@@ -1,14 +1,17 @@
 # Runtime flows
 
+Module owners are listed in [project-structure.md](project-structure.md); persisted
+records in [data-model.md](data-model.md); user-visible behavior in
+[features.md](features.md).
+
 ## Startup and map readiness
 
 ```mermaid
 sequenceDiagram
   participant Entry as main.tsx
   participant Root as createRuntimeServices
-  participant UI as WorkspaceShell
-  participant Workspace as MapWorkspace
   participant Storage as AppDatabase
+  participant Workspace as MapWorkspace
   participant Facade as MapLibreFacade
   participant Map as MapLibre
 
@@ -16,9 +19,8 @@ sequenceDiagram
   Root-->>Entry: RuntimeServices
   Entry->>Storage: load UI preferences
   Storage-->>Entry: validated preferences or defaults
-  Entry->>UI: render providers and error boundary
-  UI->>Workspace: mount persistent map area
-  Workspace->>Storage: load saved camera with deadline
+  Entry->>Entry: activate locale, render providers and error boundary
+  Workspace->>Storage: load saved camera (2 s deadline)
   Storage-->>Workspace: valid camera, null, or failure
   Workspace->>Map: mount once with initial camera and pure style
   Workspace->>Facade: attach native map
@@ -26,173 +28,70 @@ sequenceDiagram
   Facade-->>Workspace: serializable ready snapshot
 ```
 
-Configuration validation and UI preference restoration occur before React's first
-render. This prevents the navigation from briefly rendering expanded when its persisted
-state is collapsed. A storage failure logs a safe warning and uses default UI settings
-without blocking startup. A configuration failure renders a fatal alert without
-contacting the provider. Camera failure is recoverable: the map uses
-`defaultGeorgiaCamera`. The facade publishes Ready on `style.load`, when MapLibre can
-safely accept satellite and terrain sources, rather than waiting for every visible
-basemap and relief tile. The later full `load` and `idle` events remain diagnostic
-signals. `idle` fires after every repaint, so the facade stores its timestamp in the
-diagnostics snapshot without notifying React subscribers; export and the open developer
-drawer read it on demand. `styledata` republishes source and layer IDs only when either
-list changed. The facade registers native listeners exactly once and removes them during
-teardown.
+`runApplicationBootstrap` restores UI preferences and activates the locale before
+React's first render, so persisted navigation state and language never flash. A
+preference-read failure logs a warning and uses defaults. A configuration failure
+renders a fatal alert without contacting providers. A service-construction failure
+mounts the pre-React fallback, which can export a minimal bootstrap diagnostics bundle.
+Camera failure is recoverable: the map uses `defaultGeorgiaCamera`.
 
-The Satellite contextual sidebar subscribes to the existing serializable map snapshot
-and shows the settled viewport center inside the compact `Viewport | <coordinates>`
-selector. Viewport is the current source; Marker remains disabled because Satellite does
-not yet accept saved markers as search targets. The sidebar never receives the native
-MapLibre object and falls back to `defaultGeorgiaCamera` before the first snapshot is
-available.
+The facade publishes Ready on `style.load`, when MapLibre can accept new sources, rather
+than waiting for every basemap and relief tile. `load` and `idle` remain diagnostic
+signals; `idle` fires after every repaint, so its timestamp is stored in the diagnostics
+snapshot without notifying React. `styledata` republishes source and layer IDs only when
+either list changed. Native listeners are registered once and removed at teardown.
 
-`MarkersWorkspaceProvider` loads validated global saved markers from the IndexedDB
-repository and sends the ready collection to `MapLibreLayerController`. **New marker**
-changes the map interaction mode until the next map click; the point-action menu (or the
-touch point sheet) supplies a point directly. Both paths query the facade's nearest
-inspected POI for an initial name and queue one creation command until marker loading is
-ready. Confirmation writes the marker, then the controller reconciles GeoJSON features
-and generated MUI icon images. `TracksWorkspaceProvider` independently sends markers
-from only the active editable preview or saved track to the same source and symbol
-layer. The controller combines both owners without letting either clear the other and
-selects the smaller track-marker icon and label values from feature properties. Row
-navigation changes the shared map camera without remounting the map. Global rename,
-appearance changes, deletion, and persisted sort remain owned by the global marker
-workspace; synchronized global marker records stay separate from track metadata.
+`MapWorkspace` publishes the facade's settled WGS84 bounds and center through
+`MapViewportSnapshotStore` on style readiness, `moveend`, and the end of a terrain
+transition, and publishes `null` on teardown. The initial settle does not wait for full
+`load`. A late movement subscriber immediately receives the current settled viewport,
+and a numerically equal viewport keeps the previous object. Search, Satellite, and
+Mosaic consumers read this store without touching MapLibre.
 
-Changing sections changes floating contextual content, not the full-viewport map owner
-or its dimensions. Collapsing navigation keeps only the Trail Planner logo above the
-map; that control retains the dark-teal logo's expanded-state size and coordinates while
-a white chevron control travels with the retracting sidebar, docks at the logo's right
-edge, and rotates to indicate expansion. Opening Settings or Diagnostics follows the
-same invariant: the existing `MapWorkspace` and native MapLibre instance stay mounted.
-The expanded Trail Planner logo and standalone chevron both collapse navigation; once
-collapsed, the combined logo-and-chevron pill is one expansion target.
-
-Settings is a non-modal floating dialog without a dimming backdrop. Releasing an imagery
-stretch slider validates and stores the new numeric values, prepares a replacement
-raster for the current scene, and swaps only after MapLibre reports it ready. A failed
-tuning attempt rolls back the controller values and keeps the prior raster visible.
-Startup restores only non-scene layer preferences. Late errors from a source that has
-already been removed are ignored. Clicking the active scene aborts any pending
-application, removes both raster slots and the footprint, clears the transient scene
-selection, and returns map layer state to empty.
-
-The persisted rendering mode selects the initial template: Auto and Server use the
-hosted renderer, while Direct starts on the opaque COG protocol and never contacts
-TiTiler. A newly selected scene first removes both raster slots and its predecessor's
-footprint, then restores the vector basemap before adding the new source. The source is
-not allowed to suppress the basemap until its first raster data event, so a slow hosted
-request or automatic provider switch cannot blank the map.
-
-An explicit HTTP 429 or status-zero/no-response failure does not refresh TiTiler. In
-Auto mode, the controller changes that source to the direct visual-COG protocol and
-continues waiting without an application deadline. It recreates the native raster source
-and layer under the same stable IDs so MapLibre cannot retain hosted-renderer tiles or
-released textures across the provider change; Server mode fails without switching. The
-shell reports that TiTiler is unavailable while the alternative is switching and after
-it becomes active. An explicit Direct selection, successful hosted render, or imagery
-removal clears the automatic-fallback state. Retryable failures still use the bounded
-failed-tile refresh policy, and usable partial imagery can be promoted after those
-retries are exhausted.
-
-Both mirrored rendering-mode controls remain enabled while staging. A mode command
-persists the mode immediately, aborts the controller-owned application signal, removes
-both provider raster slots, restores the vector style, and immediately reapplies the
-same scene with the new initial template. Only one provider layer exists during this
-transition. A later completion from the canceled operation cannot remove or overwrite
-the replacement. MapLibre's final source-data event during removal is treated as
-cancellation: it clears that source's recoverable failure and cannot leave the shared
-status widget degraded.
-
-After a raster is active, MapLibre tile errors flow through the facade for safe
-classification and through the layer controller for recovery. The controller ignores
-duplicate errors while a retry is scheduled, refreshes retryable failed raster tiles
-after a bounded exponential delay, and stops after three attempts. HTTP 4xx failures,
-including 429, status-zero/no-response failures, and unknown failures remain visible
-without automatic retry. HTTP 429 and status zero open direct visual-imagery fallback
-because a 429 response without CORS headers is indistinguishable from a connection
-failure at the application boundary. A fresh raster source replaces the hosted source
-under the same stable ID and uses an opaque custom protocol; a dedicated worker performs
-bounded range reads of the pre-rendered 8-bit visual COG, UTM-to-Web Mercator
-reprojection, and WebP encoding. It preserves the visual asset's channel values and
-never applies hosted stretch tuning. A successful source-data event for every failed
-canonical tile clears the controller's pending set; only then can a loaded source start
-the two-second stability window. Another source error cancels that window. The facade
-returns to ready when no active failure remains. Raw tile URLs, response bodies, and
-tile coordinates never enter logs, React state, or the diagnostics bundle.
-
-Changing a terrain-overlay setting follows the same controller boundary. The controller
-validates the supported contour interval, updates the generated vector-tile URL on the
-existing source, reconciles relief/satellite/contour/OSM order, publishes a serializable
-snapshot, and then persists the combined map-layer record. When no map is attached, it
-persists the choice and applies it on the next style-ready attach. A failed native
-update restores the previous preference and emits only a safe, bounded diagnostic
-message.
-
-Settings presents three exclusive tabs and mounts only the selected tab's content. The
-Storage tab performs a fresh, read-only measurement when opened and on explicit refresh.
-It combines `navigator.storage.estimate()`, optional Chromium usage details, a bounded
-localStorage byte calculation, and optional `performance.memory` values. Unsupported or
-failed measurements are omitted and do not block the rest of Settings.
-
-Diagnostics opens as a non-modal persistent drawer. It neither installs a backdrop nor
-captures interaction from the workspace, and it remains open until the user activates
-its header close control, toggles the Diagnostics rail action, or disables developer
-mode.
+`MarkersWorkspaceProvider` loads validated saved markers and sends them to
+`MapLibreLayerController`. `TracksWorkspaceProvider` separately sends markers owned by
+the active preview or saved track to the same source and symbol layer; the controller
+combines both owners so neither clears the other.
 
 ## Settled map-view write and restore
 
-1. Startup reads one versioned center-and-zoom value before mounting the map and forces
-   bearing and pitch to zero.
-2. An explicit 3D share URL restores its shared bearing and pitch and selects the 3D
-   control immediately, but the first MapLibre style remains flat so optional DEM tiles
-   cannot delay base-map readiness. Once the base map reports ready, terrain starts
-   through the normal timeout and retry path. A user selecting 2D during initial loading
-   supersedes the URL intent immediately; later readiness updates cannot re-enable
-   terrain.
-3. MapLibre emits `moveend`; the facade reads center, zoom, bearing, and pitch together
-   with the current terrain mode.
-4. The facade updates its snapshot, notifies React, and calls the view-settled port.
-5. `SettledCameraPersistence` keeps only the newest serializable view during its
-   debounce window, then passes only its camera to the repository. The repository writes
-   center and zoom and discards orientation and terrain mode.
-6. Writes are chained so IndexedDB saves cannot overtake one another.
-7. Save failure is logged and shown as a non-blocking warning; map interaction
-   continues.
+1. Startup reads one versioned center-and-zoom value and forces bearing and pitch to 0.
+2. A 3D share URL restores bearing and pitch and selects 3D, but the first style stays
+   flat so DEM tiles cannot delay readiness; terrain starts after Ready through the
+   normal retry path. Selecting 2D during loading supersedes the URL intent.
+3. On `moveend` the facade reads center, zoom, bearing, pitch, and terrain mode, updates
+   its snapshot, and calls the view-settled port.
+4. `SettledCameraPersistence` keeps only the newest view during a 400 ms debounce, then
+   the repository writes center and zoom. Writes are chained so saves cannot overtake
+   one another.
+5. A save failure is logged and shown as a non-blocking warning.
 
-This flow intentionally excludes continuous `move`/render events from React, IndexedDB,
-and diagnostics.
+Continuous `move`/render events never reach React, IndexedDB, or diagnostics.
 
-For a shared satellite URL, `MapWorkspace` opens the Satellite section and resolves the
-allowlisted collection/item identity without waiting for MapLibre readiness. The
-controller publishes the selected scene to transient `mapLayerStore` state, so
-`SatelliteBrowser` can open a one-card Images pane using footprint-derived coverage even
-before a viewport snapshot exists. Native raster application and any shared 3D terrain
-transition start separately as soon as the base style is ready for new sources.
-Satellite, terrain, relief, and basemap tile loading can then proceed concurrently,
-separating share navigation and selection from slower tile rendering while keeping all
-scene data out of IndexedDB.
+A shared satellite URL opens Satellite and resolves the allowlisted collection/item
+without waiting for map readiness. The controller publishes the selected scene to
+`mapLayerStore`, so `SatelliteBrowser` can show a one-card result from footprint-derived
+coverage before a viewport exists. Raster application and any shared 3D transition start
+when the base style is ready. Scene data never enters IndexedDB.
 
 ## Terrain transition
 
 ```mermaid
 sequenceDiagram
   participant User
-  participant UI as TerrainModeControl
+  participant UI as MapWorkspace
   participant Facade as MapLibreFacade
   participant Map as MapLibre
   participant Filter as Filtered Terrarium protocol
   participant DEM as Terrain provider
 
-  User->>UI: select 3D
+  User->>UI: select 3D in MapViewControls
   UI->>Facade: setTerrainMode(terrain)
   Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: level camera and set terrain
   Map->>Filter: request revision-qualified raster-dem tile
   Filter->>DEM: fetch center and optional neighboring context
-  Filter->>Filter: decode height plane, reject, repair, re-encode, cache
+  Filter->>Filter: decode, reject, repair, re-encode, cache
   Filter-->>Map: shared corrected Terrarium PNG
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
@@ -201,376 +100,67 @@ sequenceDiagram
   else error, timeout, or cancellation
     Facade->>Map: clear 3D terrain; retain shared overlay source
     Facade-->>UI: failed / usable flat map
-    loop two bounded backoff retries
+    loop retries after 1 s and 3 s
       UI->>Facade: setTerrainMode(terrain)
-      Facade->>Map: refresh shared DEM tiles and reapply terrain
+      Facade->>Map: refresh DEM tiles under a new retry revision
     end
   end
 ```
 
-Only one terrain transition may run at a time. Camera persistence ignores the internal
-level-camera commands used during a transition. Entering 3D levels a restored pitched
-flat camera before terrain changes its elevation reference, waits for the current DEM,
-then applies and reads back MapLibre's terrain-safe camera. Leaving 3D levels the camera
-before removing that elevation reference. Repeated requests for the same target share
-its promise; an opposite request receives an explicit failure. This prevents duplicate
-sources, listeners, and out-of-order camera changes. Selecting 2D also resets pitch and
-bearing to zero, so the flat map returns north-up. The UI automatically retries a failed
-3D enable twice with bounded backoff. Each retry advances a private source revision so
-MapLibre does not reuse a failed tile-cache entry. If all attempts fail, the shared
-status below search remains the only user-facing failure surface; no map banner is
-mounted.
+Only one terrain transition runs at a time. Repeated requests for the same target share
+its promise; an opposite request fails explicitly. Camera persistence ignores the
+internal level-camera commands. Entering 3D levels a pitched flat camera before terrain
+changes the elevation reference; leaving 3D levels the camera first and returns it
+north-up. Each retry advances a private source revision so MapLibre cannot reuse a
+failed tile-cache entry. Final failure appears only in the shared operational status.
 
 ## Terrain overlay reconciliation
 
-On style readiness, style data changes, satellite swaps, preference changes, and 3D
+On style readiness, style data changes, imagery swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
-generated contour source, minor/index lines, and index labels. The invariant is base
-surface fills, relief/satellite in the selected order, waterways, contours, water-body
-polygons, then OSM boundaries, transport, and labels. This keeps terrain relief visible
-over grass, forest, and other opaque land-cover fills while water bodies mask generated
-isolines. Updating the contour interval calls the existing vector source's tile update,
-so the map camera and unrelated native resources remain untouched. MapLibre abort
-signals flow through both the shared DEM and contour protocols, the request-correlated
-worker channel, and the same filtered provider. The provider coalesces each
-revision-qualified processed tile across its complete fetch, decode, filter, and encode
-lifetime. Each consumer can cancel independently; the producer continues for remaining
-consumers and aborts when the last releases it. Later calls use the unchanged bounded
-processed-PNG LRU, while overlapping neighborhoods still share decoded source work
-through the unchanged decoded-context LRU.
+generated contour source, minor/index lines, and index labels. The order is base surface
+fills, relief/satellite in the selected order, waterways, contours, water-body polygons,
+then OSM boundaries, transport, and labels, so relief stays visible over opaque
+land-cover fills while water bodies mask isolines. Changing the contour interval updates
+the existing vector source's tiles without touching the camera.
 
-The center remains required. Ordinary network, HTTP, or PNG-decode failures for any
-optional neighbor become null halo cells, so one unavailable context tile does not erase
-otherwise usable terrain. Parent cancellation, timeout, mode change, disposal, and
-center failure still reject instead of degrading to missing context. The repair filter
-decodes the center and one-pixel halo once into a height plane and compact validity
-mask, then uses a fixed-scratch direct-index stencil with lazy output cloning. Relief,
-3D terrain, and generated isolines therefore cannot observe different elevation bytes.
+MapLibre abort signals flow through the DEM and contour protocols, the worker channel,
+and the filtered provider. The provider coalesces each revision-qualified processed tile
+across fetch, decode, filter, and encode; each consumer cancels independently and the
+producer aborts when the last one releases it. The center tile is required; a failed
+optional neighbor becomes a null halo cell. Relief, 3D terrain, and isolines read the
+same repaired bytes.
 
-One dedicated module worker owns PNG decode/encode, repair, parsed DEM data, and contour
-generation. Initialization maps validated provider configuration into the strict,
-versioned compute DTO and validates that DTO at the worker boundary. Adding unrelated
-provider or presentation fields therefore cannot invalidate worker startup. `movestart`
-marks the channel interactive: DEM requests continue immediately while new contour
-requests enter the bounded contour queue. Cancellation removes a queued request
-immediately, a full queue cancels its oldest viewport request, and `moveend` drains
-current contours one at a time. An already-running synchronous contour is allowed to
-finish. Detach always clears interactive mode.
-
-The worker publishes a coordinate-free queue snapshot whenever active work or the
-contour backlog changes. The recoverable backend validates that event, the layer
-controller stores only execution mode and counts, and the Ready status renders the
-current queued count against the fixed capacity only while work is pending. Restart and
-inline fallback reset the snapshot so stale worker work cannot remain visible.
+One module worker owns PNG decode/encode, repair, parsed DEM data, and contour
+generation. `movestart` marks the channel interactive: DEM requests continue while new
+contour requests enter a bounded queue (a full queue cancels its oldest request), and
+`moveend` drains contours one at a time. The worker publishes a coordinate-free queue
+snapshot that the controller stores in `mapLayerStore` for the operational status.
 
 Provider, timeout, decode, and compute errors fail only their request. A worker `error`,
-`messageerror`, channel loss, or malformed DEM/contour result enters the same recovery
-loop: one fresh worker receives the validated DTO plus current filter revision, then the
-still-current request is retried. Cancellation remains cancellation and does not start
-recovery. If the replacement worker also fails validation or transport, the page keeps
-terrain available through the same engine on the window thread and publishes a
-non-blocking compatibility warning. A later page session starts with a worker again.
-
-The engine retains cached contour buffers. The worker server slices each cached result
-and transfers that owned copy; inline compatibility slices before returning to MapLibre.
-Protocol registration forwards those already-owned buffers directly, so no additional
-window-thread copy is made and MapLibre detachment cannot corrupt later cache hits. DEM
-protocol delivery is already owned because each response materializes a fresh buffer
-from its `Blob`.
-
-Queue/compute and end-to-end contour timings retain their separate event schemas. Each
-aggregator uses the same small count/interval window, flushes partial batches during
-runtime disposal, cancels its timer, and ignores later callbacks. Diagnostic logger
-failures are contained and cannot fail terrain delivery. Aggregates exclude tile
-coordinates, URLs, pixels, and geometry. Source failures update the overlay snapshot
-without removing the basemap, while expected cancellation during source replacement is
-ignored as lifecycle noise.
+`messageerror`, channel loss, or malformed result restarts one fresh worker and retries
+the still-current request. If the replacement also fails, terrain continues through
+`InlineTerrainComputeBackend` on the window thread with a non-blocking compatibility
+warning; the next page session starts with a worker again. Cached contour buffers are
+sliced before transfer so MapLibre detachment cannot corrupt later cache hits. Timing
+aggregates exclude tile coordinates, URLs, pixels, and geometry.
 
 The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
-the shared protocol's processed, decoded, parsed DEM, and contour caches, then changes a
-bounded revision on both native tile templates. MapLibre consequently reloads relief, 3D
-terrain, and isolines together without remounting the map. Disabled mode preserves the
-same shared protocol and cancellation/timeout behavior but fetches only the original
-center PNG and bypasses decoding, neighborhood lookup, repair, and re-encoding.
+every terrain cache and bumps a revision on both native tile templates, so relief, 3D
+terrain, and isolines reload together without remounting the map. Disabled mode fetches
+only the original center PNG and skips decoding and repair.
 
-Applying, hiding, restoring, replacing, or clearing satellite imagery also reapplies the
-shared visual mode on the existing native layers. Semantic colors remain stable, while
-opaque vector-base land-cover fills switch off for satellite context, while true line
-features, hillshade strength, and label halos update atomically; the map instance,
-camera, sources, and user visibility choices are preserved. Surface polygons are not
-restyled as decorative line layers; the restricted-area layer is an intentional red
-perimeter derived from provider-tagged military geometry.
+Applying, hiding, replacing, or clearing satellite imagery reapplies the shared visual
+mode on existing layers: opaque land-cover fills switch off over imagery while line
+features, hillshade strength, and label halos update atomically. The camera, sources,
+and user visibility choices are preserved.
 
-## Spatial weather map
-
-The weather controller loads the weather-map package and registers its `om://` MapLibre
-protocol on first enable, then releases the protocol when the runtime service is
-disposed. Its protocol cache retains at most three variable states. Enabling weather
-snapshots the current relief-shading and elevation-isoline visibility, suppresses both
-overlays without replacing their durable preferences, then fetches the public
-`data_spatial/ecmwf_ifs025/latest.json` document through the shared bounded HTTP client.
-Disabling weather or failing to enable it restores the snapshot before normal terrain
-controls resume. The controller validates completion, required cloud and precipitation,
-both wind-component variables, and `valid_times`, then chooses the available timestamp
-nearest the requested instant. The selected zero-based index becomes one shared
-`time_step=valid_times_N` for cloud cover, precipitation, and wind-arrow sources.
-
-Before requesting the first weather tile, the controller submits the current MapLibre
-viewport to the package's `updateCurrentBounds()`. While the weather map is enabled it
-repeats that update on every MapLibre `dataloading` event, so tile requests issued
-during or after a camera move use the viewport current at request time; the package owns
-its built-in tile-boundary snapping. Every source requests `tile_size=256`, limiting
-per-tile raster and vector work.
-
-MapLibre reads each source directly from Open-Meteo's public OM files. The controller
-adds the thresholded neutral-gray cloud raster and precipitation raster followed by the
-package's `wind-arrows` vector source layer, all immediately before road casings. The
-wind style interpolates both visibility and stroke width from the vector tile's speed
-property, keeping values at or below 5 m/s nearly invisible. Source-data events publish
-zero-to-three render progress into the shared operational-status area and clear it when
-all current-frame sources settle.
-
-Reconciliation after style changes restores the same frame and order before imported
-tracks, routes, and saved markers are reapplied. A time change removes the three old
-sources and recreates them together before publishing the new selected index, so state
-never claims a mixed forecast frame. Disabling weather aborts metadata loading and
-removes the complete source/layer group. Shared opacity remains durable. While enabled,
-the URL owns the selected point and valid time needed to reload the map and request a
-fresh sidebar forecast; metadata, render progress, and downloaded forecast values remain
-memory-only.
-
-## Browser route planning
-
-```mermaid
-sequenceDiagram
-  participant User
-  participant Tracks as TracksWorkspaceProvider
-  participant Map as MapLibreFacade
-  participant Router as BrowserTrailRouter
-  participant Worker as Routing worker
-  participant Terrain as ElevationProvider
-  participant Storage as AppDatabase
-
-  User->>Tracks: choose Plan route
-  Tracks->>Map: enable route-planning clicks
-  Map-->>Tracks: first waypoint coordinate
-  User->>Tracks: choose Routes or Line
-  Map-->>Tracks: next waypoint coordinate
-  alt Routes
-    Tracks->>Router: route(start, destination, signal)
-    Router->>Worker: validated request over WorkerRpc
-    Worker->>Worker: load bounded MVT, build graph, snap, A*
-    Worker-->>Tracks: validated routed geometry and diagnostics
-  else Line
-    Tracks->>Tracks: append direct segment
-  end
-  Tracks->>Terrain: sample accepted geometry
-  Terrain-->>Tracks: elevation profile or explicit failure
-  Tracks->>Map: render line and numbered waypoints
-  User->>Tracks: save
-  Tracks->>Storage: save existing LocalTrackContent
-```
-
-The first planning click creates only a waypoint. Each later click captures the
-currently selected mode for that leg. A routed request expands its half-open XYZ
-coverage once when no path is found, within the same tile budgets and one-minute
-calculation limit. Worker events report completed/total tile downloads, graph
-construction, and A* search to the owning route-plan generation. The worker filters the
-configured detail-vector `streets` layer to road and path lines, normalizes them onto a
-global MVT grid, and uses a bounded spatial index to split eligible X, T, near-touch,
-and collinear-overlap junctions. Available layer and bridge/tunnel differences prevent
-inferred interior connections. The worker then splits snapped edges and runs A* with
-geodesic edge weights. It returns explicit no-path, area-too-large,
-routing-data-unavailable, one-minute timeout, or invalid data failures; no failure
-changes accepted geometry or silently becomes a direct line.
-
-Every click, mode change, Undo, Clear, close, and unmount aborts work that no longer
-owns the current route-plan generation. Stale completions are ignored even if transport
-cancellation races with a response. Accepted route legs preserve the clicked endpoints
-with direct connector fragments around snapped network geometry, while direct legs
-preserve their exact endpoints. Flattening removes only the shared boundary between
-adjacent legs; independent gaps are not invented or joined.
-
-Elevation enrichment starts only for accepted geometry and uses the existing bounded
-track preparation calculations. It is generation-checked and cancellable like routing.
-An unavailable elevation provider preserves a distance-only route without a profile. The
-route remains unsaved React state until explicit Save creates the existing local
-summary/content records atomically, without a route-draft schema or a second persistence
-model.
-
-## Provider and WebGL failures
-
-- `error` events are classified from safe source IDs and normalized messages.
-- Routine aborted, cancelled, and superseded tile requests are ignored before snapshot
-  mutation or subscriber notification; camera movement must not create a render storm.
-- Style errors during startup become fatal because no usable basemap exists.
-- Vector, glyph, and terrain errors update capped failure buckets and a degraded
-  snapshot; repeated equivalent events do not create alert or log storms.
-- The shell projects the latest degraded snapshot into the shared status below search;
-  no separate recoverable map banner is mounted.
-- `webglcontextlost` is prevented from default disposal, recorded as fatal, and exposed
-  to the user. A restoration event refreshes capabilities and returns the snapshot to
-  ready.
-
-## Explicit cross-device synchronization
-
-Startup restores the local `sync.enabled` preference and account session independently.
-Exactly one worker run starts after both are resolved when the user is authenticated and
-sync is enabled. Further runs occur only after an explicit local track, folder, or
-marker mutation, enabling sync, an explicit sign-in, or **Sync now**; authentication
-refresh and focus notifications update account state without synchronizing. Disabling
-sync or signing out aborts an active run. The main thread passes the authenticated user
-ID only to namespace browser-local preparation; the access token remains the sole remote
-authorization credential.
-
-Before any remote status, snapshot, or mutation, the worker records `sync.user-id` in
-the same IndexedDB transaction that prepares local pairs. Each local sync state stores
-the canonical `contentHash`, stable `lineageHash`, and GRPT `geometryVersion`. A new,
-malformed, or different owner resets all remembered remote revisions and tombstones to
-pending upserts while retaining valid browser tracks.
-
-Folder reconciliation runs before track reconciliation so every downloaded track can
-validate its placement against the merged folder set. Pending folder deletes and upserts
-use exact base revisions; a conflict retries the local edit on the newer revision, so
-folder content resolves as last writer wins. A browser's untouched **Imports**
-placeholder (created and updated at the same instant, never synchronized) adopts the
-account's existing **Imports** record instead of overwriting it. Folder order is not
-part of those writes: the server keeps an existing folder's position, and a pending
-local reorder uploads the complete order through one `folder-reorder` call that the
-database applies atomically, placing folders unknown to that browser after it. A second
-owner-only snapshot becomes canonical; remote folder creation or a higher revision
-replaces the local record, while a known clean folder missing remotely is deleted
-locally. A local reorder made during the run keeps its local positions until its own
-upload. Positions may contain gaps or ties; every reader orders by position, then ID.
-Deleting a folder locally moves its tracks to **Unfiled** and marks their metadata
-dirty. A remote folder deletion only clears local placement: remote metadata still names
-the deleted ID, and every browser reads an unknown folder ID as unfiled. Remote track
-metadata without `folderId` places tracks in **Imports** and routes in **Unfiled**, so
-pre-folder records need no server rewrite.
-
-Each snapshot is grouped by lineage before reconciliation. A ready GRPT v2 member is the
-lineage head even when a v1 predecessor has a higher revision; otherwise the highest
-revision wins. A browser that still owns source elevation for a v1 lineage prepares a v2
-replacement without changing the local track ID. The predecessor remains ready until
-that replacement is ready, then deletion uses the exact observed predecessor revision
-and retries one conflict. Quota exhaustion leaves both objects and the pending
-replacement intact instead of discarding elevation or metadata.
-
-The worker validates remote records and private GZIP objects, performs explicit pending
-deletes before other mutations, and merges the second full snapshot atomically. A known
-same-account revision absent from that snapshot pauses synchronization for a global
-decision: selected tracks are deleted locally, while unselected tracks become pending
-upserts and upload again. Only explicit local deletes complete silently. Invalid or
-network failures preserve valid local data and pending work.
-
-## User-data synchronization trust boundary
-
-The repository defines one authenticated `track-sync` Edge Function for tracks, folders,
-and saved markers. Supabase performs its platform JWT check, and `@supabase/server` in
-`auth: "user"` mode supplies verified claims and the platform-provided admin client. The
-function derives `user_id` only from `userClaims.id`. It rejects client-supplied
-identity, object paths, quota counters, unknown fields, oversized bodies, and malformed
-protocol values. No privileged key is stored in the browser or this repository.
-
-Uploads use bounded multipart requests containing `action=upload`, `baseRevision`,
-`contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry
-file. The function checks actual compressed size, bounded decompression, the complete
-GRPT v1 or v2 envelope, codec flags, segment/point limits, finite v2 `Float64`
-elevation, and SHA-256 before reserving quota. The function derives the stable legacy
-lineage hash from either envelope and requires metadata's 64-hex `lineageHash` and
-`geometryVersion` to match it. Metadata updates must retain the stored identity.
-Mismatches fail before the mutation RPC. The database generates a unique path under the
-verified user's prefix. The function validates that path, writes the immutable object
-with `upsert: false`, and finalizes the reservation. A concurrent `Asset Already Exists`
-response proceeds to finalization; other failures delete only an object created by that
-request and release its reservation. If compensation cannot delete the object, the
-released row makes it an orphan for mandatory later cleanup.
-
-The canonical hash identifies the exact GRPT payload; lineage keeps v1 and v2
-representations of the same source track related. GRPT v1 retains normalized source
-coordinates and timestamps. GRPT v2 additionally retains each source point's exact
-finite elevation or explicit missing value. JSON contains the bounded source metadata,
-track-owned marker IDs, names, and coordinates, and distance/elapsed metrics already
-owned by synchronization. Marker-only edits use metadata revisions and therefore do not
-change GRPT bytes, canonical content hashes, lineage, or duplicate grouping.
-
-Tracks with usable source elevation keep source points and metrics canonical; their
-browser-calculated Terrarium points and metrics remain separate local derived data. An
-elevation-free import promotes a complete Terrarium projection to canonical points and
-metrics on save, so its canonical hash and cloud revision include those elevations.
-Recalculation replaces canonical content, hash, and synchronization revision only for an
-already-promoted track. Recalculation of a source-elevated track replaces only its
-separate local derived projection, leaving canonical source identity unchanged. Another
-browser therefore receives promoted elevation where it was canonicalized while legacy
-remote-only v1 elevation remains missing rather than being invented locally.
-
-JSON requests support metadata update, hard deletion, and quota status. The database RPC
-response has one explicit outcome: `applied | upload | conflict | existing | missing`.
-Metadata and deletion carry a server `baseRevision`; an upload with a nonzero revision
-must match the current record before it can return `existing` or `upload`. A matching
-ready upload applies its metadata atomically with a new revision; a stale revision
-returns the current record as `conflict`, while a nonzero revision cannot recreate a row
-that deletion already removed. Client wall clocks do not decide conflicts.
-
-Delete commits row removal and quota release before idempotent object removal. A storage
-failure is returned without restoring the row. Before status and every later mutation,
-the function lists objects under the verified user prefix, then re-reads current
-`reserved` and `ready` paths before deleting candidates. This ordering prevents cleanup
-from racing a new reservation. No flow creates a server tombstone.
-
-## Diagnostics and health
-
-```mermaid
-flowchart LR
-  Map["MapLibreFacade"] --> Snapshot["Map snapshot store"]
-  Browser["Global/error boundary"] --> Logger["Bounded redacting logger"]
-  HTTP["HTTP hooks"] --> Logger
-  Storage["Persistence"] --> Logger
-  Sentinel["Sentinel use cases and raster adapter"] --> SentinelSnapshot["Sentinel query timeline store"]
-  Sentinel --> LayerState["Applied imagery and logical visibility state"]
-  LayerState --> Map
-  SentinelSnapshot --> Drawer
-  Snapshot --> Drawer["Developer drawer"]
-  Logger --> Drawer
-  Health["Local and explicit provider checks"] --> Diagnostics["Diagnostics service"]
-  Snapshot --> Diagnostics
-  Logger --> Diagnostics
-  Diagnostics --> Bundle["Local schema-v2 JSON download"]
-```
-
-Logging is best-effort and must never fail the primary operation. Redaction happens
-before an event enters the bounded buffer. Bundle creation copies serializable state,
-coarsens camera location, and creates a local object URL that is revoked immediately
-after download. Nothing is uploaded.
-
-The shared `ky` client records start, completion, cancellation, timeout, HTTP-status,
-and network-failure events. It exports only the remote origin, status, duration, and an
-allowlisted operation ID; request paths, queries, headers, and bodies never enter the
-diagnostic event. Satellite use cases pass their operation ID through the HTTP context
-so application and transport events can be correlated without adding a public header.
-
-Application startup is enclosed by a pre-React failure boundary. When normal runtime
-services exist, the fallback can export the standard bundle. If service construction or
-root discovery fails, it mounts against the available document body and produces a
-minimal schema-versioned bootstrap bundle using the standalone redactor, without
-depending on React, IndexedDB, health checks, or the normal diagnostics service.
-
-Sentinel commands will open one timeline operation ID and publish a fixed sequence of
-best-effort step transitions through the `SentinelQueryDiagnostics` application port.
-The local store keeps only the current or most recent operation. While the persistent
-drawer is open and the operation is running, its UI requests a monotonic-duration
-refresh every 250 milliseconds; this performs no provider polling. Invalid or late
-diagnostic transitions are ignored and cannot change the primary operation outcome.
-
-## Sentinel search core
-
-The Satellite sidebar invokes the provider-independent application flow and Earth Search
-adapter through the injected `SearchSatelliteScenes` use case:
+## Sentinel search
 
 ```mermaid
 sequenceDiagram
   participant Command as SatelliteBrowser
-  participant UseCase as Satellite search use case
+  participant UseCase as SearchSatelliteScenes
   participant Gateway as SatelliteCatalogGateway
   participant Geometry as Satellite coverage
   participant Timeline as Sentinel diagnostics
@@ -582,66 +172,34 @@ sequenceDiagram
   Gateway-->>UseCase: readonly scenes + total matched
   UseCase->>UseCase: enforce level/cap and deduplicate IDs
   UseCase->>Geometry: coverage and center-to-edge evidence
-  Geometry-->>UseCase: percent, relation, distance, warning
   UseCase->>Timeline: complete, fail, or cancel matching operation
-  UseCase-->>Command: stable UTC date groups or typed error
+  UseCase-->>Command: UTC date groups or typed error
 ```
 
-The Earth Search request intersects the immutable submitted center point, not the full
-map bounds. The submitted viewport remains part of the application criteria only for
-coverage calculation and edge evidence. The displayed UTC calendar month supplies the
-date range; the current month ends at today and past months end on their final day.
-Users do not enter date endpoints.
+The search anchor is the settled viewport center or a custom point set by the **Search
+satellite scenes here** point action in `mapInteractionStore`; a custom anchor is
+cleared when the viewport changes. Earth Search intersects the submitted point; the
+viewport is used only for coverage and edge evidence. The displayed UTC calendar month
+supplies the date range, with the current month ending today.
 
-Each successful month is recorded as complete for the submitted viewport and product,
-including a successful empty result. Provider requests use the complete 0–100% cloud
-range. The slider filters loaded scene cards client-side and updates the calendar's
-orange highlights immediately. Acquisition dates above the threshold remain visible
-without an outline, and changing the slider neither invalidates loaded months nor
-performs another provider request. A calendar selection above the threshold remains in
-the results projection while it is selected, so the active card can be inspected and
-de-applied. Clearing that selection or selecting a different scene reapplies the cloud
-filter. Calendar navigation checks the session cache before requesting the displayed
-month. A missing month runs the same cancellable search use case and appends its groups
-to the existing results. Revisiting a complete month performs no provider request.
-Changing submitted provider criteria starts a new session and clears the completed-month
-set.
+Each month is requested with the full 0–100% cloud range and recorded as complete for
+the submitted viewport and product, including an empty result. The cloud slider filters
+loaded cards and calendar highlights locally without another request; a selected scene
+above the threshold stays visible until deselected. Calendar navigation requests only
+missing months, and changing provider criteria starts a new session. The UI reveals
+scenes eight at a time; when exhausted, load-more fetches the next missing earlier month
+back to the start of the Sentinel-2 archive. Per-day cloud is weighted by viewport
+coverage.
 
-The UI reveals locally loaded scenes in eight-card sets. When that result is exhausted,
-the same load-more command finds the next missing month before the initially submitted
-month, uses the immutable original viewport and product level with the complete cloud
-range, and appends the returned groups. This continues back to the first Sentinel-2
-archive month without skipping a gap created by direct calendar navigation. Earth Search
-pages are capped at 100 items and followed internally up to the configured ten-page
-safety boundary, so a normal month is not truncated or turned into a user refinement
-task. The use cases reject a mixed L1C/L2A response instead of substituting product
-levels. The calendar's per-day cloud summary is a weighted average using each scene's
-submitted viewport coverage as its weight, with a simple average fallback when every
-coverage is zero. A newer operation replaces the visible timeline; late transitions from
-an older request are ignored by operation ID. Logs contain correlation IDs, counts,
-durations, and safe error codes, never exact viewport geometry.
+The gateway posts allowlisted fields, requests pages of at most 100 items, and follows
+only same-origin `POST` next tokens up to the configured page cap. Every page is
+validated with Zod before mapping; one malformed item fails the whole response. Mixed
+L1C/L2A responses are rejected. Timeout, rate-limit, HTTP, network, schema, pagination,
+result-limit, and cancellation outcomes stay distinct typed codes. Logs and the timeline
+contain operation IDs, counts, durations, and safe codes, never viewport geometry. A
+newer operation replaces the visible timeline; late transitions are ignored.
 
-The Earth Search gateway posts only allowlisted fields to the configured HTTPS search
-URL. It obtains the first page, follows at most the configured number of same-origin
-`POST` next tokens, validates every collected page with Zod, and then maps items to
-readonly scenes. A page containing any malformed item fails as a whole; the application
-does not present incomplete comparisons as trustworthy partial results. L1C `s3://`
-visual keys are converted only for the known public bucket and remain marked as
-unsupported JP2. L2A visual assets must be HTTPS true-color COGs.
-
-Timeout, rate-limit, unsuccessful HTTP, network, schema, pagination, result-limit, and
-cancellation outcomes remain distinct typed codes. Logs and the timeline contain the
-operation ID, safe code, count, and duration only. Explicit provider health checks add a
-fixed one-item Sentinel POST probe; startup never waits for it.
-
-The sidebar captures one immutable viewport snapshot at submission, aborts a replaced
-request, and keeps provider data local to the current browser session. Successful
-results are grouped by UTC acquisition date. Catalog, pagination, validation, mapping,
-and coverage steps complete in the live timeline. Applying a result starts a new
-correlated operation for visual selection, provider reprojection, and MapLibre source
-application.
-
-## Sentinel imagery application and logical layers
+## Sentinel imagery application
 
 ```mermaid
 sequenceDiagram
@@ -651,7 +209,7 @@ sequenceDiagram
   participant Renderer as Configured COG renderer
   participant Worker as Direct visual-COG worker
   participant Map as MapLibre
-  participant State as Map layer store
+  participant State as mapLayerStore
 
   User->>Browser: click scene card or loaded calendar day
   Browser->>Controller: applyScene(scene, AbortSignal)
@@ -659,10 +217,10 @@ sequenceDiagram
   Controller->>Map: add staging raster source/layer
   Map->>Renderer: request RGB tiles from raw red/green/blue COG bands
   alt Auto mode and renderer returns 429 or CORS-opaque status zero
-    Controller->>Map: restore vector style and replace template with direct protocol
+    Controller->>Map: recreate source on the direct protocol under the same IDs
     Map->>Worker: request tile by safe scene key
     Worker->>Worker: range-read, reproject, and encode the 8-bit visual COG
-    Worker-->>Map: reveal each completed WebP tile progressively
+    Worker-->>Map: WebP tile
   end
   alt staging source becomes ready
     Controller->>Map: reveal raster and update footprint GeoJSON
@@ -673,106 +231,94 @@ sequenceDiagram
   end
 ```
 
-Two internal raster slots support stretch-tuning replacement. Rendering-mode and scene
-changes remove both slots immediately, so two providers or scene selections cannot
-remain overlaid. Provider URLs remain inside the controller and never enter Zustand or
-exported diagnostics. The footprint is updated only after the replacement raster is
-usable. `Fit footprint` derives bounds from the validated polygon while preserving
-current pitch and bearing.
+The persisted rendering mode selects the initial template: Auto and Server use the
+hosted renderer; Direct starts on the `georgia-satellite-cog` protocol. Server never
+switches. A new scene or mode change removes both raster slots and the old footprint,
+restores the vector basemap, and aborts the previous controller-owned signal; a late
+completion from the cancelled operation cannot overwrite the replacement. The basemap
+stays visible until the new source's first raster data. The direct worker preserves the
+visual asset's 8-bit values and ignores hosted stretch tuning. Raster readiness has no
+application deadline.
 
-### Sentinel Mosaic application
+Once active, retryable tile errors refresh failed tiles with bounded exponential delay,
+up to three attempts; HTTP 4xx, status-zero, and unknown failures are not retried.
+Usable partial imagery can be promoted after retries are exhausted. A source counts as
+stable two seconds after every failed tile has loaded. Tile URLs, bodies, and
+coordinates never enter logs, React state, or diagnostics.
+
+Two raster slots support stretch tuning: releasing a slider prepares a replacement
+raster and swaps only when MapLibre reports it ready; failure rolls back and keeps the
+prior raster. Clicking the active scene aborts pending work and clears the scene.
+`Fit footprint` preserves pitch and bearing.
+
+### Sentinel Mosaic
 
 ```mermaid
 sequenceDiagram
   participant User
   participant Provider as SatelliteMosaicProvider
   participant Search as SearchSatelliteMosaic
-  participant Catalog as Earth Search gateway
   participant Selector as Mosaic coverage accumulator
   participant Controller as MapLibreLayerController
   participant Map as MapLibre
-  participant State as Map layer store
 
-  User->>Provider: select a different upper-bound date
-  Provider->>Provider: abort obsolete request
-  Provider->>Controller: clearMosaic()
-  Controller->>Map: remove staging and ready Mosaic sources
-  Controller->>State: empty; remove Ready-area progress
   User->>Provider: Show mosaic
   Provider->>Controller: beginMosaic(date, settled viewport)
-  Controller->>Controller: prune outside exact viewport
-  Controller->>State: loading
   Provider->>Search: execute(viewport polygon, date, L2A)
-  loop selected partial month, then complete earlier months
-    Search->>Catalog: viewport query without cloud predicate
-    Catalog-->>Search: validated descending acquisition groups
-    Search->>Selector: addGroups(groups)
-    Selector->>Selector: clip, union, and retain coverage contributors
+  loop selected partial month, then earlier months
+    Search->>Selector: add validated acquisition groups
+    Selector->>Selector: clip, union, keep coverage contributors
   end
   Search-->>Provider: bounded scenes, union coverage, archive state
   Provider->>Controller: applyMosaic(scenes, viewport, date)
-  Controller->>Map: add all bounded raster sources/layers newest first
-  loop source readiness in any completion order
-    Map-->>Controller: source content loaded
-    Controller->>State: increment rendered/total progress
-  end
-  Controller->>State: ready with actual rendered union coverage
+  Controller->>Map: add all raster sources newest first
+  Map-->>Controller: per-source readiness in any order
+  Controller->>Controller: publish rendered/total progress, then ready coverage
 ```
 
-The coverage accumulator stops at 100% within `1e-6` percentage points, complete archive
-traversal, or the 128-scene source budget. It retains combined geometry rather than
-rebuilding every prior month and drops footprints that do not measurably increase
-coverage. Rendering uses the existing Auto, Server, or Direct provider path; all
-selected sources are registered before readiness waits, then each reveals independently
-within its scene extrema. Zero fade prevents cross-fade texture overlap.
+The accumulator stops at 100% coverage (within `1e-6` points), at the end of the
+archive, or at 128 scenes (`selectSatelliteMosaicScenes.ts`). Rendering uses the same
+Auto/Server/Direct path; each source reveals independently with zero fade. Selecting a
+different date calls `clearMosaic()` before another explicit **Show mosaic**.
+`movestart` aborts only obsolete work; the next settled viewport starts one refresh
+whose `beginMosaic` call prunes and recalculates coverage. The provider subscribes to
+movement directly, so movement never re-renders consumers of its context. 3D terrain is
+unavailable while a Mosaic is active.
 
-`movestart` aborts only obsolete search/application work; already ready imagery remains
-available during movement. The next settled viewport starts one refresh whose
-`beginMosaic` call owns pruning and rendered-coverage recalculation. Selecting a
-different calendar date instead performs the full clear path before another explicit
-**Show mosaic**, so no earlier-date layers or progress can survive. Sequence guards
-prevent cancelled source waits from publishing a stale loading snapshot after either
-clear or replacement. The provider handles movement in a direct store subscription, so
-`movestart` and settlement do not re-render the map workspace or sidebar through the
-Mosaic context; terrain transitions also end with one settled viewport.
+### Logical layers
 
-Layers commands use logical IDs. The Natural features command expands to land-cover,
-glacier, and water-polygon layers; restricted-area, hiking, road, and place commands
-expand to their fixed native style groups. Satellite and footprint commands target only
-controller-owned layers. Adding a map data source includes adding its provider group and
-relevant logical visibility controls to Layers in the same change. Visibility is applied
-idempotently and projected into a serializable live store. The OpenStreetMap group
-opacity scales the existing satellite-mode paint opacity for its controlled fills,
-lines, points, and labels. Vector mode always uses the unscaled base paint. Dexie
-persists visibility, shared OpenStreetMap opacity, rendering mode, imagery stretch, and
-terrain-overlay preferences. Scene metadata stays transient and is never written to
-Dexie. Satellite search/results state remains mounted while another rail section is
-visible, and returning to Satellite reattaches the existing adjacent pane without a new
-provider request.
+Layers commands use logical IDs that expand to fixed native style groups; satellite and
+footprint commands target only controller-owned layers. A new map data source must add
+its provider group and logical visibility controls to Layers in the same change.
+Visibility is applied idempotently and projected into `mapLayerStore`; the OpenStreetMap
+group opacity scales satellite-mode paint only. Dexie persists the basemap preset,
+visibility, OpenStreetMap opacity, rendering mode, imagery stretch, and terrain-overlay
+preferences; scene metadata stays transient.
 
-## Place search expansion
+## Spatial weather map
 
-`MapSearchPlaceholder` captures an immutable viewport with an explicit text submission.
-`SearchPlaces` asks the replaceable gateway for results inside that area, accumulates
-visually unique name-and-category matches in inner-to-outer order, and emits the growing
-list after each response. This collapses OSM streets split across several ways while
-preserving same-name features whose full location labels differ. It doubles the area
-around the same center until the radius reaches 500 km even when an earlier area already
-matched. Sub-metre cap tolerance and a defensive attempt ceiling guarantee the expansion
-terminates even when floating-point bounds or a provider cache repeat an area. The
-Nominatim adapter serializes the requests at no more than one per second, caches each
-query-and-area combination, and passes cancellation through every wait and HTTP request.
-Provider failure ends the search without discarding results that were already visible in
-the component; a new submission or closing the result list cancels the obsolete query.
-Map camera interactions do not close the list and therefore do not cancel the query. The
-adapter also maps provider categories into settlements, administrative areas, mountains,
-water, and other results. Presentation prioritizes the first four groups and hides the
-other group until explicitly requested. Each displayed match includes its geodesic
-distance from the original viewport center; later camera movement does not change that
-search anchor. Only explicit settlement types are classified as settlements, so objects
-such as `place=square` remain in the optional other-results group.
+On first enable the controller loads `@openmeteo/weather-map-layer` and registers its
+`om://` protocol (at most three cached variable states), releasing it on disposal.
+Enabling weather snapshots relief-shading and isoline visibility and hides both without
+changing their durable preferences; disabling or a failed enable restores them. The
+controller fetches the ECMWF IFS 0.25° `latest.json` spatial manifest through the shared
+HTTP client (`loadOpenMeteoSpatialMetadata`), validates completion, cloud,
+precipitation, both wind components, and `valid_times`, and selects the timestamp
+nearest the requested instant. That index becomes one shared `time_step=valid_times_N`
+for the cloud, precipitation, and wind-arrow sources, each with `tile_size=256`.
 
-## Point Weather forecast
+Before the first tile and on every `dataloading` event while enabled, the controller
+passes the current viewport to the package's `updateCurrentBounds()`. The cloud and
+precipitation rasters and the `wind-arrows` vector layer are inserted before road
+casings; wind visibility and stroke width scale with speed, so ≤5 m/s is nearly
+invisible. Source-data events publish 0–3 render progress to the operational status.
+
+Style reconciliation restores the same frame and order. A time change removes and
+recreates all three sources before publishing the new index, so state never claims a
+mixed frame. Opacity is durable. While enabled, the URL carries the selected point and
+valid time; metadata, progress, and forecast values stay in memory.
+
+## Point weather forecast
 
 ```mermaid
 sequenceDiagram
@@ -782,181 +328,277 @@ sequenceDiagram
   participant UseCase as GetPointWeatherForecast
   participant DEM as ElevationProvider
   participant Gateway as OpenMeteoWeatherForecastGateway
-  participant Period as Weather period aggregator
 
-  Map->>Command: selected WGS84 coordinate
-  Command->>Panel: latest Weather request
-  Panel->>UseCase: coordinate + ecmwf_ifs + AbortSignal
-  UseCase->>DEM: sample coordinate
-  DEM-->>UseCase: terrain elevation or unavailable
-  UseCase->>Gateway: coordinate + optional elevation + model
+  Map->>Command: selected coordinate
+  Command->>Panel: latest weather request
+  Panel->>UseCase: coordinate + AbortSignal
+  UseCase->>DEM: sample coordinate (unless elevation was provided)
+  UseCase->>Gateway: coordinate + optional elevation + ecmwf_ifs
   Gateway-->>UseCase: normalized current and eight local dates
-  UseCase->>Period: current 3 h, daylight, and anchored night samples
-  Period-->>UseCase: interval metrics and primary/secondary statuses
-  UseCase-->>Panel: compact summary, 24+ hourly values, and seven date rows
+  UseCase->>UseCase: aggregate current 3 h, daylight, and night periods
+  UseCase-->>Panel: summary, hourly values, and seven date rows
 ```
 
-Weather keeps the selected point plus a serializable latest-request command in
-`mapInteractionStore` because the persistent map, URL synchronizer, and contextual panel
-have separate owners. The panel consumes each command immediately and retains only its
-request/result lifecycle while loading. A newer point aborts the previous request and
-owns all subsequent rendering; sequence identity prevents a late response from replacing
-it. Leaving Weather keeps the mounted request and result, while unmount aborts active
-work. Forecast values are never written to Zustand or IndexedDB. When the weather map is
-enabled, only its selected coordinate and metadata valid time enter the URL.
+The panel consumes each request command immediately; a newer point aborts the previous
+request and sequence identity drops late responses. Leaving Weather keeps the mounted
+result; unmount aborts. A finite local DEM sample becomes the forecast elevation,
+otherwise the Open-Meteo elevation is used. The gateway requests only current and hourly
+values with `timezone=auto` and `forecast_days=8`, so dates follow the selected
+location. Each night combines post-daylight samples with the next date's pre-daylight
+samples through `domain/weather/aggregateWeatherPeriodStatus.ts`. Forecasts are never
+written to Zustand or IndexedDB.
 
-`GetPointWeatherForecast` first asks the existing local terrain provider for the clicked
-point. A finite sample is sent as the forecast elevation; otherwise the Open-Meteo
-response elevation is retained. The gateway requests `timezone=auto`, so hourly
-grouping, date labels, and model-update formatting follow the selected location rather
-than the browser. Only current and hourly values are requested. Eight location-local
-dates provide seven complete displayed nights. For each date, post-daylight samples are
-combined with the following date's pre-daylight samples before aggregation, so midnight
-does not split the night. Day, night, and current three-hour intervals share one metrics
-and status contract. Primary sky and precipitation use per-hour duration and dominance;
-visibility remains a separate severity and interval-position result. The application
-never requests provider `daily` values or precipitation probability.
+After the Markers section is first opened, `MarkersWorkspaceProvider` runs the same use
+case for every saved marker with at most four concurrent requests, passing a stored
+marker elevation when present. `selectMarkerWeatherForecast` reduces each forecast to
+the weekdays and day/night/custom period in the persisted weather-interval preferences.
+Results are cached in memory per marker and preference set and drawn on the map only
+while Markers is active. A marker without elevation stores the forecast elevation and
+reports a marker change for synchronization.
 
-One-shot Weather selection and an enabled weather map both suppress ordinary point
-inspection for their primary clicks. Marker placement remains first in click precedence.
-An enabled weather map also pauses route-draft click ownership; disabling it lets the
-unchanged route draft resume when Tracks is active.
+One-shot weather selection and an enabled weather map take primary map clicks from point
+inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
+clicks until disabled.
 
-## Point inspection lifecycle
+## Point inspection and point actions
 
-`MapLibreFacade` owns the serializable inspection state and the native popup adapter.
-The first map click opens loading state and starts cancellable nearby-map-feature and
-elevation work. If an inspection is already open and intersects the map viewport, the
-next map click closes it, aborts that work, and does not inspect the new coordinate; the
-following click may start another inspection. An entirely offscreen popup is closed and
-replaced by the same click. Sequence checks prevent a late provider result from
-reopening a closed popup. Explicit popup close uses the same cancellation path.
-Diagnostics record only lifecycle, duration, outcome, and result count, never the
-clicked coordinate or arbitrary POI metadata.
+`MapLibreFacade` owns the serializable inspection state and the native popup. A map
+click opens a loading inspection and starts cancellable nearby-feature and elevation
+work. While an inspection is open and on screen, the next click only closes it; an
+offscreen popup is replaced by the same click. Sequence checks stop late results from
+reopening a closed popup. Diagnostics record lifecycle, duration, outcome, and count,
+never coordinates or POI metadata.
 
-The native popup exposes an empty host element through
-`MapFacade.getPointInspectionContent()`. `MapWorkspace` subscribes to the inspection
-state and renders `MapPointInspectorContent` into that host with a React portal, so the
-popup follows the app theme and locale without imperative DOM updates. MapLibre inserts
-the popup before React fills it, so the content component moves focus to its close
-button once per opened popup and the adapter re-anchors after the next layout frame. On
-a coarse primary pointer `MapWorkspace` calls
-`MapFacade.setPointInspectionPopupEnabled(false)`: the adapter keeps only the point
-marker, detaches the popup so a marker tap cannot toggle it, and reports the inspection
-as visible while it is open, so the next map tap still closes it. The same content then
-renders in a bottom sheet owned by `MapWorkspace`. `MapPointActionList` is the single
-definition of point actions: the mouse context menu renders it in a popover and the
-touch sheet renders it below the details, while `MapWorkspace.runPointAction` executes
-both.
+The popup exposes an empty host through `MapFacade.getPointInspectionContent()`, and
+`MapWorkspace` portals `MapPointInspectorContent` into it so it follows the app theme
+and locale. On a coarse pointer `MapWorkspace` calls
+`MapFacade.setPointInspectionPopupEnabled(false)`; the facade keeps only the point
+marker and the same content renders in a bottom sheet. `MapPointActionList` defines the
+point actions for both the context menu and the touch sheet, and
+`MapWorkspace.runPointAction` executes them: copy coordinates or point link, create a
+marker (named from the nearest POI), search satellite images, show or link the weather
+forecast, and open external forecast sites.
 
-## Local track retention
+## Place search expansion
 
-A picker selection or drop inside the contained Tracks import zone parses one supported
-GPX, FIT, or KML file in memory. GPX and KML use bounded XML parsing with DTD/entity
-rejection. FIT uses Garmin's official decoder, requires header/size/CRC integrity, and
-projects only ordered positions, timestamps, and preferred enhanced elevation into the
-shared track model; sensor, profile, health, and device fields are discarded. During a
-file drag anywhere in the application, a contained portal card is visible over the
-workspace; only a drop on that card imports. A drop outside it is prevented from
-navigating the browser but does not import. On the `idle -> preparing` import edge, the
-shell selects Tracks and expands desktop navigation; rejected validation leaves the
-current tab and collapse state unchanged. Another import, selecting a saved track, or
-closing the preview first requires an explicit discard decision. File-selection and
-parse errors appear inside the import zone and dismiss after five seconds; storage and
-selected-track failures use the persistent panel error. A valid preview starts a
-cancellable optional English-name lookup without blocking editing or save.
-`application/tracks/suggestTrackName.ts` joins all segments, classifies the track as
-one-way, loop, or out-and-back, and resolves the start, the finish of one-way tracks,
-and one landmark at the dominant summit or closed-track turnaround. Endpoints use a
-nearby settlement, then a ranked nearby landmark; the landmark uses a ranked nearby
-feature, then a settlement. `domain/tracks/trackNaming.ts` romanizes labels and composes
-the name. Each failed lookup is logged and skipped, and its kind and reason (for example
-an HTTP 429 rate limit) are returned so the preview can explain a missing or partial
-name. Switching rail sections retains the preview. `beforeunload` is registered only
-while that preview remains unsaved and is removed after save or confirmed discard.
+`MapSearchPlaceholder` captures an immutable viewport on explicit submission.
+`SearchPlaces` queries the gateway inside that area, then doubles the area around the
+same center until a 500 km radius, emitting the accumulated, visually unique
+name-and-category matches after each response. A sub-metre tolerance and an attempt
+ceiling guarantee termination. The Nominatim adapter serializes requests at one per
+second, caches each query-and-area pair, and passes cancellation through every wait. A
+provider failure keeps visible results; a new submission or closing the list cancels the
+query, but camera movement does not. Distances are measured from the original viewport
+center.
 
-Saving a validated import writes its lightweight summary and full content row in one
-Dexie read-write transaction. The summary contains the stable display name, source
-format and filename, favorite state, authoritative source metrics, and optional
-browser-calculated metrics used by list and detail views. The content row retains the
-exact normalized source-point projection and an optional separate calculated Terrarium
-projection. Original source bytes are discarded after parsing. A database upgrade
-retains historical metrics and points as source fields while adding no calculated data;
-a fresh Terrarium run populates that projection. A transaction failure leaves neither
-row listable. Rename and favorite updates validate and change only the summary. List
-reads place favorites first and use newest-first import time inside each group. Delete
-removes both rows and clears a matching latest-opened setting in one transaction.
+## Browser route planning
 
-Opening or newly saving a track records its opaque ID in the existing settings table. On
-startup the Tracks provider loads that summary and validates its content before
-restoring the details and map geometry. Missing or corrupt remembered content clears the
-setting without blocking the remaining list. Saved-track names are searched through
-their normalized name only; source metadata, including parsed source descriptions,
-remains bounded within the parsed metadata projection rather than becoming editable
-saved state.
+```mermaid
+sequenceDiagram
+  participant User
+  participant Tracks as TracksWorkspaceProvider
+  participant Router as BrowserTrailRouter
+  participant Worker as Routing worker
+  participant Terrain as ElevationProvider
+  participant Storage as AppDatabase
 
-The Tracks provider sends validated independent segments to the existing map layer
-controller. The controller retains one GeoJSON `MultiLineString`, reconciles its casing
-and bright-blue line after map/style attachment, and applies one persistent
-visibility/opacity pair. Once an elevation profile is available, Tracks publishes
-independent grade subsegments across every completed source run to the existing
-highlight layer, regardless of macro climb/descent classification. That whole-track
-colored overlay shares the imported-track opacity and is visible only when both durable
-Imported tracks and Elevation gradient preferences are enabled. When that overlay has
-grade subsegments, `MapWorkspace` displays a compact lower-right profile-shaped, stepped
-color scale. Labels use numeric grade positions around 0% and appear only where the
-palette changes color; smartphones omit the scale. Hovering or selecting a chart or
-Climbs & Descents segment changes panel emphasis only; it does not republish or filter
-the overlay. Chart-point highlighting independently updates a transient point source and
-circle layer, which is cleared when hover ends or the track closes. Import and
-saved-track selection issue one fit command with left padding for both Tracks panes.
-Close replaces the source data with empty geometry; it does not alter the stored row or
-camera.
+  User->>Tracks: Plan route, then click waypoints
+  alt Routes leg
+    Tracks->>Router: route(start, destination, signal)
+    Router->>Worker: validated request over WorkerRpc
+    Worker->>Worker: load bounded MVT, build graph, snap, A*
+    Worker-->>Tracks: routed geometry and progress events
+  else Line leg
+    Tracks->>Tracks: append direct segment
+  end
+  Tracks->>Terrain: sample accepted geometry
+  Tracks->>Tracks: render line and numbered waypoints
+  User->>Tracks: Save
+  Tracks->>Storage: save LocalTrackContent
+```
 
-Elevation analysis never bridges independent segment gaps. Complete parsed source
-elevation runs remain authoritative for the profile, grade bands, and climb/descent
-segments; calculated Terrarium elevation is the profile fallback only when no usable
-source run exists. Terrain calculation resamples each source segment at 10 m, repairs
-invalid DEM pixels through the shared Terrarium provider, median-filters one-point
-spikes, applies a distance-weighted symmetric 150 m trapezoidal moving average, and
-aggregates gain/loss with 10 m hysteresis. Recalculation replaces only calculated
-metrics/points and preserves source geometry, timestamps, elevations, content hash, and
-sync state.
+The first click creates only a waypoint; each later click uses the currently selected
+mode. The worker filters the detail-vector `streets` layer to road and path lines, nodes
+eligible junctions through a bounded spatial index (layer and bridge/tunnel differences
+prevent inferred connections), snaps both endpoints, and runs A* with geodesic weights.
+A no-path result expands the tile coverage once within the same budgets. Failures are
+explicit — no path, area too large, routing data unavailable, 60 s timeout
+(`ROUTE_CALCULATION_TIMEOUT_MS`), or invalid data — and never become a direct line.
+
+Every click, mode change, Undo, Clear, close, and unmount aborts work from an older
+route-plan generation, and stale completions are ignored. Routed legs keep the clicked
+endpoints with direct connectors to the snapped network. Elevation enrichment is
+generation-checked and cancellable; without an elevation provider the route is saved
+distance-only. The plan stays unsaved React state until Save writes the ordinary track
+records.
+
+## Tracks on the map
+
+Import parsing, naming, and saving are described in [features.md](features.md) and
+[data-model.md](data-model.md). `TracksWorkspaceProvider` sends validated independent
+segments to `MapLibreLayerController.setImportedTrackGeometry`, which keeps one GeoJSON
+`MultiLineString` with a casing and line and one persistent visibility/opacity pair. In
+multi-track mode the provider combines the segments of every ready selected track into
+that geometry and fits their combined bounds. Route plans use a separate route-plan
+source with numbered waypoints.
+
+With an elevation profile, grade subsegments across every source run feed the highlight
+layer, visible only when both Imported tracks and Elevation gradient are enabled; the
+lower-right grade legend appears with it. Chart and climb hovers change panel emphasis
+only; the chart point drives a separate transient trace-point source. Import and track
+selection issue one fit command padded for the Tracks panes; closing clears the source
+without touching storage or the camera.
+
+Elevation analysis never bridges segment gaps. Complete source elevation runs are
+authoritative; calculated Terrarium elevation is the profile fallback only when no
+usable source run exists. The calculation resamples at 10 m, repairs DEM pixels through
+the shared Terrarium provider, median-filters single-point spikes, applies a 150 m
+distance-weighted trapezoidal average, and aggregates gain/loss with 10 m hysteresis.
+
+`beforeunload` is registered only while an import preview is unsaved.
+
+## Explicit cross-device synchronization
+
+Startup restores the local `sync.enabled` preference and the account session
+independently. One worker run starts when both resolve with an authenticated user and
+sync enabled. Later runs follow only an explicit local track, folder, or marker
+mutation, enabling sync, sign-in, or **Sync now**; token refresh and focus update
+account state without syncing. Disabling sync or signing out aborts an active run. The
+user ID only namespaces local preparation; the access token is the sole remote
+credential.
+
+Before any remote call, the worker records `sync.user-id` in the transaction that
+prepares local pairs. A new or different owner resets remembered remote revisions and
+tombstones to pending upserts while keeping local tracks.
+
+Folders reconcile before tracks so downloaded tracks can validate their placement.
+Folder upserts and deletes use exact base revisions; a conflict retries the local edit
+on the newer revision (last writer wins). An untouched local **Imports** placeholder
+adopts the account's existing record. Order is uploaded separately through one atomic
+`folder-reorder` call; readers order by position, then ID. A remote folder deletion only
+clears local placement, and unknown folder IDs read as unfiled.
+
+Each snapshot is grouped by lineage. A ready GRPT v2 member is the lineage head even
+over a higher-revision v1 predecessor. A browser holding source elevation for a v1
+lineage uploads a v2 replacement under the same local track ID, then deletes the
+predecessor at its observed revision. Quota exhaustion leaves both objects intact.
+
+The worker validates remote records and private GZIP objects, performs pending deletes
+first, and merges a second full snapshot atomically. A known same-account revision
+missing from that snapshot pauses for a user decision (`RemoteDeletionDialog`): selected
+tracks are deleted locally, others upload again. Invalid or network failures preserve
+local data and pending work.
+
+### Edge Function trust boundary
+
+`supabase/functions/track-sync` handles tracks, folders, and markers. Supabase verifies
+the JWT, `@supabase/server` in `auth: "user"` mode supplies claims, and the function
+derives `user_id` only from `userClaims.id`. It rejects client-supplied identity, object
+paths, quota counters, unknown fields, oversized bodies, and malformed values. No
+privileged key reaches the browser.
+
+An upload is one bounded multipart request with `action=upload`, `baseRevision`,
+`contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry.
+Before reserving quota, the function checks actual size, bounded decompression, the GRPT
+v1 or v2 envelope, limits, finite v2 elevation, SHA-256, and that metadata's
+`lineageHash` and `geometryVersion` match the geometry. The database assigns the object
+path; the function writes it with `upsert: false` and finalizes the reservation, or
+compensates on failure. Revisions, not client clocks, decide conflicts. Record, quota,
+and deletion-ordering rules are in [data-model.md](data-model.md).
+
+## Public track sharing
+
+An authenticated owner opens **Track actions** for a ready synchronized track, which
+loads `status` from `supabase/functions/track-share`. The **Share** toggle calls
+`enable` or `disable`; enable copies the canonical capability link, and **Copy share
+link** repeats it. The function derives the stable HMAC capability from the stored nonce
+and `TRACK_SHARE_TOKEN_SECRET`; Postgres never returns raw tokens.
+
+A recipient sends the fragment capability with the publishable key in an
+`x-track-share-token` header (`SupabaseTrackShareService`). The function resolves only
+the token digest, returns a narrow metadata projection or the private GZIP bytes with
+`Cache-Control: no-store`, and returns the same unavailable response for unknown,
+disabled, deleted, and non-ready shares. The browser checks byte count, decompresses
+GRPT, verifies the SHA-256 content hash, and decodes geometry before rendering. **Save a
+copy** creates an independent local track and removes the fragment; opening a link never
+writes persistence or enables sync.
+
+## Provider and WebGL failures
+
+- `error` events are classified from safe source IDs and normalized messages.
+- Aborted, cancelled, and superseded tile requests are ignored before any snapshot
+  change, so camera movement cannot cause a render storm.
+- A style error sets the fatal lifecycle because no usable basemap exists.
+- Vector, glyph, raster, and terrain errors update capped failure buckets and a degraded
+  snapshot (terrain errors also return the snapshot to flat); repeats do not create log
+  storms.
+- The shell projects the latest degraded snapshot into `OperationalStatus`; no separate
+  map banner is mounted.
+- `webglcontextlost` is prevented, recorded as fatal, and shown; `webglcontextrestored`
+  refreshes capabilities and returns to ready.
+
+## Diagnostics, health, and export
+
+```mermaid
+flowchart LR
+  Map["MapLibreFacade"] --> Snapshot["MapDiagnosticsSnapshotStore"]
+  Boundary["Global handlers / error boundary"] --> Logger["BoundedDiagnosticLogger"]
+  HTTP["ky hooks"] --> Logger
+  Storage["Persistence"] --> Logger
+  Sentinel["Sentinel use cases"] --> Timeline["SentinelQueryDiagnosticsStore"]
+  Timeline --> Drawer["DeveloperDrawer"]
+  Snapshot --> Drawer
+  Logger --> Drawer
+  Health["HealthCheckService"] --> Service["DiagnosticsService"]
+  Snapshot --> Service
+  Logger --> Service
+  Service --> Bundle["Local schema-v3 JSON download"]
+```
+
+Logging is best-effort and never fails the primary operation. Redaction happens before
+an event enters the 200-event buffer. The shared `ky` client records start, completion,
+cancellation, timeout, status, and network failure with only the origin, status,
+duration, and an allowlisted operation ID; satellite use cases pass that ID through the
+HTTP context for correlation.
+
+`HealthCheckService.run()` performs local checks: IndexedDB, storage estimate, browser
+capabilities, WebGL, and map readiness. `runProviderReachability()` runs only on
+explicit request and probes the vector and detail-vector TileJSON, one terrain tile with
+a `Range` header, and a one-item Sentinel search; startup never waits for it.
+`DiagnosticsService` merges results by check name.
+
+`DiagnosticsService.createBundle()` builds a schema-version-3 bundle
+(`diagnosticBundleSchema.ts`) from build info, runtime basics, sanitized reproduction
+notes, health results, events, and the map snapshot with camera values rounded.
+`downloadBundle()` saves it through an object URL revoked immediately; nothing is
+uploaded. `tools/diagnostics` inspects and summarizes exported bundles. If runtime
+services cannot be built, `mountBootstrapFallback` produces a schema-version-1 bootstrap
+bundle with the standalone redactor.
+
+Sentinel commands publish correlated step transitions through the
+`SentinelQueryDiagnostics` port; the store keeps only the current or latest operation.
+While the drawer is open and an operation runs, it refreshes durations every 250 ms
+without polling providers. Invalid or late transitions are ignored.
+
+## Localization
+
+`main.tsx` resolves the locale from the saved `ui.preferences` value, then
+`navigator.languages`, and calls `activateAppLocale` before rendering. The Settings
+language control goes through `WorkspaceShell`, which re-activates the shared `appI18n`
+instance (updating `<html lang>`, the title, and the description) and persists the
+choice with the other UI preferences. Catalog ownership is described in
+[project-structure.md](project-structure.md#localization-ownership).
 
 ## Teardown ownership
 
 `MapWorkspace` flushes camera persistence and releases the native map through its ref
-callback. The facade detaches the shared layer controller, cancels a pending terrain
-wait, removes MapLibre and WebGL listeners, and releases the native map reference. Ref
-cleanup preserves facade subscribers so React Strict Mode can immediately reattach the
-retained facade without leaving map readiness or the Satellite controller stale. React
-effects also remove online/offline listeners and reset developer-only debug flags. New
-integrations must preserve this single-owner cleanup model.
+callback. The facade detaches the layer controller, cancels a pending terrain wait,
+removes MapLibre and WebGL listeners, and drops the native reference, but keeps its
+subscribers so React Strict Mode can reattach the same facade. New integrations must
+keep this single-owner cleanup model.
 
-For final page teardown or Vite module replacement, runtime-service disposal removes the
-registered DEM/contour protocols, releases terrain timing subscriptions, flushes partial
-diagnostic batches, terminates the terrain worker, rejects pending RPC work, clears
-worker caches, detaches controller listeners, and closes local runtime resources. A page
-retained in Chrome's back-forward cache keeps its runtime and `pagehide` listener
-intact. After restoration, a later final navigation removes that listener and disposes
-the runtime; Vite module replacement uses the same explicit, idempotent cleanup path.
-
-## Public track sharing
-
-An authenticated owner opens **Track actions** for a ready synchronized track. The menu
-loads `status` through the `track-share` Edge Function using the verified owner claim.
-Its direct **Share** toggle calls `enable` or `disable`; successful enable copies the
-canonical capability link and an enabled status exposes **Copy share link**. Disable
-clears the retained token and removes public access. Enable reconstructs the stable
-HMAC-derived capability from the stored nonce and never returns raw tokens from
-Postgres. The function uses a dedicated stable `TRACK_SHARE_TOKEN_SECRET` per
-environment; there is no share dialog.
-
-A recipient sends the fragment capability with the publishable key and
-`X-Track-Share-Token`. The function resolves only the token digest, returns a narrow
-metadata projection or the private GZIP bytes, and applies `Cache-Control: no-store`.
-Unknown, disabled, deleted, and non-ready shares converge on the same unavailable
-response. The browser validates byte count, decompresses GRPT, verifies the canonical
-SHA-256 content hash, and decodes geometry before rendering. **Save a copy** explicitly
-creates an independent local track and removes the sharing fragment; opening a link
-never writes persistence or enables synchronization.
+`registerPageLifecycleDisposal` unmounts React and calls `RuntimeServices.dispose()` on
+a non-persisted `pagehide` or Vite module replacement. A page kept in the back-forward
+cache stays intact. Disposal terminates the routing worker, lets the layer controller
+remove its protocols, flush partial timing batches, and terminate the terrain worker,
+disposes the user service, and closes the database.

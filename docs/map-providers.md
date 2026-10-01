@@ -1,39 +1,42 @@
-# Map provider decision
+# Map providers
 
-## Decision record
+The application is an anonymous static client hosted on GitHub Pages. Every default
+provider is keyless: no API key, cookie, account, signed request, or referrer-restricted
+secret is bundled. Provider behavior and policy are time-sensitive; recheck this file
+before a public traffic increase or whenever a default changes.
 
-- Evidence date: **2026-07-18**.
-- Scope: anonymous static browser client hosted on GitHub Pages and local development
-  origins.
-- Decision: use a hybrid anonymous vector basemap: OpenFreeMap/OpenMapTiles for
-  hiking-specific layers and labels, plus OSM Foundation Shortbread v1 for land,
-  buildings, and street detail. AWS Open Data Mapzen Terrain Tiles remain the
-  replaceable terrain default.
-- Credentials: neither vector default requires an API key, cookie, account, signed
-  request, or referrer-restricted secret. No provider credential is included in the
-  bundle.
+## Configuration
 
-Provider behavior and policy are time-sensitive. Recheck this record before a public
-traffic increase or whenever the defaults change.
+Schemas and defaults live in `src/bootstrap/configuration`:
+
+| Area                               | Schema and defaults                 | Public override                         |
+| ---------------------------------- | ----------------------------------- | --------------------------------------- |
+| Basemap, terrain, and imagery      | `MapProviderConfiguration.ts`       | `VITE_MAP_PROVIDER_CONFIGURATION`       |
+| Place search, reverse, nearby name | `GeocodingProviderConfiguration.ts` | `VITE_GEOCODING_PROVIDER_CONFIGURATION` |
+| Point forecast and weather map     | `WeatherProviderConfiguration.ts`   | none                                    |
+
+Overrides are JSON validated by strict Zod schemas; see the
+[map](./map-provider-configuration.example.json) and
+[geocoding](./geocoding-provider-configuration.example.json) examples, which equal the
+defaults. Map endpoints must be HTTPS or application-relative, templates must contain
+their tile tokens, and attribution rejects script markup. The imagery basemap sections
+(`satelliteBasemap`, `bingSatelliteBasemap`, `esriSatelliteBasemap`, `naprOrthophoto`)
+fall back to their defaults when omitted. An invalid override fails closed with a
+message that never echoes URLs or contents; diagnostics record only provider IDs and
+origins.
+
+Replacing a provider requires a compatible schema or tile format, updated attribution,
+and a review of the style mapping and limits below, not changes to React workflows.
 
 ## Hiking vector: OpenFreeMap/OpenMapTiles
 
-The production default is the TileJSON endpoint `https://tiles.openfreemap.org/planet`.
-The official [quick-start guide](https://openfreemap.org/quick_start/) documents
-MapLibre use through the public instance, and the
-[provider page](https://openfreemap.org/) states that the instance needs no registration
-or API key and currently imposes no map-view/request limit. It does not offer an SLA.
-
-The inspected live TileJSON advertised zooms 0 through 14 and a versioned HTTPS PBF
-template. The provider's Liberty style identified these optional support endpoints:
-
-- Glyphs: `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf`.
-- Sprite metadata/image base: `https://tiles.openfreemap.org/sprites/ofm_f384/ofm`.
-
-The application uses glyphs for labels but intentionally avoids provider sprite
-coupling. Hiking points are rendered with simple circles and text. The source is the
-unmodified [OpenMapTiles schema](https://openmaptiles.org/schema/), which gives this
-configuration mapping:
+The basemap is a hybrid of two vector sources. OpenFreeMap serves the unmodified
+[OpenMapTiles schema](https://openmaptiles.org/schema/) through the TileJSON endpoint
+`https://tiles.openfreemap.org/planet` (z0–14) and glyphs from
+`https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf`. The
+[provider](https://openfreemap.org/) requires no registration or key and currently
+imposes no request limit, but offers no SLA. Provider sprites are not used; hiking
+points render as circles and text.
 
 | Application concept           | Source layer          | Relevant fields/values                                                       |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------- |
@@ -49,744 +52,321 @@ configuration mapping:
 | Settlements                   | `place`               | `class`, names, `rank`, `capital`                                            |
 | Water labels                  | `water_name`          | names and geometry-specific fields                                           |
 
-The transportation schema explicitly includes `path`, `track`, `footway`, `steps`,
-`bridleway`, and `cycleway` classifications. OpenMapTiles does not expose hiking route
-relations as a dedicated source layer in this default schema, so the current style shows
-physical ways rather than claiming to show official marked routes.
-
-### Routing tile inspection baseline
-
-The opt-in `pnpm diagnostics:routing-inspect` command reads the configured
-`detailVector` TileJSON and `streets` source layer independently of MapLibre. This is
-the same source and layer used to draw visible roads and paths from z13 upward, so
-routed geometry does not diverge from the detailed map because of a second provider's
-generalization.
-
-The 2026-08-10 inspection covered the z14 3×3 tile area centered on Stepantsminda
-(`44.6408, 42.6602`). It recorded 321 line features, 98 shared part-endpoint keys, 135
-repeated part-endpoint occurrences, and 407 shared graph-vertex keys. The observed
-property keys were `bridge`, `kind`, `oneway`, `oneway_reverse`, `rail`, `service`,
-`tracktype`, and `tunnel`; road kinds included `footway`, `path`, `pedestrian`,
-`residential`, `service`, `steps`, `tertiary`, `track`, `trunk`, and `unclassified`.
-Shortbread does not publish feature IDs or foot/access values in this layer. Routing
-therefore includes every street kind except construction/proposed, rail, and explicit
-non-road aeroway kinds. It rejects explicit `foot=no` or `foot=private` when a
-replacement provider supplies those values, but it does not invent access rules absent
-from the configured schema.
-
-Routing stays at z14 because the inspected TileJSON advertises z14 as its maximum native
-zoom and that level retains the provider's most detailed street geometry. Each leg
-expands the endpoint bounds north, south, east, and west by the larger of 2,000 m or 25%
-of the endpoint geodesic distance, covers the resulting half-open XYZ rectangle, and
-rejects coverage above 256 tiles. A disconnected search that reaches the covered
-boundary retries once with doubled padding. Tile decoding is limited to eight concurrent
-requests and a worker-owned 128-entry LRU; neither MapLibre's viewport nor its tile
-cache participates.
-
-Decoded coordinates are normalized to one global 4,096-unit MVT grid. Exact shared
-vertices connect first. A deterministic 512-unit spatial index then splits primitives at
-eligible X crossings, endpoint-on-interior T junctions, collinear overlap ends, and
-endpoint-to-segment gaps of at most two graph units. Inferred interior junctions require
-matching available layer and bridge/tunnel metadata, so an explicit bridge or tunnel
-remains separated; exact shared source endpoints remain connected. Feature IDs are not
-required for topology identity.
-
-The reported Uravi area at `[43.28590, 42.65015]` demonstrates why routing uses this
-source. In tile `z14/10161/6041`, OpenMapTiles represented the relevant minor road with
-18 vertices while the visible Shortbread road contained 32. The production path routed
-between `[43.2864761, 42.6536135]` and `[43.2814658, 42.6507018]` along that Shortbread
-geometry as a 576.76 m route with 33 geometry points from a 16-tile graph containing
-1,927 nodes and 1,945 edges. The broader stress route from `[44.75419, 41.72431]` to
-`[44.73748, 41.74651]` returned 3,459.05 m and 204 geometry points from a 16-tile graph
-containing 58,890 nodes and 67,262 edges, without expanded coverage.
-
-These point-in-time diagnostics detect provider drift rather than promise an SLA.
-Shortbread can still omit, misclassify, or grade-separate a physical connection, and the
-router does not infer access or one-way restrictions absent from the published
-properties.
-
-English-first labels use `name:en`, then the provider-generated `name:latin` field for
-transliteration, and finally legacy English/native fallbacks. Land-cover `ice` supplies
-the available glacier geometry. Land-use `military` supplies restricted-area geometry,
-but the schema has no dependable general access/ownership field; private-property and
-other closure coverage is therefore unavailable rather than inferred from unrelated
-land-use classes.
-
-The Layers panel represents this source under its provider heading. One **Natural
-features** checkbox owns the polygon layers for vegetation (`landcover` excluding ice),
-glaciers (`landcover` ice), and water bodies (`water`). Waterway lines and water labels
-remain visible as navigation context. The remaining source controls cover Restricted
-areas (`landuse` military), Hiking paths, Roads, and Places and POIs. New source-layer
-families must be added to the corresponding Layers control in the same change as their
-style.
-
-Waterways and water bodies share one blue. The `waterway` layer is ordered below the
-`water` fill so lake and reservoir polygons mask overlapping river centerlines.
-
-### Attribution and licensing
-
-At desktop widths, attribution remains visible in MapLibre's attribution control:
-
-> OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors
-
-The smartphone map omits the attribution control to preserve the map-first interaction
-surface. OpenFreeMap and OpenMapTiles are credited by the OpenFreeMap source; OSM
-contributors are credited once by the Shortbread source. OpenFreeMap's
-[attribution section](https://openfreemap.org/#attribution) requires OpenMapTiles and
-OpenStreetMap credit; OpenFreeMap credit itself is encouraged. The OpenMapTiles schema
-is CC-BY and its implementation is BSD-licensed. OSM data remains subject to ODbL and
-the OSM attribution guidance.
-
-### Browser evidence and replacement
-
-A page served from `http://127.0.0.1:4174` fetched the cross-origin TileJSON
-successfully with status 200 (`application/json`, 19,254 bytes, 368 ms in the observed
-run). The provider's own MapLibre example loaded its style, tiles, glyphs, and
-attribution over HTTPS. This confirms browser CORS for the tested local origin; GitHub
-Pages uses the same anonymous CORS request model.
-
-The base source, support endpoints, layer mapping, and attribution are parsed
-configuration. Replacing OpenFreeMap therefore requires a compatible TileJSON/schema
-configuration and style-mapping review, not changes to React workflows.
+OpenMapTiles has no hiking-route relation layer, so the style shows physical ways
+(`path`, `track`, `footway`, `steps`, `bridleway`, `cycleway`) rather than official
+marked routes. Map labels are English-first in every UI language: `name:en`, then the
+provider-generated `name:latin`, then legacy fallbacks
+(`src/presentation/map/mapStyleFactory.ts`). Land-cover `ice` supplies glaciers and
+land-use `military` supplies restricted areas; the schema has no dependable
+access/ownership field, so private-property closures are not inferred. New source-layer
+families must get a Layers control in the same change as their style.
 
 ## Detail vector: OSM Shortbread v1
 
-The production detail source is the OSM Foundation TileJSON endpoint
-`https://vector.openstreetmap.org/shortbread_v1/tilejson.json`. It is deliberately a
-second vector source, not a replacement for OpenFreeMap: Shortbread supplies `land`,
-`buildings`, and `streets`, while OpenFreeMap remains authoritative for peaks, saddles,
-ridges, hiking POIs, water/place labels, glyphs, and z10–12 overview paths.
+The OSM Foundation endpoint
+`https://vector.openstreetmap.org/shortbread_v1/tilejson.json` (z0–14, overzoomed above)
+is a second source, not a replacement. Shortbread supplies `land` (`kind = brownfield`),
+unfiltered `buildings`, and `streets`; OpenFreeMap stays authoritative for peaks,
+saddles, ridges, POIs, water and place labels, glyphs, and z10–12 overview paths.
 
-The verified mappings are `land.kind = brownfield`, unfiltered `buildings`, and
-`streets.kind`. The road style allows `motorway`, `trunk`, `primary`, `secondary`,
-`tertiary`, `unclassified`, `residential`, `living_street`, and `service`. At z13 and
-above, Shortbread additionally supplies `track`, `footway`, `path`, `cycleway`, and
-`pedestrian`; `steps` also come from Shortbread. OpenMapTiles remains the visible
-bridleway styling source because Shortbread v1 does not publish that distinction; the
-underlying way still participates in routing under its Shortbread `kind`.
+Visible roads use Shortbread `motorway`, `trunk`, `primary`, `secondary`, `tertiary`,
+`unclassified`, `residential`, `living_street`, and `service`; from z13 it also supplies
+`track`, `footway`, `path`, `cycleway`, `pedestrian`, and `steps`. Bridleway styling
+still comes from OpenMapTiles because Shortbread v1 has no such distinction.
 
-The inspected endpoint is anonymous, keyless HTTPS with browser CORS for ordinary
-interactive requests. Its TileJSON supplies detail through z14; MapLibre overzooms z14
-at higher map zooms rather than issuing a different source level. It is best-effort
-public infrastructure with no application SLA and no retry or provider failover.
+OSM Foundation tiles are best-effort public infrastructure for normal attributed
+interactive use: keep the browser's Referer and User-Agent, allow ordinary caching, add
+no cache-busting or synthetic headers, and never bulk-download, prefetch, archive, or
+prepare offline data. The application requests tiles only for the current view or a
+user-triggered bounded route and has no proxy, retry, or fallback provider.
 
-OSM Foundation tile use requires normal attributed interactive use: preserve the
-browser's Referer and User-Agent behavior, permit ordinary browser/CDN caching, and do
-not add cache-busting wrappers or synthetic request headers. Bulk retrieval,
-prefetching, archive creation, and offline downloads are prohibited. The application
-requests tiles only for the current map view or a user-triggered bounded route, never in
-the background or for offline preparation, and has no custom profile build, hosted
-archive, proxy, or fallback provider.
+### Attribution and licensing
 
-## Place search: public Nominatim
+Desktop MapLibre attribution shows:
 
-The replaceable default place-search endpoint is the public OpenStreetMap Nominatim
-Search API. Search is submit-only because the public usage policy forbids client-side
-autocomplete. Each request supplies a bounded `viewbox`; the application begins with the
-visible viewport and doubles the bounded area until it reaches a 500 km radius from the
-original viewport center. Matches from narrower areas remain first while wider responses
-append new displayed name-and-category combinations. This collapses one named street
-split across several OSM ways without suppressing same-name features whose full location
-labels differ, and avoids allowing a nearby road or business name to hide a more distant
-settlement. Provider categories are normalized into settlements, administrative areas,
-mountains, water, and other results. Settlement classification uses explicit OSM place
-types rather than the whole `place` category, keeping squares and similar objects out of
-the default list. The first four categories are visible by default; streets, businesses,
-and other POIs require the explicit secondary-results action.
+> OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors
 
-JSONv2 `category` and `type` are the result object's open-ended primary OSM tag, not a
-stable Nominatim enum. The adapter therefore allowlists reviewed tags: cities, towns,
-villages, hamlets, and isolated dwellings; administrative boundaries; peaks, ranges,
-ridges, saddles, volcanoes, and mountain passes; and named rivers, streams, canals,
-waterfalls, springs, bays, straits, and water bodies. Every other tag is
-deterministically classified as `other`. Requests select the `address`, `natural`, and
-`manmade` provider layers so POI and railway matches cannot consume the bounded result
-quota. Raw tag values are retained at the port boundary while presentation converts them
-to readable labels.
+The OpenFreeMap source credits OpenFreeMap and OpenMapTiles; the Shortbread source
+credits OSM contributors once. The smartphone map omits the attribution control to keep
+the map-first surface (`MapWorkspace.tsx`). OpenFreeMap's
+[attribution section](https://openfreemap.org/#attribution) requires OpenMapTiles and
+OpenStreetMap credit. The OpenMapTiles schema is CC-BY, its implementation BSD; OSM data
+is ODbL.
 
-The adapter enforces a minimum one-second interval between network requests, caches
-query-and-viewbox responses for five minutes, limits each provider response to the
-configured maximum, validates JSON with Zod, and exposes typed timeout, rate-limit,
-invalid-response, provider, and network failures. Queries and result metadata are not
-written to diagnostics. UI attribution links to the OpenStreetMap copyright page.
+## Routing tiles
 
-An explicitly imported local track may also request reverse lookups for its start,
-finish, and landmark anchors. The reverse request asks for `addressdetails` and returns
-only the largest enclosing `city`, `town`, `village`, `hamlet`, or `isolated_dwelling`
-address component, located by the matched object's coordinate. A town quarter therefore
-resolves to its town, while a match that is only a district, municipality, or road names
-nothing. Landmark lookups submit one bounded Overpass query around the anchor. A single
-`around` scan collects named objects within two kilometres into a set, and tag filters
-on that in-memory set keep only the categories track naming ranks: mountain passes;
-peaks, volcanoes, saddles, water bodies, glaciers, and cave entrances; waterfalls; huts,
-viewpoints, camp sites, and attractions; historic objects; shelters and places of
-worship; and settlements. The query returns at most 50 centres and declares a 32 MiB
-`maxsize`, which helps the busy dispatcher admit it. Against the public endpoint this
-shape finished in 1–7 s, while a key-regex filter on the spatial scan took up to 20 s
-and a union of per-tag `around` scans timed out. Overpass reports timeouts and memory
-exhaustion as HTTP 200 with a `runtime error` remark; the adapter treats that as a
-provider failure rather than an empty result. HTTP 504 and runtime-error responses are
-retried twice, after 2 s and 5 s. HTTP 429 means this client has used its Overpass
-slots, so it is reported without a retry. Provider coordinates are validated and
-out-of-radius relation centres are discarded. The application ranks the results by
-category class and distance, so no English keyword search such as `pass` is needed. A
-failed lookup is skipped: a failed landmark lookup falls back to the nearest settlement
-and vice versa, and the preview explains which lookup failed and why, including
-HTTP 429.
+In-browser routing (`src/infrastructure/routing`) reads the configured `detailVector`
+`streets` layer at z14, the same geometry drawn from z13, so routes do not diverge from
+the visible detail map. Limits:
 
-The configured Nominatim and Overpass requests share pacing, bounded cache, timeout,
-cancellation, validation, and safe failure mapping. The editable source name remains
-authoritative; a returned short English candidate changes it only after the user chooses
-`Apply place name`. A lookup failure never blocks preview or save, and coordinates or
-returned labels are not added to diagnostics.
+- Each leg's endpoint bounds expand by the larger of 2,000 m or 25% of the geodesic
+  distance; coverage above 256 tiles is rejected. A disconnected search that reaches the
+  boundary retries once with doubled padding.
+- Tile fetches run at most eight at a time into a worker-owned 128-entry LRU; MapLibre's
+  viewport and tile cache do not participate. A calculation times out after 60 s.
+- Every street kind participates except construction/proposed, rail, and non-road
+  aeroway kinds. Explicit `foot=no` or `foot=private` is rejected when a replacement
+  provider supplies it; Shortbread publishes no foot/access values or feature IDs, and
+  the router infers no access or one-way rules absent from the data.
+- Topology uses one 4,096-unit MVT grid: exact shared vertices connect, and a 512-unit
+  spatial index splits crossings, T junctions, overlaps, and gaps of at most two units.
+  Inferred junctions require matching layer and bridge/tunnel metadata.
 
-A direct request to the configured Overpass endpoint on 2026-07-22 UTC returned HTTP
-200, `Access-Control-Allow-Origin: *`, and the expected validated tags for the Kelida
-node, including `name:en=Kelida`, `natural=saddle`, and `mountain_pass=yes`. This
-confirms anonymous browser CORS for the same static-client request model used by GitHub
-Pages. The
-[Overpass API documentation](https://wiki.openstreetmap.org/wiki/Overpass_API) describes
-its read-only OSM query interface.
+`pnpm diagnostics:routing-inspect` inspects the configured TileJSON and layer outside
+MapLibre to detect provider drift (`tools/diagnostics/inspectRoutingTiles.ts`).
+Shortbread can still omit, misclassify, or grade-separate a physical connection.
+
+## Place search and names: Nominatim and Overpass
+
+The defaults are the public OpenStreetMap Nominatim search and reverse endpoints under
+`https://nominatim.openstreetmap.org/` plus the Overpass interpreter at
+`https://overpass-api.de/api/interpreter`
+(`src/infrastructure/geocoding/NominatimPlaceSearchGateway.ts`). Operating limits:
+
+- Search is submit-only because the Nominatim usage policy forbids client autocomplete.
+- Each search sends a bounded `viewbox`, starting at the visible viewport and doubling
+  up to a 500 km radius, and selects the `address`, `natural`, and `manmade` layers.
+- All three endpoints share a minimum one-second request interval, a five-minute cache,
+  the configured timeout and result cap (default 12 s and 10), Zod validation, and typed
+  timeout, rate-limit, invalid-response, provider, and network failures.
+- JSONv2 `category`/`type` is an open-ended OSM tag, so the adapter allowlists reviewed
+  settlement, administrative, mountain, and water tags and classifies everything else as
+  `other`.
+- Imported-track naming requests reverse lookups (zoom 14, `addressdetails=1`,
+  `Accept-Language: en`) that return only the largest enclosing city, town, village,
+  hamlet, or isolated dwelling, so a town quarter resolves to its town and an
+  administrative-only match names nothing.
+- Landmark lookups send one Overpass query per anchor: a single `around:2000` scan of
+  named objects into a set, in-memory filters for the categories naming ranks, at most
+  50 centres, and a declared 32 MiB `maxsize`. On the public endpoint this finished in
+  1–7 s, while a key-regex filter took up to 20 s and per-tag `around` unions timed out.
+- Overpass reports query timeouts as HTTP 200 with a `runtime error` remark; that and
+  HTTP 504 are retried twice (after 2 s and 5 s). HTTP 429 means this client's slots are
+  used and is reported without a retry. Failed lookups are skipped and explained in the
+  preview; they never block import.
+
+Queries, coordinates, and returned names are not written to diagnostics. UI attribution
+links to the OpenStreetMap copyright page.
 
 ## Terrain: AWS Open Data Mapzen Terrain Tiles
 
-The terrain default is
-`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` with:
-
-- Encoding: `terrarium`.
-- Tile size: 256 pixels.
-- Zoom range: 0 through 15; higher map zooms overzoom the last DEM level.
-- HTTPS and anonymous access.
-- Exaggeration: 1.15, deliberately conservative for route-planning context.
-- Relief: low-contrast hillshade from the same source in both flat and 3D modes.
-- Contours: browser-generated vector tiles from zoom 11 through 15, with a 32-tile
-  least-recently-used DEM cache.
-- Preprocessing: a shared filtered-Terrarium protocol repairs only rejected pixels
-  before the PNG reaches relief, 3D terrain, or contour generation.
-
-The [AWS Open Data entry](https://registry.opendata.aws/terrain-tiles/) describes global
-bare-earth elevation and anonymous bucket access. The upstream
+The DEM is `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`:
+Terrarium encoding, 256-pixel tiles, z0–15 (overzoomed above), anonymous HTTPS with
+browser CORS and byte ranges. The
+[AWS Open Data entry](https://registry.opendata.aws/terrain-tiles/) and
 [service documentation](https://github.com/tilezen/joerd/blob/master/docs/use-service.md)
-documents the Terrarium endpoint, 256-pixel size, and zoom limit.
+describe the dataset and limits. One filtered protocol feeds hillshade relief, 3D
+terrain (exaggeration 1.15), browser-generated contours (z11–15), and DEM elevation
+sampling for tracks, point inspection, and forecast downscaling
+(`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
 
-A browser-origin single-range request to a Georgia-covering PNG returned status 206 and
-exactly 1,024 requested bytes in 538 ms. This verifies HTTPS, CORS, and byte-range
-behavior for the observed endpoint.
+### Terrarium repair
 
-### Conservative Terrarium repair
+The provider publishes corrupted pixels, for example a complete −700 m scanline near
+Stepantsminda and compact downward spikes of −315 m to −1,826 m at Lisi Lake.
+`TerrariumDemFilter.ts` repairs them in one stencil pass over the tile plus a one-pixel
+halo from its eight neighbors. It rejects transparent pixels, sentinel values
+(`-32768`), elevations outside −500 m to 9,000 m, and isolated extremes whose residual
+from a consistent neighborhood (at least five neighbors, MAD ≤ 80 m, at most one
+supporting neighbor) is at least 500 m upward or 300 m downward. Rejected pixels take
+the neighbor median; accepted pixels are never resampled, and an unrepaired tile returns
+its original bytes. All thresholds and the 48-entry caches are validated configuration.
 
-The configured tile at `15/20448/12164`, covering the reported map point, contained no
-transparent pixels and no RGB `0/0/0` Terrarium sentinel. Its decoded range was −710.68
-m to 1,191.20 m. Exactly 256 pixels were below zero: the complete local row 5. The
-eastern neighbor repeated the same one-row pattern (−701.53 m minimum), while the
-western, northern, and southern neighbors remained within 830.05 m to 1,278.50 m. The
-bad scanline crosses one shared tile border and begins at another; it is not a coastline
-transition or an artifact introduced by contour rendering.
+Layers exposes `Repair invalid DEM elevation pixels`, enabled by default and persisted
+locally. Changing it reloads relief, 3D terrain, and contours together so they cannot
+disagree. Diagnostics export only durations and aggregate repair counts, never tile
+URLs, indices, coordinates, or pixels.
 
-The separate reported lake point at `42.78452, 42.24199` falls in `15/20228/12067`. Its
-source tile contained diagonal and short vertical downward sequences as low as −1,930.92
-m among local terrain near 2,650 m. The sequences mixed out-of-range pixels with
-still-valid negative and intermediate elevations, so physical bounds alone left visible
-fragments. The configured one-pass repair classifies 129 impossible values and 120
-severe downward spikes in that center tile. The inspected lake window has no remaining
-drop of at least 300 m relative to its immediate-neighbor median after repair.
+### Contours and compute worker
 
-The filter decodes the center plus the required one-pixel halo from all eight
-neighboring tiles exactly once into a `Float64Array` height plane and compact validity
-mask. One direct-index stencil pass then rejects transparent pixels, configured sentinel
-elevations, values outside the configured physical range, and isolated local extremes;
-it does not iteratively feed repaired values back into later classifications.
-
-The standard local-extreme test requires at least five neighbors close to their median,
-median absolute deviation no greater than 80 m, no more than one neighbor supporting the
-extreme center value, and a center residual of at least 500 m upward or 300 m downward.
-A downward residual at least twice that threshold may relax the consensus and support
-limits by one vote. This narrow exception removes the provider's mutually supporting
-two-pixel artifact strands without globally weakening upward peak detection or
-flattening coherent cliffs with broad local support.
-
-Hard-invalid pixels normally use the median of valid immediate neighbors. When those
-neighbors contain one unambiguous cluster of at least three elevations within twice the
-80 m deviation limit, repair uses that cluster's median instead of allowing scattered
-downward corruption to bias the result. Ambiguous or sparse neighborhoods retain the
-overall median. Accepted pixels are never resampled, blurred, or re-encoded. The stencil
-reuses fixed eight-value neighbor and deviation buffers, clones output bytes only at the
-first changed pixel, and introduces no additional tile pass. A deterministic reference
-oracle verifies matching repair counts and RGBA bytes across threshold, topology,
-artifact, and benchmark scenarios. A tile with no repairs returns the original PNG
-bytes.
-
-The default physical range is −500 m through 9,000 m and the explicit sentinel list is
-`[-32768]`. These bounds cover global terrestrial elevations conservatively while
-rejecting the observed inland −700 m scanline. Applying the policy repairs all 256 bad
-pixels and changes the center tile range to 969.49–1,191.20 m. Thresholds and the
-48-entry processed-PNG and decoded-context LRU bounds are validated provider
-configuration, not rendering constants. Revision-qualified in-flight requests share the
-complete fetch, decode, filter, and encode pipeline; all active consumers receive the
-same response object. Canceling one consumer rejects it independently, while underlying
-work is aborted only after the last consumer releases it. Completed results remain owned
-only by the existing bounded LRUs. An ordinary fetch, HTTP, or decode failure for an
-optional neighbor degrades that cell to a null halo and remains retryable; center
-failures, timeout, mode changes, disposal, and parent cancellation still reject the
-processed request. Disabled mode continues to bypass decoding and repair.
-
-Diagnostics export only duration and aggregate no-data, sentinel, impossible-value,
-spike, repaired, and unrepaired counts; tile URLs, indices, coordinates, and pixels are
-excluded. They are recorded once per underlying processed request and emitted in
-fixed-size aggregate batches. Mixed results retain the batch's most severe status
-without creating a new event for every cancellation transition.
-
-At Lisi Lake, tiles `15/20455/12195` and `15/20456/12195` contain 63 compact downward
-spikes against a 626–635 m local surface. Their residuals range from −315.19 m to
-−1,826.25 m, with source minima of −683.80 m and −1,197.81 m. The repeated pixel-offset
-pattern crosses the shared tile boundary while surrounding tiles remain plausible. A 300
-m downward threshold rejects all 63; 400 m leaves five and 500 m leaves eighteen.
-
-Layers exposes `Repair invalid DEM elevation pixels` under the AWS terrain provider,
-enabled by default and persisted locally. Disabling it bypasses decoding and repair and
-returns the original center PNG. Both modes retain one shared protocol for relief, 3D
-terrain, and contours; changing the preference invalidates their mode-dependent caches
-and reloads all three consumers together so they cannot disagree.
+`maplibre-contour` 0.0.5 (BSD-3-Clause) generates contour vector tiles for visible DEM
+tiles only, with a user-selected minor interval (default 50 m), 200 m index lines, and a
+32-tile cache. One application-owned module worker runs DEM decode, repair, encode, and
+contour generation; contour requests wait until the camera settles. A broken worker is
+restarted once, then the identical inline engine takes over for the session. Relief and
+3D rendering stay on MapLibre's own workers and the GPU.
 
 ### Attribution, limits, and failure policy
 
-The source attribution is available in the desktop MapLibre attribution control whenever
-the DEM source is configured or terrain is requested:
+Desktop attribution reads `Terrain data: Mapzen/AWS Open Data providers` and links to
+the authoritative
+[attribution list](https://github.com/tilezen/joerd/blob/master/docs/attribution.md);
+for Georgia, Copernicus/EU and USGS/NOAA inputs are the relevant ones.
 
-> Terrain data: Mapzen/AWS Open Data — includes Copernicus, USGS, NOAA, and regional
-> providers
+The S3 endpoint has no CDN or SLA and is the main production risk. A missing tile or
+network failure may omit an overlay or return 3D to flat mode but never blocks the
+vector basemap. There is no terrain failover because a replacement could differ in
+licensing and elevation semantics; it needs HTTPS/CORS tiles, Terrarium or Mapbox
+encoding, updated attribution, and a contour density review.
 
-It links to the upstream
-[full attribution list](https://github.com/tilezen/joerd/blob/master/docs/attribution.md),
-which is authoritative and includes region-specific credits. For Georgia, the global and
-European inputs make Copernicus/European Union and USGS/NOAA provenance especially
-relevant.
+## Imagery basemaps
 
-The S3 endpoint has no CDN or SLA; upstream documentation says it is optimized for EC2
-networking. This is acceptable for interactive relief, contours, and explicitly enabled
-3D, but it is the main production risk. A missing/no-data tile or network failure may
-omit an overlay or return 3D to flat mode, but it never blocks the vector basemap. There
-is no silent terrain provider failover because a replacement could have different
-licensing and elevation semantics.
+Google, Bing, Esri, and NAPR are optional raster basemaps, disabled by default and
+persisted only after an explicit choice. They are mutually exclusive with each other and
+with applied Sentinel-2 imagery. The vector map stays opaque until the selected raster
+reports content, then uses the separately persisted OpenStreetMap overlay opacity.
+Failures have no retry or fallback; the vector map remains usable. Endpoint evidence
+below is point-in-time, not an availability guarantee.
 
-### Client-side contour generation
+### Google satellite
 
-The application pins `maplibre-contour` 0.0.5 (BSD-3-Clause), the implementation used by
-the MapLibre contour example. Its registered protocol requests only visible DEM tiles,
-honors MapLibre cancellation, decodes Terrarium elevation in the browser, and returns
-vector tiles containing `ele` and minor/index `level` properties. The application uses
-50 m minor and 200 m index thresholds by default, labels index lines only, and replaces
-the source tile template atomically when spacing changes. No geometry, token, backend,
-or hosted processing service is introduced.
+Tiles come from `https://mt{0-3}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}` (JPEG, CORS `*`
+observed 2026-08-06) with attribution `© Google`. `mt*.google.com/vt` is undocumented,
+is not the official Map Tiles API, and has no SLA. The application sends no key, session
+token, or viewport-attribution request and must not claim Google Maps Platform
+compliance.
 
-One application-owned module worker runs DEM decode, repair, PNG encode, parsed-DEM
-caching, and contour generation; MapLibre retains its own renderer worker. DEM requests
-remain active during camera movement, while new contour requests wait in a bounded,
-cancellation-aware queue until the camera settles. Ordinary provider and calculation
-failures remain per-request. A broken worker channel is restarted once and then falls
-back to the identical inline engine for the page session, preserving terrain features
-with a possible responsiveness reduction.
+### Bing aerial
 
-Relief and 3D are not rendered by the terrain-compute worker. Their filtered
-`raster-dem` tiles continue through MapLibre/browser workers and WebGL to the GPU. The
-worker also does not process satellite imagery: the configured TiTiler service performs
-COG reads, RGB composition, reprojection, and web-tile encoding remotely, and MapLibre
-receives ordinary raster tiles. These pipelines remain separate so the terrain worker
-has one bounded cache set and does not duplicate renderer or remote imagery work.
+Tiles come from `https://ecn.t{0-3}.tiles.virtualearth.net/tiles/a{quadkey}.jpeg` using
+MapLibre's `{quadkey}` token (JPEG, CORS `*` observed 2026-09-21); attribution links to
+the Microsoft Maps terms. Microsoft's
+[direct tile guidance](https://learn.microsoft.com/en-us/bingmaps/rest-services/directly-accessing-the-bing-maps-tiles)
+forbids hard-coded tile URLs, requires the keyed Imagery Metadata service, and restricts
+mixing with competing platforms; that API is enterprise-only until June 30, 2028. This
+source is experimental and must be removed or migrated if enforcement, availability, or
+distribution requirements change.
 
-MapLibre transfers protocol responses to a worker. Worker contour delivery transfers a
-slice that protects the engine cache; inline delivery makes the equivalent owned copy.
-The main-thread protocol forwards that buffer without another slice. The contour
-library's cached buffer is never transferred or detached, so repeated cache hits remain
-usable during rapid camera and zoom changes.
+### Esri World Imagery
 
-The terrain configuration validates filter thresholds, physical bounds, filter cache
-size, contour minimum/maximum zoom, and contour cache size. The contour maximum cannot
-exceed the DEM provider maximum. Replacing the provider requires compatible HTTPS/CORS
-image tiles, correct Terrarium or Mapbox encoding, updated attribution, and a review of
-contour density and cache bounds.
+Tiles come from the anonymous ArcGIS Online template
+`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`
+(JPEG, CORS `*` observed 2026-09-21) with attribution
+`Esri, Maxar, Earthstar Geographics, and the GIS User Community`. Esri's documented
+MapLibre path uses the credentialed `ibasemaps-api.arcgis.com`; migrating would need a
+reviewed public-client credential strategy, never a bundled secret.
+
+### NAPR orthophoto mosaic
+
+The National Agency of Public Registry mosaic stacks four fixed Web Mercator sources
+bottom-to-top (tile URLs and bounds in the configuration):
+
+| Source key           | Service                | Zoom | Role                                                |
+| -------------------- | ---------------------- | ---- | --------------------------------------------------- |
+| `national2016To2017` | `ORTHO_GEORGIA_4`      | 0–19 | Opaque nationwide JPEG fallback (`nt0.napr.gov.ge`) |
+| `westernGeorgia2020` | `ORTHO_2020_DASAVLETI` | 0–19 | Western Georgia                                     |
+| `kutaisi2020`        | `ORTHO_2020_KUTAISI`   | 0–20 | Higher-resolution same-year tie-breaker             |
+| `racha2025`          | `ORTHO_2025_BLK4`      | 0–19 | Racha                                               |
+
+The 2020 and 2025 WMTS services return fully transparent PNGs outside their footprints,
+so ordinary alpha composition exposes the next older source without clipping. All four
+returned imagery with CORS `*` on 2026-08-09. Capabilities follow
+`https://mp.napr.gov.ge/<SERVICE>/wmts/1.0.0/WMTSCapabilities.xml`. Older services
+(`ORTHO_2015_*`, `ORTHO_2014_*`, `ORTHO_2000_10_SATEL`, `ORTHO_2006_07_SATKEO`,
+`ORTHO_2005_JICA`, `ORTHO_2000_KFW`) are not loaded because the nationwide fallback
+already covers them without extra requests; `ORTHO_net` is a Bing mirror. The
+attribution credits the National Agency of Public Registry (NAPR) orthophotos 2016–2017,
+2020, and 2025 and links to `https://maps.gov.ge/`.
 
 ## Rejected defaults
 
-- Public `tile.openstreetmap.org` raster tiles: rejected because the application uses a
-  vector OSM foundation and the OSM Foundation raster service is not the application's
-  production vector provider.
-- MapTiler Cloud: technically suitable but rejected as the anonymous default because its
-  hosted APIs require a public API key and account/plan policy. A public key is not a
-  secret, but it adds an avoidable provider account dependency for this MVP.
-- MapLibre demo vector/terrain endpoints: useful for examples and tests, but rejected as
-  production defaults because they are demo infrastructure without a product SLA.
+- Public `tile.openstreetmap.org` raster tiles: the application uses vector OSM data.
+- MapTiler Cloud: suitable, but its public key and account/plan policy add an avoidable
+  provider account dependency.
+- MapLibre demo vector/terrain endpoints: demo infrastructure without a product SLA.
 
-## Google satellite basemap
+## Sentinel-2: Earth Search and TiTiler
 
-The optional anonymous Google satellite basemap uses these static tile templates:
+The catalog is Earth Search v1 (`https://earth-search.aws.element84.com/v1/search`,
+collections `sentinel-2-l1c` and `sentinel-2-l2a`), anonymous STAC 1.0 JSON with no SLA
+(`src/infrastructure/stac`). Requests send one collection, a UTC interval, descending
+sort, allowlisted fields, and at most 100 items per page, up to the configured page cap
+(default 10). Scene search sends a center point and a cloud filter; Mosaic sends the
+settled-viewport polygon without a cloud filter. The gateway follows only an unambiguous
+`POST` next link on the configured origin and path; invalid items, assets, or pagination
+fail closed, and raw bodies, tokens, and exact geometry are never logged. The
+[AWS dataset record](https://registry.opendata.aws/sentinel-2-l2a-cogs/) documents the
+free/open Sentinel terms.
 
-- `https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-- `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-- `https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
-- `https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`
+### L2A rendering
 
-A bounded probe of `https://mt0.google.com/vt/lyrs=s&x=2412&y=1517&z=12` on
-**2026-08-06** observed `200`, `content-type: image/jpeg`, and
-`access-control-allow-origin: *`. This is endpoint evidence only, not a stability or
-availability guarantee. The raster declares the static attribution
-`<a href="https://www.google.com/maps" target="_blank">© Google</a>`.
+MapLibre cannot render a UTM GeoTIFF directly, so the default renderer is Development
+Seed's public [TiTiler](https://developmentseed.org/titiler/endpoints/stac/) demo at
+`https://titiler.xyz/stac/tiles/WebMercatorQuad/...`. It composes the item's
+red/green/blue assets over 0–`{reflectanceMax}` with user-tunable gamma and saturation
+and returns 256-pixel WebP tiles for z5–14; MapLibre overzooms beyond z14, near
+Sentinel-2's 10 m resolution. The template is validated configuration; the controller
+substitutes only bounded numbers and never stores the resulting URL. Because the
+CloudFront cache can reuse a tile across origins, renderers declaring the
+`application-origin` cache partition receive a sanitized `application_origin` value
+(scheme, host, and port only).
 
-Google imagery is disabled by default and persists only after an explicit choice in this
-browser. It is mutually exclusive with Bing, Esri, NAPR, and applied Sentinel-2 rasters.
-Selecting a different raster does not change the separately persisted OpenStreetMap
-overlay opacity. The vector map remains opaque until the first Google source-content
-event, then shares the existing OpenStreetMap-opacity and terrain ordering behavior with
-the active raster. A Google failure has no application-level retry or COG fallback; the
-selected preference remains checked while the opaque vector map stays usable.
+The demo is best-effort, suitable for low traffic but not sustained production use. The
+persisted Satellite render mode is Auto, Server, or Direct:
 
-`mt*.google.com/vt` is undocumented. It is not the official Google Map Tiles API and has
-no supported API or SLA guarantee. The application intentionally sends no API key,
-billing credential, session token, or viewport-attribution request, and must not claim
-official Google Maps Platform compliance.
+- Auto starts on TiTiler and switches to Direct on HTTP 429 or status zero (a renderer
+  can omit CORS headers on 429).
+- Server stays on TiTiler and reports those failures.
+- Direct sends no TiTiler requests: a module worker range-reads the item's 8-bit
+  `visual` COG, reprojects from the declared northern UTM CRS, and returns WebP tiles
+  without the reflectance controls. The worker keeps only the two most recent GeoTIFF
+  readers.
 
-## Bing aerial basemap
+HTTP 5xx, timeouts, and network failures get up to three deduplicated failed-tile
+refreshes with exponential delay; 429 and status zero are never retried. Status and
+diagnostics name the HTTP code or `no-response` but never URLs or tile coordinates. The
+raster reveals only after its first data, above the still-visible vector map, and the
+validated WGS84 footprint renders independently.
 
-The optional Bing source uses MapLibre's `{quadkey}` template support against four
-anonymous `ecn.t*.tiles.virtualearth.net` aerial tile hosts. A bounded probe of
-`https://ecn.t0.tiles.virtualearth.net/tiles/a120310233.jpeg?g=1&mkt=en-US&n=z` on
-**2026-09-21** observed `200`, `content-type: image/jpeg`, and
-`access-control-allow-origin: *`. Runtime attribution links to the Microsoft Maps
-product terms.
+Mosaic reuses these endpoints for one explicit action: it walks calendar months newest
+first and keeps at most 128 scenes that add measurable union coverage of the exact
+viewport, each as one bounded raster source. There is no background prefetching or
+unbounded traversal.
 
-This is best-effort endpoint evidence, not a supported Bing Maps integration.
-Microsoft's
-[direct tile guidance](https://learn.microsoft.com/en-us/bingmaps/rest-services/directly-accessing-the-bing-maps-tiles)
-says hard-coded tile URLs are not allowed, requires the current URL and copyright data
-from the keyed Imagery Metadata service, and restricts combining Bing data with
-competing mapping platforms. That metadata API is retired for free accounts and
-available to enterprise accounts only until June 30, 2028. The current static GitHub
-Pages application has no credentialed Bing account or runtime server, so this source
-must be treated as an explicitly selected experimental source and removed or migrated if
-Microsoft enforcement, availability, or project distribution requirements change.
+### L1C
 
-## Esri World Imagery basemap
+L1C `visual` assets are 10980×10980 JPEG 2000 objects (about 100 MB) on the public
+`sentinel-s2-l1c` bucket. Range requests work, but no maintained browser decoder reads
+only the visible region with bounded memory, so L1C imagery is labeled unsupported and
+the corresponding L2A scene is never substituted.
 
-The optional Esri source uses the anonymous ArcGIS Online tile template
-`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`.
-A bounded z12 probe over Georgia on **2026-09-21** observed `200`,
-`content-type: image/jpeg`, and `access-control-allow-origin: *`. Runtime attribution is
-`Esri, Maxar, Earthstar Geographics, and the GIS User Community`.
+## Weather: Open-Meteo
 
-Esri's current MapLibre examples use the credentialed `ibasemaps-api.arcgis.com`
-endpoint and require an ArcGIS Location Platform account. The anonymous ArcGIS Online
-endpoint remains point-in-time best-effort evidence rather than an application SLA. A
-future credentialed migration cannot put a durable secret in the static client; it would
-require a separately reviewed public-client credential strategy.
+### Point forecast
 
-## NAPR orthophoto mosaic
+Point, marker, and map-point forecasts use the anonymous generic endpoint
+`https://api.open-meteo.com/v1/forecast` with `models=ecmwf_ifs`
+(`src/infrastructure/weather/OpenMeteoWeatherForecastGateway.ts`). IFS HRES is ECMWF's 9
+km global deterministic model; the run time comes from the model's `meta.json`, and a
+metadata failure never substitutes the fetch time. Requests send the coordinate,
+`timezone=auto`, `forecast_days=8`, Celsius/km/h/mm units, allowlisted `current` and
+`hourly` fields, and, when a local DEM sample exists, `elevation` for downscaling. They
+omit `daily` and `precipitation_probability`. The generic endpoint returns null
+`precipitation_type`, so the phase is derived from precipitation, rain, showers,
+snowfall, and WMO codes. Coordinates and responses are not persisted or logged.
 
-The optional NAPR basemap is one anonymous Web Mercator orthophoto mosaic. It loads four
-fixed raster sources bottom-to-top, so transparent newer imagery exposes the next older
-source:
+### Weather map layer
 
-1. `national2016To2017` (`ORTHO_GEORGIA_4`): nationwide fallback, z0–19, 256 pixels,
-   bounds
-   `[39.854887835932935, 40.95043078335194, 46.811064678938735, 43.68599206966364]`,
-   tile template `https://nt0.napr.gov.ge/NGCache?x={x}&y={y}&z={z}&l=ORTHO_GEORGIA_4`.
-2. `westernGeorgia2020` (`ORTHO_2020_DASAVLETI`): z0–19, 256 pixels, bounds
-   `[41.397448792721505, 41.5288960450433, 43.455051840654676, 42.815072774303644]`,
-   tile template
-   `https://mp.napr.gov.ge/ORTHO_2020_DASAVLETI/wmts/ORTHO_2020_DASAVLETI/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
-3. `kutaisi2020` (`ORTHO_2020_KUTAISI`): z0–20, 256 pixels, bounds
-   `[42.598257144482105, 42.211097128103006, 42.74659092533837, 42.29503776969293]`,
-   tile template
-   `https://mp.napr.gov.ge/ORTHO_2020_KUTAISI/wmts/ORTHO_2020_KUTAISI/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
-   It renders above western Georgia as the fixed same-year higher-resolution
-   tie-breaker.
-4. `racha2025` (`ORTHO_2025_BLK4`): z0–19, 256 pixels, bounds
-   `[41.496791459122655, 41.9954418326647, 43.67097971829147, 43.16476392114931]`, tile
-   template
-   `https://mp.napr.gov.ge/ORTHO_2025_BLK4/wmts/ORTHO_2025_BLK4/GLOBAL_MERCATOR/{z}/{x}/{y}.png`.
+The Layers weather overlay uses `@openmeteo/weather-map-layer` through an `om://`
+MapLibre protocol. It reads ECMWF IFS 0.25° spatial data from Open-Meteo's public
+bucket, starting with
+`https://openmeteo.s3.amazonaws.com/data_spatial/ecmwf_ifs025/latest.json`, which must
+list cloud cover, precipitation, and 10 m wind components. It adds cloud and
+precipitation rasters (z≤12) and a wind-arrow vector layer below roads and labels, and
+hides relief and isolines while enabled (`MapLibreLayerController.ts`).
 
-The two 2020 services and the 2025 service return fully transparent PNG tiles outside
-their real footprints. MapLibre's ordinary alpha composition therefore exposes the next
-raster without clipping or runtime year selection. `ORTHO_GEORGIA_4` is an opaque JPEG
-base fallback. It has no public capabilities document; z19 and the conservative national
-envelope are the documented operating limits.
+### Limits and attribution
 
-Browser evidence revalidated on **2026-08-09**: z12 requests at longitude `42.70271`,
-latitude `42.27116` returned HTTP `200`, decodable 256-pixel imagery, and
-`access-control-allow-origin: *` from all four sources. An out-of-coverage Tbilisi tile
-from the 2020 western and 2025 Racha services was a fully transparent PNG. Nationwide
-fallback samples returned non-blank JPEG payloads at Sukhumi, Zugdidi, Batumi,
-Akhaltsikhe, Kutaisi, Mestia, Kazbegi, Tbilisi, Telavi, and Lagodekhi. This is
-best-effort endpoint evidence, not an availability guarantee.
+Anonymous access is limited to Open-Meteo's non-commercial terms: 600 calls per minute,
+5,000 per hour, and 10,000 per day. Commercial use requires a separate customer endpoint
+and licence, not a secret in this client. Forecast panels keep
+[Open-Meteo attribution](https://open-meteo.com/) adjacent, map sources credit
+`Weather data © Open-Meteo · ECMWF`, and About links the
+[CC BY 4.0 licence](https://creativecommons.org/licenses/by/4.0/).
 
-The common capabilities convention is
-`https://mp.napr.gov.ge/<SERVICE>/wmts/1.0.0/WMTSCapabilities.xml`. Historical live
-services are retained as research inventory, not runtime layers:
-
-| Service                | Catalogued imagery            | Zoom | Bounds `[west, south, east, north]`                                               |
-| ---------------------- | ----------------------------- | ---- | --------------------------------------------------------------------------------- |
-| `ORTHO_2015_VERE`      | 2015, 10 cm/px                | 0–20 | `[44.43731070936169, 41.650138053759356, 44.793390537886914, 41.767209615523754]` |
-| `ORTHO_2015_SAMEGRELO` | 2015, 50 cm/px                | 0–19 | `[41.50098353204594, 42.24033331738053, 42.15437065434703, 42.78374675464939]`    |
-| `ORTHO_2015_ADJARA`    | 2015, 25 cm/px                | 0–19 | `[41.45515263821117, 41.36025675480494, 42.64497174055761, 41.95771004140832]`    |
-| `ORTHO_2014_TBILISI`   | 2014, 6 cm/px                 | 0–20 | `[44.5896451701308, 41.61342123997876, 45.023369288656426, 41.84760074991676]`    |
-| `ORTHO_2014_DASAVLETI` | 2014, 25 cm/px                | 0–20 | `[41.4702432447368, 41.51772126826586, 43.49762473282109, 42.71563396253005]`     |
-| `ORTHO_2000_10_SATEL`  | catalogued as 2010, 100 cm/px | 0–17 | `[39.854887835932935, 40.95043078335194, 46.811064678938735, 43.68599206966364]`  |
-| `ORTHO_2006_07_SATKEO` | 2006–2007 forestry, 80 cm/px  | 0–19 | `[41.89631284744207, 41.14805627900728, 46.26640395241099, 42.93631847201833]`    |
-| `ORTHO_2005_JICA`      | 2005 JICA, 80 cm/px           | 0–18 | `[41.60446047410022, 41.27190884858784, 46.028288342204974, 42.69945825334009]`   |
-| `ORTHO_2000_KFW`       | 2000 KFW, 100 cm/px           | 0–18 | `[41.43142153513101, 41.05698962018753, 46.75954685638646, 42.86999920915596]`    |
-
-These older layers are intentionally not loaded: the newer nationwide fallback supplied
-non-blank imagery across the sampled locations, while additional overlapping sources
-would add requests without improving newest-available selection. `ORTHO_net` is excluded
-because it is a Bing mirror, not a NAPR orthophoto.
-
-The runtime attribution is
-`Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>`.
-NAPR is disabled by default, mutually exclusive with Google, Bing, Esri, and Sentinel
-imagery, and uses the existing OpenStreetMap-opacity and terrain ordering after any
-mosaic source reports content. Failures remain best-effort and the vector basemap stays
-usable.
-
-## Sentinel-2 catalog and raster feasibility
-
-The evidence below was revalidated on **2026-07-19** against Earth Search v1 and public
-AWS Sentinel objects. Earth Search remains the selected replaceable catalog candidate:
-
-- Root/search origin: `https://earth-search.aws.element84.com/v1`.
-- Collections: `sentinel-2-l1c` and `sentinel-2-l2a`.
-- Search transport: anonymous STAC 1.0 JSON over HTTPS; production code must still
-  validate every response and bounded pagination link.
-- Service policy: public best-effort access with no SLA. A private catalog or silent
-  provider fallback is not assumed.
-
-The validated public configuration supplies the exact search URL, distinct collection
-IDs, plain-text attribution, and a one-to-ten page cap (default five). An
-individual-scene search sends one WGS84 center point and a numeric scene-level cloud
-filter. Mosaic sends the closed WGS84 settled-viewport polygon and omits
-`eo:cloud_cover`, so scenes without cloud metadata remain eligible. Both requests send
-one collection, an inclusive UTC interval, descending acquisition sort, allowlisted
-fields, and at most 100 items per page. The gateway follows only one unambiguous `POST`
-next link at a time when it has the configured HTTPS origin/path, no query or fragment,
-and a bounded opaque `next` token. Invalid items, counts, assets, or pagination fail
-closed; raw bodies, links, tokens, and exact geometry are never logged.
-
-### L2A true-color COG
-
-This was a non-product, time-boxed check. Earth Search v1 returned the item
-`S2A_38TMM_20250731_0_L2A` for a Tbilisi-area bounding box. Its `visual` asset was the
-public true-color COG:
-
-`https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/38/T/MM/2025/7/S2A_38TMM_20250731_0_L2A/TCI.tif`
-
-The asset declared `image/tiff; application=geotiff; profile=cloud-optimized`. From the
-local browser origin, a request for bytes 0–16,383 succeeded with status 206, returned
-exactly 16,384 bytes, and completed in 1,891 ms in the observed run. Thus the tested
-Earth Search asset supports browser CORS and partial range access without credentials.
-The [AWS dataset record](https://registry.opendata.aws/sentinel-2-l2a-cogs/) documents
-the free/open Sentinel terms and public Earth Search catalog.
-
-The 2026-07-19 Georgia sample `S2A_38TMN_20250731_0_L2A` reported EPSG:32638 and a
-220,705,355-byte true-color COG. A bounded request for its first 65,536 bytes again
-returned `206 Partial Content`, `Accept-Ranges: bytes`, and browser-permissive CORS.
-
-The `visual` TCI COG is an 8-bit display product whose provider-applied stretch may clip
-bright snow to white. It is nevertheless the direct fallback asset: the worker preserves
-its RGB values as delivered and masks only black no-data pixels. It does not apply the
-user's TiTiler reflectance, gamma, or saturation controls. This avoids fetching three
-large raw-band TIFFs while still using COG range requests for the visible map area.
-
-MapLibre GL JS does not directly render a GeoTIFF/COG as a raster source, and the
-inspected direct COG protocol accepts EPSG:3857 input but does not reproject the UTM
-Sentinel sample. The application therefore uses a configured dynamic COG tile adapter.
-The default template calls Development Seed's public
-[TiTiler demo](https://developmentseed.org/titiler/examples/notebooks/Working_with_STAC_simple/)
-[`/stac/tiles` endpoint](https://developmentseed.org/titiler/endpoints/stac/) with
-`WebMercatorQuad`, the MapLibre tile coordinates, the validated STAC item, and ordered
-red/green/blue assets. The default maps each channel over 0–10,000 reflectance before
-display gamma. Users can persistently tune the upper reflectance bound, gamma, and up to
-five times normal saturation in Satellite; a lower bound brightens midtones but can clip
-the brightest snow. TiTiler performs bounded COG reads, RGB composition, reprojection,
-and web-tile encoding; MapLibre receives ordinary 256-pixel raster tiles during normal
-operation. The maximum source zoom is 14, near Sentinel-2's native 10 m resolution in
-Georgia; MapLibre overzooms beyond it instead of issuing denser equivalent requests.
-
-The default is anonymous and requires no browser secret, but it is a best-effort demo
-service with no project SLA. It is acceptable for the current low-traffic static MVP and
-manual review, not sustained production traffic. The browser therefore includes a local
-COG raster fallback for renderer throttling. The renderer ID, HTTPS template, tile size,
-zoom bounds, and attribution are validated public configuration so a managed
-TiTiler-compatible deployment can replace it without changing catalog, UI, or map
-commands.
-
-Satellite raster readiness has no application timeout. Replacing, clearing, or
-superseding a scene still cancels the outstanding wait and requests immediately.
-
-The validated renderer template contains explicit `{reflectanceMax}`, `{gamma}`, and
-`{saturation}` tokens. The controller substitutes only bounded numeric preferences and
-never stores the resulting provider URL. Renderer HTTP rejection, throttling, server
-failure, timeout, and an otherwise unusable tile are mapped to distinct safe UI errors.
-TiTiler's CloudFront distribution reflects `Access-Control-Allow-Origin` but can reuse a
-cached tile across request origins. Renderers that declare the `application-origin`
-cache-partition policy therefore receive a sanitized, stable `application_origin` value
-derived from scheme, host, and port. The default GitHub Pages deployment uses
-`https-bogdandm-github-io`, while local ports receive distinct values; renderers
-configured with `none` receive no extra parameter. This value contains no path, query,
-user data, or secret. The persisted Satellite render control offers Auto, Server, and
-Direct. Auto starts with the hosted template and switches on explicit HTTP 429 or
-status-zero; Server stays on the hosted template and reports those failures without
-local fallback; Direct starts on the local protocol and sends no TiTiler tile requests.
-None of the modes retries HTTP 429 or status-zero. A renderer can omit CORS headers from
-its 429 response, leaving the application with only status zero. A dedicated module
-worker range-reads the validated 8-bit visual COG, selects appropriate overviews,
-transforms output pixels between Web Mercator and the declared northern UTM CRS, and
-returns 256-pixel WebP tiles without additional stretching. The main thread and MapLibre
-source contain only a safe scene key. The provider registry retains bounded scene
-definitions for the complete Mosaic source budget plus replacement headroom, while the
-worker retains only the two most recent GeoTIFF readers to cap large per-file block
-caches. Direct rendering across many interleaved Mosaic scenes can therefore reopen
-older readers rather than growing memory without bound.
-
-HTTP 5xx, timeout, and identifiable network failures trigger up to three deduplicated
-failed-tile refreshes with exponential delay. Refreshing only the failed canonical tile
-coordinates keeps already rendered imagery available. The current status names the exact
-HTTP code when available; developer diagnostics also retain the stable source ID, safe
-failure class, aggregate count, recovery state, and retry attempt. URLs, queries,
-response bodies, and tile coordinates remain excluded. MapLibre status zero is reported
-as `no-response`, which accurately covers blocked CORS responses as well as connection
-failures without inventing an HTTP status. If direct COG range access or worker
-rasterization also fails, a safe direct-rendering error remains visible and the vector
-basemap stays available.
-
-Selecting a different scene removes both stable raster slots and the old footprint
-immediately, restores the complete vector style, and creates only the requested scene.
-The raster does not switch the basemap into satellite styling until its first data
-event, so a slow TiTiler request or automatic direct fallback cannot produce a blank
-map. Stretch changes may use the second slot so the active scene remains visible until
-replacement data arrives. Rendering-mode changes remove both provider slots first and
-keep the vector basemap visible until the selected provider returns data. Auto-mode
-429/status-zero failures restore the vector style while changing the pending source to
-the direct protocol. Retryable failures receive bounded failed-tile refreshes; usable
-partial imagery can be promoted after retries are exhausted. Cancellation or
-supersession removes pending resources. The validated WGS84 footprint renders
-independently as GeoJSON, making partial coverage explicit. The application never logs
-or stores the COG or tile URL in shared state or support bundles.
-
-Mosaic reuses these catalog and rendering endpoints without adding a provider stack. Its
-application search walks descending calendar months and incrementally retains at most
-128 unique-bound L2A scenes whose clipped footprints add measurable coverage. Actual
-completion uses the union of those footprints inside the exact viewport; overlap cannot
-inflate the percentage. This raises the number of bounded Earth Search and TiTiler
-requests for one explicit user action, but does not create background prefetching,
-retries, credentials, or unbounded traversal.
-
-Each selected scene becomes one MapLibre raster source constrained to its validated
-WGS84 extrema. All sources register newest-first before the controller waits for
-readiness, so one slow image cannot delay requests for the remaining images. Sources
-reveal independently as their content loads, with zero raster fade and no artificial
-stability delay. The existing vector basemap remains below partial imagery. A global
-rendered/total progress value is derived only from ready sources. Cancellation, a
-different selected date, mode exit, or supersession removes pending resources; date
-changes additionally remove every ready Mosaic source before another run. A sequence
-guard prevents cancelled work from restoring cleared progress.
-
-A 2026-07-19 current-Chrome smoke searched the live Georgia viewport, applied
-`S2A_38TLM_20260709_0_L2A`, and displayed the georeferenced true-color tiles plus the
-independent footprint and combined provider attribution. Hiding/restoring the raster
-through Layers left the footprint and basemap in place; the same applied source remained
-usable after enabling 3D terrain and changing rail destinations.
-
-### L1C true-color JP2
-
-The same bounded Georgia query returned `S2A_38TMN_20250731_0_L1C`, EPSG:32638. Its
-`visual` asset is a 10980-by-10980 JPEG 2000 object referenced as
-`s3://sentinel-s2-l1c/tiles/38/T/MN/2025/7/31/0/TCI.jp2`; the concrete item has no
-thumbnail. The public bucket/key maps to the equivalent anonymous HTTPS URL. A bounded
-1,024-byte request returned `206 Partial Content`, `Accept-Ranges: bytes`, and
-browser-permissive CORS; the complete object is 104,134,127 bytes.
-
-This proves transport but not a production render path. Current general-purpose
-[OpenJPEG](https://github.com/uclouvain/openjpeg)/WebAssembly decoders do not establish
-a maintained browser adapter that requests only the visible region, reprojects UTM to
-Web Mercator, feeds MapLibre, and supports bounded memory plus prompt cancellation.
-Downloading and decoding the whole 104 MB object is rejected. L1C search metadata can be
-implemented independently, but the application must label its visual asset as
-unsupported until a bounded adapter or an approved raster tile service is selected. It
-must never apply the corresponding L2A scene as a substitute.
-
-## Weather forecast: Open-Meteo ECMWF IFS
-
-The Weather workspace uses the anonymous Open-Meteo generic forecast endpoint,
-`https://api.open-meteo.com/v1/forecast`, with the explicit model identifier
-`models=ecmwf_ifs`. Open-Meteo's
-[ECMWF API documentation](https://open-meteo.com/en/docs/ecmwf-api) identifies IFS HRES
-as the default global deterministic model at 9 km resolution. ECMWF initializes the
-model at six-hour intervals; the separately fetched model metadata supplies the run time
-when available. Metadata failure does not invalidate forecast values and is never
-replaced with the browser fetch time.
-
-Each point request sends the selected latitude and longitude, `timezone=auto`,
-`forecast_days=8`, explicit Celsius/km/h/mm units, and the allowlisted current and
-hourly fields. The eighth location-local date completes the night beginning on the
-seventh displayed date. The UI converts the provider's wind values to metres per second.
-A successful local DEM sample is also transmitted as `elevation` for provider
-downscaling. If local sampling is unavailable, the elevation in Open-Meteo's response is
-used for the displayed forecast elevation. This transmission is necessary for a
-location-specific forecast; neither the coordinate nor response is persisted or added to
-diagnostics.
-
-The request deliberately omits `daily` and `precipitation_probability`. The next
-three-hour summary and 24 hourly slots are displayed from normalized hourly values.
-Seven date rows each contain an independent daylight summary and a complete physical
-night summary running from post-daylight hours through the next date's pre-daylight
-hours. Sky and precipitation use the same duration and dominance policy for both
-intervals. Visibility is classified separately by severity and interval position, so fog
-or reduced visibility remains secondary and cannot replace the primary weather. These
-are deterministic model values, not measured weather-station observations.
-
-Anonymous free access is suitable only under Open-Meteo's documented non-commercial
-limits: 600 calls per minute, 5,000 per hour, and 10,000 per day. The deployment sends
-no API key. Commercial use requires a separately configured customer endpoint and
-licence rather than a secret embedded in this static client. Displayed data keeps the
-required [Open-Meteo attribution](https://open-meteo.com/) adjacent to the forecast and
-links the configured [CC BY 4.0 licence](https://creativecommons.org/licenses/by/4.0/)
-from About.
-
-Direct anonymous endpoint reads on **2026-09-09** returned JSON for a synthetic
-Tbilisi-area coordinate. The generic endpoint returned the requested current values and
-visibility, but its hourly `precipitation_type` values were null. The dedicated
-`/v1/ecmwf` endpoint returned numeric precipitation types while omitting the required
-current contract and usable visibility. The runtime therefore uses the generic endpoint
-and derives a missing precipitation phase deterministically from precipitation, rain,
-showers, snowfall, and freezing/snow WMO codes. This evidence confirms the observed
-schema only; browser CORS and ongoing availability were not revalidated in this
-workstream.
-
-## Verification record
-
-The required Chromium suite uses generated local vector, glyph, and DEM fixtures. The
-recorded 2026-07-18 run exercised the production style, camera reload, 2D/3D
-transitions, terrain retry, vector failure, WebGL context loss/restoration, diagnostics,
-attribution focus, accessibility, and rejection of every unexpected public request.
-Public-provider availability is deliberately outside that required gate.
-
-The live checks recorded above independently confirmed anonymous browser CORS for the
-OpenFreeMap TileJSON and AWS terrain range request. A combined local Vite smoke in the
-Codex in-app Chrome reached the application shell, but that embedded browser exposed no
-IndexedDB API. The observation found a startup resilience gap: a non-settling camera
-read could indefinitely delay MapLibre mount. The implementation now bounds that read
-and falls back to the Georgia overview with a storage warning, with component coverage.
-
-The in-app browser's local-navigation policy prevented a post-fix live-provider rerun.
-Use the checklist below for normal-desktop-Chrome verification before public release; do
-not treat the separate endpoint and deterministic fixture evidence as a completed
-real-provider application smoke.
+Map-point and forecast menus also link out to meteoblue and Windy for the same
+coordinate (`src/presentation/weather/weatherForecastLinks.ts`); these are plain
+navigation links, not data providers.
 
 ## Manual revalidation checklist
 
+The Chromium end-to-end suite uses local vector, glyph, and DEM fixtures and rejects
+unexpected public requests, so live providers are outside that gate. Before a public
+release:
+
 1. Open the GitHub Pages and local origins in current stable desktop Chrome.
-2. Confirm vector TileJSON, a representative Georgia PBF, glyphs, and the DEM tile
-   return over HTTPS with CORS and no credential.
-3. Confirm desktop attribution links remain visible and keyboard reachable in 2D and 3D.
-4. Pan/zoom/pitch around Georgia; record style-ready and first-idle diagnostics.
-5. Simulate vector and DEM failure separately and confirm the documented fatal/degraded
-   behavior.
-6. Recheck provider policy, schema version, source-layer list, and attribution text.
+2. Confirm vector TileJSON, a Georgia PBF, glyphs, and a DEM tile load over HTTPS with
+   CORS and no credential.
+3. Confirm desktop attribution stays visible and keyboard reachable in 2D and 3D.
+4. Simulate vector and DEM failure separately and confirm the documented behavior.
+5. Recheck provider policy, schema version, source-layer list, and attribution text.

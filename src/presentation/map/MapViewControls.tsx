@@ -140,7 +140,7 @@ export function MapViewControls({
             disabled={pending}
             sx={{ width: 40, height: 36, p: 0 }}
           >
-            <Tooltip title={t`Flat map`}>
+            <Tooltip disableInteractive title={t`Flat map`}>
               <span>
                 {terrainState === 'disabling' ? (
                   <CircularProgress size={18} aria-hidden />
@@ -151,7 +151,9 @@ export function MapViewControls({
               </span>
             </Tooltip>
           </ToggleButton>
+          {/* Interactive tooltips open below and would cover the next button, eating clicks. */}
           <Tooltip
+            disableInteractive
             title={
               terrainDisabled
                 ? t`3D terrain is unavailable while Sentinel Mosaic is active.`
@@ -177,7 +179,7 @@ export function MapViewControls({
             </span>
           </Tooltip>
         </ToggleButtonGroup>
-        <Tooltip title={t`Choose map layer preset`}>
+        <Tooltip disableInteractive title={t`Choose map layer preset`}>
           <span>
             <ToggleButton
               aria-controls={menuOpen ? menuId : undefined}

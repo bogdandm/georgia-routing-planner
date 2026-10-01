@@ -1,1017 +1,464 @@
 # Features and workspace UX
 
-This document describes the implemented application and the reviewed complete system
-concept. It distinguishes unavailable behavior so the mockups are not mistaken for
-working functionality.
+This document describes the implemented workspace: layout, feature placement, control
+grouping, and interaction behavior. [UI design guidelines](./ui-design.md) define
+reusable presentation conventions; [data model](./data-model.md) owns persisted records
+and privacy; [runtime flows](./runtime-flows.md) own internal sequencing and failure
+mechanics; [map providers](./map-providers.md) own provider choice and limits. Correct
+this document whenever it no longer describes the interface.
 
-## Design authority and vocabulary
-
-This document is authoritative for layout, feature placement, control grouping, and
-interaction hierarchy. [UI design guidelines](./ui-design.md) define reusable
-presentation conventions. Repository documentation and code remain authoritative for
-data, privacy, architecture, and failure contracts. Correct this document whenever it no
-longer describes the reviewed interface.
+## Workspace vocabulary
 
 - **Feature rail:** `Tracks`, `Markers`, `Layers`, `Satellite`, and `Weather` are the
-  primary top-level feature sections, in that order.
+  primary feature sections, in that order.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
-  available when developer mode is enabled. The `About this site` action sits below
-  Settings and opens public author, repository, API, and data-source information.
-- **Route planning workflow:** browser route planning begins from `Plan route` in the
-  Tracks header. There is no Plan tab, Plan rail item, or independent planning
-  destination.
+  available when developer mode is enabled. `About this site` sits below Settings and
+  opens author, repository, API, and data-source information.
+- **Route planning:** starts from `Plan route` in the Tracks header. There is no
+  separate planning destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
-- **Detail pane:** selected track and imagery details are adjacent to the contextual
-  sidebar at widths of 1900 CSS pixels and above, and overlay that sidebar below 1900
-  pixels without replacing or remounting the map.
-- **Persistent map:** the map remains the primary canvas across rail changes, detail
-  selection, dialogs, and developer tools.
+- **Detail pane:** selected track and imagery details sit beside the sidebar at 1900 CSS
+  pixels and above, and overlay the sidebar below that width.
+- **Persistent map:** the map stays mounted as the primary canvas across rail changes,
+  detail selection, dialogs, and developer tools.
+
+Each workspace destination has a URL anchor: `#tracks`, `#markers`, `#layers`,
+`#satellite`, `#weather`, or `#user`. Loading an anchored URL restores that tab, and
+changing tabs updates the anchor.
 
 ## Smartphone workspace
 
 Below 900 CSS pixels, the map is the default surface. **Open workspace** reveals the
-full-height feature rail and contextual tools without remounting the map; **Show map**
-and the Trail Planner logo return to the same map. An active saved track appears over
-the map as a collapsed disclosure containing the same distance, recorded-time, ascent,
-and descent statistics used by the full editor. Tapping its active saved-track row opens
-the editor. An unsaved preview uses a taller disclosure with editable **Track name** and
-**Save** controls above its decorative profile and metrics. When the active track has a
-usable elevation profile, its grade-colored graph is drawn decoratively behind these
-compact stats without chart interaction. Expanding the disclosure reveals the full
-editor; collapsing preserves the active track, while closing clears it. Saving a
-preview, shared copy, or route plan from the expanded editor keeps the editor open for
-the saved track.
+full-height rail and contextual tools without remounting the map; **Show map** and the
+Trail Planner logo return to the same map. An active track appears over the map as a
+collapsed disclosure with distance, recorded time, ascent, and descent, drawn over a
+decorative grade-colored profile when elevation is usable. An unsaved preview's
+disclosure also offers **Track name** and **Save**. Expanding it reveals the full
+editor; collapsing keeps the active track, while closing clears it.
 
-Smartphone taps follow one rule: an action whose result is on the map closes the
-workspace, and a map action whose result is in a panel opens it. Opening a saved track
-from the list or map search, starting a route plan, importing a file, panning to a track
-or saved marker, arming saved or track marker placement, route-plan **Undo** and
+An action whose result is on the map closes the workspace, and a map action whose result
+is in a panel opens it. Opening a saved track, starting a route plan, importing a file,
+panning to a track or marker, arming marker placement, route-plan **Undo** and
 **Clear**, **Center map on forecast location**, applying Sentinel imagery, **Fit
 footprint**, and **Show mosaic** all return to the map; reopening the workspace restores
-the existing Tracks list or imagery results. Settings controls such as layer toggles,
-rendering options, and the weather-map switch keep the workspace open. Elevation-chart
-taps keep the expanded editor open and only move the camera behind it. From Weather,
-**Select forecast point** closes the workspace and gives the next primary map click to
-Weather, which then reopens the workspace on the loading forecast. A shared-track link
-keeps the map first; an invalid or unavailable link opens Tracks to show its error. This
-transient presentation state is not stored as a navigation preference or URL entry.
+the previous list or results. Settings controls keep the workspace open. From Weather,
+**Select forecast point** closes the workspace and the chosen point reopens it on the
+forecast. A shared-track link keeps the map first; an invalid link opens Tracks to show
+its error. This presentation state is not stored.
 
 ## Desktop workspace
 
-At widths from 900 CSS pixels through 1899 pixels, a selected track or imagery result
-overlays only the contextual sidebar while the rail stays interactive. At 1900 CSS
-pixels and above, the rail, contextual sidebar, and detail pane form one floating
-surface above the full-viewport map. Changing sections or opening a pane never changes
-the map viewport. One right-side vertical rail contains zoom, compass, geolocation, 2D,
-3D, and the quick map-layer preset chooser. The shell uses the shared sky-blue,
-blue-green, deep-space, amber, and orange palette with derived surface, border, status,
-and tag colors.
+From 900 through 1899 CSS pixels, a selected track or imagery result overlays only the
+contextual sidebar while the rail stays interactive. At 1900 CSS pixels and above, the
+rail, sidebar, and detail pane form one floating surface above the full-viewport map.
+Changing sections or opening a pane never changes the map viewport. One right-side
+control column holds zoom, compass, geolocation, the 2D/3D selector, and the quick
+map-layer chooser.
 
-When navigation is collapsed on desktop with an active track, the same decorative
-profile-and-stats summary sits between the fixed Trail Planner logo and the navigation
-expansion affordance. Without an active track summary, the Trail Planner logo and
-expansion affordance remain the compact collapsed control.
+Navigation collapses to the clickable Trail Planner logo, which keeps the same size and
+position in both states. With an active track, the collapsed state also shows the
+decorative profile-and-stats summary.
 
-The current shell exposes Tracks, Markers, Layers, Satellite, Weather, and User as
-interactive rail destinations. It has no full-width app bar, empty global elevation
-placeholder, or generic always-visible privacy notice.
-
-- Owner: `src/presentation/shell`.
-- Visual tokens: `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Durable preferences: language, developer mode, collapsed navigation, marker sorting,
-  Sentinel imagery rendering, and terrain overlays in Dexie.
-- Settings uses compact `General` and `Storage` tabs. General exposes immediate
-  English/Русский language selection and the developer-diagnostics preference. An
-  explicit language choice is stored in the existing UI-preferences record; otherwise
-  the first English or Russian entry in the browser language list is used, with English
-  as the fallback.
-- Storage shows only the measurements the browser supplies: origin usage and quota,
-  IndexedDB, Cache Storage, localStorage, residual origin data, and Chromium's optional
-  JavaScript heap estimate in megabytes.
-- Fallback: `?developer=1` enables diagnostics even when stored settings cannot load.
-- Failure boundary: uncaught React errors render a support-bundle fallback.
+- Owner: `src/presentation/shell`; visual tokens in
+  `src/presentation/theme/appColors.ts` and the Material UI theme.
+- Settings is non-modal with `General` and `Storage` tabs. General offers
+  English/Русский language selection and developer diagnostics. Without an explicit
+  choice, the first English or Russian browser language is used, falling back to
+  English. UI strings use Lingui catalogs in `src/locales`.
+- Storage shows only browser-supplied measurements: origin usage and quota, IndexedDB,
+  Cache Storage, localStorage, residual origin data, and Chromium's optional JavaScript
+  heap estimate. Browser HTTP and MapLibre tile caches are not measurable, so no size or
+  clear action is offered for them.
+- `?developer=1` enables diagnostics even when stored settings cannot load.
+- Uncaught React errors render a support-bundle fallback.
 
 ### User
 
-**User** is a standalone lower-rail action. With valid public Supabase configuration, an
-ordinary user can create an email/password account and enable **Sync across devices**.
-Synchronization is disabled by default and remains local-first. Signing in to a new or
-different account preserves valid browser tracks and prepares them for upload while
-downloading that account's remote tracks. Current synchronized geometry retains finite
-source elevation exactly. Legacy remote-only geometry remains elevation-missing; it is
-never filled from a terrain provider automatically. If a same-account track was deleted
-from the cloud, a global **Tracks deleted from cloud** dialog opens with every affected
-track unchecked. **Delete**, **Restore**, and **Delete selected, upload the rest again**
-state the selected decision; unchecked tracks upload again. The signed-in panel exposes
-the full support User ID, exact compressed usage, reservation-aware quota progress, a
-**Sync now** action, and per-track transfer progress while synchronization runs. The
-lower-rail User icon shows an orange dot while synchronization is active or needs a
-deletion decision, red after failure, and green after success. Three HTTP 500 responses
-exhaust the page-lifetime server-error budget; the worker sends no further
-synchronization requests until the page reloads.
+**User** is a lower-rail action. With public Supabase configuration, a user can create
+an email/password account and enable **Sync across devices**, which is off by default;
+the app stays local-first. Saved tracks, track folders, and saved markers synchronize.
+Signing in to a new or different account keeps valid browser data and prepares it for
+upload while downloading that account's data. If synchronized tracks or markers were
+deleted from the cloud, an **Items deleted from cloud** dialog lists them unchecked;
+**Delete**, **Restore**, or **Delete selected, upload the rest again** applies the
+choice, and unchecked items upload again.
+
+The signed-in panel shows the email, the full User ID for support, compressed usage
+against the quota including reservations, **Sync now**, and an item-count progress line
+while synchronizing. The User rail icon shows an orange dot while synchronization runs
+or needs a decision, red after failure, and green after success. After three HTTP 500
+responses the page stops sending synchronization requests until reload. See
+[runtime flows](./runtime-flows.md#explicit-cross-device-synchronization).
 
 ## Feature surfaces
 
 ### Tracks
 
-Tracks combines the browser-local track library with flat personal folders. The
-contextual sidebar header places the pressed multi-track selection control immediately
-before `Plan route`; its scrollable content owns file import, search, sorting, folder
-management, and local track results. Catalog, tags, filters, and batch import remain
-reviewed but unavailable.
+Tracks combines the browser-local track library with flat folders. The sidebar header
+places the multi-track toggle immediately before `Plan route`; the scrollable content
+owns file import, search, sorting, folder management, and the track list. Import privacy
+guidance appears at the preview step rather than as a permanent banner.
 
-Selecting a track draws its geometry on the map and opens an adjacent detail pane with
-source, tags, metrics, folder/download actions, calculation provenance, and a contextual
-elevation profile. Curated source GPX is loaded only when requested. Import retention
-and privacy guidance appears at the relevant preview/confirmation step instead of as a
-permanent workspace banner. The multi-track control enables a session-only mode whose
-saved-track row clicks add or remove tracks in click order. Every selected track appears
-in one combined bright-blue base scene, with elevation-grade color overlays retained for
-every track that has a usable profile. The read-only detail pane has a **Selected
-tracks** header with a **Download selected tracks** action, then complete combined
-statistics followed by a named divider, normal statistics, and elevation profile for
-each track. The action downloads the complete click-ordered selection as
-`selected-tracks.zip`, with one GPX member per track. Member names use the safe track
-name; collisions use deterministic suffixes such as `Stem (2).gpx`, then `Stem (3).gpx`.
-The pane omits the ordinary track-specific title, metadata, provenance, analysis, and
-editing actions. At intermediate desktop widths, **Back to tracks** preserves the
-pressed mode and ordered selection, and adding another track reopens the pane. On
-smartphones, row clicks keep the list open; **Show map** reveals the combined compact
-disclosure, which opens the multi-track pane without clearing the selection. An empty
-selection closes the pane and clears the map. The mode and its selected-track list are
-never persisted across reload.
+#### Import
 
-The implemented local workflow imports one `.gpx`, `.fit`, or `.kml` file from the
-contained picker row or its browse button. FIT Activity and Course files must pass
-Garmin SDK integrity validation and contain geographic records. KML accepts line-based
-`LineString`, `MultiGeometry`, `gx:Track`, and `gx:MultiTrack` content without fetching
-external resources; KMZ and geometry-free files remain unsupported. During a file drag
-anywhere in the application, an opaque elevated drop card appears above the current
-workspace content, including non-Tracks tabs and collapsed desktop navigation. It has no
-full-screen dimming or map-covering hit area; only a drop on the card imports the file.
-An accepted import opens Tracks, expands desktop navigation, and exposes the **New
-track** detail pane. Import validates and previews the file's metadata in that pane. The
-editable embedded or filename-derived name is never replaced automatically.
-File-selection and parsing errors appear inside the import zone and dismiss after five
-seconds; persistent track/storage errors remain in the panel. The stored source filename
-remains visible after rename, and structured validation warnings show their parser code,
-explanation, and available point/segment context. An optional English place candidate
-appears separately and requires an explicit apply action between the editable track-name
-field and the adjacent read-only **English place name** field. Multiple segments are
-named as one joined journey:
+One `.gpx`, `.fit`, or `.kml` file is imported from the picker row or by dropping it
+anywhere in the app onto the drop card that appears during a file drag. FIT Activity and
+Course files must pass Garmin SDK integrity validation and contain geographic records.
+KML accepts `LineString`, `MultiGeometry`, `gx:Track`, and `gx:MultiTrack` without
+fetching external resources; KMZ and geometry-free files are unsupported. An accepted
+file opens Tracks with a **New track** preview pane. File and parse errors appear in the
+import zone and dismiss after five seconds; validation warnings show their parser code
+and point/segment context. Unsaved previews activate the leave-site guard.
 
-- One-way tracks use `Start → Finish`, adding `via Landmark` when a dominant interior
-  summit has a named landmark, for example `Juta → Roshka via Chaukhi Pass`.
-- Closed tracks that retrace most of their way back use `Landmark from Start`; other
-  closed tracks use `Landmark loop from Start`. Their landmark comes from the dominant
-  summit or, without one, the point farthest from the start.
-- Missing parts are omitted, a landmark repeating an endpoint is dropped, and a one-way
-  track finishing in its starting settlement reads as `Landmark from Start`. The
-  optional `via`/`from` part is dropped when the name would exceed 80 characters.
+The embedded or filename-derived name stays editable and is never replaced
+automatically. An optional English place candidate appears as a separate **English place
+name** field and needs an explicit apply. Multiple segments are named as one journey:
 
-Start and finish prefer a city, town, village, or hamlet within 1 km, then a ranked
-landmark, then a settlement within 3 km; districts and municipalities never name a
-track. Landmarks rank passes, saddles, and peaks within 1 km first, so a nearby summit
-the route did not cross cannot name it, then lakes, glaciers, and waterfalls, then huts,
-viewpoints, historic sites, shelters, places of worship, and settlements within 2 km,
-weighting each class by distance. A failed settlement or landmark lookup is skipped, and
-a warning under the candidate names the failed lookup and its reason; a rate-limited
-provider is reported as HTTP 429. Labels without an English or Latin name are romanized:
-Georgian as on road signs, without ejective apostrophes and with `ყ` as `k` (`ყელიდა` →
-`Kelida`), and Cyrillic by BGN/PCGN without diacritics or soft/hard-sign marks
-(`Верхние ночевки` → `Verkhniye nochevki`). Mountain passes gain a `Pass` suffix and
-named peaks or volcanoes gain an `Mt.` prefix when the source name does not already
-include one. When source elevation is usable, Save retains the exact normalized source
-points as canonical content and keeps the browser-calculated Terrarium projection
-separately. When an imported track has no usable source elevation, Save promotes the
-complete calculated Terrarium projection to canonical points and primary metrics. Source
-filename/format metadata and versioned metrics remain local; the original file bytes are
-discarded after parsing. Unsaved previews activate the native leave-site guard.
+- One-way: `Start → Finish`, plus `via Landmark` when a dominant summit has one
+  (`Juta → Roshka via Chaukhi Pass`).
+- Closed tracks that mostly retrace their way back: `Landmark from Start`; other closed
+  tracks: `Landmark loop from Start`. The landmark is at the dominant summit or, without
+  one, the point farthest from the start.
+- Missing parts are omitted, a landmark repeating an endpoint is dropped, a one-way
+  track ending in its starting settlement reads as `Landmark from Start`, and the
+  `via`/`from` part is dropped above 80 characters.
 
-**Plan route** opens a new unsaved-track detail pane and gives route planning ownership
-of map clicks. The first click sets the start waypoint; each later click adds an ordered
-leg. **Next segment: Routes | Line** persists across clicks. **Routes** snaps both ends
-to the configured transportation topology and searches the shortest walkable connection
-in a browser worker; **Line** preserves the clicked endpoints as one direct segment.
-Accepted legs remain visible as a single planned line with numbered waypoints. While a
-routed leg is pending, the detail pane reports tile downloads as a completed share, then
-graph construction and route search as named phases. Conflicting mode and Save controls
-are disabled; Undo or Clear cancels the request before changing accepted geometry.
-Calculation has a one-minute overall limit. A timeout or other failed routed leg keeps
-the existing plan and offers a direct-line fallback without silently changing the
-selected mode.
+Endpoints prefer a city, town, village, or hamlet within 1 km, then a ranked landmark,
+then a settlement within 3 km; districts and municipalities never name a track.
+Landmarks rank passes, saddles, and peaks within 1 km, then lakes, glaciers, and
+waterfalls, then huts, viewpoints, historic sites, shelters, places of worship, and
+settlements within 2 km, weighting each class by distance. Labels without an English or
+Latin name are romanized: Georgian as on road signs, without apostrophes and with `ყ` as
+`k` (`ყელიდა` → `Kelida`); Cyrillic by BGN/PCGN without diacritics or soft/hard-sign
+marks. Passes gain a `Pass` suffix and peaks an `Mt.` prefix when missing. A failed
+lookup is skipped, and a warning names the failed lookup and its reason, including
+HTTP 429. When source elevation is usable, Save keeps the source points as canonical and
+stores the calculated Terrarium projection separately; otherwise the Terrarium
+projection becomes the canonical elevation. The original file bytes are discarded after
+parsing.
 
-The worker fetches bounded MVT coverage from the configured detail-vector TileJSON and
-decodes the same `streets` layer used for visible roads and paths at detailed map zooms.
-Every provider road kind participates except construction/proposed and explicit non-road
-or rail features. Explicit `foot=no` or `foot=private` remains rejected when a
-replacement provider supplies it; the default Shortbread schema does not publish access
-values. Exact source vertices and eligible geometric crossings, branches, overlaps, and
-two-grid-unit near touches become route junctions; available layer and bridge/tunnel
-differences remain disconnected. Routing does not query MapLibre's visible tile cache
-and does not use a backend, proxy, routing service, or Overpass. Missing or unusable
-provider topology produces an actionable unavailable state; it never falls back to an
-unrelated external service.
+GPX import also reads bounded root `<wpt>` elements as track markers. Blank names become
+`Marker N`; invalid or excess waypoints are skipped with warnings and never count as
+track geometry. FIT, KML, shared tracks, and route plans do not create track markers.
 
-After every accepted geometry edit, the browser samples terrain elevation and computes
-the same track metrics, elevation profile, grades, and climbs/descents used by imported
-tracks. A terrain failure leaves the accepted geometry and distance metrics intact, with
-no elevation profile; the route can still be saved. Saving locks route edits and map
-clicks while it validates and atomically writes the generated points through the
-existing local-track repository. The result then behaves like any other saved local
-track. Unsaved plans are transient and activate the same leave-site guard as imported
-previews.
+#### Route planning
 
-Saved track cards show icon-led recorded duration, distance, and primary elevation gain
-when available. The detail pane's primary stats grid presents duration, distance,
-derived average speed, and **Elevation gain**/**Elevation loss** from usable source
-elevation or, for an elevation-free import, its promoted Terrarium projection. Tracks
-with usable source elevation retain separate **Elevation gain (calculated)** and
-**Elevation loss (calculated)** rows below the point/segment count. Missing measurements
-are omitted; source file, point, segment, and save metadata, including a
-`DD.MM.YYYY HH:mm:ss` saved timestamp, remain below it. Saved tracks are searchable by
-name, reopen after close, and rename only from the detail header's **Rename** action.
-That action replaces the saved title with a bounded name editor; the preview retains its
-body **Track name** field and English-name application flow. Each saved-track row keeps
-favorite and icon-only delete controls in the DOM, revealing inactive controls on
-pointer hover or keyboard focus; active favorites remain visible. Row selection and
-hover color cover the entire row, including its action column. Each row shows a
-simplified track-shape thumbnail left of the name on a bordered rounded-square backdrop:
-orange for loops and blue for one-way tracks. A loop ends within 1 km of its start and
-within half its length. Thumbnails are computed in the browser and stored locally;
-missing or outdated ones are computed at startup and after list changes. Deletion uses
-two-stage inline confirmation: the row delete icon becomes a destructive confirmation
-icon, while **Delete track** in the detail action menu replaces that menu trigger with
-**Confirm delete**. Pointer exit, Escape, and click-away cancel either confirmation
-without mutation. Users can favorite a track from its list row or detail header.
-Saved-track GPX downloads use the one-click **Download GPX** detail-header action; KML
-remains in the detail header's compact action menu. Favorites sort before other tracks,
-with the selected track sort applied independently inside every folder. Users create,
-rename, re-icon, delete, collapse, expand, and explicitly reorder flat folders from
-compact controls above and within the track list. The icon picker offers the folder
-glyph plus the complete marker catalog. Empty folders remain visible as drop targets.
-Tracks without a folder render directly below the folder rows without another framed
-section. Deleting a folder moves its tracks there. Tracks and folders move with pointer,
-delayed touch, or keyboard drag controls; keyboard drops restore focus to the moved
-control. Nesting is unavailable. New file imports enter the single provisioned
-**Imports** folder, saved route plans remain unfiled, and migration assigns older
-imported tracks to **Imports** while leaving older saved routes unfiled. **Imports** can
-be renamed, re-iconed, and reordered but not deleted, because it is the destination for
-every new import. Folder identity, ordering, icon, and track placement synchronize with
-the existing opt-in account data flow; the last synchronized folder reorder wins as a
-whole. Which folders are collapsed is remembered in the current browser and restored
-after a reload, but it is view state and never synchronizes to other devices.
+**Plan route** opens a new unsaved-track pane and takes ownership of map clicks. The
+first click sets the start; each later click adds a leg in the persistent **Next
+segment: Routes | Line** mode. **Routes** snaps both ends to the detail-vector street
+network and searches a walkable connection in a browser worker; **Line** adds a direct
+segment. A pending routed leg reports tile download, graph construction, and search
+progress, disables conflicting controls, and is cancelled by Undo or Clear. Routing has
+a one-minute limit; a failed leg keeps the plan and offers a direct-line fallback
+without changing the mode. Missing provider topology shows an unavailable state; there
+is no backend or fallback routing service. Topology rules are in
+[runtime flows](./runtime-flows.md#browser-route-planning).
 
-The latest opened saved track reopens after restart when its content is still valid.
-Catalog, tags, filters, batch import, and manual GPX authoring remain unavailable. A
-newly imported or reopened track renders as bright-blue independent lines and fits its
-complete bounds with padding for the master/detail surfaces. With usable elevation, the
-map overlays every non-flat climb/descent grade subsegment across the active track,
-leaving flat spans bright blue. The overlay is not narrowed by chart or Climbs &
-Descents segment hover/selection; those interactions remain panel-only. Closing the
-track removes the active geometry without deleting a saved record or moving the camera.
-Every saved track can be downloaded locally as GPX or KML. Generated files preserve
-independent segments, saved name, available canonical point elevation—including promoted
-Terrarium elevation for an elevation-free import—and reliably aligned timestamps without
-writing GPX or KML description elements; conversion never uploads the source.
+After each accepted edit the browser samples terrain and recomputes metrics, profile,
+grades, and climbs/descents. A terrain failure keeps geometry and distance and still
+allows saving. Save locks editing while it writes through the local-track repository;
+the result behaves like any saved track. Unsaved plans activate the leave-site guard.
 
-GPX import also reads bounded root `<wpt>` elements in document order. Valid coordinates
-are retained, names use the same whitespace and length normalization as saved markers,
-and blank names receive deterministic `Marker N` labels. Invalid or excess waypoints are
-skipped with bounded warnings; they never satisfy the requirement for usable track or
-route geometry. FIT, KML, reconstructed public shares, and route plans do not invent
-track markers.
+#### Library and folders
 
-Imported waypoints and markers added from the map belong to one preview or saved track.
-Editable single-track details show a collapsed **Markers** section below elevation
-analysis with an independent add action, fixed blue-flag rows, map navigation, direct
-inline rename, and two-stage deletion. Shared tracks, route plans, and multi-track mode
-do not expose that editor. Only the active editable track renders its markers, using the
-existing marker symbol layer with smaller icons and labels alongside global saved
-markers.
+Rows show a simplified shape thumbnail (orange for a loop, blue for one-way), the name,
+recorded duration, distance, and elevation gain. A loop ends within 1 km of its start
+and within half its length; thumbnails are computed and cached in the browser. Favorite
+and delete controls appear on hover or focus on desktop and stay visible on smartphones;
+active favorites always show. Deletion is two-stage inline confirmation from the row or
+from **Delete track** in the detail action menu; pointer exit, Escape, or click-away
+cancels it.
 
-Track markers persist atomically in local track content and synchronize as bounded
-mutable track metadata. They do not alter GRPT geometry, content hashes, lineage,
-duplicate grouping, or elevation identity. GPX downloads emit escaped root `<wpt>`
-elements before `<trk>` in stored order, including each marker name and coordinate; KML
-downloads remain geometry-only.
+Sorting offers Newest, Oldest, Name, and Distance from map center, persisted locally.
+Favorites sort first, and the sort applies inside every folder. Users create, rename,
+re-icon, delete, collapse, and reorder flat folders; the icon picker offers the folder
+glyph plus the marker icon catalog. Tracks and folders move by pointer, delayed touch,
+or keyboard drag. Unfiled tracks list below the folders, and deleting a folder moves its
+tracks there. New imports enter the **Imports** folder, which can be renamed, re-iconed,
+and reordered but not deleted; saved route plans stay unfiled. Folder identity, order,
+icon, and track placement synchronize with the account; the last synchronized reorder
+wins as a whole. Collapsed folders are remembered in this browser only.
 
-Tracks with usable elevation show an interactive distance profile with labeled axes,
-grid, axis tooltip, and a map marker synchronized to the highlighted chart point. Parsed
-source elevation remains authoritative for that profile, grades, and climb/descent
-analysis; the calculated Terrarium profile is used only when the source has no complete
-elevation run. The profile does not repeat the ascent/descent metrics already shown in
-the stats grid.
+The track search field filters saved tracks by name, and the map search also lists up to
+two matching saved tracks. The last opened saved track reopens after restart when still
+valid.
 
-From 900 through 1899 CSS pixels, an open track detail pane overlays Tracks tools and
-**Back to tracks** restores the prior import, search, and list state. At 1900 CSS pixels
-and above, the track pane remains adjacent and uses **Close track**. Favorite and delete
-row actions remain visible on smartphones; desktop rows reveal them on hover or focus.
-Two-stage inline deletion behaves the same at every width.
+#### Track detail
 
-### Satellite
+Selecting a track draws it in bright blue, fits its bounds around the open panes, and
+opens a detail pane with metrics, actions, provenance, and an elevation profile. The
+stats grid shows duration, distance, average speed, and **Elevation gain**/**Elevation
+loss**; tracks with source elevation also list the calculated Terrarium gain and loss.
+Missing measurements are omitted. Source file, point/segment counts, and the saved
+timestamp follow. Closing the track removes its geometry without moving the camera. From
+900 through 1899 CSS pixels, **Back to tracks** restores the prior list state; at 1900
+and above the pane stays adjacent and uses **Close track**.
 
-Satellite uses a compact `Point | <coordinates>` search-area selector. Point uses the
-submitted viewport center. Choosing **Search satellite images** from the map context
-menu sets a read-only Custom point as the search center until the map moves or the user
-chooses Point. Marker remains unavailable as a Satellite target; saved markers currently
-support map navigation but do not feed Satellite criteria. The catalog returns only
-scenes whose footprint intersects that immutable point, while the full submitted
-viewport is retained for client-side coverage. The sidebar shows a read-only acquisition
-calendar, an L2A scene-cloud slider, and the latest-images action. Users do not
-construct a date range. L1C is not exposed in the current MVP UI.
+The header offers **Download GPX** and a **Track actions** menu with favorite,
+**Download KML**, sharing, **Rename** (an inline name editor), and **Delete track**.
+Downloads preserve segments, name, canonical elevation, and aligned timestamps. GPX also
+writes track markers as root `<wpt>` elements before `<trk>`; KML is geometry-only.
 
-Results live in an adjacent right pane and compare acquisition date, platform, product
-level, cloud cover, and coverage. Cards within one acquisition day sort by acquisition
-time descending. Date and time share one line, localized with the IANA time zone
-resolved offline from the submitted search coordinates; platform text is omitted. The
-first eight latest images are visible initially; `Load more images` reveals the next
-bounded set and then continues into preceding calendar months using the submitted
-viewport and filters. A warning appears only when the scene border is less than 5 km
-from the submitted search anchor. Scene cards are the selection and future apply target;
-there is no separate Apply button or tile/orbit tag row. Coverage at 50% or below is a
-yellow tag; higher coverage is plain text. Cloud cover at 70% or higher is a red tag;
-lower cloud values are plain text. Every card remains an individual scene; mosaics are
-not currently composed.
+With usable elevation, the map colors every non-flat climb/descent grade subsegment of
+the active track, leaving flat spans blue; chart and Climbs & Descents hover stay
+panel-only. The interactive distance profile has axes, tooltip, and a map marker at the
+highlighted point. Source elevation drives the profile, grades, and climbs unless it has
+no complete run, in which case the Terrarium profile is used. On desktop and tablet, a
+lower-right grade legend explains the colors; its dismissal persists and the profile
+chart offers **Show track grade legend** to restore it.
 
-The displayed calendar month is the search month. The current month ends at today;
-earlier months cover their complete UTC month. The provider search loads the complete
-0–100% scene-cloud range. The cloud slider defaults to 50%, persists locally across page
-reloads, and filters scene cards client-side while every loaded acquisition date remains
-visible in the calendar; dates at or below the threshold receive the orange highlight.
-Selecting a date above the threshold temporarily reveals its selected scene card;
-de-applying it or selecting another scene restores the filter. After the first search,
-calendar arrows load a displayed month only when that month has not completed
-successfully for the submitted point, viewport, and product. Successful months,
-including empty ones, are reused when navigating back. Newly loaded scene groups are
-appended to the right results pane without replacing other months or resetting the
-displayed calendar month. Month navigation remains available during these loads; a short
-pause before each request lets users move across several months without fetching every
-intermediate month, and a newer selection cancels a superseded month request. Calendar
-controls provide tooltips, a double-chevron shortcut returns directly to the current
-month, and the visibly marked month-year dropdown opens a floating year selector with a
-12-month grid for direct navigation without shifting the calendar. Months outside the
-Sentinel archive or after the current month are disabled. The picker is non-modal:
-clicking another calendar or sidebar control closes it and performs that action.
+Editable single tracks show a collapsed **Markers** section with an add action, map
+navigation, inline rename, and two-stage deletion. Only the active editable track
+renders its markers, smaller than saved markers. Track markers are stored in track
+content and synchronize as track metadata without changing geometry or content hashes.
 
-Scenes sort by acquisition time and cards group by month in the right pane. The calendar
-annotates each loaded day with the scene-cloud average weighted by each scene's viewport
-coverage. Days at or below the current cloud slider receive a subtle orange highlight;
-non-matching days retain only their cloud percentage without a tile outline. After
-locally loaded cards are revealed, the same load-more action fetches the next missing
-preceding month and appends it, continuing back through the Sentinel-2 archive.
-Whole-card click selects, expands metadata, and applies that concrete scene through the
-shared map adapter. TiTiler normally renders a validated L2A item's separate red, green,
-and blue reflectance COGs as georeferenced Web Mercator tiles below hiking references.
-The Satellite sidebar exposes persistent reflectance ceiling, gamma, and saturation
-controls below the render selector for this hosted rendering path. Fresh storage and
-reset use a reflectance ceiling of 11000, gamma 2.25, and saturation 2.50; saved tuning
-takes precedence.
+#### Multi-track view
 
-The real polygon or multipolygon footprint is a separate orange outline above hiking
-geometry and below labels. Selecting a different scene immediately removes the current
-scene and footprint, restores the vector basemap, and loads only the requested scene. A
-failed application reports a safe, clickable error. The detail distinguishes rejected
-values, rate limiting, renderer availability, and an unclassified unusable tile without
-exposing provider URLs.
+The multi-track toggle enables a session-only mode in which row clicks add or remove
+tracks in click order. Selected tracks share one bright-blue scene with grade overlays
+where profiles exist. The read-only pane shows a **Selected tracks** header with
+**Download selected tracks**, combined statistics, then statistics and a profile per
+track. The download is `selected-tracks.zip` with one GPX per track, named from the
+track with deterministic `Stem (2).gpx` suffixes for collisions. On smartphones, row
+clicks keep the list open and **Show map** reveals a combined disclosure. An empty
+selection closes the pane; the mode is never persisted.
 
-A render dropdown in Satellite selects `Auto`, `Server`, or `Direct`. Auto switches a
-hosted-renderer 429 or CORS-opaque status-zero failure to direct range reads of the
-scene's pre-rendered 8-bit visual COG without retrying TiTiler. Server never falls back,
-and Direct bypasses TiTiler entirely. The visual COG is displayed as supplied;
-reflectance, gamma, and saturation controls are not applied to it. Tiles become visible
-individually while the vector basemap remains available below them, and satellite
-rendering has no application deadline.
+#### Public track links
 
-A successful automatic fallback replaces Ready with a persistent, non-blocking warning
-that TiTiler is unavailable and the alternative imagery provider is being activated or
-is active. Choosing Direct explicitly does not show that warning. The warning clears
-when a later server render succeeds, the user explicitly changes rendering mode, or
-imagery is removed. A mode change removes both provider raster slots, restores the full
-vector basemap, and reapplies the same selected scene through only the newly selected
-provider. The mode choice is stored immediately, including during a pending or failed
-render. Saved-marker targeting remains unavailable in Satellite.
-
-Storage reporting is read-only. Browser-managed HTTP and MapLibre tile caches are not
-exposed through the web storage APIs, so the application neither claims their size nor
-offers a misleading clear action. Replaced Sentinel raster sources are removed from the
-live MapLibre map after a successful swap, and failed staging sources are discarded.
-
-Clicking a loaded calendar date selects the scene with the highest viewport coverage for
-that date, reveals its batch if needed, expands its card, and scrolls it into view.
-Coverage ties retain the existing acquisition-time order. The shortcut never reopens a
-results pane that the user closed. The same shortcut applies the selected scene through
-the card command path.
-
-The expanded applied card shows validated acquisition, tile, orbit, product,
-edge-distance, and attribution evidence. `Fit footprint` preserves pitch and bearing;
-`Hide imagery` stops the raster without discarding results, selection, or the footprint.
-Clicking the already applied scene card de-applies it, removes its raster and footprint,
-and clears the transient selection. At desktop widths, the Satellite sidebar and results
-stay mounted but hidden across rail changes, so a user can inspect Layers and return
-without losing the search session.
-
-If the initial cards do not occupy most of the adjacent pane, the UI automatically
-reveals another local set or fetches preceding months, with a small bounded number of
-automatic month requests. The same load-more button remains available for further manual
-archive traversal.
-
-The compact **Mosaic** toggle beside the Satellite heading, identified by a grid icon
-and hover explanation, replaces individual-scene browsing with a viewport-filling L2A
-workflow. Its calendar selects an inclusive upper-bound date: visible cells from the
-Sentinel archive start through that date form one continuous range, while pre-archive
-and future dates remain disabled. Mosaic exposes the shared Auto, Server, and Direct
-render selector but intentionally omits the cloud ceiling, relief shading, stretch
-controls, scene cards, and footprint control.
-
-**Show mosaic** requires a settled map in 2D. It searches the exact viewport polygon
-from the selected date backwards in complete calendar-month chunks, without a cloud
-predicate. Newest-to-oldest scenes with unique geometric bounds are retained only when
-their clipped footprint adds measurable viewport coverage. Turf union area, rather than
-summed per-scene percentages, determines completion at 100% within numerical tolerance.
-Search stops when coverage is complete, the archive reaches 23 June 2015, or the bounded
-128-scene native-source budget is reached. An exhausted archive can leave an explicit
-partial result or a non-error no-imagery result.
-
-Mosaic registers all selected raster sources without waiting for earlier imagery to
-load; each source reveals when its own content is ready, within validated scene bounds
-and with no cross-fade. The global Ready area under map search reports rendered images
-and a determinate progress bar; coverage, rendered-image count, and chronological
-acquisition range remain in Satellite after completion. Selecting a different
-upper-bound date immediately cancels catalog/render work, removes every current Mosaic
-source, and clears that progress before the next explicit **Show mosaic**. Map movement
-cancels obsolete work and refreshes the shown Mosaic for the next settled viewport.
-Closing the sidebar or visiting another rail destination preserves the active Mosaic and
-its settled-camera refresh behavior.
-
-Mosaic and a selected single scene are mutually exclusive. Mosaic entry flattens the map
-and disables the 3D control; leaving it re-enables 3D without restoring an earlier
-terrain mode. Mosaic dates, request state, and applied layers are transient: they are
-neither persisted nor added to map/share URLs. The existing single-scene sharing
-contract remains unchanged.
-
-### Weather
-
-Opening Weather does not change the map cursor or map-click behavior while the weather
-map is off. Its header exposes the **Select forecast point** icon action. Activating it
-changes the cursor to a crosshair and gives the next primary map click to Weather
-instead of the ordinary point-inspection workflow; the mode then ends. After a point is
-selected, the adjacent overflow menu links directly to its Meteoblue and Windy forecasts
-in new browser tabs. Marker placement and one-shot Weather point selection are mutually
-exclusive, and a route draft hidden behind Weather does not capture clicks. On
-smartphones, activating the selection action reveals the map and the selected point
-reopens the workspace on its forecast.
-
-The header's **Show weather map** action enables one combined ECMWF IFS 0.25° map
-feature. It temporarily disables relief shading and elevation isolines, restoring each
-overlay that was enabled when weather is later turned off. It then fetches Open-Meteo's
-public spatial metadata and OM files directly from the browser without an account, API
-key, application server, or proxy. While the weather map is enabled, each primary map
-click replaces the Weather sidebar forecast point; ordinary point inspection and hidden
-route-planning clicks stay disabled. Explicit marker placement still takes precedence.
-Cloud cover at or below 30% is transparent, 31% begins at 30% opacity, and the neutral
-gray ramp darkens smoothly to fully opaque `#808080` at 100%. Precipitation at or below
-0.5 mm is transparent, then follows the shared 0.5, 1.5, 2, 3, 7, 10, 20, and 30 mm
-scale. Wind arrows sit above both; their stroke stays almost invisible at 5 m/s and
-below, then grows with wind speed. The complete weather stack remains below roads,
-hiking paths, labels, routes, and markers.
-
-While the weather map is enabled, a compact forecast-frame control appears below the map
-readiness and terrain-work indicators. The available metadata days form a two-row
-calendar instead of a scrolling rail; the selected day's actual `valid_times` remain in
-the compact time rail. At tablet and desktop widths, its enlarged legend renders cloud
-and precipitation gradients from the same color-scale constants used for map tiles,
-labels their explicit thresholds, and links a low-resolution notice to Windy beside the
-wind legend. The legend and notice are hidden at phone widths to preserve map space.
-Previous and next available times are selected directly from that rail. Every selection
-updates clouds, precipitation, and wind to the same metadata index; the UI never infers
-a fixed forecast interval. The shared Ready area reports metadata loading and
-determinate progress as the three MapLibre sources settle. The quick map-layer menu can
-show or hide the feature. Layers exposes its shared opacity and, while weather is off,
-routes its entry to Weather instead of starting a hidden network request. Opacity
-persists locally. Enabled state, the selected forecast point, and the selected metadata
-time are synchronized into the URL and restored on reload; the downloaded forecast
-response remains session-only.
-
-A completed forecast renders one map marker at the clicked WGS84 coordinate. It uses the
-monochrome Meteocon selected for **Now · next 3 h** at the visual scale of saved map
-markers. Temperature and precipitation stack below the icon inside one compact white
-card so the complete marker stays legible over every basemap. The panel and map marker
-therefore share the same monochrome artwork.
-
-The selected-point context is one compact clickable location row containing a pin icon,
-forecast elevation, and either the named POI selected by the map's existing
-nearest-object lookup within 500 metres or the clicked coordinate when no such POI is
-available. Hover and keyboard-focus treatments expose the row's interactivity.
-Activating it recenters the map on the forecast point without changing its zoom.
-
-The summary is one bordered card: a softly tinted current-period section fills the left
-side, while daytime and night forecasts stack on the right behind inset dividers. The
-current section gives the local date and time, then keeps the weather icon beside a
-top-aligned temperature with the primary condition directly beneath it. Visibly labelled
-wind, gust, and precipitation rows follow without separators. Each Day and Night section
-groups its plain period label with the weather icon. Wider viewports keep the
-temperature and compact metrics in an adjacent column. At narrow mobile widths, the
-period expands into a prominent temperature with its primary condition while
-precipitation, icon-only wind, and icon-only gust ranges form a compact vertical metrics
-column on the right. Significant visibility is folded into the single condition Meteocon
-only when no precipitation phenomenon takes priority. The former large
-apparent-temperature, cloud-cover, visibility, wind, and gust metric cards are not
-rendered. Every weather and metric icon exposes its label on pointer hover, keyboard
-focus, and a touch-screen tap.
-
-All forecast-condition artwork is one monochrome static Meteocon selected from the
-hourly WMO code or aggregated status, using day/night variants where available.
-Precipitation always has priority when the aggregate includes rain, snow, sleet,
-showers, or freezing precipitation. Significant fog, haze, or poor visibility selects a
-ready-made complete Meteocon only when there is no precipitation phenomenon, instead of
-layering another badge over the primary-condition artwork. Wind, gust, and precipitation
-remain separate indicators.
-
-The hourly forecast is one compact bordered, horizontally scrolling table with a leading
-label column that scrolls with exactly 24 consecutive one-hour columns from the current
-local forecast hour. Vertical rules mark calendar-day boundaries rather than separating
-every hourly column; no horizontal rules separate metric rows. Its rows are `Time`,
-`Weather`, `Temp (°C)`, `Precip (mm)`, `Wind (m/s)`, `Gusts (m/s)`, `Cloud (%)`, and
-`Visibility (km)`. The time row stays on one line: the first column of each local
-calendar-day section shows its weekday instead of the hour, whose value is implicit from
-its neighbours, and the other columns use local `HH:00`. Weather keeps one condition
-icon per unmodified hourly sample. Cloud cover and visibility close the table after
-gusts. Cloud cover is rounded to the nearest percentage point, and its background
-interpolates from white at 0% through light grey `#E1E7EA` at 25% to the darker
-`#8A9AA1` at 100%. Visibility is rounded to the nearest whole kilometre. In descending
-visibility order, its background runs from sky blue at 100 km through white at 30 km to
-grey at 5 km, retaining the endpoint colours outside that range. Both rows omit repeated
-units because their labels own them. Temperature and precipitation values stay
-column-aligned immediately above their corresponding chart shape. Temperature moves
-through blue `#0288D1` at 0 °C and below, green `#2EAD5B` at 10 °C, amber `#FFB703` at
-20 °C, and red `#E53935` at 30 °C and above; those colors fill a point-free polygon
-through the hourly values and extend the first and last values to the chart edges.
-Precipitation cells omit the repeated `mm` suffix because the row label owns the unit.
-Precipitation is drawn as vertical blue bars whose zero baseline meets the row boundary;
-a snowflake appears between a snowy value and its bar. Wind and gust row backgrounds
-form continuous horizontal gradients through their hourly values. The color anchors are
-white at 0 m/s, green at 8 m/s, yellow at 15 m/s, orange at 20 m/s, and red at 25 m/s;
-values between anchors are linearly interpolated and higher values remain red. Wind
-direction is not requested or shown in either the current or hourly forecast. The left
-and right controls scroll this unchanged hourly cadence without grouping or sampling it.
-An expand icon to their right leaves that header in the sidebar while widening only the
-table rightward until all 24 columns are visible; the same control contracts it back to
-the compact scrollable layout. Collapsing the workspace sidebar or scrolling the Weather
-panel also contracts an expanded table. A mouse can drag the compact table directly;
-table text is not selectable during that interaction. While loading, one rounded
-placeholder retains the table-and-chart geometry; the summary and seven-day placeholders
-remain unchanged. At narrow mobile workspace widths, the summary stacks its current and
-Day/Night areas. Each seven-day period places its primary condition beneath its
-temperature, precipitation immediately to their right, and the two-line wind/gust group
-at the far edge so words do not compress or overflow the card.
-
-Seven rows are derived from location-local hourly forecast data. Each date owns one
-full-width bordered card with a fixed date column and two stacked weather-period rows.
-Saturday and Sunday date columns use the soft orange tag palette with its paired
-contrast-safe foreground; weekday date columns retain the neutral panel treatment. The
-rows omit repeated Day and Night text while their article names and icon tooltips retain
-those accessible distinctions. Each row aligns the weather icon, temperature range,
-primary condition, precipitation, and a two-line wind and gust group; its only internal
-divider separates the two periods without crossing the date column. Night `D` includes
-all non-daylight samples after date `D`'s daylight period and all non-daylight samples
-before date `D+1`'s daylight period. Pre-sunrise samples on date `D` therefore belong to
-night `D-1`; local midnight never splits a physical night. An eighth fetched calendar
-date supplies the pre-sunrise samples needed to complete the seventh displayed night.
-
-Each Day or Night row is a keyboard-accessible forecast trigger. Activating it opens a
-non-modal floating 24-hour table using the same hourly visualization as the current
-forecast. Day windows begin at local midnight. Night windows begin six hourly samples
-before the post-daylight period starts. The panel opens at the selected date card's
-position and expands horizontally to the full 24-column width; its final position and
-maximum height remain inside the viewport when lower or edge-adjacent cards trigger it.
-Closing with Escape, the close control, an outside click, or source-panel scrolling
-animates back to the source card's top-left corner while its width and height reach
-zero, then returns focus to the triggering row.
-
-Day and night independently classify every dry sample before choosing the dominant sky
-from duration thresholds. A brief non-clear variation may remain **Clear**, but a
-sustained three-hour minority window in a 12-hour period is **Mostly clear**.
-Precipitation is likewise separated into isolated, intermittent, and persistent patterns
-before it is combined with the dominant sky. Significant fog, poor visibility, or
-reduced visibility remains a secondary, time-qualified icon and never replaces the
-primary weather icon. Each interval shows temperature, wind-speed, and gust ranges plus
-its complete precipitation total. Wind and gust ranges are displayed in metres per
-second, rounded to the nearest whole number. Date labels and the model-update time use
-the selected location's provider-returned time zone.
-
-Only the latest point request may update the panel. A new selection or unmount aborts
-the previous request, and Retry repeats the currently selected coordinate. Loading,
-ready, and error content scroll inside the Weather panel while the model metadata and
-`Weather data by Open-Meteo` attribution remain fixed at its bottom. Forecast responses
-are ephemeral: navigation keeps the mounted result, while an enabled weather-map reload
-restores the URL-selected point and frame and requests current provider data again.
-ECMWF IFS values are deterministic model forecasts, not weather-station observations.
-
-Each primary workspace destination has a shareable URL anchor: `#tracks`, `#markers`,
-`#layers`, `#satellite`, `#weather`, or `#user`. Loading an anchored URL restores that
-tab, and changing tabs updates the anchor.
-
-Regular map sharing is always available and encodes a 2D center and zoom; context-menu
-point links follow the same flat-camera contract and do not include satellite imagery.
-When a scene is selected, the share dialog enables its **Include selected satellite
-image** checkbox by default; clearing it omits the scene from both links. Included
-scenes use the current selection even while its raster is still rendering and open on
-the Satellite section. The selected scene row also provides **Share link** for the same
-2D map-and-scene URL; clicking the rest of an applied row removes that imagery. A
-separate 3D link is enabled only while terrain mode is active and additionally encodes
-bearing and pitch. Opening that link selects the 3D control immediately, but starts
-terrain only after the base style can safely accept new sources. Shared terrain and
-satellite tiles then load alongside basemap and relief tiles, so one source cannot hold
-the others behind the map's loading state.
+A signed-in owner of a synchronized saved track uses **Share** in **Track actions**.
+Opening the menu loads the current status. The **Share** toggle enables or disables
+public access; enabling copies the link, and **Copy share link** retrieves it later.
+Disabling keeps the track synchronized. Links use `#tracks/share/1.<token>`, keeping the
+capability out of request paths and referrers. A recipient needs no account and sees the
+owner's current snapshot read-only; **Save a copy** creates an independent local track.
 
 ### Markers
 
-Markers is a browser-local library of named map points. **New marker** starts placement
-mode, and **Create marker here** is also available from the map context menu. A map
-click opens the editor with the nearest inspected POI name when available; the user
-confirms the name, one of 130 Pinhead map icons organized in category tabs, and one of
-ten shared-theme colors before anything is stored. The icon picker exposes the 21 most
-recently used unique icons in a dedicated three-row section. Its expanded Nature catalog
-includes telescope, moon, lake, viewpoint, waterfall, cave, cliff, valley, rock, bear,
-deer, bird, wildflowers, and wetland choices for hiking landmarks.
+Markers is a library of named map points. **New marker** starts placement mode, and
+**Create marker here** is available from the map point actions. A map click opens the
+editor prefilled with the nearest inspected POI name; the user confirms the name, one of
+130 searchable Pinhead icons in category tabs with a recently used section, and one of
+ten theme colors before anything is stored.
 
-The contextual sidebar lists saved markers using the same row interaction pattern as
-Tracks. It sorts by newest, name, color, icon, or distance from the current map center;
-icon sorting follows catalog order and sorts markers sharing an icon by distance. The
-list shows the current distance; navigates the map from a row and returns smartphone
-users to the map after selecting it; and supports rename, appearance changes, and
-two-step inline deletion. Markers remain in IndexedDB across browser restarts and render
-as MapLibre symbols with their selected icon, color, and name. Malformed stored rows are
-omitted and reported through bounded local diagnostics.
+The list uses the Tracks row pattern and sorts by newest, name, color, icon, or distance
+from the map center (persisted); icon sorting follows catalog order, then distance. Rows
+show the current distance, navigate the map, and support rename, appearance changes, and
+two-stage deletion. Markers are stored in IndexedDB, synchronize with the account when
+sync is enabled, and render as MapLibre symbols. Malformed stored rows are omitted and
+logged.
 
-The Markers header exposes a weather-settings action. Its label shows the enabled
-weekday abbreviations; no weekday label means forecasts are disabled. One or two local
-weekdays may be selected, with Saturday and Sunday enabled initially. Every selected
-weekday uses the same interval: the Weather tab's daylight period, its continuous
-post-sunset-to-next-sunrise night period, or a custom whole-hour half-open interval.
-Custom intervals whose end hour is earlier than their start continue across local
-midnight. Clearing all weekdays disables marker forecasts. The weekday, interval, and
-**Show forecasts on the map** choices form one browser-local weather preference stored
-in IndexedDB.
+The header's weather-settings action chooses one or two local weekdays (Saturday and
+Sunday initially; none disables forecasts) and one interval: the Weather daylight
+period, the night period, or a custom whole-hour range that may cross midnight. **Show
+forecasts on the map** completes this browser-local preference.
 
-While Markers is open, each saved marker receives one forecast at its WGS84 coordinate.
-The point's terrain elevation is resolved for the first request, persisted on that
-marker, and reused by subsequent weather requests. The marker list labels each selected
-forecast column once above its rows with the weekday, day, and month. Columns use the
-chronological order of their actual forecast dates rather than weekday selection order.
-Each marker row then shows one separate clickable weather cell per selected date beside
-the marker name and distance. Every cell carries that date's monochrome condition icon,
-temperature range, and total precipitation without repeating the date label.
-
-When map display is enabled, a compact unified overlay replaces that marker's normal
-MapLibre symbol while Markers is active. The marker name spans the overlay header; one
-or two weather cells form the grid below it in chronological forecast-date order without
-repeating the date labels. The configured marker icon is omitted while this weather
-overlay is visible. Leaving Markers restores the normal map symbol and removes these
-interval overlays, including when **Open in Weather** selects the marker as the Weather
-forecast point.
-
-Activating a weather cell expands the same floating 24-hour table used by a Weather
-seven-day forecast period, starting at the selected daylight, night, or custom interval
-boundary. **Open in Weather** in that table selects the Weather workspace and requests
-the normal seven-day forecast at the marker, reusing its persisted elevation and name.
-The floating preview remains local presentation state and is not encoded in the URL.
-
-Marker search, grouping, filtering, coordinate/scale editing, remote synchronization,
-Satellite targeting, and copying into Create GPX are not currently available.
+While Markers is open, each marker gets one forecast at its coordinate; its terrain
+elevation is resolved once and stored on the marker. The list labels each forecast date
+column once, in date order, and each row shows one clickable cell per date with icon,
+temperature range, and precipitation. With map display enabled, a compact overlay with
+the name and the same cells replaces the marker symbol until Markers closes. A cell
+opens the floating 24-hour table used by Weather, starting at the interval boundary; its
+**Open in Weather** loads the full forecast at the marker.
 
 ### Layers
 
-Layers groups durable controls under explicit source headings: Local GPX, Satellites,
-the configured terrain provider, and **OpenStreetMap via OpenFreeMap + OSM Shortbread**.
-OpenFreeMap supplies hiking-specific map layers and labels. The default-on **OSM
-detail** checkbox controls Shortbread brownfield and building context; Shortbread roads
-and detailed paths remain under the existing Roads and Hiking paths controls. Satellites
-starts with optional **Google satellite imagery**, **Bing aerial imagery**, **Esri World
-Imagery**, and **NAPR Orthophoto** basemaps, followed by **Copernicus Sentinel-2 via
-Earth Search**, whose **Satellite imagery** and **Scene footprint** controls remain
-disabled until a scene is applied. NAPR is one logical multi-year orthophoto mosaic:
-newest available aerial pixels render from 2025, then 2020, then nationwide 2016–2017
-coverage. Google, Bing, Esri, NAPR, and Sentinel imagery are mutually exclusive
-checkboxes: choosing one immediately clears every other imagery source, while every
-imagery source may be off. Static imagery is disabled by default, and each explicit
-choice is retained in this browser's IndexedDB preferences. The shared OpenStreetMap
-opacity slider enables whenever any raster is selected and scales every OpenStreetMap
-reference layer and elevation isoline once active raster content has switched the map
-into satellite visual mode; vector paints remain fully opaque while static raster tiles
-first load.
+Layers groups controls under source headings: Weather, Local GPX, Satellites, the
+terrain provider, and **OpenStreetMap via OpenFreeMap + OSM Shortbread**. Every map data
+source must appear under its provider heading, with an explicit control for each
+user-visible feature family outside the base canvas. Logical IDs map to allowlisted
+MapLibre layer IDs; native IDs never reach the UI.
 
-The compact map chooser lists **Vector OSM**, **Google Satellite**, **Bing Aerial**,
-**Esri World Imagery**, and **NAPR Orthophoto** without preview thumbnails. Vector OSM
-always renders the vector map at full opacity without changing the saved **OSM overlay**
-setting; choosing a satellite source changes only the active raster and reuses that
-independent toggle. The final two-column action row gives the same hit area to
-**Sentinel-2** and **Layers tab**: Sentinel activates the applied scene or opens
-Satellite when no scene exists, while Layers tab opens the complete Layers workspace.
-Independent Layers toggles, imported-track opacity, terrain preferences, and an applied
-Sentinel scene remain intact.
+- **Weather:** turning the weather map on routes to the Weather tab; turning it off and
+  its opacity work here.
+- **Local GPX:** Imported tracks, the default-on **Elevation gradient**, and one opacity
+  for the active preview, saved selection, and gradient.
+- **Satellites:** **Google satellite imagery**, **Bing aerial imagery**, **Esri World
+  Imagery**, **NAPR Orthophoto**, then Sentinel-2 **Satellite imagery** and **Scene
+  footprint**, enabled once a scene is applied. The imagery sources are mutually
+  exclusive and may all be off. NAPR renders the newest available aerial pixels from
+  2025, then 2020, then 2016–2017. Hiding Sentinel imagery keeps the scene, footprint,
+  and results.
+- **Terrain:** relief shading, elevation isolines, contour spacing, and invalid-DEM
+  repair.
+- **OpenStreetMap:** **OSM detail**, Hiking paths, Roads, Places and POIs, Natural
+  features, Restricted areas, and one opacity that applies to OSM layers and isolines
+  while a raster is active.
 
-The remaining checkboxes cover Imported tracks, its default-on **Elevation gradient**,
-Relief shading, Elevation isolines, Hiking paths, Roads, and Places and POIs, plus
-Natural features and Restricted areas. The gradient colors climb and descent grades
-across the active track; its durable checkbox remains independently editable while
-Imported tracks gates its effective map visibility. When the colored overlay is visible,
-desktop and tablet maps show a compact lower-right profile-shaped, stepped color scale.
-Labels sit at numerically positioned color boundaries around 0% grade; thresholds that
-do not change color are omitted. Smartphones omit the scale. The base bright-blue
-geometry and gradient share the imported-track opacity control. The single **Natural
-features** checkbox controls vegetation, glaciers, wetlands, rivers, water bodies, and
-their water labels. The terrain provider also owns the invalid-DEM repair switch and a
-compact contour-distance slider. Every map data source added to the application must
-appear under its provider heading in Layers; each user-visible feature family from that
-source receives an explicit control unless it is part of the required base canvas. Each
-logical ID maps to an allowlisted set of stable MapLibre layer IDs; arbitrary native IDs
-never cross the UI boundary. Hiding Sentinel imagery retains the applied scene and does
-not remove its footprint, search results, or attribution contract. Relief and isoline
-visibility are independent of 3D terrain mode and satellite availability. Base land
-remains visible and cannot be disabled. Per-layer opacity, drag ordering, and custom
-layers are unavailable. Checkbox state, shared OpenStreetMap opacity, the shared
-imported-track opacity, rendering mode, imagery stretch, and terrain-overlay preferences
-are stored locally and restored after refresh. Imported-track visibility and opacity
-affect the active preview and saved selection together; they do not create per-track
-presentation records. Satellite scene metadata and assets are never persisted locally;
-imagery starts empty unless an explicit share URL requests a scene.
+Visibility, opacities, imagery choice, rendering mode, stretch, and terrain preferences
+persist locally. Sentinel scene data is never persisted; imagery starts empty unless a
+share URL requests a scene. Per-layer opacity, drag ordering, and custom layers are not
+offered.
+
+The quick map-layer chooser lists **Vector OSM**, **Google Satellite**, **Bing Aerial**,
+**Esri World Imagery**, and **NAPR Orthophoto**, then **OSM overlay** and **Weather**
+checkboxes, and a final row with **Sentinel-2** (activates the applied scene or opens
+Satellite) and **Layers tab**. Vector OSM shows the vector map at full opacity without
+changing the saved overlay setting.
+
+### Satellite
+
+The search area is a compact `Point | <coordinates>` selector. Point uses the viewport
+center at submission; **Search satellite scenes here** in the map point actions sets a
+read-only Custom point until the map moves or Point is chosen. A Marker option is shown
+disabled. Only L2A scenes are searched; the catalog returns scenes whose footprint
+intersects the point, and the submitted viewport is kept for coverage.
+
+The sidebar has an acquisition calendar, a **Maximum cloud** slider (default 50%,
+persisted), **Search images**, and rendering settings. The calendar month is the search
+month; months are fetched on demand with a short debounce, cached per search, and
+cancelled when superseded. Days show viewport-coverage-weighted cloud and are
+highlighted when at or below the slider, which filters cards client-side. Clicking a day
+selects and applies its highest-coverage scene. Calendar controls include a
+current-month shortcut and a non-modal month-year picker; months outside the archive are
+disabled.
+
+Results open in an adjacent pane grouped by month, newest first, with acquisition time
+in the search point's local time zone, product level, cloud, and viewport coverage. A
+warning appears when the scene edge is within 5 km of the search point. **Load more
+images** reveals further cards and then earlier months; a sparse pane auto-loads a few
+more months. Clicking a card selects, expands, and applies that scene; clicking the
+applied card removes its imagery. The expanded card shows acquisition, tile, orbit,
+product, edge distance, and attribution, plus **Fit footprint** and **Share link**. At
+desktop widths the Satellite session survives rail changes.
+
+TiTiler normally renders the L2A red, green, and blue reflectance COGs below hiking
+layers, with persistent reflectance-ceiling, gamma, and saturation controls; the
+footprint is an orange outline. The render selector offers `Auto`, `Server`, and
+`Direct`: Auto switches a TiTiler 429 or status-zero failure to direct reads of the
+scene's visual COG and shows a persistent warning; Server never falls back; Direct skips
+TiTiler. Stretch controls do not apply to the visual COG. Changing the mode reapplies
+the scene through the new provider. A switch moves relief shading above the imagery.
+Failures show a safe, clickable error without provider URLs.
+
+#### Mosaic
+
+The **Mosaic** toggle beside the heading switches to a viewport-filling L2A mosaic. Its
+calendar selects an inclusive end date; dates before the Sentinel-2 archive start (23
+June 2015) and future dates are disabled. Mosaic offers the render selector only.
+
+**Show mosaic** needs a settled 2D map. It searches the viewport backwards from the end
+date without a cloud filter, keeping newer scenes only when they add coverage, until the
+viewport is fully covered, the archive is exhausted, or a bounded scene budget is
+reached. Scenes appear as each loads; the status line shows progress, and the sidebar
+shows coverage, rendered-image count, and date range afterwards. Changing the date
+cancels work and clears the mosaic; moving the map refreshes it for the next settled
+viewport. Mosaic and a single scene are mutually exclusive, and Mosaic disables 3D.
+Mosaic state is transient and never shared in URLs. See
+[runtime flows](./runtime-flows.md#sentinel-mosaic).
+
+### Weather
+
+Weather does not change map clicks by default. **Select forecast point** in its header
+gives the next map click to Weather, with a crosshair cursor. The header overflow menu
+links the selected point to Meteoblue and Windy. Marker placement and point selection
+are mutually exclusive, and a hidden route draft does not capture clicks.
+
+**Show weather map** enables one combined ECMWF IFS 0.25° layer of clouds,
+precipitation, and wind arrows, fetched from Open-Meteo directly in the browser. It
+temporarily turns off relief shading and isolines and restores them afterwards. While it
+is on, every map click moves the forecast point, except explicit marker placement. The
+weather stack sits below roads, paths, labels, routes, and markers; its color scales are
+defined in `src/presentation/weather/weatherMapStyle.ts`.
+
+A forecast-frame control below the status line offers a two-row day calendar and the
+selected day's actual forecast times; clouds, precipitation, and wind always share one
+frame. On tablet and desktop it also shows a legend and a Windy link for detailed wind.
+The Ready line reports loading progress. Opacity persists locally; the enabled state,
+forecast point, and frame are kept in the URL and restored on reload.
+
+A completed forecast places one map marker with the **Now · next 3 h** Meteocon,
+temperature, and precipitation. The panel shows a clickable location row (named POI
+within 500 m, otherwise the coordinate, plus elevation) that recenters the map, then a
+summary card with the current period and the day and night outlook, a 24-hour hourly
+table, and a seven-day outlook. Weather artwork is one monochrome Meteocon per
+condition; precipitation takes priority, and significant fog, haze, or poor visibility
+selects a complete Meteocon instead of an extra badge. Icons expose labels on hover,
+focus, and tap.
+
+The hourly table has exactly 24 one-hour columns from the current local hour with rows
+Time, Weather, Temp (°C), Precip (mm), Wind (m/s), Gusts (m/s), Cloud (%), and
+Visibility (km), with a temperature curve and precipitation bars. It scrolls with
+buttons or mouse drag and can expand to show all columns. Wind direction is not shown.
+
+The seven-day outlook shows one card per date with Day and Night rows. Night `D` runs
+from the end of daylight on `D` to the start of daylight on `D+1`, so local midnight
+never splits a night; an eighth fetched date completes the last night. Each row shows
+the dominant sky, precipitation pattern, temperature, wind, and gust ranges in m/s, and
+the precipitation total. Activating a row opens a non-modal floating 24-hour table for
+that period that closes on Escape, outside click, or panel scroll.
+
+Only the latest point request updates the panel; Retry repeats the current point. The
+model update time and `Weather data by Open-Meteo` attribution stay at the panel bottom.
+Forecast responses are session-only. ECMWF IFS values are model forecasts, not station
+observations.
 
 ## Persistent map controls
 
-- Place-or-coordinate search is overlaid on the map. Submitted place searches begin in
-  the visible viewport, then repeatedly double the bounded search area up to a 500 km
-  radius from the original viewport center. Results from every area are appended as they
-  arrive and deduplicated, so a nearby street name does not hide a more distant
-  settlement with the same name. Direct coordinates remain local and do not contact the
-  place provider. Unlabeled decimal pairs use `latitude, longitude`, matching the map's
-  **Copy coordinates** output; explicit latitude/longitude labels remain accepted in
-  either order. The result list shows each match's geodesic distance from that center.
-  It shows settlements, administrative place boundaries, mountains, and water features
-  by default. Squares, streets, businesses, and other POIs remain behind an explicit
-  **Show other results** action. A fixed-height, full-width progress bar shows outward
-  expansion against the 500 km maximum without shifting completed results. Map pan,
-  zoom, and camera controls do not dismiss results or cancel an active search.
-  Nominatim's open-ended OSM tags are shown as readable labels; only explicitly reviewed
-  geographic tags enter the default list and unknown tags stay in other results.
-- A lightweight line below search reports readiness, pending work, or safe failures;
-  selecting an error opens its complete safe detail.
-- Navigation collapses with a short transition to only the clickable Trail Planner logo.
-  The Trail Planner square keeps the exact same size and viewport position in both
-  states so the remaining navigation appears to retract into that fixed anchor.
-- Settings is non-modal and does not dim or block the map.
-- Layers exposes default-enabled invalid DEM repair and minor contour spacing under the
-  terrain provider. Satellite owns the imagery stretch and the switch that moves relief
-  shading above imagery. Index contours remain labeled at 200 m intervals.
-- Native zoom and compass/navigation controls remain on the right.
-- The 2D/3D selector is a separate control group immediately below the compass stack.
-- Clicking the map opens an anchored, accessible point-inspection popup. Selecting a
-  place-search result opens the same popup immediately while its destination navigation
-  begins. Coordinates and terrain elevation load without waiting for navigation; nearby
-  map-feature lookup remains in its loading state until the destination map data becomes
-  idle, preventing features from the previous viewport from appearing. Selection has no
-  fixed distance cutoff; the geodesic distance remains visible so the user can judge
-  relevance. Supported feature sources include places, peaks, and points of interest.
-  Named results include direct English Wikipedia article and Google Search links that
-  open in a new tab. For native map clicks, while any part of that popup intersects the
-  map viewport, the next map click only closes it; a subsequent click opens a new
-  inspection. If camera movement puts the popup entirely outside the viewport, the next
-  native click immediately replaces it.
-- Right-clicking the map opens the point-action menu: copy coordinates, copy the flat 2D
-  point link, create a marker, search satellite scenes, show the Weather forecast for
-  the point, copy a weather-map link, and open the point's Meteoblue or Windy forecast
-  in a new tab. The weather-map link enables the weather map on that forecast point,
-  opens the Weather tab, and keeps the selected weather-map time while the weather map
-  is visible. With a mouse the point popup shows only details. On touch-first devices
-  (coarse primary pointer), where a right click is unavailable, a map tap marks the
-  point and a full-width bottom sheet slides up instead of the anchored popup. The sheet
-  shows the same details followed by the same action list, stacks above the track
-  summary, and grows to its content. Choosing any action, the close button, or the next
-  map tap slides it back down; reduced-motion preferences skip the slide.
-- Attribution remains visible in every feature section and terrain mode.
-- Selection legends, elevation charts, and imagery footprints appear only when their
-  corresponding geometry exists.
+- **Search:** place-or-coordinate search starts in the viewport and doubles the area up
+  to a 500 km radius, appending deduplicated results with their distance. Coordinates
+  stay local; unlabeled pairs are `latitude, longitude`, matching **Copy coordinates**.
+  Settlements, boundaries, mountains, and water features show by default; other results
+  sit behind **Show other results**. Map movement does not dismiss or cancel a search.
+  Up to two matching saved tracks are listed as well.
+- **Status line:** below search, reports readiness, pending work, terrain workload, and
+  safe failures; selecting an error opens its safe detail. It is the only surface for
+  map and imagery errors.
+- **Point inspection:** a map click or place-search result opens an anchored popup with
+  coordinates, terrain elevation, and the nearest map feature with its distance; named
+  features link to English Wikipedia and Google Search. While the popup is visible, the
+  next map click only closes it.
+- **Point actions:** right-click opens copy coordinates, copy a 2D point link, create a
+  marker, search satellite scenes here, show the weather forecast, copy a weather-map
+  link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap instead
+  opens a bottom sheet with the details and the same actions.
+- **Sharing:** the map share dialog copies a 2D center-and-zoom link, optionally with
+  the selected satellite scene (included by default), and a 3D link with bearing and
+  pitch while terrain is active.
+- **Camera:** left drag pans; middle drag or Shift+left drag rotates and pitches in 3D
+  around the terrain point under the press, marked by a small pivot ring; keyboard pans,
+  zooms, and orbits once the canvas has focus. Box zoom and right drag are off; pitch is
+  capped at 75 degrees. The 2D command resets pitch and bearing.
+- Attribution remains visible in every section and terrain mode.
 
-Map interaction keeps MapLibre's camera behavior while adapting desktop orbit gestures
-to middle drag and Shift+left drag: ordinary left drag pans, the wheel and double-click
-zoom, arrow keys pan, `+`/`-` zoom, and Shift+arrow keys rotate or pitch after the
-canvas receives focus. Box zoom is unavailable. Both orbit gestures are consumed without
-camera movement in flat 2D. In 3D either rotates and pitches at a restrained sensitivity
-around the terrain point beneath the initial press; each pointer update is one
-zero-duration MapLibre camera command with that geographic `around` anchor. A small
-blue-ring MapLibre marker identifies that shared pivot only while the initiating button
-remains pressed; it follows terrain and disappears when covered, released, or returned
-to 2D. The 3D camera can pitch down to 75 degrees. Right drag is disabled in both modes,
-while right click continues to open the map's contextual actions. MapLibre retains
-projection, terrain anchoring, camera limits, movement events, and the native compass
-reset. The explicit 2D command returns pitch to zero and bearing to north, while 3D
-restores the last useful terrain pitch. Settled results continue through the existing
-map-view persistence queue.
+## Map, terrain, and persistence
 
-## Hiking basemap
+The hiking basemap combines OpenFreeMap for hiking layers and OSM Shortbread for land,
+buildings, and streets; see [map providers](./map-providers.md). Labels prefer
+`name:en`, then `name:latin`, before native names; the client does not invent spellings.
+When satellite imagery is visible, vegetation and land-use fills are removed. Military
+areas show a red perimeter; the map does not claim to identify all private land. Invalid
+configuration prevents the map from mounting with a safe fatal message; a single
+vector-source failure is recoverable.
 
-The pure style factory maps validated OpenMapTiles source-layer names to land, water,
-boundaries, vegetation, glaciers, provider-identified restricted land, roads, paths,
-steps, hiking POIs, peaks, and labels. Source/layer IDs and ordering are stable
-contracts. Unsupported hiking route relations are not invented.
+Relief shading and client-generated contours (labeled 200 m index lines, minor spacing
+20–100 m, default 50 m) use the shared DEM with conservative repair. Contour work runs
+in a terrain worker and falls back to inline work with a Layers warning if the worker
+cannot recover. The 2D/3D control reuses the same map and DEM source; failed 3D
+activation returns to 2D and reports in the status line. Reloads start in 2D: only
+center and zoom persist. Details are in [runtime flows](./runtime-flows.md).
 
-One semantic palette owns all map colors. The vector-only mode uses a warm neutral-grey
-base with opaque land-cover fills so overlapping source polygons cannot create
-accidental shades. Grass and farmland stay close to the neutral base instead of reading
-as yellow surfaces; forests and scrub carry the stronger green distinction. When
-satellite imagery is visible, vegetation, land-use, park, and glacier fills are removed;
-the imagery supplies that surface context while orange transport lines, blue contours,
-and white label halos retain contrast. The style does not derive decorative boundaries
-from tiled surface polygons; the intentional red military perimeter is the only
-restricted-area outline. Imported and user-created GPX tracks reserve a brighter blue
-than the contour family so route geometry remains distinguishable.
-
-Waterway lines and water-body polygons use the same blue. Waterways render first, so
-lake and reservoir polygons cover river centerlines where the geometries overlap.
-
-Labels prefer `name:en`, then the provider's `name:latin` transliteration, before legacy
-English and native-name fallbacks. A native Georgian label can therefore remain when the
-source supplies neither an English name nor a Latin transliteration; the client does not
-invent spellings at render time.
-
-Military polygons are shown with a medium red perimeter and no fill. The current
-OpenMapTiles land-use schema does not expose a general private-access or ownership
-field, so the map does not claim to identify every private or otherwise closed property.
-
-- Default vector sources: OpenFreeMap TileJSON for hiking-specific layers and OSM
-  Shortbread TileJSON for land, building, and street detail; their combined attribution
-  stays visible.
-- Invalid configuration: MapLibre does not mount; a safe fatal message is shown.
-- Either vector-source failure is recoverable when an existing map canvas remains
-  usable; the aggregated safe failure appears only in the shared status below search.
-- Tests: pure style assertions plus synthetic MVT/glyph Chromium coverage.
-
-## Map-view persistence
-
-The map starts only after the last valid center and zoom are read, preventing a visible
-jump from the Georgia overview to the saved position. `moveend` sends settled map views
-to a debounced persistence queue, but the repository deliberately discards terrain mode,
-bearing, and pitch. Animation-frame events are never persisted.
-
-- Stored value: schema-version 3 `map.camera` record containing longitude, latitude, and
-  zoom in the existing Dexie settings table. Schema-version 1 and 2 cameras load with
-  zero bearing and pitch instead of restoring their former terrain orientation.
-- Validation: finite center and zoom values are clamped to supported ranges before a
-  flat camera is returned.
-- Corrupt value: delete it, log a repair event, and use the Georgia overview.
-- Failed or non-settling storage: show a warning and mount with the overview after a
-  bounded wait.
-- Teardown: flush the most recent pending camera without blocking React unmount.
-
-## 2D and 3D terrain
-
-The configured `raster-dem` source is always available to low-contrast relief shading.
-Client-side contour generation reads bounded DEM tiles and renders subdued minor lines
-plus emphasized, labeled 200 m index lines from zoom 11. Minor spacing defaults to 50 m
-and supports 20, 25, 40, 50, or 100 m so every choice divides the index cadence.
-
-DEM repair and contour calculation normally run in one dedicated terrain worker. Camera
-movement continues DEM work but defers newly requested contours until movement settles;
-existing contour tiles remain under MapLibre's normal retention rules. If the worker
-channel or returned data cannot recover after one restart, the same calculations
-continue inline for that page session and Layers shows a non-blocking compatibility
-warning that movement may be slower. Provider, decode, and calculation failures remain
-isolated to their individual requests and do not switch execution mode. A successful
-worker session has no warning; a new page session tries the worker again.
-
-While terrain work is active, the Ready status below search also shows the execution
-mode, exact number of queued contour jobs against the 32-job bound, and any currently
-active work. The secondary line is absent when the worker is idle. This workload summary
-is transient and contains no tile coordinates or provider URLs.
-
-Relief normally sits below satellite imagery; the Satellite switch moves it above the
-active raster without remounting MapLibre. Contours remain above both and below OSM
-roads, paths, labels, and POIs. Preferences are validated and stored locally with the
-existing map-layer record. Provider failure leaves unrelated layers and controls usable.
-
-The 2D/3D control operates on the same MapLibre instance and shared DEM source. Enabling
-3D levels the camera before applying terrain, waits for the source to become usable, and
-then restores a useful pitch without persisting the intermediate view. Disabling terrain
-levels the camera before removing its terrain elevation reference, while retaining
-center and zoom. Ordinary reloads also restart in 2D: durable camera state contains only
-center and zoom, never terrain mode, bearing, or pitch.
-
-- Duplicate clicks share one in-flight transition.
-- Conflicting transitions fail explicitly instead of racing.
-- DEM error, cancellation, or timeout returns to 2D and preserves camera intent; the
-  controller keeps ownership of the shared source so relief can recover on later tiles.
-- Failed 3D enable requests retry twice with bounded backoff, reusing the same facade
-  and map rather than remounting either. Exhausted failures remain in the shared status
-  line below search; the map does not mount a separate warning or retry banner.
-
-Before the shared DEM source is decoded by MapLibre, the client repairs only transparent
-or configured-invalid values and isolated extreme local outliers. Decisions at tile
-borders use neighboring source pixels. Valid terrain is not smoothed, and the same
-corrected PNG cache supplies relief, 3D, and elevation isolines.
-
-## Failure and offline feedback
-
-Map errors are classified as vector, glyph/sprite, satellite raster, terrain, style,
-WebGL, or unknown. Satellite raster failures expose a safe transport reason and exact
-HTTP status when MapLibre provides one. Rate limits and status-zero/no-response failures
-do not retry the hosted renderer because a cross-origin 429 without CORS headers is
-indistinguishable from a connection failure in application code. In Auto mode both
-replace the hosted source with direct pre-rendered visual-COG rasterization; Server mode
-reports the failure without fallback. Server responses and identifiable network failures
-schedule one deduplicated exponential refresh of the failed tiles, capped at three
-attempts; other client errors and unclassified failures also do not retry automatically.
-Equivalent recoverable errors are counted in capped buckets and logged at a bounded
-interval. Style startup and WebGL loss are fatal; provider-tile and DEM errors are
-degraded states. A pending scene also retries retryable transient failed tiles. If a
-transient tile still fails after retries, the usable partial raster is promoted after
-the bounded retries; the safe failure class remains visible. Non-retryable or
-whole-source failures preserve the vector basemap. For active imagery, successful
-source-data for each failed canonical tile must clear the controller's pending set
-before a loaded source starts the stability window. Only that tile-confirmed recovery
-restores the ready lifecycle when no other failure remains and clears the user-facing
-error. This prevents the status from blinking while other tiles from the same source are
-still failing. Offline messaging promises only that already rendered areas may remain
-visible, not full offline map support. Map lifecycle and imagery errors do not create a
-wide map banner: the shared line below search is their single UI surface. Ready remains
-background-free; pending and error states use a lightly translucent surface for map
-contrast, and selecting an error reveals its complete safe detail. Hovering any
-truncated status message reveals the full text in a multiline tooltip. The non-ready
-surface transitions quickly and remains translucent enough to preserve map context.
-Pending text uses the dark primary color and a medium weight rather than the muted Ready
-treatment, preserving legibility over imagery. Status padding is invariant so state
-changes never shift the icon or text. Its compact terrain line appears only for active
-work or a live contour backlog, without turning normal background work into an error or
-blocking the rest of the map.
+Map errors are classified and shown in the status line; offline messaging promises only
+that already rendered areas may stay visible. Retry and recovery rules are in
+[runtime flows](./runtime-flows.md#provider-and-webgl-failures).
 
 ## Diagnostics and developer mode
 
-Diagnostics are local, bounded, and redacted before storage in the event ring buffer.
-The developer Map view shows exact local camera state, ordered source/layer IDs,
-terrain, failures, idle time, WebGL capabilities, and temporary debug flags. Each
-failure includes its source ID, safe reason, HTTP status when known, occurrence count,
-last occurrence, recovery state, and retry attempt. Debug flags reset when developer
-mode ends.
+Diagnostics are local, bounded, and redacted before storage. The drawer is non-modal and
+closes only from its header or the Diagnostics rail button. Its tabs are Overview,
+Sentinel query, Map, Logs, and Health. The Map tab shows exact local camera state,
+source and layer IDs, terrain, failures, WebGL capabilities, and temporary debug flags
+that reset when developer mode ends. The Sentinel query tab shows a memory-only timeline
+of the current or last search and render operation with per-step state and duration,
+without payloads, geometry, or URLs.
 
-The diagnostics drawer is a persistent, non-modal workspace surface: it has no backdrop
-or elevation shadow and does not close on Escape, backdrop interaction, or section
-changes. The header close control and the active Diagnostics rail button are the only
-normal close actions, so the map and feature controls remain usable while diagnostics
-are observed. Drawer tabs use their own compact light-surface treatment rather than the
-dark navigation-rail tab styling.
+Exported bundles use schema version 3 with build/runtime data, events, health results,
+notes, and a map snapshot whose coordinates are rounded to 0.1 degree; the inspection
+CLI in `tools/diagnostics` migrates versions 1 and 2. Provider reachability checks run
+only on request.
 
-The `Sentinel query` tab exposes one local current-or-last-operation timeline. It always
-lists viewport capture, criteria construction, STAC request, pagination, validation,
-scene mapping, coverage/grouping, visual-asset selection, decode/reprojection, and map
-application. Each row shows an explicit waiting, running, completed, failed, cancelled,
-or skipped state and a monotonic duration that refreshes while work is active. Search
-and imagery-application operations publish their transitions in real time. The render
-operation records visual-asset selection, provider reprojection, and MapLibre
-application without exporting the COG or tile URL. The timeline is memory-only and does
-not expose raw payloads, exact geometry, provider URLs, headers, tokens, or raw
-failures.
-
-Schema-version 2 exports include build/runtime data, bounded events, health results,
-notes, and a serializable map snapshot. Exported longitude/latitude are rounded to 0.1
-degree; route geometry, raw provider URLs, tokens, headers, paths, and filenames are
-excluded. The inspection CLI migrates supported version 1 bundles.
-
-Local checks cover browser APIs, WebGL, map readiness, IndexedDB, and quota. Vector and
-terrain reachability run only on explicit request and accept an `AbortSignal`; normal
-startup never waits for them.
-
-## Configuration and security
+## Configuration
 
 `VITE_MAP_PROVIDER_CONFIGURATION` is optional public JSON validated by Zod. Endpoints
-must be HTTPS or application-relative; terrain and satellite renderer template tokens,
-supported tile sizes, zoom ranges, policy limits, layer mappings, and attribution are
-validated. The Sentinel renderer template accepts `{z}`, `{x}`, `{y}`, and an encoded
-`{itemUrl}`. Safe errors report an issue count without echoing the payload. `VITE_*`
-configuration must never contain secrets.
-
-## Current capability boundary
-
-The application does not currently provide GPX catalog loading, Create GPX
-editing/export, marker search/grouping/cross-feature targeting, or offline-region
-downloads. Saved-marker creation, local persistence, sorting, map rendering, navigation,
-rename, appearance editing, and deletion are available. Optional email/password accounts
-can explicitly synchronize elevation-free track copies when public Supabase
-configuration is present. Satellite provides live viewport search for L2A scenes with a
-scene-cloud control. Successful results are grouped by UTC acquisition day and show a
-thumbnail, local acquisition time, processing level, cloud, viewport coverage, and
-sub-5-km edge warning. Selecting a card renders one georeferenced true-color scene and
-its footprint; Layers can hide or restore the raster and related logical map groups.
-
-## Public track links
-
-A signed-in owner with a ready synchronized saved track uses **Share** in **Track
-actions**. Opening the menu loads authoritative sharing status. The direct **Share**
-toggle enables or disables public access; enabling automatically copies the canonical
-link, and an enabled share adds **Copy share link** for retrieving the same stable link
-later. Disabling removes public access without deleting or unsynchronizing the track.
-There is no share dialog.
-
-Links use `#tracks/share/1.<token>`, keeping the capability out of GitHub Pages request
-paths and referrers. A recipient needs no account. Opening a valid link fetches the
-owner's current shared snapshot as a read-only Tracks view; **Save a copy** explicitly
-creates an independent local track that does not follow later owner changes.
+must be HTTPS or application-relative; template tokens, tile sizes, zoom ranges, layer
+mappings, and attribution are validated, and errors report an issue count without
+echoing the payload. `VITE_*` configuration must never contain secrets.

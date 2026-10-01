@@ -49,6 +49,7 @@ function OpenTrackFolderEditorDialog({
   const compact = useMediaQuery('(width < 900px)');
   const [name, setName] = useState(folder?.name ?? '');
   const [iconKey, setIconKey] = useState<TrackFolderIconKey>(
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Folder icon key.
     folder?.iconKey ?? 'folder',
   );
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -100,6 +101,7 @@ function OpenTrackFolderEditorDialog({
       fullScreen={compact}
       fullWidth
       maxWidth="xs"
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
       aria-labelledby="track-folder-editor-title"
       onClose={saving ? undefined : onCancel}
     >

@@ -1,12 +1,13 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   MacroElevationSegment,
   MacroElevationSegmentType,
 } from '@/domain/tracks/elevationProfile';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
 import {
   formatTrackDistance,
@@ -14,6 +15,7 @@ import {
   formatTrackGrade,
 } from '@/presentation/tracks/trackFormatters';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 function segment(
   type: MacroElevationSegmentType,
@@ -51,7 +53,7 @@ function renderSection(
     readonly onSegmentSelectionChange?: (index: number | null) => void;
   } = {},
 ) {
-  return render(
+  return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
       <ClimbsDescentsSection
         recalculating={overrides.recalculating ?? false}
@@ -67,6 +69,10 @@ function renderSection(
 }
 
 describe('ClimbsDescentsSection', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
   it('starts collapsed and lists directional segments in route order without flats', async () => {
     const user = userEvent.setup();
     renderSection();
@@ -170,15 +176,15 @@ describe('ClimbsDescentsSection', () => {
 
   it('formats signed grades, threshold distances, and rounded elevations', () => {
     expect([
-      formatTrackGrade(-0),
-      formatTrackGrade(0),
-      formatTrackGrade(3.6),
-      formatTrackGrade(-3.6),
+      formatTrackGrade(-0, appI18n),
+      formatTrackGrade(0, appI18n),
+      formatTrackGrade(3.6, appI18n),
+      formatTrackGrade(-3.6, appI18n),
     ]).toEqual(['0%', '0%', '+4%', '-4%']);
-    expect([formatTrackDistance(9_999), formatTrackDistance(10_000)]).toEqual([
-      '10.0 km',
-      '10 km',
-    ]);
-    expect(formatTrackElevation(1_234.6)).toBe('1,235 m');
+    expect([
+      formatTrackDistance(9_999, appI18n),
+      formatTrackDistance(10_000, appI18n),
+    ]).toEqual(['10.0 km', '10 km']);
+    expect(formatTrackElevation(1_234.6, appI18n)).toBe('1,235 m');
   });
 });

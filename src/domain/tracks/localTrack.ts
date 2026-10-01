@@ -60,14 +60,27 @@ export function localTrackSegments(
   return content.trackPoints.map((segment) => segment.map((point) => point.coordinate));
 }
 
+export type TrackNameProblem = 'required' | 'too-long';
+
+/** Rejected track name; `problem` lets the UI show a localized explanation. */
+export class TrackNameError extends Error {
+  public constructor(public readonly problem: TrackNameProblem) {
+    super(
+      problem === 'required'
+        ? 'Track name is required.'
+        : 'Track name must be 200 characters or fewer.',
+    );
+    this.name = 'TrackNameError';
+  }
+}
+
 export function normalizeLocalTrackName(name: string): {
   readonly name: string;
   readonly normalizedName: string;
 } {
   const trimmed = name.trim();
-  if (trimmed.length === 0) throw new Error('Track name is required.');
-  if (trimmed.length > 200)
-    throw new Error('Track name must be 200 characters or fewer.');
+  if (trimmed.length === 0) throw new TrackNameError('required');
+  if (trimmed.length > 200) throw new TrackNameError('too-long');
   return {
     name: trimmed,
     normalizedName: trimmed.toLocaleLowerCase('en'),

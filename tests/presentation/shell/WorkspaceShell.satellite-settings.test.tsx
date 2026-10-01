@@ -1160,7 +1160,7 @@ describe('WorkspaceShell', () => {
     if (input === null) return;
 
     await user.upload(input, gpxFile('Terrain failure.gpx'));
-    expect(await screen.findByText('Terrain unavailable')).toBeVisible();
+    expect(await screen.findByText('Elevation preparation failed.')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Hide navigation' }));
 
     const navigation = screen.getByRole('navigation');

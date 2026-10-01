@@ -1,4 +1,6 @@
-import { Trans, useLingui } from '@lingui/react/macro';
+import type { I18n, MessageDescriptor } from '@lingui/core';
+import { msg, plural } from '@lingui/core/macro';
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import {
   DndContext,
   DragOverlay,
@@ -88,6 +90,7 @@ import {
   prepareImportedTrack,
   TrackElevationPreparationError,
   type PreparedImportedTrack,
+  type TrackElevationPreparationErrorCode,
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -98,6 +101,10 @@ import {
 import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
 import {
   GPX_PARSER_VERSION,
+  GpxParseError,
+  type GpxParseFailureCode,
+  type GpxValidationWarning,
+  type GpxWarningCode,
   type ParsedGpx,
   type TrackCoordinate,
   type TrackPoint,
@@ -108,6 +115,7 @@ import {
   MAXIMUM_TRACK_MARKERS,
   localTrackSegments,
   normalizeLocalTrackName,
+  TrackNameError,
   type LocalTrackContent,
   type LocalTrackSummary,
   type TrackMarker,
@@ -220,7 +228,7 @@ interface PreparingPreviewTrack extends PreviewTrackBase {
 
 interface FailedPreviewTrack extends PreviewTrackBase {
   readonly preparationStatus: 'failed';
-  readonly preparationError: string;
+  readonly preparationError: MessageDescriptor;
 }
 
 interface PreparedPreviewTrack extends PreviewTrackBase {
@@ -373,6 +381,7 @@ function sortTracks(
     const byFavorite = Number(right.favorite) - Number(left.favorite);
     if (byFavorite !== 0) return byFavorite;
 
+    /* eslint-disable lingui/no-unlocalized-strings -- BCP 47 locale tokens keep ordering deterministic. */
     const byNewest = right.savedAt.localeCompare(left.savedAt, 'en');
     if (sort === 'created') {
       return byNewest === 0 ? left.id.localeCompare(right.id, 'en') : byNewest;
@@ -394,11 +403,12 @@ function sortTracks(
       (distanceByTrack.get(left) ?? 0) - (distanceByTrack.get(right) ?? 0);
     if (byDistance !== 0) return byDistance;
     return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
+    /* eslint-enable lingui/no-unlocalized-strings */
   });
 }
 
 interface ImportErrorNotice {
-  readonly message: string;
+  readonly message: MessageDescriptor;
   readonly occurrence: number;
 }
 
@@ -422,13 +432,13 @@ function useOptionalTracksWorkspace(): TracksWorkspaceValue | null {
   return use(TracksWorkspaceContext);
 }
 
-function initialTrackName(file: File, parsed: ParsedGpx): string {
+function initialTrackName(file: File, parsed: ParsedGpx, fallbackName: string): string {
   const embeddedName = parsed.metadata.selectedName ?? parsed.metadata.name;
   if (embeddedName !== undefined && embeddedName.trim().length > 0) {
     return embeddedName.trim();
   }
   const filenameStem = file.name.replace(/\.(gpx|fit|kml)$/iu, '').trim();
-  return filenameStem.length > 0 ? filenameStem : 'New track';
+  return filenameStem.length > 0 ? filenameStem : fallbackName;
 }
 
 function toPoiCandidate(
@@ -462,6 +472,7 @@ function bestCandidate(
     .filter((candidate): candidate is PoiCandidate => candidate !== undefined)
     .sort((left, right) => {
       const byRank = candidateRank(right) - candidateRank(left);
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
       return byRank === 0 ? left.label.localeCompare(right.label, 'en') : byRank;
     })[0];
 }
@@ -473,8 +484,45 @@ function requireCalculatedElevation(prepared: PreparedImportedTrack) {
   return { segments: prepared.calculatedSegments, metrics: prepared.calculatedMetrics };
 }
 
+const elevationPreparationFailureMessages: Readonly<
+  Record<TrackElevationPreparationErrorCode, MessageDescriptor>
+> = {
+  'elevation-unavailable': msg`Elevation data is unavailable for this track.`,
+  'point-limit-exceeded': msg`This track is too long to prepare at 10 metre resolution.`,
+  'zero-length-track': msg`This track is broken: all track points are in one location, so its route length is zero. Choose another file.`,
+};
+
+const trackImportFailureMessages: Readonly<
+  Record<GpxParseFailureCode, MessageDescriptor>
+> = {
+  aborted: msg`The import was cancelled.`,
+  'file-too-large': msg`The file is larger than the import limit.`,
+  'unsafe-xml': msg`Files with DTD or entity declarations are not supported.`,
+  'invalid-xml': msg`The file could not be read as a GPX, FIT, or KML track.`,
+  'unsupported-version': msg`Only GPX 1.0 and 1.1 are supported.`,
+  'limit-exceeded': msg`The file contains too much track data.`,
+  'empty-geometry': msg`The file has no usable track or route geometry.`,
+};
+
+const maximumMarkers = MAXIMUM_TRACK_MARKERS;
+const trackMarkerLimitMessage = msg`${plural(maximumMarkers, {
+  one: 'A track can have up to # marker.',
+  other: 'A track can have up to # markers.',
+})}`;
+
+/** Explains a rejected track name; other failures keep the caller's generic message. */
+function trackNameFailureMessage(
+  error: unknown,
+  fallback: MessageDescriptor,
+): MessageDescriptor {
+  if (!(error instanceof TrackNameError)) return fallback;
+  return error.problem === 'required'
+    ? msg`Track name is required.`
+    : msg`Track name must be 200 characters or fewer.`;
+}
+
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const {
     clock,
     database,
@@ -544,12 +592,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [multiTrackSelections, setMultiTrackSelections] = useState<
     readonly MultiTrackSelection[]
   >([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageDescriptor | null>(null);
   const [importError, setImportError] = useState<ImportErrorNotice | null>(null);
+  /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
   const [importState, setImportState] = useState<'idle' | 'preparing'>('idle');
   const [recalculationState, setRecalculationState] = useState<
     'idle' | 'recalculating'
   >('idle');
+  /* eslint-enable lingui/no-unlocalized-strings */
   const [elevationProgress, setElevationProgress] =
     useState<TrackElevationPreparationProgress | null>(null);
   const [trackMarkerDraft, setTrackMarkerDraft] =
@@ -772,9 +822,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       // restoring reads and would otherwise delay reopening the last track.
       void refreshTrackThumbnails(loaded);
     } catch {
-      setError(t`Saved tracks and folders could not be loaded from this browser.`);
+      setError(msg`Saved tracks and folders could not be loaded from this browser.`);
     }
-  }, [database, logger, refreshTrackThumbnails, t]);
+  }, [database, logger, refreshTrackThumbnails]);
 
   const toggleFolderCollapsed = useCallback(
     (folderId: string) => {
@@ -894,11 +944,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return true;
       } catch {
         await reloadSummaries();
-        setError(t`The track could not be moved.`);
+        setError(msg`The track could not be moved.`);
         return false;
       }
     },
-    [database, reloadSummaries, t, userData],
+    [database, reloadSummaries, userData],
   );
 
   const reorderFolders = useCallback(
@@ -918,11 +968,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return true;
       } catch {
         await reloadSummaries();
-        setError(t`The folder order could not be saved.`);
+        setError(msg`The folder order could not be saved.`);
         return false;
       }
     },
-    [database, folders, reloadSummaries, t, userData],
+    [database, folders, reloadSummaries, userData],
   );
   useEffect(() => {
     const thumbnailQueue = thumbnailRefresh.current;
@@ -948,8 +998,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       const timeout = window.setTimeout(() => {
         setError(
           intent.kind === 'invalid'
-            ? 'This track link is invalid.'
-            : 'Shared tracks are unavailable because cloud features are not configured.',
+            ? msg`This track link is invalid.`
+            : msg`Shared tracks are unavailable because cloud features are not configured.`,
         );
         setMobileWorkspaceOpen(true);
       }, 0);
@@ -1045,8 +1095,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         }
         setError(
           error instanceof TrackShareError && error.category === 'share-not-found'
-            ? 'This shared track is unavailable.'
-            : 'Shared track could not be loaded. Try again.',
+            ? msg`This shared track is unavailable.`
+            : msg`Shared track could not be loaded. Try again.`,
         );
         setMobileWorkspaceOpen(true);
       },
@@ -1149,7 +1199,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             setMultiTrackSelections((current) =>
               current.filter((selection) => selection.requestId !== refresh.requestId),
             );
-            setError('The track could not be added to multi-track view.');
+            setError(msg`The track could not be added to multi-track view.`);
           });
         }
       }),
@@ -1430,7 +1480,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const importFiles = useCallback(
     async (files: FileList | readonly File[]) => {
       if (routePlanSaveInProgress.current) return;
-      const reportImportError = (message: string) => {
+      const reportImportError = (message: MessageDescriptor) => {
         setImportError((current) => ({
           message,
           occurrence: (current?.occurrence ?? 0) + 1,
@@ -1438,13 +1488,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       };
       const selected = Array.from(files);
       if (selected.length !== 1) {
-        reportImportError('Choose exactly one GPX, FIT, or KML file.');
+        reportImportError(msg`Choose exactly one GPX, FIT, or KML file.`);
         return;
       }
       const file = selected[0];
       const sourceFormat = file === undefined ? null : trackSourceFormat(file.name);
       if (file === undefined || sourceFormat === null) {
-        reportImportError('Choose a file with a .gpx, .fit, or .kml extension.');
+        reportImportError(msg`Choose a file with a .gpx, .fit, or .kml extension.`);
         return;
       }
       const replacingUnsavedTrack =
@@ -1452,7 +1502,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         (active?.kind === 'route-plan' && active.waypoints.length > 0);
       if (
         replacingUnsavedTrack &&
-        !window.confirm('Discard the current unsaved track and import another file?')
+        !window.confirm(t`Discard the current unsaved track and import another file?`)
       ) {
         return;
       }
@@ -1465,6 +1515,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       recalculationAbort.current?.abort();
       routePlanRequestAbort.current?.abort();
       routePlanElevationAbort.current?.abort();
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setRecalculationState('idle');
       setElevationProgress(null);
       const generation = importGeneration.current + 1;
@@ -1472,6 +1523,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setActive(null);
       setImportError(null);
       setError(null);
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setImportState('preparing');
       const controller = new AbortController();
       preparationAbort.current = controller;
@@ -1486,7 +1538,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           file,
           parsed,
           sourceFormat,
-          name: initialTrackName(file, parsed),
+          name: initialTrackName(file, parsed, t`New track`),
           markers: parsed.waypoints.map((waypoint) => ({
             id: idGenerator.generate(),
             name: waypoint.name,
@@ -1530,9 +1582,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             name: 'local-track.elevation-preparation.failed',
           });
           const preparationError =
-            preparationFailure instanceof Error
-              ? preparationFailure.message
-              : 'Elevation preparation failed.';
+            preparationFailure instanceof TrackElevationPreparationError
+              ? elevationPreparationFailureMessages[preparationFailure.code]
+              : msg`Elevation preparation failed.`;
           setActive((current) =>
             current?.kind === 'preview' && current.id === previewBase.id
               ? {
@@ -1552,9 +1604,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             return;
           logger.log({ level: 'warn', name: 'local-track.import.failed' });
           reportImportError(
-            importFailure instanceof Error
-              ? importFailure.message
-              : 'The track file could not be imported.',
+            importFailure instanceof GpxParseError
+              ? trackImportFailureMessages[importFailure.code]
+              : msg`The track file could not be imported.`,
           );
           setElevationProgress(null);
         })
@@ -1562,6 +1614,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           if (generation === importGeneration.current) {
             preparationAbort.current = null;
             setElevationProgress(null);
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
             setImportState('idle');
           }
         });
@@ -1573,6 +1626,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       idGenerator,
       logger,
       setMobileWorkspaceOpen,
+      t,
     ],
   );
 
@@ -1584,7 +1638,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       (active?.kind === 'route-plan' && active.waypoints.length > 0);
     if (
       replacingUnsavedTrack &&
-      !window.confirm('Discard the current unsaved track and start a new route?')
+      !window.confirm(t`Discard the current unsaved track and start a new route?`)
     ) {
       return;
     }
@@ -1597,14 +1651,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     recalculationAbort.current?.abort();
     routePlanRequestAbort.current?.abort();
     routePlanElevationAbort.current?.abort();
+    /* eslint-disable lingui/no-unlocalized-strings -- State tokens and track ID prefix. */
     setRecalculationState('idle');
     setElevationProgress(null);
     setImportState('idle');
     importGeneration.current += 1;
-    setActive(createRoutePlanDraft(`local:${idGenerator.generate()}`));
+    const draftId = `local:${idGenerator.generate()}`;
+    /* eslint-enable lingui/no-unlocalized-strings */
+    setActive(createRoutePlanDraft(draftId, t`New route`));
     setError(null);
     setMobileWorkspaceOpen(false);
-  }, [active, idGenerator, setMobileWorkspaceOpen, trailRouter]);
+  }, [active, idGenerator, setMobileWorkspaceOpen, t, trailRouter]);
 
   const enrichRoutePlan = useCallback(
     (draft: RoutePlanDraft) => {
@@ -1716,10 +1773,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     routePlanRequestAbort.current?.abort();
     routePlanRequestAbort.current = controller;
     routePlanRequestOwner.current = owner;
+    /* eslint-disable lingui/no-unlocalized-strings -- Routing result tokens. */
     const unavailable = {
       status: 'failed',
       reason: 'routing-data-unavailable',
     } as const;
+    /* eslint-enable lingui/no-unlocalized-strings */
     void (
       trailRouter === null
         ? Promise.resolve(unavailable)
@@ -1833,7 +1892,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (
       active?.kind === 'route-plan' &&
       active.waypoints.length > 0 &&
-      !window.confirm('Discard this unsaved track?')
+      !window.confirm(t`Discard this unsaved track?`)
     ) {
       return;
     }
@@ -1843,7 +1902,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     importGeneration.current += 1;
     setActive((current) => (current?.kind === 'route-plan' ? null : current));
     setError(null);
-  }, [active]);
+  }, [active, t]);
 
   const saveRoutePlan = useCallback(async () => {
     if (
@@ -1920,7 +1979,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setError(null);
     };
     await saveRoute()
-      .catch((saveError: unknown) => {
+      .catch((error: unknown) => {
         if (generation !== importGeneration.current) return;
         setActive((current) =>
           current?.kind === 'route-plan' &&
@@ -1929,11 +1988,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? { ...current, status: previousStatus }
             : current,
         );
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : 'The route could not be saved.',
-        );
+        setError(trackNameFailureMessage(error, msg`The route could not be saved.`));
       })
       .finally(() => {
         routePlanSaveInProgress.current = false;
@@ -1963,9 +2018,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const generation = importGeneration.current;
     const previewNamingAbort = namingAbort.current;
     const savePreviewTrack = async () => {
+      /* eslint-disable lingui/no-unlocalized-strings -- Track ID prefixes. */
       const savedTrackId = active.id.startsWith('shared:')
         ? `local:${idGenerator.generate()}`
         : active.id;
+      /* eslint-enable lingui/no-unlocalized-strings */
       const normalizedName = normalizeLocalTrackName(active.name);
       const savedAt = clock.now().toISOString();
       const promoteCalculatedElevation =
@@ -2036,20 +2093,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           ? { kind: 'saved', summary, content, draftName: summary.name }
           : current,
       );
+      /* eslint-disable lingui/no-unlocalized-strings -- Track ID prefix and URL hash. */
       if (previewId.startsWith('shared:')) {
         window.history.replaceState(null, '', '#tracks');
       }
+      /* eslint-enable lingui/no-unlocalized-strings */
       await reloadSummaries();
       setError(null);
     };
     await savePreviewTrack()
-      .catch((saveError: unknown) => {
+      .catch((error: unknown) => {
         if (generation !== importGeneration.current) return;
-        setError(
-          saveError instanceof Error
-            ? saveError.message
-            : 'The track could not be saved.',
-        );
+        setError(trackNameFailureMessage(error, msg`The track could not be saved.`));
       })
       .finally(() => {
         previewSaveInProgress.current = false;
@@ -2080,6 +2135,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     recalculationAbort.current?.abort();
     const controller = new AbortController();
     recalculationAbort.current = controller;
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     setRecalculationState('recalculating');
     setElevationProgress(null);
     setError(null);
@@ -2190,15 +2246,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       .catch((recalculationError: unknown) => {
         if (!controller.signal.aborted) {
           setError(
-            recalculationError instanceof Error
-              ? recalculationError.message
-              : 'Elevation could not be recalculated.',
+            recalculationError instanceof TrackElevationPreparationError
+              ? elevationPreparationFailureMessages[recalculationError.code]
+              : msg`Elevation could not be recalculated.`,
           );
         }
       })
       .finally(() => {
         if (recalculationAbort.current === controller) {
           recalculationAbort.current = null;
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
           setRecalculationState('idle');
           setElevationProgress(null);
         }
@@ -2218,11 +2275,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     initiallyRestoredTrackId.current = null;
     preparationAbort.current?.abort();
     recalculationAbort.current?.abort();
+    /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
     setRecalculationState('idle');
     setElevationProgress(null);
     importGeneration.current += 1;
     namingAbort.current?.abort();
     setImportState('idle');
+    /* eslint-enable lingui/no-unlocalized-strings */
     setActive(null);
     setError(null);
   }, []);
@@ -2232,7 +2291,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const closingUnsavedTrack =
       active?.kind === 'preview' ||
       (active?.kind === 'route-plan' && active.waypoints.length > 0);
-    if (closingUnsavedTrack && !window.confirm('Discard this unsaved track?')) {
+    if (closingUnsavedTrack && !window.confirm(t`Discard this unsaved track?`)) {
       return false;
     }
     if (active?.kind === 'saved') {
@@ -2241,7 +2300,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         await saveLatestOpenedTrackId(null);
       } catch {
         if (closingGeneration === importGeneration.current) {
-          setError('The track could not be closed.');
+          setError(msg`The track could not be closed.`);
         }
         return false;
       }
@@ -2252,15 +2311,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     recalculationAbort.current?.abort();
     routePlanRequestAbort.current?.abort();
     routePlanElevationAbort.current?.abort();
+    /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
     setRecalculationState('idle');
     setElevationProgress(null);
     importGeneration.current += 1;
     setImportState('idle');
+    /* eslint-enable lingui/no-unlocalized-strings */
     namingAbort.current?.abort();
     setActive(null);
     setError(null);
     return true;
-  }, [active, saveLatestOpenedTrackId]);
+  }, [active, saveLatestOpenedTrackId, t]);
   const toggleMultiTrackMode = useCallback(async () => {
     if (multiTrackMode) {
       setMultiTrackMode(false);
@@ -2344,7 +2405,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setMultiTrackSelections((current) =>
           current.filter((selection) => selection.requestId !== requestId),
         );
-        setError('The track could not be added to multi-track view.');
+        setError(msg`The track could not be added to multi-track view.`);
         throw loadError;
       }
     },
@@ -2361,7 +2422,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         (active?.kind === 'route-plan' && active.waypoints.length > 0);
       if (
         replacingUnsavedTrack &&
-        !window.confirm('Discard the current unsaved track and open the saved track?')
+        !window.confirm(t`Discard the current unsaved track and open the saved track?`)
       ) {
         return;
       }
@@ -2371,11 +2432,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       recalculationAbort.current?.abort();
       routePlanRequestAbort.current?.abort();
       routePlanElevationAbort.current?.abort();
+      /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
       setRecalculationState('idle');
       setElevationProgress(null);
       const generation = importGeneration.current + 1;
       importGeneration.current = generation;
       setImportState('idle');
+      /* eslint-enable lingui/no-unlocalized-strings */
       namingAbort.current?.abort();
       try {
         const content = await database.loadLocalTrackContent(summary.id);
@@ -2389,13 +2452,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         );
         setError(null);
         setMobileWorkspaceOpen(false);
-      } catch (loadError) {
+      } catch {
         if (generation !== importGeneration.current) return;
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : 'The track could not be opened.',
-        );
+        setError(msg`The track could not be opened.`);
         setMobileWorkspaceOpen(true);
         if (activeSavedTrackId !== null && latestOpenedTrackId.current === null) {
           try {
@@ -2412,6 +2471,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       database,
       saveLatestOpenedTrackId,
       setMobileWorkspaceOpen,
+      t,
     ],
   );
 
@@ -2444,13 +2504,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       void userData.trackMetadataChanged(activeId);
       if (generation === importGeneration.current) setError(null);
       return true;
-    } catch (renameError) {
+    } catch (error) {
       if (generation === importGeneration.current) {
-        setError(
-          renameError instanceof Error
-            ? renameError.message
-            : 'The track could not be renamed.',
-        );
+        setError(trackNameFailureMessage(error, msg`The track could not be renamed.`));
       }
       return false;
     }
@@ -2490,7 +2546,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return;
     }
     if (editableTrackMarkers.length >= MAXIMUM_TRACK_MARKERS) {
-      setError(`A track can have up to ${String(MAXIMUM_TRACK_MARKERS)} markers.`);
+      setError(trackMarkerLimitMessage);
       return;
     }
     requestMarkerPlacement({ kind: 'track-marker', trackId: editableTrackId });
@@ -2596,7 +2652,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         void userData.trackMetadataChanged(updated.id);
         setError(null);
       } catch {
-        setError('The favorite could not be updated.');
+        setError(msg`The favorite could not be updated.`);
       }
     },
     [database, reloadSummaries, userData],
@@ -2607,6 +2663,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       const deleteTrack = async () => {
         if (active?.kind === 'saved' && active.summary.id === summary.id) {
           recalculationAbort.current?.abort();
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
           setRecalculationState('idle');
           setElevationProgress(null);
         }
@@ -2635,7 +2692,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setError(null);
       };
       await deleteTrack().catch(() => {
-        setError('The track could not be deleted.');
+        setError(msg`The track could not be deleted.`);
       });
     },
     [active, database, reloadSummaries, saveLatestOpenedTrackId, userData],
@@ -2652,6 +2709,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, []);
 
   const filteredSummaries = useMemo(() => {
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
     const normalizedQuery = query.trim().toLocaleLowerCase('en');
     const matchingSummaries =
       normalizedQuery.length === 0
@@ -2742,6 +2800,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     readyMultiTrackSelections,
   ]);
 
+  const errorMessage = error === null ? null : i18n._(error);
+  const importErrorMessage = importError === null ? null : i18n._(importError.message);
   const value = useMemo<TracksWorkspaceValue>(
     () => ({
       active,
@@ -2750,7 +2810,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       addRoutePlanPoint,
       clearRoutePlan,
       elevationProgress,
-      error,
+      error: errorMessage,
       filteredSummaries,
       folders,
       collapsedFolderIds,
@@ -2760,7 +2820,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       deleteFolder,
       moveTrackToFolder,
       reorderFolders,
-      importError: importError?.message ?? null,
+      importError: importErrorMessage,
       importState,
       importFiles,
       multiTrackMode,
@@ -2809,12 +2869,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       startTrackMarkerPlacement,
       renameTrackMarker,
       deleteTrackMarker,
-      error,
+      errorMessage,
       filteredSummaries,
       folders,
       collapsedFolderIds,
       toggleFolderCollapsed,
-      importError,
+      importErrorMessage,
       importFiles,
       importState,
       multiTrackMode,
@@ -2864,15 +2924,17 @@ interface TrackSortControlProps {
   readonly onTrackSortChange: (sort: TrackSort) => Promise<boolean>;
 }
 
-const trackSortLabels: Readonly<Record<TrackSort, string>> = {
-  created: 'Newest',
-  name: 'Name',
-  oldest: 'Oldest',
-  distance: 'Distance from map center',
+const trackSortLabels: Readonly<Record<TrackSort, MessageDescriptor>> = {
+  created: msg`Newest`,
+  name: msg`Name`,
+  oldest: msg`Oldest`,
+  distance: msg`Distance from map center`,
 };
 
 export function TrackSortControl({ onTrackSortChange }: TrackSortControlProps) {
+  const { t, i18n } = useLingui();
   const trackSort = useUiStore((state) => state.trackSort);
+  const currentSortLabel = i18n._(trackSortLabels[trackSort]);
   const [sortSaveError, setSortSaveError] = useState(false);
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
 
@@ -2884,10 +2946,10 @@ export function TrackSortControl({ onTrackSortChange }: TrackSortControlProps) {
 
   return (
     <>
-      <Tooltip title={`Sort: ${trackSortLabels[trackSort]}`}>
+      <Tooltip title={t`Sort: ${currentSortLabel}`}>
         <IconButton
           size="small"
-          aria-label={`Sort tracks. Current: ${trackSortLabels[trackSort]}`}
+          aria-label={t`Sort tracks. Current: ${currentSortLabel}`}
           aria-haspopup="menu"
           onClick={(event) => {
             setSortAnchor(event.currentTarget);
@@ -2911,14 +2973,14 @@ export function TrackSortControl({ onTrackSortChange }: TrackSortControlProps) {
               void chooseSort(sort);
             }}
           >
-            {trackSortLabels[sort]}
+            {i18n._(trackSortLabels[sort])}
           </MenuItem>
         ))}
       </Menu>
       <Snackbar
         open={sortSaveError}
         autoHideDuration={4_000}
-        message="Sort preference could not be saved"
+        message={t`Sort preference could not be saved`}
         onClose={() => {
           setSortSaveError(false);
         }}
@@ -2928,6 +2990,7 @@ export function TrackSortControl({ onTrackSortChange }: TrackSortControlProps) {
 }
 
 function TrackImportZone() {
+  const { t } = useLingui();
   const { importError, importFiles } = useTracksWorkspace();
   const inputRef = useRef<HTMLInputElement>(null);
   const compactZoneRef = useRef<HTMLElement>(null);
@@ -2942,6 +3005,7 @@ function TrackImportZone() {
     workspaceShellRef.current = workspaceShell;
 
     const hasFiles = (event: globalThis.DragEvent) =>
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- DataTransfer type token.
       event.dataTransfer?.types.includes('Files') ?? false;
     const handleWorkspaceDragEnter = (event: globalThis.DragEvent) => {
       if (!hasFiles(event)) return;
@@ -3009,14 +3073,16 @@ function TrackImportZone() {
       <Paper
         ref={compactZoneRef}
         component="section"
-        aria-label="Import track file"
+        aria-label={t`Import track file`}
         variant="outlined"
         onDragEnter={(event) => {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- DataTransfer type token.
           if (!event.dataTransfer.types.includes('Files')) return;
           event.preventDefault();
           setDragActive(true);
         }}
         onDragOver={(event) => {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- DataTransfer type token.
           if (!event.dataTransfer.types.includes('Files')) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
@@ -3053,7 +3119,7 @@ function TrackImportZone() {
             noWrap
             sx={{ flex: 1, fontSize: { xs: '0.6875rem', sm: '0.875rem' } }}
           >
-            Drop GPX, FIT, or KML here
+            <Trans>Drop GPX, FIT, or KML here</Trans>
           </Typography>
           <Button
             size="small"
@@ -3061,7 +3127,7 @@ function TrackImportZone() {
             onClick={() => inputRef.current?.click()}
             sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
           >
-            Browse track file
+            <Trans>Browse track file</Trans>
           </Button>
         </Stack>
         <input
@@ -3096,7 +3162,7 @@ function TrackImportZone() {
             <Paper
               ref={floatingZoneRef}
               component="section"
-              aria-label="Drop track file"
+              aria-label={t`Drop track file`}
               variant="outlined"
               onDragOver={(event) => {
                 event.preventDefault();
@@ -3140,9 +3206,11 @@ function TrackImportZone() {
                 }}
               >
                 <UploadFileOutlinedIcon color="primary" sx={{ fontSize: 36 }} />
-                <Typography variant="subtitle2">Drop GPX, FIT, or KML here</Typography>
+                <Typography variant="subtitle2">
+                  <Trans>Drop GPX, FIT, or KML here</Trans>
+                </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Release the file inside this zone
+                  <Trans>Release the file inside this zone</Trans>
                 </Typography>
               </Stack>
             </Paper>,
@@ -3179,6 +3247,7 @@ const trackFolderKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) =
   ) {
     return args.currentCoordinates;
   }
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- Drag data type tokens.
   const targetType = activeData.type === 'track' ? 'folder-target' : 'folder';
   const targets = args.context.droppableContainers
     .getEnabled()
@@ -3238,6 +3307,7 @@ const TRACK_LIST_GUTTER_PX = 16;
 const TRACK_FOLDER_GLYPH_PX = 20;
 const TRACK_FOLDER_INDENT_PX = TRACK_FOLDER_GLYPH_PX + 8;
 
+/* eslint-disable lingui/no-unlocalized-strings -- CSS values and selectors. */
 const dragHandleSx: SxProps<Theme> = {
   alignSelf: 'stretch',
   width: TRACK_LIST_GUTTER_PX,
@@ -3275,6 +3345,7 @@ function revealOnRowHover(selector: string, hoverSelector: string) {
     },
   } as const;
 }
+/* eslint-enable lingui/no-unlocalized-strings */
 
 /**
  * Hover state shared by every saved-track row. A pointer favorite click re-sorts
@@ -3313,7 +3384,7 @@ function SavedTrackRow({
   onToggleFavorite,
   onDelete,
 }: SavedTrackRowProps) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const [pendingDelete, setPendingDelete] = useState(false);
   const [hovered, setHovered] = useState(false);
   const {
@@ -3337,9 +3408,11 @@ function SavedTrackRow({
     },
     [setDraggableNodeRef, setDroppableNodeRef],
   );
+  /* eslint-disable lingui/no-unlocalized-strings -- CSS class names. */
   const actionClassName = `saved-track-row-action${
     pendingDelete ? ' saved-track-row-action--pending' : ''
   }`;
+  /* eslint-enable lingui/no-unlocalized-strings */
   const elapsedSeconds = summary.metrics.elapsedSeconds;
   const ascentMeters = summary.metrics.ascentMeters;
 
@@ -3392,6 +3465,7 @@ function SavedTrackRow({
           className="saved-track-row-action"
           size="small"
           aria-label={t`Move ${summary.name}`}
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Focus restoration key.
           data-drag-focus={`track:${summary.id}`}
           sx={dragHandleSx}
           {...dragAttributes}
@@ -3424,20 +3498,20 @@ function SavedTrackRow({
               {elapsedSeconds === undefined ? null : (
                 <TrackStat
                   icon={<TimerOutlinedIcon sx={{ fontSize: 16 }} />}
-                  label="Recorded time"
-                  value={formatTrackDuration(elapsedSeconds)}
+                  label={t`Recorded time`}
+                  value={formatTrackDuration(elapsedSeconds, i18n)}
                 />
               )}
               <TrackStat
                 icon={<SwapHorizIcon sx={{ fontSize: 16 }} />}
-                label="Distance"
-                value={formatTrackDistance(summary.metrics.distanceMeters)}
+                label={t`Distance`}
+                value={formatTrackDistance(summary.metrics.distanceMeters, i18n)}
               />
               {ascentMeters === undefined ? null : (
                 <TrackStat
                   icon={<NorthEastIcon sx={{ fontSize: 16 }} />}
-                  label="Elevation gain"
-                  value={formatTrackElevation(ascentMeters)}
+                  label={t`Elevation gain`}
+                  value={formatTrackElevation(ascentMeters, i18n)}
                 />
               )}
             </Stack>
@@ -3451,7 +3525,7 @@ function SavedTrackRow({
         >
           <Tooltip
             disableHoverListener={hover.suppressed}
-            title={summary.favorite ? 'Remove from favorites' : 'Add to favorites'}
+            title={summary.favorite ? t`Remove from favorites` : t`Add to favorites`}
           >
             <IconButton
               className={`saved-track-row-action${
@@ -3459,7 +3533,7 @@ function SavedTrackRow({
               }`}
               size="small"
               aria-label={
-                summary.favorite ? 'Remove from favorites' : 'Add to favorites'
+                summary.favorite ? t`Remove from favorites` : t`Add to favorites`
               }
               color={summary.favorite ? 'warning' : 'default'}
               onClick={(event) => {
@@ -3477,15 +3551,15 @@ function SavedTrackRow({
           </Tooltip>
           <Tooltip
             disableHoverListener={hover.suppressed}
-            title={pendingDelete ? 'Confirm deletion' : 'Delete track'}
+            title={pendingDelete ? t`Confirm deletion` : t`Delete track`}
           >
             <IconButton
               className={actionClassName}
               size="small"
               aria-label={
                 pendingDelete
-                  ? `Confirm deletion of ${summary.name}`
-                  : `Delete ${summary.name}`
+                  ? t`Confirm deletion of ${summary.name}`
+                  : t`Delete ${summary.name}`
               }
               color={pendingDelete ? 'error' : 'default'}
               disabled={deleting}
@@ -3682,6 +3756,7 @@ function TrackFolderSection({
             ref={setActivatorNodeRef}
             size="small"
             aria-label={t`Reorder ${folder.name}`}
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- Focus restoration key.
             data-drag-focus={`folder:${folder.id}`}
             sx={dragHandleSx}
             {...sortableAttributes}
@@ -3828,6 +3903,7 @@ function UnfiledTrackDropZone({
       ref={setNodeRef}
       role="listitem"
       aria-label={t`Unfiled tracks`}
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Drop target ID.
       data-folder-drop="unfiled"
       sx={{
         minHeight: summaries.length === 0 && trackDragActive ? 44 : undefined,
@@ -3891,6 +3967,7 @@ export function TracksPanel({
     updateFolder,
   } = useTracksWorkspace();
   const { t } = useLingui();
+  const trackCount = summaries.length;
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [hoverSuppressed, setHoverSuppressed] = useState(false);
   const [hoverEpoch, setHoverEpoch] = useState(0);
@@ -3976,10 +4053,12 @@ export function TracksPanel({
           ? (target.folderId as string | null)
           : undefined;
       if (folderId === undefined || folderId === summary.folderId) {
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Focus restoration key.
         restoreFocus(`track:${summary.id}`);
         return;
       }
       void moveTrackToFolder(summary.id, folderId).finally(() => {
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Focus restoration key.
         restoreFocus(`track:${summary.id}`);
       });
       return;
@@ -3993,6 +4072,7 @@ export function TracksPanel({
           ? (target.folderId as string | null)
           : null;
     if (targetFolderId === null || targetFolderId === folder.id) {
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Focus restoration key.
       restoreFocus(`folder:${folder.id}`);
       return;
     }
@@ -4003,6 +4083,7 @@ export function TracksPanel({
       (candidate) => candidate.id,
     );
     void reorderFolders(next).finally(() => {
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Focus restoration key.
       restoreFocus(`folder:${folder.id}`);
     });
   };
@@ -4101,8 +4182,11 @@ export function TracksPanel({
             <TextField
               fullWidth
               size="small"
-              aria-label="Search saved tracks"
-              placeholder={`Search ${String(summaries.length)} saved tracks`}
+              aria-label={t`Search saved tracks`}
+              placeholder={t`${plural(trackCount, {
+                one: 'Search # saved track',
+                other: 'Search # saved tracks',
+              })}`}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -4123,6 +4207,7 @@ export function TracksPanel({
                 size="small"
                 aria-label={t`Create folder`}
                 onClick={() => {
+                  // eslint-disable-next-line lingui/no-unlocalized-strings -- Editor mode token.
                   setEditingFolder('create');
                 }}
               >
@@ -4134,14 +4219,16 @@ export function TracksPanel({
           {summaries.length === 0 && folders.length === 0 ? (
             <Paper variant="outlined" sx={{ p: 2, bgcolor: appColors.surface.subtle }}>
               <Typography variant="body2" color="text.secondary">
-                Import a GPX, FIT, or KML file to preview it, then save it in this
-                browser.
+                <Trans>
+                  Import a GPX, FIT, or KML file to preview it, then save it in this
+                  browser.
+                </Trans>
               </Typography>
             </Paper>
           ) : null}
           {query.length > 0 && filteredSummaries.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              No saved track matches this name.
+              <Trans>No saved track matches this name.</Trans>
             </Typography>
           ) : null}
           {folders.length > 0 || summaries.length > 0 ? (
@@ -4156,6 +4243,7 @@ export function TracksPanel({
               }}
             >
               <SortableContext
+                // eslint-disable-next-line lingui/no-unlocalized-strings -- Sortable item IDs.
                 items={folders.map((folder) => `folder-order:${folder.id}`)}
                 strategy={verticalListSortingStrategy}
               >
@@ -4451,7 +4539,7 @@ function TrackElevationAnalysis() {
         ) : (
           <Stack spacing={1.5}>
             <Typography component="h3" variant="subtitle2">
-              Elevation profile
+              <Trans>Elevation profile</Trans>
             </Typography>
             <Box
               sx={{
@@ -4467,9 +4555,13 @@ function TrackElevationAnalysis() {
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                {active.kind === 'route-plan'
-                  ? 'Add at least two route points to see the elevation profile.'
-                  : 'No elevation profile is available for this track.'}
+                {active.kind === 'route-plan' ? (
+                  <Trans>
+                    Add at least two route points to see the elevation profile.
+                  </Trans>
+                ) : (
+                  <Trans>No elevation profile is available for this track.</Trans>
+                )}
               </Typography>
             </Box>
           </Stack>
@@ -4512,39 +4604,51 @@ function TrackMetadata({
   sourceFilename,
   sourceFormat,
 }: TrackMetadataProps) {
-  const pointLabel = `${pointCount.toLocaleString('en')} ${pointCount === 1 ? 'point' : 'points'}`;
-  const segmentLabel = `${segmentCount.toLocaleString('en')} ${segmentCount === 1 ? 'segment' : 'segments'}`;
+  const { t, i18n } = useLingui();
+  const countsLabel = t`${plural(pointCount, {
+    one: '# point',
+    other: '# points',
+  })} · ${plural(segmentCount, { one: '# segment', other: '# segments' })}`;
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
+  const formatLabel = sourceFormat.toLocaleUpperCase('en');
+  const calculatedAscent =
+    calculatedMetrics?.ascentMeters === undefined
+      ? null
+      : formatTrackElevation(calculatedMetrics.ascentMeters, i18n);
+  const calculatedDescent =
+    calculatedMetrics?.descentMeters === undefined
+      ? null
+      : formatTrackElevation(calculatedMetrics.descentMeters, i18n);
+  const savedAtLabel = savedAt === undefined ? null : formatDateTime(new Date(savedAt));
   return (
     <Stack spacing={0.5} sx={{ px: 1 }}>
       <Typography variant="body2">
-        {sourceFilename} · {sourceFormat.toLocaleUpperCase('en')}
+        {sourceFilename} · {formatLabel}
       </Typography>
       <Typography variant="caption" color="text.secondary">
-        {pointLabel} · {segmentLabel}
+        {countsLabel}
       </Typography>
-      {calculatedMetrics?.ascentMeters === undefined ? null : (
+      {calculatedAscent === null ? null : (
         <Typography
-          aria-label={`Elevation gain (calculated): ${formatTrackElevation(calculatedMetrics.ascentMeters)}`}
+          aria-label={t`Elevation gain (calculated): ${calculatedAscent}`}
           variant="caption"
           color="text.secondary"
         >
-          Elevation gain (calculated):{' '}
-          {formatTrackElevation(calculatedMetrics.ascentMeters)}
+          <Trans>Elevation gain (calculated): {calculatedAscent}</Trans>
         </Typography>
       )}
-      {calculatedMetrics?.descentMeters === undefined ? null : (
+      {calculatedDescent === null ? null : (
         <Typography
-          aria-label={`Elevation loss (calculated): ${formatTrackElevation(calculatedMetrics.descentMeters)}`}
+          aria-label={t`Elevation loss (calculated): ${calculatedDescent}`}
           variant="caption"
           color="text.secondary"
         >
-          Elevation loss (calculated):{' '}
-          {formatTrackElevation(calculatedMetrics.descentMeters)}
+          <Trans>Elevation loss (calculated): {calculatedDescent}</Trans>
         </Typography>
       )}
-      {savedAt === undefined ? null : (
+      {savedAtLabel === null ? null : (
         <Typography variant="caption" color="text.secondary">
-          Saved {formatDateTime(new Date(savedAt))}
+          <Trans>Saved {savedAtLabel}</Trans>
         </Typography>
       )}
     </Stack>
@@ -4613,19 +4717,46 @@ interface TrackShareMenuState {
   readonly state: ShareMenuState;
 }
 
-function shareMutationErrorMessage(error: unknown): string {
+function shareMutationErrorMessage(error: unknown): MessageDescriptor {
   if (
     error instanceof TrackShareError &&
     (error.category === 'track-not-found' || error.category === 'track-not-ready')
   ) {
-    return 'Sync this track before sharing.';
+    return msg`Sync this track before sharing.`;
   }
-  return 'Sharing could not be updated. Try again.';
+  return msg`Sharing could not be updated. Try again.`;
 }
 
 interface ShareNotice {
   readonly contentHash: string;
-  readonly message: string;
+  readonly message: MessageDescriptor;
+}
+
+const trackWarningMessages: Readonly<Record<GpxWarningCode, MessageDescriptor>> = {
+  'invalid-point': msg`A point with invalid coordinates was skipped.`,
+  'invalid-waypoint': msg`A waypoint with invalid coordinates was skipped.`,
+  'short-segment': msg`A segment with fewer than two valid points was skipped.`,
+  'track-preferred-over-route': msg`Detailed track geometry was used instead of companion route geometry.`,
+  'invalid-time': msg`A point with an invalid timestamp was retained without time.`,
+  'waypoint-limit-reached': msg`Additional valid waypoints were omitted.`,
+  'warning-limit-reached': msg`Additional GPX validation warnings were omitted.`,
+};
+
+/** Localized warning text; the parser's stored English message is diagnostic data. */
+function trackWarningDetail(warning: GpxValidationWarning, i18n: I18n): string {
+  const message = i18n._(trackWarningMessages[warning.code]);
+  const segmentNumber =
+    warning.segmentIndex === undefined ? undefined : warning.segmentIndex + 1;
+  const pointNumber =
+    warning.pointIndex === undefined ? undefined : warning.pointIndex + 1;
+  if (segmentNumber !== undefined && pointNumber !== undefined) {
+    return i18n._(msg`${message} (segment ${segmentNumber}, point ${pointNumber})`);
+  }
+  if (segmentNumber !== undefined) {
+    return i18n._(msg`${message} (segment ${segmentNumber})`);
+  }
+  if (pointNumber !== undefined) return i18n._(msg`${message} (point ${pointNumber})`);
+  return message;
 }
 
 export function TrackDetailsPane({
@@ -4659,6 +4790,7 @@ export function TrackDetailsPane({
     toggleMultiTrackMode,
     undoLastRoutePlanPoint,
   } = useTracksWorkspace();
+  const { t, i18n } = useLingui();
   const trackMarkers =
     active?.kind === 'saved'
       ? active.content.markers
@@ -4765,12 +4897,12 @@ export function TrackDetailsPane({
       try {
         await navigator.clipboard.writeText(url);
         if (generation !== shareOperationGeneration.current) return;
-        setShareNotice({ contentHash, message: 'Share link copied.' });
+        setShareNotice({ contentHash, message: msg`Share link copied.` });
       } catch {
         if (generation !== shareOperationGeneration.current) return;
         setShareNotice({
           contentHash,
-          message: 'Sharing is enabled, but the link could not be copied.',
+          message: msg`Sharing is enabled, but the link could not be copied.`,
         });
       }
     },
@@ -4805,7 +4937,7 @@ export function TrackDetailsPane({
       await service.disable(contentHash, controller.signal);
       if (!shareOperationIsCurrent(controller, generation)) return;
       setShareMenuState({ contentHash, state: { kind: 'disabled' } });
-      setShareNotice({ contentHash, message: 'Sharing disabled.' });
+      setShareNotice({ contentHash, message: msg`Sharing disabled.` });
     };
     await applyShareUpdate()
       .catch((error: unknown) => {
@@ -4844,7 +4976,7 @@ export function TrackDetailsPane({
     return (
       <Box
         component="aside"
-        aria-label="Multiple track details"
+        aria-label={t`Multiple track details`}
         sx={{
           width: mode === 'adjacent' ? { xs: 404, xl: 440 } : '100%',
           height: '100%',
@@ -4871,14 +5003,18 @@ export function TrackDetailsPane({
           {mode === 'mobile' ? (
             <IconButton
               size="small"
-              aria-label="Collapse track details"
+              aria-label={t`Collapse track details`}
               onClick={onCollapse}
             >
               <KeyboardArrowDownIcon fontSize="small" />
             </IconButton>
           ) : null}
           {mode === 'overlay' ? (
-            <IconButton size="small" aria-label="Back to tracks" onClick={onCollapse}>
+            <IconButton
+              size="small"
+              aria-label={t`Back to tracks`}
+              onClick={onCollapse}
+            >
               <ArrowBackOutlinedIcon fontSize="small" />
             </IconButton>
           ) : null}
@@ -4889,20 +5025,22 @@ export function TrackDetailsPane({
               noWrap
               sx={{ fontWeight: 700 }}
             >
-              Selected tracks
+              <Trans>Selected tracks</Trans>
             </Typography>
           </Box>
-          <Tooltip title="Download selected tracks">
+          <Tooltip title={t`Download selected tracks`}>
             <span>
               <IconButton
                 size="small"
-                aria-label="Download selected tracks"
+                aria-label={t`Download selected tracks`}
                 disabled={!canDownloadMultiTrackSelections}
                 onClick={() => {
                   if (!canDownloadMultiTrackSelections) return;
                   downloadFile(
+                    /* eslint-disable lingui/no-unlocalized-strings -- Export filename and MIME type. */
                     'selected-tracks.zip',
                     'application/zip',
+                    /* eslint-enable lingui/no-unlocalized-strings */
                     exportTracksAsZip(
                       readyMultiTrackSelections.map(({ summary, content }) => ({
                         summary,
@@ -4922,7 +5060,7 @@ export function TrackDetailsPane({
           {mode === 'adjacent' ? (
             <IconButton
               size="small"
-              aria-label="Close multi-track view"
+              aria-label={t`Close multi-track view`}
               onClick={() => {
                 void toggleMultiTrackMode().then(onClosed);
               }}
@@ -4934,14 +5072,14 @@ export function TrackDetailsPane({
         <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
           <Stack spacing={2}>
             {multiTrackStatsMetrics === null ? null : (
-              <Box role="group" aria-label="Combined track details">
+              <Box role="group" aria-label={t`Combined track details`}>
                 <TrackStats metrics={multiTrackStatsMetrics} />
               </Box>
             )}
             {multiTrackSelections.map((selection) => (
               <Box
                 component="section"
-                aria-label={`${selection.summary.name} track details`}
+                aria-label={t`${selection.summary.name} track details`}
                 key={selection.summary.id}
               >
                 <Stack spacing={1.5}>
@@ -4960,7 +5098,9 @@ export function TrackDetailsPane({
                       sx={{ alignItems: 'center' }}
                     >
                       <CircularProgress size={18} />
-                      <Typography variant="body2">Loading track…</Typography>
+                      <Typography variant="body2">
+                        <Trans>Loading track…</Trans>
+                      </Typography>
                     </Stack>
                   ) : (
                     <>
@@ -4980,7 +5120,9 @@ export function TrackDetailsPane({
                           }}
                         >
                           <Typography variant="body2" color="text.secondary">
-                            No elevation profile is available for this track.
+                            <Trans>
+                              No elevation profile is available for this track.
+                            </Trans>
                           </Typography>
                         </Box>
                       ) : (
@@ -5053,6 +5195,7 @@ export function TrackDetailsPane({
       : active.kind === 'saved'
         ? active.summary.warnings
         : active.parsed.warnings;
+  const warningCount = warnings.length;
   const savedTrackId = active.kind === 'saved' ? active.summary.id : null;
   const renaming = savedTrackId !== null && renamingTrackId === savedTrackId;
   const confirmingDelete =
@@ -5064,7 +5207,7 @@ export function TrackDetailsPane({
   return (
     <Box
       component="aside"
-      aria-label="Track details"
+      aria-label={t`Track details`}
       sx={{
         width: mode === 'adjacent' ? { xs: 404, xl: 440 } : '100%',
         height: '100%',
@@ -5091,7 +5234,7 @@ export function TrackDetailsPane({
         {mode === 'mobile' ? (
           <IconButton
             size="small"
-            aria-label="Collapse track details"
+            aria-label={t`Collapse track details`}
             onClick={onCollapse}
             sx={{ mr: 1 }}
           >
@@ -5101,7 +5244,7 @@ export function TrackDetailsPane({
         {mode === 'overlay' ? (
           <IconButton
             size="small"
-            aria-label="Back to tracks"
+            aria-label={t`Back to tracks`}
             onClick={() => {
               void closeActive();
             }}
@@ -5117,7 +5260,7 @@ export function TrackDetailsPane({
               fullWidth
               inputRef={renameInputRef}
               size="small"
-              label="Track name"
+              label={t`Track name`}
               value={active.draftName}
               onChange={(event) => {
                 setActiveName(event.target.value);
@@ -5151,16 +5294,16 @@ export function TrackDetailsPane({
                 ? active.summary.name
                 : active.kind === 'shared'
                   ? active.name
-                  : 'New track'}
+                  : t`New track`}
             </Typography>
           )}
         </Box>
         {active.kind === 'saved' && renaming ? (
-          <Tooltip title="Confirm rename">
+          <Tooltip title={t`Confirm rename`}>
             <span>
               <IconButton
                 size="small"
-                aria-label="Confirm rename"
+                aria-label={t`Confirm rename`}
                 disabled={
                   active.draftName.trim().length === 0 ||
                   active.draftName.trim() === active.summary.name
@@ -5209,17 +5352,18 @@ export function TrackDetailsPane({
                     });
                   }}
                 >
-                  Confirm delete
+                  <Trans>Confirm delete</Trans>
                 </Button>
               ) : (
                 <>
-                  <Tooltip title="Download GPX">
+                  <Tooltip title={t`Download GPX`}>
                     <IconButton
                       size="small"
-                      aria-label="Download GPX"
+                      aria-label={t`Download GPX`}
                       onClick={() => {
                         downloadFile(
                           safeTrackFilename(active.summary.name, 'gpx'),
+                          // eslint-disable-next-line lingui/no-unlocalized-strings -- MIME type.
                           'application/gpx+xml',
                           exportTrackAsGpx(active.summary, active.content),
                         );
@@ -5231,10 +5375,10 @@ export function TrackDetailsPane({
                       />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Track actions">
+                  <Tooltip title={t`Track actions`}>
                     <IconButton
                       size="small"
-                      aria-label="Track actions"
+                      aria-label={t`Track actions`}
                       onClick={(event) => {
                         setActionMenuAnchor(event.currentTarget);
                         void loadShareStatus();
@@ -5264,13 +5408,14 @@ export function TrackDetailsPane({
                     <StarBorderIcon fontSize="small" sx={{ mr: 1.25 }} />
                   )}
                   {active.summary.favorite
-                    ? 'Remove from favorites'
-                    : 'Add to favorites'}
+                    ? t`Remove from favorites`
+                    : t`Add to favorites`}
                 </MenuItem>
                 <MenuItem
                   onClick={() => {
                     downloadFile(
                       safeTrackFilename(active.summary.name, 'kml'),
+                      // eslint-disable-next-line lingui/no-unlocalized-strings -- MIME type.
                       'application/vnd.google-earth.kml+xml',
                       exportTrackAsKml(active.summary, active.content),
                     );
@@ -5278,7 +5423,7 @@ export function TrackDetailsPane({
                   }}
                 >
                   <DownloadOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                  Download KML
+                  <Trans>Download KML</Trans>
                 </MenuItem>
                 {canManageShare ? (
                   <>
@@ -5296,7 +5441,7 @@ export function TrackDetailsPane({
                     >
                       <Stack direction="row" sx={{ alignItems: 'center' }}>
                         <ShareOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                        Share
+                        <Trans>Share</Trans>
                       </Stack>
                       <Box
                         sx={{
@@ -5309,7 +5454,7 @@ export function TrackDetailsPane({
                       >
                         {currentShareMenuState.kind === 'loading' ? (
                           <CircularProgress
-                            aria-label="Loading sharing status"
+                            aria-label={t`Loading sharing status`}
                             size={20}
                           />
                         ) : (
@@ -5317,7 +5462,7 @@ export function TrackDetailsPane({
                             checked={currentShareMenuState.kind === 'enabled'}
                             slotProps={{
                               input: {
-                                'aria-label': 'Share track publicly',
+                                'aria-label': t`Share track publicly`,
                                 readOnly: true,
                                 tabIndex: -1,
                               },
@@ -5336,7 +5481,7 @@ export function TrackDetailsPane({
                         }}
                       >
                         <ContentCopyOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                        Copy share link
+                        <Trans>Copy share link</Trans>
                       </MenuItem>
                     ) : null}
                     {currentShareMenuState.kind === 'error' ? (
@@ -5346,7 +5491,7 @@ export function TrackDetailsPane({
                         }}
                       >
                         <RefreshOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                        Retry sharing status
+                        <Trans>Retry sharing status</Trans>
                       </MenuItem>
                     ) : null}
                   </>
@@ -5359,7 +5504,7 @@ export function TrackDetailsPane({
                   }}
                 >
                   <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                  Rename
+                  <Trans>Rename</Trans>
                 </MenuItem>
                 <Divider />
                 <MenuItem
@@ -5370,7 +5515,7 @@ export function TrackDetailsPane({
                   sx={{ color: 'error.main' }}
                 >
                   <DeleteOutlineOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
-                  Delete track
+                  <Trans>Delete track</Trans>
                 </MenuItem>
               </Menu>
             </Box>
@@ -5378,7 +5523,7 @@ export function TrackDetailsPane({
         ) : null}
         <Snackbar
           autoHideDuration={6_000}
-          message={shareNotice?.message}
+          message={shareNotice === null ? undefined : i18n._(shareNotice.message)}
           open={shareNotice !== null && shareNotice.contentHash === shareContentHash}
           onClose={() => {
             setShareNotice(null);
@@ -5387,7 +5532,7 @@ export function TrackDetailsPane({
         {mode !== 'overlay' ? (
           <IconButton
             size="small"
-            aria-label="Close track"
+            aria-label={t`Close track`}
             onClick={() => {
               void handleClose();
             }}
@@ -5414,7 +5559,7 @@ export function TrackDetailsPane({
             <Stack spacing={2}>
               <TextField
                 size="small"
-                label="Track name"
+                label={t`Track name`}
                 value={active.name}
                 onChange={(event) => {
                   setActiveName(event.target.value);
@@ -5424,43 +5569,43 @@ export function TrackDetailsPane({
               {active.preparationStatus === 'preparing' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <CircularProgress
-                    aria-label="Preparing terrain and elevation"
+                    aria-label={t`Preparing terrain and elevation`}
                     size={18}
                   />
                   <Typography variant="body2">
-                    Preparing terrain and elevation…
+                    <Trans>Preparing terrain and elevation…</Trans>
                   </Typography>
                 </Stack>
               ) : active.preparationStatus === 'failed' ? (
-                <Alert severity="warning">{active.preparationError}</Alert>
+                <Alert severity="warning">{i18n._(active.preparationError)}</Alert>
               ) : active.namingStatus === 'loading' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <CircularProgress
-                    aria-label="Looking up representative places"
+                    aria-label={t`Looking up representative places`}
                     size={18}
                   />
                   <Typography variant="body2">
-                    Looking up representative places…
+                    <Trans>Looking up representative places…</Trans>
                   </Typography>
                 </Stack>
               ) : active.generatedName === undefined ? (
                 <Typography variant="body2" color="text.secondary">
-                  No generated name is available. Saving is unaffected.
+                  <Trans>No generated name is available. Saving is unaffected.</Trans>
                 </Typography>
               ) : (
                 <Stack spacing={2}>
                   <Button
                     size="small"
                     variant="text"
-                    aria-label="Apply place name"
+                    aria-label={t`Apply place name`}
                     onClick={applyGeneratedName}
                     sx={{ alignSelf: 'center' }}
                   >
-                    ↑ Apply place name ↑
+                    <Trans>↑ Apply place name ↑</Trans>
                   </Button>
                   <TextField
                     size="small"
-                    label="English place name"
+                    label={t`English place name`}
                     value={active.generatedName}
                     slotProps={{ input: { readOnly: true } }}
                   />
@@ -5485,11 +5630,11 @@ export function TrackDetailsPane({
                     color="text.secondary"
                     sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}
                   >
-                    Shared track
+                    <Trans>Shared track</Trans>
                   </Typography>
                 ) : null}
                 <Button size="small" color="inherit" onClick={discardPreview}>
-                  Discard
+                  <Trans>Discard</Trans>
                 </Button>
                 <Button
                   size="small"
@@ -5500,20 +5645,26 @@ export function TrackDetailsPane({
                   }
                   onClick={() => void savePreview()}
                 >
-                  {active.id.startsWith('shared:') ? 'Save a copy' : 'Save'}
+                  {active.kind === 'shared' ? (
+                    <Trans>Save a copy</Trans>
+                  ) : (
+                    <Trans>Save</Trans>
+                  )}
                 </Button>
               </Stack>
             </>
           ) : null}
           <Typography component="h3" variant="subtitle2">
-            Track details
+            <Trans>Track details</Trans>
           </Typography>
           <Box sx={{ minHeight: 56, display: 'flex', alignItems: 'center' }}>
             {metrics === null ? (
               <Typography variant="body2" color="text.secondary">
-                {active.kind === 'route-plan'
-                  ? 'Add at least two route points to see track details.'
-                  : 'Track details are being prepared…'}
+                {active.kind === 'route-plan' ? (
+                  <Trans>Add at least two route points to see track details.</Trans>
+                ) : (
+                  <Trans>Track details are being prepared…</Trans>
+                )}
               </Typography>
             ) : (
               <Box sx={{ width: '100%' }}>
@@ -5546,41 +5697,32 @@ export function TrackDetailsPane({
           )}
           {segmentCount > 1 ? (
             <Alert severity="info">
-              Independent segments are not joined; totals exclude gaps.
+              <Trans>Independent segments are not joined; totals exclude gaps.</Trans>
             </Alert>
           ) : null}
           {warnings.length > 0 ? (
             <Alert severity="warning">
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Imported with {warnings.length} validation{' '}
-                {warnings.length === 1 ? 'warning' : 'warnings'}
+                <Plural
+                  value={warningCount}
+                  one="Imported with # validation warning"
+                  other="Imported with # validation warnings"
+                />
               </Typography>
               <Box component="ul" sx={{ m: 0, mt: 0.5, pl: 2.25 }}>
-                {warnings.map((warning, index) => {
-                  const context: string[] = [];
-                  if (warning.segmentIndex !== undefined) {
-                    context.push(`segment ${String(warning.segmentIndex + 1)}`);
-                  }
-                  if (warning.pointIndex !== undefined) {
-                    context.push(`point ${String(warning.pointIndex + 1)}`);
-                  }
-                  const contextLabel =
-                    context.length === 0 ? '' : ` (${context.join(', ')})`;
-                  return (
-                    <Typography
-                      component="li"
-                      key={`${warning.code}-${String(index)}`}
-                      variant="caption"
-                      sx={{ mb: 0.25 }}
-                    >
-                      <Box component="code" sx={{ fontSize: 'inherit' }}>
-                        {warning.code}
-                      </Box>{' '}
-                      — {warning.message}
-                      {contextLabel}
-                    </Typography>
-                  );
-                })}
+                {warnings.map((warning, index) => (
+                  <Typography
+                    component="li"
+                    key={`${warning.code}-${String(index)}`}
+                    variant="caption"
+                    sx={{ mb: 0.25 }}
+                  >
+                    <Box component="code" sx={{ fontSize: 'inherit' }}>
+                      {warning.code}
+                    </Box>{' '}
+                    — {trackWarningDetail(warning, i18n)}
+                  </Typography>
+                ))}
               </Box>
             </Alert>
           ) : null}

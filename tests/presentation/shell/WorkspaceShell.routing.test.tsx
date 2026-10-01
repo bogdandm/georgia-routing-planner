@@ -293,7 +293,7 @@ describe('WorkspaceShell', () => {
       expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     });
     const elevationProfile = await screen.findByRole('img', {
-      name: /Elevation profile from \d+ to \d+ metres/u,
+      name: /Elevation profile from [\d,]+ to [\d,]+ metres/u,
     });
     expect(elevationProfile).toBeVisible();
     expect(elevationProfile).toHaveStyle({ height: '264px' });
@@ -459,7 +459,7 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByText('Preparing terrain and elevation…')).toBeVisible();
     expect(sampleMany).toHaveBeenCalledOnce();
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText('Storage unavailable')).toBeVisible();
+    expect(await screen.findByText('The route could not be saved.')).toBeVisible();
     await waitFor(() => {
       expect(sampleMany).toHaveBeenCalledTimes(2);
     });

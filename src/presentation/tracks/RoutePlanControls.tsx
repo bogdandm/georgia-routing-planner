@@ -1,3 +1,6 @@
+import type { I18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Alert,
   Button,
@@ -28,28 +31,49 @@ interface RoutePlanControlsProps {
   readonly onUndo: () => void;
 }
 
-function failureMessage(failure: NonNullable<RoutePlanDraft['failure']>): string {
+function failureMessage(
+  failure: NonNullable<RoutePlanDraft['failure']>,
+  i18n: I18n,
+): string {
   if (failure.reason === 'no-nearby-trail') {
     if (failure.endpoint === 'both') {
-      return 'No routable trail or road was found within 200 m of the start and destination points.';
+      return i18n._(
+        msg`No routable trail or road was found within 200 m of the start and destination points.`,
+      );
     }
-    return `No routable trail or road was found within 200 m of the ${
-      failure.endpoint ?? 'selected'
-    } point.`;
+    if (failure.endpoint === 'start') {
+      return i18n._(
+        msg`No routable trail or road was found within 200 m of the start point.`,
+      );
+    }
+    if (failure.endpoint === 'destination') {
+      return i18n._(
+        msg`No routable trail or road was found within 200 m of the destination point.`,
+      );
+    }
+    return i18n._(
+      msg`No routable trail or road was found within 200 m of the selected point.`,
+    );
   }
   if (failure.reason === 'no-route') {
-    return 'No connected route was found. Add a closer point or use Line for the next segment.';
+    return i18n._(
+      msg`No connected route was found. Add a closer point or use Line for the next segment.`,
+    );
   }
   if (failure.reason === 'area-too-large') {
-    return 'This segment covers too large an area. Add an intermediate point.';
+    return i18n._(
+      msg`This segment covers too large an area. Add an intermediate point.`,
+    );
   }
   if (failure.reason === 'routing-data-unavailable') {
-    return 'Routing data is unavailable. Try again when you are online.';
+    return i18n._(msg`Routing data is unavailable. Try again when you are online.`);
   }
   if (failure.reason === 'routing-timeout') {
-    return 'Route calculation exceeded one minute. Add a closer point or try again.';
+    return i18n._(
+      msg`Route calculation exceeded one minute. Add a closer point or try again.`,
+    );
   }
-  return 'Routing data could not be decoded.';
+  return i18n._(msg`Routing data could not be decoded.`);
 }
 
 export function RoutePlanStatus({
@@ -59,19 +83,27 @@ export function RoutePlanStatus({
   readonly draft: RoutePlanDraft;
   readonly elevationProgress: TrackElevationPreparationProgress | null;
 }): ReactElement {
+  const { i18n, t } = useLingui();
   let content: ReactElement;
   if (draft.status === 'calculating') {
     const progress = draft.routeProgress;
-    const label =
-      progress?.phase === 'loading-tiles'
-        ? progress.totalTileCount > 0
-          ? `Loading route tiles… ${String(progress.loadedTileCount)}/${String(progress.totalTileCount)}`
-          : 'Loading route tiles…'
-        : progress?.phase === 'building-graph'
-          ? `Building route graph… ${String(Math.round(progress.graphProgress * 100))}%`
-          : progress?.phase === 'searching-route'
-            ? 'Searching for a route…'
-            : 'Loading route tiles…';
+    const countFormatter = new Intl.NumberFormat(i18n.locale);
+    let label: string;
+    if (progress?.phase === 'loading-tiles' && progress.totalTileCount > 0) {
+      const loadedTiles = countFormatter.format(progress.loadedTileCount);
+      const totalTiles = countFormatter.format(progress.totalTileCount);
+      label = t`Loading route tiles… ${loadedTiles}/${totalTiles}`;
+    } else if (progress?.phase === 'building-graph') {
+      const graphProgress = new Intl.NumberFormat(i18n.locale, {
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
+        style: 'percent',
+      }).format(Math.round(progress.graphProgress * 100) / 100);
+      label = t`Building route graph… ${graphProgress}`;
+    } else if (progress?.phase === 'searching-route') {
+      label = t`Searching for a route…`;
+    } else {
+      label = t`Loading route tiles…`;
+    }
     const value =
       progress?.phase === 'loading-tiles' && progress.totalTileCount > 0
         ? (progress.loadedTileCount / progress.totalTileCount) * 100
@@ -91,15 +123,22 @@ export function RoutePlanStatus({
   } else if (draft.status === 'saving') {
     content = (
       <Stack spacing={0.75}>
-        <Typography variant="body2">Saving route…</Typography>
-        <LinearProgress aria-label="Saving route…" />
+        <Typography variant="body2">
+          <Trans>Saving route…</Trans>
+        </Typography>
+        <LinearProgress aria-label={t`Saving route…`} />
       </Stack>
     );
   } else if (draft.status === 'elevation-enriching') {
-    const label =
-      elevationProgress !== null && elevationProgress.totalTiles > 0
-        ? `Loading elevation tiles: ${String(elevationProgress.completedTiles)} of ${String(elevationProgress.totalTiles)}`
-        : 'Preparing terrain and elevation…';
+    let label: string;
+    if (elevationProgress !== null && elevationProgress.totalTiles > 0) {
+      const countFormatter = new Intl.NumberFormat(i18n.locale);
+      const completedTiles = countFormatter.format(elevationProgress.completedTiles);
+      const totalTiles = countFormatter.format(elevationProgress.totalTiles);
+      label = t`Loading elevation tiles: ${completedTiles} of ${totalTiles}`;
+    } else {
+      label = t`Preparing terrain and elevation…`;
+    }
     const value =
       elevationProgress !== null && elevationProgress.totalTiles > 0
         ? (elevationProgress.completedTiles / elevationProgress.totalTiles) * 100
@@ -115,20 +154,22 @@ export function RoutePlanStatus({
       </Stack>
     );
   } else if (draft.status === 'failed' && draft.failure !== null) {
-    content = <Alert severity="warning">{failureMessage(draft.failure)}</Alert>;
+    content = <Alert severity="warning">{failureMessage(draft.failure, i18n)}</Alert>;
   } else if (draft.status === 'elevation-failed') {
     content = (
       <Alert severity="info">
-        Elevation is unavailable. The route geometry is ready and can still be saved.
+        <Trans>
+          Elevation is unavailable. The route geometry is ready and can still be saved.
+        </Trans>
       </Alert>
     );
   } else {
     const instruction =
       draft.status === 'selecting-start'
-        ? 'Click the map to choose the route start.'
+        ? t`Click the map to choose the route start.`
         : draft.status === 'selecting-destination'
-          ? 'Click the map to choose the next point.'
-          : 'Route ready. Click the map to add another point.';
+          ? t`Click the map to choose the next point.`
+          : t`Route ready. Click the map to add another point.`;
     content = (
       <Typography variant="body2" color="text.secondary">
         {instruction}
@@ -136,6 +177,7 @@ export function RoutePlanStatus({
     );
   }
   return (
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- ARIA tokens.
     <Stack aria-live="polite" role="status" sx={{ minHeight: 40 }}>
       {content}
     </Stack>
@@ -152,6 +194,7 @@ export function RoutePlanControls({
   onSave,
   onUndo,
 }: RoutePlanControlsProps): ReactElement {
+  const { t } = useLingui();
   const locked =
     draft.status === 'calculating' ||
     draft.status === 'saving' ||
@@ -161,7 +204,7 @@ export function RoutePlanControls({
     <Stack spacing={2}>
       <TextField
         size="small"
-        label="Track name"
+        label={t`Track name`}
         value={draft.name}
         disabled={locked}
         onChange={(event) => {
@@ -171,23 +214,23 @@ export function RoutePlanControls({
       />
       <Stack spacing={0.75}>
         <Typography variant="caption" color="text.secondary">
-          Next segment
+          <Trans>Next segment</Trans>
         </Typography>
         <ToggleButtonGroup
           exclusive
           fullWidth
           size="small"
-          aria-label="Next segment"
+          aria-label={t`Next segment`}
           value={draft.nextSegmentMode}
           onChange={(_event, value: RoutePlanSegmentMode | null) => {
             if (value !== null) onNextSegmentModeChange(value);
           }}
         >
           <ToggleButton value="routes" disabled={locked}>
-            Routes
+            <Trans>Routes</Trans>
           </ToggleButton>
           <ToggleButton value="line" disabled={locked}>
-            Line
+            <Trans>Line</Trans>
           </ToggleButton>
         </ToggleButtonGroup>
       </Stack>
@@ -200,7 +243,7 @@ export function RoutePlanControls({
             disabled={draft.status === 'saving' || draft.waypoints.length === 0}
             onClick={onUndo}
           >
-            Undo
+            <Trans>Undo</Trans>
           </Button>
           <Button
             size="small"
@@ -208,7 +251,7 @@ export function RoutePlanControls({
             disabled={draft.status === 'saving' || draft.waypoints.length === 0}
             onClick={onClear}
           >
-            Clear
+            <Trans>Clear</Trans>
           </Button>
         </Stack>
         <Stack direction="row" spacing={1}>
@@ -218,7 +261,7 @@ export function RoutePlanControls({
             disabled={draft.status === 'saving'}
             onClick={onDiscard}
           >
-            Discard
+            <Trans>Discard</Trans>
           </Button>
           <Button
             size="small"
@@ -226,7 +269,7 @@ export function RoutePlanControls({
             disabled={!canSaveRoutePlan(draft)}
             onClick={onSave}
           >
-            Save
+            <Trans>Save</Trans>
           </Button>
         </Stack>
       </Stack>

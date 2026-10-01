@@ -189,15 +189,27 @@ export function isXmlText(text: string): boolean {
   return true;
 }
 
+export type MarkerNameProblem = 'required' | 'too-long' | 'invalid-character';
+
+const markerNameProblemMessages = {
+  required: 'Marker name is required.',
+  'too-long': 'Marker name must be 200 characters or fewer.',
+  'invalid-character': 'Marker name contains characters that cannot be exported.',
+} as const satisfies Record<MarkerNameProblem, string>;
+
+/** Rejected marker name; `problem` lets the UI show a localized explanation. */
+export class MarkerNameError extends Error {
+  public constructor(public readonly problem: MarkerNameProblem) {
+    super(markerNameProblemMessages[problem]);
+    this.name = 'MarkerNameError';
+  }
+}
+
 export function normalizeMarkerName(name: string): NormalizedMarkerName {
   const trimmed = name.trim();
-  if (trimmed.length === 0) throw new Error('Marker name is required.');
-  if (trimmed.length > 200) {
-    throw new Error('Marker name must be 200 characters or fewer.');
-  }
-  if (!isXmlText(trimmed)) {
-    throw new Error('Marker name contains characters that cannot be exported.');
-  }
+  if (trimmed.length === 0) throw new MarkerNameError('required');
+  if (trimmed.length > 200) throw new MarkerNameError('too-long');
+  if (!isXmlText(trimmed)) throw new MarkerNameError('invalid-character');
   return {
     name: trimmed,
     normalizedName: trimmed.toLocaleLowerCase('en'),

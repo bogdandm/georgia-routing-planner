@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
 import {
   beginRoutePlanElevation,
@@ -11,6 +12,7 @@ import {
   startRoutePlan,
   updateRoutePlanProgress,
 } from '@/presentation/tracks/routePlan';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const A = [44.64, 42.66] as const;
 const B = [44.65, 42.67] as const;
@@ -27,15 +29,19 @@ function callbacks() {
 }
 
 function lineDraft(id: string) {
-  const withStart = enqueueRoutePlanPoint(startRoutePlan(id), A);
+  const withStart = enqueueRoutePlanPoint(startRoutePlan(id, 'New route'), A);
   return enqueueRoutePlanPoint(setNextSegmentMode(withStart, 'line'), B);
 }
 
 describe('RoutePlanControls', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
   it('keeps the next-segment mode persistent and enables save for a usable line', async () => {
     const user = userEvent.setup();
     const handlers = callbacks();
-    render(
+    renderWithI18n(
       <RoutePlanControls draft={lineDraft('route-plan:controls')} {...handlers} />,
     );
 
@@ -50,9 +56,12 @@ describe('RoutePlanControls', () => {
   });
 
   it('uses the one fixed status slot for routing, elevation, and saving', () => {
-    const withStart = enqueueRoutePlanPoint(startRoutePlan('route-plan:status'), A);
+    const withStart = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:status', 'New route'),
+      A,
+    );
     const calculating = enqueueRoutePlanPoint(withStart, B);
-    const status = render(
+    const status = renderWithI18n(
       <RoutePlanControls draft={calculating} {...callbacks()} />,
     ).getByRole('status');
 
@@ -60,7 +69,7 @@ describe('RoutePlanControls', () => {
     expect(screen.getAllByRole('progressbar')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Line' })).toBeDisabled();
 
-    render(
+    renderWithI18n(
       <RoutePlanControls
         draft={beginRoutePlanElevation(lineDraft('route-plan:elevation'))}
         elevationProgress={{ completedTiles: 1, totalTiles: 2, points: [] }}
@@ -72,7 +81,10 @@ describe('RoutePlanControls', () => {
 
   it('shows determinate progress while building the route graph', () => {
     const calculating = enqueueRoutePlanPoint(
-      enqueueRoutePlanPoint(startRoutePlan('route-plan:graph-progress'), A),
+      enqueueRoutePlanPoint(
+        startRoutePlan('route-plan:graph-progress', 'New route'),
+        A,
+      ),
       B,
     );
     const request = calculating.pendingRequest;
@@ -85,7 +97,7 @@ describe('RoutePlanControls', () => {
       graphProgress: 0.6,
     });
 
-    render(<RoutePlanControls draft={buildingGraph} {...callbacks()} />);
+    renderWithI18n(<RoutePlanControls draft={buildingGraph} {...callbacks()} />);
 
     expect(screen.getByText('Building route graph… 60%')).toBeVisible();
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '60');
@@ -105,7 +117,10 @@ describe('RoutePlanControls', () => {
       'Routing data is unavailable. Try again when you are online.',
     ],
   ])('shows actionable copy for $reason', (failure, message) => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:failure'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:failure', 'New route'),
+      A,
+    );
     draft = enqueueRoutePlanPoint(draft, B);
     const request = draft.pendingRequest;
     if (request === null) throw new Error('Expected route request.');
@@ -114,7 +129,7 @@ describe('RoutePlanControls', () => {
       ...failure,
     });
 
-    render(<RoutePlanControls draft={failed} {...callbacks()} />);
+    renderWithI18n(<RoutePlanControls draft={failed} {...callbacks()} />);
     expect(screen.getByText(message)).toBeVisible();
   });
 });

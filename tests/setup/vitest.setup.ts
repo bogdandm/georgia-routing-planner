@@ -1,10 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 import 'fake-indexeddb/auto';
 
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 
 import { mswServer } from './mswServer';
+
+// WorkspaceShell hydration crosses fake IndexedDB, GPX parsing, and several React
+// commits. The one-second default for findBy*/waitFor expires on loaded CI runners and
+// shared workstations; one suite-wide bound keeps tests free of per-call timeouts.
+configure({ asyncUtilTimeout: 5_000 });
 
 beforeAll(() => {
   mswServer.listen({ onUnhandledRequest: 'error' });

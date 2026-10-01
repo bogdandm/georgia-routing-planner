@@ -174,7 +174,9 @@ landmark, then a settlement within 3 km; districts and municipalities never name
 track. Landmarks rank passes, saddles, and peaks within 1 km first, so a nearby summit
 the route did not cross cannot name it, then lakes, glaciers, and waterfalls, then huts,
 viewpoints, historic sites, shelters, places of worship, and settlements within 2 km,
-weighting each class by distance. Labels without an English or Latin name are romanized:
+weighting each class by distance. A failed settlement or landmark lookup is skipped, and
+a warning under the candidate names the failed lookup and its reason; a rate-limited
+provider is reported as HTTP 429. Labels without an English or Latin name are romanized:
 Georgian as on road signs, without ejective apostrophes and with `ყ` as `k` (`ყელიდა` →
 `Kelida`), and Cyrillic by BGN/PCGN without diacritics or soft/hard-sign marks
 (`Верхние ночевки` → `Verkhniye nochevki`). Mountain passes gain a `Pass` suffix and

@@ -22,7 +22,7 @@ export interface PlaceSearchBounds {
   readonly north: number;
 }
 
-type PlaceSearchFailureCode =
+export type PlaceSearchFailureCode =
   'network' | 'timeout' | 'rate-limited' | 'invalid-response' | 'provider';
 
 export class PlaceSearchFailure extends Error {

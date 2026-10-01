@@ -226,11 +226,86 @@ describe('NominatimPlaceSearchGateway', () => {
     ]);
 
     const query = submittedQuery.mock.calls[0]?.[0];
-    expect(query).toContain('around:2000,42.711630,43.163426');
-    expect(query).toContain(
-      'mountain_pass|natural|tourism|historic|place|waterway|amenity',
+    expect(query).toContain('nwr(around:2000,42.711630,43.163426)["name"]->.named;');
+    expect(query).toContain('nwr.named["amenity"~"^(shelter|place_of_worship)$"];');
+    expect(query).toContain('[maxsize:33554432]');
+  });
+
+  it('retries an overloaded nearby lookup and then succeeds', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const services = createTestServices();
+      const responses = [
+        () => new HttpResponse(null, { status: 504 }),
+        () =>
+          HttpResponse.json({
+            elements: [],
+            remark:
+              'runtime error: Query timed out in "query" at line 1 after 11 seconds.',
+          }),
+        () =>
+          HttpResponse.json({
+            elements: [
+              {
+                type: 'node',
+                id: 1,
+                lat: 42.7112,
+                lon: 43.1638,
+                tags: { name: 'Kelida', mountain_pass: 'yes' },
+              },
+            ],
+          }),
+      ];
+      let attempts = 0;
+      mswServer.use(
+        http.post(defaultGeocodingProviderConfiguration.nearbyUrl, () => {
+          const respond = responses[attempts] ?? responses[0];
+          attempts += 1;
+          return respond?.();
+        }),
+      );
+      const gateway = new NominatimPlaceSearchGateway(
+        services.httpClient,
+        defaultGeocodingProviderConfiguration,
+        services.idGenerator,
+        () => 2_000,
+      );
+
+      const lookup = gateway.nearby(
+        { longitude: 43.163426, latitude: 42.71163 },
+        new AbortController().signal,
+      );
+      await vi.advanceTimersByTimeAsync(20_000);
+
+      await expect(lookup).resolves.toMatchObject([{ label: 'Kelida' }]);
+      expect(attempts).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a rate-limited nearby lookup without retrying it', async () => {
+    const services = createTestServices();
+    let attempts = 0;
+    mswServer.use(
+      http.post(defaultGeocodingProviderConfiguration.nearbyUrl, () => {
+        attempts += 1;
+        return new HttpResponse(null, { status: 429 });
+      }),
     );
-    expect(query).not.toContain('shop');
+    const gateway = new NominatimPlaceSearchGateway(
+      services.httpClient,
+      defaultGeocodingProviderConfiguration,
+      services.idGenerator,
+    );
+
+    await expect(
+      gateway.nearby(
+        { longitude: 43.16, latitude: 42.71 },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'rate-limited' });
+    expect(attempts).toBe(1);
   });
 
   it('rejects malformed provider data with a safe error', async () => {

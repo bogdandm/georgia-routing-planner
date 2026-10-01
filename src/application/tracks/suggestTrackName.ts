@@ -1,5 +1,9 @@
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type { PlaceSearchResult } from '@/application/ports/PlaceSearchGateway';
+import {
+  PlaceSearchFailure,
+  type PlaceSearchFailureCode,
+  type PlaceSearchResult,
+} from '@/application/ports/PlaceSearchGateway';
 import type { TrackCoordinate, TrackSegment } from '@/domain/tracks/gpx';
 import {
   findDominantSummit,
@@ -24,7 +28,14 @@ export interface TrackNamingPlaces {
   ): Promise<readonly PlaceSearchResult[]>;
 }
 
-/** Field names match the persisted `LocalTrackSummary` naming provenance. */
+/** A place lookup that failed; the suggestion was built without it. */
+export interface TrackNameLookupFailure {
+  /** `landmark` is the nearby-feature (Overpass) lookup; `settlement` the reverse geocoder. */
+  readonly lookup: 'settlement' | 'landmark';
+  readonly reason: PlaceSearchFailureCode | 'unknown';
+}
+
+/** Provenance field names match the persisted `LocalTrackSummary`. */
 export interface TrackNameSuggestion {
   readonly generatedName?: string;
   readonly middleAnchorKind?: TrackNameLandmarkAnchor;
@@ -32,6 +43,8 @@ export interface TrackNameSuggestion {
   /** Landmark at the dominant summit or closed-track turnaround. */
   readonly middlePoi?: PoiCandidate;
   readonly endPoi?: PoiCandidate;
+  /** Distinct failed lookups, so the UI can explain a missing or partial name. */
+  readonly lookupFailures?: readonly TrackNameLookupFailure[];
 }
 
 type TrackNameSuggestionBuilder = {
@@ -116,8 +129,9 @@ function locate(
 /**
  * Suggests an English name for an imported track from its start, finish, and one
  * landmark: the dominant summit, or the turnaround of a closed track. Multiple
- * segments are joined into one journey. Settlement lookup failures propagate;
- * nearby-landmark failures are logged and treated as no landmark.
+ * segments are joined into one journey. Failed lookups are logged, reported in
+ * `lookupFailures`, and treated as missing parts: a failed settlement falls back to a
+ * landmark and vice versa. Cancellation propagates.
  */
 export async function suggestTrackName(input: {
   readonly segments: readonly TrackSegment[];
@@ -132,11 +146,33 @@ export async function suggestTrackName(input: {
   const last = points.at(-1);
   if (first === undefined || last === undefined) return {};
 
+  const lookupFailures: TrackNameLookupFailure[] = [];
+  const recordFailure = (lookup: TrackNameLookupFailure['lookup'], error: unknown) => {
+    signal.throwIfAborted();
+    const reason = error instanceof PlaceSearchFailure ? error.code : 'unknown';
+    logger.log({
+      level: 'warn',
+      name:
+        lookup === 'landmark'
+          ? 'local-track.nearby-poi.failed'
+          : 'local-track.settlement-lookup.failed',
+      data: { reason },
+    });
+    if (!lookupFailures.some((f) => f.lookup === lookup && f.reason === reason)) {
+      lookupFailures.push({ lookup, reason });
+    }
+  };
   const settlementNear = async (anchor: TrackCoordinate) => {
-    const result = await places.reverseSettlement(
-      { longitude: anchor[0], latitude: anchor[1] },
-      signal,
-    );
+    let result: PlaceSearchResult | null;
+    try {
+      result = await places.reverseSettlement(
+        { longitude: anchor[0], latitude: anchor[1] },
+        signal,
+      );
+    } catch (error) {
+      recordFailure('settlement', error);
+      return null;
+    }
     return result === null ? null : locate(result, anchor, lookedUpAt);
   };
   const landmarkNear = async (anchor: TrackCoordinate) => {
@@ -146,9 +182,8 @@ export async function suggestTrackName(input: {
         { longitude: anchor[0], latitude: anchor[1] },
         signal,
       );
-    } catch {
-      signal.throwIfAborted();
-      logger.log({ level: 'warn', name: 'local-track.nearby-poi.failed' });
+    } catch (error) {
+      recordFailure('landmark', error);
       return null;
     }
     let best: LocatedCandidate | null = null;
@@ -202,8 +237,7 @@ export async function suggestTrackName(input: {
     landmarkCoordinate = shape.farthestCoordinate;
   }
 
-  // The landmark goes first: it is the most informative part, and the public Overpass
-  // endpoint is most likely to rate-limit the later endpoint fallbacks.
+  // The landmark goes first: it is the most informative part of the name.
   const landmarkPoi =
     landmarkCoordinate === undefined ? null : await landmarkPoiAt(landmarkCoordinate);
   const startPoi = await endpointPoi(first.coordinate);
@@ -222,5 +256,6 @@ export async function suggestTrackName(input: {
   if (startPoi !== null) result.startPoi = startPoi;
   if (landmarkPoi !== null) result.middlePoi = landmarkPoi;
   if (endPoi !== null) result.endPoi = endPoi;
+  if (lookupFailures.length > 0) result.lookupFailures = lookupFailures;
   return result;
 }

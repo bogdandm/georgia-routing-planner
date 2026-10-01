@@ -89,7 +89,10 @@ import {
   type PreparedImportedTrack,
   type TrackElevationPreparationProgress,
 } from '@/application/tracks/prepareImportedTrack';
-import { suggestTrackName } from '@/application/tracks/suggestTrackName';
+import {
+  suggestTrackName,
+  type TrackNameLookupFailure,
+} from '@/application/tracks/suggestTrackName';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   normalizeMarkerName,
@@ -235,6 +238,7 @@ interface PreparedPreviewTrack extends PreviewTrackBase {
   readonly startPoi?: PoiCandidate;
   readonly middlePoi?: PoiCandidate;
   readonly endPoi?: PoiCandidate;
+  readonly lookupFailures?: readonly TrackNameLookupFailure[];
 }
 
 interface SharedTrackSelection extends Omit<PreparedPreviewTrack, 'kind'> {
@@ -414,6 +418,28 @@ function initialTrackName(file: File, parsed: ParsedGpx): string {
   }
   const filenameStem = file.name.replace(/\.(gpx|fit|kml)$/iu, '').trim();
   return filenameStem.length > 0 ? filenameStem : 'New track';
+}
+
+const lookupFailureReasonText: Readonly<
+  Record<TrackNameLookupFailure['reason'], string>
+> = {
+  'rate-limited':
+    'was rate-limited by the provider (HTTP 429); wait a minute and import the track again',
+  timeout: 'timed out',
+  provider: 'failed because the provider is overloaded',
+  network: 'could not reach the provider',
+  'invalid-response': 'received an unsupported provider response',
+  unknown: 'failed',
+};
+
+/** Explains why a generated name is missing or may be incomplete. */
+function lookupFailureText(failures: readonly TrackNameLookupFailure[]): string {
+  return failures
+    .map(
+      ({ lookup, reason }) =>
+        `${lookup === 'landmark' ? 'Nearby landmark lookup' : 'Settlement lookup'} ${lookupFailureReasonText[reason]}.`,
+    )
+    .join(' ');
 }
 
 /** Returns DEM-calculated elevation, rejecting preparations that produced none. */
@@ -5283,9 +5309,16 @@ export function TrackDetailsPane({
                   </Typography>
                 </Stack>
               ) : active.generatedName === undefined ? (
-                <Typography variant="body2" color="text.secondary">
-                  No generated name is available. Saving is unaffected.
-                </Typography>
+                active.lookupFailures === undefined ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No generated name is available. Saving is unaffected.
+                  </Typography>
+                ) : (
+                  <Alert severity="warning">
+                    No generated name is available.{' '}
+                    {lookupFailureText(active.lookupFailures)} Saving is unaffected.
+                  </Alert>
+                )
               ) : (
                 <Stack spacing={2}>
                   <Button
@@ -5303,6 +5336,12 @@ export function TrackDetailsPane({
                     value={active.generatedName}
                     slotProps={{ input: { readOnly: true } }}
                   />
+                  {active.lookupFailures === undefined ? null : (
+                    <Alert severity="warning">
+                      The name may be incomplete.{' '}
+                      {lookupFailureText(active.lookupFailures)}
+                    </Alert>
+                  )}
                 </Stack>
               )}
             </Stack>

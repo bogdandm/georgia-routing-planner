@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type {
-  PlaceSearchKind,
-  PlaceSearchResult,
+import {
+  PlaceSearchFailure,
+  type PlaceSearchKind,
+  type PlaceSearchResult,
 } from '@/application/ports/PlaceSearchGateway';
 import {
   suggestTrackName,
@@ -234,7 +235,9 @@ describe('suggestTrackName', () => {
       ],
       [],
     );
-    places.nearby.mockRejectedValue(new Error('Overpass unavailable'));
+    places.nearby.mockRejectedValue(
+      new PlaceSearchFailure('rate-limited', 'Rate limited.'),
+    );
     const logger = createLogger();
 
     const suggestion = await suggestTrackName({
@@ -246,25 +249,43 @@ describe('suggestTrackName', () => {
     });
 
     expect(suggestion.generatedName).toBe('Gergeti from Stepantsminda');
+    expect(suggestion.lookupFailures).toEqual([
+      { lookup: 'landmark', reason: 'rate-limited' },
+    ]);
     expect(logger.log).toHaveBeenCalledWith({
       level: 'warn',
       name: 'local-track.nearby-poi.failed',
+      data: { reason: 'rate-limited' },
     });
   });
 
-  it('propagates settlement failures and cancellation', async () => {
-    const failing = fakePlaces([], []);
-    failing.reverseSettlement.mockRejectedValue(new Error('Nominatim unavailable'));
-    await expect(
-      suggestTrackName({
-        segments: [squareLoop],
-        places: failing,
-        logger: createLogger(),
-        lookedUpAt,
-        signal: new AbortController().signal,
-      }),
-    ).rejects.toThrow('Nominatim unavailable');
+  it('names from landmarks when the settlement lookup fails and reports the failure', async () => {
+    const places = fakePlaces(
+      [],
+      [
+        [
+          [44.01, 42.01],
+          [place('Koruldi Lakes', 'natural:water', 'water', [44.0105, 42.0105])],
+        ],
+      ],
+    );
+    places.reverseSettlement.mockRejectedValue(new Error('Nominatim unavailable'));
 
+    const suggestion = await suggestTrackName({
+      segments: [squareLoop],
+      places,
+      logger: createLogger(),
+      lookedUpAt,
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestion.generatedName).toBe('Koruldi Lakes loop');
+    expect(suggestion.lookupFailures).toEqual([
+      { lookup: 'settlement', reason: 'unknown' },
+    ]);
+  });
+
+  it('propagates cancellation without reporting a lookup failure', async () => {
     const controller = new AbortController();
     const cancelled = fakePlaces([], []);
     cancelled.nearby.mockImplementation(() => {

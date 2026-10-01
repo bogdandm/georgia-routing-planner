@@ -870,9 +870,10 @@ one-way, loop, or out-and-back, and resolves the start, the finish of one-way tr
 and one landmark at the dominant summit or closed-track turnaround. Endpoints use a
 nearby settlement, then a ranked nearby landmark; the landmark uses a ranked nearby
 feature, then a settlement. `domain/tracks/trackNaming.ts` romanizes labels and composes
-the name. Settlement failures make the name unavailable; landmark failures are logged
-and skipped. Switching rail sections retains the preview. `beforeunload` is registered
-only while that preview remains unsaved and is removed after save or confirmed discard.
+the name. Each failed lookup is logged and skipped, and its kind and reason (for example
+an HTTP 429 rate limit) are returned so the preview can explain a missing or partial
+name. Switching rail sections retains the preview. `beforeunload` is registered only
+while that preview remains unsaved and is removed after save or confirmed discard.
 
 Saving a validated import writes its lightweight summary and full content row in one
 Dexie read-write transaction. The summary contains the stable display name, source

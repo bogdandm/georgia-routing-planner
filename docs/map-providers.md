@@ -215,18 +215,24 @@ finish, and landmark anchors. The reverse request asks for `addressdetails` and 
 only the largest enclosing `city`, `town`, `village`, `hamlet`, or `isolated_dwelling`
 address component, located by the matched object's coordinate. A town quarter therefore
 resolves to its town, while a match that is only a district, municipality, or road names
-nothing. Landmark lookups submit one bounded Overpass query around the anchor. The query
-requests up to 50 named nodes, ways, or relations within two kilometres whose tags
-belong to mountain-pass, natural, tourism, historic, place, waterway, or amenity
-families. Shops, leisure, and man-made objects are not requested so they cannot consume
-the result quota; amenities other than shelters and places of worship are returned but
-never ranked. A second tag-specific filter was avoided because it doubled the spatial
-scan on the shared endpoint. Provider coordinates are validated and out-of-radius
-relation centres are discarded. The application then ranks the results by category class
-and distance, so no English keyword search such as `pass` is needed. The landmark is
-requested before the endpoints, whose Overpass fallbacks are the most likely to be
-rate-limited. A failed landmark lookup falls back to the nearest settlement; a failed
-settlement lookup leaves the track without a suggested name.
+nothing. Landmark lookups submit one bounded Overpass query around the anchor. A single
+`around` scan collects named objects within two kilometres into a set, and tag filters
+on that in-memory set keep only the categories track naming ranks: mountain passes;
+peaks, volcanoes, saddles, water bodies, glaciers, and cave entrances; waterfalls; huts,
+viewpoints, camp sites, and attractions; historic objects; shelters and places of
+worship; and settlements. The query returns at most 50 centres and declares a 32 MiB
+`maxsize`, which helps the busy dispatcher admit it. Against the public endpoint this
+shape finished in 1–7 s, while a key-regex filter on the spatial scan took up to 20 s
+and a union of per-tag `around` scans timed out. Overpass reports timeouts and memory
+exhaustion as HTTP 200 with a `runtime error` remark; the adapter treats that as a
+provider failure rather than an empty result. HTTP 504 and runtime-error responses are
+retried twice, after 2 s and 5 s. HTTP 429 means this client has used its Overpass
+slots, so it is reported without a retry. Provider coordinates are validated and
+out-of-radius relation centres are discarded. The application ranks the results by
+category class and distance, so no English keyword search such as `pass` is needed. A
+failed lookup is skipped: a failed landmark lookup falls back to the nearest settlement
+and vice versa, and the preview explains which lookup failed and why, including
+HTTP 429.
 
 The configured Nominatim and Overpass requests share pacing, bounded cache, timeout,
 cancellation, validation, and safe failure mapping. The editable source name remains

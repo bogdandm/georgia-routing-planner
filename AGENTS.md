@@ -582,17 +582,18 @@ Markdown file, including `AGENTS.md`, once after the final edits and before hand
 needed, then require `./node_modules/.bin/prettier --check <changed-markdown-files>` to
 pass, then run `git diff --check`.
 
-Documentation-only pull requests must keep required CI conclusive while skipping
-Playwright installation and execution. Classification must inspect the complete diff; do
-not use top-level path filters that leave a required check pending.
+Documentation-only pull requests (every changed path is `*.md` or under `docs/`) must
+keep the required `verify` check conclusive while running only installation, the
+repository audit, and formatting. Classification must inspect the complete diff; do not
+use top-level path filters that leave a required check pending.
 
 ## CI policy
 
 GitHub Actions runs on every pull request and protected-branch push. Required checks
 include frozen-lockfile installation, the repository audit, formatting, linting, type
 checking, Vitest coverage, a production build, and Chromium/axe checks against the built
-application. Documentation-only diffs report an explicit successful E2E skip. Required
-checks block merging.
+application. Documentation-only pull requests skip every executable check; main pushes
+always run the complete matrix. Required checks block merging.
 
 ## Commands
 

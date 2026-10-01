@@ -52,8 +52,8 @@ From 900 through 1899 CSS pixels, a selected track or imagery result overlays on
 contextual sidebar while the rail stays interactive. At 1900 CSS pixels and above, the
 rail, sidebar, and detail pane form one floating surface above the full-viewport map.
 Changing sections or opening a pane never changes the map viewport. One right-side
-control column holds zoom, compass, geolocation, the 2D/3D selector, and the quick
-map-layer chooser.
+control column holds zoom, compass, geolocation, the 2D/3D selector, the quick map-layer
+chooser, and the ruler.
 
 Navigation collapses to the clickable Trail Planner logo, which keeps the same size and
 position in both states. With an active track, the collapsed state also shows the
@@ -388,6 +388,16 @@ observations.
   coordinates, terrain elevation, and the nearest map feature with its distance; named
   features link to English Wikipedia and Google Search. While the popup is visible, the
   next map click only closes it.
+- **Ruler:** the ruler button below the map-layer chooser toggles a session-only
+  measurement. While it is on, primary map clicks add numbered purple points joined by
+  straight lines, with the same cursor preview and segment-distance label as route
+  planning; it takes clicks from route planning and an enabled weather map, while marker
+  placement and a one-shot weather pick keep precedence. A compact card beside the rail
+  shows the total distance, the terrain elevation difference from the first to the last
+  point, and, from three points, the ascent and descent between consecutive points.
+  Elevation is sampled only at the clicked points, so relief between them is ignored.
+  **Undo last point**, **Clear points**, and **Close ruler** edit or end the
+  measurement; nothing is saved.
 - **Point actions:** right-click opens copy coordinates, copy a 2D point link, create a
   marker, search satellite scenes here, show the weather forecast, copy a weather-map
   link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap instead

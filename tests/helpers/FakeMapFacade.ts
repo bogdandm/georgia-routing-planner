@@ -26,7 +26,7 @@ export class FakeMapFacade implements MapFacade {
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
   public interactionModes: MapInteractionMode[] = [];
-  public routePlanPreviewAnchors: (MapCoordinate | null)[] = [];
+  public planningPreviewAnchors: (MapCoordinate | null)[] = [];
   public navigationRequests: {
     readonly longitude: number;
     readonly latitude: number;
@@ -193,8 +193,8 @@ export class FakeMapFacade implements MapFacade {
     this.interactionModes.push(mode);
   }
 
-  public setRoutePlanPreviewAnchor(coordinate: MapCoordinate | null): void {
-    this.routePlanPreviewAnchors.push(coordinate);
+  public setPlanningPreviewAnchor(coordinate: MapCoordinate | null): void {
+    this.planningPreviewAnchors.push(coordinate);
   }
 
   public destroy(): void {

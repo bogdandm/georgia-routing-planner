@@ -18,6 +18,7 @@ export const mapSourceIds = {
   importedTrackHighlight: 'imported-track-highlight',
   importedTrackTrace: 'imported-track-trace',
   routePlan: 'route-plan',
+  measurement: 'measurement',
   savedMarkers: 'saved-markers',
 } as const;
 
@@ -78,6 +79,14 @@ export const routePlanLayerIds = {
   waypoints: 'route-plan-waypoints',
   waypointLabels: 'route-plan-waypoint-labels',
 } as const;
+export const measurementLayerIds = {
+  routed: 'measurement-routed',
+  direct: 'measurement-direct',
+  preview: 'measurement-preview',
+  previewLabel: 'measurement-preview-label',
+  waypoints: 'measurement-waypoints',
+  waypointLabels: 'measurement-waypoint-labels',
+} as const satisfies Record<keyof typeof routePlanLayerIds, string>;
 
 export const savedMarkerLayerIds = {
   symbols: 'saved-marker-symbols',

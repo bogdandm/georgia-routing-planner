@@ -16,6 +16,7 @@ import {
   importedTrackLayerIds,
   mapLayerIds,
   mapSourceIds,
+  measurementLayerIds,
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
@@ -1165,7 +1166,8 @@ describe('MapLibreLayerController', () => {
         [44.1, 42.1],
       ],
     ]);
-    controller.setRoutePlanGeometry(
+    controller.setPlannedLineGeometry(
+      'route-plan',
       [
         {
           kind: 'routed',
@@ -1282,7 +1284,8 @@ describe('MapLibreLayerController', () => {
     controller.attach(map as unknown as MapLibreMap);
 
     expect(
-      controller.setRoutePlanGeometry(
+      controller.setPlannedLineGeometry(
+        'route-plan',
         [
           {
             kind: 'direct',
@@ -1360,7 +1363,12 @@ describe('MapLibreLayerController', () => {
       layout: { 'text-field': ['get', 'number'] },
     });
 
-    controller.setRoutePlanPreview([44.64, 42.66], [44.66, 42.68], '1.2 km');
+    controller.setPlannedLinePreview(
+      'route-plan',
+      [44.64, 42.66],
+      [44.66, 42.68],
+      '1.2 km',
+    );
     expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
       'data.features',
       expect.arrayContaining([
@@ -1392,7 +1400,8 @@ describe('MapLibreLayerController', () => {
         'text-radial-offset': 0.75,
       },
     });
-    controller.setRoutePlanGeometry(
+    controller.setPlannedLineGeometry(
+      'route-plan',
       [],
       [
         [44.64, 42.66],
@@ -1405,7 +1414,7 @@ describe('MapLibreLayerController', () => {
         expect.objectContaining({ properties: { kind: 'preview' } }),
       ]),
     );
-    controller.clearRoutePlanPreview();
+    controller.clearPlannedLinePreview('route-plan');
     expect(map.sources.get(mapSourceIds.routePlan)).not.toHaveProperty(
       'data.features.2.properties.kind',
       'preview',
@@ -1425,8 +1434,76 @@ describe('MapLibreLayerController', () => {
     expect(map.layers.has(routePlanLayerIds.routed)).toBe(true);
     expect(map.layers.has(routePlanLayerIds.direct)).toBe(true);
 
-    controller.clearRoutePlanGeometry();
+    controller.clearPlannedLineGeometry('route-plan');
     expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty('data.features', []);
+  });
+
+  it('keeps the ruler overlay independent from an open route plan', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const routeLine = {
+      kind: 'direct',
+      coordinates: [
+        [44.64, 42.66],
+        [44.65, 42.67],
+      ],
+    } as const;
+    const rulerLine = {
+      kind: 'direct',
+      coordinates: [
+        [44.7, 42.7],
+        [44.71, 42.71],
+        [44.72, 42.7],
+      ],
+    } as const;
+    controller.setPlannedLineGeometry('route-plan', [routeLine], routeLine.coordinates);
+
+    controller.setPlannedLineGeometry(
+      'measurement',
+      [rulerLine],
+      rulerLine.coordinates,
+    );
+    controller.setPlannedLinePreview(
+      'measurement',
+      [44.72, 42.7],
+      [44.73, 42.7],
+      '820 m',
+    );
+
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features.length',
+      3,
+    );
+    expect(map.sources.get(mapSourceIds.measurement)).toHaveProperty(
+      'data.features',
+      expect.arrayContaining([
+        expect.objectContaining({ properties: { kind: 'waypoint', number: '3' } }),
+        expect.objectContaining({
+          properties: { kind: 'preview-label', distanceLabel: '820 m' },
+        }),
+      ]),
+    );
+    expect(map.layers.get(measurementLayerIds.direct)).toMatchObject({
+      source: mapSourceIds.measurement,
+      paint: { 'line-color': '#8E44AD' },
+    });
+    expect(map.layers.get(measurementLayerIds.waypoints)).toMatchObject({
+      source: mapSourceIds.measurement,
+      paint: { 'circle-color': '#8E44AD' },
+    });
+
+    controller.clearPlannedLineGeometry('measurement');
+    expect(map.sources.get(mapSourceIds.measurement)).toHaveProperty(
+      'data.features',
+      [],
+    );
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features.length',
+      3,
+    );
   });
 
   it('renders and gates a multicolor imported-track grade zebra', async () => {

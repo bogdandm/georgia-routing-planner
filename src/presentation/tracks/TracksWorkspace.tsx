@@ -1240,7 +1240,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (multiTrackMode) {
       renderedTrackId.current = null;
-      mapLayers?.clearRoutePlanGeometry();
+      mapLayers?.clearPlannedLineGeometry('route-plan');
       if (readyMultiTrackSelections.length === 0) {
         mapLayers?.clearImportedTrackGeometry();
         return;
@@ -1271,19 +1271,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (active === null) {
       renderedTrackId.current = null;
       mapLayers?.clearImportedTrackGeometry();
-      mapLayers?.clearRoutePlanGeometry();
+      mapLayers?.clearPlannedLineGeometry('route-plan');
       return;
     }
     if (active.kind === 'route-plan') {
       renderedTrackId.current = null;
       mapLayers?.clearImportedTrackGeometry();
-      mapLayers?.setRoutePlanGeometry(
+      mapLayers?.setPlannedLineGeometry(
+        'route-plan',
         active.legs.flatMap((leg) => leg.sections),
         [...active.waypoints, ...active.queuedWaypoints],
       );
       return;
     }
-    mapLayers?.clearRoutePlanGeometry();
+    mapLayers?.clearPlannedLineGeometry('route-plan');
     const trackId =
       active.kind === 'preview' || active.kind === 'shared'
         ? `${active.id}:${active.preparationStatus}`

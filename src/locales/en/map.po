@@ -13,16 +13,6 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#. js-lingui-id: 3Mpfhk
-#: src/presentation/map/MapLibreFacade.ts:121
-msgid "{distance} km"
-msgstr "{distance} km"
-
-#. js-lingui-id: 9sSCIt
-#: src/presentation/map/MapLibreFacade.ts:114
-msgid "{distance} m"
-msgstr "{distance} m"
-
 #. js-lingui-id: KPwAwW
 #: src/presentation/map/MapPointInspectorContent.tsx:62
 msgid "{elevation} m"
@@ -39,17 +29,22 @@ msgid "{name}, {distance} m away"
 msgstr "{name}, {distance} m away"
 
 #. js-lingui-id: 2h8w7c
-#: src/presentation/map/MapViewControls.tsx:160
+#: src/presentation/map/MapViewControls.tsx:165
 msgid "3D terrain"
 msgstr "3D terrain"
 
 #. js-lingui-id: eWVlWI
-#: src/presentation/map/MapViewControls.tsx:159
+#: src/presentation/map/MapViewControls.tsx:164
 msgid "3D terrain is unavailable while Sentinel Mosaic is active."
 msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
 
+#. js-lingui-id: 2fTsR2
+#: src/presentation/map/MapMeasurementPanel.tsx:218
+msgid "Ascent / descent"
+msgstr "Ascent / descent"
+
 #. js-lingui-id: dEgA5A
-#: src/presentation/map/MapWorkspace.tsx:1490
+#: src/presentation/map/MapWorkspace.tsx:1562
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -59,18 +54,29 @@ msgid "Checking nearby map data…"
 msgstr "Checking nearby map data…"
 
 #. js-lingui-id: 2uEfCs
-#: src/presentation/map/MapViewControls.tsx:182
-#: src/presentation/map/MapViewControls.tsx:188
+#: src/presentation/map/MapViewControls.tsx:187
+#: src/presentation/map/MapViewControls.tsx:193
 msgid "Choose map layer preset"
 msgstr "Choose map layer preset"
 
+#. js-lingui-id: -yHhwl
+#: src/presentation/map/MapMeasurementPanel.tsx:164
+#: src/presentation/map/MapMeasurementPanel.tsx:167
+msgid "Clear points"
+msgstr "Clear points"
+
+#. js-lingui-id: 1cxc33
+#: src/presentation/map/MapMeasurementPanel.tsx:184
+msgid "Click the map to add points."
+msgstr "Click the map to add points."
+
 #. js-lingui-id: dLNd3k
-#: src/presentation/map/MapWorkspace.tsx:1487
+#: src/presentation/map/MapWorkspace.tsx:1559
 msgid "Click the map to place the marker"
 msgstr "Click the map to place the marker"
 
 #. js-lingui-id: jysdB3
-#: src/presentation/map/MapWorkspace.tsx:1500
+#: src/presentation/map/MapWorkspace.tsx:1572
 msgid "Clipboard access failed. Try again or use the Share dialog."
 msgstr "Clipboard access failed. Try again or use the Share dialog."
 
@@ -79,8 +85,14 @@ msgstr "Clipboard access failed. Try again or use the Share dialog."
 msgid "Close map point details"
 msgstr "Close map point details"
 
+#. js-lingui-id: tpfJQr
+#: src/presentation/map/MapMeasurementPanel.tsx:176
+#: src/presentation/map/MapMeasurementPanel.tsx:177
+msgid "Close ruler"
+msgstr "Close ruler"
+
 #. js-lingui-id: zN8IXs
-#: src/presentation/map/MapViewControls.tsx:266
+#: src/presentation/map/MapViewControls.tsx:284
 msgid "Clouds, precipitation, and wind"
 msgstr "Clouds, precipitation, and wind"
 
@@ -90,7 +102,7 @@ msgid "Coordinates"
 msgstr "Coordinates"
 
 #. js-lingui-id: 1-81oq
-#: src/presentation/map/MapWorkspace.tsx:1180
+#: src/presentation/map/MapWorkspace.tsx:1233
 msgid "Coordinates copied"
 msgstr "Coordinates copied"
 
@@ -115,14 +127,24 @@ msgid "Create marker here"
 msgstr "Create marker here"
 
 #. js-lingui-id: _j3RtS
-#: src/presentation/map/MapWorkspace.tsx:138
+#: src/presentation/map/MapWorkspace.tsx:140
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
+
+#. js-lingui-id: GPeIuw
+#: src/presentation/map/MapMeasurementPanel.tsx:202
+msgid "Distance"
+msgstr "Distance"
 
 #. js-lingui-id: XqgXQv
 #: src/presentation/map/MapPointInspectorContent.tsx:67
 msgid "Elevation could not be loaded."
 msgstr "Elevation could not be loaded."
+
+#. js-lingui-id: XPEm7c
+#: src/presentation/map/MapMeasurementPanel.tsx:208
+msgid "Elevation difference"
+msgstr "Elevation difference"
 
 #. js-lingui-id: iyHgF_
 #: src/presentation/map/ElevationGradeLegend.tsx:106
@@ -135,7 +157,7 @@ msgid "Elevation is unavailable here."
 msgstr "Elevation is unavailable here."
 
 #. js-lingui-id: D_aoaV
-#: src/presentation/map/MapViewControls.tsx:143
+#: src/presentation/map/MapViewControls.tsx:148
 msgid "Flat map"
 msgstr "Flat map"
 
@@ -146,9 +168,14 @@ msgid "Hide track grade legend"
 msgstr "Hide track grade legend"
 
 #. js-lingui-id: VBKJhe
-#: src/presentation/map/MapViewControls.tsx:304
+#: src/presentation/map/MapViewControls.tsx:322
 msgid "Layers tab"
 msgstr "Layers tab"
+
+#. js-lingui-id: yOwWEU
+#: src/presentation/map/MapMeasurementPanel.tsx:121
+msgid "Loading elevation"
+msgstr "Loading elevation"
 
 #. js-lingui-id: o4EgvC
 #: src/presentation/map/MapPointInspectorContent.tsx:59
@@ -156,7 +183,7 @@ msgid "Loading elevation…"
 msgstr "Loading elevation…"
 
 #. js-lingui-id: 0bNvaO
-#: src/presentation/map/MapViewControls.tsx:123
+#: src/presentation/map/MapViewControls.tsx:128
 msgid "Map dimension"
 msgstr "Map dimension"
 
@@ -171,9 +198,19 @@ msgid "Map point actions"
 msgstr "Map point actions"
 
 #. js-lingui-id: iDuQuY
-#: src/presentation/map/MapWorkspace.tsx:1189
+#: src/presentation/map/MapWorkspace.tsx:1242
 msgid "Map workspace"
 msgstr "Map workspace"
+
+#. js-lingui-id: NShsjv
+#: src/presentation/map/MapViewControls.tsx:207
+msgid "Measure distance"
+msgstr "Measure distance"
+
+#. js-lingui-id: uWOO6b
+#: src/presentation/map/MapViewControls.tsx:205
+msgid "Measure distance and elevation"
+msgstr "Measure distance and elevation"
 
 #. js-lingui-id: N-L5qF
 #: src/presentation/map/MapPointInspectorContent.tsx:82
@@ -201,14 +238,20 @@ msgid "Open windy.com"
 msgstr "Open windy.com"
 
 #. js-lingui-id: pOgx3m
-#: src/presentation/map/MapViewControls.tsx:246
+#: src/presentation/map/MapViewControls.tsx:264
 msgid "OSM overlay"
 msgstr "OSM overlay"
 
 #. js-lingui-id: _HLYHh
-#: src/presentation/map/MapWorkspace.tsx:1182
+#: src/presentation/map/MapWorkspace.tsx:1235
 msgid "Point link copied"
 msgstr "Point link copied"
+
+#. js-lingui-id: FT9wIE
+#: src/presentation/map/MapMeasurementPanel.tsx:134
+#: src/presentation/map/MapMeasurementPanel.tsx:150
+msgid "Ruler"
+msgstr "Ruler"
 
 #. js-lingui-id: -dYCED
 #: src/presentation/map/MapPointInspectorContent.tsx:154
@@ -216,12 +259,12 @@ msgid "Search satellite scenes here"
 msgstr "Search satellite scenes here"
 
 #. js-lingui-id: 0OYApz
-#: src/presentation/map/MapViewControls.tsx:166
+#: src/presentation/map/MapViewControls.tsx:171
 msgid "Show 3D terrain map"
 msgstr "Show 3D terrain map"
 
 #. js-lingui-id: 0EcC35
-#: src/presentation/map/MapViewControls.tsx:139
+#: src/presentation/map/MapViewControls.tsx:144
 msgid "Show flat 2D map"
 msgstr "Show flat 2D map"
 
@@ -236,27 +279,27 @@ msgid "Terrain elevation"
 msgstr "Terrain elevation"
 
 #. js-lingui-id: 9xVYMD
-#: src/presentation/map/MapWorkspace.tsx:1172
+#: src/presentation/map/MapWorkspace.tsx:1225
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "The current camera could not be saved. Map interaction is still available."
 
 #. js-lingui-id: IxTd0L
-#: src/presentation/map/MapWorkspace.tsx:1507
+#: src/presentation/map/MapWorkspace.tsx:1579
 msgid "The map layer could not be changed. Try again."
 msgstr "The map layer could not be changed. Try again."
 
 #. js-lingui-id: U5Trc5
-#: src/presentation/map/MapWorkspace.tsx:1200
+#: src/presentation/map/MapWorkspace.tsx:1253
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 
 #. js-lingui-id: FlHLo_
-#: src/presentation/map/MapWorkspace.tsx:1174
+#: src/presentation/map/MapWorkspace.tsx:1227
 msgid "The saved camera could not be restored. The Georgia overview is shown instead."
 msgstr "The saved camera could not be restored. The Georgia overview is shown instead."
 
 #. js-lingui-id: IDB1Ps
-#: src/presentation/map/MapWorkspace.tsx:1176
+#: src/presentation/map/MapWorkspace.tsx:1229
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
 
@@ -270,22 +313,33 @@ msgstr "Track grade"
 msgid "Track grade color thresholds"
 msgstr "Track grade color thresholds"
 
+#. js-lingui-id: jqzUyM
+#: src/presentation/map/MapMeasurementPanel.tsx:124
+msgid "Unavailable"
+msgstr "Unavailable"
+
+#. js-lingui-id: 9ptwlO
+#: src/presentation/map/MapMeasurementPanel.tsx:152
+#: src/presentation/map/MapMeasurementPanel.tsx:155
+msgid "Undo last point"
+msgstr "Undo last point"
+
 #. js-lingui-id: aBvon1
 #: src/presentation/map/MapPointInspectorContent.tsx:85
 msgid "Unnamed map feature"
 msgstr "Unnamed map feature"
 
 #. js-lingui-id: mJZLtT
-#: src/presentation/map/MapViewControls.tsx:265
+#: src/presentation/map/MapViewControls.tsx:283
 msgid "Weather"
 msgstr "Weather"
 
 #. js-lingui-id: OrcMj6
-#: src/presentation/map/MapWorkspace.tsx:1184
+#: src/presentation/map/MapWorkspace.tsx:1237
 msgid "Weather map link copied"
 msgstr "Weather map link copied"
 
 #. js-lingui-id: ElM6On
-#: src/presentation/map/MapWorkspace.tsx:1387
+#: src/presentation/map/MapWorkspace.tsx:1459
 msgid "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."
 msgstr "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."

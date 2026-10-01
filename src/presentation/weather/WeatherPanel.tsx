@@ -983,7 +983,8 @@ function SummaryPeriod({
 
 /**
  * One forecast period row. With `onOpen` it is a button; `openLabel` names its action
- * and defaults to opening the 24-hour table.
+ * and defaults to opening the 24-hour table. `stacked` always places the condition under
+ * the temperature, the layout narrow viewports use, for rows in narrow containers.
  */
 export function DailyPeriodRow({
   dateLabel,
@@ -992,6 +993,7 @@ export function DailyPeriodRow({
   onOpen,
   openLabel,
   period,
+  stacked = false,
 }: {
   readonly dateLabel: string;
   readonly isDay: boolean;
@@ -999,8 +1001,15 @@ export function DailyPeriodRow({
   readonly onOpen?: (triggerElement: HTMLElement) => void;
   readonly openLabel?: string;
   readonly period: PointWeatherForecastPeriod;
+  readonly stacked?: boolean;
 }) {
   const values = periodDisplayValues(period);
+  const stackedGrid = {
+    gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
+    gridTemplateAreas:
+      '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+    rowGap: 0,
+  } as const;
   const rowSx = {
     width: '100%',
     minWidth: 0,
@@ -1014,12 +1023,8 @@ export function DailyPeriodRow({
     py: 0.375,
     color: 'text.primary',
     textAlign: 'left',
-    '@media (max-width: 479px)': {
-      gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
-      gridTemplateAreas:
-        '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
-      rowGap: 0,
-    },
+    ...(stacked ? stackedGrid : {}),
+    '@media (max-width: 479px)': stackedGrid,
   } as const;
   const content = (
     <>

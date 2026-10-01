@@ -60,7 +60,9 @@ type ForecastState =
   | { readonly status: 'ready'; readonly forecast: PointWeatherForecast }
   | { readonly status: 'error' };
 
+/** Fits "Highest"-style titles; checkpoint cards only need a time and an elevation. */
 const cardHeaderWidth = 76;
+const checkpointHeaderWidth = 62;
 
 function locationKey(location: TrackWeatherLocation): string {
   const [longitude, latitude] = location.coordinate;
@@ -264,6 +266,7 @@ export function TrackWeatherSection({
               label={t`Day`}
               period={day.day}
               isDay
+              stacked
               openLabel={t`Open the forecast for ${label} in Weather`}
               onOpen={() => {
                 openInWeather(location, title);
@@ -300,7 +303,7 @@ export function TrackWeatherSection({
           label={label}
           title={time}
           subtitle={elevation}
-          headerWidth={cardHeaderWidth}
+          headerWidth={checkpointHeaderWidth}
         >
           {state === undefined ? (
             <ForecastPlaceholder />
@@ -318,6 +321,7 @@ export function TrackWeatherSection({
               label={place}
               period={summary.period}
               isDay={summary.isDay}
+              stacked
               openLabel={t`Open the forecast for ${label} in Weather`}
               onOpen={() => {
                 openInWeather(checkpoint, [time, place].join(', '));

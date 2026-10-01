@@ -6,6 +6,10 @@ import {
   type WeatherIntervalPreferences,
   type MarkerWeatherWeekday,
 } from '@/application/weather/MarkerWeatherForecast';
+import {
+  defaultTrackWeatherPreferences,
+  type TrackWeatherPreferences,
+} from '@/application/weather/TrackWeatherForecast';
 import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
@@ -449,6 +453,10 @@ const markerWeatherPreferencesSchema: z.ZodType<WeatherIntervalPreferences> = z
     ]),
     showOnMap: z.boolean(),
   })
+  .strict();
+
+const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
+  .object({ expanded: z.boolean(), weekday: markerWeatherWeekdaySchema })
   .strict();
 
 const mapCameraKey = 'map.camera';
@@ -3574,6 +3582,32 @@ export class AppDatabase
     await this.settings.put({
       key: 'weather.interval-preferences',
       value: markerWeatherPreferencesSchema.parse(value),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async loadTrackWeatherPreferences(): Promise<TrackWeatherPreferences> {
+    const record = await this.settings.get('weather.track-preferences');
+    if (record === undefined) return defaultTrackWeatherPreferences;
+
+    const parsed = trackWeatherPreferencesSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete('weather.track-preferences');
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.settings.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultTrackWeatherPreferences;
+  }
+
+  public async saveTrackWeatherPreferences(
+    value: TrackWeatherPreferences,
+  ): Promise<void> {
+    await this.settings.put({
+      key: 'weather.track-preferences',
+      value: trackWeatherPreferencesSchema.parse(value),
       updatedAt: new Date().toISOString(),
     });
   }

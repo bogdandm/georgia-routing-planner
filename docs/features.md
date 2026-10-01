@@ -215,6 +215,20 @@ navigation, inline rename, and two-stage deletion. Only the active editable trac
 renders its markers, smaller than saved markers. Track markers are stored in track
 content and synchronize as track metadata without changing geometry or content hashes.
 
+Tracks with an elevation profile show a **Weather forecast** section below Markers. It
+starts collapsed; whether it is expanded is remembered in this browser for every track,
+and forecasts load only while it is open. It begins with seven forecast dates from
+today; choosing one remembers its weekday for all tracks, and the next Saturday is
+selected until then. **By elevation** shows day and night forecasts at the highest,
+median-elevation, and lowest profile points. **Along the route** assumes a 09:00 local
+start and shows where the hiker is every three hours and at the finish, each with the
+forecast at that location from its arrival hour until the next checkpoint; the finish
+covers its arrival hour. The pace follows recorded timestamps when the track has
+recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
+flat walking. The timeline is offered only for day hikes shorter than 30 km and 10
+hours. Cards reuse the 7-day forecast rows from Weather and request each location with
+its profile elevation.
+
 #### Multi-track view
 
 The multi-track toggle enables a session-only mode in which row clicks add or remove

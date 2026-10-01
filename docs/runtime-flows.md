@@ -356,6 +356,18 @@ Results are cached in memory per marker and preference set and drawn on the map 
 while Markers is active. A marker without elevation stores the forecast elevation and
 reports a marker change for synchronization.
 
+While its section is expanded, `TrackWeatherSection` runs the same use case once per
+distinct location with the profile elevation: the highest, median-elevation, and lowest
+profile points from `selectTrackElevationLocations`, plus the timeline checkpoints from
+`planTrackWeatherTimeline` (`application/weather/TrackWeatherForecast.ts`). The timeline
+accumulates DIN 33466 time over profile samples from cumulative distance, ascent, and
+descent and scales it to the stored `estimatedSeconds`, or uses recorded sample
+timestamps when the track has recorded time. Changing the date only reselects hours from
+the loaded forecasts; collapsing or unmounting aborts pending requests. Results stay in
+component state, keyed by the section's track, and failed locations retry on the next
+expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and saves
+every disclosure or weekday change.
+
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
 clicks until disabled. The ruler's `measurement` interaction mode ranks below marker

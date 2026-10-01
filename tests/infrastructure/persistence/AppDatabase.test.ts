@@ -204,6 +204,32 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('keeps track forecast preferences collapsed on Saturday until saved and repairs invalid ones', async () => {
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: false,
+      weekday: 6,
+    });
+
+    await database.saveTrackWeatherPreferences({ expanded: true, weekday: 3 });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: true,
+      weekday: 3,
+    });
+
+    await database.settings.put({
+      key: 'weather.track-preferences',
+      value: { expanded: true, weekday: 7 },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: false,
+      weekday: 6,
+    });
+    await expect(
+      database.settings.get('weather.track-preferences'),
+    ).resolves.toBeUndefined();
+  });
+
   it('persists at most 21 unique recently used marker icons and repairs invalid data', async () => {
     await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
 

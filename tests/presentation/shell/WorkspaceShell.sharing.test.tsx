@@ -156,8 +156,8 @@ describe('WorkspaceShell', () => {
     expect(within(details).queryByText(/fixture\.gpx/u)).not.toBeInTheDocument();
     await waitFor(() => {
       expect(setImportedTrackGeometry).toHaveBeenLastCalledWith([
-        alphaContent.trackPoints[0]?.map((point) => point.coordinate),
-        betaContent.trackPoints[0]?.map((point) => point.coordinate),
+        [alphaContent.trackPoints[0]?.map((point) => point.coordinate)],
+        [betaContent.trackPoints[0]?.map((point) => point.coordinate)],
       ]);
     });
     await waitFor(() => {
@@ -178,7 +178,7 @@ describe('WorkspaceShell', () => {
     await user.click(alphaRow);
     await waitFor(() => {
       expect(setImportedTrackGeometry).toHaveBeenLastCalledWith([
-        betaContent.trackPoints[0]?.map((point) => point.coordinate),
+        [betaContent.trackPoints[0]?.map((point) => point.coordinate)],
       ]);
     });
     await user.click(alphaRow);

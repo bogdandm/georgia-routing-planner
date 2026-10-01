@@ -1271,10 +1271,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         mapLayers?.clearImportedTrackGeometry();
         return;
       }
-      const segments = readyMultiTrackSelections.flatMap((selection) =>
-        localTrackSegments(selection.content),
+      const result = mapLayers?.setImportedTrackGeometry(
+        readyMultiTrackSelections.map((selection) =>
+          localTrackSegments(selection.content),
+        ),
       );
-      const result = mapLayers?.setImportedTrackGeometry(segments);
       if (result?.status === 'failed') return;
       const metrics = calculateTrackMetrics(
         readyMultiTrackSelections.flatMap((selection) =>
@@ -1329,7 +1330,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         : active.preparationStatus === 'ready'
           ? active.sourceMetrics
           : calculateTrackMetrics(active.parsed.segments);
-    const result = mapLayers?.setImportedTrackGeometry(segments);
+    const result = mapLayers?.setImportedTrackGeometry([segments]);
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
     if (initiallyRestoredTrackId.current !== trackId) {

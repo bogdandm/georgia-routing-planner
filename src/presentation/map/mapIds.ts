@@ -17,6 +17,7 @@ export const mapSourceIds = {
   importedTrack: 'imported-track',
   importedTrackHighlight: 'imported-track-highlight',
   importedTrackTrace: 'imported-track-trace',
+  importedTrackEndpoints: 'imported-track-endpoints',
   routePlan: 'route-plan',
   measurement: 'measurement',
   savedMarkers: 'saved-markers',
@@ -69,7 +70,12 @@ export const importedTrackLayerIds = {
   casing: 'imported-track-casing',
   line: 'imported-track-line',
   highlight: 'imported-track-highlight',
+  endpoints: 'imported-track-endpoints',
   trace: 'imported-track-trace',
+} as const;
+export const importedTrackEndpointImageIds = {
+  start: 'imported-track-start',
+  finish: 'imported-track-finish',
 } as const;
 export const routePlanLayerIds = {
   routed: 'route-plan-routed',

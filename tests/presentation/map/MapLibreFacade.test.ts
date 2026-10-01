@@ -1687,4 +1687,70 @@ describe('MapLibreFacade', () => {
     expect(clearPlannedLinePreview).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
+
+  it('labels the touch ruler total at its last point instead of following taps', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const setPlannedLinePreview = vi.fn();
+    const clearPlannedLinePreview = vi.fn();
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      setPlannedLinePreview,
+      clearPlannedLinePreview,
+    } as unknown as MapLibreLayerController;
+    const sampleMany = vi.fn<ElevationProvider['sampleMany']>(() =>
+      Promise.resolve([
+        { status: 'available', meters: 1_000 },
+        { status: 'available', meters: 1_250 },
+      ]),
+    );
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+      { sample: vi.fn(), sampleMany },
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setCursorPreviewEnabled(false);
+    facade.setInteractionMode('measurement');
+
+    // A first tap has nothing to measure yet.
+    facade.setPlanningPreview({
+      anchor: { longitude: 44.6, latitude: 42.6 },
+      measurement: { origin: { longitude: 44.6, latitude: 42.6 }, distanceMeters: 0 },
+    });
+    expect(setPlannedLinePreview).not.toHaveBeenCalled();
+
+    facade.setPlanningPreview({
+      anchor: { longitude: 44.66, latitude: 42.68 },
+      measurement: {
+        origin: { longitude: 44.6, latitude: 42.6 },
+        distanceMeters: 3_600,
+      },
+    });
+    expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
+      'measurement',
+      [44.66, 42.68],
+      [44.66, 42.68],
+      '3.6 km',
+    );
+    await vi.waitFor(() => {
+      expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
+        'measurement',
+        [44.66, 42.68],
+        [44.66, 42.68],
+        '3.6 km\nElevation +250 m',
+      );
+    });
+
+    // Taps emit compatibility mouse events; they must not move or clear the readout.
+    const calls = setPlannedLinePreview.mock.calls.length;
+    nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
+    nativeMap.getCanvas().dispatchEvent(new MouseEvent('mouseleave'));
+    expect(setPlannedLinePreview).toHaveBeenCalledTimes(calls);
+    expect(clearPlannedLinePreview).not.toHaveBeenCalled();
+  });
 });

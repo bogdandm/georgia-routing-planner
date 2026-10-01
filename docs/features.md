@@ -414,8 +414,10 @@ observations.
   weather pick keep precedence. There is no separate panel: a dashed line follows the
   cursor from the last point, and a large label below the cursor shows the total
   distance through the cursor and the terrain elevation difference between the first
-  point and the cursor. Route planning uses the same cursor label with the distance of
-  the pending segment only.
+  point and the cursor. On coarse-pointer devices, which have no cursor, the label sits
+  on the last tapped point once there are two points and shows the measured total and
+  the elevation difference from the first point. Route planning uses the same cursor
+  label with the distance of the pending segment only.
 - **Point actions:** right-click opens copy coordinates, copy a 2D point link, create a
   marker, search satellite scenes here, show the weather forecast, copy a weather-map
   link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap instead

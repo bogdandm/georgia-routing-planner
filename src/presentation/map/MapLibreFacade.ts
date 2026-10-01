@@ -265,6 +265,11 @@ export class MapLibreFacade implements MapFacade {
   /** Ruler only: terrain change from the first point to the cursor, when sampled. */
   #cursorElevationChangeMeters: number | null = null;
   #cursorElevationAbort: AbortController | null = null;
+  /**
+   * Without a hovering pointer there is no cursor to follow: touch taps also emit
+   * compatibility mouse events, so the ruler readout stays on the last point instead.
+   */
+  #cursorPreviewEnabled = true;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -390,6 +395,13 @@ export class MapLibreFacade implements MapFacade {
 
   public setPointInspectionPopupEnabled(enabled: boolean): void {
     this.#pointInspector.setPopupEnabled(enabled);
+  }
+
+  public setCursorPreviewEnabled(enabled: boolean): void {
+    if (this.#cursorPreviewEnabled === enabled) return;
+    this.#cursorPreviewEnabled = enabled;
+    this.clearPlanningPreview();
+    this.showAnchoredMeasurement();
   }
 
   public getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null {
@@ -576,6 +588,7 @@ export class MapLibreFacade implements MapFacade {
     this.#interactionMode = mode;
     this.clearPlanningPreview();
     this.applyInteractionCursor();
+    this.showAnchoredMeasurement();
   }
 
   public setPlanningPreview(preview: PlanningPreview | null): void {
@@ -592,6 +605,7 @@ export class MapLibreFacade implements MapFacade {
     }
     this.#planningPreview = preview;
     this.clearPlanningPreview();
+    this.showAnchoredMeasurement();
   }
 
   /**
@@ -738,13 +752,34 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
+    if (!this.#cursorPreviewEnabled || this.#map === null) return;
+    const cursor = this.#map.unproject(event.point);
+    this.showPlanningPreviewAt({ longitude: cursor.lng, latitude: cursor.lat });
+  };
+
+  private readonly handleCanvasMouseLeave = (): void => {
+    if (this.#cursorPreviewEnabled) this.clearPlanningPreview();
+  };
+
+  /** Touch ruler: labels the measured total at the last point once there are two. */
+  private showAnchoredMeasurement(): void {
+    const preview = this.#planningPreview;
+    if (
+      this.#cursorPreviewEnabled ||
+      preview?.measurement === undefined ||
+      preview.measurement.distanceMeters === 0
+    ) {
+      return;
+    }
+    this.showPlanningPreviewAt(preview.anchor);
+  }
+
+  private showPlanningPreviewAt(cursorCoordinate: MapCoordinate): void {
     const overlay = this.planningOverlay();
     const measurement = this.#planningPreview?.measurement;
     if (overlay === null || this.#planningPreview === null || this.#map === null) {
       return;
     }
-    const cursor = this.#map.unproject(event.point);
-    const cursorCoordinate = { longitude: cursor.lng, latitude: cursor.lat };
     this.#planningPreviewOverlay = overlay;
     this.#planningPreviewCursor = cursorCoordinate;
     this.drawPlanningPreview();
@@ -772,11 +807,7 @@ export class MapLibreFacade implements MapFacade {
         this.#cursorElevationChangeMeters = null;
         this.drawPlanningPreview();
       });
-  };
-
-  private readonly handleCanvasMouseLeave = (): void => {
-    this.clearPlanningPreview();
-  };
+  }
 
   private readonly handleMapClick = (event: MapMouseEvent): void => {
     const map = this.#map;

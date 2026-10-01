@@ -73,6 +73,10 @@ export const importedTrackLayerIds = {
   endpoints: 'imported-track-endpoints',
   trace: 'imported-track-trace',
 } as const;
+export const importedTrackEndpointImageIds = {
+  start: 'imported-track-start',
+  finish: 'imported-track-finish',
+} as const;
 export const routePlanLayerIds = {
   routed: 'route-plan-routed',
   direct: 'route-plan-direct',

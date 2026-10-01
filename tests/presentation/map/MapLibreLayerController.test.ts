@@ -13,6 +13,7 @@ import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatel
 import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
+  importedTrackEndpointImageIds,
   importedTrackLayerIds,
   mapLayerIds,
   mapSourceIds,
@@ -29,10 +30,7 @@ import {
 } from '@/presentation/map/mapIds';
 import * as markerCatalog from '@/presentation/markers/markerCatalog';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
-import {
-  mapVisualModePaint,
-  mapVisualPalette,
-} from '@/presentation/map/mapVisualPalette';
+import { mapVisualModePaint } from '@/presentation/map/mapVisualPalette';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type Listener = (event: never) => void;
@@ -1117,15 +1115,17 @@ describe('MapLibreLayerController', () => {
       })),
     );
     expect(map.layers.get(importedTrackLayerIds.endpoints)).toHaveProperty(
-      'paint.circle-color',
+      'layout.icon-image',
       [
         'match',
         ['get', 'endpoint'],
         'start',
-        mapVisualPalette.userGeometry.gpxTrackStart,
-        mapVisualPalette.userGeometry.gpxTrackFinish,
+        importedTrackEndpointImageIds.start,
+        importedTrackEndpointImageIds.finish,
       ],
     );
+    expect(map.hasImage(importedTrackEndpointImageIds.start)).toBe(true);
+    expect(map.hasImage(importedTrackEndpointImageIds.finish)).toBe(true);
     expect(map.layers.get(importedTrackLayerIds.casing)).toHaveProperty(
       'paint.line-width',
       7,
@@ -1175,12 +1175,7 @@ describe('MapLibreLayerController', () => {
       map.paintProperties.get(`${importedTrackLayerIds.highlight}.line-opacity`),
     ).toBe(0.45);
     expect(
-      map.paintProperties.get(`${importedTrackLayerIds.endpoints}.circle-opacity`),
-    ).toBe(0.45);
-    expect(
-      map.paintProperties.get(
-        `${importedTrackLayerIds.endpoints}.circle-stroke-opacity`,
-      ),
+      map.paintProperties.get(`${importedTrackLayerIds.endpoints}.icon-opacity`),
     ).toBe(0.45);
     expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
       status: 'success',
@@ -2791,7 +2786,9 @@ describe('MapLibreLayerController', () => {
     controller.setSavedMarkers(markers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
-      expect(map.images.size).toBe(2);
+      expect(
+        [...map.images.keys()].filter((id) => id.startsWith('saved-marker-')).sort(),
+      ).toEqual(['saved-marker-hiking-red', 'saved-marker-place-blue']);
     });
     // One push for the marker change and one for the whole icon batch, not one per icon.
     expect(map.setDataSourceIds).toEqual([
@@ -2803,7 +2800,9 @@ describe('MapLibreLayerController', () => {
     controller.setTrackMarkers(trackMarkers);
     await waitFor(() => {
       expect(createIcon).toHaveBeenCalledTimes(2);
-      expect(map.images.size).toBe(2);
+      expect(
+        [...map.images.keys()].filter((id) => id.startsWith('saved-marker-')).sort(),
+      ).toEqual(['saved-marker-hiking-red', 'saved-marker-place-blue']);
     });
     const source = map.sources.get(mapSourceIds.savedMarkers) as {
       readonly data: { readonly features: readonly { readonly properties: unknown }[] };

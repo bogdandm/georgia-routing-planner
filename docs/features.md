@@ -185,11 +185,11 @@ valid.
 
 #### Track detail
 
-Selecting a track draws it in bright blue with a green start and a red finish marker,
-fits its bounds around the open panes, and opens a detail pane with metrics, actions,
-provenance, and an elevation profile. The stats grid shows duration, distance, average
-speed, and **Elevation gain**/**Elevation loss**; tracks with source elevation also list
-the calculated Terrarium gain and loss. Without recorded time, duration is an
+Selecting a track draws it in bright blue with a green Play start and a red Stop finish
+marker, fits its bounds around the open panes, and opens a detail pane with metrics,
+actions, provenance, and an elevation profile. The stats grid shows duration, distance,
+average speed, and **Elevation gain**/**Elevation loss**; tracks with source elevation
+also list the calculated Terrarium gain and loss. Without recorded time, duration is an
 **Estimated time** (`≈`) from DIN 33466 hiking rates: 4 km/h horizontally, 300 m/h
 ascent, and 500 m/h descent, with the larger of the horizontal and vertical times
 counted fully and the smaller by half. Breaks are not included. Missing measurements are

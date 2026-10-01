@@ -55,6 +55,7 @@ import { selectNearestForecastTimeIndex } from '@/domain/weather/selectNearestFo
 import type { SavedMarker } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import {
+  importedTrackEndpointImageIds,
   importedTrackLayerIds,
   mapInsertionPoints,
   mapLayerIds,
@@ -85,6 +86,11 @@ import {
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 import { createMarkerIconImage } from '@/presentation/markers/markerCatalog';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import {
+  createTrackEndpointIcon,
+  trackEndpointIconPixelRatio,
+  type TrackEndpointKind,
+} from '@/presentation/map/trackEndpointIcons';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type { MapLayerPreset, MapRecoveryState } from '@/presentation/map/mapTypes';
@@ -397,7 +403,7 @@ const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
 
 interface ImportedTrackEndpoint {
-  readonly kind: 'start' | 'finish';
+  readonly kind: TrackEndpointKind;
   readonly coordinate: readonly [number, number];
 }
 
@@ -3465,7 +3471,7 @@ export class MapLibreLayerController {
         this.syncGeoJsonSource(
           map,
           mapSourceIds.importedTrackEndpoints,
-          (): FeatureCollection<Point, { readonly endpoint: 'start' | 'finish' }> => ({
+          (): FeatureCollection<Point, { readonly endpoint: TrackEndpointKind }> => ({
             type: 'FeatureCollection',
             features: this.#importedTrackEndpoints.map(({ kind, coordinate }) => ({
               type: 'Feature',
@@ -3507,26 +3513,34 @@ export class MapLibreLayerController {
           },
         });
       }
+      for (const kind of ['start', 'finish'] as const) {
+        const imageId = importedTrackEndpointImageIds[kind];
+        if (!map.hasImage(imageId)) {
+          map.addImage(imageId, createTrackEndpointIcon(kind), {
+            pixelRatio: trackEndpointIconPixelRatio,
+          });
+        }
+      }
       if (map.getLayer(importedTrackLayerIds.endpoints) === undefined) {
         map.addLayer({
           id: importedTrackLayerIds.endpoints,
-          type: 'circle',
+          type: 'symbol',
           source: mapSourceIds.importedTrackEndpoints,
-          layout,
-          paint: {
-            'circle-color': [
+          layout: {
+            ...layout,
+            'icon-image': [
               'match',
               ['get', 'endpoint'],
               'start',
-              mapVisualPalette.userGeometry.gpxTrackStart,
-              mapVisualPalette.userGeometry.gpxTrackFinish,
+              importedTrackEndpointImageIds.start,
+              importedTrackEndpointImageIds.finish,
             ],
-            'circle-radius': 7,
-            'circle-stroke-color': '#FFFFFF',
-            'circle-stroke-width': 2,
-            'circle-opacity': importedTrackOpacity,
-            'circle-stroke-opacity': importedTrackOpacity,
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+            // Source order, not screen position, decides which coincident icon is on top.
+            'symbol-z-order': 'source',
           },
+          paint: { 'icon-opacity': importedTrackOpacity },
         });
       }
       this.applyImportedTrackPaint();
@@ -3667,7 +3681,7 @@ export class MapLibreLayerController {
       [importedTrackLayerIds.casing, ['line-opacity']],
       [importedTrackLayerIds.line, ['line-opacity']],
       [importedTrackLayerIds.highlight, ['line-opacity']],
-      [importedTrackLayerIds.endpoints, ['circle-opacity', 'circle-stroke-opacity']],
+      [importedTrackLayerIds.endpoints, ['icon-opacity']],
     ] as const;
     const layerChanged = opacityPropertiesByLayer.some(
       ([layerId]) =>

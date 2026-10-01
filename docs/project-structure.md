@@ -3,306 +3,187 @@
 ## System shape
 
 The application is a static React client. GitHub Pages serves the build; the browser
-talks directly to public map providers and stores durable local state in IndexedDB. The
-project operates no application server. With valid public Supabase configuration, a user
-may explicitly enable cross-device synchronization; the browser worker receives only an
-access token and communicates with user-scoped PostgREST, private Storage, and the Edge
-Function. Frontend configuration contains no secrets, and diagnostics or telemetry are
-never uploaded automatically.
+talks directly to public map, search, imagery, and weather providers and stores durable
+local state in IndexedDB. The project operates no application server. With valid public
+Supabase configuration, a user may explicitly enable cross-device synchronization and
+public track links through the `track-sync` and `track-share` Edge Functions under
+`supabase/functions`. Frontend configuration contains no secrets, and diagnostics are
+never uploaded automatically. The Vite development and preview servers send
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`, so local runs are cross-origin isolated
+([`vite.config.ts`](../vite.config.ts)).
 
 ```mermaid
 flowchart LR
-  Browser["Chrome"] --> Main["main.tsx"]
-  Main --> Bootstrap["bootstrap composition root"]
+  Main["main.tsx"] --> Bootstrap["bootstrap composition root"]
   Bootstrap --> UI["presentation"]
   UI --> UseCases["application use cases"]
   UseCases --> Domain["domain values and calculations"]
   UseCases --> Ports["application ports"]
   Infra["infrastructure adapters"] --> Ports
-  UI --> MapLibre["MapLibre facade"]
+  UI --> MapLibre["MapLibre facade and layer controller"]
   Infra --> IndexedDB["IndexedDB / Dexie"]
-  MapLibre --> Providers["Vector and terrain providers"]
+  Infra --> Supabase["Supabase client and sync worker"]
   UI --> Diagnostics["diagnostics"]
   Infra --> Diagnostics
-  MapLibre --> Diagnostics
 ```
 
-Dependencies point toward contracts: presentation and infrastructure may depend on
-application ports; application code must not depend on React, MapLibre, Dexie, or MUI.
-Any domain layer added to the repository must remain independent of all browser
-frameworks.
+Dependencies point toward contracts. `domain` and `application` import no React,
+MapLibre, Dexie, MUI, `ky`, or other layers; presentation and infrastructure depend on
+application ports. Only `bootstrap` constructs concrete adapters.
 
 ## Repository layout
 
 ```text
 src/
-  main.tsx                 browser entry and provider nesting
-  bootstrap/               one-time dependency construction and React service context
-  domain/localization/     supported locale values and initial-locale resolution
-  domain/satellite/        framework-free Sentinel values and geometry calculations
-  domain/markers/          framework-free saved-marker schema and catalog keys
-  domain/weather/          framework-free hourly-to-daily forecast aggregation
-  application/satellite/   cancellable Sentinel search and result orchestration
-  application/weather/     point forecast orchestration and daily summaries
-  application/ports/       framework-free catalog, diagnostics, storage, and runtime ports
-  infrastructure/          HTTP, STAC, weather, routing/elevation/satellite workers, IndexedDB, clock, and ID adapters
+  main.tsx                 browser entry, preference restore, and provider nesting
+  bootstrap/               composition root, configuration validation, lifecycle
+  domain/                  framework-free values: tracks, markers, satellite, weather,
+                           elevation, and localization
+  application/             use cases and ports: map search, satellite, tracks, user,
+                           and weather
+  infrastructure/          HTTP, STAC, geocoding, weather, persistence, Supabase, and
+                           routing/elevation/satellite workers
   diagnostics/             bounded logging, redaction, health, snapshots, and export
-  locales/{en,ru}/         reviewable feature-split Lingui PO catalogs
+  locales/{en,ru}/         feature-split Lingui PO catalogs
   presentation/
-    localization/          shared Lingui runtime and document metadata activation
-    shell/                 feature rail, contextual sidebars, settings, and shell state
-    map/                   map UI, pure style, facade, terrain, and camera coordination
-    markers/               saved-marker library, editor, sorting, and map commands
-    layers/                logical visibility checkbox presentation
-    satellite-browser/     live search controls and date-grouped scene presentation
-    weather/               point forecast states, hourly/day presentation, and condition icons
-    developer-tools/       local support and diagnostic UI
-    theme/                 shared color tokens and Material UI theme
-    styles/                application-level CSS
+    shell/                 rail, contextual sidebar, settings, search, and UI store
+    map/                   map workspace, facade, layer controller, style, and stores
+    tracks/                import, folders, route planning, details, and sharing UI
+    markers/               saved-marker library, editor, and marker weather
+    layers/                basemap preset and logical visibility controls
+    satellite-browser/     Sentinel scene and Mosaic search and rendering controls
+    weather/               point forecast panel and weather-map time control
+    user/                  account, synchronization, and remote-deletion UI
+    localization/          shared Lingui instance and document metadata
+    developer-tools/       diagnostics drawer and Sentinel query timeline
+    theme/, styles/        color tokens, MUI theme, and global CSS
+supabase/                  migrations, Edge Functions, and database/function tests
 e2e/                       built-app Chromium workflows and provider fixtures
-tests/                     unit, component, and integration tests mirroring `src/`, plus shared test support
-tools/                     Node-only audit, diagnostics, E2E, and localization runners
-docs/                      maintainer-facing system documentation
+tests/                     unit, component, and integration tests mirroring `src/`
+tools/                     Node-only audit, benchmark, diagnostics, E2E, localization,
+                           and Supabase test runners
 ```
 
-The satellite domain contains readonly criteria, scene, coverage, grouped-result, and
-Mosaic-selection values plus deterministic Turf-backed intersection and union
-calculations. Its incremental Mosaic accumulator keeps only coverage-contributing scenes
-and combined geometry while older months arrive. The satellite application layer
-validates submitted UTC criteria and viewports, enforces result bounds and product
-separation, deduplicates scenes, and publishes correlated diagnostics through ports. It
-does not import React, MapLibre, `ky`, or STAC JSON.
-
-`infrastructure/stac/` owns the configured Earth Search adapter and Zod schemas. It
-builds allowlisted point or viewport-polygon STAC requests, validates all returned items
-before mapping them, follows only same-origin POST pagination tokens within the
-configured cap, and converts transport/schema failures to safe catalog errors. The
-composition root exposes the adapter through the scene and Mosaic search use cases;
-React never receives its `ky` client. A serializable viewport snapshot store bridges
-settled map updates to Satellite controls without exposing MapLibre.
-
-`infrastructure/satellite/` owns direct visual-COG range decoding, UTM-to-Web Mercator
-reprojection, and its validated worker RPC boundary. `SatelliteCogTileProvider`
-registers one opaque MapLibre protocol and maps scene keys to validated asset URLs in
-bounded memory. MapLibre source state contains only the opaque scene key; COG URLs stay
-inside the provider and worker.
-
-Satellite presentation uses the CC0-licensed `@photostructure/tz-lookup` data resolver
-to map the submitted anchor coordinates to an IANA time zone entirely in the browser. No
-location or acquisition metadata is sent to a time-zone service.
-
-The Weather boundary follows the same dependency direction. `WeatherForecastGateway`
-describes provider-neutral current and hourly values; `GetPointWeatherForecast`
-validates one coordinate, samples the existing local DEM, falls back to provider terrain
-elevation when necessary, and derives the current three-hour, daylight, and
-midnight-spanning night summaries through the pure `domain/weather` period aggregator.
-`OpenMeteoWeatherForecastGateway` alone owns Open-Meteo query parameters, response
-validation, ECMWF metadata caching, and safe transport failures. Presentation receives
-only normalized forecast values and never imports the HTTP client. The spatial
-weather-map path keeps the same direction without adding another application service.
-`loadOpenMeteoSpatialMetadata` validates the public ECMWF IFS spatial manifest, the
-domain-level nearest-time selector resolves its real `valid_times`, and
-`MapLibreLayerController` owns the external `om://` protocol, snapped viewport bounds,
-and the three synchronized native sources. Shared weather-scale constants drive both
-protocol rendering and the visible legend. React observes serializable enablement,
-opacity, metadata times, and the selected frame through `mapLayerStore`; the map URL
-restores enabled weather, its forecast point, and its selected valid time.
+Vite runs Lingui macros and then the React Compiler over presentation code, so
+components must stay compilable (pure render, no render-time mutation of refs or
+stores).
 
 ## Composition root
 
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
-place that constructs runtime adapters. It creates the clock, ID generator, bounded
-logger, Dexie database and saved-marker repository, validated map/geocoding providers,
-static Weather provider configuration, map snapshot store, Sentinel query timeline
-store, HTTP client, and health/diagnostics services. It composes the Open-Meteo gateway
-and point-weather use case with the existing DEM provider. When Supabase is configured,
-it also owns the official browser client's persistent session lifecycle and ordinary
-email/password registration; confirmation is performed by Supabase before the user signs
-in. Otherwise it supplies a deterministic local-only user service without creating a
-client. Password reset is intentionally unavailable.
+place that constructs runtime adapters. It validates the map, geocoding, and Supabase
+configuration, then creates the clock, ID generator, bounded logger, `AppDatabase`,
+shared HTTP client, snapshot stores, layer controller with its contour and COG
+protocols, trail router, filtered Terrarium and DEM elevation provider, weather use
+case, place search, satellite search use cases, and health/diagnostics services. When
+Supabase is configured it creates the official client with a persistent session plus
+`SupabaseUserDataService` and `SupabaseTrackShareService`; otherwise it supplies an
+unconfigured local-only user service and no share service. Invalid map configuration
+leaves every map-dependent service `null`. `dispose()` releases the router, layer
+controller, user service, and database.
 
-[`main.tsx`](../src/main.tsx) loads UI preferences, resolves and activates the locale
-before the first React render, then installs global failure capture and nests providers
-in this order: Lingui, runtime services, MUI theme, error boundary, and workspace shell.
-Tests replace the whole `RuntimeServices` object at the context boundary.
+[`main.tsx`](../src/main.tsx) runs inside `runApplicationBootstrap`, which mounts a
+pre-React fallback if service construction fails. It restores UI preferences, resolves
+and activates the locale before the first render, registers page-lifecycle disposal, and
+nests `StrictMode`, Lingui, runtime services, the MUI theme, the error boundary, and
+`WorkspaceShell`. Tests replace the whole `RuntimeServices` object at the context
+boundary.
 
 ## Localization ownership
 
 English is the source and fallback locale; Russian is the target locale.
-[`lingui.config.ts`](../lingui.config.ts) fixes eight feature-owned catalog shards:
-`core`, `shell`, `map`, `tracks`, `satellite`, `markers`, `layers`, and `user`. The
-`satellite` shard maps to `presentation/satellite-browser`; Developer Diagnostics and
-the pre-React bootstrap fallback remain outside the localized source set.
+[`lingui.config.ts`](../lingui.config.ts) defines eight catalog shards, each bound to
+one source path: `core` (`main.tsx`, `presentation/localization`), `shell`, `map`,
+`tracks`, `satellite` (`presentation/satellite-browser`), `markers`, `layers`, and
+`user`. Code outside those paths, including `presentation/weather`, Developer
+Diagnostics, and the pre-React bootstrap fallback, is not extracted.
 
-`presentation/localization/appI18n.ts` owns the single Lingui instance. It statically
-loads every English and Russian shard once so language switching remains available
-offline, then updates the document language, title, and description on activation.
-`domain/localization/appLocale.ts` owns the supported-locale type and deterministic
-saved-preference/browser fallback rule. `AppDatabase` persists an explicit locale in the
-existing `ui.preferences` record without a Dexie schema migration.
-
-PO files under `src/locales/{en,ru}` are the only committed catalog artifacts. Vite
-compiles imported shards on demand; strict merged validation output stays under
-`node_modules/.tmp/locales`. `tools/localization` owns extraction freshness, ICU
-structure, translation completeness, equality-allowlist, and scoped source-string
-checks.
+`presentation/localization/appI18n.ts` owns the single Lingui instance, statically loads
+every shard for both locales so switching works offline, and updates the document
+language, title, and description on activation. `domain/localization/appLocale.ts` owns
+the supported-locale type and the saved-preference/browser fallback rule. The explicit
+choice persists in the `ui.preferences` record. Committed PO files are the only catalog
+artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
+`tools/localization` owns catalog and source-string checks.
 
 ## State ownership
 
-| State                                                          | Owner                                                 | Reason                                                  |
-| -------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| Dialogs, active rail section, developer flags                  | Zustand `uiStore`                                     | Cross-component, transient, serializable UI state       |
-| Component transitions and messages                             | React component state                                 | Local rendering concern                                 |
-| Native map, listeners, camera snapshot, terrain operation      | `MapLibreFacade`                                      | Imperative MapLibre lifecycle stays isolated            |
-| Middle-drag pan and Shift+left terrain orbit with pivot marker | `MapPointerGestureControl`                            | Camera input and native marker placement stay isolated  |
-| Sentinel, terrain, active-track, and route-plan map commands   | `MapLibreLayerController`                             | Native resources and ordering stay imperative           |
-| Direct visual-COG scene registry and raster worker             | `SatelliteCogTileProvider` / `SatelliteCogRasterizer` | Bounded fallback state and COG URLs stay outside React  |
-| DEM fetch, repair, parse, contour caches, worker fallback      | `TerrainComputeEngine` / `TerrainComputeBackend`      | One algorithm runs in worker or inline compatibility    |
-| Terrain worker execution status                                | `mapLayerStore`                                       | Transient serializable UI warning state                 |
-| Visibility, stretch, rendering, and overlay preferences        | Dexie plus map layer controller                       | Durable non-scene choices with a serializable live view |
-| Browser storage and optional heap measurements                 | `BrowserStorageUsageReader`                           | Read-only platform metrics behind an app port           |
-| Settled 2D center and zoom                                     | `AppDatabase` through `MapCameraRepository`           | Durable camera restarts without 3D orientation          |
-| Saved local track summaries and content                        | `AppDatabase` through `LocalTrackRepository`          | Atomic IndexedDB ownership with validated reads         |
-| Flat track folders, order, and placement                       | `AppDatabase` through `TrackFolderRepository`         | One transaction owner for folders and track summaries   |
-| Saved marker records                                           | `AppDatabase` through `SavedMarkerRepository`         | Validated local points with atomic IndexedDB writes     |
-| Marker collection, editor draft, and distance anchor           | `MarkersWorkspaceProvider` React state                | One feature owner while map commands stay serializable  |
-| Marker placement and one-shot creation command                 | `mapInteractionStore`                                 | Cross-component map interaction without native objects  |
-| Selected Weather point and latest panel request                | `mapInteractionStore`                                 | Serializable map-to-panel and enabled-map URL state     |
-| Weather request/result lifecycle                               | `WeatherPanel` React state                            | Ephemeral latest response retained across rail tabs     |
-| Unsaved import/route plan, active selection, and list query    | `TracksWorkspaceProvider` React state                 | One feature owner without a duplicate global store      |
-| Map diagnostic snapshot                                        | `MapDiagnosticsSnapshotStore`                         | Serializable view shared by UI, health, and export      |
-| Current/last Sentinel step status and duration                 | `SentinelQueryDiagnosticsStore`                       | Memory-only live developer timeline                     |
-| Submitted scene criteria and derived grouped results           | `SatelliteBrowser` React state                        | Disposable, not persisted                               |
-| Mosaic mode, draft/active dates, and request identity          | `SatelliteMosaicProvider` React state                 | Cross-surface transient workflow, not URL or preference |
-| Selected/applied scene or applied Mosaic snapshot              | `MapLibreLayerController` plus `mapLayerStore`        | Mutually exclusive transient rendering state            |
-| Persistent account session and registration                    | Official Supabase client via `UserDataService`        | Optional email/password auth outside Zustand/Dexie      |
+| State                                                       | Owner                                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------- |
+| Active rail section, dialogs, developer mode, list sorts    | Zustand `uiStore`                                               |
+| Native map, listeners, camera snapshot, terrain operation   | `MapLibreFacade`                                                |
+| Middle-drag pan and Shift+left terrain orbit                | `MapPointerGestureControl`                                      |
+| Native sources/layers for imagery, terrain, weather, tracks | `MapLibreLayerController`                                       |
+| Serializable layer, imagery, weather-map, and worker status | `mapLayerStore`                                                 |
+| Map navigation, placement, Satellite anchor, Weather point  | `mapInteractionStore`                                           |
+| Settled viewport for search controls                        | `MapViewportSnapshotStore`                                      |
+| Direct visual-COG scene registry and raster worker          | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
+| DEM fetch, repair, parse, contour caches, worker fallback   | `TerrainComputeEngine` / `TerrainComputeBackend`                |
+| Tracks, folders, markers, camera, layer and UI preferences  | `AppDatabase` behind the application ports                      |
+| Loaded folders, previews, route plan, selection, multi-view | `TracksWorkspaceProvider` React state                           |
+| Marker collection, editor draft, per-marker forecasts       | `MarkersWorkspaceProvider` React state                          |
+| Point-forecast request/result lifecycle                     | `WeatherPanel` React state                                      |
+| Scene search results                                        | `SatelliteBrowser` React state                                  |
+| Mosaic mode, dates, and request identity                    | `SatelliteMosaicProvider` React state                           |
+| Map diagnostic snapshot / Sentinel query timeline           | `MapDiagnosticsSnapshotStore` / `SentinelQueryDiagnosticsStore` |
+| Account session                                             | Official Supabase client via `UserDataService`                  |
 
-Do not mirror authoritative map or durable data into Zustand. React consumes the map's
-serializable snapshot through `useSyncExternalStore`; unrelated UI state must not cause
-the native map instance to be recreated. The facade creates a new readonly serializable
-snapshot for each update, so snapshot stores retain that value directly and consumers
-must not mutate it.
+Do not mirror authoritative map or durable data into Zustand. React reads map snapshots
+through `useSyncExternalStore`; snapshots are new readonly values per update and must
+not be mutated. Unrelated UI state must never recreate the native map.
 
-The track parsers, calculation policies, and flat folder model stay under
-`domain/tracks`; they have no React, Dexie, MapLibre, or provider dependency.
-`AppDatabase` implements both `LocalTrackRepository` and `TrackFolderRepository` because
-track placement, folder ordering, and their synchronization states require one
-transaction owner. `TracksWorkspaceProvider` owns the loaded folder projection, imported
-previews, and transient route plans; accepted route geometry uses the same calculation
-and save path instead of adding draft persistence. `MapLibreLayerController` owns the
-active track line, planned route and waypoint overlay, and transient chart-hover marker
-so React never owns native map objects.
+`AppDatabase` implements `LocalTrackRepository`, `TrackFolderRepository`,
+`SavedMarkerRepository`, `MapCameraRepository`, and `MapLayerPreferencesRepository`;
+tracks and folders share it because placement, ordering, and sync state need one
+transaction owner. See [data-model.md](data-model.md) for records and storage authority.
 
-`BrowserTrailRouter` implements the narrow `TrailRouter` application capability with one
-Vite module worker and the reusable request-correlated `WorkerRpc` transport. The worker
-loads the configured detail-vector TileJSON, fetches bounded XYZ coverage, decodes the
-same `streets` MVT layer used by the visible detailed map, geometrically nodes a
-request-local walkable graph through a bounded spatial index, snaps both endpoints, and
-runs deterministic A*. Provider URLs, tile bytes, graph nodes, and MapLibre internals
-never enter React or the application port. Cancellation crosses the RPC boundary, and
-disposing runtime services terminates the worker.
+`WorkspaceShell` keeps the map fixed to the viewport. `WorkspaceRail` owns the Tracks,
+Markers, Layers, Satellite, Weather, and User destinations plus Share, Diagnostics, and
+Settings actions. `WorkspaceSidebar` keeps the Tracks, Satellite, and Weather panels
+mounted while hidden so their sessions survive section changes. Shared palette values
+live in `appColors.ts` for both the MUI theme and the MapLibre style.
 
-Saved-marker catalog keys and name normalization stay under `domain/markers`.
-`AppDatabase` implements `SavedMarkerRepository`, while `MarkersWorkspaceProvider` owns
-the loaded collection and editor state. `MapLibreLayerController` owns marker images,
-the GeoJSON source, and the symbol layer; React supplies serializable marker values
-rather than native map objects.
+## Workers
 
-`WorkspaceShell` keeps the map fixed to the viewport and composes floating navigation.
-`WorkspaceRail` owns the Tracks, Markers, Layers, Satellite, Weather, and User
-destinations plus global Diagnostics and Settings actions. `WorkspaceSidebar` keeps the
-Satellite, Tracks, and Weather feature sessions mounted while changing their
-presentation visibility; Weather owns its inner scroller and fixed provider footer.
-Route planning and the disabled manual GPX authoring action belong to Tracks and are
-never rail sections. Shared palette values live in `appColors.ts` so the MUI theme and
-pure MapLibre style use the same visual vocabulary without introducing a second styling
-system.
+Four Vite module workers share the request-correlated `WorkerRpc` transport
+(`infrastructure/runtime/WorkerRpc.ts`):
 
-`BrowserStorageUsageReader` implements the small `StorageUsageReader` application port.
-It combines the origin storage estimate, Chromium's optional per-category details,
-localStorage byte estimation, and optional JavaScript heap counters without exposing
-browser globals to the Settings UI. Missing browser capabilities produce unavailable
-metric values rather than failing the dialog.
+- `infrastructure/routing` — `BrowserTrailRouter` implements `TrailRouter`; the worker
+  builds a request-local graph from the detail-vector `streets` layer and runs A*.
+- `infrastructure/elevation` — `WorkerTerrainComputeBackend` runs `TerrainComputeEngine`
+  (Terrarium repair, parsed DEM, `maplibre-contour`); `InlineTerrainComputeBackend` runs
+  the same engine on the window thread after repeated worker failure.
+  `TerrainComputeConfiguration` is the strict, versioned worker DTO.
+- `infrastructure/satellite` — direct visual-COG range reads with `geotiff` and UTM to
+  Web Mercator reprojection with `proj4`.
+- `infrastructure/supabase` — `TrackSyncWorkerClient` runs synchronization in
+  `trackSync.worker.ts`; the access token is its only remote credential.
+
+Provider URLs, tile bytes, graphs, and caches never enter React or application ports.
 
 ## Map boundary
 
 [`MapWorkspace.tsx`](../src/presentation/map/MapWorkspace.tsx) translates React state
-and user commands. [`MapLibreFacade.ts`](../src/presentation/map/MapLibreFacade.ts) owns
-the native object, event listeners, terrain source, error aggregation, WebGL state, and
-cleanup. [`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and
-uses stable IDs from `mapIds.ts`. Any added feature layer must extend that typed
-ordering instead of scattering MapLibre identifiers through presentation components.
-`mapVisualPalette.ts` is the single owner of semantic map colors and vector/satellite
-contrast paints; feature code must reference it instead of introducing local map-color
-literals.
+and user commands, including the shared point actions.
+[`MapLibreFacade.ts`](../src/presentation/map/MapLibreFacade.ts) owns the native object,
+event listeners, error aggregation, WebGL state, point inspection, and cleanup.
+[`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and uses the
+stable, typed IDs and insertion points in `mapIds.ts`; new layers extend that ordering
+instead of scattering MapLibre identifiers. `mapVisualPalette.ts` is the single owner of
+semantic map colors and vector/satellite contrast paints.
 
-`TerrainComputeEngine` owns the `maplibre-contour` local manager and its bounded
-filtered-PNG, parsed-DEM, and contour caches. `FilteredTerrariumTileProvider` uses
-browser image/canvas primitives behind a typed codec, while `TerrariumDemFilter` owns
-the pure rejection and replacement policy. `TerrainComputeConfiguration` is the narrow,
-versioned worker DTO; one Zod schema defines its boundary and an explicit mapper strips
-provider identity, attribution, overlay presentation, and other non-compute fields from
-the validated application configuration. `WorkerTerrainComputeBackend` normally runs the
-engine in one Vite module worker through the reusable request-correlated `WorkerRpc`
-transport. A failed worker is restarted once; a second transport failure selects
-`InlineTerrainComputeBackend`, which calls the same engine and exposes only a
-serializable compatibility and bounded-queue state. Worker objects and caches never
-enter React, Zustand, or application ports.
+`MapLibreLayerController` attaches to the same native map through the facade. It owns
+the basemap preset (`vector-osm`, Google, Bing, Esri, NAPR, or Sentinel-2), Sentinel
+scene and Mosaic rasters, DEM relief and generated contours, the Open-Meteo weather
+layers and `om://` protocol, track, route-plan, and marker overlays, and allowlisted
+logical visibility commands. It validates and persists layer preferences and projects
+its state into `mapLayerStore`. `ContourTileGenerator` registers the contour protocol
+and adapts the terrain backend to `maplibre-contour`; `SatelliteCogTileProvider`
+registers the `georgia-satellite-cog` protocol. Runtime behavior is described in
+[runtime-flows.md](runtime-flows.md).
 
-The application backend exposes only DEM and contour delivery. A private
-`TerrainComputeManagerAdapter` satisfies the larger third-party manager shape without
-advertising parsed-DEM access as an application capability. Parsed DEM data remains
-internal to the engine and its contour cache. Worker diagnostics enter the injected
-diagnostic logger directly; UI and export consumers read the diagnostics service rather
-than subscribing through a terrain-specific bypass.
-
-`MapLibreLayerController` attaches to the same native map through the facade and owns
-single-scene raster slots, bounded Mosaic raster entries, the footprint, shared DEM
-relief, generated-contour source and layers, and allowlisted logical visibility
-commands. `ContourTileGenerator` wraps the MapLibre protocol that turns bounded DEM tile
-requests into vector contours; it does not expose caches, provider URLs, or the native
-map to React. The facade forwards camera movement state through the controller so the
-worker can prioritize DEM requests and defer new contour calculations until movement
-settles. It also publishes settled viewports through `MapViewportSnapshotStore`;
-`SatelliteMosaicProvider` subscribes to movement directly rather than through React
-state, cancels obsolete work while moving, and refreshes a shown Mosaic after
-settlement, so movement never changes its context value. The controller forwards the
-worker's coordinate-free active and queued counts plus Mosaic render counts into the
-map-layer store for the operational status line.
-
-The controller validates persistent imagery mode/tuning and terrain-overlay preferences,
-atomically updates source tiles, and reconciles native order after style or satellite
-changes. Satellite and Layers consume its serializable Zustand snapshot, so relocated
-controls stay synchronized with restored preferences. Scene search results remain local
-React state in a mounted-but-hidden Satellite browser, while Mosaic workflow state lives
-in the provider mounted around both map and sidebar surfaces. The provider exposes the
-Scene/Mosaic mode through its own small context for map-wide consumers; only the Mosaic
-controls subscribe to movement phase and terrain mode to explain a disabled **Show
-mosaic** action.
-
-`SatelliteCogTileProvider` owns the `georgia-satellite-cog` MapLibre protocol and one
-module worker. Its bounded registry retains safe definitions for a complete 128-scene
-Mosaic plus replacement headroom; the worker deliberately retains only the two most
-recent GeoTIFF readers so direct fallback cannot multiply large per-file block caches.
-`geotiff` performs bounded HTTP range reads and overview selection; `proj4` transforms
-each output pixel between WGS84 and the validated northern-UTM scene CRS. The controller
-persists the Auto, Server, or Direct rendering mode. Auto switches an existing raster
-source to this opaque protocol when the hosted renderer reports 429 or the browser
-exposes the response as status zero because CORS hid it; Direct starts on the protocol
-immediately, and Server does not switch. The worker preserves the provider's
-pre-rendered 8-bit RGB values and does not apply the hosted renderer's stretch controls.
-Raster readiness has no application deadline.
-
-The facade returns a serializable snapshot of current WGS84 bounds and center, or `null`
-before a native map exists. `MapWorkspace` publishes that value through
-`MapViewportSnapshotStore` when the workspace mounts and on every settled viewport
-(style ready, `moveend`, and the end of a terrain transition), and publishes `null` on
-teardown. The initial settle does not wait for MapLibre's full `load`, so Search
-controls are not blocked by slow initial tiles or a WebGL context loss. A movement
-subscriber that arrives after that settle immediately receives the current settled
-viewport, so a remounted workspace does not leave movement state unavailable. Other
-facade notifications such as idle, style data, or point inspection never republish it,
-and the store keeps the previous object for a numerically equal viewport. Search
-controls read it without exposing MapLibre. Sentinel validation rejects non-finite,
-inverted, antimeridian-crossing, or center-mismatched snapshots; exact bounds never
-enter the default diagnostics bundle.
+`BrowserStorageUsageReader` implements `StorageUsageReader` for Settings; missing
+browser capabilities produce unavailable values rather than failing the dialog.
+Satellite and Weather presentation resolve IANA time zones locally with
+`@photostructure/tz-lookup`; no location is sent to a time-zone service.

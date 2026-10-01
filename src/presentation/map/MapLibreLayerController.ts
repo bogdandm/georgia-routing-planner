@@ -64,6 +64,7 @@ import {
   satelliteBasemapLayerIds,
   savedMarkerImageId,
   savedMarkerLayerIds,
+  measurementLayerIds,
   routePlanLayerIds,
   sentinelMosaicIdPrefixes,
   sentinelMapLayerIds,
@@ -92,16 +93,48 @@ import {
   weatherPrecipitationColorScale,
 } from '@/presentation/weather/weatherMapStyle';
 
-interface RoutePlanMapSection {
+interface PlannedLineSection {
   readonly kind: 'routed' | 'direct';
   readonly coordinates: readonly (readonly [number, number])[];
 }
 
-interface RoutePlanFeatureProperties {
+interface PlannedLineFeatureProperties {
   readonly kind: 'routed' | 'direct' | 'waypoint' | 'preview' | 'preview-label';
   readonly number?: string;
   readonly distanceLabel?: string;
 }
+
+interface PlannedLineState {
+  readonly sections: readonly PlannedLineSection[];
+  readonly waypoints: readonly (readonly [number, number])[];
+  readonly preview: {
+    readonly start: readonly [number, number];
+    readonly cursor: readonly [number, number];
+    readonly distanceLabel: string;
+  } | null;
+}
+
+/**
+ * Click-built lines share one blue rendering: route planning and the map ruler each own
+ * an independent source so both can be visible at once without overwriting each other.
+ */
+const plannedLineStyles = {
+  'route-plan': { sourceId: mapSourceIds.routePlan, layerIds: routePlanLayerIds },
+  measurement: { sourceId: mapSourceIds.measurement, layerIds: measurementLayerIds },
+} as const;
+
+export type PlannedLineOverlay = keyof typeof plannedLineStyles;
+
+const plannedLineOverlays: readonly PlannedLineOverlay[] = [
+  'route-plan',
+  'measurement',
+];
+
+const emptyPlannedLine: PlannedLineState = {
+  sections: [],
+  waypoints: [],
+  preview: null,
+};
 
 interface RasterLayerSlot {
   readonly sourceId: string;
@@ -574,13 +607,10 @@ export class MapLibreLayerController {
   };
   #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
-  #routePlanSections: readonly RoutePlanMapSection[] = [];
-  #routePlanWaypoints: readonly (readonly [number, number])[] = [];
-  #routePlanPreview: {
-    readonly start: readonly [number, number];
-    readonly cursor: readonly [number, number];
-    readonly distanceLabel: string;
-  } | null = null;
+  readonly #plannedLines: Record<PlannedLineOverlay, PlannedLineState> = {
+    'route-plan': emptyPlannedLine,
+    measurement: emptyPlannedLine,
+  };
   #appliedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
   #savedMarkers: readonly SavedMarker[] = [];
@@ -664,7 +694,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
-      this.reconcileRoutePlan();
+      this.reconcilePlannedLines();
       this.reconcileSavedMarkers();
       return;
     }
@@ -685,7 +715,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
-    this.reconcileRoutePlan();
+    this.reconcilePlannedLines();
     this.reconcileSavedMarkers();
   }
 
@@ -1163,8 +1193,9 @@ export class MapLibreLayerController {
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrackTrace();
   }
-  public setRoutePlanGeometry(
-    sections: readonly RoutePlanMapSection[],
+  public setPlannedLineGeometry(
+    overlay: PlannedLineOverlay,
+    sections: readonly PlannedLineSection[],
     waypoints: readonly (readonly [number, number])[],
   ): MapLayerVisibilityResult {
     const validCoordinate = ([longitude, latitude]: readonly [number, number]) =>
@@ -1182,49 +1213,52 @@ export class MapLibreLayerController {
       ) ||
       !waypoints.every((coordinate) => validCoordinate(coordinate))
     ) {
-      return this.visibilityFailure('The planned route geometry is invalid.');
+      return this.visibilityFailure('The planned line geometry is invalid.');
     }
-    this.#routePlanSections = sections.map((section) => ({
-      kind: section.kind,
-      coordinates: section.coordinates.map(([longitude, latitude]) => [
-        longitude,
-        latitude,
-      ]),
-    }));
-    this.#routePlanWaypoints = waypoints.map(([longitude, latitude]) => [
-      longitude,
-      latitude,
-    ]);
-    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
-    return this.reconcileRoutePlan();
+    return this.updatePlannedLine(overlay, {
+      sections: sections.map((section) => ({
+        kind: section.kind,
+        coordinates: section.coordinates.map(([longitude, latitude]) => [
+          longitude,
+          latitude,
+        ]),
+      })),
+      waypoints: waypoints.map(([longitude, latitude]) => [longitude, latitude]),
+      preview: this.#plannedLines[overlay].preview,
+    });
   }
 
-  public setRoutePlanPreview(
+  public setPlannedLinePreview(
+    overlay: PlannedLineOverlay,
     start: readonly [number, number],
     cursor: readonly [number, number],
     distanceLabel: string,
   ): MapLayerVisibilityResult {
-    this.#routePlanPreview = {
-      start: [...start] as readonly [number, number],
-      cursor: [...cursor] as readonly [number, number],
-      distanceLabel,
-    };
-    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
-    return this.reconcileRoutePlan();
+    return this.updatePlannedLine(overlay, {
+      ...this.#plannedLines[overlay],
+      preview: {
+        start: [...start] as readonly [number, number],
+        cursor: [...cursor] as readonly [number, number],
+        distanceLabel,
+      },
+    });
   }
 
-  public clearRoutePlanPreview(): void {
-    this.#routePlanPreview = null;
-    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
-    this.reconcileRoutePlan();
+  public clearPlannedLinePreview(overlay: PlannedLineOverlay): void {
+    this.updatePlannedLine(overlay, { ...this.#plannedLines[overlay], preview: null });
   }
 
-  public clearRoutePlanGeometry(): void {
-    this.#routePlanSections = [];
-    this.#routePlanWaypoints = [];
-    this.#routePlanPreview = null;
-    this.#currentGeoJsonSources.delete(mapSourceIds.routePlan);
-    this.reconcileRoutePlan();
+  public clearPlannedLineGeometry(overlay: PlannedLineOverlay): void {
+    this.updatePlannedLine(overlay, emptyPlannedLine);
+  }
+
+  private updatePlannedLine(
+    overlay: PlannedLineOverlay,
+    state: PlannedLineState,
+  ): MapLayerVisibilityResult {
+    this.#plannedLines[overlay] = state;
+    this.#currentGeoJsonSources.delete(plannedLineStyles[overlay].sourceId);
+    return this.reconcilePlannedLine(overlay);
   }
 
   public setSavedMarkers(markers: readonly SavedMarker[]): void {
@@ -2535,7 +2569,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
-    this.reconcileRoutePlan();
+    this.reconcilePlannedLines();
     this.reconcileSavedMarkers();
   };
 
@@ -3207,24 +3241,31 @@ export class MapLibreLayerController {
     return true;
   }
 
-  private reconcileRoutePlan(): MapLayerVisibilityResult {
+  private reconcilePlannedLines(): void {
+    for (const overlay of plannedLineOverlays) this.reconcilePlannedLine(overlay);
+  }
+
+  private reconcilePlannedLine(overlay: PlannedLineOverlay): MapLayerVisibilityResult {
     const map = this.#map;
     if (map?.getLayer(mapLayerIds.background) === undefined) {
       return { status: 'success' };
     }
+    const { sourceId, layerIds } = plannedLineStyles[overlay];
+    const color = mapVisualPalette.userGeometry.gpxTrack;
+    const { sections, waypoints, preview } = this.#plannedLines[overlay];
     const beforeLayerId =
       map.getLayer(mapInsertionPoints.importedTracksBeforeLayerId) === undefined
         ? undefined
         : mapInsertionPoints.importedTracksBeforeLayerId;
     try {
-      const createRouteData = (): FeatureCollection<
+      const createLineData = (): FeatureCollection<
         LineString | Point,
-        RoutePlanFeatureProperties
+        PlannedLineFeatureProperties
       > => ({
         type: 'FeatureCollection',
         features: [
-          ...this.#routePlanSections.map(
-            (section): Feature<LineString, RoutePlanFeatureProperties> => ({
+          ...sections.map(
+            (section): Feature<LineString, PlannedLineFeatureProperties> => ({
               type: 'Feature',
               properties: { kind: section.kind },
               geometry: {
@@ -3233,14 +3274,14 @@ export class MapLibreLayerController {
               },
             }),
           ),
-          ...this.#routePlanWaypoints.map(
-            (coordinate, index): Feature<Point, RoutePlanFeatureProperties> => ({
+          ...waypoints.map(
+            (coordinate, index): Feature<Point, PlannedLineFeatureProperties> => ({
               type: 'Feature',
               properties: { kind: 'waypoint', number: String(index + 1) },
               geometry: { type: 'Point', coordinates: [...coordinate] },
             }),
           ),
-          ...(this.#routePlanPreview === null
+          ...(preview === null
             ? []
             : [
                 {
@@ -3248,55 +3289,52 @@ export class MapLibreLayerController {
                   properties: { kind: 'preview' as const },
                   geometry: {
                     type: 'LineString' as const,
-                    coordinates: [
-                      [...this.#routePlanPreview.start],
-                      [...this.#routePlanPreview.cursor],
-                    ],
+                    coordinates: [[...preview.start], [...preview.cursor]],
                   },
                 },
                 {
                   type: 'Feature' as const,
                   properties: {
                     kind: 'preview-label' as const,
-                    distanceLabel: this.#routePlanPreview.distanceLabel,
+                    distanceLabel: preview.distanceLabel,
                   },
                   geometry: {
                     type: 'Point' as const,
-                    coordinates: [...this.#routePlanPreview.cursor],
+                    coordinates: [...preview.cursor],
                   },
                 },
               ]),
         ],
       });
-      if (!this.syncGeoJsonSource(map, mapSourceIds.routePlan, createRouteData)) {
-        throw new Error('The planned route source cannot update its data.');
+      if (!this.syncGeoJsonSource(map, sourceId, createLineData)) {
+        throw new Error('The planned line source cannot update its data.');
       }
-      if (map.getLayer(routePlanLayerIds.routed) === undefined) {
+      if (map.getLayer(layerIds.routed) === undefined) {
         map.addLayer(
           {
-            id: routePlanLayerIds.routed,
+            id: layerIds.routed,
             type: 'line',
-            source: mapSourceIds.routePlan,
+            source: sourceId,
             filter: ['==', ['get', 'kind'], 'routed'],
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: {
-              'line-color': mapVisualPalette.userGeometry.gpxTrack,
+              'line-color': color,
               'line-width': importedTrackLineWidth,
             },
           },
           beforeLayerId,
         );
       }
-      if (map.getLayer(routePlanLayerIds.direct) === undefined) {
+      if (map.getLayer(layerIds.direct) === undefined) {
         map.addLayer(
           {
-            id: routePlanLayerIds.direct,
+            id: layerIds.direct,
             type: 'line',
-            source: mapSourceIds.routePlan,
+            source: sourceId,
             filter: ['==', ['get', 'kind'], 'direct'],
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: {
-              'line-color': mapVisualPalette.userGeometry.gpxTrack,
+              'line-color': color,
               'line-width': importedTrackLineWidth,
               'line-dasharray': [2, 2],
             },
@@ -3304,16 +3342,16 @@ export class MapLibreLayerController {
           beforeLayerId,
         );
       }
-      if (map.getLayer(routePlanLayerIds.preview) === undefined) {
+      if (map.getLayer(layerIds.preview) === undefined) {
         map.addLayer(
           {
-            id: routePlanLayerIds.preview,
+            id: layerIds.preview,
             type: 'line',
-            source: mapSourceIds.routePlan,
+            source: sourceId,
             filter: ['==', ['get', 'kind'], 'preview'],
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: {
-              'line-color': mapVisualPalette.userGeometry.gpxTrack,
+              'line-color': color,
               'line-width': 2,
               'line-dasharray': [2, 2],
               'line-opacity': 0.75,
@@ -3322,46 +3360,49 @@ export class MapLibreLayerController {
           beforeLayerId,
         );
       }
-      if (map.getLayer(routePlanLayerIds.previewLabel) === undefined) {
+      if (map.getLayer(layerIds.previewLabel) === undefined) {
         map.addLayer({
-          id: routePlanLayerIds.previewLabel,
+          id: layerIds.previewLabel,
           type: 'symbol',
-          source: mapSourceIds.routePlan,
+          source: sourceId,
           filter: ['==', ['get', 'kind'], 'preview-label'],
           layout: {
             'text-field': ['get', 'distanceLabel'],
-            'text-size': 12,
-            'text-variable-anchor': ['top', 'bottom', 'left', 'right'],
-            'text-radial-offset': 0.75,
-            'text-justify': 'auto',
+            'text-font': ['Noto Sans Regular'],
+            'text-size': 15,
+            'text-line-height': 1.3,
+            // Always below the cursor, clear of the crosshair, so the pointer never covers it.
+            'text-anchor': 'top',
+            'text-offset': [0, 1.6],
             'text-allow-overlap': true,
+            'text-ignore-placement': true,
           },
           paint: {
-            'text-color': mapVisualPalette.userGeometry.gpxTrack,
+            'text-color': color,
             'text-halo-color': '#FFFFFF',
-            'text-halo-width': 1,
+            'text-halo-width': 2,
           },
         });
       }
-      if (map.getLayer(routePlanLayerIds.waypoints) === undefined) {
+      if (map.getLayer(layerIds.waypoints) === undefined) {
         map.addLayer({
-          id: routePlanLayerIds.waypoints,
+          id: layerIds.waypoints,
           type: 'circle',
-          source: mapSourceIds.routePlan,
+          source: sourceId,
           filter: ['==', ['get', 'kind'], 'waypoint'],
           paint: {
-            'circle-color': mapVisualPalette.userGeometry.gpxTrack,
+            'circle-color': color,
             'circle-radius': 10,
             'circle-stroke-color': '#FFFFFF',
             'circle-stroke-width': 2,
           },
         });
       }
-      if (map.getLayer(routePlanLayerIds.waypointLabels) === undefined) {
+      if (map.getLayer(layerIds.waypointLabels) === undefined) {
         map.addLayer({
-          id: routePlanLayerIds.waypointLabels,
+          id: layerIds.waypointLabels,
           type: 'symbol',
-          source: mapSourceIds.routePlan,
+          source: sourceId,
           filter: ['==', ['get', 'kind'], 'waypoint'],
           layout: {
             'text-field': ['get', 'number'],
@@ -3373,7 +3414,7 @@ export class MapLibreLayerController {
       }
       return { status: 'success' };
     } catch {
-      return this.visibilityFailure('The planned route could not be rendered.');
+      return this.visibilityFailure('The planned line could not be rendered.');
     }
   }
 

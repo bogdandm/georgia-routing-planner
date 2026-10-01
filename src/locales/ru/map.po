@@ -13,16 +13,6 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#. js-lingui-id: 3Mpfhk
-#: src/presentation/map/MapLibreFacade.ts:121
-msgid "{distance} km"
-msgstr "{distance} км"
-
-#. js-lingui-id: 9sSCIt
-#: src/presentation/map/MapLibreFacade.ts:114
-msgid "{distance} m"
-msgstr "{distance} м"
-
 #. js-lingui-id: KPwAwW
 #: src/presentation/map/MapPointInspectorContent.tsx:62
 msgid "{elevation} m"
@@ -39,17 +29,17 @@ msgid "{name}, {distance} m away"
 msgstr "{name}, в {distance} м"
 
 #. js-lingui-id: 2h8w7c
-#: src/presentation/map/MapViewControls.tsx:160
+#: src/presentation/map/MapViewControls.tsx:165
 msgid "3D terrain"
 msgstr "3D-рельеф"
 
 #. js-lingui-id: eWVlWI
-#: src/presentation/map/MapViewControls.tsx:159
+#: src/presentation/map/MapViewControls.tsx:164
 msgid "3D terrain is unavailable while Sentinel Mosaic is active."
 msgstr "3D-рельеф недоступен, пока активна мозаика Sentinel."
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/map/MapWorkspace.tsx:1490
+#: src/presentation/map/MapWorkspace.tsx:1570
 msgid "Cancel"
 msgstr "Отмена"
 
@@ -59,18 +49,18 @@ msgid "Checking nearby map data…"
 msgstr "Проверка данных карты поблизости…"
 
 #. js-lingui-id: 2uEfCs
-#: src/presentation/map/MapViewControls.tsx:182
-#: src/presentation/map/MapViewControls.tsx:188
+#: src/presentation/map/MapViewControls.tsx:187
+#: src/presentation/map/MapViewControls.tsx:193
 msgid "Choose map layer preset"
 msgstr "Выбрать набор слоёв карты"
 
 #. js-lingui-id: dLNd3k
-#: src/presentation/map/MapWorkspace.tsx:1487
+#: src/presentation/map/MapWorkspace.tsx:1567
 msgid "Click the map to place the marker"
 msgstr "Нажмите на карту, чтобы поставить метку"
 
 #. js-lingui-id: jysdB3
-#: src/presentation/map/MapWorkspace.tsx:1500
+#: src/presentation/map/MapWorkspace.tsx:1580
 msgid "Clipboard access failed. Try again or use the Share dialog."
 msgstr "Не удалось получить доступ к буферу обмена. Повторите попытку или воспользуйтесь окном «Поделиться»."
 
@@ -80,7 +70,7 @@ msgid "Close map point details"
 msgstr "Закрыть сведения о точке карты"
 
 #. js-lingui-id: zN8IXs
-#: src/presentation/map/MapViewControls.tsx:266
+#: src/presentation/map/MapViewControls.tsx:284
 msgid "Clouds, precipitation, and wind"
 msgstr "Облака, осадки и ветер"
 
@@ -90,7 +80,7 @@ msgid "Coordinates"
 msgstr "Координаты"
 
 #. js-lingui-id: 1-81oq
-#: src/presentation/map/MapWorkspace.tsx:1180
+#: src/presentation/map/MapWorkspace.tsx:1256
 msgid "Coordinates copied"
 msgstr "Координаты скопированы"
 
@@ -115,9 +105,14 @@ msgid "Create marker here"
 msgstr "Создать метку здесь"
 
 #. js-lingui-id: _j3RtS
-#: src/presentation/map/MapWorkspace.tsx:138
+#: src/presentation/map/MapWorkspace.tsx:141
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Текущая погода: {temperature}, осадки {precipitation}"
+
+#. js-lingui-id: 5zBbQV
+#: src/presentation/map/MapLibreFacade.ts:1497
+msgid "Elevation {elevationChange}"
+msgstr "Перепад {elevationChange}"
 
 #. js-lingui-id: XqgXQv
 #: src/presentation/map/MapPointInspectorContent.tsx:67
@@ -135,7 +130,7 @@ msgid "Elevation is unavailable here."
 msgstr "Высота в этой точке недоступна."
 
 #. js-lingui-id: D_aoaV
-#: src/presentation/map/MapViewControls.tsx:143
+#: src/presentation/map/MapViewControls.tsx:148
 msgid "Flat map"
 msgstr "Плоская карта"
 
@@ -146,7 +141,7 @@ msgid "Hide track grade legend"
 msgstr "Скрыть легенду уклона трека"
 
 #. js-lingui-id: VBKJhe
-#: src/presentation/map/MapViewControls.tsx:304
+#: src/presentation/map/MapViewControls.tsx:322
 msgid "Layers tab"
 msgstr "Вкладка «Слои»"
 
@@ -156,7 +151,7 @@ msgid "Loading elevation…"
 msgstr "Загрузка высоты…"
 
 #. js-lingui-id: 0bNvaO
-#: src/presentation/map/MapViewControls.tsx:123
+#: src/presentation/map/MapViewControls.tsx:128
 msgid "Map dimension"
 msgstr "Режим карты"
 
@@ -171,9 +166,19 @@ msgid "Map point actions"
 msgstr "Действия с точкой карты"
 
 #. js-lingui-id: iDuQuY
-#: src/presentation/map/MapWorkspace.tsx:1189
+#: src/presentation/map/MapWorkspace.tsx:1265
 msgid "Map workspace"
 msgstr "Рабочая область карты"
+
+#. js-lingui-id: NShsjv
+#: src/presentation/map/MapViewControls.tsx:207
+msgid "Measure distance"
+msgstr "Измерить расстояние"
+
+#. js-lingui-id: uWOO6b
+#: src/presentation/map/MapViewControls.tsx:205
+msgid "Measure distance and elevation"
+msgstr "Измерить расстояние и перепад высоты"
 
 #. js-lingui-id: N-L5qF
 #: src/presentation/map/MapPointInspectorContent.tsx:82
@@ -201,12 +206,12 @@ msgid "Open windy.com"
 msgstr "Открыть windy.com"
 
 #. js-lingui-id: pOgx3m
-#: src/presentation/map/MapViewControls.tsx:246
+#: src/presentation/map/MapViewControls.tsx:264
 msgid "OSM overlay"
 msgstr "Наложение OSM"
 
 #. js-lingui-id: _HLYHh
-#: src/presentation/map/MapWorkspace.tsx:1182
+#: src/presentation/map/MapWorkspace.tsx:1258
 msgid "Point link copied"
 msgstr "Ссылка на точку скопирована"
 
@@ -216,12 +221,12 @@ msgid "Search satellite scenes here"
 msgstr "Искать спутниковые снимки здесь"
 
 #. js-lingui-id: 0OYApz
-#: src/presentation/map/MapViewControls.tsx:166
+#: src/presentation/map/MapViewControls.tsx:171
 msgid "Show 3D terrain map"
 msgstr "Показать карту с 3D-рельефом"
 
 #. js-lingui-id: 0EcC35
-#: src/presentation/map/MapViewControls.tsx:139
+#: src/presentation/map/MapViewControls.tsx:144
 msgid "Show flat 2D map"
 msgstr "Показать плоскую 2D-карту"
 
@@ -236,27 +241,27 @@ msgid "Terrain elevation"
 msgstr "Высота рельефа"
 
 #. js-lingui-id: 9xVYMD
-#: src/presentation/map/MapWorkspace.tsx:1172
+#: src/presentation/map/MapWorkspace.tsx:1248
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "Не удалось сохранить текущий вид карты. Работа с картой по-прежнему доступна."
 
 #. js-lingui-id: IxTd0L
-#: src/presentation/map/MapWorkspace.tsx:1507
+#: src/presentation/map/MapWorkspace.tsx:1587
 msgid "The map layer could not be changed. Try again."
 msgstr "Не удалось сменить слой карты. Повторите попытку."
 
 #. js-lingui-id: U5Trc5
-#: src/presentation/map/MapWorkspace.tsx:1200
+#: src/presentation/map/MapWorkspace.tsx:1276
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "Конфигурация поставщика карты недействительна. Базовая карта не запущена. Проверьте конфигурацию развёртывания или откройте диагностику разработчика."
 
 #. js-lingui-id: FlHLo_
-#: src/presentation/map/MapWorkspace.tsx:1174
+#: src/presentation/map/MapWorkspace.tsx:1250
 msgid "The saved camera could not be restored. The Georgia overview is shown instead."
 msgstr "Не удалось восстановить сохранённый вид карты. Вместо него показан обзор Грузии."
 
 #. js-lingui-id: IDB1Ps
-#: src/presentation/map/MapWorkspace.tsx:1176
+#: src/presentation/map/MapWorkspace.tsx:1252
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "Не удалось восстановить общий спутниковый снимок. Общее местоположение на карте по-прежнему доступно."
 
@@ -276,16 +281,16 @@ msgid "Unnamed map feature"
 msgstr "Безымянный объект карты"
 
 #. js-lingui-id: mJZLtT
-#: src/presentation/map/MapViewControls.tsx:265
+#: src/presentation/map/MapViewControls.tsx:283
 msgid "Weather"
 msgstr "Погода"
 
 #. js-lingui-id: OrcMj6
-#: src/presentation/map/MapWorkspace.tsx:1184
+#: src/presentation/map/MapWorkspace.tsx:1260
 msgid "Weather map link copied"
 msgstr "Ссылка на карту погоды скопирована"
 
 #. js-lingui-id: ElM6On
-#: src/presentation/map/MapWorkspace.tsx:1387
+#: src/presentation/map/MapWorkspace.tsx:1467
 msgid "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."
 msgstr "Вы офлайн. Уже отрисованные области могут остаться видимыми, но новые данные карты недоступны до восстановления соединения."

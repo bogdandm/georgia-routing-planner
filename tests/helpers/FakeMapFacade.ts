@@ -2,6 +2,7 @@ import type {
   MapFacade,
   MapInteractionMode,
   MapViewportMovement,
+  PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import {
   defaultGeorgiaCamera,
@@ -26,7 +27,7 @@ export class FakeMapFacade implements MapFacade {
   public debugOptions: MapDebugOptions | null = null;
   public terrainModeRequests: TerrainMode[] = [];
   public interactionModes: MapInteractionMode[] = [];
-  public routePlanPreviewAnchors: (MapCoordinate | null)[] = [];
+  public planningPreviews: (PlanningPreview | null)[] = [];
   public navigationRequests: {
     readonly longitude: number;
     readonly latitude: number;
@@ -193,8 +194,8 @@ export class FakeMapFacade implements MapFacade {
     this.interactionModes.push(mode);
   }
 
-  public setRoutePlanPreviewAnchor(coordinate: MapCoordinate | null): void {
-    this.routePlanPreviewAnchors.push(coordinate);
+  public setPlanningPreview(preview: PlanningPreview | null): void {
+    this.planningPreviews.push(preview);
   }
 
   public destroy(): void {

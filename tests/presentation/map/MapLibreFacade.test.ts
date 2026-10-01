@@ -1,6 +1,7 @@
 import type { GeoJSONFeature, Map as MapLibreMap } from 'maplibre-gl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -227,8 +228,8 @@ describe('MapLibreFacade', () => {
       handleRasterSourceRecovered: vi.fn(),
       isRasterSourceRecoveryComplete: vi.fn(() => false),
       setTerrainInteractionActive,
-      setRoutePlanPreview: vi.fn(),
-      clearRoutePlanPreview: vi.fn(),
+      setPlannedLinePreview: vi.fn(),
+      clearPlannedLinePreview: vi.fn(),
     };
     const facade = new MapLibreFacade(
       services.logger,
@@ -1587,38 +1588,47 @@ describe('MapLibreFacade', () => {
     facade.detachMap();
     expect(nativeMap.getCanvas().style.cursor).toBe('');
   });
-  it('publishes only primary route-planning clicks and manages the cursor preview', () => {
+  it('publishes primary planning clicks and labels the cursor for the active mode', async () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     const listener = vi.fn();
-    const setRoutePlanPreview = vi.fn();
-    const clearRoutePlanPreview = vi.fn();
+    const setPlannedLinePreview = vi.fn();
+    const clearPlannedLinePreview = vi.fn();
     const layerController = {
       attach: vi.fn(),
       detach: vi.fn(),
-      setRoutePlanPreview,
-      clearRoutePlanPreview,
+      setPlannedLinePreview,
+      clearPlannedLinePreview,
     } as unknown as MapLibreLayerController;
+    const sampleMany = vi.fn<ElevationProvider['sampleMany']>(() =>
+      Promise.resolve([
+        { status: 'available', meters: 1_000 },
+        { status: 'available', meters: 1_985.4 },
+      ]),
+    );
     const facade = new MapLibreFacade(
       services.logger,
       undefined,
       undefined,
       undefined,
       layerController,
+      { sample: vi.fn(), sampleMany },
     );
     facade.attach(nativeMap as unknown as MapLibreMap);
     const unsubscribe = facade.subscribePlanningClicks(listener);
 
-    facade.setRoutePlanPreviewAnchor({ longitude: 44.64, latitude: 42.66 });
+    facade.setPlanningPreview({ anchor: { longitude: 44.64, latitude: 42.66 } });
     facade.setInteractionMode('route-planning');
     nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
-    expect(setRoutePlanPreview).toHaveBeenCalledWith(
+    expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
+      'route-plan',
       [44.64, 42.66],
       [44.65, 42.67],
-      expect.stringMatching(/m|km/u),
+      '1.4 km',
     );
-    facade.setRoutePlanPreviewAnchor({ longitude: 44.66, latitude: 42.68 });
-    expect(clearRoutePlanPreview).toHaveBeenCalled();
+    expect(sampleMany).not.toHaveBeenCalled();
+    facade.setPlanningPreview({ anchor: { longitude: 44.66, latitude: 42.68 } });
+    expect(clearPlannedLinePreview).toHaveBeenLastCalledWith('route-plan');
 
     nativeMap.fire('click', {
       lngLat: { lng: 44.64, lat: 42.66 },
@@ -1631,10 +1641,50 @@ describe('MapLibreFacade', () => {
     });
     expect(listener).toHaveBeenCalledWith({ longitude: 44.64, latitude: 42.66 });
 
-    nativeMap.getCanvasContainer().dispatchEvent(new MouseEvent('mouseleave'));
+    facade.setPlanningPreview({
+      anchor: { longitude: 44.66, latitude: 42.68 },
+      measurement: {
+        origin: { longitude: 44.6, latitude: 42.6 },
+        distanceMeters: 3_600,
+      },
+    });
+    facade.setInteractionMode('measurement');
+    expect(nativeMap.getCanvas().style.cursor).toBe('crosshair');
+    nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
+    // The ruler totals the measured distance plus the cursor segment, then adds the
+    // terrain change from its first point once the cursor sample resolves.
+    expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
+      'measurement',
+      [44.66, 42.68],
+      [44.65, 42.67],
+      '5.0 km',
+    );
+    expect(sampleMany).toHaveBeenCalledWith(
+      [
+        { longitude: 44.6, latitude: 42.6 },
+        { longitude: 44.65, latitude: 42.67 },
+      ],
+      expect.any(AbortSignal),
+    );
+    await vi.waitFor(() => {
+      expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
+        'measurement',
+        [44.66, 42.68],
+        [44.65, 42.67],
+        '5.0 km\nElevation +985 m',
+      );
+    });
+    nativeMap.fire('click', {
+      lngLat: { lng: 44.7, lat: 42.7 },
+      originalEvent: { button: 0 },
+    });
+    expect(listener).toHaveBeenLastCalledWith({ longitude: 44.7, latitude: 42.7 });
+
     facade.setInteractionMode('default');
-    facade.setRoutePlanPreviewAnchor(null);
-    expect(clearRoutePlanPreview).toHaveBeenCalledTimes(5);
+    expect(clearPlannedLinePreview).toHaveBeenLastCalledWith('measurement');
+    nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
+    expect(setPlannedLinePreview).toHaveBeenCalledTimes(3);
+    expect(clearPlannedLinePreview).toHaveBeenCalledTimes(2);
     unsubscribe();
   });
 });

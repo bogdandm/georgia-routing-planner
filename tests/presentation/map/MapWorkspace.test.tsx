@@ -1511,6 +1511,84 @@ describe('MapWorkspace', () => {
     expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
   });
 
+  it('lets the ruler take map clicks from route planning and an enabled weather map', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    const setPlannedLineGeometry = vi.spyOn(mapLayers, 'setPlannedLineGeometry');
+    const clearPlannedLineGeometry = vi.spyOn(mapLayers, 'clearPlannedLineGeometry');
+    tracksWorkspaceMock.active = {
+      kind: 'route-plan',
+      status: 'selecting-start',
+      queuedWaypoints: [],
+      waypoints: [[44.5, 42.5]],
+    };
+    useUiStore.setState({ activeTab: 'tracks' });
+    const weatherMap = mapLayerStore.getState().weatherMap;
+    mapLayerStore.setState({ weatherMap: { ...weatherMap, enabled: true } });
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Ruler map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Ruler map');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Measure distance' }));
+    expect(screen.getByRole('button', { name: 'Measure distance' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('measurement');
+    });
+    expect(screen.queryByRole('region')).toBeNull();
+
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44, latitude: 42 });
+      facade.emitPlanningClick({ longitude: 44, latitude: 42.01 });
+      facade.emitPlanningClick({ longitude: 44, latitude: 42.02 });
+    });
+    expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
+    expect(setPlannedLineGeometry).toHaveBeenLastCalledWith(
+      'measurement',
+      [
+        {
+          kind: 'direct',
+          coordinates: [
+            [44, 42],
+            [44, 42.01],
+            [44, 42.02],
+          ],
+        },
+      ],
+      [
+        [44, 42],
+        [44, 42.01],
+        [44, 42.02],
+      ],
+    );
+    // The cursor readout continues from the last point with the distance measured so far.
+    const preview = facade.planningPreviews.at(-1);
+    expect(preview?.anchor).toEqual({ longitude: 44, latitude: 42.02 });
+    expect(preview?.measurement?.origin).toEqual({ longitude: 44, latitude: 42 });
+    expect(preview?.measurement?.distanceMeters).toBeCloseTo(2_223.9, 0);
+
+    await user.click(screen.getByRole('button', { name: 'Measure distance' }));
+    expect(clearPlannedLineGeometry).toHaveBeenLastCalledWith('measurement');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('weather-point-selection');
+    });
+    // The open route plan's last waypoint anchors the cursor preview again.
+    expect(facade.planningPreviews.at(-1)).toEqual({
+      anchor: { longitude: 44.5, latitude: 42.5 },
+    });
+  });
+
   it('uses the one-shot Weather point mode while the forecast map is disabled', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });

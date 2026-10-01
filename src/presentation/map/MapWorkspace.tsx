@@ -40,6 +40,7 @@ import type {
   MapFacade,
   MapInteractionMode,
   MapViewportMovement,
+  PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
@@ -59,6 +60,8 @@ import {
   type MapPointInspection,
 } from '@/presentation/map/mapTypes';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import {
   cancelMarkerPlacement,
   cancelWeatherPointSelection,
@@ -317,6 +320,11 @@ export function MapWorkspace({
   const terrainCommandAbort = useRef<AbortController | null>(null);
   const terrainCommandTail = useRef<Promise<void>>(Promise.resolve());
   const [online, setOnline] = useState(() => navigator.onLine);
+  // `null` while the ruler is off; an empty list means it waits for the first click.
+  const [measurementPoints, setMeasurementPoints] = useState<
+    readonly TrackCoordinate[] | null
+  >(null);
+  const measurementActive = measurementPoints !== null;
   const [contextMenu, setContextMenu] = useState<{
     readonly mouseX: number;
     readonly mouseY: number;
@@ -395,7 +403,9 @@ export function MapWorkspace({
     activeTab === 'tracks' &&
     tracksWorkspace?.active?.kind === 'route-plan' &&
     tracksWorkspace.active.status !== 'saving';
-  const weatherOwnsMapClicks = weatherMap.enabled || weatherPointSelectionActive;
+  // An enabled weather map yields clicks to the ruler; a one-shot weather pick does not.
+  const weatherOwnsMapClicks =
+    weatherPointSelectionActive || (weatherMap.enabled && !measurementActive);
   const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
   const routePlanPreviewAnchor =
     tracksWorkspace?.active?.kind === 'route-plan' && routePlanningActive
@@ -403,6 +413,36 @@ export function MapWorkspace({
         tracksWorkspace.active.waypoints.at(-1) ??
         null)
       : null;
+  const planningPreview = useMemo((): PlanningPreview | null => {
+    if (measurementPoints === null) {
+      return routePlanPreviewAnchor === null
+        ? null
+        : {
+            anchor: {
+              longitude: routePlanPreviewAnchor[0],
+              latitude: routePlanPreviewAnchor[1],
+            },
+          };
+    }
+    const [origin] = measurementPoints;
+    const anchor = measurementPoints.at(-1);
+    if (origin === undefined || anchor === undefined) return null;
+    let distanceMeters = 0;
+    for (let index = 1; index < measurementPoints.length; index += 1) {
+      const start = measurementPoints[index - 1];
+      const end = measurementPoints[index];
+      if (start !== undefined && end !== undefined) {
+        distanceMeters += geodesicDistanceMeters(start, end);
+      }
+    }
+    return {
+      anchor: { longitude: anchor[0], latitude: anchor[1] },
+      measurement: {
+        origin: { longitude: origin[0], latitude: origin[1] },
+        distanceMeters,
+      },
+    };
+  }, [measurementPoints, routePlanPreviewAnchor]);
   const fitBoundsCommand = useStore(
     mapInteractionStore,
     (state) => state.fitBoundsCommand,
@@ -687,22 +727,31 @@ export function MapWorkspace({
         ? 'marker-placement'
         : weatherOwnsMapClicks
           ? 'weather-point-selection'
-          : routePlanningActive
-            ? 'route-planning'
-            : 'default';
+          : measurementActive
+            ? 'measurement'
+            : routePlanningActive
+              ? 'route-planning'
+              : 'default';
     facade.setInteractionMode(mode);
-    if (mode === 'route-planning' || mode === 'weather-point-selection') {
+    if (mode !== 'default' && mode !== 'marker-placement') {
       facade.closePointInspection();
     }
     return () => {
       facade.setInteractionMode('default');
     };
-  }, [facade, markerPlacement, routePlanningActive, weatherOwnsMapClicks]);
+  }, [
+    facade,
+    markerPlacement,
+    measurementActive,
+    routePlanningActive,
+    weatherOwnsMapClicks,
+  ]);
 
   useEffect(() => {
     if (
       !routePlanningActive ||
       weatherOwnsMapClicks ||
+      measurementActive ||
       addRoutePlanPoint === undefined
     ) {
       return undefined;
@@ -710,21 +759,45 @@ export function MapWorkspace({
     return facade.subscribePlanningClicks((coordinate) => {
       addRoutePlanPoint([coordinate.longitude, coordinate.latitude]);
     });
-  }, [addRoutePlanPoint, facade, routePlanningActive, weatherOwnsMapClicks]);
+  }, [
+    addRoutePlanPoint,
+    facade,
+    measurementActive,
+    routePlanningActive,
+    weatherOwnsMapClicks,
+  ]);
 
   useEffect(() => {
-    facade.setRoutePlanPreviewAnchor(
-      routePlanPreviewAnchor === null
-        ? null
-        : {
-            longitude: routePlanPreviewAnchor[0],
-            latitude: routePlanPreviewAnchor[1],
-          },
+    if (!measurementActive) return undefined;
+    return facade.subscribePlanningClicks((coordinate) => {
+      setMeasurementPoints((current) =>
+        current === null
+          ? null
+          : [...current, [coordinate.longitude, coordinate.latitude]],
+      );
+    });
+  }, [facade, measurementActive]);
+
+  useEffect(() => {
+    if (mapLayers === null || measurementPoints === null) return undefined;
+    mapLayers.setPlannedLineGeometry(
+      'measurement',
+      measurementPoints.length < 2
+        ? []
+        : [{ kind: 'direct', coordinates: measurementPoints }],
+      measurementPoints,
     );
     return () => {
-      facade.setRoutePlanPreviewAnchor(null);
+      mapLayers.clearPlannedLineGeometry('measurement');
     };
-  }, [facade, routePlanPreviewAnchor]);
+  }, [mapLayers, measurementPoints]);
+
+  useEffect(() => {
+    facade.setPlanningPreview(planningPreview);
+    return () => {
+      facade.setPlanningPreview(null);
+    };
+  }, [facade, planningPreview]);
 
   useEffect(() => {
     return () => {
@@ -1166,6 +1239,9 @@ export function MapWorkspace({
   const handleOpenLayersTab = useCallback(() => {
     openWorkspaceTab('layers');
   }, [openWorkspaceTab]);
+  const handleMeasurementActiveChange = useCallback((active: boolean) => {
+    setMeasurementPoints(active ? [] : null);
+  }, []);
 
   let cameraNoticeText: string | null = null;
   if (cameraNotice === 'camera-save-failed') {
@@ -1250,6 +1326,8 @@ export function MapWorkspace({
               terrainState={terrainState}
               weatherMapDisabled={mapLayers === null || weatherMap.status === 'loading'}
               weatherMapEnabled={weatherMap.enabled}
+              measurementActive={measurementActive}
+              onMeasurementActiveChange={handleMeasurementActiveChange}
             />
             {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
@@ -1361,6 +1439,8 @@ export function MapWorkspace({
           terrainState={terrainState}
           weatherMapDisabled={mapLayers === null || weatherMap.status === 'loading'}
           weatherMapEnabled={weatherMap.enabled}
+          measurementActive={measurementActive}
+          onMeasurementActiveChange={handleMeasurementActiveChange}
         />
       ) : null}
       <ElevationGradeLegend

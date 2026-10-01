@@ -13,11 +13,25 @@ import type {
 } from '@/presentation/map/mapTypes';
 
 export type MapInteractionMode =
-  'default' | 'marker-placement' | 'route-planning' | 'weather-point-selection';
+  | 'default'
+  | 'marker-placement'
+  | 'route-planning'
+  | 'measurement'
+  | 'weather-point-selection';
 
 export type MapViewportMovement =
   | { readonly phase: 'moving' }
   | { readonly phase: 'settled'; readonly viewport: MapViewportSnapshot };
+
+/** Cursor preview that starts at the last accepted route-plan or ruler point. */
+export interface PlanningPreview {
+  readonly anchor: MapCoordinate;
+  /** Ruler only: its first point and the straight-line distance measured up to `anchor`. */
+  readonly measurement?: {
+    readonly origin: MapCoordinate;
+    readonly distanceMeters: number;
+  };
+}
 
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
@@ -27,6 +41,7 @@ export interface MapFacade {
   subscribe(listener: () => void): () => void;
   /** Replays the current settled viewport when the map has already emitted its initial settle. */
   subscribeViewportMovement(listener: (event: MapViewportMovement) => void): () => void;
+  /** Primary clicks while route planning or measuring; other modes never publish them. */
   subscribePlanningClicks(listener: (coordinate: MapCoordinate) => void): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
@@ -60,7 +75,7 @@ export interface MapFacade {
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
   setDebugOptions(options: MapDebugOptions): void;
   setInteractionMode(mode: MapInteractionMode): void;
-  setRoutePlanPreviewAnchor(coordinate: MapCoordinate | null): void;
+  setPlanningPreview(preview: PlanningPreview | null): void;
 
   /** Cancels pending transitions and removes every native listener owned by the facade. */
   destroy(): void;

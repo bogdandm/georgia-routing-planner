@@ -358,7 +358,15 @@ reports a marker change for synchronization.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
-clicks until disabled.
+clicks until disabled. The ruler's `measurement` interaction mode ranks below marker
+placement and one-shot weather selection but above an enabled weather map and route
+planning. Route planning and the ruler share `subscribePlanningClicks` and the facade's
+cursor preview; the facade draws that preview into the overlay of the active mode.
+`MapWorkspace` owns the ruler points as transient React state and passes the facade a
+`PlanningPreview` with the last point, the first point, and the distance measured so
+far. On each ruler mouse move the facade samples the first point and the cursor through
+`ElevationProvider.sampleMany`, aborting the previous sample; the last elevation
+difference stays in the label until the new sample resolves.
 
 ## Point inspection and point actions
 
@@ -439,8 +447,9 @@ Import parsing, naming, and saving are described in [features.md](features.md) a
 segments to `MapLibreLayerController.setImportedTrackGeometry`, which keeps one GeoJSON
 `MultiLineString` with a casing and line and one persistent visibility/opacity pair. In
 multi-track mode the provider combines the segments of every ready selected track into
-that geometry and fits their combined bounds. Route plans use a separate route-plan
-source with numbered waypoints.
+that geometry and fits their combined bounds. Route plans and the ruler use
+`setPlannedLineGeometry` with separate `route-plan` and `measurement` sources that share
+one blue layer structure with numbered waypoints.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

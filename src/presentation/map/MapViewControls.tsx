@@ -2,6 +2,7 @@ import { useLingui } from '@lingui/react/macro';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import StraightenIcon from '@mui/icons-material/Straighten';
 import {
   CircularProgress,
   ListItemIcon,
@@ -32,11 +33,13 @@ interface MapViewControlsProps {
   readonly hybridOverlayDisabled: boolean;
   readonly weatherMapEnabled: boolean;
   readonly weatherMapDisabled: boolean;
+  readonly measurementActive: boolean;
   readonly onTerrainModeChange: (mode: TerrainMode) => void;
   readonly onLayerPresetChange: (preset: MapLayerPreset) => boolean;
   readonly onHybridOverlayChange: (enabled: boolean) => void;
   readonly onWeatherMapChange: (enabled: boolean) => void;
   readonly onOpenLayersTab: () => void;
+  readonly onMeasurementActiveChange: (active: boolean) => void;
 }
 
 /* eslint-disable lingui/no-unlocalized-strings -- Configured provider product names stay invariant. */
@@ -78,11 +81,13 @@ export function MapViewControls({
   hybridOverlayDisabled,
   weatherMapEnabled,
   weatherMapDisabled,
+  measurementActive,
   onTerrainModeChange,
   onLayerPresetChange,
   onHybridOverlayChange,
   onWeatherMapChange,
   onOpenLayersTab,
+  onMeasurementActiveChange,
 }: MapViewControlsProps) {
   const { t } = useLingui();
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
@@ -196,6 +201,19 @@ export function MapViewControls({
               <LayersOutlinedIcon fontSize="small" />
             </ToggleButton>
           </span>
+        </Tooltip>
+        <Tooltip disableInteractive title={t`Measure distance and elevation`}>
+          <ToggleButton
+            aria-label={t`Measure distance`}
+            onChange={() => {
+              onMeasurementActiveChange(!measurementActive);
+            }}
+            selected={measurementActive}
+            sx={{ borderRadius: 0, mt: '-1px', width: 40, height: 36, p: 0 }}
+            value="measurement"
+          >
+            <StraightenIcon fontSize="small" />
+          </ToggleButton>
         </Tooltip>
       </Paper>
       <Menu

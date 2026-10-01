@@ -55,6 +55,8 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={onTerrainModeChange}
         terrainState="flat"
@@ -84,6 +86,8 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
         terrainState="enabling"
@@ -112,6 +116,8 @@ describe('MapViewControls', () => {
         onWeatherMapChange={onWeatherMapChange}
         onLayerPresetChange={() => true}
         onOpenLayersTab={onOpenLayersTab}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
       />,
@@ -166,6 +172,8 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={onLayerPresetChange}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -195,6 +203,8 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -223,6 +233,8 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -244,7 +256,7 @@ describe('MapViewControls', () => {
     ).toBeVisible();
   });
 
-  it('mounts the dimension and layer controls in the MapLibre rail', () => {
+  it('mounts the dimension, layer, and ruler controls in the MapLibre rail', () => {
     document.body.append(mapControlHost);
     const { unmount } = renderWithI18n(
       <MapViewControlsControl
@@ -258,6 +270,8 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => true}
         onTerrainModeChange={() => undefined}
         terrainState="flat"
@@ -268,7 +282,12 @@ describe('MapViewControls', () => {
       within(mapControlHost)
         .getAllByRole('button')
         .map((button) => button.getAttribute('aria-label')),
-    ).toEqual(['Show flat 2D map', 'Show 3D terrain map', 'Choose map layer preset']);
+    ).toEqual([
+      'Show flat 2D map',
+      'Show 3D terrain map',
+      'Choose map layer preset',
+      'Measure distance',
+    ]);
 
     unmount();
     expect(mapControlHost.querySelector('.map-view-controls-control')).toBeNull();

@@ -132,10 +132,18 @@ The defaults are the public OpenStreetMap Nominatim search and reverse endpoints
 - JSONv2 `category`/`type` is an open-ended OSM tag, so the adapter allowlists reviewed
   settlement, administrative, mountain, and water tags and classifies everything else as
   `other`.
-- Imported tracks may request reverse lookups (zoom 14, `Accept-Language: en`) for
-  representative points, and one Overpass query for a dominant interior summit: up to 50
-  named features within 2 km, nearest wins. Failures fall back or leave the name
-  unchanged and never block import.
+- Imported-track naming requests reverse lookups (zoom 14, `addressdetails=1`,
+  `Accept-Language: en`) that return only the largest enclosing city, town, village,
+  hamlet, or isolated dwelling, so a town quarter resolves to its town and an
+  administrative-only match names nothing.
+- Landmark lookups send one Overpass query per anchor: a single `around:2000` scan of
+  named objects into a set, in-memory filters for the categories naming ranks, at most
+  50 centres, and a declared 32 MiB `maxsize`. On the public endpoint this finished in
+  1–7 s, while a key-regex filter took up to 20 s and per-tag `around` unions timed out.
+- Overpass reports query timeouts as HTTP 200 with a `runtime error` remark; that and
+  HTTP 504 are retried twice (after 2 s and 5 s). HTTP 429 means this client's slots are
+  used and is reported without a retry. Failed lookups are skipped and explained in the
+  preview; they never block import.
 
 Queries, coordinates, and returned names are not written to diagnostics. UI attribution
 links to the OpenStreetMap copyright page.

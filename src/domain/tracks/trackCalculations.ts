@@ -54,27 +54,6 @@ export interface DominantSummit {
   readonly algorithmVersion: typeof DOMINANT_SUMMIT_ALGORITHM_VERSION;
 }
 
-export interface PoiCandidate {
-  readonly label: string;
-  readonly kind: string;
-  readonly matchedCoordinate: TrackCoordinate;
-  readonly distanceMeters?: number;
-  readonly lookedUpAt: string;
-}
-
-export function formatGeneratedPoiLabel(label: string, category: string): string {
-  if (category === 'mountain_pass:yes' && !/\bpass\b/iu.test(label)) {
-    return `${label} Pass`;
-  }
-  if (
-    (category === 'natural:peak' || category === 'natural:volcano') &&
-    !/^(?:mt\.?|mount)\s/iu.test(label)
-  ) {
-    return `Mt. ${label}`;
-  }
-  return label;
-}
-
 function radians(value: number): number {
   return (value * Math.PI) / 180;
 }
@@ -446,27 +425,6 @@ function cumulativeDistances(points: readonly TrackPoint[]): readonly number[] {
   return distances;
 }
 
-export function pointNearestFraction(
-  points: readonly TrackPoint[],
-  fraction: number,
-): TrackPoint {
-  const distances = cumulativeDistances(points);
-  const total = distances[distances.length - 1] ?? 0;
-  const target = Math.min(1, Math.max(0, fraction)) * total;
-  let closestIndex = 0;
-  let closestDelta = Number.POSITIVE_INFINITY;
-  for (const [index, distance] of distances.entries()) {
-    const delta = Math.abs(distance - target);
-    if (delta < closestDelta) {
-      closestDelta = delta;
-      closestIndex = index;
-    }
-  }
-  const point = points[closestIndex];
-  if (point === undefined) throw new Error('Representative point requires geometry.');
-  return point;
-}
-
 export function findDominantSummit(
   points: readonly TrackPoint[],
 ): DominantSummit | null {
@@ -563,44 +521,4 @@ export function isLoop(segments: readonly (readonly TrackCoordinate[])[]): boole
     geodesicDistanceMeters(start, end) <=
     Math.min(LOOP_START_FINISH_GAP_METERS, total / 2)
   );
-}
-
-function cleanLabel(candidate: PoiCandidate | undefined): string | undefined {
-  const value = candidate?.label.trim();
-  return value === undefined || value.length === 0 ? undefined : value;
-}
-
-export function generateEnglishTrackName(input: {
-  readonly loop: boolean;
-  readonly multipleSegments: boolean;
-  readonly startPoi?: PoiCandidate;
-  readonly middlePoi?: PoiCandidate;
-  readonly endPoi?: PoiCandidate;
-  readonly fallbackPoi?: PoiCandidate;
-}): string | null {
-  if (input.multipleSegments || input.loop) {
-    return (
-      cleanLabel(
-        input.fallbackPoi ?? input.middlePoi ?? input.startPoi ?? input.endPoi,
-      ) ?? null
-    );
-  }
-  const labels = [
-    cleanLabel(input.startPoi),
-    cleanLabel(input.middlePoi),
-    cleanLabel(input.endPoi),
-  ].filter((value): value is string => value !== undefined);
-  const unique = labels.filter(
-    (label, index) =>
-      labels.findIndex(
-        (candidate) =>
-          candidate.localeCompare(label, 'en', { sensitivity: 'base' }) === 0,
-      ) === index,
-  );
-  const [first, second, third] = unique;
-  if (first !== undefined && second !== undefined && third !== undefined) {
-    return `${second}: ${first} \u2192 ${third}`;
-  }
-  if (first !== undefined && second !== undefined) return `${first} \u2192 ${second}`;
-  return first ?? null;
 }

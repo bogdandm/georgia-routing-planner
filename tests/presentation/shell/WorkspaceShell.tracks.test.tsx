@@ -46,6 +46,7 @@ import {
   type TrailRouteResult,
   type LocalTrackSummary,
 } from '@test/helpers/workspaceShellTestSupport';
+import { PlaceSearchFailure } from '@/application/ports/PlaceSearchGateway';
 
 async function createTrackFolder(
   id: string,
@@ -761,6 +762,30 @@ describe('WorkspaceShell', () => {
       name: 'Expand track details',
     });
     expect(within(disclosure).getByLabelText('Distance: 1.4 km')).toBeVisible();
+  });
+
+  it('explains a missing generated name caused by a rate-limited landmark lookup', async () => {
+    const searchPlaces = services.searchPlaces;
+    expect(searchPlaces).not.toBeNull();
+    if (searchPlaces === null) return;
+    vi.spyOn(searchPlaces, 'reverseSettlement').mockResolvedValue(null);
+    vi.spyOn(searchPlaces, 'nearby').mockRejectedValue(
+      new PlaceSearchFailure('rate-limited', 'Rate limited.'),
+    );
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+    await user.upload(input, gpxFile('Rate limited.gpx'));
+
+    expect(
+      await screen.findByText(
+        /No generated name is available\. Saving is unaffected\. Nearby landmark lookup was rate-limited by the provider \(HTTP 429\)/u,
+      ),
+    ).toBeVisible();
   });
 
   it('opens active saved track details from the smartphone track list', async () => {

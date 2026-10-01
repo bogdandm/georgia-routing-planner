@@ -330,22 +330,25 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
       json: { elements },
     });
   });
-  await page.route(`${nominatimOrigin}/reverse**`, (route) =>
-    route.fulfill({
+  // Echoes the requested point so every track endpoint lies inside the settlement.
+  await page.route(`${nominatimOrigin}/reverse**`, (route) => {
+    const url = new URL(route.request().url());
+    return route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         place_id: 84,
-        lat: '42.51',
-        lon: '44.51',
-        display_name: 'Kazbegi Municipality, Georgia',
-        category: 'boundary',
-        type: 'administrative',
-        osm_type: 'relation',
+        lat: url.searchParams.get('lat'),
+        lon: url.searchParams.get('lon'),
+        display_name: 'Stepantsminda, Kazbegi Municipality, Georgia',
+        category: 'place',
+        type: 'town',
+        osm_type: 'node',
         boundingbox: ['42.40', '42.60', '44.40', '44.60'],
+        address: { town: 'Stepantsminda', county: 'Kazbegi Municipality' },
       }),
-    }),
-  );
+    });
+  });
   await page.route(
     new RegExp(`^${shortbreadOrigin.replaceAll('.', '\\.')}`),
     (route) => {

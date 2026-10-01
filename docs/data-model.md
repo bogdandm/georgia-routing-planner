@@ -92,7 +92,9 @@ optional `contentHash`, source filename and format (`gpx | fit | kml`), favorite
 `geometryKind` (`track | route`), nullable `folderId`, point and segment counts,
 `metrics`, optional DEM-derived `calculatedMetrics`, the bounded GPX metadata
 projection, up to 50 validation warnings, and optional generated-name fields
-(`generatedName`, `middleAnchorKind`, start/middle/end/fallback POI candidates).
+(`generatedName`, `middleAnchorKind` of `dominant-summit | farthest-point`, and
+start/landmark (`middlePoi`)/end POI candidates). The retired `distance-midpoint` anchor
+and `fallbackPoi` field are still accepted from older records and dropped on read.
 
 `LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
 segments of at least two points, each with coordinate and optional source elevation and

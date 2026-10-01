@@ -8,9 +8,11 @@ tracks. It runs in the browser, needs no installation, and works without an acco
 
 _This project was built 100% with LLMs._
 
-![GPX import preview with track metrics, elevation profile, and grade-colored route](./docs/assets/gpx-import-preview.png)
+![Imported track over 3D satellite terrain with metrics, grade-colored elevation profile, and weather forecast by elevation](./docs/assets/track-weather-forecast.png)
 
-![Sentinel-2 imagery search and true-color scene over 3D terrain](./docs/assets/sentinel-2-imagery.png)
+![Point weather with the current conditions, a 24-hour forecast table, and a seven-day forecast](./docs/assets/point-weather.png)
+
+![Drawing a new route over 3D terrain with live track metrics and elevation profile](./docs/assets/route-planning.png)
 
 ## Features
 

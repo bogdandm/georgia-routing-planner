@@ -603,6 +603,7 @@ always run the complete matrix. Required checks block merging.
 - `pnpm format:check`
 - `pnpm typecheck`
 - `pnpm lint`
+- `pnpm i18n:check`
 - `pnpm diagnostics:inspect -- <bundle.json>` when support-bundle work requires it
 - `pnpm build`
 - `pnpm check`
@@ -647,8 +648,12 @@ changes are complete.
    agree. Apply the complexity and cleanup rules above before running broad checks.
 2. For documentation-only changes, follow the documentation-only verification section
    and do not run executable checks.
-3. For executable code, run `pnpm format:check`, `pnpm typecheck`, and `pnpm lint` once,
-   unless a broader aggregate already includes them.
+3. For executable code, run `pnpm format:check`, `pnpm typecheck`, `pnpm lint`, and
+   `pnpm i18n:check` once, unless a broader aggregate already includes them. Run
+   `pnpm i18n:check` after the last source edit and before handing off: it re-extracts
+   the catalogs and fails when any `.po` file changes, including source-reference line
+   numbers shifted by edits to already-localized files. On failure, commit the
+   regenerated catalogs and run it again until it passes.
 4. Read and apply [`tests/AGENTS.md`](tests/AGENTS.md) when the changed behavior or
    selected verification requires Vitest. Read and apply
    [`e2e/AGENTS.md`](e2e/AGENTS.md) only when the maintainer explicitly requests local

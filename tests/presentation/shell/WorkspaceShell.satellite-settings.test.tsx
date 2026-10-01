@@ -1283,6 +1283,10 @@ describe('WorkspaceShell', () => {
   });
 
   it('persists the satellite rendering mode only from Satellite', async () => {
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    // Startup hydration would otherwise race the selection and restore the stored mode.
+    vi.spyOn(mapLayers, 'restorePersistedState').mockResolvedValue(undefined);
     const user = userEvent.setup();
     useUiStore.setState({ activeTab: 'layers' });
     renderWorkspaceShell();
@@ -1310,7 +1314,7 @@ describe('WorkspaceShell', () => {
     await user.click(sidebarMode);
     await user.click(screen.getByRole('option', { name: 'Server' }));
     await waitFor(() => {
-      expect(services.mapLayers?.getRenderingMode()).toBe('server');
+      expect(mapLayers.getRenderingMode()).toBe('server');
     });
 
     await user.click(screen.getByRole('button', { name: 'Open settings' }));
@@ -1329,6 +1333,10 @@ describe('WorkspaceShell', () => {
   });
 
   it('persists Sentinel stretch controls from Satellite', async () => {
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    // Startup hydration would otherwise race the slider and restore the stored tuning.
+    vi.spyOn(mapLayers, 'restorePersistedState').mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderWorkspaceShell();
 
@@ -1348,7 +1356,7 @@ describe('WorkspaceShell', () => {
     fireEvent.keyDown(ceiling, { key: 'Home' });
     fireEvent.keyUp(ceiling, { key: 'Home' });
     await waitFor(() => {
-      expect(services.mapLayers?.getRenderingTuning().reflectanceMax).toBe(3_000);
+      expect(mapLayers.getRenderingTuning().reflectanceMax).toBe(3_000);
     });
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
@@ -1360,7 +1368,7 @@ describe('WorkspaceShell', () => {
     fireEvent.keyDown(saturation, { key: 'End' });
     fireEvent.keyUp(saturation, { key: 'End' });
     await waitFor(() => {
-      expect(services.mapLayers?.getRenderingTuning().saturation).toBe(5);
+      expect(mapLayers.getRenderingTuning().saturation).toBe(5);
     });
   });
 

@@ -626,7 +626,10 @@ test('reports and restores a controlled WebGL context loss', async ({ page }) =>
   test.skip(!supported, 'Chromium did not expose WEBGL_lose_context.');
 
   await expect(workspace).toHaveAttribute('data-map-state', 'fatal');
-  await expect(page.getByRole('alert')).toContainText('The map could not be loaded.');
+  // The Satellite panel may also show an info alert while the lost map has no viewport.
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'The map could not be loaded.' }),
+  ).toBeVisible();
   await page.evaluate(() => {
     const testWindow = window as typeof window & {
       __mapContextExtension?: WEBGL_lose_context;

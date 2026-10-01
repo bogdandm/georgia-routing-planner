@@ -41,6 +41,9 @@ test seam, not architectural symmetry.
 - Use React Testing Library queries by role, accessible name, and visible text.
 - Use `user-event` for realistic interaction. Avoid MUI class, hook-internal, and large
   snapshot assertions.
+- `tests/setup/vitest.setup.ts` sets one suite-wide `findBy*`/`waitFor` timeout. Do not
+  pass per-call `timeout` options; wait for an observable state instead of a fixed
+  delay.
 - Use Mock Service Worker when HTTP-boundary control is useful and reset handlers after
   each test.
 - Use `fake-indexeddb` for browser persistence behavior that needs IndexedDB control.

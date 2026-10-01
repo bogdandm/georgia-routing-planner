@@ -773,11 +773,7 @@ describe('WorkspaceShell', () => {
     const loadLocalTrackContent = vi.spyOn(services.database, 'loadLocalTrackContent');
     renderWorkspaceShell();
 
-    await screen.findByRole(
-      'button',
-      { name: 'Expand track details' },
-      { timeout: 5_000 },
-    );
+    await screen.findByRole('button', { name: 'Expand track details' });
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     loadLocalTrackContent.mockClear();
     await user.click(
@@ -876,11 +872,7 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await screen.findByRole(
-      'button',
-      { name: 'Expand track details' },
-      { timeout: 5_000 },
-    );
+    await screen.findByRole('button', { name: 'Expand track details' });
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     const multiTrack = screen.getByRole('button', { name: 'Select multiple tracks' });
     await user.click(multiTrack);
@@ -1502,12 +1494,9 @@ describe('WorkspaceShell', () => {
       ?.contentHash;
     expect(sourceContentHash).toMatch(/^[0-9a-f]{64}$/u);
     trackSaved.mockClear();
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-      },
-      { timeout: 5_000 },
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
 
     demMeters = 500;
     details = screen.getByRole('complementary', { name: 'Track details' });
@@ -1815,12 +1804,9 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(saveLocalTrack).toHaveBeenCalledOnce();
     });
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-      },
-      { timeout: 5_000 },
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
     const savedDisclosure = screen.getByRole('button', {
       name: 'Climbs & Descents',
     });
@@ -1921,12 +1907,9 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Delete race.gpx'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-      },
-      { timeout: 5_000 },
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
     const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });

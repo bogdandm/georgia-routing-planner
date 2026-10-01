@@ -4,6 +4,7 @@ import {
   Box,
   ButtonBase,
   Skeleton,
+  Slider,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
@@ -21,6 +22,8 @@ import {
 
 import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
+  TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
+  TRACK_WEATHER_MINIMUM_PACE_FACTOR,
   TRACK_WEATHER_START_HOUR,
   TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
   defaultTrackWeatherDate,
@@ -119,8 +122,20 @@ export function TrackWeatherSection({
     () => selectTrackElevationLocations(profile),
     [profile],
   );
+  // The slider shows `paceDraft` while dragging; only the released value replans the
+  // timeline, so intermediate positions do not start forecast requests.
+  const [paceFactor, setPaceFactor] = useState(1);
+  const [paceDraft, setPaceDraft] = useState(1);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const paceLabelId = `${detailsId}-pace`;
   const timeline = useMemo(
-    () => planTrackWeatherTimeline(profile, metrics),
+    () => planTrackWeatherTimeline(profile, metrics, paceFactor),
+    [metrics, paceFactor, profile],
+  );
+  // Pace adjustment is offered only for tracks that qualify at their own pace; slowing
+  // one down past the limit keeps the slider so the change can be undone.
+  const paceAdjustable = useMemo(
+    () => planTrackWeatherTimeline(profile, metrics).status === 'available',
     [metrics, profile],
   );
   const locations = useMemo(() => {
@@ -322,10 +337,14 @@ export function TrackWeatherSection({
   const duration = formatTrackDuration(timeline.durationSeconds, i18n);
   const timelineCaption =
     timeline.status === 'too-long'
-      ? t`Available for day hikes shorter than ${maximumDistance} and 10 hours.`
-      : timeline.durationSource === 'recorded'
-        ? t`Starting at ${startTime} at the recorded pace, ${duration} in total.`
-        : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
+      ? t`Available for day hikes shorter than ${maximumDistance} and 12 hours.`
+      : paceFactor !== 1
+        ? t`Starting at ${startTime} at the adjusted pace, about ${duration} in total.`
+        : timeline.durationSource === 'recorded'
+          ? t`Starting at ${startTime} at the recorded pace, ${duration} in total.`
+          : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
+  const paceFormat = new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 2 });
+  const formatPace = (value: number) => `×${paceFormat.format(value)}`;
 
   return (
     <Box component="section">
@@ -404,6 +423,44 @@ export function TrackWeatherSection({
             <Typography component="h4" variant="subtitle2">
               <Trans>Along the route</Trans>
             </Typography>
+            {paceAdjustable ? (
+              <Box>
+                <Typography id={paceLabelId} variant="caption" color="text.secondary">
+                  <Trans>Adjust pace</Trans>
+                </Typography>
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ alignItems: 'center', px: 0.5 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    <Trans>Faster</Trans>
+                  </Typography>
+                  <Slider
+                    size="small"
+                    aria-labelledby={paceLabelId}
+                    min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
+                    max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
+                    step={0.05}
+                    marks={[{ value: 1 }]}
+                    value={paceDraft}
+                    // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI enum.
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatPace}
+                    getAriaValueText={formatPace}
+                    onChange={(_event, value) => {
+                      setPaceDraft(value);
+                    }}
+                    onChangeCommitted={(_event, value) => {
+                      setPaceFactor(value);
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    <Trans>Slower</Trans>
+                  </Typography>
+                </Stack>
+              </Box>
+            ) : null}
             <Typography variant="caption" color="text.secondary">
               {timelineCaption}
             </Typography>

@@ -184,15 +184,42 @@ describe('TrackWeatherSection', () => {
     );
   });
 
-  it('limits the route timeline to day hikes', () => {
+  it('limits the route timeline and pace adjustment to day hikes', () => {
     renderSection({ expanded: true, weekday: 6 }, { distanceMeters: 31_000 });
 
     expect(
-      screen.getByText('Available for day hikes shorter than 30 km and 10 hours.'),
+      screen.getByText('Available for day hikes shorter than 30 km and 12 hours.'),
     ).toBeVisible();
     expect(
       screen.queryByRole('list', { name: 'Forecast along the route' }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('slider', { name: 'Adjust pace' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('replans the route forecast for an adjusted pace', async () => {
+    const user = userEvent.setup();
+    renderSection({ expanded: true, weekday: 6 });
+    const route = () => screen.getByRole('list', { name: 'Forecast along the route' });
+    const times = () =>
+      within(route())
+        .getAllByRole('group')
+        .map((card) => card.getAttribute('aria-label')?.slice(0, 5));
+
+    screen.getByRole('slider', { name: 'Adjust pace' }).focus();
+    await user.keyboard('{Home}');
+
+    expect(times()).toEqual(['09:00', '11:45']);
+    expect(
+      screen.getByText(
+        'Starting at 09:00 at the adjusted pace, about 2h 45m in total.',
+      ),
+    ).toBeVisible();
+
+    await user.keyboard('{End}');
+
+    expect(times()).toEqual(['09:00', '12:00', '15:00', '18:00', '20:00']);
   });
 
   it('requests forecasts again when new track metrics abort the pending ones', async () => {

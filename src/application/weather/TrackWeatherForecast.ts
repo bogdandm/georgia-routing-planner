@@ -34,7 +34,7 @@ export const TRACK_WEATHER_DATE_COUNT = 7;
 /** Local hour at which the timeline assumes the hike starts. */
 export const TRACK_WEATHER_START_HOUR = 9;
 export const TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS = 30_000;
-export const TRACK_WEATHER_TIMELINE_MAXIMUM_SECONDS = 10 * 3_600;
+export const TRACK_WEATHER_TIMELINE_MAXIMUM_SECONDS = 12 * 3_600;
 export const TRACK_WEATHER_CHECKPOINT_INTERVAL_SECONDS = 3 * 3_600;
 
 const millisecondsPerDay = 86_400_000;
@@ -211,20 +211,28 @@ function locationAtElapsed(
   };
 }
 
+/** Bounds of the forecast-only pace adjustment, as a multiplier of hiking time. */
+export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
+export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
+
 /**
  * Places the hiker on the route every three hours from the start and at the finish.
  * Recorded timestamps drive the pace when the track has a recorded duration; otherwise
  * the DIN 33466 estimate adds climbing and descending time to horizontal walking time.
- * Only day hikes qualify: shorter than 30 km and 10 hours.
+ * `paceFactor` stretches (above 1) or compresses that time for the forecast only.
+ * Only day hikes qualify: shorter than 30 km and, after the adjustment, 12 hours.
  */
 export function planTrackWeatherTimeline(
   profile: ElevationProfile,
   metrics: Pick<TrackMetrics, 'distanceMeters' | 'elapsedSeconds' | 'estimatedSeconds'>,
+  paceFactor = 1,
 ): TrackWeatherTimeline {
   const { points } = profile;
   const recorded =
     metrics.elapsedSeconds === undefined ? null : recordedElapsedSeconds(points);
-  const elapsed = recorded ?? estimatedElapsedSeconds(points, metrics.estimatedSeconds);
+  const elapsed = (
+    recorded ?? estimatedElapsedSeconds(points, metrics.estimatedSeconds)
+  ).map((seconds) => seconds * paceFactor);
   const durationSeconds = elapsed.at(-1) ?? 0;
   if (
     metrics.distanceMeters >= TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS ||

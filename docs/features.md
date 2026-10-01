@@ -225,10 +225,14 @@ start and shows where the hiker is every three hours and at the finish, each wit
 forecast at that location from its arrival hour until the next checkpoint; the finish
 covers its arrival hour. The pace follows recorded timestamps when the track has
 recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
-flat walking. The timeline is offered only for day hikes shorter than 30 km and 10
-hours. Cards reuse the 7-day forecast rows from Weather and request each location with
-its profile elevation. Clicking a loaded forecast row opens Weather with the full
-forecast at that location and elevation, labelled with the card's point or time.
+flat walking. The timeline is offered only for day hikes shorter than 30 km and 12
+hours. For those tracks an **Adjust pace** slider scales the timeline from ×0.5 (faster)
+to ×2 (slower) and replans the checkpoints on release; it is session-only and never
+changes the track's recorded or estimated time. Slowing a track past 12 hours hides the
+timeline until the pace is reduced. Cards reuse the 7-day forecast rows from Weather and
+request each location with its profile elevation. Clicking a loaded forecast row opens
+Weather with the full forecast at that location and elevation, labelled with the card's
+point or time.
 
 #### Multi-track view
 

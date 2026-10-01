@@ -263,7 +263,7 @@ describe('planTrackWeatherTimeline', () => {
     ).toMatchObject({ status: 'available', durationSource: 'estimated' });
   });
 
-  it('is unavailable for tracks of 30 km or 10 hours and longer', () => {
+  it('is unavailable for tracks of 30 km or 12 hours and longer', () => {
     expect(
       planTrackWeatherTimeline(ridgeProfile(), {
         distanceMeters: 30_000,
@@ -273,9 +273,29 @@ describe('planTrackWeatherTimeline', () => {
     expect(
       planTrackWeatherTimeline(ridgeProfile(), {
         distanceMeters: 12_000,
-        estimatedSeconds: 10 * hour,
+        estimatedSeconds: 12 * hour,
       }),
-    ).toMatchObject({ status: 'too-long', durationSeconds: 10 * hour });
+    ).toMatchObject({ status: 'too-long', durationSeconds: 12 * hour });
+    expect(
+      planTrackWeatherTimeline(ridgeProfile(), {
+        distanceMeters: 12_000,
+        estimatedSeconds: 11.5 * hour,
+      }),
+    ).toMatchObject({ status: 'available' });
+  });
+
+  it('stretches or compresses the timeline by the pace factor', () => {
+    const metrics = { distanceMeters: 12_000, estimatedSeconds: 5.5 * hour };
+
+    const faster = planTrackWeatherTimeline(ridgeProfile(), metrics, 0.5);
+    expect(faster).toMatchObject({ status: 'available' });
+    if (faster.status !== 'available') return;
+    expect(faster.durationSeconds).toBeCloseTo(2.75 * hour, 6);
+    expect(faster.checkpoints.map((value) => value.kind)).toEqual(['start', 'finish']);
+    // Slowed beyond the day-hike limit: 5.5 h × 2.2 = 12.1 h.
+    expect(planTrackWeatherTimeline(ridgeProfile(), metrics, 2.2)).toMatchObject({
+      status: 'too-long',
+    });
   });
 });
 

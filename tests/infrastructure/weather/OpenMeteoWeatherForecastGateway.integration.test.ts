@@ -243,38 +243,110 @@ describe('OpenMeteoWeatherForecastGateway', () => {
     services.dispose();
   });
 
+  const fastRetryConfiguration = {
+    ...weatherProviderConfiguration,
+    requestRetryBaseDelayMs: 1,
+  };
+  const pointInput = {
+    coordinate: { longitude: -74.006, latitude: 40.7128 },
+    elevationMeters: null,
+    model: 'ecmwf_ifs' as const,
+  };
+
+  it.each([429, 500, 503])(
+    'recovers after transient HTTP %i responses',
+    async (status) => {
+      const forecast = vi
+        .fn<() => Response>()
+        .mockReturnValueOnce(HttpResponse.json({}, { status }))
+        .mockReturnValueOnce(HttpResponse.json({}, { status }))
+        .mockReturnValue(HttpResponse.json(responseFixture()));
+      mswServer.use(http.get(weatherProviderConfiguration.forecastUrl, forecast));
+      installMetadata();
+      const { services, gateway } = createGateway(fastRetryConfiguration);
+
+      await expect(
+        gateway.fetch(pointInput, new AbortController().signal),
+      ).resolves.toMatchObject({ timezone: 'America/New_York' });
+
+      expect(forecast).toHaveBeenCalledTimes(3);
+      services.dispose();
+    },
+  );
+
+  it('waits for the provider Retry-After before retrying a rate limit', async () => {
+    const forecast = vi
+      .fn<() => Response>()
+      .mockReturnValueOnce(
+        HttpResponse.json({}, { status: 429, headers: { 'Retry-After': '0.05' } }),
+      )
+      .mockReturnValue(HttpResponse.json(responseFixture()));
+    mswServer.use(http.get(weatherProviderConfiguration.forecastUrl, forecast));
+    installMetadata();
+    const { services, gateway } = createGateway(fastRetryConfiguration);
+    const startedAt = performance.now();
+
+    await gateway.fetch(pointInput, new AbortController().signal);
+
+    expect(forecast).toHaveBeenCalledTimes(2);
+    expect(performance.now() - startedAt).toBeGreaterThanOrEqual(45);
+    services.dispose();
+  });
+
   it.each([
     {
       name: 'rate limit',
       response: () => HttpResponse.json({}, { status: 429 }),
       code: 'provider-rate-limited',
+      attempts: fastRetryConfiguration.requestRetryLimit + 1,
     },
     {
       name: 'server failure',
       response: () => HttpResponse.json({}, { status: 503 }),
       code: 'provider-unavailable',
+      attempts: fastRetryConfiguration.requestRetryLimit + 1,
+    },
+    {
+      name: 'client error',
+      response: () => HttpResponse.json({}, { status: 400 }),
+      code: 'invalid-request',
+      attempts: 1,
     },
     {
       name: 'network failure',
       response: () => HttpResponse.error(),
       code: 'provider-unavailable',
+      attempts: 1,
     },
-  ])('maps $name without an automatic retry', async ({ response, code }) => {
+  ])('maps $name after $attempts attempt(s)', async ({ response, code, attempts }) => {
     const forecast = vi.fn(response);
+    mswServer.use(http.get(weatherProviderConfiguration.forecastUrl, forecast));
+    installMetadata();
+    const { services, gateway } = createGateway(fastRetryConfiguration);
+
+    await expect(
+      gateway.fetch(pointInput, new AbortController().signal),
+    ).rejects.toMatchObject({ code });
+
+    expect(forecast).toHaveBeenCalledTimes(attempts);
+    services.dispose();
+  });
+
+  it('does not retry after the caller aborts a failed attempt', async () => {
+    const controller = new AbortController();
+    const forecast = vi.fn(() => {
+      queueMicrotask(() => {
+        controller.abort();
+      });
+      return HttpResponse.json({}, { status: 503 });
+    });
     mswServer.use(http.get(weatherProviderConfiguration.forecastUrl, forecast));
     installMetadata();
     const { services, gateway } = createGateway();
 
-    await expect(
-      gateway.fetch(
-        {
-          coordinate: { longitude: -74.006, latitude: 40.7128 },
-          elevationMeters: null,
-          model: 'ecmwf_ifs',
-        },
-        new AbortController().signal,
-      ),
-    ).rejects.toMatchObject({ code });
+    await expect(gateway.fetch(pointInput, controller.signal)).rejects.toMatchObject({
+      name: 'AbortError',
+    });
 
     expect(forecast).toHaveBeenCalledOnce();
     services.dispose();

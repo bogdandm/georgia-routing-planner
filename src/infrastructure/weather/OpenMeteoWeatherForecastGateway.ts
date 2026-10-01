@@ -1,4 +1,10 @@
-import { HTTPError, TimeoutError, type KyInstance } from 'ky';
+import {
+  HTTPError,
+  TimeoutError,
+  isHTTPError,
+  type KyInstance,
+  type RetryOptions,
+} from 'ky';
 import { z } from 'zod';
 
 import type { Clock } from '@/application/ports/Clock';
@@ -148,6 +154,11 @@ const metadataSchema = z
   .loose();
 
 type ForecastResponse = z.infer<typeof forecastSchema>;
+
+/** Rate limits and transient server failures; 501/505-style permanent 5xx are not retried. */
+const retriedStatusCodes = [429, 500, 502, 503, 504];
+/** Caps a provider `Retry-After` so one rate limit cannot stall a forecast indefinitely. */
+const maximumRetryAfterMs = 10_000;
 
 interface MetadataCacheEntry {
   readonly modelRunAt: string;
@@ -327,13 +338,28 @@ function mapTransportError(error: unknown): PointWeatherForecastError {
 /** Open-Meteo adapter for one explicit ECMWF point-model request. */
 export class OpenMeteoWeatherForecastGateway implements WeatherForecastGateway {
   readonly #metadataCache = new Map<WeatherModel, MetadataCacheEntry>();
+  readonly #retry: RetryOptions;
 
   public constructor(
     private readonly httpClient: KyInstance,
     private readonly configuration: WeatherProviderConfiguration,
     private readonly clock: Clock,
     private readonly idGenerator: IdGenerator,
-  ) {}
+  ) {
+    const { requestRetryLimit, requestRetryBaseDelayMs } = configuration;
+    // Ky owns the retry loop: it honors `Retry-After` on 429/503, stops on abort, and
+    // applies the timeout per attempt. Full jitter spreads the concurrent track and
+    // marker requests that were rate-limited together. Network errors are not retried.
+    this.#retry = {
+      limit: requestRetryLimit,
+      methods: ['get'],
+      statusCodes: retriedStatusCodes,
+      maxRetryAfter: maximumRetryAfterMs,
+      delay: (attempt) => requestRetryBaseDelayMs * 2 ** (attempt - 1),
+      jitter: true,
+      shouldRetry: ({ error }) => (isHTTPError(error) ? undefined : false),
+    };
+  }
 
   public async fetch(
     input: {
@@ -382,7 +408,7 @@ export class OpenMeteoWeatherForecastGateway implements WeatherForecastGateway {
         .get(this.configuration.forecastUrl, {
           cache: 'no-store',
           context: { operationId },
-          retry: 0,
+          retry: this.#retry,
           searchParams,
           signal,
           timeout: this.configuration.requestTimeoutMs,
@@ -435,7 +461,7 @@ export class OpenMeteoWeatherForecastGateway implements WeatherForecastGateway {
         .get(this.configuration.models[model].metadataUrl, {
           cache: 'no-store',
           context: { operationId },
-          retry: 0,
+          retry: this.#retry,
           signal,
           timeout: this.configuration.requestTimeoutMs,
         })

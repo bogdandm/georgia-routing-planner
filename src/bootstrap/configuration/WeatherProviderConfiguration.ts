@@ -16,6 +16,9 @@ export interface WeatherProviderConfiguration {
   readonly attributionUrl: string;
   readonly licenseUrl: string;
   readonly requestTimeoutMs: number;
+  /** Retries after HTTP 429 or a transient 5xx; exponential base delay with full jitter. */
+  readonly requestRetryLimit: number;
+  readonly requestRetryBaseDelayMs: number;
   readonly metadataTtlMs: number;
   readonly map: WeatherMapConfiguration;
   readonly models: Readonly<Record<WeatherModel, WeatherModelConfiguration>>;
@@ -26,6 +29,8 @@ export const weatherProviderConfiguration = {
   attributionUrl: 'https://open-meteo.com/',
   licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
   requestTimeoutMs: 15_000,
+  requestRetryLimit: 3,
+  requestRetryBaseDelayMs: 1_000,
   metadataTtlMs: 600_000,
   map: {
     model: 'ecmwf_ifs025',

@@ -140,6 +140,7 @@ export default tseslint.config(
       'src/presentation/tracks/ElevationProfileChart.tsx',
       'src/presentation/tracks/RoutePlanControls.tsx',
       'src/presentation/tracks/TrackMarkersSection.tsx',
+      'src/presentation/tracks/TrackWeatherSection.tsx',
       'src/presentation/tracks/ClimbsDescentsSection.tsx',
       'src/presentation/tracks/TrackSummary.tsx',
       'src/presentation/tracks/TrackThumbnailImage.tsx',

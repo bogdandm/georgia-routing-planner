@@ -14,7 +14,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import {
@@ -981,109 +981,132 @@ function SummaryPeriod({
   );
 }
 
-function DailyPeriodRow({
+/**
+ * One forecast period row. With `onOpen` it is a button; `openLabel` names its action
+ * and defaults to opening the 24-hour table. `stacked` always places the condition under
+ * the temperature, the layout narrow viewports use, for rows in narrow containers.
+ */
+export function DailyPeriodRow({
   dateLabel,
   isDay,
   label,
   onOpen,
+  openLabel,
   period,
+  stacked = false,
 }: {
   readonly dateLabel: string;
   readonly isDay: boolean;
   readonly label: string;
-  readonly onOpen: (triggerElement: HTMLElement) => void;
+  readonly onOpen?: (triggerElement: HTMLElement) => void;
+  readonly openLabel?: string;
   readonly period: PointWeatherForecastPeriod;
+  readonly stacked?: boolean;
 }) {
   const values = periodDisplayValues(period);
-  return (
-    <Box component="article" aria-label={`${label} forecast`}>
-      <ButtonBase
-        type="button"
-        aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
-        onClick={(event) => {
-          onOpen(event.currentTarget);
-        }}
+  const stackedGrid = {
+    gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
+    gridTemplateAreas:
+      '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
+    rowGap: 0,
+  } as const;
+  const rowSx = {
+    width: '100%',
+    minWidth: 0,
+    minHeight: 44,
+    display: 'grid',
+    gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
+    gridTemplateAreas: '"icon temperature condition precipitation metrics"',
+    alignItems: 'center',
+    columnGap: 0.5,
+    px: 1,
+    py: 0.375,
+    color: 'text.primary',
+    textAlign: 'left',
+    ...(stacked ? stackedGrid : {}),
+    '@media (max-width: 479px)': stackedGrid,
+  } as const;
+  const content = (
+    <>
+      <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
+        <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
+      </Box>
+      <Typography
+        variant="caption"
+        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
         sx={{
-          width: '100%',
-          minWidth: 0,
-          minHeight: 44,
-          display: 'grid',
-          gridTemplateColumns: '36px 58px minmax(0, 1fr) 52px 76px',
-          gridTemplateAreas: '"icon temperature condition precipitation metrics"',
-          alignItems: 'center',
-          columnGap: 0.5,
-          px: 1,
-          py: 0.375,
-          color: 'text.primary',
-          textAlign: 'left',
-          '@media (max-width: 479px)': {
-            gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
-            gridTemplateAreas:
-              '"icon temperature precipitation metrics" "icon condition precipitation metrics"',
-            rowGap: 0,
-          },
-          '&:hover': { bgcolor: 'action.hover' },
-          '&.Mui-focusVisible': {
-            boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
-          },
+          gridArea: 'temperature',
+          fontSize: '0.75rem',
+          fontWeight: 700,
+          lineHeight: 1.25,
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
         }}
       >
-        <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
-          <PeriodGraphic isDay={isDay} label={label} period={period} size={36} />
-        </Box>
-        <Typography
-          variant="caption"
-          aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+        {values.temperature}
+      </Typography>
+      <Typography
+        variant="caption"
+        sx={{
+          gridArea: 'condition',
+          minWidth: 0,
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+          fontSize: '0.68rem',
+          lineHeight: 1.2,
+        }}
+      >
+        {period.status.primary.label}
+      </Typography>
+      <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
+        <CompactMetricValue
+          kind="precipitation"
+          label={`${label} precipitation`}
+          value={values.precipitation}
+          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          compact
+        />
+      </Box>
+      <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
+        <CompactMetricValue
+          kind="wind"
+          label={`${label} wind`}
+          value={values.wind}
+          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          compact
+        />
+        <CompactMetricValue
+          kind="gusts"
+          label={`${label} gusts`}
+          value={values.gusts}
+          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          compact
+        />
+      </Stack>
+    </>
+  );
+  return (
+    <Box component="article" aria-label={`${label} forecast`}>
+      {onOpen === undefined ? (
+        <Box sx={rowSx}>{content}</Box>
+      ) : (
+        <ButtonBase
+          type="button"
+          aria-label={openLabel ?? `Open 24-hour forecast for ${label}, ${dateLabel}`}
+          onClick={(event) => {
+            onOpen(event.currentTarget);
+          }}
           sx={{
-            gridArea: 'temperature',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            lineHeight: 1.25,
-            fontVariantNumeric: 'tabular-nums',
-            whiteSpace: 'nowrap',
+            ...rowSx,
+            '&:hover': { bgcolor: 'action.hover' },
+            '&.Mui-focusVisible': {
+              boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
+            },
           }}
         >
-          {values.temperature}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            gridArea: 'condition',
-            minWidth: 0,
-            whiteSpace: 'normal',
-            overflowWrap: 'anywhere',
-            fontSize: '0.68rem',
-            lineHeight: 1.2,
-          }}
-        >
-          {period.status.primary.label}
-        </Typography>
-        <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
-          <CompactMetricValue
-            kind="precipitation"
-            label={`${label} precipitation`}
-            value={values.precipitation}
-            ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
-            compact
-          />
-        </Box>
-        <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
-          <CompactMetricValue
-            kind="wind"
-            label={`${label} wind`}
-            value={values.wind}
-            ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
-            compact
-          />
-          <CompactMetricValue
-            kind="gusts"
-            label={`${label} gusts`}
-            value={values.gusts}
-            ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
-            compact
-          />
-        </Stack>
-      </ButtonBase>
+          {content}
+        </ButtonBase>
+      )}
     </Box>
   );
 }
@@ -1130,26 +1153,31 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
   );
 }
 
-function DayForecastRow({
-  day,
-  onOpenHourly,
+/** Outlined forecast card with a labelled left column, as in the 7-day forecast. */
+export function WeatherForecastCard({
+  children,
+  headerWidth = 52,
+  highlighted = false,
+  label,
+  subtitle,
+  title,
 }: {
-  readonly day: PointWeatherForecastDay;
-  readonly onOpenHourly: OpenDailyHourlyForecast;
+  readonly children: ReactNode;
+  readonly headerWidth?: number;
+  readonly highlighted?: boolean;
+  readonly label: string;
+  readonly subtitle: string;
+  readonly title: string;
 }) {
-  const weekday = localWeekday(day.date);
-  const weekend = weekday === 'Sat' || weekday === 'Sun';
-  const dateLabel = `${weekday} ${localDateLabel(day.date)}`;
   return (
     <Paper
       data-weather-day-card
       role="group"
       variant="outlined"
-      aria-label={`${weekday} ${localDateLabel(day.date)}`}
+      aria-label={label}
       sx={{
-        minHeight: 80,
         display: 'grid',
-        gridTemplateColumns: '52px minmax(0, 1fr)',
+        gridTemplateColumns: `${headerWidth.toString()}px minmax(0, 1fr)`,
         borderColor: 'divider',
         borderRadius: 1.25,
         overflow: 'hidden',
@@ -1158,51 +1186,70 @@ function DayForecastRow({
       <Box
         sx={{
           minWidth: 0,
-          my: weekend ? 0 : 1,
+          my: highlighted ? 0 : 1,
           px: 1,
-          py: weekend ? 1 : 0,
+          py: highlighted ? 1 : 0,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          bgcolor: weekend ? appColors.tag.orange.background : 'transparent',
-          color: weekend ? appColors.tag.orange.foreground : 'text.primary',
-          borderRight: weekend ? 0 : 1,
+          bgcolor: highlighted ? appColors.tag.orange.background : 'transparent',
+          color: highlighted ? appColors.tag.orange.foreground : 'text.primary',
+          borderRight: highlighted ? 0 : 1,
           borderColor: 'divider',
         }}
       >
         <Typography variant="body2" sx={{ color: 'inherit', fontWeight: 700 }}>
-          {weekday}
+          {title}
         </Typography>
         <Typography
           variant="caption"
-          color={weekend ? 'inherit' : 'text.secondary'}
+          color={highlighted ? 'inherit' : 'text.secondary'}
           sx={{ whiteSpace: 'nowrap' }}
         >
-          {localDateLabel(day.date)}
+          {subtitle}
         </Typography>
       </Box>
-      <Stack sx={{ minWidth: 0, py: 0.25 }}>
-        <DailyPeriodRow
-          dateLabel={dateLabel}
-          label="Day"
-          period={day.day}
-          isDay
-          onOpen={(triggerElement) => {
-            onOpenHourly(day, true, triggerElement);
-          }}
-        />
-        <Divider sx={{ mx: 0.75 }} />
-        <DailyPeriodRow
-          dateLabel={dateLabel}
-          label="Night"
-          period={day.night}
-          isDay={false}
-          onOpen={(triggerElement) => {
-            onOpenHourly(day, false, triggerElement);
-          }}
-        />
-      </Stack>
+      <Stack sx={{ minWidth: 0, py: 0.25, justifyContent: 'center' }}>{children}</Stack>
     </Paper>
+  );
+}
+
+function DayForecastRow({
+  day,
+  onOpenHourly,
+}: {
+  readonly day: PointWeatherForecastDay;
+  readonly onOpenHourly: OpenDailyHourlyForecast;
+}) {
+  const weekday = localWeekday(day.date);
+  const dateLabel = `${weekday} ${localDateLabel(day.date)}`;
+  return (
+    <WeatherForecastCard
+      label={dateLabel}
+      title={weekday}
+      subtitle={localDateLabel(day.date)}
+      highlighted={weekday === 'Sat' || weekday === 'Sun'}
+    >
+      <DailyPeriodRow
+        dateLabel={dateLabel}
+        label="Day"
+        period={day.day}
+        isDay
+        onOpen={(triggerElement) => {
+          onOpenHourly(day, true, triggerElement);
+        }}
+      />
+      <Divider sx={{ mx: 0.75 }} />
+      <DailyPeriodRow
+        dateLabel={dateLabel}
+        label="Night"
+        period={day.night}
+        isDay={false}
+        onOpen={(triggerElement) => {
+          onOpenHourly(day, false, triggerElement);
+        }}
+      />
+    </WeatherForecastCard>
   );
 }
 

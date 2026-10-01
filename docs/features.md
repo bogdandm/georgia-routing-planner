@@ -189,10 +189,13 @@ Selecting a track draws it in bright blue, fits its bounds around the open panes
 opens a detail pane with metrics, actions, provenance, and an elevation profile. The
 stats grid shows duration, distance, average speed, and **Elevation gain**/**Elevation
 loss**; tracks with source elevation also list the calculated Terrarium gain and loss.
-Missing measurements are omitted. Source file, point/segment counts, and the saved
-timestamp follow. Closing the track removes its geometry without moving the camera. From
-900 through 1899 CSS pixels, **Back to tracks** restores the prior list state; at 1900
-and above the pane stays adjacent and uses **Close track**.
+Without recorded time, duration is an **Estimated time** (`≈`) from DIN 33466 hiking
+rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent, with the larger of the
+horizontal and vertical times counted fully and the smaller by half. Breaks are not
+included. Missing measurements are omitted. Source file, point/segment counts, and the
+saved timestamp follow. Closing the track removes its geometry without moving the
+camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the prior list
+state; at 1900 and above the pane stays adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
 **Download KML**, sharing, **Rename** (an inline name editor), and **Delete track**.
@@ -211,6 +214,25 @@ Editable single tracks show a collapsed **Markers** section with an add action, 
 navigation, inline rename, and two-stage deletion. Only the active editable track
 renders its markers, smaller than saved markers. Track markers are stored in track
 content and synchronize as track metadata without changing geometry or content hashes.
+
+Tracks with an elevation profile show a **Weather forecast** section below Markers. It
+starts collapsed; whether it is expanded is remembered in this browser for every track,
+and forecasts load only while it is open. It begins with seven forecast dates from
+today; choosing one remembers its weekday for all tracks, and the next Saturday is
+selected until then. **By elevation** shows the daytime forecast at the highest,
+median-elevation, and lowest profile points. **Along the route** assumes a 09:00 local
+start and shows where the hiker is every three hours and at the finish, each with the
+forecast at that location from its arrival hour until the next checkpoint; the finish
+covers its arrival hour. The pace follows recorded timestamps when the track has
+recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
+flat walking. The timeline is offered only for day hikes shorter than 30 km and 12
+hours. For those tracks an **Adjust pace** slider scales the timeline from ×0.5 (faster)
+to ×2 (slower) and replans the checkpoints on release; it is session-only and never
+changes the track's recorded or estimated time. Slowing a track past 12 hours hides the
+timeline until the pace is reduced. Cards reuse the 7-day forecast rows from Weather and
+request each location with its profile elevation. Clicking a loaded forecast row opens
+Weather with the full forecast at that location and elevation, labelled with the card's
+point or time.
 
 #### Multi-track view
 

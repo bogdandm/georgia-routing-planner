@@ -204,6 +204,32 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('keeps track forecast preferences collapsed on Saturday until saved and repairs invalid ones', async () => {
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: false,
+      weekday: 6,
+    });
+
+    await database.saveTrackWeatherPreferences({ expanded: true, weekday: 3 });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: true,
+      weekday: 3,
+    });
+
+    await database.settings.put({
+      key: 'weather.track-preferences',
+      value: { expanded: true, weekday: 7 },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: false,
+      weekday: 6,
+    });
+    await expect(
+      database.settings.get('weather.track-preferences'),
+    ).resolves.toBeUndefined();
+  });
+
   it('persists at most 21 unique recently used marker icons and repairs invalid data', async () => {
     await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
 
@@ -887,6 +913,55 @@ describe('AppDatabase', () => {
     await expect(database.trackSyncStates.get('local:route')).resolves.toEqual(
       expect.objectContaining({ pendingKind: null }),
     );
+  });
+
+  it('stores walking-time estimates for version 10 tracks without recorded time', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(10).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      trackFolders: 'id,normalizedName,position',
+      folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      localTrackThumbnails: 'trackId',
+    });
+    const untimed = localTrackSummary();
+    const climbing: LocalTrackSummary = {
+      ...untimed,
+      metrics: { ...untimed.metrics, ascentMeters: 900, descentMeters: 500 },
+      calculatedMetrics: {
+        ...untimed.metrics,
+        distanceMeters: 12_000,
+        ascentMeters: 300,
+        descentMeters: 0,
+        elevationAlgorithmVersion: 4,
+      },
+    };
+    const timed: LocalTrackSummary = {
+      ...climbing,
+      id: 'local:timed',
+      metrics: { ...climbing.metrics, elapsedSeconds: 3_600 },
+    };
+    await legacy.table('localTracks').bulkPut([climbing, timed]);
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    // 1 km = 0.25 h; 900 m up + 500 m down = 4 h; 4 h + 0.25 h / 2.
+    await expect(database.localTracks.get(climbing.id)).resolves.toMatchObject({
+      metrics: { estimatedSeconds: 4.125 * 3_600 },
+      calculatedMetrics: { estimatedSeconds: 3.5 * 3_600 },
+    });
+    const timedRow = await database.localTracks.get('local:timed');
+    expect(timedRow?.metrics.estimatedSeconds).toBeUndefined();
+    expect(timedRow?.calculatedMetrics?.estimatedSeconds).toBe(3.5 * 3_600);
   });
 
   it('keeps collapsed folders locally and discards an unreadable list', async () => {

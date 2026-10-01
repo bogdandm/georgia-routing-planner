@@ -47,7 +47,7 @@ the SQL in `supabase/migrations`, and the Edge Function validators in
 
 ## IndexedDB schema
 
-`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 10. Earlier
+`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 11. Earlier
 versions exist only as upgrade steps.
 
 | Store                  | Key        | Record                                                             |
@@ -68,20 +68,21 @@ upsert.
 
 ### Settings keys
 
-| Key                             | Value                                                                                                                   |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort |
-| `map.camera`                    | Schema version 3: last settled longitude, latitude, and zoom; bearing and pitch are session-only                        |
-| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options            |
-| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                            |
-| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                    |
-| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                          |
-| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                       |
-| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                |
-| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                            |
-| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                             |
-| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                           |
-| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                       |
+| Key                             | Value                                                                                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort            |
+| `map.camera`                    | Schema version 3: last settled longitude, latitude, and zoom; bearing and pitch are session-only                                   |
+| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options                       |
+| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                       |
+| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                               |
+| `weather.track-preferences`     | Whether the track **Weather forecast** section is expanded and its preferred weekday (default collapsed, Saturday); never uploaded |
+| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                     |
+| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                  |
+| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                           |
+| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                                       |
+| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                                        |
+| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                                      |
+| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                                  |
 
 ## Local tracks
 
@@ -107,7 +108,11 @@ antimeridian-aware bounds, center, optional recorded start/end and elapsed secon
 optional ascent/descent/min/max elevation with `elevationSource` (`gpx | dem-assisted`)
 and a matching `elevationAlgorithmVersion`. `calculatedMetrics` must be DEM-assisted
 version 4. Recorded duration is absent unless every rendered point has an ordered valid
-timestamp.
+timestamp. Without it, metrics with ascent and descent carry `estimatedSeconds`, the DIN
+33466 walking time from `estimateHikingSeconds` in
+`src/domain/tracks/trackCalculations.ts`. Database version 11 fills the estimate into
+summaries saved earlier; like other calculated values it is browser-local and never
+synchronized.
 
 `contentHash` is the lowercase SHA-256 of canonical GRPT v2 bytes of `trackPoints`
 (`src/infrastructure/runtime/WebCryptoTrackContentHasher.ts`). It is absent only on rows

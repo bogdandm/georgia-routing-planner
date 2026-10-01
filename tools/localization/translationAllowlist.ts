@@ -15,4 +15,9 @@ export const translationAllowlist: readonly TranslationAllowlistEntry[] = [
     messageId: 'FX4c9a',
     reason: 'Русский is the language self-name shown in the selector.',
   },
+  {
+    catalog: 'tracks',
+    messageId: 'C6vDEv',
+    reason: 'The approximation sign before an already localized duration is invariant.',
+  },
 ];

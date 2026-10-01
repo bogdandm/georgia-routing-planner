@@ -29,6 +29,11 @@ export interface TrackMetrics {
   readonly recordedStartAt?: string;
   readonly recordedEndAt?: string;
   readonly elapsedSeconds?: number;
+  /**
+   * DIN 33466 walking-time estimate without breaks. Present only when the track has no
+   * recorded duration and known ascent/descent.
+   */
+  readonly estimatedSeconds?: number;
   readonly ascentMeters?: number;
   readonly descentMeters?: number;
   readonly minimumElevationMeters?: number;
@@ -407,7 +412,56 @@ export function calculateTrackMetrics(
     result.ascentMeters = ascentMeters;
     result.descentMeters = descentMeters;
   }
+  const estimatedSeconds = estimatedTrackSeconds(result);
+  if (estimatedSeconds !== undefined) result.estimatedSeconds = estimatedSeconds;
   return result;
+}
+
+const hikingHorizontalMetersPerHour = 4_000;
+const hikingAscentMetersPerHour = 300;
+const hikingDescentMetersPerHour = 500;
+
+/**
+ * DIN 33466 hiking time: horizontal time at 4 km/h and vertical time at 300 m/h ascent
+ * plus 500 m/h descent; the larger of the two counts fully and the smaller by half.
+ * The result is monotonic in each argument, so it also yields elapsed time along a track
+ * from cumulative distance, ascent, and descent.
+ */
+export function estimateHikingSeconds(
+  distanceMeters: number,
+  ascentMeters: number,
+  descentMeters: number,
+): number {
+  const horizontalHours = distanceMeters / hikingHorizontalMetersPerHour;
+  const verticalHours =
+    ascentMeters / hikingAscentMetersPerHour +
+    descentMeters / hikingDescentMetersPerHour;
+  return (
+    (Math.max(horizontalHours, verticalHours) +
+      Math.min(horizontalHours, verticalHours) / 2) *
+    3_600
+  );
+}
+
+/** Estimate stored for tracks without recorded time; undefined when time is recorded. */
+export function estimatedTrackSeconds(
+  metrics: Pick<
+    TrackMetrics,
+    'distanceMeters' | 'elapsedSeconds' | 'ascentMeters' | 'descentMeters'
+  >,
+): number | undefined {
+  if (
+    metrics.elapsedSeconds !== undefined ||
+    metrics.ascentMeters === undefined ||
+    metrics.descentMeters === undefined
+  ) {
+    return undefined;
+  }
+  return estimateHikingSeconds(
+    metrics.distanceMeters,
+    metrics.ascentMeters,
+    metrics.descentMeters,
+  );
 }
 
 function cumulativeDistances(points: readonly TrackPoint[]): readonly number[] {

@@ -179,6 +179,11 @@ import {
 import { MarkerEditorDialog } from '@/presentation/markers/MarkerEditorDialog';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
+import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
+import {
+  defaultTrackWeatherPreferences,
+  type TrackWeatherPreferences,
+} from '@/application/weather/TrackWeatherForecast';
 import {
   formatTrackDistance,
   formatTrackElevation,
@@ -302,6 +307,11 @@ interface TracksWorkspaceValue {
   /** Folders shown collapsed; remembered in this browser only. */
   readonly collapsedFolderIds: ReadonlySet<string>;
   readonly toggleFolderCollapsed: (folderId: string) => void;
+  /** Forecast disclosure and weekday shared by every track; null until loaded. */
+  readonly trackWeatherPreferences: TrackWeatherPreferences | null;
+  readonly updateTrackWeatherPreferences: (
+    preferences: TrackWeatherPreferences,
+  ) => void;
   readonly createFolder: (name: string, iconKey: TrackFolderIconKey) => Promise<void>;
   readonly updateFolder: (
     folder: TrackFolder,
@@ -562,6 +572,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [trackWeatherPreferences, setTrackWeatherPreferences] =
+    useState<TrackWeatherPreferences | null>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
@@ -610,6 +622,23 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       window.clearTimeout(timer);
     };
   }, [editableTrackId, markerCreationCommand, multiTrackMode]);
+  useEffect(() => {
+    let current = true;
+    void database
+      .loadTrackWeatherPreferences()
+      .catch((): TrackWeatherPreferences => {
+        // View state only: an unreadable record falls back to the defaults.
+        logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+        return defaultTrackWeatherPreferences;
+      })
+      .then((loaded) => {
+        // A choice made before the stored record arrived wins over it.
+        if (current) setTrackWeatherPreferences((existing) => existing ?? loaded);
+      });
+    return () => {
+      current = false;
+    };
+  }, [database, logger]);
   useEffect(() => {
     if (
       markerPlacement?.target.kind === 'track-marker' &&
@@ -829,6 +858,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         });
     },
     [collapsedFolderIds, database, folders, logger],
+  );
+  const updateTrackWeatherPreferences = useCallback(
+    (preferences: TrackWeatherPreferences) => {
+      setTrackWeatherPreferences(preferences);
+      void database.saveTrackWeatherPreferences(preferences).catch(() => {
+        logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+      });
+    },
+    [database, logger],
   );
 
   // The folder editor dialog reports these failures, so they are rethrown
@@ -2692,6 +2730,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       folders,
       collapsedFolderIds,
       toggleFolderCollapsed,
+      trackWeatherPreferences,
+      updateTrackWeatherPreferences,
       createFolder,
       updateFolder,
       deleteFolder,
@@ -2751,6 +2791,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       folders,
       collapsedFolderIds,
       toggleFolderCollapsed,
+      trackWeatherPreferences,
+      updateTrackWeatherPreferences,
       importErrorMessage,
       importFiles,
       importState,
@@ -4643,6 +4685,7 @@ export function TrackDetailsPane({
 }: TrackDetailsPaneProps) {
   const {
     active,
+    activeProfile,
     activeStatsMetrics,
     applyGeneratedName,
     closeActive,
@@ -4665,7 +4708,9 @@ export function TrackDetailsPane({
     setNextSegmentMode,
     toggleFavorite,
     toggleMultiTrackMode,
+    trackWeatherPreferences,
     undoLastRoutePlanPoint,
+    updateTrackWeatherPreferences,
   } = useTracksWorkspace();
   const { t, i18n } = useLingui();
   const trackMarkers =
@@ -5573,6 +5618,17 @@ export function TrackDetailsPane({
               onAdd={startTrackMarkerPlacement}
               onRename={renameTrackMarker}
               onDelete={deleteTrackMarker}
+            />
+          )}
+          {active.kind === 'route-plan' ||
+          activeProfile === null ||
+          metrics === null ? null : (
+            <TrackWeatherSection
+              key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
+              profile={activeProfile}
+              metrics={metrics}
+              preferences={trackWeatherPreferences}
+              onPreferencesChange={updateTrackWeatherPreferences}
             />
           )}
           {active.kind === 'route-plan' ? null : (

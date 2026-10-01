@@ -15,13 +15,13 @@ msgstr ""
 
 #. js-lingui-id: 1y-zxu
 #. placeholder {0}: selection.summary.name
-#: src/presentation/tracks/TracksWorkspace.tsx:4959
+#: src/presentation/tracks/TracksWorkspace.tsx:5004
 msgid "{0} track details"
 msgstr "Сведения о треке «{0}»"
 
 #. js-lingui-id: QUiwqi
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3726
+#: src/presentation/tracks/TracksWorkspace.tsx:3768
 msgid "{0} tracks"
 msgstr "Треки в папке «{0}»"
 
@@ -63,7 +63,7 @@ msgid "{hours}h {minutes}m"
 msgstr "{hours} ч {minutes} мин"
 
 #. js-lingui-id: HM5aeT
-#: src/presentation/tracks/TrackSummary.tsx:60
+#: src/presentation/tracks/TrackSummary.tsx:64
 msgid "{label}: {value}"
 msgstr "{label} — {value}"
 
@@ -73,32 +73,32 @@ msgid "{maximumElevationMeters, plural, one {Elevation profile from {minimumElev
 msgstr "{maximumElevationMeters, plural, one {Профиль высот от {minimumElevation} до # метра} few {Профиль высот от {minimumElevation} до # метров} many {Профиль высот от {minimumElevation} до # метров} other {Профиль высот от {minimumElevation} до # метра}}"
 
 #. js-lingui-id: RO_lsm
-#: src/presentation/tracks/TracksWorkspace.tsx:496
+#: src/presentation/tracks/TracksWorkspace.tsx:506
 msgid "{maximumMarkers, plural, one {A track can have up to # marker.} other {A track can have up to # markers.}}"
 msgstr "{maximumMarkers, plural, one {Трек может содержать не более # метки.} few {Трек может содержать не более # меток.} many {Трек может содержать не более # меток.} other {Трек может содержать не более # метки.}}"
 
 #. js-lingui-id: 3hnzF8
-#: src/presentation/tracks/TracksWorkspace.tsx:4635
+#: src/presentation/tracks/TracksWorkspace.tsx:4677
 msgid "{message} (point {pointNumber})"
 msgstr "{message} (точка {pointNumber})"
 
 #. js-lingui-id: RkHtfQ
-#: src/presentation/tracks/TracksWorkspace.tsx:4630
+#: src/presentation/tracks/TracksWorkspace.tsx:4672
 msgid "{message} (segment {segmentNumber}, point {pointNumber})"
 msgstr "{message} (сегмент {segmentNumber}, точка {pointNumber})"
 
 #. js-lingui-id: guWhax
-#: src/presentation/tracks/TracksWorkspace.tsx:4633
+#: src/presentation/tracks/TracksWorkspace.tsx:4675
 msgid "{message} (segment {segmentNumber})"
 msgstr "{message} (сегмент {segmentNumber})"
 
 #. js-lingui-id: CrwWJw
-#: src/presentation/tracks/TracksWorkspace.tsx:4485
+#: src/presentation/tracks/TracksWorkspace.tsx:4527
 msgid "{pointCount, plural, one {# point} other {# points}} · {segmentCount, plural, one {# segment} other {# segments}}"
 msgstr "{pointCount, plural, one {# точка} few {# точки} many {# точек} other {# точки}} · {segmentCount, plural, one {# сегмент} few {# сегмента} many {# сегментов} other {# сегмента}}"
 
 #. js-lingui-id: l1OB5S
-#: src/presentation/tracks/TrackSummary.tsx:129
+#: src/presentation/tracks/TrackSummary.tsx:141
 msgid "{speed} km/h"
 msgstr "{speed} км/ч"
 
@@ -108,54 +108,59 @@ msgid "{totalTiles, plural, one {Elevation profile loading: {completedTileCount}
 msgstr "{totalTiles, plural, one {Загрузка профиля высот: {completedTileCount} из # тайла} few {Загрузка профиля высот: {completedTileCount} из # тайлов} many {Загрузка профиля высот: {completedTileCount} из # тайлов} other {Загрузка профиля высот: {completedTileCount} из # тайла}}"
 
 #. js-lingui-id: rh2wFH
-#: src/presentation/tracks/TracksWorkspace.tsx:4063
+#: src/presentation/tracks/TracksWorkspace.tsx:4105
 msgid "{trackCount, plural, one {Search # saved track} other {Search # saved tracks}}"
 msgstr "{trackCount, plural, one {Поиск среди # сохранённого трека} few {Поиск среди # сохранённых треков} many {Поиск среди # сохранённых треков} other {Поиск среди # сохранённого трека}}"
 
 #. js-lingui-id: pXTSNf
-#: src/presentation/tracks/TracksWorkspace.tsx:5596
+#: src/presentation/tracks/TracksWorkspace.tsx:5652
 msgid "{warningCount, plural, one {Imported with # validation warning} other {Imported with # validation warnings}}"
 msgstr "{warningCount, plural, one {Импортировано с # предупреждением проверки} few {Импортировано с # предупреждениями проверки} many {Импортировано с # предупреждениями проверки} other {Импортировано с # предупреждениями проверки}}"
 
 #. js-lingui-id: BEi0CZ
-#: src/presentation/tracks/TracksWorkspace.tsx:5488
+#: src/presentation/tracks/TracksWorkspace.tsx:5533
 msgid "↑ Apply place name ↑"
 msgstr "↑ Применить название места ↑"
 
+#. js-lingui-id: C6vDEv
+#: src/presentation/tracks/TrackSummary.tsx:123
+msgid "≈{duration}"
+msgstr "≈{duration}"
+
 #. js-lingui-id: dvb1sX
-#: src/presentation/tracks/TracksWorkspace.tsx:4617
+#: src/presentation/tracks/TracksWorkspace.tsx:4659
 msgid "A point with an invalid timestamp was retained without time."
 msgstr "Точка с некорректной отметкой времени сохранена без времени."
 
 #. js-lingui-id: iaNZ48
-#: src/presentation/tracks/TracksWorkspace.tsx:4613
+#: src/presentation/tracks/TracksWorkspace.tsx:4655
 msgid "A point with invalid coordinates was skipped."
 msgstr "Точка с некорректными координатами пропущена."
 
 #. js-lingui-id: n9L-x2
-#: src/presentation/tracks/TracksWorkspace.tsx:4615
+#: src/presentation/tracks/TracksWorkspace.tsx:4657
 msgid "A segment with fewer than two valid points was skipped."
 msgstr "Сегмент, в котором меньше двух корректных точек, пропущен."
 
 #. js-lingui-id: Xb3fsF
-#: src/presentation/tracks/TracksWorkspace.tsx:4614
+#: src/presentation/tracks/TracksWorkspace.tsx:4656
 msgid "A waypoint with invalid coordinates was skipped."
 msgstr "Путевая точка с некорректными координатами пропущена."
 
 #. js-lingui-id: kCoVTh
-#: src/presentation/tracks/TracksWorkspace.tsx:4436
+#: src/presentation/tracks/TracksWorkspace.tsx:4478
 msgid "Add at least two route points to see the elevation profile."
 msgstr "Добавьте хотя бы две точки маршрута, чтобы увидеть профиль высот."
 
 #. js-lingui-id: fMI_Yi
-#: src/presentation/tracks/TracksWorkspace.tsx:5554
+#: src/presentation/tracks/TracksWorkspace.tsx:5599
 msgid "Add at least two route points to see track details."
 msgstr "Добавьте хотя бы две точки маршрута, чтобы увидеть сведения о треке."
 
 #. js-lingui-id: pBsoKL
-#: src/presentation/tracks/TracksWorkspace.tsx:3405
-#: src/presentation/tracks/TracksWorkspace.tsx:3413
-#: src/presentation/tracks/TracksWorkspace.tsx:5289
+#: src/presentation/tracks/TracksWorkspace.tsx:3447
+#: src/presentation/tracks/TracksWorkspace.tsx:3455
+#: src/presentation/tracks/TracksWorkspace.tsx:5334
 msgid "Add to favorites"
 msgstr "Добавить в избранное"
 
@@ -166,19 +171,39 @@ msgid "Add track marker"
 msgstr "Добавить метку трека"
 
 #. js-lingui-id: pvz19Z
-#: src/presentation/tracks/TracksWorkspace.tsx:4619
+#: src/presentation/tracks/TracksWorkspace.tsx:4661
 msgid "Additional GPX validation warnings were omitted."
 msgstr "Остальные предупреждения проверки GPX не показаны."
 
 #. js-lingui-id: nXV9Bp
-#: src/presentation/tracks/TracksWorkspace.tsx:4618
+#: src/presentation/tracks/TracksWorkspace.tsx:4660
 msgid "Additional valid waypoints were omitted."
 msgstr "Остальные корректные путевые точки не включены."
 
+#. js-lingui-id: rKEsFD
+#: src/presentation/tracks/TrackWeatherSection.tsx:433
+msgid "Adjust pace"
+msgstr "Темп"
+
+#. js-lingui-id: Gbx5p_
+#: src/presentation/tracks/TrackWeatherSection.tsx:428
+msgid "Along the route"
+msgstr "По маршруту"
+
 #. js-lingui-id: wmtKjA
-#: src/presentation/tracks/TracksWorkspace.tsx:5484
+#: src/presentation/tracks/TracksWorkspace.tsx:5529
 msgid "Apply place name"
 msgstr "Применить название места"
+
+#. js-lingui-id: -zt5fR
+#: src/presentation/tracks/TrackWeatherSection.tsx:293
+msgid "At {distance}"
+msgstr "На {distance}"
+
+#. js-lingui-id: 926sk4
+#: src/presentation/tracks/TrackWeatherSection.tsx:344
+msgid "Available for day hikes shorter than {maximumDistance} and 12 hours."
+msgstr "Доступно для однодневных походов короче {maximumDistance} и 12 часов."
 
 #. js-lingui-id: WBiJLk
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:316
@@ -186,18 +211,18 @@ msgid "Average grade"
 msgstr "Средний уклон"
 
 #. js-lingui-id: 4zUd3z
-#: src/presentation/tracks/TrackSummary.tsx:128
+#: src/presentation/tracks/TrackSummary.tsx:140
 msgid "Average speed"
 msgstr "Средняя скорость"
 
 #. js-lingui-id: leKdGm
-#: src/presentation/tracks/TracksWorkspace.tsx:4892
-#: src/presentation/tracks/TracksWorkspace.tsx:5124
+#: src/presentation/tracks/TracksWorkspace.tsx:4937
+#: src/presentation/tracks/TracksWorkspace.tsx:5169
 msgid "Back to tracks"
 msgstr "Назад к трекам"
 
 #. js-lingui-id: QIgTCB
-#: src/presentation/tracks/TracksWorkspace.tsx:3007
+#: src/presentation/tracks/TracksWorkspace.tsx:3049
 msgid "Browse track file"
 msgstr "Выбрать файл трека"
 
@@ -206,6 +231,11 @@ msgstr "Выбрать файл трека"
 msgid "Building route graph… {graphProgress}"
 msgstr "Построение графа маршрутов… {graphProgress}"
 
+#. js-lingui-id: 67TcRf
+#: src/presentation/tracks/TrackWeatherSection.tsx:418
+msgid "By elevation"
+msgstr "По высоте"
+
 #. js-lingui-id: dEgA5A
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:163
 #: src/presentation/tracks/TrackMarkersSection.tsx:258
@@ -213,12 +243,12 @@ msgid "Cancel"
 msgstr "Отмена"
 
 #. js-lingui-id: 88TfUJ
-#: src/presentation/tracks/TracksWorkspace.tsx:1375
+#: src/presentation/tracks/TracksWorkspace.tsx:1413
 msgid "Choose a file with a .gpx, .fit, or .kml extension."
 msgstr "Выберите файл с расширением .gpx, .fit или .kml."
 
 #. js-lingui-id: SLO2Wr
-#: src/presentation/tracks/TracksWorkspace.tsx:1369
+#: src/presentation/tracks/TracksWorkspace.tsx:1407
 msgid "Choose exactly one GPX, FIT, or KML file."
 msgstr "Выберите один файл GPX, FIT или KML."
 
@@ -255,47 +285,47 @@ msgid "Climbs & Descents"
 msgstr "Подъёмы и спуски"
 
 #. js-lingui-id: 2IOueG
-#: src/presentation/tracks/TracksWorkspace.tsx:4940
+#: src/presentation/tracks/TracksWorkspace.tsx:4985
 msgid "Close multi-track view"
 msgstr "Закрыть просмотр нескольких треков"
 
 #. js-lingui-id: rgd-X9
-#: src/presentation/tracks/TracksWorkspace.tsx:5412
+#: src/presentation/tracks/TracksWorkspace.tsx:5457
 msgid "Close track"
 msgstr "Закрыть трек"
 
 #. js-lingui-id: tTipyO
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3647
+#: src/presentation/tracks/TracksWorkspace.tsx:3689
 msgid "Collapse {0}"
 msgstr "Свернуть папку «{0}»"
 
 #. js-lingui-id: 82gRfM
-#: src/presentation/tracks/TracksWorkspace.tsx:4883
-#: src/presentation/tracks/TracksWorkspace.tsx:5114
+#: src/presentation/tracks/TracksWorkspace.tsx:4928
+#: src/presentation/tracks/TracksWorkspace.tsx:5159
 msgid "Collapse track details"
 msgstr "Свернуть сведения о треке"
 
 #. js-lingui-id: 25r4HG
-#: src/presentation/tracks/TracksWorkspace.tsx:4952
+#: src/presentation/tracks/TracksWorkspace.tsx:4997
 msgid "Combined track details"
 msgstr "Сводные сведения о треках"
 
 #. js-lingui-id: mgJ1oe
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:155
-#: src/presentation/tracks/TracksWorkspace.tsx:5232
+#: src/presentation/tracks/TracksWorkspace.tsx:5277
 msgid "Confirm delete"
 msgstr "Подтвердить удаление"
 
 #. js-lingui-id: jPpVoJ
 #: src/presentation/tracks/TrackMarkersSection.tsx:347
-#: src/presentation/tracks/TracksWorkspace.tsx:3431
+#: src/presentation/tracks/TracksWorkspace.tsx:3473
 msgid "Confirm deletion"
 msgstr "Подтвердить удаление"
 
 #. js-lingui-id: oXVNQJ
 #. placeholder {0}: summary.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3438
+#: src/presentation/tracks/TracksWorkspace.tsx:3480
 msgid "Confirm deletion of {0}"
 msgstr "Подтвердить удаление: {0}"
 
@@ -305,26 +335,31 @@ msgid "Confirm deletion of {markerName}"
 msgstr "Подтвердить удаление: {markerName}"
 
 #. js-lingui-id: wAvLtU
-#: src/presentation/tracks/TracksWorkspace.tsx:5179
-#: src/presentation/tracks/TracksWorkspace.tsx:5183
+#: src/presentation/tracks/TracksWorkspace.tsx:5224
+#: src/presentation/tracks/TracksWorkspace.tsx:5228
 msgid "Confirm rename"
 msgstr "Подтвердить переименование"
 
 #. js-lingui-id: RGCCrg
-#: src/presentation/tracks/TracksWorkspace.tsx:5361
+#: src/presentation/tracks/TracksWorkspace.tsx:5406
 msgid "Copy share link"
 msgstr "Скопировать ссылку"
 
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:109
-#: src/presentation/tracks/TracksWorkspace.tsx:4082
-#: src/presentation/tracks/TracksWorkspace.tsx:4085
+#: src/presentation/tracks/TracksWorkspace.tsx:4124
+#: src/presentation/tracks/TracksWorkspace.tsx:4127
 msgid "Create folder"
 msgstr "Создать папку"
 
+#. js-lingui-id: H7OUPr
+#: src/presentation/tracks/TrackWeatherSection.tsx:266
+msgid "Day"
+msgstr "День"
+
 #. js-lingui-id: Y2tU6I
 #. placeholder {0}: summary.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3439
+#: src/presentation/tracks/TracksWorkspace.tsx:3481
 msgid "Delete {0}"
 msgstr "Удалить {0}"
 
@@ -344,8 +379,8 @@ msgid "Delete marker"
 msgstr "Удалить метку"
 
 #. js-lingui-id: 0mPUcN
-#: src/presentation/tracks/TracksWorkspace.tsx:3431
-#: src/presentation/tracks/TracksWorkspace.tsx:5395
+#: src/presentation/tracks/TracksWorkspace.tsx:3473
+#: src/presentation/tracks/TracksWorkspace.tsx:5440
 msgid "Delete track"
 msgstr "Удалить трек"
 
@@ -356,87 +391,87 @@ msgid "Descent {typeNumber}"
 msgstr "Спуск {typeNumber}"
 
 #. js-lingui-id: 6jxjQX
-#: src/presentation/tracks/TracksWorkspace.tsx:4616
+#: src/presentation/tracks/TracksWorkspace.tsx:4658
 msgid "Detailed track geometry was used instead of companion route geometry."
 msgstr "Вместо геометрии сопутствующего маршрута использована подробная геометрия трека."
 
 #. js-lingui-id: bzSI52
 #: src/presentation/tracks/RoutePlanControls.tsx:264
-#: src/presentation/tracks/TracksWorkspace.tsx:5527
+#: src/presentation/tracks/TracksWorkspace.tsx:5572
 msgid "Discard"
 msgstr "Сбросить"
 
 #. js-lingui-id: wiyCKM
-#: src/presentation/tracks/TracksWorkspace.tsx:1383
+#: src/presentation/tracks/TracksWorkspace.tsx:1421
 msgid "Discard the current unsaved track and import another file?"
 msgstr "Сбросить текущий несохранённый трек и импортировать другой файл?"
 
 #. js-lingui-id: 83FTde
-#: src/presentation/tracks/TracksWorkspace.tsx:2302
+#: src/presentation/tracks/TracksWorkspace.tsx:2340
 msgid "Discard the current unsaved track and open the saved track?"
 msgstr "Сбросить текущий несохранённый трек и открыть сохранённый?"
 
 #. js-lingui-id: yt_w_T
-#: src/presentation/tracks/TracksWorkspace.tsx:1519
+#: src/presentation/tracks/TracksWorkspace.tsx:1557
 msgid "Discard the current unsaved track and start a new route?"
 msgstr "Сбросить текущий несохранённый трек и начать новый маршрут?"
 
 #. js-lingui-id: caNaPD
-#: src/presentation/tracks/TracksWorkspace.tsx:1773
-#: src/presentation/tracks/TracksWorkspace.tsx:2171
+#: src/presentation/tracks/TracksWorkspace.tsx:1811
+#: src/presentation/tracks/TracksWorkspace.tsx:2209
 msgid "Discard this unsaved track?"
 msgstr "Сбросить этот несохранённый трек?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:249
-#: src/presentation/tracks/TrackSummary.tsx:116
-#: src/presentation/tracks/TracksWorkspace.tsx:3384
+#: src/presentation/tracks/TrackSummary.tsx:128
+#: src/presentation/tracks/TracksWorkspace.tsx:3426
 msgid "Distance"
 msgstr "Расстояние"
 
 #. js-lingui-id: FhJza8
-#: src/presentation/tracks/TracksWorkspace.tsx:2808
+#: src/presentation/tracks/TracksWorkspace.tsx:2850
 msgid "Distance from map center"
 msgstr "По расстоянию от центра карты"
 
 #. js-lingui-id: VbJKn0
-#: src/presentation/tracks/TracksWorkspace.tsx:5236
-#: src/presentation/tracks/TracksWorkspace.tsx:5239
+#: src/presentation/tracks/TracksWorkspace.tsx:5281
+#: src/presentation/tracks/TracksWorkspace.tsx:5284
 msgid "Download GPX"
 msgstr "Скачать GPX"
 
 #. js-lingui-id: Lg315q
-#: src/presentation/tracks/TracksWorkspace.tsx:5303
+#: src/presentation/tracks/TracksWorkspace.tsx:5348
 msgid "Download KML"
 msgstr "Скачать KML"
 
 #. js-lingui-id: h_r3dC
-#: src/presentation/tracks/TracksWorkspace.tsx:4908
-#: src/presentation/tracks/TracksWorkspace.tsx:4912
+#: src/presentation/tracks/TracksWorkspace.tsx:4953
+#: src/presentation/tracks/TracksWorkspace.tsx:4957
 msgid "Download selected tracks"
 msgstr "Скачать выбранные треки"
 
 #. js-lingui-id: BLhYQr
-#: src/presentation/tracks/TracksWorkspace.tsx:2999
-#: src/presentation/tracks/TracksWorkspace.tsx:3087
+#: src/presentation/tracks/TracksWorkspace.tsx:3041
+#: src/presentation/tracks/TracksWorkspace.tsx:3129
 msgid "Drop GPX, FIT, or KML here"
 msgstr "Перетащите сюда файл GPX, FIT или KML"
 
 #. js-lingui-id: E2u3_n
-#: src/presentation/tracks/TracksWorkspace.tsx:3042
+#: src/presentation/tracks/TracksWorkspace.tsx:3084
 msgid "Drop track file"
 msgstr "Перетащите файл трека"
 
 #. js-lingui-id: AHjV65
-#: src/presentation/tracks/TracksWorkspace.tsx:3721
-#: src/presentation/tracks/TracksWorkspace.tsx:3812
+#: src/presentation/tracks/TracksWorkspace.tsx:3763
+#: src/presentation/tracks/TracksWorkspace.tsx:3854
 msgid "Drop tracks here"
 msgstr "Перетащите треки сюда"
 
 #. js-lingui-id: N6j2JH
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3694
-#: src/presentation/tracks/TracksWorkspace.tsx:3698
+#: src/presentation/tracks/TracksWorkspace.tsx:3736
+#: src/presentation/tracks/TracksWorkspace.tsx:3740
 msgid "Edit {0}"
 msgstr "Редактировать {0}"
 
@@ -452,26 +487,26 @@ msgid "Elevation"
 msgstr "Высота"
 
 #. js-lingui-id: OhnUCw
-#: src/presentation/tracks/TracksWorkspace.tsx:2128
+#: src/presentation/tracks/TracksWorkspace.tsx:2166
 msgid "Elevation could not be recalculated."
 msgstr "Не удалось пересчитать высоты."
 
 #. js-lingui-id: 6QkXnq
-#: src/presentation/tracks/TracksWorkspace.tsx:478
+#: src/presentation/tracks/TracksWorkspace.tsx:488
 msgid "Elevation data is unavailable for this track."
 msgstr "Для этого трека нет данных о высоте."
 
 #. js-lingui-id: c3aKIi
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:267
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:294
-#: src/presentation/tracks/TrackSummary.tsx:136
-#: src/presentation/tracks/TracksWorkspace.tsx:3390
+#: src/presentation/tracks/TrackSummary.tsx:148
+#: src/presentation/tracks/TracksWorkspace.tsx:3432
 msgid "Elevation gain"
 msgstr "Набор высоты"
 
 #. js-lingui-id: MR1xHP
-#: src/presentation/tracks/TracksWorkspace.tsx:4510
-#: src/presentation/tracks/TracksWorkspace.tsx:4514
+#: src/presentation/tracks/TracksWorkspace.tsx:4552
+#: src/presentation/tracks/TracksWorkspace.tsx:4556
 msgid "Elevation gain (calculated): {calculatedAscent}"
 msgstr "Набор высоты (расчётный): {calculatedAscent}"
 
@@ -483,25 +518,25 @@ msgstr "Данные о высоте недоступны. Геометрия м
 #. js-lingui-id: Z9RdI1
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:268
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:293
-#: src/presentation/tracks/TrackSummary.tsx:143
+#: src/presentation/tracks/TrackSummary.tsx:155
 msgid "Elevation loss"
 msgstr "Сброс высоты"
 
 #. js-lingui-id: XZCvTw
-#: src/presentation/tracks/TracksWorkspace.tsx:4519
-#: src/presentation/tracks/TracksWorkspace.tsx:4523
+#: src/presentation/tracks/TracksWorkspace.tsx:4561
+#: src/presentation/tracks/TracksWorkspace.tsx:4565
 msgid "Elevation loss (calculated): {calculatedDescent}"
 msgstr "Сброс высоты (расчётный): {calculatedDescent}"
 
 #. js-lingui-id: jeOXaS
-#: src/presentation/tracks/TracksWorkspace.tsx:1465
+#: src/presentation/tracks/TracksWorkspace.tsx:1503
 msgid "Elevation preparation failed."
 msgstr "Не удалось подготовить данные о высоте."
 
 #. js-lingui-id: fGXQ-P
 #: src/presentation/tracks/ElevationProfileChart.tsx:369
 #: src/presentation/tracks/ElevationProfileChart.tsx:496
-#: src/presentation/tracks/TracksWorkspace.tsx:4419
+#: src/presentation/tracks/TracksWorkspace.tsx:4461
 msgid "Elevation profile"
 msgstr "Профиль высот"
 
@@ -516,7 +551,7 @@ msgid "Elevation unavailable"
 msgstr "Высота недоступна"
 
 #. js-lingui-id: 7HgnzO
-#: src/presentation/tracks/TracksWorkspace.tsx:5492
+#: src/presentation/tracks/TracksWorkspace.tsx:5537
 msgid "English place name"
 msgstr "Название места на английском"
 
@@ -530,16 +565,31 @@ msgstr "Введите название папки."
 msgid "Enter a marker name."
 msgstr "Введите название метки."
 
+#. js-lingui-id: -nuEh_
+#: src/presentation/tracks/TrackSummary.tsx:122
+msgid "Estimated time"
+msgstr "Расчётное время"
+
 #. js-lingui-id: WXp971
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3647
+#: src/presentation/tracks/TracksWorkspace.tsx:3689
 msgid "Expand {0}"
 msgstr "Развернуть папку «{0}»"
 
+#. js-lingui-id: qmIOJX
+#: src/presentation/tracks/TrackWeatherSection.tsx:441
+msgid "Faster"
+msgstr "Быстрее"
+
 #. js-lingui-id: mjgLBr
-#: src/presentation/tracks/TracksWorkspace.tsx:488
+#: src/presentation/tracks/TracksWorkspace.tsx:498
 msgid "Files with DTD or entity declarations are not supported."
 msgstr "Файлы с объявлениями DTD или сущностей не поддерживаются."
+
+#. js-lingui-id: JmZ_-d
+#: src/presentation/tracks/TrackWeatherSection.tsx:292
+msgid "Finish"
+msgstr "Финиш"
 
 #. js-lingui-id: F7cy8b
 #: src/presentation/tracks/ElevationProfileChart.tsx:160
@@ -556,23 +606,43 @@ msgstr "Название папки"
 msgid "Folder names must be 200 characters or fewer."
 msgstr "Название папки должно быть не длиннее 200 символов."
 
+#. js-lingui-id: 2JKkIm
+#: src/presentation/tracks/TrackWeatherSection.tsx:472
+msgid "Forecast along the route"
+msgstr "Прогноз по маршруту"
+
+#. js-lingui-id: AFitTJ
+#: src/presentation/tracks/TrackWeatherSection.tsx:420
+msgid "Forecast by elevation"
+msgstr "Прогноз по высоте"
+
+#. js-lingui-id: qpYeDl
+#: src/presentation/tracks/TrackWeatherSection.tsx:391
+msgid "Forecast date"
+msgstr "Дата прогноза"
+
+#. js-lingui-id: _WH_9-
+#: src/presentation/tracks/TrackWeatherSection.tsx:421
+msgid "Highest"
+msgstr "Высшая точка"
+
 #. js-lingui-id: LjMWQs
-#: src/presentation/tracks/TracksWorkspace.tsx:4099
+#: src/presentation/tracks/TracksWorkspace.tsx:4141
 msgid "Import a GPX, FIT, or KML file to preview it, then save it in this browser."
 msgstr "Импортируйте файл GPX, FIT или KML, чтобы просмотреть его, а затем сохраните в этом браузере."
 
 #. js-lingui-id: EtUh8b
-#: src/presentation/tracks/TracksWorkspace.tsx:2953
+#: src/presentation/tracks/TracksWorkspace.tsx:2995
 msgid "Import track file"
 msgstr "Импортировать файл трека"
 
 #. js-lingui-id: ZwUT0o
-#: src/presentation/tracks/TracksWorkspace.tsx:5590
+#: src/presentation/tracks/TracksWorkspace.tsx:5646
 msgid "Independent segments are not joined; totals exclude gaps."
 msgstr "Независимые сегменты не соединяются; итоги не учитывают разрывы."
 
 #. js-lingui-id: tWKSiS
-#: src/presentation/tracks/TracksWorkspace.tsx:4035
+#: src/presentation/tracks/TracksWorkspace.tsx:4077
 msgid "Item dropped."
 msgstr "Элемент перемещён."
 
@@ -607,24 +677,29 @@ msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Загрузка тайлов маршрутов… {loadedTiles}/{totalTiles}"
 
 #. js-lingui-id: 5nnEsR
-#: src/presentation/tracks/TracksWorkspace.tsx:5334
+#: src/presentation/tracks/TracksWorkspace.tsx:5379
 msgid "Loading sharing status"
 msgstr "Загрузка статуса общего доступа"
 
 #. js-lingui-id: z2Yq69
-#: src/presentation/tracks/TracksWorkspace.tsx:4979
+#: src/presentation/tracks/TracksWorkspace.tsx:5024
 msgid "Loading track…"
 msgstr "Загрузка трека…"
 
 #. js-lingui-id: NJHTJk
-#: src/presentation/tracks/TracksWorkspace.tsx:5461
+#: src/presentation/tracks/TracksWorkspace.tsx:5506
 msgid "Looking up representative places"
 msgstr "Поиск характерных мест"
 
 #. js-lingui-id: 3uOeA5
-#: src/presentation/tracks/TracksWorkspace.tsx:5465
+#: src/presentation/tracks/TracksWorkspace.tsx:5510
 msgid "Looking up representative places…"
 msgstr "Поиск характерных мест…"
+
+#. js-lingui-id: 05qZg8
+#: src/presentation/tracks/TrackWeatherSection.tsx:423
+msgid "Lowest"
+msgstr "Низшая точка"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/tracks/TrackMarkersSection.tsx:230
@@ -646,70 +721,75 @@ msgstr "Метки"
 msgid "Markers ({markerCount})"
 msgstr "Метки ({markerCount})"
 
+#. js-lingui-id: jbPrMa
+#: src/presentation/tracks/TrackWeatherSection.tsx:422
+msgid "Median"
+msgstr "Медиана"
+
 #. js-lingui-id: Z9u6zw
 #. placeholder {0}: summary.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3344
+#: src/presentation/tracks/TracksWorkspace.tsx:3386
 msgid "Move {0}"
 msgstr "Переместить {0}"
 
 #. js-lingui-id: VZdoAN
-#: src/presentation/tracks/TracksWorkspace.tsx:4038
+#: src/presentation/tracks/TracksWorkspace.tsx:4080
 msgid "Move cancelled."
 msgstr "Перемещение отменено."
 
 #. js-lingui-id: RSjgBr
-#: src/presentation/tracks/TracksWorkspace.tsx:4856
+#: src/presentation/tracks/TracksWorkspace.tsx:4901
 msgid "Multiple track details"
 msgstr "Сведения о нескольких треках"
 
 #. js-lingui-id: 6YtxFj
-#: src/presentation/tracks/TracksWorkspace.tsx:2806
+#: src/presentation/tracks/TracksWorkspace.tsx:2848
 msgid "Name"
 msgstr "По названию"
 
 #. js-lingui-id: geqCyR
-#: src/presentation/tracks/TracksWorkspace.tsx:443
+#: src/presentation/tracks/TracksWorkspace.tsx:453
 msgid "Nearby landmark lookup could not reach the provider."
 msgstr "Поиск ближайших ориентиров не смог связаться с сервисом."
 
 #. js-lingui-id: 8wNUgZ
-#: src/presentation/tracks/TracksWorkspace.tsx:442
+#: src/presentation/tracks/TracksWorkspace.tsx:452
 msgid "Nearby landmark lookup failed because the provider is overloaded."
 msgstr "Поиск ближайших ориентиров не удался: сервис перегружен."
 
 #. js-lingui-id: dHKmf1
-#: src/presentation/tracks/TracksWorkspace.tsx:445
+#: src/presentation/tracks/TracksWorkspace.tsx:455
 msgid "Nearby landmark lookup failed."
 msgstr "Поиск ближайших ориентиров не удался."
 
 #. js-lingui-id: _7OG2V
-#: src/presentation/tracks/TracksWorkspace.tsx:444
+#: src/presentation/tracks/TracksWorkspace.tsx:454
 msgid "Nearby landmark lookup received an unsupported provider response."
 msgstr "Поиск ближайших ориентиров получил неподдерживаемый ответ сервиса."
 
 #. js-lingui-id: eNjrtb
-#: src/presentation/tracks/TracksWorkspace.tsx:441
+#: src/presentation/tracks/TracksWorkspace.tsx:451
 msgid "Nearby landmark lookup timed out."
 msgstr "Поиск ближайших ориентиров превысил время ожидания."
 
 #. js-lingui-id: e1g1dF
-#: src/presentation/tracks/TracksWorkspace.tsx:440
+#: src/presentation/tracks/TracksWorkspace.tsx:450
 msgid "Nearby landmark lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 msgstr "Сервис ограничил поиск ближайших ориентиров (HTTP 429); подождите минуту и импортируйте трек снова."
 
 #. js-lingui-id: E6zZ7b
-#: src/presentation/tracks/TracksWorkspace.tsx:1539
+#: src/presentation/tracks/TracksWorkspace.tsx:1577
 msgid "New route"
 msgstr "Новый маршрут"
 
 #. js-lingui-id: f1xZWH
-#: src/presentation/tracks/TracksWorkspace.tsx:1419
-#: src/presentation/tracks/TracksWorkspace.tsx:5174
+#: src/presentation/tracks/TracksWorkspace.tsx:1457
+#: src/presentation/tracks/TracksWorkspace.tsx:5219
 msgid "New track"
 msgstr "Новый трек"
 
 #. js-lingui-id: dUCJry
-#: src/presentation/tracks/TracksWorkspace.tsx:2805
+#: src/presentation/tracks/TracksWorkspace.tsx:2847
 msgid "Newest"
 msgstr "Сначала новые"
 
@@ -725,14 +805,20 @@ msgid "No connected route was found. Add a closer point or use Line for the next
 msgstr "Связный маршрут не найден. Добавьте точку ближе или постройте следующий участок в режиме «Прямая»."
 
 #. js-lingui-id: 15C5dj
-#: src/presentation/tracks/TracksWorkspace.tsx:4440
-#: src/presentation/tracks/TracksWorkspace.tsx:5000
+#: src/presentation/tracks/TracksWorkspace.tsx:4482
+#: src/presentation/tracks/TracksWorkspace.tsx:5045
 msgid "No elevation profile is available for this track."
 msgstr "Для этого трека нет профиля высот."
 
+#. js-lingui-id: wm5OI3
+#: src/presentation/tracks/TrackWeatherSection.tsx:261
+#: src/presentation/tracks/TrackWeatherSection.tsx:316
+msgid "No forecast for this date."
+msgstr "Нет прогноза на эту дату."
+
 #. js-lingui-id: xKg-Bl
-#: src/presentation/tracks/TracksWorkspace.tsx:5471
-#: src/presentation/tracks/TracksWorkspace.tsx:5475
+#: src/presentation/tracks/TracksWorkspace.tsx:5516
+#: src/presentation/tracks/TracksWorkspace.tsx:5520
 msgid "No generated name is available. Saving is unaffected."
 msgstr "Сгенерированное название недоступно. На сохранение это не влияет."
 
@@ -762,7 +848,7 @@ msgid "No routable trail or road was found within 200 m of the start point."
 msgstr "В радиусе 200 м от начальной точки не найдено троп или дорог, пригодных для маршрута."
 
 #. js-lingui-id: HWGZtY
-#: src/presentation/tracks/TracksWorkspace.tsx:4108
+#: src/presentation/tracks/TracksWorkspace.tsx:4150
 msgid "No saved track matches this name."
 msgstr "Нет сохранённых треков с таким названием."
 
@@ -772,51 +858,57 @@ msgid "No significant climbs or descents."
 msgstr "Нет значимых подъёмов и спусков."
 
 #. js-lingui-id: zsJUbn
-#: src/presentation/tracks/TracksWorkspace.tsx:2807
+#: src/presentation/tracks/TracksWorkspace.tsx:2849
 msgid "Oldest"
 msgstr "Сначала старые"
 
 #. js-lingui-id: _zooi6
-#: src/presentation/tracks/TracksWorkspace.tsx:490
+#: src/presentation/tracks/TracksWorkspace.tsx:500
 msgid "Only GPX 1.0 and 1.1 are supported."
 msgstr "Поддерживаются только GPX 1.0 и 1.1."
 
+#. js-lingui-id: zZj-jN
+#: src/presentation/tracks/TrackWeatherSection.tsx:270
+#: src/presentation/tracks/TrackWeatherSection.tsx:325
+msgid "Open the forecast for {label} in Weather"
+msgstr "Открыть прогноз для {label} во вкладке «Погода»"
+
 #. js-lingui-id: 9GH1hZ
-#: src/presentation/tracks/TracksWorkspace.tsx:4030
+#: src/presentation/tracks/TracksWorkspace.tsx:4072
 msgid "Over {name}."
 msgstr "Над {name}."
 
 #. js-lingui-id: NVQqOC
 #. placeholder {0}: (data.folder as TrackFolder).name
-#: src/presentation/tracks/TracksWorkspace.tsx:4011
+#: src/presentation/tracks/TracksWorkspace.tsx:4053
 msgid "Picked up folder {0}."
 msgstr "Выбрана папка {0}."
 
 #. js-lingui-id: Y0Hloc
-#: src/presentation/tracks/TracksWorkspace.tsx:4016
+#: src/presentation/tracks/TracksWorkspace.tsx:4058
 msgid "Picked up item."
 msgstr "Элемент выбран."
 
 #. js-lingui-id: cKK6tl
 #. placeholder {0}: (data.summary as LocalTrackSummary).name
-#: src/presentation/tracks/TracksWorkspace.tsx:4014
+#: src/presentation/tracks/TracksWorkspace.tsx:4056
 msgid "Picked up track {0}."
 msgstr "Выбран трек {0}."
 
 #. js-lingui-id: gKPwKn
-#: src/presentation/tracks/TracksWorkspace.tsx:5449
+#: src/presentation/tracks/TracksWorkspace.tsx:5494
 msgid "Preparing terrain and elevation"
 msgstr "Подготовка рельефа и высот"
 
 #. js-lingui-id: fwASbQ
 #: src/presentation/tracks/ElevationProfileChart.tsx:358
 #: src/presentation/tracks/RoutePlanControls.tsx:140
-#: src/presentation/tracks/TracksWorkspace.tsx:5453
+#: src/presentation/tracks/TracksWorkspace.tsx:5498
 msgid "Preparing terrain and elevation…"
 msgstr "Подготовка рельефа и высот…"
 
 #. js-lingui-id: KQYkQd
-#: src/presentation/tracks/TracksWorkspace.tsx:4005
+#: src/presentation/tracks/TracksWorkspace.tsx:4047
 msgid "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 msgstr "Нажмите пробел, чтобы выбрать элемент. Используйте клавиши со стрелками для перемещения. Нажмите пробел, чтобы отпустить, или Escape, чтобы отменить."
 
@@ -827,37 +919,37 @@ msgid "Recalculate elevation"
 msgstr "Пересчитать высоты"
 
 #. js-lingui-id: SVCift
-#: src/presentation/tracks/TrackSummary.tsx:110
-#: src/presentation/tracks/TracksWorkspace.tsx:3378
+#: src/presentation/tracks/TrackSummary.tsx:115
+#: src/presentation/tracks/TracksWorkspace.tsx:3420
 msgid "Recorded time"
 msgstr "Записанное время"
 
 #. js-lingui-id: 5PjJFI
-#: src/presentation/tracks/TracksWorkspace.tsx:3090
+#: src/presentation/tracks/TracksWorkspace.tsx:3132
 msgid "Release the file inside this zone"
 msgstr "Отпустите файл в этой области"
 
 #. js-lingui-id: T_pF0Z
-#: src/presentation/tracks/TracksWorkspace.tsx:3405
-#: src/presentation/tracks/TracksWorkspace.tsx:3413
-#: src/presentation/tracks/TracksWorkspace.tsx:5288
+#: src/presentation/tracks/TracksWorkspace.tsx:3447
+#: src/presentation/tracks/TracksWorkspace.tsx:3455
+#: src/presentation/tracks/TracksWorkspace.tsx:5333
 msgid "Remove from favorites"
 msgstr "Удалить из избранного"
 
 #. js-lingui-id: 2wxgft
 #: src/presentation/tracks/TrackMarkersSection.tsx:344
-#: src/presentation/tracks/TracksWorkspace.tsx:5384
+#: src/presentation/tracks/TracksWorkspace.tsx:5429
 msgid "Rename"
 msgstr "Переименовать"
 
 #. js-lingui-id: 2BPVq8
 #. placeholder {0}: folder.name
-#: src/presentation/tracks/TracksWorkspace.tsx:3635
+#: src/presentation/tracks/TracksWorkspace.tsx:3677
 msgid "Reorder {0}"
 msgstr "Изменить порядок: {0}"
 
 #. js-lingui-id: SZzo9N
-#: src/presentation/tracks/TracksWorkspace.tsx:5371
+#: src/presentation/tracks/TracksWorkspace.tsx:5416
 msgid "Retry sharing status"
 msgstr "Повторить загрузку статуса общего доступа"
 
@@ -895,27 +987,27 @@ msgstr "Данные маршрутизации недоступны. Повто
 #: src/presentation/tracks/RoutePlanControls.tsx:272
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:166
 #: src/presentation/tracks/TrackMarkersSection.tsx:250
-#: src/presentation/tracks/TracksWorkspace.tsx:5541
+#: src/presentation/tracks/TracksWorkspace.tsx:5586
 msgid "Save"
 msgstr "Сохранить"
 
 #. js-lingui-id: FuBQJT
-#: src/presentation/tracks/TracksWorkspace.tsx:5539
+#: src/presentation/tracks/TracksWorkspace.tsx:5584
 msgid "Save a copy"
 msgstr "Сохранить копию"
 
 #. js-lingui-id: GNReNP
-#: src/presentation/tracks/TracksWorkspace.tsx:4528
+#: src/presentation/tracks/TracksWorkspace.tsx:4570
 msgid "Saved {savedAtLabel}"
 msgstr "Сохранено {savedAtLabel}"
 
 #. js-lingui-id: BBAHO5
-#: src/presentation/tracks/TracksWorkspace.tsx:4114
+#: src/presentation/tracks/TracksWorkspace.tsx:4156
 msgid "Saved tracks"
 msgstr "Сохранённые треки"
 
 #. js-lingui-id: xdliLJ
-#: src/presentation/tracks/TracksWorkspace.tsx:813
+#: src/presentation/tracks/TracksWorkspace.tsx:842
 msgid "Saved tracks and folders could not be loaded from this browser."
 msgstr "Не удалось загрузить сохранённые треки и папки из этого браузера."
 
@@ -926,7 +1018,7 @@ msgid "Saving route…"
 msgstr "Сохранение маршрута…"
 
 #. js-lingui-id: Ekds9Z
-#: src/presentation/tracks/TracksWorkspace.tsx:4062
+#: src/presentation/tracks/TracksWorkspace.tsx:4104
 msgid "Search saved tracks"
 msgstr "Поиск по сохранённым трекам"
 
@@ -936,82 +1028,82 @@ msgid "Searching for a route…"
 msgstr "Поиск маршрута…"
 
 #. js-lingui-id: jGHUWA
-#: src/presentation/tracks/TracksWorkspace.tsx:4905
+#: src/presentation/tracks/TracksWorkspace.tsx:4950
 msgid "Selected tracks"
 msgstr "Выбранные треки"
 
 #. js-lingui-id: qu-1YC
-#: src/presentation/tracks/TracksWorkspace.tsx:451
+#: src/presentation/tracks/TracksWorkspace.tsx:461
 msgid "Settlement lookup could not reach the provider."
 msgstr "Поиск населённого пункта не смог связаться с сервисом."
 
 #. js-lingui-id: hOevdc
-#: src/presentation/tracks/TracksWorkspace.tsx:450
+#: src/presentation/tracks/TracksWorkspace.tsx:460
 msgid "Settlement lookup failed because the provider is overloaded."
 msgstr "Поиск населённого пункта не удался: сервис перегружен."
 
 #. js-lingui-id: k5nWY_
-#: src/presentation/tracks/TracksWorkspace.tsx:453
+#: src/presentation/tracks/TracksWorkspace.tsx:463
 msgid "Settlement lookup failed."
 msgstr "Поиск населённого пункта не удался."
 
 #. js-lingui-id: fAOru8
-#: src/presentation/tracks/TracksWorkspace.tsx:452
+#: src/presentation/tracks/TracksWorkspace.tsx:462
 msgid "Settlement lookup received an unsupported provider response."
 msgstr "Поиск населённого пункта получил неподдерживаемый ответ сервиса."
 
 #. js-lingui-id: oBpZur
-#: src/presentation/tracks/TracksWorkspace.tsx:449
+#: src/presentation/tracks/TracksWorkspace.tsx:459
 msgid "Settlement lookup timed out."
 msgstr "Поиск населённого пункта превысил время ожидания."
 
 #. js-lingui-id: KqB3pI
-#: src/presentation/tracks/TracksWorkspace.tsx:448
+#: src/presentation/tracks/TracksWorkspace.tsx:458
 msgid "Settlement lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 msgstr "Сервис ограничил поиск населённого пункта (HTTP 429); подождите минуту и импортируйте трек снова."
 
 #. js-lingui-id: Z8lGw6
-#: src/presentation/tracks/TracksWorkspace.tsx:5321
+#: src/presentation/tracks/TracksWorkspace.tsx:5366
 msgid "Share"
 msgstr "Поделиться"
 
 #. js-lingui-id: knHYgz
-#: src/presentation/tracks/TracksWorkspace.tsx:4777
+#: src/presentation/tracks/TracksWorkspace.tsx:4822
 msgid "Share link copied."
 msgstr "Ссылка скопирована."
 
 #. js-lingui-id: EvS-Rw
-#: src/presentation/tracks/TracksWorkspace.tsx:5342
+#: src/presentation/tracks/TracksWorkspace.tsx:5387
 msgid "Share track publicly"
 msgstr "Публичный доступ к треку"
 
 #. js-lingui-id: xVsHr4
-#: src/presentation/tracks/TracksWorkspace.tsx:5523
+#: src/presentation/tracks/TracksWorkspace.tsx:5568
 msgid "Shared track"
 msgstr "Общий трек"
 
 #. js-lingui-id: CR9KYR
-#: src/presentation/tracks/TracksWorkspace.tsx:1087
+#: src/presentation/tracks/TracksWorkspace.tsx:1125
 msgid "Shared track could not be loaded. Try again."
 msgstr "Не удалось загрузить общий трек. Повторите попытку."
 
 #. js-lingui-id: VYqFZJ
-#: src/presentation/tracks/TracksWorkspace.tsx:990
+#: src/presentation/tracks/TracksWorkspace.tsx:1028
 msgid "Shared tracks are unavailable because cloud features are not configured."
 msgstr "Общие треки недоступны: облачные функции не настроены."
 
 #. js-lingui-id: eKm51w
-#: src/presentation/tracks/TracksWorkspace.tsx:4604
+#: src/presentation/tracks/TracksWorkspace.tsx:4646
 msgid "Sharing could not be updated. Try again."
 msgstr "Не удалось обновить общий доступ. Повторите попытку."
 
 #. js-lingui-id: 6a2P86
-#: src/presentation/tracks/TracksWorkspace.tsx:4817
+#: src/presentation/tracks/TracksWorkspace.tsx:4862
 msgid "Sharing disabled."
 msgstr "Общий доступ отключён."
 
 #. js-lingui-id: QgKL0R
-#: src/presentation/tracks/TracksWorkspace.tsx:4782
+#: src/presentation/tracks/TracksWorkspace.tsx:4827
 msgid "Sharing is enabled, but the link could not be copied."
 msgstr "Общий доступ включён, но скопировать ссылку не удалось."
 
@@ -1021,48 +1113,73 @@ msgstr "Общий доступ включён, но скопировать сс
 msgid "Show track grade legend"
 msgstr "Показать легенду уклонов трека"
 
+#. js-lingui-id: w625t8
+#: src/presentation/tracks/TrackWeatherSection.tsx:463
+msgid "Slower"
+msgstr "Медленнее"
+
 #. js-lingui-id: oLk0R8
-#: src/presentation/tracks/TracksWorkspace.tsx:2860
+#: src/presentation/tracks/TracksWorkspace.tsx:2902
 msgid "Sort preference could not be saved"
 msgstr "Не удалось сохранить порядок сортировки"
 
 #. js-lingui-id: IjHzD5
-#: src/presentation/tracks/TracksWorkspace.tsx:2829
+#: src/presentation/tracks/TracksWorkspace.tsx:2871
 msgid "Sort tracks. Current: {currentSortLabel}"
 msgstr "Сортировать треки. Сейчас: {currentSortLabel}"
 
 #. js-lingui-id: 3i9kU-
-#: src/presentation/tracks/TracksWorkspace.tsx:2826
+#: src/presentation/tracks/TracksWorkspace.tsx:2868
 msgid "Sort: {currentSortLabel}"
 msgstr "Сортировка: {currentSortLabel}"
 
+#. js-lingui-id: tXkhj_
+#: src/presentation/tracks/TrackWeatherSection.tsx:290
+msgid "Start"
+msgstr "Старт"
+
+#. js-lingui-id: QSVyj5
+#: src/presentation/tracks/TrackWeatherSection.tsx:346
+msgid "Starting at {startTime} at the adjusted pace, about {duration} in total."
+msgstr "Старт в {startTime} в изменённом темпе, всего около {duration}."
+
+#. js-lingui-id: phlNWx
+#: src/presentation/tracks/TrackWeatherSection.tsx:349
+msgid "Starting at {startTime} at the estimated pace, about {duration} in total."
+msgstr "Старт в {startTime} в расчётном темпе, всего около {duration}."
+
+#. js-lingui-id: Cj8J4o
+#: src/presentation/tracks/TrackWeatherSection.tsx:348
+msgid "Starting at {startTime} at the recorded pace, {duration} in total."
+msgstr "Старт в {startTime} в записанном темпе, всего {duration}."
+
 #. js-lingui-id: fKf3Bw
-#: src/presentation/tracks/TracksWorkspace.tsx:4602
+#: src/presentation/tracks/TracksWorkspace.tsx:4644
 msgid "Sync this track before sharing."
 msgstr "Синхронизируйте трек, прежде чем делиться им."
 
 #. js-lingui-id: z6iEU0
-#: src/presentation/tracks/TracksWorkspace.tsx:2532
+#: src/presentation/tracks/TracksWorkspace.tsx:2570
 msgid "The favorite could not be updated."
 msgstr "Не удалось обновить избранное."
 
 #. js-lingui-id: W-i-k4
-#: src/presentation/tracks/TracksWorkspace.tsx:491
+#: src/presentation/tracks/TracksWorkspace.tsx:501
 msgid "The file contains too much track data."
 msgstr "В файле слишком много данных трека."
 
 #. js-lingui-id: 4xxAdA
-#: src/presentation/tracks/TracksWorkspace.tsx:489
+#: src/presentation/tracks/TracksWorkspace.tsx:499
 msgid "The file could not be read as a GPX, FIT, or KML track."
 msgstr "Не удалось прочитать файл как трек GPX, FIT или KML."
 
 #. js-lingui-id: dTBM8y
-#: src/presentation/tracks/TracksWorkspace.tsx:492
+#: src/presentation/tracks/TracksWorkspace.tsx:502
 msgid "The file has no usable track or route geometry."
 msgstr "В файле нет пригодной геометрии трека или маршрута."
 
 #. js-lingui-id: uKcSSD
-#: src/presentation/tracks/TracksWorkspace.tsx:487
+#: src/presentation/tracks/TracksWorkspace.tsx:497
 msgid "The file is larger than the import limit."
 msgstr "Файл превышает допустимый размер для импорта."
 
@@ -1082,12 +1199,18 @@ msgid "The folder name contains unsupported characters."
 msgstr "Название папки содержит недопустимые символы."
 
 #. js-lingui-id: 4x2rxR
-#: src/presentation/tracks/TracksWorkspace.tsx:959
+#: src/presentation/tracks/TracksWorkspace.tsx:997
 msgid "The folder order could not be saved."
 msgstr "Не удалось сохранить порядок папок."
 
+#. js-lingui-id: Z_3eUd
+#: src/presentation/tracks/TrackWeatherSection.tsx:257
+#: src/presentation/tracks/TrackWeatherSection.tsx:312
+msgid "The forecast could not be loaded."
+msgstr "Не удалось загрузить прогноз."
+
 #. js-lingui-id: IuIhFc
-#: src/presentation/tracks/TracksWorkspace.tsx:486
+#: src/presentation/tracks/TracksWorkspace.tsx:496
 msgid "The import was cancelled."
 msgstr "Импорт отменён."
 
@@ -1097,53 +1220,53 @@ msgid "The marker name contains unsupported characters."
 msgstr "Название метки содержит недопустимые символы."
 
 #. js-lingui-id: njvys6
-#: src/presentation/tracks/TracksWorkspace.tsx:5498
+#: src/presentation/tracks/TracksWorkspace.tsx:5543
 msgid "The name may be incomplete."
 msgstr "Название может быть неполным."
 
 #. js-lingui-id: HVnV06
-#: src/presentation/tracks/TracksWorkspace.tsx:1869
+#: src/presentation/tracks/TracksWorkspace.tsx:1907
 msgid "The route could not be saved."
 msgstr "Не удалось сохранить маршрут."
 
 #. js-lingui-id: _Kz0qB
-#: src/presentation/tracks/TracksWorkspace.tsx:1190
-#: src/presentation/tracks/TracksWorkspace.tsx:2285
+#: src/presentation/tracks/TracksWorkspace.tsx:1228
+#: src/presentation/tracks/TracksWorkspace.tsx:2323
 msgid "The track could not be added to multi-track view."
 msgstr "Не удалось добавить трек в просмотр нескольких треков."
 
 #. js-lingui-id: yT70hX
-#: src/presentation/tracks/TracksWorkspace.tsx:2180
+#: src/presentation/tracks/TracksWorkspace.tsx:2218
 msgid "The track could not be closed."
 msgstr "Не удалось закрыть трек."
 
 #. js-lingui-id: eHUuK1
-#: src/presentation/tracks/TracksWorkspace.tsx:2572
+#: src/presentation/tracks/TracksWorkspace.tsx:2610
 msgid "The track could not be deleted."
 msgstr "Не удалось удалить трек."
 
 #. js-lingui-id: aukFge
-#: src/presentation/tracks/TracksWorkspace.tsx:935
+#: src/presentation/tracks/TracksWorkspace.tsx:973
 msgid "The track could not be moved."
 msgstr "Не удалось переместить трек."
 
 #. js-lingui-id: PEPXpn
-#: src/presentation/tracks/TracksWorkspace.tsx:2334
+#: src/presentation/tracks/TracksWorkspace.tsx:2372
 msgid "The track could not be opened."
 msgstr "Не удалось открыть трек."
 
 #. js-lingui-id: Yv3_Gt
-#: src/presentation/tracks/TracksWorkspace.tsx:2386
+#: src/presentation/tracks/TracksWorkspace.tsx:2424
 msgid "The track could not be renamed."
 msgstr "Не удалось переименовать трек."
 
 #. js-lingui-id: 1fcltE
-#: src/presentation/tracks/TracksWorkspace.tsx:1984
+#: src/presentation/tracks/TracksWorkspace.tsx:2022
 msgid "The track could not be saved."
 msgstr "Не удалось сохранить трек."
 
 #. js-lingui-id: eA1dfv
-#: src/presentation/tracks/TracksWorkspace.tsx:1487
+#: src/presentation/tracks/TracksWorkspace.tsx:1525
 msgid "The track file could not be imported."
 msgstr "Не удалось импортировать файл трека."
 
@@ -1163,39 +1286,39 @@ msgid "This segment covers too large an area. Add an intermediate point."
 msgstr "Этот участок охватывает слишком большую область. Добавьте промежуточную точку."
 
 #. js-lingui-id: dyrVG2
-#: src/presentation/tracks/TracksWorkspace.tsx:1086
+#: src/presentation/tracks/TracksWorkspace.tsx:1124
 msgid "This shared track is unavailable."
 msgstr "Этот общий трек недоступен."
 
 #. js-lingui-id: bocm5J
-#: src/presentation/tracks/TracksWorkspace.tsx:480
+#: src/presentation/tracks/TracksWorkspace.tsx:490
 msgid "This track is broken: all track points are in one location, so its route length is zero. Choose another file."
 msgstr "Трек повреждён: все его точки находятся в одном месте, поэтому длина маршрута равна нулю. Выберите другой файл."
 
 #. js-lingui-id: 03nexU
-#: src/presentation/tracks/TracksWorkspace.tsx:479
+#: src/presentation/tracks/TracksWorkspace.tsx:489
 msgid "This track is too long to prepare at 10 metre resolution."
 msgstr "Трек слишком длинный для подготовки с разрешением 10 м."
 
 #. js-lingui-id: 8NkMCw
-#: src/presentation/tracks/TracksWorkspace.tsx:989
+#: src/presentation/tracks/TracksWorkspace.tsx:1027
 msgid "This track link is invalid."
 msgstr "Ссылка на трек недействительна."
 
 #. js-lingui-id: SLFyVr
-#: src/presentation/tracks/TracksWorkspace.tsx:5255
-#: src/presentation/tracks/TracksWorkspace.tsx:5258
+#: src/presentation/tracks/TracksWorkspace.tsx:5300
+#: src/presentation/tracks/TracksWorkspace.tsx:5303
 msgid "Track actions"
 msgstr "Действия с треком"
 
 #. js-lingui-id: aLQpKA
-#: src/presentation/tracks/TracksWorkspace.tsx:5087
-#: src/presentation/tracks/TracksWorkspace.tsx:5548
+#: src/presentation/tracks/TracksWorkspace.tsx:5132
+#: src/presentation/tracks/TracksWorkspace.tsx:5593
 msgid "Track details"
 msgstr "Сведения о треке"
 
 #. js-lingui-id: FPwJAx
-#: src/presentation/tracks/TracksWorkspace.tsx:5556
+#: src/presentation/tracks/TracksWorkspace.tsx:5601
 msgid "Track details are being prepared…"
 msgstr "Сведения о треке готовятся…"
 
@@ -1206,18 +1329,18 @@ msgstr "Метки трека"
 
 #. js-lingui-id: tGFu7D
 #: src/presentation/tracks/RoutePlanControls.tsx:207
-#: src/presentation/tracks/TracksWorkspace.tsx:5140
-#: src/presentation/tracks/TracksWorkspace.tsx:5439
+#: src/presentation/tracks/TracksWorkspace.tsx:5185
+#: src/presentation/tracks/TracksWorkspace.tsx:5484
 msgid "Track name"
 msgstr "Название трека"
 
 #. js-lingui-id: WlvDZa
-#: src/presentation/tracks/TracksWorkspace.tsx:508
+#: src/presentation/tracks/TracksWorkspace.tsx:518
 msgid "Track name is required."
 msgstr "Введите название трека."
 
 #. js-lingui-id: V2Zf2t
-#: src/presentation/tracks/TracksWorkspace.tsx:509
+#: src/presentation/tracks/TracksWorkspace.tsx:519
 msgid "Track name must be 200 characters or fewer."
 msgstr "Название трека должно быть не длиннее 200 символов."
 
@@ -1227,12 +1350,18 @@ msgid "Undo"
 msgstr "Отменить"
 
 #. js-lingui-id: u4NvoA
-#: src/presentation/tracks/TracksWorkspace.tsx:4028
+#: src/presentation/tracks/TracksWorkspace.tsx:4070
 msgid "Unfiled"
 msgstr "Без папки"
 
 #. js-lingui-id: bLnJmO
-#: src/presentation/tracks/TracksWorkspace.tsx:3782
-#: src/presentation/tracks/TracksWorkspace.tsx:3793
+#: src/presentation/tracks/TracksWorkspace.tsx:3824
+#: src/presentation/tracks/TracksWorkspace.tsx:3835
 msgid "Unfiled tracks"
 msgstr "Треки без папки"
+
+#. js-lingui-id: xxls-e
+#: src/presentation/tracks/TrackWeatherSection.tsx:356
+#: src/presentation/tracks/TrackWeatherSection.tsx:371
+msgid "Weather forecast"
+msgstr "Прогноз погоды"

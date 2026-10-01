@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import ChangeHistoryOutlinedIcon from '@mui/icons-material/ChangeHistoryOutlined';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
@@ -70,7 +71,9 @@ export function ClimbsDescentsSection({
   onSegmentHoverChange,
   onSegmentSelectionChange,
 }: ClimbsDescentsSectionProps): ReactElement {
+  const { i18n, t } = useLingui();
   const [expanded, setExpanded] = useState(false);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `climbs-descents-${useId().replaceAll(':', '')}`;
   const directionalSegments = numberedDirectionalSegments(segments);
 
@@ -86,7 +89,7 @@ export function ClimbsDescentsSection({
         }}
       >
         <ButtonBase
-          aria-label="Climbs & Descents"
+          aria-label={t`Climbs & Descents`}
           aria-controls={detailsId}
           aria-expanded={expanded}
           onClick={() => {
@@ -101,7 +104,7 @@ export function ClimbsDescentsSection({
           }}
         >
           <Typography component="h3" variant="subtitle2">
-            Climbs & Descents
+            <Trans>Climbs & Descents</Trans>
           </Typography>
           <ExpandMoreIcon
             aria-hidden
@@ -115,11 +118,11 @@ export function ClimbsDescentsSection({
             }}
           />
         </ButtonBase>
-        <Tooltip title="Recalculate elevation">
+        <Tooltip title={t`Recalculate elevation`}>
           <span>
             <IconButton
               size="small"
-              aria-label="Recalculate elevation"
+              aria-label={t`Recalculate elevation`}
               disabled={recalculating}
               onClick={onRecalculate}
             >
@@ -136,13 +139,13 @@ export function ClimbsDescentsSection({
         <Box id={detailsId}>
           {directionalSegments.length === 0 ? (
             <Typography variant="caption" color="text.secondary">
-              No significant climbs or descents.
+              <Trans>No significant climbs or descents.</Trans>
             </Typography>
           ) : (
             <Stack
               component="ul"
               spacing={0.75}
-              aria-label="Route climbs and descents"
+              aria-label={t`Route climbs and descents`}
               sx={{ m: 0, p: 0, listStyle: 'none' }}
             >
               {directionalSegments.map(({ segment, segmentIndex, typeNumber }) => {
@@ -156,10 +159,22 @@ export function ClimbsDescentsSection({
                   segment.type === 'climb'
                     ? segment.descentMeters
                     : segment.ascentMeters;
-                const typeLabel = segment.type === 'climb' ? 'Climb' : 'Descent';
-                const heading = `${typeLabel} ${String(typeNumber)}`;
-                const oppositeLabel = segment.type === 'climb' ? 'descent' : 'ascent';
-                const ariaLabel = `${heading}, ${formatTrackGrade(segment.averageGradePct)}, ${formatTrackDistance(segment.distanceMeters)}, ${formatTrackElevation(primaryMovement)}${oppositeMovement > 0 ? `, ${formatTrackElevation(oppositeMovement)} ${oppositeLabel}` : ''}`;
+                const heading =
+                  segment.type === 'climb'
+                    ? t`Climb ${typeNumber}`
+                    : t`Descent ${typeNumber}`;
+                const grade = formatTrackGrade(segment.averageGradePct, i18n);
+                const distance = formatTrackDistance(segment.distanceMeters, i18n);
+                const primary = formatTrackElevation(primaryMovement, i18n);
+                const opposite = formatTrackElevation(oppositeMovement, i18n);
+                let ariaLabel: string;
+                if (oppositeMovement <= 0) {
+                  ariaLabel = t`${heading}, ${grade}, ${distance}, ${primary}`;
+                } else if (segment.type === 'climb') {
+                  ariaLabel = t`${heading}, ${grade}, ${distance}, ${primary}, ${opposite} descent`;
+                } else {
+                  ariaLabel = t`${heading}, ${grade}, ${distance}, ${primary}, ${opposite} ascent`;
+                }
                 return (
                   <Box
                     component="li"
@@ -231,14 +246,14 @@ export function ClimbsDescentsSection({
                               spacing={0.5}
                               sx={{ alignItems: 'center' }}
                             >
-                              <Tooltip title="Distance">
+                              <Tooltip title={t`Distance`}>
                                 <SwapHorizIcon aria-hidden sx={{ fontSize: 15 }} />
                               </Tooltip>
                               <Typography
                                 variant="caption"
                                 sx={{ whiteSpace: 'nowrap' }}
                               >
-                                {formatTrackDistance(segment.distanceMeters)}
+                                {distance}
                               </Typography>
                             </Stack>
                             <Stack
@@ -249,8 +264,8 @@ export function ClimbsDescentsSection({
                               <Tooltip
                                 title={
                                   segment.type === 'climb'
-                                    ? 'Elevation gain'
-                                    : 'Elevation loss'
+                                    ? t`Elevation gain`
+                                    : t`Elevation loss`
                                 }
                               >
                                 {segment.type === 'climb' ? (
@@ -263,7 +278,7 @@ export function ClimbsDescentsSection({
                                 variant="caption"
                                 sx={{ whiteSpace: 'nowrap' }}
                               >
-                                {formatTrackElevation(primaryMovement)}
+                                {primary}
                               </Typography>
                             </Stack>
                             {oppositeMovement > 0 ? (
@@ -275,8 +290,8 @@ export function ClimbsDescentsSection({
                                 <Tooltip
                                   title={
                                     segment.type === 'climb'
-                                      ? 'Elevation loss'
-                                      : 'Elevation gain'
+                                      ? t`Elevation loss`
+                                      : t`Elevation gain`
                                   }
                                 >
                                   {segment.type === 'climb' ? (
@@ -289,7 +304,7 @@ export function ClimbsDescentsSection({
                                   variant="caption"
                                   sx={{ whiteSpace: 'nowrap' }}
                                 >
-                                  {formatTrackElevation(oppositeMovement)}
+                                  {opposite}
                                 </Typography>
                               </Stack>
                             ) : null}
@@ -298,7 +313,7 @@ export function ClimbsDescentsSection({
                               spacing={0.5}
                               sx={{ alignItems: 'center' }}
                             >
-                              <Tooltip title="Average grade">
+                              <Tooltip title={t`Average grade`}>
                                 <ChangeHistoryOutlinedIcon
                                   aria-hidden
                                   sx={{
@@ -314,7 +329,7 @@ export function ClimbsDescentsSection({
                                 variant="caption"
                                 sx={{ whiteSpace: 'nowrap' }}
                               >
-                                {formatTrackGrade(segment.averageGradePct)}
+                                {grade}
                               </Typography>
                             </Stack>
                           </Stack>

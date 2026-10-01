@@ -936,7 +936,7 @@ describe('WorkspaceShell', () => {
       within(results).getByRole('button', { name: /^Mobile search beta/u }),
     );
 
-    expect(await screen.findByText('Synthetic track load failure.')).toBeVisible();
+    expect(await screen.findByText('The track could not be opened.')).toBeVisible();
     expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
   });
 
@@ -1410,7 +1410,7 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('Terrain failure.gpx'));
 
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    expect(await screen.findByText('Terrain unavailable')).toBeVisible();
+    expect(await screen.findByText('Elevation preparation failed.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.getByText('Terrain failure.gpx · GPX')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Recalculate elevation' }));
@@ -1474,7 +1474,7 @@ describe('WorkspaceShell', () => {
     expect(calculatedLoss.querySelector('svg')).toBeNull();
     expect(
       within(details).getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
 
@@ -1531,7 +1531,7 @@ describe('WorkspaceShell', () => {
     expect(trackSaved).not.toHaveBeenCalled();
     expect(
       await screen.findByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
     details = screen.getByRole('complementary', { name: 'Track details' });
@@ -2100,7 +2100,7 @@ describe('WorkspaceShell', () => {
     });
     expect(
       within(details).getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
     await waitFor(() => {
@@ -2285,7 +2285,7 @@ describe('WorkspaceShell', () => {
         name: /^Replacement trail/u,
       }),
     );
-    expect(await screen.findByText('Replacement unavailable')).toBeVisible();
+    expect(await screen.findByText('The track could not be opened.')).toBeVisible();
 
     clear.resolve(undefined);
 
@@ -2461,7 +2461,7 @@ describe('WorkspaceShell', () => {
       expect(within(details).queryByText('Map marker')).not.toBeInTheDocument();
     });
     const elevationProfile = within(details).getByRole('img', {
-      name: 'Elevation profile from 1000 to 1120 metres',
+      name: 'Elevation profile from 1,000 to 1,120 metres',
     });
     expect(elevationProfile).toBeVisible();
     await waitFor(() => {
@@ -2586,7 +2586,7 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('Source file')).not.toBeInTheDocument();
     expect(
       within(details).getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
 
@@ -2599,7 +2599,7 @@ describe('WorkspaceShell', () => {
       new Error('Rename unavailable'),
     );
     await user.click(screen.getByRole('button', { name: 'Confirm rename' }));
-    expect(await screen.findByText('Rename unavailable')).toBeVisible();
+    expect(await screen.findByText('The track could not be renamed.')).toBeVisible();
     expect(nameInput).toHaveValue('Rejected trail');
     await user.clear(nameInput);
     await user.type(nameInput, 'Final trail');

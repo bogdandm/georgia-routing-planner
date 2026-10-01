@@ -113,11 +113,12 @@ function statusForWaypointCount(count: number): RoutePlanStatus {
   return 'route-ready';
 }
 
-export function startRoutePlan(id: string): RoutePlanDraft {
+/** `name` is the localized default shown in the Track name field until the user edits it. */
+export function startRoutePlan(id: string, name: string): RoutePlanDraft {
   return {
     kind: 'route-plan',
     id,
-    name: 'New route',
+    name,
     waypoints: [],
     legs: [],
     queuedWaypoints: [],

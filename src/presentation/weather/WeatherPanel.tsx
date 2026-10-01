@@ -981,18 +981,23 @@ function SummaryPeriod({
   );
 }
 
-/** One forecast period row; it opens the hourly table when `onOpen` is provided. */
+/**
+ * One forecast period row. With `onOpen` it is a button; `openLabel` names its action
+ * and defaults to opening the 24-hour table.
+ */
 export function DailyPeriodRow({
   dateLabel,
   isDay,
   label,
   onOpen,
+  openLabel,
   period,
 }: {
   readonly dateLabel: string;
   readonly isDay: boolean;
   readonly label: string;
   readonly onOpen?: (triggerElement: HTMLElement) => void;
+  readonly openLabel?: string;
   readonly period: PointWeatherForecastPeriod;
 }) {
   const values = periodDisplayValues(period);
@@ -1082,7 +1087,7 @@ export function DailyPeriodRow({
       ) : (
         <ButtonBase
           type="button"
-          aria-label={`Open 24-hour forecast for ${label}, ${dateLabel}`}
+          aria-label={openLabel ?? `Open 24-hour forecast for ${label}, ${dateLabel}`}
           onClick={(event) => {
             onOpen(event.currentTarget);
           }}

@@ -37,6 +37,9 @@ import {
 } from '@/application/weather/TrackWeatherForecast';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
+import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import {
   formatTrackDuration,
   type TrackStatsMetrics,
@@ -105,6 +108,9 @@ export function TrackWeatherSection({
   const { clock, pointWeatherForecast } = useRuntimeServices();
   const current = preferences ?? defaultTrackWeatherPreferences;
   const expanded = preferences?.expanded ?? false;
+  const setActiveTab = useUiStore((state) => state.setActiveTab);
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
+  const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `track-weather-${useId().replaceAll(':', '')}`;
   const dates = useMemo(() => trackWeatherDates(localDate(clock.now())), [clock]);
@@ -195,6 +201,22 @@ export function TrackWeatherSection({
   const forecastFor = (location: TrackWeatherLocation): ForecastState | undefined =>
     forecasts.get(locationKey(location));
 
+  /** Loads the full forecast for this track location in the Weather tab. */
+  const openInWeather = (location: TrackWeatherLocation, placeLabel: string) => {
+    const [longitude, latitude] = location.coordinate;
+    requestWeatherForecast(
+      { longitude, latitude },
+      placeLabel,
+      location.elevationMeters,
+    );
+    setActiveTab('weather');
+    setMobileWorkspaceOpen(true);
+    setNavigationCollapsed(false);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.hash = workspaceHashForTab('weather');
+    window.history.pushState(window.history.state, '', nextUrl);
+  };
+
   const elevationCard = (title: string, location: TrackWeatherLocation) => {
     const elevation = formatTrackElevation(location.elevationMeters, i18n);
     const state = forecastFor(location);
@@ -202,10 +224,11 @@ export function TrackWeatherSection({
       state?.status === 'ready'
         ? state.forecast.days.find((value) => value.date === selectedDate)
         : undefined;
+    const label = [title, elevation].join(', ');
     return (
       <Box key={title} role="listitem">
         <WeatherForecastCard
-          label={[title, elevation].join(', ')}
+          label={label}
           title={title}
           subtitle={elevation}
           headerWidth={cardHeaderWidth}
@@ -226,6 +249,10 @@ export function TrackWeatherSection({
               label={t`Day`}
               period={day.day}
               isDay
+              openLabel={t`Open the forecast for ${label} in Weather`}
+              onOpen={() => {
+                openInWeather(location, title);
+              }}
             />
           )}
         </WeatherForecastCard>
@@ -251,10 +278,11 @@ export function TrackWeatherSection({
       state?.status === 'ready'
         ? summarizeTrackWeatherCheckpoint(state.forecast, selectedDate, checkpoint)
         : null;
+    const label = [time, place, elevation].join(', ');
     return (
       <Box key={checkpoint.elapsedSeconds} role="listitem">
         <WeatherForecastCard
-          label={[time, place, elevation].join(', ')}
+          label={label}
           title={time}
           subtitle={elevation}
           headerWidth={cardHeaderWidth}
@@ -275,6 +303,10 @@ export function TrackWeatherSection({
               label={place}
               period={summary.period}
               isDay={summary.isDay}
+              openLabel={t`Open the forecast for ${label} in Weather`}
+              onOpen={() => {
+                openInWeather(checkpoint, [time, place].join(', '));
+              }}
             />
           )}
         </WeatherForecastCard>

@@ -227,7 +227,8 @@ covers its arrival hour. The pace follows recorded timestamps when the track has
 recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
 flat walking. The timeline is offered only for day hikes shorter than 30 km and 10
 hours. Cards reuse the 7-day forecast rows from Weather and request each location with
-its profile elevation.
+its profile elevation. Clicking a loaded forecast row opens Weather with the full
+forecast at that location and elevation, labelled with the card's point or time.
 
 #### Multi-track view
 

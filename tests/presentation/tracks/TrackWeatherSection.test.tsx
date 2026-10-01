@@ -12,6 +12,11 @@ import type {
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
+import {
+  mapInteractionStore,
+  resetMapInteractionStore,
+} from '@/presentation/map/mapInteractionStore';
+import { useUiStore } from '@/presentation/shell/uiStore';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
@@ -142,6 +147,25 @@ describe('TrackWeatherSection', () => {
     ).toHaveLength(3);
     // Three elevation points plus three checkpoints; the start is also the lowest point.
     expect(execute).toHaveBeenCalledTimes(5);
+  });
+
+  it('opens the full forecast at a clicked location in Weather', async () => {
+    resetMapInteractionStore();
+    const user = userEvent.setup();
+    renderSection({ expanded: true, weekday: 6 });
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Open the forecast for 12:00, At 4.8 km, 2,720 m in Weather',
+      }),
+    );
+
+    const request = mapInteractionStore.getState().weatherForecastRequest;
+    expect(request?.placeLabel).toBe('12:00, At 4.8 km');
+    expect(request?.elevationMeters).toBeCloseTo(2_720, 6);
+    expect(request?.coordinate.longitude).toBeCloseTo(44.048, 6);
+    expect(useUiStore.getState().activeTab).toBe('weather');
+    expect(window.location.hash).toBe('#weather');
   });
 
   it('remembers the weekday of a chosen forecast date', async () => {

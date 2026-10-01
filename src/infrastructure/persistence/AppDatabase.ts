@@ -72,7 +72,10 @@ import {
   trackFolderUpdatedAt,
   type TrackFolder,
 } from '@/domain/tracks/trackFolder';
-import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import {
+  estimatedTrackSeconds,
+  type TrackMetrics,
+} from '@/domain/tracks/trackCalculations';
 import type { PoiCandidate } from '@/domain/tracks/trackNaming';
 import {
   TRACK_THUMBNAIL_ALGORITHM_VERSION,
@@ -619,6 +622,7 @@ const trackMetricsSchema = z
     recordedStartAt: z.iso.datetime().optional(),
     recordedEndAt: z.iso.datetime().optional(),
     elapsedSeconds: z.number().nonnegative().optional(),
+    estimatedSeconds: z.number().nonnegative().optional(),
     ascentMeters: z.number().nonnegative().optional(),
     descentMeters: z.number().nonnegative().optional(),
     minimumElevationMeters: z.number().optional(),
@@ -662,6 +666,9 @@ const trackMetricsSchema = z
     if (value.recordedEndAt !== undefined) result.recordedEndAt = value.recordedEndAt;
     if (value.elapsedSeconds !== undefined)
       result.elapsedSeconds = value.elapsedSeconds;
+    if (value.estimatedSeconds !== undefined) {
+      result.estimatedSeconds = value.estimatedSeconds;
+    }
     if (value.ascentMeters !== undefined) result.ascentMeters = value.ascentMeters;
     if (value.descentMeters !== undefined) result.descentMeters = value.descentMeters;
     if (value.minimumElevationMeters !== undefined) {
@@ -850,6 +857,24 @@ function withoutCalculatedElevation(value: unknown): unknown {
   delete sourceRecord.calculatedMetrics;
   delete sourceRecord.calculatedTrackPoints;
   return sourceRecord;
+}
+
+function withEstimatedDuration(metrics: TrackMetrics): TrackMetrics {
+  if (metrics.estimatedSeconds !== undefined) return metrics;
+  const estimatedSeconds = estimatedTrackSeconds(metrics);
+  return estimatedSeconds === undefined ? metrics : { ...metrics, estimatedSeconds };
+}
+
+/** Fills the walking-time estimate that summaries saved before it existed lack. */
+function withEstimatedDurations(summary: LocalTrackSummary): LocalTrackSummary {
+  const result: LocalTrackSummaryBuilder = {
+    ...summary,
+    metrics: withEstimatedDuration(summary.metrics),
+  };
+  if (summary.calculatedMetrics !== undefined) {
+    result.calculatedMetrics = withEstimatedDuration(summary.calculatedMetrics);
+  }
+  return result;
 }
 
 const currentLocalTrackSummarySchema = z
@@ -1384,6 +1409,29 @@ export class AppDatabase
       folderSyncStates: 'folderId,remoteRevision,pendingKind',
       localTrackThumbnails: 'trackId',
     });
+    this.version(11)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+        savedMarkers: 'id,normalizedName,colorKey,createdAt',
+        markerSyncStates: 'markerId,remoteRevision,pendingKind',
+        trackFolders: 'id,normalizedName,position',
+        folderSyncStates: 'folderId,remoteRevision,pendingKind',
+        localTrackThumbnails: 'trackId',
+      })
+      // The estimate is browser-local derived metadata: it never enters the content
+      // hash or synchronized metadata, so sync state stays unchanged.
+      .upgrade(async (transaction) => {
+        const summaryTable = transaction.table('localTracks');
+        const summaries: unknown[] = await summaryTable.toArray();
+        for (const value of summaries) {
+          const summary = parseLocalTrackSummary(value);
+          if (summary !== null) await summaryTable.put(withEstimatedDurations(summary));
+        }
+      });
     this.on('populate', async (transaction) => {
       const folder = createDefaultImportsFolder(new Date().toISOString());
       await transaction.table('trackFolders').put(folder);

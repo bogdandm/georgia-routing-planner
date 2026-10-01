@@ -27,7 +27,11 @@ export function formatTrackDuration(seconds: number, i18n: I18n): string {
 
 export type TrackStatsMetrics = Pick<
   TrackMetrics,
-  'distanceMeters' | 'elapsedSeconds' | 'ascentMeters' | 'descentMeters'
+  | 'distanceMeters'
+  | 'elapsedSeconds'
+  | 'estimatedSeconds'
+  | 'ascentMeters'
+  | 'descentMeters'
 >;
 
 function averageSpeedKilometersPerHour(metrics: TrackStatsMetrics): number | undefined {
@@ -104,11 +108,19 @@ export function TrackStats({
   const { i18n, t } = useLingui();
   const stats: TrackStatProps[] = [];
   const elapsedSeconds = metrics.elapsedSeconds;
+  const estimatedSeconds = metrics.estimatedSeconds;
   if (elapsedSeconds !== undefined) {
     stats.push({
       icon: <TimerOutlinedIcon sx={{ fontSize: 18 }} />,
       label: t`Recorded time`,
       value: formatTrackDuration(elapsedSeconds, i18n),
+    });
+  } else if (estimatedSeconds !== undefined) {
+    const duration = formatTrackDuration(estimatedSeconds, i18n);
+    stats.push({
+      icon: <TimerOutlinedIcon sx={{ fontSize: 18 }} />,
+      label: t`Estimated time`,
+      value: t`≈${duration}`,
     });
   }
   stats.push({

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { parseGpx, type TrackPoint, type TrackSegment } from '@/domain/tracks/gpx';
 import {
   calculateTrackMetrics,
+  estimateHikingSeconds,
   findDominantSummit,
   isLoop,
 } from '@/domain/tracks/trackCalculations';
@@ -271,6 +272,35 @@ describe('track calculations', () => {
     expect(partial.elapsedSeconds).toBeUndefined();
     expect(reversed.elapsedSeconds).toBeUndefined();
     expect(constant.elapsedSeconds).toBeUndefined();
+  });
+
+  it('estimates DIN 33466 walking time from the larger of horizontal and vertical time', () => {
+    // 12 km horizontal = 3 h; 900 m up + 500 m down = 4 h; 4 h + 3 h / 2.
+    expect(estimateHikingSeconds(12_000, 900, 500)).toBe(5.5 * 3_600);
+    // 20 km horizontal = 5 h dominates 300 m up = 1 h.
+    expect(estimateHikingSeconds(20_000, 300, 0)).toBe(5.5 * 3_600);
+  });
+
+  it('stores a walking-time estimate only without recorded duration', () => {
+    const untimed = calculateTrackMetrics([
+      { points: [point(0, 0, 100), point(0.01, 0, 400)] },
+    ]);
+    const timed = calculateTrackMetrics([
+      {
+        points: [
+          point(0, 0, 100, '2026-01-01T00:00:00Z'),
+          point(0.01, 0, 400, '2026-01-01T02:00:00Z'),
+        ],
+      },
+    ]);
+    const flat = calculateTrackMetrics([{ points: [point(0, 0), point(0.01, 0)] }]);
+
+    expect(untimed.estimatedSeconds).toBe(
+      estimateHikingSeconds(untimed.distanceMeters, 300, 0),
+    );
+    expect(timed.elapsedSeconds).toBe(7_200);
+    expect(timed.estimatedSeconds).toBeUndefined();
+    expect(flat.estimatedSeconds).toBeUndefined();
   });
 
   it('rejects missing geometry for metrics', () => {

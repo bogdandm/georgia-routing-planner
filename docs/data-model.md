@@ -47,7 +47,7 @@ the SQL in `supabase/migrations`, and the Edge Function validators in
 
 ## IndexedDB schema
 
-`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 10. Earlier
+`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 11. Earlier
 versions exist only as upgrade steps.
 
 | Store                  | Key        | Record                                                             |
@@ -107,7 +107,11 @@ antimeridian-aware bounds, center, optional recorded start/end and elapsed secon
 optional ascent/descent/min/max elevation with `elevationSource` (`gpx | dem-assisted`)
 and a matching `elevationAlgorithmVersion`. `calculatedMetrics` must be DEM-assisted
 version 4. Recorded duration is absent unless every rendered point has an ordered valid
-timestamp.
+timestamp. Without it, metrics with ascent and descent carry `estimatedSeconds`, the DIN
+33466 walking time from `estimateHikingSeconds` in
+`src/domain/tracks/trackCalculations.ts`. Database version 11 fills the estimate into
+summaries saved earlier; like other calculated values it is browser-local and never
+synchronized.
 
 `contentHash` is the lowercase SHA-256 of canonical GRPT v2 bytes of `trackPoints`
 (`src/infrastructure/runtime/WebCryptoTrackContentHasher.ts`). It is absent only on rows

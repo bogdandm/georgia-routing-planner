@@ -889,6 +889,55 @@ describe('AppDatabase', () => {
     );
   });
 
+  it('stores walking-time estimates for version 10 tracks without recorded time', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(10).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      trackFolders: 'id,normalizedName,position',
+      folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      localTrackThumbnails: 'trackId',
+    });
+    const untimed = localTrackSummary();
+    const climbing: LocalTrackSummary = {
+      ...untimed,
+      metrics: { ...untimed.metrics, ascentMeters: 900, descentMeters: 500 },
+      calculatedMetrics: {
+        ...untimed.metrics,
+        distanceMeters: 12_000,
+        ascentMeters: 300,
+        descentMeters: 0,
+        elevationAlgorithmVersion: 4,
+      },
+    };
+    const timed: LocalTrackSummary = {
+      ...climbing,
+      id: 'local:timed',
+      metrics: { ...climbing.metrics, elapsedSeconds: 3_600 },
+    };
+    await legacy.table('localTracks').bulkPut([climbing, timed]);
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    // 1 km = 0.25 h; 900 m up + 500 m down = 4 h; 4 h + 0.25 h / 2.
+    await expect(database.localTracks.get(climbing.id)).resolves.toMatchObject({
+      metrics: { estimatedSeconds: 4.125 * 3_600 },
+      calculatedMetrics: { estimatedSeconds: 3.5 * 3_600 },
+    });
+    const timedRow = await database.localTracks.get('local:timed');
+    expect(timedRow?.metrics.estimatedSeconds).toBeUndefined();
+    expect(timedRow?.calculatedMetrics?.estimatedSeconds).toBe(3.5 * 3_600);
+  });
+
   it('keeps collapsed folders locally and discards an unreadable list', async () => {
     await database.saveCollapsedTrackFolderIds([IMPORTS_FOLDER_ID, 'folder:trips']);
     await expect(database.loadCollapsedTrackFolderIds()).resolves.toEqual([

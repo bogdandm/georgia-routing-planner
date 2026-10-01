@@ -335,6 +335,11 @@ omit `daily` and `precipitation_probability`. The generic endpoint returns null
 `precipitation_type`, so the phase is derived from precipitation, rain, showers,
 snowfall, and WMO codes. Coordinates and responses are not persisted or logged.
 
+Forecast and `meta.json` requests retry HTTP 429, 500, 502, 503, and 504 up to three
+times with jittered exponential backoff from 1 s, or after the provider's `Retry-After`
+(capped at 10 s) for 429 and 503. Other 4xx, network failures, timeouts, and aborts are
+not retried; each attempt gets the full 15 s timeout.
+
 ### Weather map layer
 
 The Layers weather overlay uses `@openmeteo/weather-map-layer` through an `om://`

@@ -119,8 +119,8 @@ describe('TrackWeatherSection', () => {
       await within(highest).findByRole('article', { name: 'Day forecast' }),
     ).toBeVisible();
     expect(
-      within(highest).getByRole('article', { name: 'Night forecast' }),
-    ).toBeVisible();
+      within(highest).queryByRole('article', { name: 'Night forecast' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Lowest, 2,000 m' })).toBeVisible();
     expect(
       screen.getByText(

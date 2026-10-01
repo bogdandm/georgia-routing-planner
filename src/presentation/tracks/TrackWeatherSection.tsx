@@ -3,7 +3,6 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Box,
   ButtonBase,
-  Divider,
   Skeleton,
   Stack,
   ToggleButton,
@@ -212,10 +211,7 @@ export function TrackWeatherSection({
           headerWidth={cardHeaderWidth}
         >
           {state === undefined ? (
-            <>
-              <ForecastPlaceholder />
-              <ForecastPlaceholder />
-            </>
+            <ForecastPlaceholder />
           ) : state.status === 'error' ? (
             <ForecastPlaceholder>
               <Trans>The forecast could not be loaded.</Trans>
@@ -225,21 +221,12 @@ export function TrackWeatherSection({
               <Trans>No forecast for this date.</Trans>
             </ForecastPlaceholder>
           ) : (
-            <>
-              <DailyPeriodRow
-                dateLabel={selectedDateLabel}
-                label={t`Day`}
-                period={day.day}
-                isDay
-              />
-              <Divider sx={{ mx: 0.75 }} />
-              <DailyPeriodRow
-                dateLabel={selectedDateLabel}
-                label={t`Night`}
-                period={day.night}
-                isDay={false}
-              />
-            </>
+            <DailyPeriodRow
+              dateLabel={selectedDateLabel}
+              label={t`Day`}
+              period={day.day}
+              isDay
+            />
           )}
         </WeatherForecastCard>
       </Box>

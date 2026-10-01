@@ -219,7 +219,7 @@ Tracks with an elevation profile show a **Weather forecast** section below Marke
 starts collapsed; whether it is expanded is remembered in this browser for every track,
 and forecasts load only while it is open. It begins with seven forecast dates from
 today; choosing one remembers its weekday for all tracks, and the next Saturday is
-selected until then. **By elevation** shows day and night forecasts at the highest,
+selected until then. **By elevation** shows the daytime forecast at the highest,
 median-elevation, and lowest profile points. **Along the route** assumes a 09:00 local
 start and shows where the hiker is every three hours and at the finish, each with the
 forecast at that location from its arrival hour until the next checkpoint; the finish

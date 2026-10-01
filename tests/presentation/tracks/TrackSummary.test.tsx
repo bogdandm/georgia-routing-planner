@@ -1,11 +1,13 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const profile: ElevationProfile = {
   points: [
@@ -106,6 +108,7 @@ class TestResizeObserver implements ResizeObserver {
 }
 
 beforeEach(() => {
+  activateAppLocale('en');
   vi.stubGlobal('ResizeObserver', TestResizeObserver);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
     new DOMRect(0, 0, 320, 56),
@@ -121,7 +124,7 @@ function renderSummary(
   summaryMetrics: TrackMetrics | null = metrics,
   summaryProfile: ElevationProfile | null = profile,
 ) {
-  return render(
+  return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
       <CompactTrackSummary metrics={summaryMetrics} profile={summaryProfile} />
     </ThemeProvider>,
@@ -168,6 +171,16 @@ describe('CompactTrackSummary', () => {
     expect(screen.getByLabelText('Elevation gain: 99,999 m')).toBeVisible();
     expect(screen.getByLabelText('Elevation loss: 99,999 m')).toBeVisible();
     expect(screen.getByTestId('compact-elevation-profile')).toBeVisible();
+  });
+
+  it('labels metrics in Russian with locale number formatting', () => {
+    activateAppLocale('ru');
+    renderSummary({ ...metrics, ascentMeters: 99_999 }, profile);
+
+    expect(screen.getByLabelText('Расстояние — 1,4 км')).toBeVisible();
+    // Testing Library collapses the locale's no-break group separator to a space.
+    expect(screen.getByLabelText('Набор высоты — 99 999 м')).toBeVisible();
+    expect(screen.getByLabelText('Сброс высоты — 0 м')).toBeVisible();
   });
 
   it('keeps metrics on the paper surface without a profile', () => {

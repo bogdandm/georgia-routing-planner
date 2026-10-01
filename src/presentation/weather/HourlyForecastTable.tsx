@@ -9,6 +9,7 @@ import { Box, Button, IconButton, Paper, Stack, Typography } from '@mui/material
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useId,
   useMemo,
   useRef,
@@ -602,6 +603,9 @@ export function HourlyForecastTable({
     }
     setExpansionPhase('closing');
   }, [expandedLayout, expansionPhase]);
+  // Scroll and resize listeners stay attached across the opening -> open commit. An
+  // Effect Event reads that committed phase even before passive effects re-run.
+  const collapseFromEnvironment = useEffectEvent(collapseExpanded);
 
   const updateScrollState = useCallback(() => {
     const region = scrollRef.current;
@@ -646,22 +650,22 @@ export function HourlyForecastTable({
     if (!isExpanded) return undefined;
     const scrollRegion = containerRef.current?.closest('[data-weather-scroll-region]');
     if (!(scrollRegion instanceof HTMLElement)) return undefined;
-    scrollRegion.addEventListener('scroll', collapseExpanded, { passive: true });
+    scrollRegion.addEventListener('scroll', collapseFromEnvironment, { passive: true });
     return () => {
-      scrollRegion.removeEventListener('scroll', collapseExpanded);
+      scrollRegion.removeEventListener('scroll', collapseFromEnvironment);
     };
-  }, [collapseExpanded, isExpanded]);
+  }, [isExpanded]);
   useEffect(() => {
     const updateExpansionAvailability = () => {
       const fits = window.innerWidth >= expandedPanelWidth + floatingViewportMargin * 2;
       setCanExpand(fits);
-      if (!fits) collapseExpanded();
+      if (!fits) collapseFromEnvironment();
     };
     window.addEventListener('resize', updateExpansionAvailability);
     return () => {
       window.removeEventListener('resize', updateExpansionAvailability);
     };
-  }, [collapseExpanded]);
+  }, []);
 
   const scroll = (direction: -1 | 1) => {
     scrollRef.current?.scrollBy({ left: direction * 240, behavior: 'smooth' });

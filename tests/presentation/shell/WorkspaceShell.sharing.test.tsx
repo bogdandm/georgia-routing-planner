@@ -71,11 +71,9 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    const ordinaryDetails = await screen.findByRole(
-      'complementary',
-      { name: 'Track details' },
-      { timeout: 3_000 },
-    );
+    const ordinaryDetails = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
     expect(
       within(ordinaryDetails).getByRole('heading', { name: 'Alpha trail' }),
     ).toBeVisible();
@@ -238,11 +236,7 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    const details = await screen.findByRole(
-      'complementary',
-      { name: 'Track details' },
-      { timeout: 3_000 },
-    );
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
     const download = within(details).getByRole('button', { name: 'Download GPX' });
     const actions = within(details).getByRole('button', { name: 'Track actions' });
     expect(
@@ -433,7 +427,7 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     const firstRender = renderWorkspaceShell();
 
-    await screen.findByRole('heading', { name: 'Alpha trail' }, { timeout: 3_000 });
+    await screen.findByRole('heading', { name: 'Alpha trail' });
     const toggle = screen.getByRole('button', {
       name: 'Select multiple tracks',
     });

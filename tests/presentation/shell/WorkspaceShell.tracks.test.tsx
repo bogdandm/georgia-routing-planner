@@ -783,7 +783,7 @@ describe('WorkspaceShell', () => {
 
     expect(
       await screen.findByText(
-        /No generated name is available\. Nearby landmark lookup was rate-limited by the provider \(HTTP 429\)/u,
+        /No generated name is available\. Saving is unaffected\. Nearby landmark lookup was rate-limited by the provider \(HTTP 429\)/u,
       ),
     ).toBeVisible();
   });
@@ -798,11 +798,7 @@ describe('WorkspaceShell', () => {
     const loadLocalTrackContent = vi.spyOn(services.database, 'loadLocalTrackContent');
     renderWorkspaceShell();
 
-    await screen.findByRole(
-      'button',
-      { name: 'Expand track details' },
-      { timeout: 5_000 },
-    );
+    await screen.findByRole('button', { name: 'Expand track details' });
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     loadLocalTrackContent.mockClear();
     await user.click(
@@ -901,11 +897,7 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await screen.findByRole(
-      'button',
-      { name: 'Expand track details' },
-      { timeout: 5_000 },
-    );
+    await screen.findByRole('button', { name: 'Expand track details' });
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     const multiTrack = screen.getByRole('button', { name: 'Select multiple tracks' });
     await user.click(multiTrack);
@@ -961,7 +953,7 @@ describe('WorkspaceShell', () => {
       within(results).getByRole('button', { name: /^Mobile search beta/u }),
     );
 
-    expect(await screen.findByText('Synthetic track load failure.')).toBeVisible();
+    expect(await screen.findByText('The track could not be opened.')).toBeVisible();
     expect(useUiStore.getState().mobileWorkspaceOpen).toBe(true);
   });
 
@@ -1435,7 +1427,7 @@ describe('WorkspaceShell', () => {
     await user.upload(input, gpxFile('Terrain failure.gpx'));
 
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    expect(await screen.findByText('Terrain unavailable')).toBeVisible();
+    expect(await screen.findByText('Elevation preparation failed.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.getByText('Terrain failure.gpx · GPX')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Recalculate elevation' }));
@@ -1499,7 +1491,7 @@ describe('WorkspaceShell', () => {
     expect(calculatedLoss.querySelector('svg')).toBeNull();
     expect(
       within(details).getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
 
@@ -1527,12 +1519,9 @@ describe('WorkspaceShell', () => {
       ?.contentHash;
     expect(sourceContentHash).toMatch(/^[0-9a-f]{64}$/u);
     trackSaved.mockClear();
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-      },
-      { timeout: 5_000 },
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
 
     demMeters = 500;
     details = screen.getByRole('complementary', { name: 'Track details' });
@@ -1556,7 +1545,7 @@ describe('WorkspaceShell', () => {
     expect(trackSaved).not.toHaveBeenCalled();
     expect(
       await screen.findByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
     details = screen.getByRole('complementary', { name: 'Track details' });
@@ -1840,12 +1829,9 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(saveLocalTrack).toHaveBeenCalledOnce();
     });
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-      },
-      { timeout: 5_000 },
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
     const savedDisclosure = screen.getByRole('button', {
       name: 'Climbs & Descents',
     });
@@ -1946,12 +1932,9 @@ describe('WorkspaceShell', () => {
 
     await user.upload(input, gpxFile('Delete race.gpx'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(
-      () => {
-        expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-      },
-      { timeout: 5_000 },
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
     const details = await screen.findByRole('complementary', {
       name: 'Track details',
     });
@@ -2125,7 +2108,7 @@ describe('WorkspaceShell', () => {
     });
     expect(
       within(details).getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
     await waitFor(() => {
@@ -2310,7 +2293,7 @@ describe('WorkspaceShell', () => {
         name: /^Replacement trail/u,
       }),
     );
-    expect(await screen.findByText('Replacement unavailable')).toBeVisible();
+    expect(await screen.findByText('The track could not be opened.')).toBeVisible();
 
     clear.resolve(undefined);
 
@@ -2486,7 +2469,7 @@ describe('WorkspaceShell', () => {
       expect(within(details).queryByText('Map marker')).not.toBeInTheDocument();
     });
     const elevationProfile = within(details).getByRole('img', {
-      name: 'Elevation profile from 1000 to 1120 metres',
+      name: 'Elevation profile from 1,000 to 1,120 metres',
     });
     expect(elevationProfile).toBeVisible();
     await waitFor(() => {
@@ -2611,7 +2594,7 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByText('Source file')).not.toBeInTheDocument();
     expect(
       within(details).getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       }),
     ).toBeVisible();
 
@@ -2624,7 +2607,7 @@ describe('WorkspaceShell', () => {
       new Error('Rename unavailable'),
     );
     await user.click(screen.getByRole('button', { name: 'Confirm rename' }));
-    expect(await screen.findByText('Rename unavailable')).toBeVisible();
+    expect(await screen.findByText('The track could not be renamed.')).toBeVisible();
     expect(nameInput).toHaveValue('Rejected trail');
     await user.clear(nameInput);
     await user.type(nameInput, 'Final trail');

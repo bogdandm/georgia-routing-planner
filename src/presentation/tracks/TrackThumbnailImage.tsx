@@ -40,9 +40,11 @@ function thumbnailPath(thumbnail: TrackThumbnail): string {
     .map((segment) => {
       const [first, ...rest] = segment.map(point);
       if (first === undefined) return '';
+      /* eslint-disable lingui/no-unlocalized-strings -- SVG path commands are not copy. */
       return rest.length === 0
         ? `M ${first} L ${first}`
         : `M ${first} ${rest.map((vertex) => `L ${vertex}`).join(' ')}`;
+      /* eslint-enable lingui/no-unlocalized-strings */
     })
     .join(' ');
 }

@@ -1,16 +1,19 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
+import { normalizeMarkerName } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import {
   mapInteractionStore,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const marker: TrackMarker = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -27,7 +30,7 @@ function renderSection(
     readonly onDelete?: (markerId: string) => Promise<void>;
   } = {},
 ) {
-  return render(
+  return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
       <TrackMarkersSection
         elevationProvider={overrides.elevationProvider ?? null}
@@ -41,6 +44,7 @@ function renderSection(
 }
 
 beforeEach(() => {
+  activateAppLocale('en');
   resetMapInteractionStore();
 });
 
@@ -158,13 +162,10 @@ describe('TrackMarkersSection', () => {
   });
 
   it('keeps inline actions open for validation and persistence failures', async () => {
-    const onRename = vi.fn((_markerId: string, name: string) =>
-      Promise.reject(
-        new Error(
-          name.trim() === '' ? 'Marker name is required.' : 'Rename unavailable',
-        ),
-      ),
-    );
+    const onRename = vi.fn(async (_markerId: string, name: string) => {
+      normalizeMarkerName(name);
+      await Promise.reject(new Error('Rename unavailable'));
+    });
     const onDelete = vi.fn().mockRejectedValue(new Error('Delete unavailable'));
     const user = userEvent.setup();
     renderSection({ markers: [marker], onRename, onDelete });
@@ -174,12 +175,15 @@ describe('TrackMarkersSection', () => {
     const name = screen.getByRole('textbox', { name: 'Marker name' });
     await user.clear(name);
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(screen.getByText('Marker name is required.')).toBeVisible();
+    expect(await screen.findByText('Enter a marker name.')).toBeVisible();
     expect(onRename).toHaveBeenCalledWith(marker.id, '');
 
     await user.type(name, 'Valid name');
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(await screen.findByText('Rename unavailable')).toBeVisible();
+    expect(
+      await screen.findByText('The track marker could not be renamed.'),
+    ).toBeVisible();
+    expect(screen.queryByText('Rename unavailable')).not.toBeInTheDocument();
     expect(name).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -187,7 +191,9 @@ describe('TrackMarkersSection', () => {
     await user.click(
       screen.getByRole('button', { name: `Confirm deletion of ${marker.name}` }),
     );
-    expect(await screen.findByText('Delete unavailable')).toBeVisible();
+    expect(
+      await screen.findByText('The track marker could not be deleted.'),
+    ).toBeVisible();
     expect(screen.getByRole('button', { name: `Delete ${marker.name}` })).toBeVisible();
   });
 

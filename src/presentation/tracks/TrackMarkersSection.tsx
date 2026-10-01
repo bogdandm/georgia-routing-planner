@@ -1,3 +1,6 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
@@ -22,6 +25,7 @@ import type {
   ElevationProvider,
   ElevationSample,
 } from '@/application/ports/ElevationProvider';
+import { MarkerNameError } from '@/domain/markers/savedMarker';
 import { MAXIMUM_TRACK_MARKERS, type TrackMarker } from '@/domain/tracks/localTrack';
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -46,14 +50,16 @@ export function TrackMarkersSection({
   onRename,
   onDelete,
 }: TrackMarkersSectionProps): ReactElement {
+  const { i18n, t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<MessageDescriptor | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `track-markers-${useId().replaceAll(':', '')}`;
   const [markerElevations, setMarkerElevations] = useState<
     ReadonlyMap<string, ElevationSample>
@@ -123,13 +129,19 @@ export function TrackMarkersSection({
       setRenameTargetId(null);
       setRenameError(null);
     } catch (error) {
-      setRenameError(
-        error instanceof Error
-          ? error.message
-          : 'The track marker could not be renamed.',
-      );
+      if (!(error instanceof MarkerNameError)) {
+        setRenameError(msg`The track marker could not be renamed.`);
+      } else if (error.problem === 'required') {
+        setRenameError(msg`Enter a marker name.`);
+      } else if (error.problem === 'too-long') {
+        setRenameError(msg`Marker names must be 200 characters or fewer.`);
+      } else {
+        setRenameError(msg`The marker name contains unsupported characters.`);
+      }
     }
   };
+
+  const markerCount = markers.length;
 
   return (
     <Box component="section">
@@ -143,7 +155,7 @@ export function TrackMarkersSection({
         }}
       >
         <ButtonBase
-          aria-label="Markers"
+          aria-label={t`Markers`}
           aria-controls={detailsId}
           aria-expanded={expanded}
           onClick={() => {
@@ -158,7 +170,7 @@ export function TrackMarkersSection({
           }}
         >
           <Typography component="h3" variant="subtitle2">
-            Markers ({markers.length})
+            <Trans>Markers ({markerCount})</Trans>
           </Typography>
           <ExpandMoreIcon
             aria-hidden
@@ -172,11 +184,11 @@ export function TrackMarkersSection({
             }}
           />
         </ButtonBase>
-        <Tooltip title="Add track marker">
+        <Tooltip title={t`Add track marker`}>
           <span>
             <IconButton
               size="small"
-              aria-label="Add track marker"
+              aria-label={t`Add track marker`}
               disabled={markers.length >= MAXIMUM_TRACK_MARKERS}
               onClick={onAdd}
             >
@@ -187,18 +199,18 @@ export function TrackMarkersSection({
       </Box>
       {expanded ? (
         <Box id={detailsId} sx={{ px: 1 }}>
-          {deleteError === null ? null : (
+          {deleteFailed ? (
             <Typography variant="caption" color="error">
-              {deleteError}
+              <Trans>The track marker could not be deleted.</Trans>
             </Typography>
-          )}
+          ) : null}
           {markers.length === 0 ? (
             <Typography variant="caption" color="text.secondary">
-              No markers for this track.
+              <Trans>No markers for this track.</Trans>
             </Typography>
           ) : (
             <List
-              aria-label="Track markers"
+              aria-label={t`Track markers`}
               disablePadding
               sx={{ display: 'grid', gap: 1 }}
             >
@@ -215,14 +227,14 @@ export function TrackMarkersSection({
                         <TextField
                           autoFocus
                           size="small"
-                          label="Marker name"
+                          label={t`Marker name`}
                           value={renameValue}
                           onChange={(event) => {
                             setRenameValue(event.target.value);
                             setRenameError(null);
                           }}
                           error={renameError !== null}
-                          helperText={renameError}
+                          helperText={renameError === null ? null : i18n._(renameError)}
                           slotProps={{ htmlInput: { maxLength: 200 } }}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') void saveRename();
@@ -235,7 +247,7 @@ export function TrackMarkersSection({
                             variant="contained"
                             size="small"
                           >
-                            Save
+                            <Trans>Save</Trans>
                           </Button>
                           <Button
                             onClick={() => {
@@ -243,7 +255,7 @@ export function TrackMarkersSection({
                             }}
                             size="small"
                           >
-                            Cancel
+                            <Trans>Cancel</Trans>
                           </Button>
                         </Stack>
                       </Stack>
@@ -252,13 +264,14 @@ export function TrackMarkersSection({
                 }
                 const pendingDelete = pendingDeleteId === marker.id;
                 const deleting = deletingId === marker.id;
+                const markerName = marker.name;
                 const elevation = markerElevations.get(markerElevationKey(marker));
                 const elevationLabel =
                   elevation?.status === 'available'
-                    ? formatTrackElevation(elevation.meters)
+                    ? formatTrackElevation(elevation.meters, i18n)
                     : elevationProvider === null || elevation?.status === 'unavailable'
-                      ? 'Elevation unavailable'
-                      : 'Loading elevation…';
+                      ? t`Elevation unavailable`
+                      : t`Loading elevation…`;
                 return (
                   <ClickAwayListener
                     key={marker.id}
@@ -328,17 +341,17 @@ export function TrackMarkersSection({
                             startRename(marker);
                           }}
                         >
-                          Rename
+                          <Trans>Rename</Trans>
                         </Button>
                         <Tooltip
-                          title={pendingDelete ? 'Confirm deletion' : 'Delete marker'}
+                          title={pendingDelete ? t`Confirm deletion` : t`Delete marker`}
                         >
                           <IconButton
                             size="small"
                             aria-label={
                               pendingDelete
-                                ? `Confirm deletion of ${marker.name}`
-                                : `Delete ${marker.name}`
+                                ? t`Confirm deletion of ${markerName}`
+                                : t`Delete ${markerName}`
                             }
                             color={pendingDelete ? 'error' : 'default'}
                             disabled={deleting}
@@ -354,14 +367,10 @@ export function TrackMarkersSection({
                                 return;
                               }
                               setDeletingId(marker.id);
-                              setDeleteError(null);
+                              setDeleteFailed(false);
                               void onDelete(marker.id)
-                                .catch((error: unknown) => {
-                                  setDeleteError(
-                                    error instanceof Error
-                                      ? error.message
-                                      : 'The track marker could not be deleted.',
-                                  );
+                                .catch(() => {
+                                  setDeleteFailed(true);
                                 })
                                 .finally(() => {
                                   setDeletingId(null);

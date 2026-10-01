@@ -1,3 +1,6 @@
+import type { I18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
@@ -16,10 +19,10 @@ import {
 } from '@/presentation/tracks/trackFormatters';
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function formatTrackDuration(seconds: number): string {
+export function formatTrackDuration(seconds: number, i18n: I18n): string {
   const hours = Math.floor(seconds / 3_600);
   const minutes = Math.round((seconds % 3_600) / 60);
-  return `${String(hours)}h ${String(minutes)}m`;
+  return i18n._(msg`${hours}h ${minutes}m`);
 }
 
 export type TrackStatsMetrics = Pick<
@@ -48,12 +51,13 @@ export function TrackStat({
   overGraphic = false,
   value,
 }: TrackStatProps) {
+  const { t } = useLingui();
   return (
     <Stack
       component="span"
       direction="row"
       spacing={0.5}
-      aria-label={`${label}: ${value}`}
+      aria-label={t`${label}: ${value}`}
       sx={{
         minWidth: 0,
         alignItems: 'center',
@@ -97,42 +101,47 @@ export function TrackStats({
   metrics,
   overGraphic = false,
 }: TrackStatsProps) {
+  const { i18n, t } = useLingui();
   const stats: TrackStatProps[] = [];
   const elapsedSeconds = metrics.elapsedSeconds;
   if (elapsedSeconds !== undefined) {
     stats.push({
       icon: <TimerOutlinedIcon sx={{ fontSize: 18 }} />,
-      label: 'Recorded time',
-      value: formatTrackDuration(elapsedSeconds),
+      label: t`Recorded time`,
+      value: formatTrackDuration(elapsedSeconds, i18n),
     });
   }
   stats.push({
     icon: <SwapHorizIcon sx={{ fontSize: 18 }} />,
-    label: 'Distance',
-    value: formatTrackDistance(metrics.distanceMeters),
+    label: t`Distance`,
+    value: formatTrackDistance(metrics.distanceMeters, i18n),
   });
   if (!compact) {
     const speedKilometersPerHour = averageSpeedKilometersPerHour(metrics);
     if (speedKilometersPerHour !== undefined) {
+      const speed = new Intl.NumberFormat(i18n.locale, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(speedKilometersPerHour);
       stats.push({
         icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
-        label: 'Average speed',
-        value: `${speedKilometersPerHour.toFixed(1)} km/h`,
+        label: t`Average speed`,
+        value: t`${speed} km/h`,
       });
     }
   }
   if (metrics.ascentMeters !== undefined) {
     stats.push({
       icon: <NorthEastIcon sx={{ fontSize: 18 }} />,
-      label: 'Elevation gain',
-      value: formatTrackElevation(metrics.ascentMeters),
+      label: t`Elevation gain`,
+      value: formatTrackElevation(metrics.ascentMeters, i18n),
     });
   }
   if (metrics.descentMeters !== undefined) {
     stats.push({
       icon: <SouthEastIcon sx={{ fontSize: 18 }} />,
-      label: 'Elevation loss',
-      value: formatTrackElevation(metrics.descentMeters),
+      label: t`Elevation loss`,
+      value: formatTrackElevation(metrics.descentMeters, i18n),
     });
   }
   return (

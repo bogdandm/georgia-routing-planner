@@ -47,7 +47,10 @@ function routedSuccess(): TrailRouteSuccess {
 
 describe('route plan reducer', () => {
   it('claims routed queue heads one at a time and preserves FIFO input', () => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:queue'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:queue', 'New route'),
+      A,
+    );
     draft = enqueueRoutePlanPoint(draft, B);
     const firstRequest = draft.pendingRequest;
     if (firstRequest === null) throw new Error('Expected A to B request.');
@@ -78,7 +81,10 @@ describe('route plan reducer', () => {
   });
 
   it('commits Line points synchronously and increments every geometry revision', () => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:line'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:line', 'New route'),
+      A,
+    );
     expect(draft.requestGeneration).toBe(1);
     draft = setNextSegmentMode(draft, 'line');
     draft = enqueueRoutePlanPoint(draft, B);
@@ -94,13 +100,19 @@ describe('route plan reducer', () => {
   });
 
   it('keeps the selected segment mode while input is buffered', () => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:mode'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:mode', 'New route'),
+      A,
+    );
     draft = enqueueRoutePlanPoint(draft, B);
     expect(setNextSegmentMode(draft, 'line')).toBe(draft);
   });
 
   it('clears dependent queued points after a routing failure without losing committed geometry', () => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:failure'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:failure', 'New route'),
+      A,
+    );
     draft = enqueueRoutePlanPoint(draft, B);
     const request = draft.pendingRequest;
     if (request === null) throw new Error('Expected request.');
@@ -126,7 +138,10 @@ describe('route plan reducer', () => {
   });
 
   it('invalidates pending work on undo and clear', () => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:undo'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:undo', 'New route'),
+      A,
+    );
     draft = enqueueRoutePlanPoint(draft, B);
     const request = draft.pendingRequest;
     if (request === null) throw new Error('Expected request.');
@@ -148,7 +163,10 @@ describe('route plan reducer', () => {
   });
 
   it('keeps committed geometry saveable during elevation work and locks saving edits', () => {
-    let draft = enqueueRoutePlanPoint(startRoutePlan('route-plan:elevation'), A);
+    let draft = enqueueRoutePlanPoint(
+      startRoutePlan('route-plan:elevation', 'New route'),
+      A,
+    );
     draft = setNextSegmentMode(draft, 'line');
     draft = enqueueRoutePlanPoint(draft, B);
     const enriching = beginRoutePlanElevation(draft);

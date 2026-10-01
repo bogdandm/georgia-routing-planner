@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,12 +8,14 @@ import {
   type ElevationProfile,
   type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import {
   CompactElevationProfile,
   ElevationPreparationChart,
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const profile: ElevationProfile = {
   points: [
@@ -119,6 +121,7 @@ class TestResizeObserver implements ResizeObserver {
 }
 
 beforeEach(() => {
+  activateAppLocale('en');
   vi.stubGlobal('ResizeObserver', TestResizeObserver);
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
     () => new DOMRect(0, 0, observedWidth, 264),
@@ -178,7 +181,7 @@ function renderElevationProfileChart({
   if (onPointClick !== undefined) {
     chartProps.onPointClick = onPointClick;
   }
-  return render(
+  return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
       <ElevationProfileChart {...chartProps} />
     </ThemeProvider>,
@@ -187,7 +190,7 @@ function renderElevationProfileChart({
 
 describe('ElevationPreparationChart', () => {
   it('renders an indeterminate terrain preparation state before tile totals are known', () => {
-    render(
+    renderWithI18n(
       <ThemeProvider theme={createAppTheme()}>
         <ElevationPreparationChart progress={null} />
       </ThemeProvider>,
@@ -201,7 +204,7 @@ describe('ElevationPreparationChart', () => {
   });
 
   it('renders neutral, determinate tile progress without profile interactions', () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ThemeProvider theme={createAppTheme()}>
         <ElevationPreparationChart
           progress={{
@@ -237,6 +240,22 @@ describe('ElevationPreparationChart', () => {
     expect(container.querySelectorAll('stop')).toHaveLength(0);
     expect(container.querySelectorAll('.recharts-tooltip-wrapper')).toHaveLength(0);
   });
+
+  it('announces tile progress with Russian plural forms', () => {
+    activateAppLocale('ru');
+    renderWithI18n(
+      <ThemeProvider theme={createAppTheme()}>
+        <ElevationPreparationChart
+          progress={{ completedTiles: 1, totalTiles: 21, points: [] }}
+        />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText('Загрузка тайлов высот: 1 из 21')).toBeVisible();
+    expect(
+      screen.getByRole('img', { name: 'Загрузка профиля высот: 1 из 21 тайла' }),
+    ).toBeVisible();
+  });
 });
 
 describe('ElevationProfileChart', () => {
@@ -248,7 +267,7 @@ describe('ElevationProfileChart', () => {
 
       expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
       const image = screen.getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       });
       expect(image).toBeVisible();
       expect(image).toHaveStyle({ height: '264px' });
@@ -334,7 +353,7 @@ describe('ElevationProfileChart', () => {
         },
       ],
     };
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ThemeProvider theme={createAppTheme()}>
         <ElevationProfileChart
           profile={splitProfile}
@@ -370,7 +389,7 @@ describe('ElevationProfileChart', () => {
     });
 
     const image = screen.getByRole('img', {
-      name: 'Elevation profile from 1000 to 1120 metres',
+      name: 'Elevation profile from 1,000 to 1,120 metres',
     });
     const chartSurface = image.querySelector('svg');
     if (chartSurface === null) {
@@ -443,7 +462,7 @@ describe('ElevationProfileChart', () => {
 
     const positiveChartSurface = screen
       .getByRole('img', {
-        name: 'Elevation profile from 1000 to 1004 metres',
+        name: 'Elevation profile from 1,000 to 1,004 metres',
       })
       .querySelector('svg');
     if (positiveChartSurface === null) {
@@ -484,7 +503,7 @@ describe('ElevationProfileChart', () => {
 
     const negativeChartSurface = screen
       .getByRole('img', {
-        name: 'Elevation profile from 1000 to 1004 metres',
+        name: 'Elevation profile from 1,000 to 1,004 metres',
       })
       .querySelector('svg');
     if (negativeChartSurface === null) {
@@ -522,7 +541,7 @@ describe('ElevationProfileChart', () => {
     });
     const chartSurface = screen
       .getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       })
       .querySelector('svg');
     if (chartSurface === null) {
@@ -555,7 +574,7 @@ describe('ElevationProfileChart', () => {
     });
     const chartSurface = screen
       .getByRole('img', {
-        name: 'Elevation profile from 1000 to 1120 metres',
+        name: 'Elevation profile from 1,000 to 1,120 metres',
       })
       .querySelector('svg');
     if (chartSurface === null) {
@@ -621,7 +640,7 @@ describe('ElevationProfileChart', () => {
   });
 
   it('renders the compact profile as a decorative non-interactive chart', () => {
-    const { container } = render(
+    const { container } = renderWithI18n(
       <ThemeProvider theme={createAppTheme()}>
         <CompactElevationProfile profile={profile} />
       </ThemeProvider>,

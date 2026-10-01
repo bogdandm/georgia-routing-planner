@@ -1,3 +1,5 @@
+import { plural } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import ChangeHistoryOutlinedIcon from '@mui/icons-material/ChangeHistoryOutlined';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
@@ -124,6 +126,7 @@ function ElevationTooltip({
   payload,
   profile,
 }: ElevationTooltipProps): ReactElement | null {
+  const { i18n, t } = useLingui();
   const point: unknown = payload[0]?.payload;
   if (
     !active ||
@@ -152,18 +155,16 @@ function ElevationTooltip({
     profilePoint?.sampleIndex === point.sampleIndex
       ? smoothedHoverGradePct(profile, profilePoint)
       : point.localGradePct;
-  const typeNumber =
-    segment.type === 'flat'
-      ? null
-      : profile.segments
-          .slice(0, (segmentIndex ?? 0) + 1)
-          .filter((candidate) => candidate.type === segment.type).length;
-  const typeLabel =
-    segment.type === 'climb'
-      ? `Climb ${String(typeNumber)}`
-      : segment.type === 'descent'
-        ? `Descent ${String(typeNumber)}`
-        : 'Flat';
+  let typeLabel: string;
+  if (segment.type === 'flat') {
+    typeLabel = t`Flat`;
+  } else {
+    const typeNumber = profile.segments
+      .slice(0, (segmentIndex ?? 0) + 1)
+      .filter((candidate) => candidate.type === segment.type).length;
+    typeLabel =
+      segment.type === 'climb' ? t`Climb ${typeNumber}` : t`Descent ${typeNumber}`;
+  }
 
   return (
     <Paper elevation={3} sx={{ p: 1, minWidth: 210 }}>
@@ -180,13 +181,13 @@ function ElevationTooltip({
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <SwapHorizIcon aria-hidden sx={{ fontSize: 16 }} />
             <Typography variant="caption">
-              {formatTrackDistance(point.distanceMeters)}
+              {formatTrackDistance(point.distanceMeters, i18n)}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <TerrainOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
             <Typography variant="body2">
-              {formatTrackElevation(point.elevationMeters)}
+              {formatTrackElevation(point.elevationMeters, i18n)}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -198,7 +199,7 @@ function ElevationTooltip({
               }}
             />
             <Typography variant="caption" color="text.secondary">
-              {formatTrackGrade(hoverGradePct)}
+              {formatTrackGrade(hoverGradePct, i18n)}
             </Typography>
           </Stack>
         </Stack>
@@ -221,7 +222,7 @@ function ElevationTooltip({
               color="text.secondary"
               sx={{ whiteSpace: 'nowrap' }}
             >
-              {formatTrackDistance(segment.distanceMeters)}
+              {formatTrackDistance(segment.distanceMeters, i18n)}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -231,7 +232,7 @@ function ElevationTooltip({
               color="text.secondary"
               sx={{ whiteSpace: 'nowrap' }}
             >
-              {formatTrackElevation(segment.ascentMeters)}
+              {formatTrackElevation(segment.ascentMeters, i18n)}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -241,7 +242,7 @@ function ElevationTooltip({
               color="text.secondary"
               sx={{ whiteSpace: 'nowrap' }}
             >
-              {formatTrackElevation(segment.descentMeters)}
+              {formatTrackElevation(segment.descentMeters, i18n)}
             </Typography>
           </Stack>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -257,7 +258,7 @@ function ElevationTooltip({
               color="text.secondary"
               sx={{ whiteSpace: 'nowrap' }}
             >
-              {formatTrackGrade(segment.averageGradePct)}
+              {formatTrackGrade(segment.averageGradePct, i18n)}
             </Typography>
           </Stack>
         </Stack>
@@ -277,6 +278,7 @@ function ElevationProfileArea({
   gradientId,
   activeSegmentIndex,
 }: ElevationProfileAreaProps): ReactElement {
+  const { t } = useLingui();
   const maximumDistance = profile.points.at(-1)?.distanceMeters ?? 0;
 
   return (
@@ -319,11 +321,15 @@ function ElevationProfileArea({
       </defs>
       <Area
         type="linear"
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts data key.
         dataKey="elevationMeters"
-        name="Elevation"
+        name={t`Elevation`}
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts domain token.
         baseValue="dataMin"
         dot={false}
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG paint reference.
         stroke={`url(#${gradientId})`}
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG paint reference.
         fill={`url(#${gradientId})`}
         fillOpacity={0.2}
         isAnimationActive={false}
@@ -339,21 +345,28 @@ export function ElevationPreparationChart({
   readonly progress: TrackElevationPreparationProgress | null;
   readonly showProgressStatus?: boolean;
 }): ReactElement {
+  const { i18n, t } = useLingui();
   const theme = useTheme();
   const completedTiles = progress?.completedTiles ?? 0;
   const totalTiles = progress?.totalTiles ?? 0;
   const hasTileTotal = totalTiles > 0;
+  const countFormatter = new Intl.NumberFormat(i18n.locale);
+  const completedTileCount = countFormatter.format(completedTiles);
+  const totalTileCount = countFormatter.format(totalTiles);
   const label = hasTileTotal
-    ? `Loading elevation tiles: ${String(completedTiles)} of ${String(totalTiles)}`
-    : 'Preparing terrain and elevation…';
+    ? t`Loading elevation tiles: ${completedTileCount} of ${totalTileCount}`
+    : t`Preparing terrain and elevation…`;
   const accessibilityLabel = hasTileTotal
-    ? `Elevation profile loading: ${String(completedTiles)} of ${String(totalTiles)} tiles`
-    : 'Elevation profile loading';
+    ? t`${plural(totalTiles, {
+        one: `Elevation profile loading: ${completedTileCount} of # tile`,
+        other: `Elevation profile loading: ${completedTileCount} of # tiles`,
+      })}`
+    : t`Elevation profile loading`;
 
   return (
     <Stack spacing={1.5}>
       <Typography component="h3" variant="subtitle2">
-        Elevation profile
+        <Trans>Elevation profile</Trans>
       </Typography>
       {showProgressStatus ? (
         <Stack spacing={0.75}>
@@ -379,19 +392,25 @@ export function ElevationPreparationChart({
           <XAxis
             hide
             type="number"
+            /* eslint-disable lingui/no-unlocalized-strings -- Recharts data key and domain tokens. */
             dataKey="distanceMeters"
             domain={['dataMin', 'dataMax']}
+            /* eslint-enable lingui/no-unlocalized-strings */
           />
           <YAxis
             hide
             type="number"
+            /* eslint-disable lingui/no-unlocalized-strings -- Recharts data key and domain tokens. */
             dataKey="elevationMeters"
             domain={['auto', 'auto']}
+            /* eslint-enable lingui/no-unlocalized-strings */
           />
           <Area
             type="linear"
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts data key.
             dataKey="elevationMeters"
-            name="Elevation"
+            name={t`Elevation`}
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts domain token.
             baseValue="dataMin"
             dot={false}
             stroke={appColors.elevationGrade.flat}
@@ -418,9 +437,27 @@ export function ElevationProfileChart({
   onTrackGradeLegendDismissedChange,
   onPointClick,
 }: ElevationProfileChartProps): ReactElement {
+  const { i18n, t } = useLingui();
   const theme = useTheme();
   const sampledPoints = useMemo(() => sampleElevationProfilePoints(profile), [profile]);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `elevation-grade-${useId().replaceAll(':', '')}`;
+  const axisDistanceFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(i18n.locale, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }),
+    [i18n.locale],
+  );
+  const minimumElevation = new Intl.NumberFormat(i18n.locale).format(
+    Math.round(profile.minimumMeters),
+  );
+  const maximumElevationMeters = Math.round(profile.maximumMeters);
+  const profileLabel = t`${plural(maximumElevationMeters, {
+    one: `Elevation profile from ${minimumElevation} to # metre`,
+    other: `Elevation profile from ${minimumElevation} to # metres`,
+  })}`;
   const axisText = useMemo(
     () => ({
       fill: theme.palette.text.secondary,
@@ -456,12 +493,12 @@ export function ElevationProfileChart({
       {showHeading ? (
         <Box sx={{ position: 'relative' }}>
           <Typography component="h3" variant="subtitle2">
-            Elevation profile
+            <Trans>Elevation profile</Trans>
           </Typography>
           {trackGradeLegendDismissed ? (
-            <MuiTooltip title="Show track grade legend">
+            <MuiTooltip title={t`Show track grade legend`}>
               <IconButton
-                aria-label="Show track grade legend"
+                aria-label={t`Show track grade legend`}
                 onClick={() => {
                   onTrackGradeLegendDismissedChange(false);
                 }}
@@ -479,11 +516,7 @@ export function ElevationProfileChart({
           ) : null}
         </Box>
       ) : null}
-      <Box
-        role="img"
-        aria-label={`Elevation profile from ${String(Math.round(profile.minimumMeters))} to ${String(Math.round(profile.maximumMeters))} metres`}
-        sx={{ height: 264, mx: -1 }}
-      >
+      <Box role="img" aria-label={profileLabel} sx={{ height: 264, mx: -1 }}>
         <AreaChart<ElevationProfilePoint>
           aria-hidden
           accessibilityLayer={false}
@@ -519,22 +552,27 @@ export function ElevationProfileChart({
           <CartesianGrid stroke={theme.palette.divider} />
           <XAxis
             type="number"
+            /* eslint-disable lingui/no-unlocalized-strings -- Recharts data key and domain tokens. */
             dataKey="distanceMeters"
             domain={['dataMin', 'dataMax']}
+            /* eslint-enable lingui/no-unlocalized-strings */
             height={32}
             tick={axisText}
-            tickFormatter={(distanceMeters: number) =>
-              `${(distanceMeters / 1_000).toFixed(1)} km`
-            }
+            tickFormatter={(distanceMeters: number) => {
+              const distance = axisDistanceFormatter.format(distanceMeters / 1_000);
+              return t`${distance} km`;
+            }}
           />
           <YAxis
             type="number"
+            /* eslint-disable lingui/no-unlocalized-strings -- Recharts data key and domain tokens. */
             dataKey="elevationMeters"
             domain={['auto', 'auto']}
+            /* eslint-enable lingui/no-unlocalized-strings */
             width={64}
             tick={axisText}
             tickFormatter={(elevationMeters: number) =>
-              `${String(Math.round(elevationMeters))} m`
+              formatTrackElevation(elevationMeters, i18n)
             }
           />
           <Tooltip
@@ -566,6 +604,7 @@ export function CompactElevationProfile({
   readonly profile: ElevationProfile;
 }): ReactElement {
   const sampledPoints = useMemo(() => sampleElevationProfilePoints(profile), [profile]);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `compact-elevation-grade-${useId().replaceAll(':', '')}`;
 
   return (
@@ -580,22 +619,27 @@ export function CompactElevationProfile({
         responsive
         data={sampledPoints}
         margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS values.
         style={{ width: '100%', height: '100%', pointerEvents: 'none' }}
       >
         <XAxis
           hide
           height={0}
           type="number"
+          /* eslint-disable lingui/no-unlocalized-strings -- Recharts data key and domain tokens. */
           dataKey="distanceMeters"
           domain={['dataMin', 'dataMax']}
+          /* eslint-enable lingui/no-unlocalized-strings */
           padding={{ left: 0, right: 0 }}
         />
         <YAxis
           hide
           width={0}
           type="number"
+          /* eslint-disable lingui/no-unlocalized-strings -- Recharts data key and domain tokens. */
           dataKey="elevationMeters"
           domain={['dataMin', 'dataMax']}
+          /* eslint-enable lingui/no-unlocalized-strings */
         />
         <ElevationProfileArea
           profile={profile}

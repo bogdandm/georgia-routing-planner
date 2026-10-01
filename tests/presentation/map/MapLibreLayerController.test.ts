@@ -29,7 +29,10 @@ import {
 } from '@/presentation/map/mapIds';
 import * as markerCatalog from '@/presentation/markers/markerCatalog';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
-import { mapVisualModePaint } from '@/presentation/map/mapVisualPalette';
+import {
+  mapVisualModePaint,
+  mapVisualPalette,
+} from '@/presentation/map/mapVisualPalette';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type Listener = (event: never) => void;
@@ -1067,12 +1070,20 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setImportedTrackGeometry([
         [
-          [44, 42],
-          [44.1, 42.1],
+          [
+            [44, 42],
+            [44.1, 42.1],
+          ],
+          [
+            [44.2, 42.2],
+            [44.3, 42.3],
+          ],
         ],
         [
-          [45, 43],
-          [45.1, 43.1],
+          [
+            [45, 43],
+            [45.1, 43.1],
+          ],
         ],
       ]),
     ).toEqual({ status: 'success' });
@@ -1084,10 +1095,37 @@ describe('MapLibreLayerController', () => {
         [44.1, 42.1],
       ],
       [
+        [44.2, 42.2],
+        [44.3, 42.3],
+      ],
+      [
         [45, 43],
         [45.1, 43.1],
       ],
     ]);
+    expect(map.sources.get(mapSourceIds.importedTrackEndpoints)).toHaveProperty(
+      'data.features',
+      [
+        ['finish', [44.3, 42.3]],
+        ['start', [44, 42]],
+        ['finish', [45.1, 43.1]],
+        ['start', [45, 43]],
+      ].map(([endpoint, coordinates]) => ({
+        type: 'Feature',
+        properties: { endpoint },
+        geometry: { type: 'Point', coordinates },
+      })),
+    );
+    expect(map.layers.get(importedTrackLayerIds.endpoints)).toHaveProperty(
+      'paint.circle-color',
+      [
+        'match',
+        ['get', 'endpoint'],
+        'start',
+        mapVisualPalette.userGeometry.gpxTrackStart,
+        mapVisualPalette.userGeometry.gpxTrackFinish,
+      ],
+    );
     expect(map.layers.get(importedTrackLayerIds.casing)).toHaveProperty(
       'paint.line-width',
       7,
@@ -1104,6 +1142,7 @@ describe('MapLibreLayerController', () => {
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
+      importedTrackLayerIds.endpoints,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
     expect(importedTrackLineLayerIdsInOrder).toEqual(
       [...importedTrackLineLayerIdsInOrder].sort((left, right) => left - right),
@@ -1135,12 +1174,21 @@ describe('MapLibreLayerController', () => {
     expect(
       map.paintProperties.get(`${importedTrackLayerIds.highlight}.line-opacity`),
     ).toBe(0.45);
+    expect(
+      map.paintProperties.get(`${importedTrackLayerIds.endpoints}.circle-opacity`),
+    ).toBe(0.45);
+    expect(
+      map.paintProperties.get(
+        `${importedTrackLayerIds.endpoints}.circle-stroke-opacity`,
+      ),
+    ).toBe(0.45);
     expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
       status: 'success',
     });
     expect(map.visibility.get(importedTrackLayerIds.casing)).toBe('none');
     expect(map.visibility.get(importedTrackLayerIds.line)).toBe('none');
     expect(map.visibility.get(importedTrackLayerIds.highlight)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.endpoints)).toBe('none');
     expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('none');
     await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: { 'imported-tracks': false },
@@ -1150,6 +1198,10 @@ describe('MapLibreLayerController', () => {
     controller.clearImportedTrackGeometry();
     expect(map.sources.get('imported-track')).toHaveProperty(
       'data.geometry.coordinates',
+      [],
+    );
+    expect(map.sources.get(mapSourceIds.importedTrackEndpoints)).toHaveProperty(
+      'data.features',
       [],
     );
   });
@@ -1162,8 +1214,10 @@ describe('MapLibreLayerController', () => {
     controller.attach(map as unknown as MapLibreMap);
     controller.setImportedTrackGeometry([
       [
-        [44, 42],
-        [44.1, 42.1],
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
       ],
     ]);
     controller.setPlannedLineGeometry(

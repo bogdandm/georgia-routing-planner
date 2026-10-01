@@ -458,13 +458,14 @@ records.
 ## Tracks on the map
 
 Import parsing, naming, and saving are described in [features.md](features.md) and
-[data-model.md](data-model.md). `TracksWorkspaceProvider` sends validated independent
-segments to `MapLibreLayerController.setImportedTrackGeometry`, which keeps one GeoJSON
-`MultiLineString` with a casing and line and one persistent visibility/opacity pair. In
-multi-track mode the provider combines the segments of every ready selected track into
-that geometry and fits their combined bounds. Route plans and the ruler use
-`setPlannedLineGeometry` with separate `route-plan` and `measurement` sources that share
-one blue layer structure with numbered waypoints.
+[data-model.md](data-model.md). `TracksWorkspaceProvider` sends validated segments
+grouped per track to `MapLibreLayerController.setImportedTrackGeometry`, which keeps one
+GeoJSON `MultiLineString` with a casing and line plus an endpoint source with each
+track's first and last points, styled as green start and red finish circles above the
+line. All share one persistent visibility/opacity pair. In multi-track mode the provider
+passes every ready selected track and fits their combined bounds. Route plans and the
+ruler use `setPlannedLineGeometry` with separate `route-plan` and `measurement` sources
+that share one blue layer structure with numbered waypoints.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

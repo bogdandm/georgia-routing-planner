@@ -185,17 +185,18 @@ valid.
 
 #### Track detail
 
-Selecting a track draws it in bright blue, fits its bounds around the open panes, and
-opens a detail pane with metrics, actions, provenance, and an elevation profile. The
-stats grid shows duration, distance, average speed, and **Elevation gain**/**Elevation
-loss**; tracks with source elevation also list the calculated Terrarium gain and loss.
-Without recorded time, duration is an **Estimated time** (`≈`) from DIN 33466 hiking
-rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent, with the larger of the
-horizontal and vertical times counted fully and the smaller by half. Breaks are not
-included. Missing measurements are omitted. Source file, point/segment counts, and the
-saved timestamp follow. Closing the track removes its geometry without moving the
-camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the prior list
-state; at 1900 and above the pane stays adjacent and uses **Close track**.
+Selecting a track draws it in bright blue with a green start and a red finish marker,
+fits its bounds around the open panes, and opens a detail pane with metrics, actions,
+provenance, and an elevation profile. The stats grid shows duration, distance, average
+speed, and **Elevation gain**/**Elevation loss**; tracks with source elevation also list
+the calculated Terrarium gain and loss. Without recorded time, duration is an
+**Estimated time** (`≈`) from DIN 33466 hiking rates: 4 km/h horizontally, 300 m/h
+ascent, and 500 m/h descent, with the larger of the horizontal and vertical times
+counted fully and the smaller by half. Breaks are not included. Missing measurements are
+omitted. Source file, point/segment counts, and the saved timestamp follow. Closing the
+track removes its geometry without moving the camera. From 900 through 1899 CSS pixels,
+**Back to tracks** restores the prior list state; at 1900 and above the pane stays
+adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
 **Download KML**, sharing, **Rename** (an inline name editor), and **Delete track**.
@@ -238,12 +239,13 @@ point or time.
 
 The multi-track toggle enables a session-only mode in which row clicks add or remove
 tracks in click order. Selected tracks share one bright-blue scene with grade overlays
-where profiles exist. The read-only pane shows a **Selected tracks** header with
-**Download selected tracks**, combined statistics, then statistics and a profile per
-track. The download is `selected-tracks.zip` with one GPX per track, named from the
-track with deterministic `Stem (2).gpx` suffixes for collisions. On smartphones, row
-clicks keep the list open and **Show map** reveals a combined disclosure. An empty
-selection closes the pane; the mode is never persisted.
+where profiles exist, and each track keeps its own start and finish markers. The
+read-only pane shows a **Selected tracks** header with **Download selected tracks**,
+combined statistics, then statistics and a profile per track. The download is
+`selected-tracks.zip` with one GPX per track, named from the track with deterministic
+`Stem (2).gpx` suffixes for collisions. On smartphones, row clicks keep the list open
+and **Show map** reveals a combined disclosure. An empty selection closes the pane; the
+mode is never persisted.
 
 #### Public track links
 

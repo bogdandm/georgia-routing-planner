@@ -387,6 +387,7 @@ const logicalNativeLayerGroups: Readonly<
   'imported-tracks': [
     importedTrackLayerIds.casing,
     importedTrackLayerIds.line,
+    importedTrackLayerIds.endpoints,
     importedTrackLayerIds.trace,
   ],
   'track-elevation-gradient': [importedTrackLayerIds.highlight],
@@ -394,6 +395,11 @@ const logicalNativeLayerGroups: Readonly<
 
 const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
+
+interface ImportedTrackEndpoint {
+  readonly kind: 'start' | 'finish';
+  readonly coordinate: readonly [number, number];
+}
 
 type RasterSlot = (typeof rasterSlots)[number];
 interface RasterTileCoordinate {
@@ -605,6 +611,7 @@ export class MapLibreLayerController {
     type: 'MultiLineString',
     coordinates: [],
   };
+  #importedTrackEndpoints: readonly ImportedTrackEndpoint[] = [];
   #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   readonly #plannedLines: Record<PlannedLineOverlay, PlannedLineState> = {
@@ -1114,22 +1121,29 @@ export class MapLibreLayerController {
     return { status: 'success' };
   }
 
+  /**
+   * Renders tracks as one line source. Each track is a list of segments; its first and
+   * last points receive the start and finish markers.
+   */
   public setImportedTrackGeometry(
-    segments: readonly (readonly (readonly [number, number])[])[],
+    tracks: readonly (readonly (readonly (readonly [number, number])[])[])[],
   ): MapLayerVisibilityResult {
-    const valid = segments.every(
-      (segment) =>
-        segment.length >= 2 &&
-        segment.every(
-          ([longitude, latitude]) =>
-            Number.isFinite(longitude) &&
-            Number.isFinite(latitude) &&
-            longitude >= -180 &&
-            longitude <= 180 &&
-            latitude >= -90 &&
-            latitude <= 90,
-        ),
-    );
+    const segments = tracks.flat();
+    const valid =
+      tracks.every((track) => track.length > 0) &&
+      segments.every(
+        (segment) =>
+          segment.length >= 2 &&
+          segment.every(
+            ([longitude, latitude]) =>
+              Number.isFinite(longitude) &&
+              Number.isFinite(latitude) &&
+              longitude >= -180 &&
+              longitude <= 180 &&
+              latitude >= -90 &&
+              latitude <= 90,
+          ),
+      );
     if (!valid || segments.length === 0) {
       return this.visibilityFailure('The imported track geometry is invalid.');
     }
@@ -1139,15 +1153,28 @@ export class MapLibreLayerController {
         segment.map(([longitude, latitude]) => [longitude, latitude]),
       ),
     };
+    // Finish precedes start so a loop's shared point keeps the start marker on top.
+    this.#importedTrackEndpoints = tracks.flatMap((track): ImportedTrackEndpoint[] => {
+      const start = track[0]?.[0];
+      const finish = track.at(-1)?.at(-1);
+      if (start === undefined || finish === undefined) return [];
+      return [
+        { kind: 'finish', coordinate: finish },
+        { kind: 'start', coordinate: start },
+      ];
+    });
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackEndpoints);
     return this.reconcileImportedTrack();
   }
 
   public clearImportedTrackGeometry(): void {
     this.#importedTrackGeometry = { type: 'MultiLineString', coordinates: [] };
+    this.#importedTrackEndpoints = [];
     this.#importedTrackHighlightSegments = [];
     this.#importedTrackTraceCoordinate = null;
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackEndpoints);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackHighlight);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrack();
@@ -3425,16 +3452,29 @@ export class MapLibreLayerController {
       return { status: 'success' };
     }
     try {
-      const sourceIsGeoJson = this.syncGeoJsonSource(
-        map,
-        mapSourceIds.importedTrack,
-        (): Feature<MultiLineString> => ({
-          type: 'Feature',
-          properties: {},
-          geometry: this.#importedTrackGeometry,
-        }),
-      );
-      if (!sourceIsGeoJson) {
+      const sourcesAreGeoJson =
+        this.syncGeoJsonSource(
+          map,
+          mapSourceIds.importedTrack,
+          (): Feature<MultiLineString> => ({
+            type: 'Feature',
+            properties: {},
+            geometry: this.#importedTrackGeometry,
+          }),
+        ) &&
+        this.syncGeoJsonSource(
+          map,
+          mapSourceIds.importedTrackEndpoints,
+          (): FeatureCollection<Point, { readonly endpoint: 'start' | 'finish' }> => ({
+            type: 'FeatureCollection',
+            features: this.#importedTrackEndpoints.map(({ kind, coordinate }) => ({
+              type: 'Feature',
+              properties: { endpoint: kind },
+              geometry: { type: 'Point', coordinates: [...coordinate] },
+            })),
+          }),
+        );
+      if (!sourcesAreGeoJson) {
         throw new Error('The imported track source cannot update its data.');
       }
       const { visibility, importedTrackOpacity } = mapLayerStore.getState();
@@ -3464,6 +3504,28 @@ export class MapLibreLayerController {
             'line-color': mapVisualPalette.userGeometry.gpxTrack,
             'line-width': importedTrackLineWidth,
             'line-opacity': importedTrackOpacity,
+          },
+        });
+      }
+      if (map.getLayer(importedTrackLayerIds.endpoints) === undefined) {
+        map.addLayer({
+          id: importedTrackLayerIds.endpoints,
+          type: 'circle',
+          source: mapSourceIds.importedTrackEndpoints,
+          layout,
+          paint: {
+            'circle-color': [
+              'match',
+              ['get', 'endpoint'],
+              'start',
+              mapVisualPalette.userGeometry.gpxTrackStart,
+              mapVisualPalette.userGeometry.gpxTrackFinish,
+            ],
+            'circle-radius': 7,
+            'circle-stroke-color': '#FFFFFF',
+            'circle-stroke-width': 2,
+            'circle-opacity': importedTrackOpacity,
+            'circle-stroke-opacity': importedTrackOpacity,
           },
         });
       }
@@ -3572,6 +3634,7 @@ export class MapLibreLayerController {
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
+      importedTrackLayerIds.endpoints,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getLayersOrder();
     const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
@@ -3600,19 +3663,22 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null) return;
     const { importedTrackOpacity: opacity } = mapLayerStore.getState();
-    const layerIds = [
-      importedTrackLayerIds.casing,
-      importedTrackLayerIds.line,
-      importedTrackLayerIds.highlight,
-    ];
-    const layerChanged = layerIds.some(
-      (layerId) =>
+    const opacityPropertiesByLayer = [
+      [importedTrackLayerIds.casing, ['line-opacity']],
+      [importedTrackLayerIds.line, ['line-opacity']],
+      [importedTrackLayerIds.highlight, ['line-opacity']],
+      [importedTrackLayerIds.endpoints, ['circle-opacity', 'circle-stroke-opacity']],
+    ] as const;
+    const layerChanged = opacityPropertiesByLayer.some(
+      ([layerId]) =>
         map.getLayer(layerId) !== this.#importedTrackLayerAnchors.get(layerId),
     );
     if (opacity === this.#appliedImportedTrackOpacity && !layerChanged) return;
-    for (const layerId of layerIds) {
+    for (const [layerId, properties] of opacityPropertiesByLayer) {
       if (map.getLayer(layerId) !== undefined) {
-        map.setPaintProperty(layerId, 'line-opacity', opacity);
+        for (const property of properties) {
+          map.setPaintProperty(layerId, property, opacity);
+        }
         this.#importedTrackLayerAnchors.set(layerId, map.getLayer(layerId));
       }
     }

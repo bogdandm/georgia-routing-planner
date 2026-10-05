@@ -202,6 +202,7 @@ export function setupWorkspaceShellTest(): void {
       mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
       mobileWorkspaceOpen: false,
       navigationCollapsed: false,
+      onboardingCompleted: true,
       settingsOpen: false,
       markerSort: 'created',
       trackSort: 'created',

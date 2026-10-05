@@ -78,7 +78,7 @@ export function ClimbsDescentsSection({
   const directionalSegments = numberedDirectionalSegments(segments);
 
   return (
-    <Box component="section">
+    <Box component="section" data-tour="track-climbs">
       <Box
         sx={{
           minHeight: 44,

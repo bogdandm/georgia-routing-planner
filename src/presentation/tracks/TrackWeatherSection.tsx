@@ -351,7 +351,7 @@ export function TrackWeatherSection({
   const formatPace = (value: number) => `×${paceFormat.format(value)}`;
 
   return (
-    <Box component="section">
+    <Box component="section" data-tour="track-weather">
       <ButtonBase
         aria-label={t`Weather forecast`}
         aria-controls={detailsId}

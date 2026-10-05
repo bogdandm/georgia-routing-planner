@@ -3,6 +3,7 @@ import AccountCircleOutlinedIcon from '@mui/icons-material/AccountCircleOutlined
 import BugReportOutlinedIcon from '@mui/icons-material/BugReportOutlined';
 import ChevronLeftOutlinedIcon from '@mui/icons-material/ChevronLeftOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
@@ -94,6 +95,8 @@ interface WorkspaceRailProps {
   readonly onOpenTracks: () => void;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
+  /** Opens the onboarding tour; `null` hides the action where the tour is unavailable. */
+  readonly onStartTour: (() => void) | null;
   readonly onShare: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
   readonly onActiveTabClick: () => void;
@@ -112,6 +115,7 @@ export function WorkspaceRail({
   onToggleDeveloperTools,
   onOpenAbout,
   onOpenSettings,
+  onStartTour,
   onShare,
   onSectionChange,
   onActiveTabClick,
@@ -481,6 +485,7 @@ export function WorkspaceRail({
 
       <Stack
         spacing={0.5}
+        data-tour="rail-actions"
         sx={{
           mt: 'auto',
           px: 0.75,
@@ -545,6 +550,15 @@ export function WorkspaceRail({
         >
           <InfoOutlinedIcon />
         </WorkspaceRailIconButton>
+        {onStartTour === null ? null : (
+          <WorkspaceRailIconButton
+            label={t`Show tour`}
+            tooltip={t`Show tour`}
+            onClick={onStartTour}
+          >
+            <HelpOutlineOutlinedIcon />
+          </WorkspaceRailIconButton>
+        )}
       </Stack>
     </Box>
   );

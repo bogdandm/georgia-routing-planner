@@ -18,6 +18,8 @@ interface UiState {
   readonly trackSort: TrackSort;
   readonly mobileWorkspaceOpen: boolean;
   readonly navigationCollapsed: boolean;
+  /** Defaults to true so the tour only auto-starts after `main.tsx` hydrates it. */
+  readonly onboardingCompleted: boolean;
   readonly settingsOpen: boolean;
   readonly setActiveTab: (value: WorkspaceTab) => void;
   readonly setDeveloperDrawerOpen: (value: boolean) => void;
@@ -28,6 +30,7 @@ interface UiState {
   readonly setTrackSort: (value: TrackSort) => void;
   readonly setMobileWorkspaceOpen: (value: boolean) => void;
   readonly setNavigationCollapsed: (value: boolean) => void;
+  readonly setOnboardingCompleted: (value: boolean) => void;
   readonly setSettingsOpen: (value: boolean) => void;
 }
 
@@ -41,6 +44,7 @@ export const useUiStore = create<UiState>()((set) => ({
   trackSort: 'created',
   mobileWorkspaceOpen: false,
   navigationCollapsed: false,
+  onboardingCompleted: true,
   settingsOpen: false,
   setActiveTab: (activeTab) => {
     set({ activeTab });
@@ -68,6 +72,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setNavigationCollapsed: (navigationCollapsed) => {
     set({ navigationCollapsed });
+  },
+  setOnboardingCompleted: (onboardingCompleted) => {
+    set({ onboardingCompleted });
   },
   setSettingsOpen: (settingsOpen) => {
     set({ settingsOpen });

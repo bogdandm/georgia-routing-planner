@@ -1406,7 +1406,7 @@ export function SatelliteBrowser({
             Settings
           </Typography>
           <Stack spacing={1.5} sx={{ mt: 2, px: 1 }}>
-            <FormControl size="small" fullWidth>
+            <FormControl size="small" fullWidth data-tour="satellite-search-area">
               <InputLabel id="satellite-search-area-label">
                 Search area source
               </InputLabel>

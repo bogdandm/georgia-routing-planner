@@ -28,6 +28,8 @@ void runApplicationBootstrap(async (rootElement, services) => {
   let elevationGradeLegendDismissed = false;
   let markerSort: MarkerSort = 'created';
   let trackSort: TrackSort = 'created';
+  // Unreadable settings must not reopen the tour on every visit.
+  let onboardingCompleted = true;
   let locale = resolveAppLocale(null, navigator.languages);
 
   try {
@@ -37,6 +39,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     elevationGradeLegendDismissed = preferences.elevationGradeLegendDismissed;
     markerSort = preferences.markerSort;
     trackSort = preferences.trackSort;
+    onboardingCompleted = preferences.onboardingCompleted;
     locale = resolveAppLocale(preferences.locale, navigator.languages);
   } catch {
     services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
@@ -50,6 +53,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     elevationGradeLegendDismissed,
     markerSort,
     trackSort,
+    onboardingCompleted,
   });
   const root = createRoot(rootElement);
   const dispose = registerPageLifecycleDisposal(() => {

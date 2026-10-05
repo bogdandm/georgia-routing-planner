@@ -68,21 +68,21 @@ upsert.
 
 ### Settings keys
 
-| Key                             | Value                                                                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort            |
-| `map.camera`                    | Schema version 3: last settled longitude, latitude, and zoom; bearing and pitch are session-only                                   |
-| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options                       |
-| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                       |
-| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                               |
-| `weather.track-preferences`     | Whether the track **Weather forecast** section is expanded and its preferred weekday (default collapsed, Saturday); never uploaded |
-| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                     |
-| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                  |
-| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                           |
-| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                                       |
-| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                                        |
-| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                                      |
-| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                                  |
+| Key                             | Value                                                                                                                                              |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort, completed onboarding tour |
+| `map.camera`                    | Schema version 3: last settled longitude, latitude, and zoom; bearing and pitch are session-only                                                   |
+| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options                                       |
+| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                       |
+| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                               |
+| `weather.track-preferences`     | Whether the track **Weather forecast** section is expanded and its preferred weekday (default collapsed, Saturday); never uploaded                 |
+| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                     |
+| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                  |
+| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                           |
+| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                                                       |
+| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                                                        |
+| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                                                      |
+| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                                                  |
 
 ## Local tracks
 

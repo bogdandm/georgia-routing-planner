@@ -2869,6 +2869,7 @@ export function TrackSortControl({ onTrackSortChange }: TrackSortControlProps) {
         <IconButton
           size="small"
           aria-label={t`Sort tracks. Current: ${currentSortLabel}`}
+          data-tour="track-sort"
           aria-haspopup="menu"
           onClick={(event) => {
             setSortAnchor(event.currentTarget);
@@ -2993,6 +2994,7 @@ function TrackImportZone() {
         ref={compactZoneRef}
         component="section"
         aria-label={t`Import track file`}
+        data-tour="track-import"
         variant="outlined"
         onDragEnter={(event) => {
           // eslint-disable-next-line lingui/no-unlocalized-strings -- DataTransfer type token.
@@ -3344,6 +3346,7 @@ function SavedTrackRow({
       <Box
         ref={setNodeRef}
         component="li"
+        data-tour="track-row"
         className={hovered ? 'saved-track-row--hovered' : undefined}
         sx={{
           display: 'grid',
@@ -4125,6 +4128,7 @@ export function TracksPanel({
               <IconButton
                 size="small"
                 aria-label={t`Create folder`}
+                data-tour="create-folder"
                 onClick={() => {
                   // eslint-disable-next-line lingui/no-unlocalized-strings -- Editor mode token.
                   setEditingFolder('create');
@@ -5553,6 +5557,7 @@ export function TrackDetailsPane({
               <Stack
                 direction="row"
                 spacing={1}
+                data-tour="track-preview-actions"
                 sx={{
                   width: '100%',
                   alignItems: 'center',

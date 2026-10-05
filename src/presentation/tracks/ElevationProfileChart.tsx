@@ -489,7 +489,7 @@ export function ElevationProfileChart({
   }
 
   return (
-    <Stack spacing={1.5}>
+    <Stack spacing={1.5} data-tour="track-profile">
       {showHeading ? (
         <Box sx={{ position: 'relative' }}>
           <Typography component="h3" variant="subtitle2">

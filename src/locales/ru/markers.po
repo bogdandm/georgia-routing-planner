@@ -13,10 +13,20 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. js-lingui-id: omWnpu
+#: src/presentation/markers/MarkersWorkspace.tsx:941
+msgid "{distance} km away"
+msgstr "В {distance} км"
+
 #. js-lingui-id: JsuAUm
-#: src/presentation/markers/MarkerIconPicker.tsx:145
+#: src/presentation/markers/MarkerIconPicker.tsx:148
 msgid "{label}. Current: {selectedLabel}"
 msgstr "{label}. Текущий значок: {selectedLabel}"
+
+#. js-lingui-id: __HSFS
+#: src/presentation/markers/MarkersWorkspace.tsx:747
+msgid "24-hour forecast · {periodKind, select, day {Day} night {Night} other {Custom}} · {weekday}, {dateLabel}"
+msgstr "Прогноз на 24 часа · {periodKind, select, day {День} night {Ночь} other {Свои часы}} · {weekday}, {dateLabel}"
 
 #. js-lingui-id: 39ohdf
 #: src/presentation/markers/MarkerIconPicker.tsx:49
@@ -24,7 +34,7 @@ msgid "Activities"
 msgstr "Активности"
 
 #. js-lingui-id: Zdun41
-#: src/presentation/markers/markerCatalog.tsx:413
+#: src/presentation/markers/markerCatalog.tsx:285
 msgid "Alert"
 msgstr "Тревога"
 
@@ -34,62 +44,72 @@ msgid "Apartment"
 msgstr "Апартаменты"
 
 #. js-lingui-id: 6cU-Bw
-#: src/presentation/markers/markerCatalog.tsx:367
+#: src/presentation/markers/markerCatalog.tsx:261
 msgid "Attraction"
 msgstr "Достопримечательность"
 
 #. js-lingui-id: tA1nmf
-#: src/presentation/markers/markerCatalog.tsx:327
+#: src/presentation/markers/markerCatalog.tsx:237
 msgid "Bakery"
 msgstr "Пекарня"
 
 #. js-lingui-id: GoBp8L
-#: src/presentation/markers/markerCatalog.tsx:345
+#: src/presentation/markers/markerCatalog.tsx:243
 msgid "Bar"
 msgstr "Бар"
 
 #. js-lingui-id: lTY3xZ
-#: src/presentation/markers/markerCatalog.tsx:208
+#: src/presentation/markers/markerCatalog.tsx:190
 msgid "Beach"
 msgstr "Пляж"
 
 #. js-lingui-id: nxZBQI
-#: src/presentation/markers/markerCatalog.tsx:246
+#: src/presentation/markers/markerCatalog.tsx:210
 msgid "Bear"
 msgstr "Медведь"
 
 #. js-lingui-id: 05AfaT
-#: src/presentation/markers/markerCatalog.tsx:456
+#: src/presentation/markers/markerCatalog.tsx:309
 msgid "Bike"
 msgstr "Велосипед"
 
 #. js-lingui-id: ILUH3x
-#: src/presentation/markers/markerCatalog.tsx:248
+#: src/presentation/markers/markerCatalog.tsx:212
 msgid "Bird"
 msgstr "Птица"
 
 #. js-lingui-id: 32TndD
-#: src/presentation/markers/markerCatalog.tsx:411
+#: src/presentation/markers/markerCatalog.tsx:283
 msgid "Blocked"
 msgstr "Проход закрыт"
 
+#. js-lingui-id: Zn5crm
+#: src/presentation/markers/markerCatalog.tsx:327
+msgid "Blue"
+msgstr "Синий"
+
+#. js-lingui-id: 3hRi9N
+#: src/presentation/markers/markerCatalog.tsx:336
+msgid "Blue-green"
+msgstr "Сине-зелёный"
+
 #. js-lingui-id: FEmb-0
-#: src/presentation/markers/markerCatalog.tsx:259
+#: src/presentation/markers/markerCatalog.tsx:217
 msgid "Boating"
 msgstr "Катание на лодке"
 
 #. js-lingui-id: DUvGjB
-#: src/presentation/markers/markerCatalog.tsx:328
+#: src/presentation/markers/markerCatalog.tsx:238
 msgid "Brunch"
 msgstr "Бранч"
 
 #. js-lingui-id: jemsB5
-#: src/presentation/markers/markerCatalog.tsx:392
+#: src/presentation/markers/markerCatalog.tsx:270
 msgid "Buddhist temple"
 msgstr "Буддийский храм"
 
 #. js-lingui-id: UEOZgY
-#: src/presentation/markers/markerCatalog.tsx:444
+#: src/presentation/markers/markerCatalog.tsx:303
 msgid "Bus"
 msgstr "Автобус"
 
@@ -104,57 +124,89 @@ msgid "Cabin"
 msgstr "Домик"
 
 #. js-lingui-id: vPKmgm
-#: src/presentation/markers/markerCatalog.tsx:324
+#: src/presentation/markers/markerCatalog.tsx:234
 msgid "Cafe"
 msgstr "Кафе"
 
 #. js-lingui-id: rT2cV-
-#: src/presentation/markers/markerCatalog.tsx:359
+#: src/presentation/markers/markerCatalog.tsx:256
 msgid "Camera"
 msgstr "Камера"
 
 #. js-lingui-id: Ev3HEi
-#: src/presentation/markers/markerCatalog.tsx:329
+#: src/presentation/markers/markerCatalog.tsx:239
 msgid "Camping"
 msgstr "Кемпинг"
 
+#. js-lingui-id: dEgA5A
+#: src/presentation/markers/MarkerEditorDialog.tsx:250
+#: src/presentation/markers/MarkersWorkspace.tsx:1266
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:261
+msgid "Cancel"
+msgstr "Отмена"
+
 #. js-lingui-id: ehaZ-s
-#: src/presentation/markers/markerCatalog.tsx:445
+#: src/presentation/markers/markerCatalog.tsx:304
 msgid "Car"
 msgstr "Автомобиль"
 
 #. js-lingui-id: INcnHP
-#: src/presentation/markers/markerCatalog.tsx:412
+#: src/presentation/markers/markerCatalog.tsx:284
 msgid "Car crash"
 msgstr "ДТП"
 
 #. js-lingui-id: HNAJHQ
-#: src/presentation/markers/markerCatalog.tsx:360
+#: src/presentation/markers/markerCatalog.tsx:257
 msgid "Castle"
 msgstr "Замок"
 
 #. js-lingui-id: -dKWeV
-#: src/presentation/markers/markerCatalog.tsx:242
+#: src/presentation/markers/markerCatalog.tsx:206
 msgid "Cave"
 msgstr "Пещера"
 
 #. js-lingui-id: grlA0m
-#: src/presentation/markers/markerCatalog.tsx:374
+#: src/presentation/markers/markerCatalog.tsx:262
 msgid "Celebration"
 msgstr "Праздник"
 
+#. js-lingui-id: wopO4r
+#: src/presentation/markers/MarkersWorkspace.tsx:1617
+msgid "Change icon and color"
+msgstr "Изменить значок и цвет"
+
+#. js-lingui-id: uphuXx
+#: src/presentation/markers/MarkerEditorDialog.tsx:210
+msgid "Choose {colorLabel} marker color"
+msgstr "Выбрать цвет «{colorLabel}»"
+
 #. js-lingui-id: CbLlnq
-#: src/presentation/markers/MarkerIconPicker.tsx:267
+#: src/presentation/markers/MarkerIconPicker.tsx:270
 msgid "Choose {iconLabel} icon"
 msgstr "Выбрать значок «{iconLabel}»"
 
+#. js-lingui-id: zgwOuR
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:211
+msgid "Choose a different hour"
+msgstr "Выберите другой час"
+
 #. js-lingui-id: dWB6jb
-#: src/presentation/markers/MarkerIconPicker.tsx:244
+#: src/presentation/markers/MarkerIconPicker.tsx:247
 msgid "Choose Folder icon"
 msgstr "Выбрать значок папки"
 
+#. js-lingui-id: YSc5Fk
+#: src/presentation/markers/MarkerEditorDialog.tsx:187
+msgid "Choose marker icon"
+msgstr "Значок метки"
+
+#. js-lingui-id: 9r-R5E
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:147
+msgid "Choose one or two weekdays. Clear all days to disable marker forecasts."
+msgstr "Выберите один или два дня недели. Снимите выбор со всех дней, чтобы отключить прогноз для меток."
+
 #. js-lingui-id: 1CfVUC
-#: src/presentation/markers/markerCatalog.tsx:361
+#: src/presentation/markers/markerCatalog.tsx:258
 msgid "Church"
 msgstr "Церковь"
 
@@ -163,103 +215,172 @@ msgstr "Церковь"
 msgid "City"
 msgstr "Город"
 
+#. js-lingui-id: TPzi7X
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:257
+msgid "Clear forecast"
+msgstr "Отключить прогноз"
+
 #. js-lingui-id: 60FykE
-#: src/presentation/markers/markerCatalog.tsx:243
+#: src/presentation/markers/markerCatalog.tsx:207
 msgid "Cliff"
 msgstr "Обрыв"
 
 #. js-lingui-id: XLMJ7O
-#: src/presentation/markers/markerCatalog.tsx:216
+#: src/presentation/markers/markerCatalog.tsx:198
 msgid "Cloud"
 msgstr "Облачно"
 
 #. js-lingui-id: FFdvhW
-#: src/presentation/markers/markerCatalog.tsx:443
+#: src/presentation/markers/markerCatalog.tsx:302
 msgid "Commute"
 msgstr "Поездки"
+
+#. js-lingui-id: jPpVoJ
+#: src/presentation/markers/MarkersWorkspace.tsx:1543
+#: src/presentation/markers/MarkersWorkspace.tsx:1641
+msgid "Confirm deletion"
+msgstr "Подтвердить удаление"
+
+#. js-lingui-id: oXVNQJ
+#. placeholder {0}: marker.name
+#: src/presentation/markers/MarkersWorkspace.tsx:1550
+msgid "Confirm deletion of {0}"
+msgstr "Подтвердить удаление: {0}"
 
 #. js-lingui-id: 2HTqAZ
 #: src/presentation/markers/markerCatalog.tsx:176
 msgid "Cottage"
 msgstr "Коттедж"
 
+#. js-lingui-id: hYgDIe
+#: src/presentation/markers/MarkerEditorDialog.tsx:253
+msgid "Create"
+msgstr "Создать"
+
+#. js-lingui-id: xCBfsE
+#: src/presentation/markers/MarkerEditorDialog.tsx:149
+msgid "Create marker"
+msgstr "Новая метка"
+
+#. js-lingui-id: 1m0D98
+#: src/presentation/markers/MarkerEditorDialog.tsx:151
+msgid "Create track marker"
+msgstr "Новая метка трека"
+
+#. js-lingui-id: 8Tg_JR
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:174
+msgid "Custom"
+msgstr "Свои часы"
+
 #. js-lingui-id: jV9IBb
-#: src/presentation/markers/markerCatalog.tsx:258
+#: src/presentation/markers/markerCatalog.tsx:216
 msgid "Cycling"
 msgstr "Велоспорт"
 
 #. js-lingui-id: TNZKpI
-#: src/presentation/markers/markerCatalog.tsx:414
+#: src/presentation/markers/markerCatalog.tsx:286
 msgid "Danger"
 msgstr "Опасность"
 
+#. js-lingui-id: H7OUPr
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:168
+msgid "Day"
+msgstr "День"
+
 #. js-lingui-id: 3AAg85
-#: src/presentation/markers/markerCatalog.tsx:378
+#: src/presentation/markers/markerCatalog.tsx:263
 msgid "Deck"
 msgstr "Терраса"
 
 #. js-lingui-id: PjayOd
-#: src/presentation/markers/markerCatalog.tsx:247
+#: src/presentation/markers/markerCatalog.tsx:211
 msgid "Deer"
 msgstr "Олень"
 
+#. js-lingui-id: Y2tU6I
+#. placeholder {0}: marker.name
+#: src/presentation/markers/MarkersWorkspace.tsx:1551
+msgid "Delete {0}"
+msgstr "Удалить {0}"
+
+#. js-lingui-id: 2sxwVB
+#: src/presentation/markers/MarkersWorkspace.tsx:1543
+#: src/presentation/markers/MarkersWorkspace.tsx:1643
+msgid "Delete marker"
+msgstr "Удалить метку"
+
 #. js-lingui-id: LiVofz
-#: src/presentation/markers/markerCatalog.tsx:346
+#: src/presentation/markers/markerCatalog.tsx:244
 msgid "Dining"
 msgstr "Еда"
 
+#. js-lingui-id: FhJza8
+#: src/presentation/markers/MarkersWorkspace.tsx:864
+msgid "Distance from map center"
+msgstr "По расстоянию от центра карты"
+
+#. js-lingui-id: NHZprE
+#: src/presentation/markers/MarkersWorkspace.tsx:931
+msgid "Distance unavailable"
+msgstr "Расстояние неизвестно"
+
 #. js-lingui-id: wi6pR1
-#: src/presentation/markers/markerCatalog.tsx:285
+#: src/presentation/markers/markerCatalog.tsx:225
 msgid "Diving"
 msgstr "Дайвинг"
 
 #. js-lingui-id: XzAuUz
-#: src/presentation/markers/markerCatalog.tsx:350
+#: src/presentation/markers/markerCatalog.tsx:247
 msgid "Drinking water"
 msgstr "Питьевая вода"
 
 #. js-lingui-id: X56ScM
-#: src/presentation/markers/markerCatalog.tsx:209
+#: src/presentation/markers/markerCatalog.tsx:191
 msgid "Eco"
 msgstr "Эко"
 
 #. js-lingui-id: e_nl8W
-#: src/presentation/markers/markerCatalog.tsx:450
+#: src/presentation/markers/markerCatalog.tsx:306
 msgid "Electric bike"
 msgstr "Электровелосипед"
 
 #. js-lingui-id: mjWorc
-#: src/presentation/markers/markerCatalog.tsx:415
+#: src/presentation/markers/markerCatalog.tsx:287
 msgid "Emergency"
 msgstr "Экстренная помощь"
 
 #. js-lingui-id: SUXBxp
-#: src/presentation/markers/markerCatalog.tsx:419
+#: src/presentation/markers/markerCatalog.tsx:288
 msgid "Engineering"
 msgstr "Инженерные объекты"
 
+#. js-lingui-id: O2G4VH
+#: src/presentation/markers/MarkerEditorDialog.tsx:38
+msgid "Enter a marker name."
+msgstr "Введите название метки."
+
 #. js-lingui-id: 8tjQCz
-#: src/presentation/markers/markerCatalog.tsx:202
+#: src/presentation/markers/markerCatalog.tsx:184
 msgid "Explore"
 msgstr "Исследовать"
 
 #. js-lingui-id: _tlnwv
-#: src/presentation/markers/markerCatalog.tsx:333
+#: src/presentation/markers/markerCatalog.tsx:240
 msgid "Fast food"
 msgstr "Фастфуд"
 
 #. js-lingui-id: cf35MA
-#: src/presentation/markers/markerCatalog.tsx:379
+#: src/presentation/markers/markerCatalog.tsx:264
 msgid "Festival"
 msgstr "Фестиваль"
 
 #. js-lingui-id: cADkbl
-#: src/presentation/markers/markerCatalog.tsx:426
+#: src/presentation/markers/markerCatalog.tsx:291
 msgid "Fire extinguisher"
 msgstr "Огнетушитель"
 
 #. js-lingui-id: DC4-ua
-#: src/presentation/markers/markerCatalog.tsx:434
+#: src/presentation/markers/markerCatalog.tsx:296
 msgid "Fire station"
 msgstr "Пожарная часть"
 
@@ -269,13 +390,13 @@ msgid "Flag"
 msgstr "Флаг"
 
 #. js-lingui-id: OdM_lr
-#: src/presentation/markers/markerCatalog.tsx:454
+#: src/presentation/markers/markerCatalog.tsx:307
 msgid "Flight"
 msgstr "Авиаперелёт"
 
 #. js-lingui-id: kNqMMd
-#: src/presentation/markers/MarkerIconPicker.tsx:120
-#: src/presentation/markers/MarkerIconPicker.tsx:241
+#: src/presentation/markers/MarkerIconPicker.tsx:122
+#: src/presentation/markers/MarkerIconPicker.tsx:244
 msgid "Folder"
 msgstr "Папка"
 
@@ -285,42 +406,72 @@ msgid "Food & stay"
 msgstr "Еда и ночлег"
 
 #. js-lingui-id: DDWQmc
-#: src/presentation/markers/markerCatalog.tsx:304
+#: src/presentation/markers/markerCatalog.tsx:229
 msgid "Football"
 msgstr "Футбол"
 
+#. js-lingui-id: uxevBu
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:106
+msgid "Forecast days"
+msgstr "Дни прогноза"
+
+#. js-lingui-id: Eg64c5
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:161
+msgid "Forecast period"
+msgstr "Период прогноза"
+
+#. js-lingui-id: LGGwdr
+#: src/presentation/markers/MarkersWorkspace.tsx:1451
+msgid "Forecast unavailable"
+msgstr "Прогноз недоступен"
+
+#. js-lingui-id: dlP1MH
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:110
+msgid "Forecast weekdays"
+msgstr "Дни недели для прогноза"
+
 #. js-lingui-id: kFLJqR
-#: src/presentation/markers/markerCatalog.tsx:204
+#: src/presentation/markers/markerCatalog.tsx:186
 msgid "Forest"
 msgstr "Лес"
 
 #. js-lingui-id: F0gbO2
-#: src/presentation/markers/markerCatalog.tsx:380
+#: src/presentation/markers/markerCatalog.tsx:265
 msgid "Fort"
 msgstr "Форт"
 
+#. js-lingui-id: ejVYRQ
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:183
+msgid "From"
+msgstr "С"
+
 #. js-lingui-id: PDAs5V
-#: src/presentation/markers/markerCatalog.tsx:455
+#: src/presentation/markers/markerCatalog.tsx:308
 msgid "Fuel"
 msgstr "Заправка"
 
 #. js-lingui-id: hT_xCE
-#: src/presentation/markers/markerCatalog.tsx:210
+#: src/presentation/markers/markerCatalog.tsx:192
 msgid "Grass"
 msgstr "Трава"
 
+#. js-lingui-id: VmkjGB
+#: src/presentation/markers/markerCatalog.tsx:339
+msgid "Green"
+msgstr "Зелёный"
+
 #. js-lingui-id: qonUHH
-#: src/presentation/markers/markerCatalog.tsx:354
+#: src/presentation/markers/markerCatalog.tsx:251
 msgid "Grocery"
 msgstr "Продукты"
 
 #. js-lingui-id: TbFGoa
-#: src/presentation/markers/markerCatalog.tsx:257
+#: src/presentation/markers/markerCatalog.tsx:215
 msgid "Hiking"
 msgstr "Пеший туризм"
 
 #. js-lingui-id: XoEM1-
-#: src/presentation/markers/markerCatalog.tsx:399
+#: src/presentation/markers/markerCatalog.tsx:274
 msgid "Hindu temple"
 msgstr "Индуистский храм"
 
@@ -330,42 +481,57 @@ msgid "Home"
 msgstr "Дом"
 
 #. js-lingui-id: lnjmoG
-#: src/presentation/markers/markerCatalog.tsx:406
+#: src/presentation/markers/markerCatalog.tsx:278
 msgid "Hospital"
 msgstr "Больница"
 
 #. js-lingui-id: vOZkAU
-#: src/presentation/markers/markerCatalog.tsx:325
+#: src/presentation/markers/markerCatalog.tsx:235
 msgid "Hotel"
 msgstr "Отель"
 
+#. js-lingui-id: yY8wAv
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:155
+msgid "Hours"
+msgstr "Часы"
+
 #. js-lingui-id: kCjjZw
-#: src/presentation/markers/markerCatalog.tsx:340
+#: src/presentation/markers/markerCatalog.tsx:241
 msgid "Ice cream"
 msgstr "Мороженое"
 
+#. js-lingui-id: qNniaA
+#: src/presentation/markers/MarkersWorkspace.tsx:863
+msgid "Icon and distance"
+msgstr "По значку и расстоянию"
+
+#. js-lingui-id: ELJlha
+#: src/presentation/markers/MarkersWorkspace.tsx:862
+msgid "Icon color"
+msgstr "По цвету значка"
+
 #. js-lingui-id: mcmuCe
-#: src/presentation/markers/MarkerIconPicker.tsx:230
+#: src/presentation/markers/MarkerIconPicker.tsx:233
 msgid "Icons"
 msgstr "Значки"
 
 #. js-lingui-id: CE-M2e
-#: src/presentation/markers/markerCatalog.tsx:408
+#: src/presentation/markers/markerCatalog.tsx:280
 msgid "Info"
 msgstr "Информация"
 
 #. js-lingui-id: wefuvA
-#: src/presentation/markers/markerCatalog.tsx:265
+#: src/presentation/markers/markerCatalog.tsx:220
 msgid "Kayaking"
 msgstr "Каякинг"
 
 #. js-lingui-id: lpNA1F
-#: src/presentation/markers/markerCatalog.tsx:272
+#: src/presentation/markers/markerCatalog.tsx:221
 msgid "Kitesurfing"
 msgstr "Кайтсёрфинг"
 
 #. js-lingui-id: a60eo8
-#: src/presentation/markers/markerCatalog.tsx:227
+#: src/presentation/markers/markerCatalog.tsx:203
 msgid "Lake"
 msgstr "Озеро"
 
@@ -375,60 +541,123 @@ msgid "Landmarks"
 msgstr "Ориентиры"
 
 #. js-lingui-id: XxIeKn
-#: src/presentation/markers/markerCatalog.tsx:203
+#: src/presentation/markers/markerCatalog.tsx:185
 msgid "Landscape"
 msgstr "Пейзаж"
 
 #. js-lingui-id: svex5a
-#: src/presentation/markers/markerCatalog.tsx:344
+#: src/presentation/markers/markerCatalog.tsx:242
 msgid "Liquor"
 msgstr "Алкоголь"
+
+#. js-lingui-id: yQE2r9
+#: src/presentation/markers/MarkersWorkspace.tsx:1468
+msgid "Loading"
+msgstr "Загрузка"
+
+#. js-lingui-id: rITQrW
+#: src/presentation/markers/MarkersWorkspace.tsx:1138
+msgid "Loading saved markers"
+msgstr "Загрузка сохранённых меток"
+
+#. js-lingui-id: Fr5Q2N
+#. placeholder {0}: marker.name
+#: src/presentation/markers/MarkersWorkspace.tsx:1406
+msgid "Loading weather for {0}"
+msgstr "Загрузка погоды для {0}"
 
 #. js-lingui-id: 4HBFYh
 #: src/presentation/markers/markerCatalog.tsx:178
 msgid "Map"
 msgstr "Карта"
 
+#. js-lingui-id: tKY7TR
+#: src/presentation/markers/MarkersWorkspace.tsx:1514
+msgid "Marker actions"
+msgstr "Действия с меткой"
+
+#. js-lingui-id: RlbMOu
+#. placeholder {0}: marker.name
+#: src/presentation/markers/MarkersWorkspace.tsx:1519
+msgid "Marker actions for {0}"
+msgstr "Действия с меткой {0}"
+
+#. js-lingui-id: h0lLI7
+#: src/presentation/markers/MarkerEditorDialog.tsx:153
+msgid "Marker appearance"
+msgstr "Вид метки"
+
+#. js-lingui-id: Mw-Nnb
+#: src/presentation/markers/MarkerEditorDialog.tsx:196
+msgid "Marker color"
+msgstr "Цвет метки"
+
+#. js-lingui-id: QxZIkl
+#: src/presentation/markers/MarkersWorkspace.tsx:1178
+msgid "Marker forecast days"
+msgstr "Дни прогноза для меток"
+
 #. js-lingui-id: buqOJj
 #. placeholder {0}: rowIndex + 1
-#: src/presentation/markers/MarkerIconPicker.tsx:202
+#: src/presentation/markers/MarkerIconPicker.tsx:205
 msgid "Marker icon categories row {0}"
 msgstr "Строка {0} категорий значков маркеров"
 
+#. js-lingui-id: lTIIr2
+#: src/presentation/markers/MarkerEditorDialog.tsx:161
+#: src/presentation/markers/MarkersWorkspace.tsx:1238
+msgid "Marker name"
+msgstr "Название метки"
+
+#. js-lingui-id: tsxBPF
+#: src/presentation/markers/MarkerEditorDialog.tsx:39
+msgid "Marker names must be 200 characters or fewer."
+msgstr "Название метки должно быть не длиннее 200 символов."
+
+#. js-lingui-id: plST6S
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:95
+msgid "Marker weather"
+msgstr "Погода для меток"
+
 #. js-lingui-id: Rk-ZP6
-#: src/presentation/markers/markerCatalog.tsx:407
+#: src/presentation/markers/markerCatalog.tsx:279
 msgid "Medical"
 msgstr "Медпомощь"
 
 #. js-lingui-id: MFN0FN
-#: src/presentation/markers/markerCatalog.tsx:363
+#: src/presentation/markers/markerCatalog.tsx:260
 msgid "Monument"
 msgstr "Памятник"
 
 #. js-lingui-id: iQ2nLC
-#: src/presentation/markers/markerCatalog.tsx:226
+#: src/presentation/markers/markerCatalog.tsx:202
 msgid "Moon"
 msgstr "Луна"
 
 #. js-lingui-id: yA6ZLP
-#: src/presentation/markers/markerCatalog.tsx:381
+#: src/presentation/markers/markerCatalog.tsx:266
 msgid "Mosque"
 msgstr "Мечеть"
 
 #. js-lingui-id: DjTtBe
-#: src/presentation/markers/markerCatalog.tsx:469
+#: src/presentation/markers/markerCatalog.tsx:313
 msgid "Motorcycle"
 msgstr "Мотоцикл"
 
 #. js-lingui-id: nGd86f
-#: src/presentation/markers/markerCatalog.tsx:362
+#: src/presentation/markers/markerCatalog.tsx:259
 msgid "Museum"
 msgstr "Музей"
 
 #. js-lingui-id: v5eALp
-#: src/presentation/markers/markerCatalog.tsx:182
+#: src/presentation/markers/markerCatalog.tsx:179
 msgid "My location"
 msgstr "Моё местоположение"
+
+#. js-lingui-id: 6YtxFj
+#: src/presentation/markers/MarkersWorkspace.tsx:861
+msgid "Name"
+msgstr "По названию"
 
 #. js-lingui-id: PGt_mb
 #: src/presentation/markers/MarkerIconPicker.tsx:48
@@ -436,27 +665,62 @@ msgid "Nature"
 msgstr "Природа"
 
 #. js-lingui-id: UxKoFf
-#: src/presentation/markers/markerCatalog.tsx:189
+#: src/presentation/markers/markerCatalog.tsx:180
 msgid "Navigation"
 msgstr "Навигация"
 
+#. js-lingui-id: b7EeKy
+#: src/presentation/markers/markerCatalog.tsx:333
+msgid "Navy"
+msgstr "Тёмно-синий"
+
+#. js-lingui-id: dUCJry
+#: src/presentation/markers/MarkersWorkspace.tsx:860
+msgid "Newest"
+msgstr "Сначала новые"
+
+#. js-lingui-id: jnd7HN
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:171
+msgid "Night"
+msgstr "Ночь"
+
 #. js-lingui-id: IpuMS3
-#: src/presentation/markers/MarkerIconPicker.tsx:289
+#: src/presentation/markers/MarkerIconPicker.tsx:292
 msgid "No matching icons"
 msgstr "Подходящие значки не найдены"
 
 #. js-lingui-id: LglrR3
-#: src/presentation/markers/MarkerIconPicker.tsx:288
+#: src/presentation/markers/MarkerIconPicker.tsx:291
 msgid "No recently used icons yet"
 msgstr "Недавно использованных значков пока нет"
 
+#. js-lingui-id: Nfw5a0
+#: src/presentation/markers/MarkersWorkspace.tsx:1162
+msgid "No saved markers yet. Use New marker, then choose a point on the map."
+msgstr "Сохранённых меток пока нет. Нажмите «Новая метка» и выберите точку на карте."
+
+#. js-lingui-id: uBD3lh
+#: src/presentation/markers/markerCatalog.tsx:330
+msgid "Olive"
+msgstr "Оливковый"
+
+#. js-lingui-id: ak_oos
+#: src/presentation/markers/MarkersWorkspace.tsx:967
+msgid "Open {weekday} weather for {markerName}: {temperature}, {precipitation} precipitation"
+msgstr "Открыть погоду ({weekday}) для {markerName}: {temperature}, осадки {precipitation}"
+
+#. js-lingui-id: 4OE5Sf
+#: src/presentation/markers/markerCatalog.tsx:331
+msgid "Orange"
+msgstr "Оранжевый"
+
 #. js-lingui-id: 63G2X_
-#: src/presentation/markers/markerCatalog.tsx:279
+#: src/presentation/markers/markerCatalog.tsx:222
 msgid "Paragliding"
 msgstr "Парапланеризм"
 
 #. js-lingui-id: zKXtCb
-#: src/presentation/markers/markerCatalog.tsx:211
+#: src/presentation/markers/markerCatalog.tsx:193
 msgid "Park"
 msgstr "Парк"
 
@@ -466,12 +730,12 @@ msgid "Parking"
 msgstr "Парковка"
 
 #. js-lingui-id: nkqs9W
-#: src/presentation/markers/markerCatalog.tsx:260
+#: src/presentation/markers/markerCatalog.tsx:218
 msgid "Pets"
 msgstr "Питомцы"
 
 #. js-lingui-id: qVkGWK
-#: src/presentation/markers/markerCatalog.tsx:193
+#: src/presentation/markers/markerCatalog.tsx:181
 msgid "Pin"
 msgstr "Метка"
 
@@ -486,17 +750,22 @@ msgid "Places"
 msgstr "Места"
 
 #. js-lingui-id: Ed-ntB
-#: src/presentation/markers/markerCatalog.tsx:197
+#: src/presentation/markers/markerCatalog.tsx:182
 msgid "Public place"
 msgstr "Общественное место"
 
+#. js-lingui-id: mF9LxA
+#: src/presentation/markers/markerCatalog.tsx:329
+msgid "Purple"
+msgstr "Фиолетовый"
+
 #. js-lingui-id: 0-G1UH
-#: src/presentation/markers/markerCatalog.tsx:446
+#: src/presentation/markers/markerCatalog.tsx:305
 msgid "Railway"
 msgstr "Железная дорога"
 
 #. js-lingui-id: 1K3mjX
-#: src/presentation/markers/markerCatalog.tsx:356
+#: src/presentation/markers/markerCatalog.tsx:253
 msgid "Ramen"
 msgstr "Рамен"
 
@@ -505,190 +774,272 @@ msgstr "Рамен"
 msgid "Recently used"
 msgstr "Недавно использованные"
 
+#. js-lingui-id: wRTiSD
+#: src/presentation/markers/markerCatalog.tsx:340
+msgid "Red"
+msgstr "Красный"
+
+#. js-lingui-id: 2wxgft
+#: src/presentation/markers/MarkersWorkspace.tsx:1607
+msgid "Rename"
+msgstr "Переименовать"
+
 #. js-lingui-id: gjpdaf
-#: src/presentation/markers/markerCatalog.tsx:438
+#: src/presentation/markers/markerCatalog.tsx:297
 msgid "Report"
 msgstr "Сообщить"
 
 #. js-lingui-id: P2sn7C
-#: src/presentation/markers/markerCatalog.tsx:320
+#: src/presentation/markers/markerCatalog.tsx:233
 msgid "Restaurant"
 msgstr "Ресторан"
 
+#. js-lingui-id: 6gRgw8
+#: src/presentation/markers/MarkersWorkspace.tsx:1147
+msgid "Retry"
+msgstr "Повторить"
+
 #. js-lingui-id: nKyPBN
-#: src/presentation/markers/markerCatalog.tsx:410
+#: src/presentation/markers/markerCatalog.tsx:282
 msgid "Roadwork"
 msgstr "Дорожные работы"
 
 #. js-lingui-id: g2eGl5
-#: src/presentation/markers/markerCatalog.tsx:245
+#: src/presentation/markers/markerCatalog.tsx:209
 msgid "Rock"
 msgstr "Скала"
 
+#. js-lingui-id: gkbhO7
+#: src/presentation/markers/markerCatalog.tsx:332
+msgid "Rose"
+msgstr "Розовый"
+
 #. js-lingui-id: EVfVou
-#: src/presentation/markers/markerCatalog.tsx:283
+#: src/presentation/markers/markerCatalog.tsx:223
 msgid "Rowing"
 msgstr "Гребля"
 
 #. js-lingui-id: RiQMUh
-#: src/presentation/markers/markerCatalog.tsx:316
+#: src/presentation/markers/markerCatalog.tsx:232
 msgid "Running"
 msgstr "Бег"
 
 #. js-lingui-id: I_43p6
-#: src/presentation/markers/markerCatalog.tsx:430
+#: src/presentation/markers/markerCatalog.tsx:295
 #: src/presentation/markers/MarkerIconPicker.tsx:52
 msgid "Safety"
 msgstr "Безопасность"
 
 #. js-lingui-id: Z9WBnC
-#: src/presentation/markers/markerCatalog.tsx:284
+#: src/presentation/markers/markerCatalog.tsx:224
 msgid "Sailing"
 msgstr "Парусный спорт"
 
+#. js-lingui-id: tfDRzk
+#: src/presentation/markers/MarkerEditorDialog.tsx:253
+#: src/presentation/markers/MarkersWorkspace.tsx:1258
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:274
+msgid "Save"
+msgstr "Сохранить"
+
+#. js-lingui-id: FtknP-
+#: src/presentation/markers/MarkersWorkspace.tsx:1170
+msgid "Saved markers"
+msgstr "Сохранённые метки"
+
+#. js-lingui-id: L9KUud
+#: src/presentation/markers/MarkersWorkspace.tsx:1151
+msgid "Saved markers could not be loaded."
+msgstr "Не удалось загрузить сохранённые метки."
+
 #. js-lingui-id: 77D4QL
-#: src/presentation/markers/markerCatalog.tsx:201
+#: src/presentation/markers/markerCatalog.tsx:183
 msgid "School"
 msgstr "Школа"
 
 #. js-lingui-id: k5oy33
-#: src/presentation/markers/markerCatalog.tsx:357
+#: src/presentation/markers/markerCatalog.tsx:254
 msgid "Seafood"
 msgstr "Морепродукты"
 
 #. js-lingui-id: hVMs0B
 #. placeholder {0}: markerIconCatalog.length + Number(allowFolder)
-#: src/presentation/markers/MarkerIconPicker.tsx:177
+#: src/presentation/markers/MarkerIconPicker.tsx:180
 msgid "Search {0} icons"
 msgstr "Поиск среди {0} значков"
 
 #. js-lingui-id: k8pi2I
-#: src/presentation/markers/MarkerIconPicker.tsx:183
+#: src/presentation/markers/MarkerIconPicker.tsx:186
 msgid "Search icons"
 msgstr "Поиск значков"
 
 #. js-lingui-id: a3LDKx
-#: src/presentation/markers/markerCatalog.tsx:439
+#: src/presentation/markers/markerCatalog.tsx:298
 msgid "Security"
 msgstr "Охрана"
 
 #. js-lingui-id: Gd8EbX
-#: src/presentation/markers/markerCatalog.tsx:355
+#: src/presentation/markers/markerCatalog.tsx:252
 msgid "Shelter"
 msgstr "Укрытие"
 
+#. js-lingui-id: MGBNt5
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:245
+msgid "Show forecasts on the map"
+msgstr "Показывать прогноз на карте"
+
 #. js-lingui-id: yc-YFi
-#: src/presentation/markers/markerCatalog.tsx:442
+#: src/presentation/markers/markerCatalog.tsx:301
 msgid "Shuttle"
 msgstr "Шаттл"
 
 #. js-lingui-id: AXIl-i
-#: src/presentation/markers/markerCatalog.tsx:289
+#: src/presentation/markers/markerCatalog.tsx:226
 msgid "Skateboarding"
 msgstr "Скейтбординг"
 
 #. js-lingui-id: 7ypOno
-#: src/presentation/markers/markerCatalog.tsx:261
+#: src/presentation/markers/markerCatalog.tsx:219
 msgid "Skiing"
 msgstr "Лыжи"
 
 #. js-lingui-id: JiA8JY
-#: src/presentation/markers/markerCatalog.tsx:207
+#: src/presentation/markers/markerCatalog.tsx:189
 msgid "Snow"
 msgstr "Снег"
 
 #. js-lingui-id: j9CE_5
-#: src/presentation/markers/markerCatalog.tsx:296
+#: src/presentation/markers/markerCatalog.tsx:227
 msgid "Snowboarding"
 msgstr "Сноубординг"
 
 #. js-lingui-id: xg6v7h
-#: src/presentation/markers/markerCatalog.tsx:460
+#: src/presentation/markers/markerCatalog.tsx:310
 msgid "Snowmobile"
 msgstr "Снегоход"
 
+#. js-lingui-id: v2Acg1
+#: src/presentation/markers/MarkersWorkspace.tsx:885
+msgid "Sort markers. Current: {markerSortLabel}"
+msgstr "Сортировать метки. Сейчас: {markerSortLabel}"
+
+#. js-lingui-id: oLk0R8
+#: src/presentation/markers/MarkersWorkspace.tsx:916
+msgid "Sort preference could not be saved"
+msgstr "Не удалось сохранить порядок сортировки"
+
+#. js-lingui-id: 1cWDsF
+#: src/presentation/markers/MarkersWorkspace.tsx:882
+msgid "Sort: {markerSortLabel}"
+msgstr "Сортировка: {markerSortLabel}"
+
 #. js-lingui-id: SWS1FV
-#: src/presentation/markers/markerCatalog.tsx:440
+#: src/presentation/markers/markerCatalog.tsx:299
 msgid "SOS"
 msgstr "СОС"
 
 #. js-lingui-id: 7JFNej
-#: src/presentation/markers/markerCatalog.tsx:300
+#: src/presentation/markers/markerCatalog.tsx:228
 msgid "Sports"
 msgstr "Спорт"
 
 #. js-lingui-id: og87nv
-#: src/presentation/markers/markerCatalog.tsx:212
+#: src/presentation/markers/markerCatalog.tsx:194
 msgid "Spring"
 msgstr "Источник"
 
 #. js-lingui-id: mZhteu
-#: src/presentation/markers/markerCatalog.tsx:326
+#: src/presentation/markers/markerCatalog.tsx:236
 msgid "Store"
 msgstr "Магазин"
 
 #. js-lingui-id: _n6s2H
-#: src/presentation/markers/markerCatalog.tsx:217
+#: src/presentation/markers/markerCatalog.tsx:199
 msgid "Storm"
 msgstr "Шторм"
 
 #. js-lingui-id: ByhGWF
-#: src/presentation/markers/markerCatalog.tsx:215
+#: src/presentation/markers/markerCatalog.tsx:197
 msgid "Sunny"
 msgstr "Солнечно"
 
 #. js-lingui-id: 9BjGPQ
-#: src/presentation/markers/markerCatalog.tsx:308
+#: src/presentation/markers/markerCatalog.tsx:230
 msgid "Surfing"
 msgstr "Сёрфинг"
 
 #. js-lingui-id: uHafbT
-#: src/presentation/markers/markerCatalog.tsx:312
+#: src/presentation/markers/markerCatalog.tsx:231
 msgid "Swimming"
 msgstr "Плавание"
 
 #. js-lingui-id: hWTYKo
-#: src/presentation/markers/markerCatalog.tsx:385
+#: src/presentation/markers/markerCatalog.tsx:267
 msgid "Synagogue"
 msgstr "Синагога"
 
 #. js-lingui-id: F0Qs2u
-#: src/presentation/markers/markerCatalog.tsx:358
+#: src/presentation/markers/markerCatalog.tsx:255
 msgid "Tapas"
 msgstr "Тапас"
 
+#. js-lingui-id: WFIEi5
+#: src/presentation/markers/markerCatalog.tsx:328
+msgid "Teal"
+msgstr "Бирюзовый"
+
 #. js-lingui-id: yUKXiQ
-#: src/presentation/markers/markerCatalog.tsx:222
+#: src/presentation/markers/markerCatalog.tsx:201
 msgid "Telescope"
 msgstr "Телескоп"
 
 #. js-lingui-id: WGWl-P
-#: src/presentation/markers/markerCatalog.tsx:205
+#: src/presentation/markers/markerCatalog.tsx:187
 msgid "Terrain"
 msgstr "Рельеф"
 
+#. js-lingui-id: kQUxI8
+#: src/presentation/markers/MarkersWorkspace.tsx:1156
+msgid "The marker could not be deleted."
+msgstr "Не удалось удалить метку."
+
+#. js-lingui-id: 0TvHJA
+#: src/presentation/markers/MarkersWorkspace.tsx:1100
+msgid "The marker could not be renamed."
+msgstr "Не удалось переименовать метку."
+
+#. js-lingui-id: BzBVfV
+#: src/presentation/markers/MarkerEditorDialog.tsx:179
+msgid "The marker could not be saved."
+msgstr "Не удалось сохранить метку."
+
+#. js-lingui-id: my4tL6
+#: src/presentation/markers/MarkerEditorDialog.tsx:40
+msgid "The marker name contains unsupported characters."
+msgstr "Название метки содержит недопустимые символы."
+
 #. js-lingui-id: A4UmDy
-#: src/presentation/markers/markerCatalog.tsx:403
+#: src/presentation/markers/markerCatalog.tsx:275
 msgid "Theater"
 msgstr "Театр"
 
 #. js-lingui-id: wBnYxO
-#: src/presentation/markers/markerCatalog.tsx:404
+#: src/presentation/markers/markerCatalog.tsx:276
 msgid "Tour"
 msgstr "Экскурсия"
 
 #. js-lingui-id: WeIu6W
-#: src/presentation/markers/markerCatalog.tsx:441
+#: src/presentation/markers/markerCatalog.tsx:300
 msgid "Traffic"
 msgstr "Дорожное движение"
 
 #. js-lingui-id: -0cOZb
-#: src/presentation/markers/markerCatalog.tsx:464
+#: src/presentation/markers/markerCatalog.tsx:311
 msgid "Train"
 msgstr "Поезд"
 
 #. js-lingui-id: 6bmd7e
-#: src/presentation/markers/markerCatalog.tsx:465
+#: src/presentation/markers/markerCatalog.tsx:312
 msgid "Tram"
 msgstr "Трамвай"
 
@@ -698,56 +1049,66 @@ msgid "Transport"
 msgstr "Транспорт"
 
 #. js-lingui-id: F7Nf76
-#: src/presentation/markers/markerCatalog.tsx:218
+#: src/presentation/markers/markerCatalog.tsx:200
 msgid "Tsunami"
 msgstr "Цунами"
 
+#. js-lingui-id: zDfdMJ
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:206
+msgid "Until"
+msgstr "До"
+
 #. js-lingui-id: eDhax8
-#: src/presentation/markers/markerCatalog.tsx:244
+#: src/presentation/markers/markerCatalog.tsx:208
 msgid "Valley"
 msgstr "Долина"
 
 #. js-lingui-id: 0o7JLj
-#: src/presentation/markers/markerCatalog.tsx:231
+#: src/presentation/markers/markerCatalog.tsx:204
 msgid "Viewpoint"
 msgstr "Смотровая площадка"
 
 #. js-lingui-id: sAAoh3
-#: src/presentation/markers/markerCatalog.tsx:405
+#: src/presentation/markers/markerCatalog.tsx:277
 msgid "Villa"
 msgstr "Вилла"
 
 #. js-lingui-id: N5uU0a
-#: src/presentation/markers/markerCatalog.tsx:213
+#: src/presentation/markers/markerCatalog.tsx:195
 msgid "Volcano"
 msgstr "Вулкан"
 
 #. js-lingui-id: r6y-jM
-#: src/presentation/markers/markerCatalog.tsx:409
+#: src/presentation/markers/markerCatalog.tsx:281
 msgid "Warning"
 msgstr "Предупреждение"
 
 #. js-lingui-id: Qj2zki
-#: src/presentation/markers/markerCatalog.tsx:206
+#: src/presentation/markers/markerCatalog.tsx:188
 msgid "Water"
 msgstr "Вода"
 
 #. js-lingui-id: u-lTLZ
-#: src/presentation/markers/markerCatalog.tsx:238
+#: src/presentation/markers/markerCatalog.tsx:205
 msgid "Waterfall"
 msgstr "Водопад"
 
 #. js-lingui-id: FItJTE
-#: src/presentation/markers/markerCatalog.tsx:214
+#: src/presentation/markers/markerCatalog.tsx:196
 msgid "Waves"
 msgstr "Волны"
 
+#. js-lingui-id: sm9vv3
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:101
+msgid "Weather settings could not be saved."
+msgstr "Не удалось сохранить настройки погоды."
+
 #. js-lingui-id: UMOjWL
-#: src/presentation/markers/markerCatalog.tsx:256
+#: src/presentation/markers/markerCatalog.tsx:214
 msgid "Wetland"
 msgstr "Болото"
 
 #. js-lingui-id: kp3xIR
-#: src/presentation/markers/markerCatalog.tsx:252
+#: src/presentation/markers/markerCatalog.tsx:213
 msgid "Wildflowers"
 msgstr "Полевые цветы"

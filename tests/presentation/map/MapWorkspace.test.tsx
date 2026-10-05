@@ -1853,7 +1853,7 @@ describe('MapWorkspace', () => {
     );
     await user.click(saturday);
     const preview = await screen.findByRole('dialog', {
-      name: '24-hour forecast · Day · Sat, 18 Jul',
+      name: '24-hour forecast · Day · Sat, Jul 18',
     });
     await user.click(within(preview).getByRole('button', { name: 'Open in Weather' }));
     expect(

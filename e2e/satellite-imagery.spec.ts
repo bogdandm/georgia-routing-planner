@@ -17,7 +17,7 @@ test('returns smartphone scene selection to the map', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Open workspace' }).click();
   await page.getByRole('button', { name: 'Search images' }).click();
-  await page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }).click();
+  await page.getByRole('button', { name: 'Apply Jul 9, 2026 imagery' }).click();
 
   await expect(workspace).toHaveAttribute('data-map-state', 'ready');
   await expect(page.getByRole('button', { name: 'Open workspace' })).toHaveAttribute(
@@ -68,7 +68,7 @@ test('auto mode switches a CORS-hidden TiTiler 429 to direct visual imagery with
   await expect(renderingMode).toContainText('Auto');
 
   await page.getByRole('button', { name: 'Search images' }).click();
-  await page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }).click();
+  await page.getByRole('button', { name: 'Apply Jul 9, 2026 imagery' }).click();
   await expect(page.getByText('True-color imagery applied')).toBeVisible({
     timeout: 15_000,
   });
@@ -128,7 +128,7 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
     { timeout: 15_000 },
   );
   await page.getByRole('button', { name: 'Search images' }).click();
-  const card = page.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' });
+  const card = page.getByRole('button', { name: 'Apply Jul 9, 2026 imagery' });
   await expect(card).toBeVisible();
   await card.click();
   await expect(page.getByText('True-color imagery applied')).toBeVisible({

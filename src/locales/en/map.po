@@ -39,7 +39,7 @@ msgid "3D terrain is unavailable while Sentinel Mosaic is active."
 msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/map/MapWorkspace.tsx:1571
+#: src/presentation/map/MapWorkspace.tsx:1570
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -55,12 +55,12 @@ msgid "Choose map layer preset"
 msgstr "Choose map layer preset"
 
 #. js-lingui-id: dLNd3k
-#: src/presentation/map/MapWorkspace.tsx:1568
+#: src/presentation/map/MapWorkspace.tsx:1567
 msgid "Click the map to place the marker"
 msgstr "Click the map to place the marker"
 
 #. js-lingui-id: jysdB3
-#: src/presentation/map/MapWorkspace.tsx:1581
+#: src/presentation/map/MapWorkspace.tsx:1580
 msgid "Clipboard access failed. Try again or use the Share dialog."
 msgstr "Clipboard access failed. Try again or use the Share dialog."
 
@@ -246,7 +246,7 @@ msgid "The current camera could not be saved. Map interaction is still available
 msgstr "The current camera could not be saved. Map interaction is still available."
 
 #. js-lingui-id: IxTd0L
-#: src/presentation/map/MapWorkspace.tsx:1588
+#: src/presentation/map/MapWorkspace.tsx:1587
 msgid "The map layer could not be changed. Try again."
 msgstr "The map layer could not be changed. Try again."
 

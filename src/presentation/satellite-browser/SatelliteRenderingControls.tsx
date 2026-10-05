@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Accordion,
@@ -26,7 +27,11 @@ import {
   type SatelliteRenderingTuning,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapLayerStore,
+  type SatelliteImageryProblem,
+} from '@/presentation/map/mapLayerStore';
+import { satelliteImageryProblemMessage } from '@/presentation/satellite-browser/satelliteProblemMessages';
 
 function SliderLabel({
   label,
@@ -57,6 +62,7 @@ export function SatelliteRenderModeSelect({
   disabled = false,
   onPendingChange,
 }: SatelliteRenderModeSelectProps) {
+  const { i18n, t } = useLingui();
   const { mapLayers } = useRuntimeServices();
   const labelId = useId();
   const renderingMode = useStore(
@@ -64,7 +70,7 @@ export function SatelliteRenderModeSelect({
     (state) => state.satelliteRenderingMode,
   );
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [problem, setProblem] = useState<SatelliteImageryProblem | null>(null);
   const request = useRef<AbortController | null>(null);
 
   useEffect(
@@ -87,9 +93,9 @@ export function SatelliteRenderModeSelect({
     const controller = new AbortController();
     request.current = controller;
     setRequestPending(true);
-    setError(null);
+    setProblem(null);
     void mapLayers.setRenderingMode(mode, controller.signal).then((result) => {
-      if (result.status === 'failed') setError(result.message);
+      if (result.status === 'failed') setProblem(result.problem);
       if (request.current === controller) {
         request.current = null;
         setRequestPending(false);
@@ -104,33 +110,46 @@ export function SatelliteRenderModeSelect({
         fullWidth
         disabled={disabled || pending || mapLayers === null}
       >
-        <InputLabel id={labelId}>Satellite render</InputLabel>
+        <InputLabel id={labelId}>
+          <Trans>Satellite render</Trans>
+        </InputLabel>
         <Select
           labelId={labelId}
-          label="Satellite render"
+          label={t`Satellite render`}
           value={renderingMode}
           onChange={(event) => {
             changeRenderingMode(event.target.value);
           }}
         >
-          <MenuItem value="auto">Auto</MenuItem>
-          <MenuItem value="server">Server</MenuItem>
-          <MenuItem value="direct">Direct</MenuItem>
+          <MenuItem value="auto">
+            <Trans>Auto</Trans>
+          </MenuItem>
+          <MenuItem value="server">
+            <Trans>Server</Trans>
+          </MenuItem>
+          <MenuItem value="direct">
+            <Trans>Direct</Trans>
+          </MenuItem>
         </Select>
         <FormHelperText>
           {renderingMode === 'auto'
-            ? 'Uses TiTiler first and switches to direct pre-rendered Sentinel imagery when it is unavailable.'
+            ? t`Uses TiTiler first and switches to direct pre-rendered Sentinel imagery when it is unavailable.`
             : renderingMode === 'server'
-              ? 'Uses only TiTiler. Provider failures do not switch to direct imagery.'
-              : 'Reads the pre-rendered 8-bit Sentinel visual asset without contacting TiTiler.'}
+              ? t`Uses only TiTiler. Provider failures do not switch to direct imagery.`
+              : t`Reads the pre-rendered 8-bit Sentinel visual asset without contacting TiTiler.`}
         </FormHelperText>
       </FormControl>
-      {error === null ? null : <Alert severity="error">{error}</Alert>}
+      {problem === null ? null : (
+        <Alert severity="error">
+          {i18n._(satelliteImageryProblemMessage(problem))}
+        </Alert>
+      )}
     </Stack>
   );
 }
 
 export function SatelliteRenderingControls() {
+  const { i18n, t } = useLingui();
   const { mapLayers } = useRuntimeServices();
   const persistedTuning = useStore(
     mapLayerStore,
@@ -145,8 +164,9 @@ export function SatelliteRenderingControls() {
   const renderingTuning = renderingTuningDraft ?? persistedTuning;
   const [renderingPending, setRenderingPending] = useState(false);
   const [modePending, setModePending] = useState(false);
-  const [renderingError, setRenderingError] = useState<string | null>(null);
-  const [terrainOverlayError, setTerrainOverlayError] = useState<string | null>(null);
+  const [renderingProblem, setRenderingProblem] =
+    useState<SatelliteImageryProblem | null>(null);
+  const [terrainOverlayFailed, setTerrainOverlayFailed] = useState(false);
   const renderingRequest = useRef<AbortController | null>(null);
 
   useEffect(
@@ -163,9 +183,9 @@ export function SatelliteRenderingControls() {
     const controller = new AbortController();
     renderingRequest.current = controller;
     setRenderingPending(true);
-    setRenderingError(null);
+    setRenderingProblem(null);
     void mapLayers.setRenderingTuning(tuning, controller.signal).then((result) => {
-      if (result.status === 'failed') setRenderingError(result.message);
+      if (result.status === 'failed') setRenderingProblem(result.problem);
       if (renderingRequest.current === controller) {
         renderingRequest.current = null;
         setRenderingPending(false);
@@ -175,6 +195,13 @@ export function SatelliteRenderingControls() {
   };
 
   const controlsPending = renderingPending || modePending;
+  const reflectanceFormatter = new Intl.NumberFormat(i18n.locale);
+  const ratioFormatter = new Intl.NumberFormat(i18n.locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const formatReflectance = (value: number) => reflectanceFormatter.format(value);
+  const formatRatio = (value: number) => ratioFormatter.format(value);
 
   return (
     <Stack spacing={1.5}>
@@ -183,8 +210,10 @@ export function SatelliteRenderingControls() {
         onPendingChange={setModePending}
       />
 
-      {renderingError === null ? null : (
-        <Alert severity="error">{renderingError}</Alert>
+      {renderingProblem === null ? null : (
+        <Alert severity="error">
+          {i18n._(satelliteImageryProblemMessage(renderingProblem))}
+        </Alert>
       )}
 
       <Box>
@@ -203,20 +232,18 @@ export function SatelliteRenderingControls() {
                   ...terrainOverlayPreferences,
                   shadeAboveSatellite: event.target.checked,
                 });
-                setTerrainOverlayError(
-                  result.status === 'failed' ? result.message : null,
-                );
+                setTerrainOverlayFailed(result.status === 'failed');
               }}
             />
           }
-          label="Show relief shading above satellite imagery"
+          label={t`Show relief shading above satellite imagery`}
         />
       </Box>
-      {terrainOverlayError === null ? null : (
+      {terrainOverlayFailed ? (
         <Alert severity="warning" role="status">
-          {terrainOverlayError}
+          <Trans>Relief shading could not be updated. Try again.</Trans>
         </Alert>
-      )}
+      ) : null}
 
       <Accordion
         disableGutters
@@ -232,28 +259,31 @@ export function SatelliteRenderingControls() {
           sx={{ px: 0, minHeight: 44, '& .MuiAccordionSummary-content': { my: 1 } }}
         >
           <Typography component="h3" variant="subtitle2">
-            Sentinel imagery stretch
+            <Trans>Sentinel imagery stretch</Trans>
           </Typography>
         </AccordionSummary>
         <AccordionDetails sx={{ px: 0, pt: 0 }}>
           <Stack spacing={1}>
             <Typography variant="caption" color="text.secondary">
-              Stored locally. Release a slider to replace the active raster; lower
-              ceilings brighten terrain but can clip bright snow.
+              <Trans>
+                Stored locally. Release a slider to replace the active raster; lower
+                ceilings brighten terrain but can clip bright snow.
+              </Trans>
             </Typography>
 
             <Box>
               <SliderLabel
-                label="Reflectance ceiling"
-                value={String(renderingTuning.reflectanceMax)}
+                label={t`Reflectance ceiling`}
+                value={formatReflectance(renderingTuning.reflectanceMax)}
               />
               <Slider
-                aria-label="Sentinel reflectance ceiling"
+                aria-label={t`Sentinel reflectance ceiling`}
                 min={3_000}
                 max={12_000}
                 step={250}
                 value={renderingTuning.reflectanceMax}
                 valueLabelDisplay="auto"
+                valueLabelFormat={formatReflectance}
                 disabled={mapLayers === null || controlsPending}
                 onChange={(_event, value) => {
                   if (typeof value === 'number') {
@@ -275,14 +305,18 @@ export function SatelliteRenderingControls() {
             </Box>
 
             <Box>
-              <SliderLabel label="Gamma" value={renderingTuning.gamma.toFixed(2)} />
+              <SliderLabel
+                label={t`Gamma`}
+                value={formatRatio(renderingTuning.gamma)}
+              />
               <Slider
-                aria-label="Sentinel gamma"
+                aria-label={t`Sentinel gamma`}
                 min={0.5}
                 max={3}
                 step={0.05}
                 value={renderingTuning.gamma}
                 valueLabelDisplay="auto"
+                valueLabelFormat={formatRatio}
                 disabled={mapLayers === null || controlsPending}
                 onChange={(_event, value) => {
                   if (typeof value === 'number') {
@@ -299,16 +333,17 @@ export function SatelliteRenderingControls() {
 
             <Box>
               <SliderLabel
-                label="Saturation"
-                value={renderingTuning.saturation.toFixed(2)}
+                label={t`Saturation`}
+                value={formatRatio(renderingTuning.saturation)}
               />
               <Slider
-                aria-label="Sentinel saturation"
+                aria-label={t`Sentinel saturation`}
                 min={0}
                 max={5}
                 step={0.05}
                 value={renderingTuning.saturation}
                 valueLabelDisplay="auto"
+                valueLabelFormat={formatRatio}
                 disabled={mapLayers === null || controlsPending}
                 onChange={(_event, value) => {
                   if (typeof value === 'number') {
@@ -333,10 +368,12 @@ export function SatelliteRenderingControls() {
                   commitRenderingTuning(defaultSatelliteRenderingTuning);
                 }}
               >
-                Reset stretch
+                <Trans>Reset stretch</Trans>
               </Button>
               {renderingPending ? (
-                <Typography variant="caption">Applying…</Typography>
+                <Typography variant="caption">
+                  <Trans>Applying…</Trans>
+                </Typography>
               ) : null}
             </Stack>
           </Stack>

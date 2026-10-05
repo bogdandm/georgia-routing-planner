@@ -2066,8 +2066,7 @@ describe('MapLibreLayerController', () => {
 
     await expect(replacement).resolves.toEqual({
       status: 'failed',
-      message:
-        'The imagery renderer did not return a usable tile. The current map remains usable; retry or reset the imagery stretch.',
+      problem: { code: 'tile-failed', reason: 'unknown', httpStatus: null },
     });
     expect(map.layers.has(sentinelMapLayerIds.rasterA)).toBe(false);
     expect(map.layers.has(sentinelMapLayerIds.rasterB)).toBe(false);
@@ -2194,8 +2193,7 @@ describe('MapLibreLayerController', () => {
 
     await expect(replacement).resolves.toEqual({
       status: 'failed',
-      message:
-        'The imagery renderer rejected these stretch values (HTTP 400). Reset the imagery stretch or try less extreme values.',
+      problem: { code: 'tile-failed', reason: 'http-client', httpStatus: 400 },
     });
     const diagnosticText = JSON.stringify(services.logger.getEvents());
     expect(diagnosticText).toContain('rejected these stretch values');
@@ -2290,8 +2288,7 @@ describe('MapLibreLayerController', () => {
 
     await expect(replacement).resolves.toEqual({
       status: 'failed',
-      message:
-        'The imagery renderer is rate-limiting requests (HTTP 429). The current map remains usable; wait briefly, then retry.',
+      problem: { code: 'tile-failed', reason: 'rate-limit', httpStatus: 429 },
     });
     expect(map.directRasterSourceAdds).toBe(0);
     expect(map.refreshTilesCalls).toHaveLength(0);
@@ -3204,7 +3201,7 @@ describe('MapLibreLayerController', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      message: 'This area needs too many Sentinel images. Zoom in and try again.',
+      problem: { code: 'too-many-scenes' },
     });
     expect(
       [...map.sources.keys()].filter((id) =>
@@ -3455,8 +3452,7 @@ describe('MapLibreLayerController', () => {
 
     await expect(application).resolves.toEqual({
       status: 'failed',
-      message:
-        'The imagery renderer is rate-limiting requests (HTTP 429). The current map remains usable; wait briefly, then retry.',
+      problem: { code: 'tile-failed', reason: 'rate-limit', httpStatus: 429 },
     });
     expect(
       [...map.sources.keys()].filter((id) =>

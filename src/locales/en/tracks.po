@@ -237,7 +237,7 @@ msgid "By elevation"
 msgstr "By elevation"
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:163
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:162
 #: src/presentation/tracks/TrackMarkersSection.tsx:258
 msgid "Cancel"
 msgstr "Cancel"
@@ -253,12 +253,12 @@ msgid "Choose exactly one GPX, FIT, or KML file."
 msgstr "Choose exactly one GPX, FIT, or KML file."
 
 #. js-lingui-id: UsGJLu
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:134
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:133
 msgid "Choose folder icon"
 msgstr "Choose folder icon"
 
 #. js-lingui-id: xCJdfg
-#: src/presentation/tracks/RoutePlanControls.tsx:254
+#: src/presentation/tracks/RoutePlanControls.tsx:253
 msgid "Clear"
 msgstr "Clear"
 
@@ -312,7 +312,7 @@ msgid "Combined track details"
 msgstr "Combined track details"
 
 #. js-lingui-id: mgJ1oe
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:155
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:154
 #: src/presentation/tracks/TracksWorkspace.tsx:5281
 msgid "Confirm delete"
 msgstr "Confirm delete"
@@ -346,7 +346,7 @@ msgid "Copy share link"
 msgstr "Copy share link"
 
 #. js-lingui-id: Oo7YVo
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:109
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:108
 #: src/presentation/tracks/TracksWorkspace.tsx:4127
 #: src/presentation/tracks/TracksWorkspace.tsx:4130
 msgid "Create folder"
@@ -369,7 +369,7 @@ msgid "Delete {markerName}"
 msgstr "Delete {markerName}"
 
 #. js-lingui-id: NbFtQm
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:157
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:156
 msgid "Delete folder"
 msgstr "Delete folder"
 
@@ -396,7 +396,7 @@ msgid "Detailed track geometry was used instead of companion route geometry."
 msgstr "Detailed track geometry was used instead of companion route geometry."
 
 #. js-lingui-id: bzSI52
-#: src/presentation/tracks/RoutePlanControls.tsx:264
+#: src/presentation/tracks/RoutePlanControls.tsx:263
 #: src/presentation/tracks/TracksWorkspace.tsx:5577
 msgid "Discard"
 msgstr "Discard"
@@ -476,7 +476,7 @@ msgid "Edit {0}"
 msgstr "Edit {0}"
 
 #. js-lingui-id: uPHscS
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:109
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:108
 msgid "Edit folder"
 msgstr "Edit folder"
 
@@ -597,7 +597,7 @@ msgid "Flat"
 msgstr "Flat"
 
 #. js-lingui-id: cqQyPB
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:116
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:115
 msgid "Folder name"
 msgstr "Folder name"
 
@@ -607,7 +607,7 @@ msgid "Folder names must be 200 characters or fewer."
 msgstr "Folder names must be 200 characters or fewer."
 
 #. js-lingui-id: 2JKkIm
-#: src/presentation/tracks/TrackWeatherSection.tsx:472
+#: src/presentation/tracks/TrackWeatherSection.tsx:471
 msgid "Forecast along the route"
 msgstr "Forecast along the route"
 
@@ -647,7 +647,7 @@ msgid "Item dropped."
 msgstr "Item dropped."
 
 #. js-lingui-id: rjuFFw
-#: src/presentation/tracks/RoutePlanControls.tsx:233
+#: src/presentation/tracks/RoutePlanControls.tsx:232
 msgid "Line"
 msgstr "Line"
 
@@ -794,8 +794,8 @@ msgid "Newest"
 msgstr "Newest"
 
 #. js-lingui-id: BxDJ4A
-#: src/presentation/tracks/RoutePlanControls.tsx:217
-#: src/presentation/tracks/RoutePlanControls.tsx:223
+#: src/presentation/tracks/RoutePlanControls.tsx:216
+#: src/presentation/tracks/RoutePlanControls.tsx:222
 msgid "Next segment"
 msgstr "Next segment"
 
@@ -969,7 +969,7 @@ msgid "Route ready. Click the map to add another point."
 msgstr "Route ready. Click the map to add another point."
 
 #. js-lingui-id: kKayYU
-#: src/presentation/tracks/RoutePlanControls.tsx:230
+#: src/presentation/tracks/RoutePlanControls.tsx:229
 msgid "Routes"
 msgstr "Routes"
 
@@ -984,8 +984,8 @@ msgid "Routing data is unavailable. Try again when you are online."
 msgstr "Routing data is unavailable. Try again when you are online."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/tracks/RoutePlanControls.tsx:272
-#: src/presentation/tracks/TrackFolderEditorDialog.tsx:166
+#: src/presentation/tracks/RoutePlanControls.tsx:271
+#: src/presentation/tracks/TrackFolderEditorDialog.tsx:165
 #: src/presentation/tracks/TrackMarkersSection.tsx:250
 #: src/presentation/tracks/TracksWorkspace.tsx:5591
 msgid "Save"
@@ -1114,7 +1114,7 @@ msgid "Show track grade legend"
 msgstr "Show track grade legend"
 
 #. js-lingui-id: w625t8
-#: src/presentation/tracks/TrackWeatherSection.tsx:463
+#: src/presentation/tracks/TrackWeatherSection.tsx:462
 msgid "Slower"
 msgstr "Slower"
 
@@ -1328,7 +1328,7 @@ msgid "Track markers"
 msgstr "Track markers"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/tracks/RoutePlanControls.tsx:207
+#: src/presentation/tracks/RoutePlanControls.tsx:206
 #: src/presentation/tracks/TracksWorkspace.tsx:5189
 #: src/presentation/tracks/TracksWorkspace.tsx:5488
 msgid "Track name"
@@ -1345,7 +1345,7 @@ msgid "Track name must be 200 characters or fewer."
 msgstr "Track name must be 200 characters or fewer."
 
 #. js-lingui-id: 9uI_rE
-#: src/presentation/tracks/RoutePlanControls.tsx:246
+#: src/presentation/tracks/RoutePlanControls.tsx:245
 msgid "Undo"
 msgstr "Undo"
 

@@ -177,7 +177,6 @@ export function RoutePlanStatus({
     );
   }
   return (
-    // eslint-disable-next-line lingui/no-unlocalized-strings -- ARIA tokens.
     <Stack aria-live="polite" role="status" sx={{ minHeight: 40 }}>
       {content}
     </Stack>

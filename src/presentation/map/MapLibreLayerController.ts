@@ -74,6 +74,7 @@ import {
 } from '@/presentation/map/mapIds';
 import {
   mapLayerStore,
+  type SatelliteImageryProblem,
   type SatelliteMosaicRenderProgress,
 } from '@/presentation/map/mapLayerStore';
 import {
@@ -250,7 +251,7 @@ type OpacityChange = 'live' | 'commit';
 type SatelliteImageryCommandResult =
   | { readonly status: 'success' }
   | { readonly status: 'cancelled' }
-  | { readonly status: 'failed'; readonly message: string };
+  | { readonly status: 'failed'; readonly problem: SatelliteImageryProblem };
 
 type TerrainOverlayCommandResult = MapLayerVisibilityResult;
 export interface WeatherMapControllerConfiguration {
@@ -537,18 +538,37 @@ function isAborted(signal: AbortSignal, error: unknown): boolean {
   return signal.aborted || error instanceof DOMException;
 }
 
+type SentinelRasterProblem = Extract<
+  SatelliteImageryProblem,
+  { code: 'tile-failed' | 'unsupported-asset' }
+>;
+
 class SentinelRasterLoadError extends Error {
-  public constructor(public readonly userMessage: string) {
-    super(userMessage);
+  public constructor(public readonly problem: SentinelRasterProblem) {
+    super(`Sentinel raster failed: ${problem.code}`);
     this.name = 'SentinelRasterLoadError';
   }
 }
 
-function safeRasterFailureMessage(event: MapLibreErrorEvent): string {
-  const details = mapFailureDetails(event);
+type SceneApplyProblem = Extract<
+  SatelliteImageryProblem,
+  {
+    code: 'map-not-ready' | 'unsupported-asset' | 'scene-render-failed' | 'tile-failed';
+  }
+>;
+
+/** English text for diagnostics and the layers-owned `errorMessage`. */
+function describeSceneApplyProblem(problem: SceneApplyProblem): string {
+  if (problem.code === 'map-not-ready') return 'The map is not ready yet.';
+  if (problem.code === 'unsupported-asset') {
+    return 'This scene has no supported true-color asset.';
+  }
+  if (problem.code === 'scene-render-failed') {
+    return 'The true-color image could not be rendered. The vector basemap remains available.';
+  }
   const status =
-    details.httpStatus === null ? '' : ` (HTTP ${String(details.httpStatus)})`;
-  switch (details.reason) {
+    problem.httpStatus === null ? '' : ` (HTTP ${String(problem.httpStatus)})`;
+  switch (problem.reason) {
     case 'no-response':
       return 'The imagery tile request received no HTTP response (network, CORS, or provider connection failure). The current map remains usable; retry the scene.';
     case 'network':
@@ -560,7 +580,7 @@ function safeRasterFailureMessage(event: MapLibreErrorEvent): string {
     case 'http-server':
       return `The imagery renderer is temporarily unavailable${status}. The current map remains usable; retry shortly.`;
     case 'http-client':
-      if (details.httpStatus === 400 || details.httpStatus === 422) {
+      if (problem.httpStatus === 400 || problem.httpStatus === 422) {
         return `The imagery renderer rejected these stretch values${status}. Reset the imagery stretch or try less extreme values.`;
       }
       return `The imagery renderer rejected the tile request${status}. The current map remains usable; review the provider configuration.`;
@@ -1343,7 +1363,7 @@ export class MapLibreLayerController {
     this.#mosaicViewport = viewport;
     this.pruneMosaicEntries(viewport);
     if (this.#map === null) {
-      return this.failMosaic(selectedDate, viewport, 'The map is not ready yet.');
+      return this.failMosaic(selectedDate, viewport, { code: 'map-not-ready' });
     }
     this.publishMosaicSnapshot('loading', selectedDate, viewport);
     this.applyMapVisualMode();
@@ -1368,14 +1388,14 @@ export class MapLibreLayerController {
   public failMosaic(
     selectedDate: string,
     viewport: SatelliteSearchViewport,
-    message: string,
+    problem: SatelliteImageryProblem,
   ): SatelliteImageryCommandResult {
     this.#mosaicSelectedDate = selectedDate;
     this.#mosaicViewport = viewport;
     this.pruneMosaicEntries(viewport);
-    this.publishMosaicSnapshot('failed', selectedDate, viewport, message);
+    this.publishMosaicSnapshot('failed', selectedDate, viewport, problem);
     this.applyMapVisualMode();
-    return { status: 'failed', message };
+    return { status: 'failed', problem };
   }
 
   public pruneMosaic(viewport: SatelliteSearchViewport): void {
@@ -1387,7 +1407,7 @@ export class MapLibreLayerController {
       snapshot.status,
       snapshot.selectedDate,
       viewport,
-      snapshot.status === 'failed' ? snapshot.message : undefined,
+      snapshot.status === 'failed' ? snapshot.problem : undefined,
       snapshot.status === 'loading' ? snapshot.renderProgress : null,
     );
   }
@@ -1790,7 +1810,7 @@ export class MapLibreLayerController {
       tuning.saturation < 0 ||
       tuning.saturation > 5
     ) {
-      return { status: 'failed', message: 'Imagery tuning values are out of range.' };
+      return { status: 'failed', problem: { code: 'tuning-out-of-range' } };
     }
     const previousTuning = this.#renderingTuning;
     this.#renderingTuning = { ...tuning };
@@ -1825,12 +1845,9 @@ export class MapLibreLayerController {
     this.cancelRasterRecovery();
     const map = this.#map;
     const sceneKey = satelliteSceneKey(scene);
-    if (map === null) return this.applyFailure(sceneKey, 'The map is not ready yet.');
+    if (map === null) return this.applyFailure(sceneKey, { code: 'map-not-ready' });
     if (scene.visualAsset.kind !== 'sentinel-l2a') {
-      return this.applyFailure(
-        sceneKey,
-        'This scene has no supported true-color asset.',
-      );
+      return this.applyFailure(sceneKey, { code: 'unsupported-asset' });
     }
 
     const previousSceneKey =
@@ -1862,7 +1879,6 @@ export class MapLibreLayerController {
         sceneKey,
         previousSceneKey,
         stage: 'preparing',
-        message: 'Preparing the selected Sentinel scene…',
         startedAt,
       },
       errorMessage: null,
@@ -1886,9 +1902,6 @@ export class MapLibreLayerController {
         sceneKey,
         previousSceneKey,
         'requesting-tiles',
-        forceDirectRendering
-          ? 'Reading pre-rendered true-color Sentinel imagery directly…'
-          : 'Requesting true-color tiles from the imagery renderer…',
         startedAt,
       );
       this.removeSlot(map, slot);
@@ -1921,26 +1934,14 @@ export class MapLibreLayerController {
         },
         mapInsertionPoints.satelliteBeforeLayerId,
       );
-      this.updateLoadingProgress(
-        sceneKey,
-        previousSceneKey,
-        'rendering',
-        'Downloading, reprojecting, and decoding visible map tiles…',
-        startedAt,
-      );
+      this.updateLoadingProgress(sceneKey, previousSceneKey, 'rendering', startedAt);
       await this.waitForSource(map, slot.sourceId, signal);
       if (sequence !== this.#applySequence || this.#map !== map) {
         throw new DOMException('Superseded imagery application.', 'AbortError');
       }
       operation.completeStep();
       operation.beginStep('apply-imagery');
-      this.updateLoadingProgress(
-        sceneKey,
-        previousSceneKey,
-        'finalizing',
-        'Finalizing the raster and scene footprint…',
-        startedAt,
-      );
+      this.updateLoadingProgress(sceneKey, previousSceneKey, 'finalizing', startedAt);
       const state = mapLayerStore.getState();
       map.setPaintProperty(slot.layerId, 'raster-opacity', 1);
       this.updateFootprint(map, scene);
@@ -2000,11 +2001,13 @@ export class MapLibreLayerController {
         return { status: 'cancelled' };
       }
       operation.fail();
-      const message =
+      return this.applyFailure(
+        sceneKey,
         error instanceof SentinelRasterLoadError
-          ? error.userMessage
-          : 'The true-color image could not be rendered. The vector basemap remains available.';
-      return this.applyFailure(sceneKey, message, previousSceneKey);
+          ? error.problem
+          : { code: 'scene-render-failed' },
+        previousSceneKey,
+      );
     }
   }
 
@@ -2055,7 +2058,7 @@ export class MapLibreLayerController {
     const map = this.#map;
     const scene = this.#appliedScene;
     if (map === null || scene === null) {
-      return { status: 'failed', message: 'No applied scene is available to fit.' };
+      return { status: 'failed', problem: { code: 'no-applied-scene' } };
     }
     const bounds = satelliteSceneBounds(scene);
     map.fitBounds(
@@ -2117,29 +2120,25 @@ export class MapLibreLayerController {
   ): Promise<SatelliteImageryCommandResult> {
     const map = this.#map;
     if (map === null) {
-      return this.failMosaic(selectedDate, viewport, 'The map is not ready yet.');
+      return this.failMosaic(selectedDate, viewport, { code: 'map-not-ready' });
     }
     this.#mosaicSelectedDate = selectedDate;
     this.#mosaicViewport = viewport;
     const sequence = ++this.#mosaicSequence;
     const desiredByBounds = new Map<string, SatelliteScene>();
-    let firstFailure: string | null = null;
+    let firstFailure: SatelliteImageryProblem | null = null;
 
     for (const scene of scenes) {
       try {
         const boundsKey = satelliteSceneBoundsKey(scene);
         if (!desiredByBounds.has(boundsKey)) desiredByBounds.set(boundsKey, scene);
       } catch {
-        firstFailure ??= 'A returned scene has geometry that cannot be rendered.';
+        firstFailure ??= { code: 'unrenderable-geometry' };
       }
     }
 
     if (desiredByBounds.size > maximumSatelliteMosaicSceneCount) {
-      return this.failMosaic(
-        selectedDate,
-        viewport,
-        'This area needs too many Sentinel images. Zoom in and try again.',
-      );
+      return this.failMosaic(selectedDate, viewport, { code: 'too-many-scenes' });
     }
     const renderedExistingSourceIds = new Set<string>();
     let renderedSceneCount = 0;
@@ -2197,8 +2196,8 @@ export class MapLibreLayerController {
                 if (!isAborted(signal, error)) {
                   firstFailure ??=
                     error instanceof SentinelRasterLoadError
-                      ? error.userMessage
-                      : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
+                      ? error.problem
+                      : { code: 'mosaic-render-failed' };
                 }
                 publishRenderProgress();
               })
@@ -2231,8 +2230,8 @@ export class MapLibreLayerController {
         this.removeSlot(map, staged.slot);
         firstFailure ??=
           error instanceof SentinelRasterLoadError
-            ? error.userMessage
-            : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
+            ? error.problem
+            : { code: 'mosaic-render-failed' };
         continue;
       }
       desiredNativeEntries.push(staged);
@@ -2259,8 +2258,8 @@ export class MapLibreLayerController {
             if (!isAborted(signal, error)) {
               firstFailure ??=
                 error instanceof SentinelRasterLoadError
-                  ? error.userMessage
-                  : 'A Sentinel mosaic image could not be rendered. Ready imagery remains visible.';
+                  ? error.problem
+                  : { code: 'mosaic-render-failed' };
             }
             publishRenderProgress();
           })
@@ -2333,7 +2332,7 @@ export class MapLibreLayerController {
     if (firstFailure !== null) {
       this.publishMosaicSnapshot('failed', selectedDate, viewport, firstFailure);
       this.applyMapVisualMode();
-      return { status: 'failed', message: firstFailure };
+      return { status: 'failed', problem: firstFailure };
     }
     this.publishMosaicSnapshot('ready', selectedDate, viewport);
     this.applyMapVisualMode();
@@ -2342,9 +2341,7 @@ export class MapLibreLayerController {
 
   private addMosaicNativeSource(map: MapLibreMap, entry: MosaicRasterEntry): void {
     if (entry.scene.visualAsset.kind !== 'sentinel-l2a') {
-      throw new SentinelRasterLoadError(
-        'This scene has no supported true-color asset.',
-      );
+      throw new SentinelRasterLoadError({ code: 'unsupported-asset' });
     }
     this.satelliteCogTiles.registerScene(entry.sceneKey, entry.scene.visualAsset);
     const directFallbackUrl = this.satelliteCogTiles.createTileUrl(entry.sceneKey);
@@ -2390,7 +2387,7 @@ export class MapLibreLayerController {
     status: 'loading' | 'ready' | 'failed',
     selectedDate: string,
     viewport: SatelliteSearchViewport,
-    message?: string,
+    problem?: SatelliteImageryProblem,
     renderProgress: SatelliteMosaicRenderProgress | null = null,
   ): void {
     const sceneKeys = [...this.#mosaicEntries.values()].map((entry) => entry.sceneKey);
@@ -2422,9 +2419,7 @@ export class MapLibreLayerController {
         appliedMosaic: {
           status,
           ...fields,
-          message:
-            message ??
-            'The Sentinel mosaic could not be updated. Ready imagery remains visible.',
+          problem: problem ?? { code: 'mosaic-render-failed' },
         },
       });
       return;
@@ -2492,7 +2487,7 @@ export class MapLibreLayerController {
   private reconcileMosaicEntries(): void {
     const map = this.#map;
     if (map === null || this.#mosaicEntries.size === 0) return;
-    let firstFailure: string | null = null;
+    let firstFailure: SatelliteImageryProblem | null = null;
     let restored = false;
     for (const [boundsKey, entry] of this.#mosaicEntries) {
       const hasSource = map.getSource(entry.slot.sourceId) !== undefined;
@@ -2505,8 +2500,7 @@ export class MapLibreLayerController {
       } catch {
         this.removeSlot(map, entry.slot);
         this.#mosaicEntries.delete(boundsKey);
-        firstFailure ??=
-          'A Sentinel mosaic image could not be restored after the map style changed.';
+        firstFailure ??= { code: 'mosaic-restore-failed' };
       }
     }
     if (restored) this.orderMosaicLayers(map);
@@ -2549,7 +2543,6 @@ export class MapLibreLayerController {
       ReturnType<typeof mapLayerStore.getState>['appliedImagery'],
       { readonly status: 'loading' }
     >['stage'],
-    message: string,
     startedAt: number,
   ): void {
     mapLayerStore.setState({
@@ -2558,7 +2551,6 @@ export class MapLibreLayerController {
         sceneKey,
         previousSceneKey,
         stage,
-        message,
         startedAt,
       },
     });
@@ -3893,14 +3885,23 @@ export class MapLibreLayerController {
             this.#pendingMosaicSourceIds.has(sourceId) &&
             (details.reason === 'rate-limit' || details.reason === 'no-response');
           if (!isAmbiguousTerminalMosaicFailure) return;
-          fail(new SentinelRasterLoadError(safeRasterFailureMessage(event)));
+          fail(
+            new SentinelRasterLoadError({
+              code: 'tile-failed',
+              reason: details.reason,
+              httpStatus: details.httpStatus,
+            }),
+          );
           return;
         }
         clearTimeout(stabilityTimer ?? undefined);
         stabilityTimer = null;
         const recovery = this.handleRasterSourceFailure(event);
         if (recovery.state === 'not-retryable') {
-          fail(new SentinelRasterLoadError(safeRasterFailureMessage(event)));
+          const { reason, httpStatus } = mapFailureDetails(event);
+          fail(
+            new SentinelRasterLoadError({ code: 'tile-failed', reason, httpStatus }),
+          );
           return;
         }
         if (recovery.state === 'exhausted') {
@@ -4581,11 +4582,12 @@ export class MapLibreLayerController {
 
   private applyFailure(
     sceneKey: string,
-    message: string,
+    problem: SceneApplyProblem,
     previousSceneKey: string | null = null,
   ): SatelliteImageryCommandResult {
+    const message = describeSceneApplyProblem(problem);
     mapLayerStore.setState({
-      appliedImagery: { status: 'failed', sceneKey, previousSceneKey, message },
+      appliedImagery: { status: 'failed', sceneKey, previousSceneKey, problem },
       errorMessage: message,
     });
     this.logger.log({
@@ -4593,6 +4595,6 @@ export class MapLibreLayerController {
       name: 'satellite.imagery.apply-failed',
       message,
     });
-    return { status: 'failed', message };
+    return { status: 'failed', problem };
   }
 }

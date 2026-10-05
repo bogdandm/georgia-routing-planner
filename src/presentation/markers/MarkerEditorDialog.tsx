@@ -138,7 +138,6 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
   return (
     <Dialog
       open={props.open}
-      // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
       aria-labelledby="marker-editor-title"
       maxWidth="xs"
       fullWidth

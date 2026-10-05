@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { SatelliteSearchErrorCode } from '@/application/satellite/SatelliteSearchError';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type {
   LogicalMapLayerId,
@@ -18,6 +19,32 @@ import type {
   TerrainComputeStatus,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
+import type { MapFailureReason } from '@/presentation/map/mapTypes';
+
+/**
+ * Why Sentinel imagery could not be applied. Satellite UI maps each code to localized
+ * copy; `tile-failed` keeps only allowlisted transport evidence.
+ */
+export type SatelliteImageryProblem =
+  | { readonly code: 'map-not-ready' }
+  | { readonly code: 'unsupported-asset' }
+  | { readonly code: 'unrenderable-geometry' }
+  | { readonly code: 'too-many-scenes' }
+  | { readonly code: 'tuning-out-of-range' }
+  | { readonly code: 'no-applied-scene' }
+  | { readonly code: 'scene-render-failed' }
+  | { readonly code: 'mosaic-render-failed' }
+  | { readonly code: 'mosaic-restore-failed' }
+  | {
+      readonly code: 'tile-failed';
+      readonly reason: MapFailureReason;
+      readonly httpStatus: number | null;
+    }
+  | {
+      readonly code: 'search-failed';
+      /** `null` when the search failed outside the satellite application boundary. */
+      readonly searchErrorCode: SatelliteSearchErrorCode | null;
+    };
 
 export type AppliedSatelliteImagerySnapshot =
   | { readonly status: 'empty' }
@@ -26,7 +53,6 @@ export type AppliedSatelliteImagerySnapshot =
       readonly sceneKey: string;
       readonly previousSceneKey: string | null;
       readonly stage: 'preparing' | 'requesting-tiles' | 'rendering' | 'finalizing';
-      readonly message: string;
       readonly startedAt: number;
     }
   | {
@@ -45,7 +71,7 @@ export type AppliedSatelliteImagerySnapshot =
       readonly status: 'failed';
       readonly sceneKey: string;
       readonly previousSceneKey: string | null;
-      readonly message: string;
+      readonly problem: SatelliteImageryProblem;
     };
 
 interface AppliedSatelliteMosaicFields {
@@ -69,7 +95,7 @@ export type AppliedSatelliteMosaicSnapshot =
   | ({ readonly status: 'ready' } & AppliedSatelliteMosaicFields)
   | ({
       readonly status: 'failed';
-      readonly message: string;
+      readonly problem: SatelliteImageryProblem;
     } & AppliedSatelliteMosaicFields);
 
 interface TerrainOverlaySnapshot {

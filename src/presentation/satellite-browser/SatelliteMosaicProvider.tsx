@@ -1,3 +1,5 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import {
   createContext,
   type PropsWithChildren,
@@ -33,13 +35,13 @@ interface SatelliteMosaicContextValue {
 const SatelliteMosaicContext = createContext<SatelliteMosaicContextValue | null>(null);
 // Map-wide consumers only need the mode; a separate context keeps Mosaic workflow
 // changes from re-rendering them.
+// eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
 const SatelliteModeContext = createContext<SatelliteMode>('scene');
-
-const unexpectedSearchMessage = 'Sentinel imagery could not be loaded. Try again.';
 
 export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
   const { mapDiagnostics, mapLayers, mapViewport, searchSatelliteMosaic } =
     useRuntimeServices();
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
   const [satelliteMode, setSatelliteMode] = useState<SatelliteMode>('scene');
   const [draftDate, setDraftDateState] = useState<string | null>(null);
   const [activeDate, setActiveDate] = useState<string | null>(null);
@@ -96,11 +98,10 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
           ) {
             return;
           }
-          const message =
-            error instanceof SatelliteSearchError
-              ? error.message
-              : unexpectedSearchMessage;
-          mapLayers.failMosaic(selectedDate, viewport, message);
+          mapLayers.failMosaic(selectedDate, viewport, {
+            code: 'search-failed',
+            searchErrorCode: error instanceof SatelliteSearchError ? error.code : null,
+          });
         })
         .finally(() => {
           if (currentRequest.current?.id !== request.id) return;
@@ -119,7 +120,8 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
       const movement = mapViewport.getMovementSnapshot();
       const movementKey =
         movement.phase === 'settled'
-          ? `settled-${String(movement.revision)}`
+          ? // eslint-disable-next-line lingui/no-unlocalized-strings -- Movement key token.
+            `settled-${String(movement.revision)}`
           : movement.phase;
       if (lastMovement.current === movementKey) return;
       lastMovement.current = movementKey;
@@ -161,11 +163,13 @@ export function SatelliteMosaicProvider({ children }: PropsWithChildren) {
       setActiveDate(null);
       setShown(false);
       setRenderModePending(false);
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setSatelliteMode('scene');
       return;
     }
 
     mapLayers?.clearScene();
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     setSatelliteMode('mosaic');
   }, [cancelRequest, mapLayers, satelliteMode]);
 
@@ -255,17 +259,18 @@ function resolveShowDisabledReason(state: {
   readonly terrainMode: TerrainMode | null;
   readonly requestActive: boolean;
   readonly renderModePending: boolean;
-}): string | null {
-  if (state.draftDate === null) return 'Choose the last date to include in the Mosaic.';
-  if (state.movementPhase === 'moving') return 'Wait for the map to stop moving.';
+}): MessageDescriptor | null {
+  if (state.draftDate === null)
+    return msg`Choose the last date to include in the Mosaic.`;
+  if (state.movementPhase === 'moving') return msg`Wait for the map to stop moving.`;
   if (state.movementPhase === 'unavailable' || !state.mapLayersAvailable) {
-    return 'Wait for the map to become available.';
+    return msg`Wait for the map to become available.`;
   }
-  if (!state.searchAvailable) return 'Sentinel Mosaic search is unavailable.';
-  if (state.terrainMode !== 'flat') return 'Wait for the map to enter 2D mode.';
-  if (state.requestActive) return 'A Mosaic request is already in progress.';
+  if (!state.searchAvailable) return msg`Sentinel Mosaic search is unavailable.`;
+  if (state.terrainMode !== 'flat') return msg`Wait for the map to enter 2D mode.`;
+  if (state.requestActive) return msg`A Mosaic request is already in progress.`;
   if (state.renderModePending) {
-    return 'Wait for the satellite renderer change to finish.';
+    return msg`Wait for the satellite renderer change to finish.`;
   }
   return null;
 }
@@ -281,7 +286,7 @@ export function useSatelliteMode(): SatelliteMode {
  * map movement does not change the shared Mosaic context.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function useSatelliteMosaicShowDisabledReason(): string | null {
+export function useSatelliteMosaicShowDisabledReason(): MessageDescriptor | null {
   const { mapDiagnostics, mapLayers, mapViewport, searchSatelliteMosaic } =
     useRuntimeServices();
   const { draftDate, renderModePending, requestActive } = useSatelliteMosaic();

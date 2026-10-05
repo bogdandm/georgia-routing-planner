@@ -1,6 +1,6 @@
 import type { SatelliteCatalogErrorCode } from '@/application/ports/SatelliteCatalogGateway';
 
-type SatelliteSearchErrorCode =
+export type SatelliteSearchErrorCode =
   | SatelliteCatalogErrorCode
   | 'invalid-viewport'
   | 'invalid-date'

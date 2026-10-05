@@ -361,6 +361,7 @@ export function WorkspaceSidebar({
               <ToggleButton
                 size="small"
                 value="weather-map"
+                data-tour="weather-map-toggle"
                 selected={weatherMap.enabled}
                 disabled={mapLayers === null || weatherMap.status === 'loading'}
                 aria-label={
@@ -387,6 +388,7 @@ export function WorkspaceSidebar({
               <ToggleButton
                 size="small"
                 value="weather-point"
+                data-tour="weather-point-toggle"
                 selected={weatherPointSelectionActive}
                 aria-label={
                   weatherPointSelectionActive
@@ -406,6 +408,7 @@ export function WorkspaceSidebar({
               aria-expanded={weatherForecastMenuOpen}
               aria-haspopup={menuPopupType}
               aria-label={t`More weather actions`}
+              data-tour="weather-more-actions"
               disabled={weatherHeaderPoint === null}
               onClick={(event) => {
                 setWeatherForecastMenuAnchor(event.currentTarget);
@@ -463,6 +466,7 @@ export function WorkspaceSidebar({
             <ToggleButton
               size="small"
               value="mosaic"
+              data-tour="satellite-mosaic"
               selected={satelliteMode === 'mosaic'}
               aria-label={t`Mosaic`}
               aria-pressed={satelliteMode === 'mosaic'}
@@ -483,6 +487,7 @@ export function WorkspaceSidebar({
           <Stack
             direction="row"
             spacing={compactMarkersHeader ? 0.5 : 1}
+            data-tour="markers-header-actions"
             sx={{
               alignItems: 'center',
               minWidth: 0,
@@ -551,6 +556,7 @@ export function WorkspaceSidebar({
               <ToggleButton
                 size="small"
                 value="multi-track"
+                data-tour="multi-track-toggle"
                 aria-label={t`Select multiple tracks`}
                 selected={multiTrackMode}
                 onClick={() => {
@@ -567,7 +573,7 @@ export function WorkspaceSidebar({
                   : t`Plan a route on the map`
               }
             >
-              <span>
+              <span data-tour="plan-route">
                 <Button
                   disabled={trailRouter === null}
                   size="small"
@@ -595,6 +601,7 @@ export function WorkspaceSidebar({
         ) : null}
       </Stack>
       <Box
+        data-tour="sidebar-content"
         sx={{
           minHeight: 0,
           flex: 1,
@@ -648,7 +655,11 @@ export function WorkspaceSidebar({
         <Box sx={{ display: activeTab === 'layers' ? 'block' : 'none' }}>
           <LayersPanel />
         </Box>
-        {activeTab === 'user' ? <UserPanel /> : null}
+        {activeTab === 'user' ? (
+          <Box data-tour="user-panel">
+            <UserPanel />
+          </Box>
+        ) : null}
       </Box>
     </Box>
   );

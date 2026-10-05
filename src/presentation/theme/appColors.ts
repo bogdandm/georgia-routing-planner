@@ -31,6 +31,7 @@ export const appColors = {
   interaction: {
     navigationHoverOverlay: 'rgba(2, 48, 71, 0.1)',
     navigationSelectedBackground: 'rgba(33, 158, 188, 0.34)',
+    tourScrim: 'rgba(2, 30, 45, 0.58)',
   },
   text: {
     primary: '#062C3D',

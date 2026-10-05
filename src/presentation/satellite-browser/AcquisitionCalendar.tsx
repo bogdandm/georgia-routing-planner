@@ -140,7 +140,7 @@ export function AcquisitionCalendar({
   };
 
   return (
-    <Box aria-label="Sentinel acquisition calendar">
+    <Box aria-label="Sentinel acquisition calendar" data-tour="satellite-calendar">
       <Box
         sx={{
           display: 'grid',

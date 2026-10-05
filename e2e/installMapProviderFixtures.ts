@@ -289,6 +289,18 @@ const shortbreadTileJsonFixture = {
  * Shortbread tile contains a synthetic brownfield polygon and representative streets.
  */
 export async function installMapProviderFixtures(page: Page): Promise<void> {
+  // Fresh browser profiles open the onboarding tour, which covers the workspace.
+  // Workflows start after skipping it, exactly as a returning user would.
+  await page.addInitScript(() => {
+    new MutationObserver((_records, observer) => {
+      const skip = document.querySelector<HTMLButtonElement>(
+        '[data-testid="onboarding-tour-skip"]',
+      );
+      if (skip === null) return;
+      observer.disconnect();
+      skip.click();
+    }).observe(document, { childList: true, subtree: true });
+  });
   await page.route(`${overpassOrigin}/api/interpreter**`, (route) => {
     const body = new URLSearchParams(route.request().postData() ?? '');
     const query = body.get('data') ?? '';

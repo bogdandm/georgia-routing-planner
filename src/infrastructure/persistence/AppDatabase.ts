@@ -387,6 +387,7 @@ const uiPreferencesSchema = z
     elevationGradeLegendDismissed: z.boolean().default(false),
     markerSort: z.enum(markerSorts).default('created'),
     trackSort: z.enum(trackSorts).default('created'),
+    onboardingCompleted: z.boolean().default(false),
   })
   .strict();
 
@@ -404,6 +405,7 @@ interface UiPreferences {
   readonly elevationGradeLegendDismissed: boolean;
   readonly markerSort: MarkerSort;
   readonly trackSort: TrackSort;
+  readonly onboardingCompleted: boolean;
 }
 
 const defaultUiPreferences: UiPreferences = {
@@ -413,6 +415,7 @@ const defaultUiPreferences: UiPreferences = {
   elevationGradeLegendDismissed: false,
   markerSort: 'created',
   trackSort: 'created',
+  onboardingCompleted: false,
 };
 const markerWeatherWeekdaySchema: z.ZodType<MarkerWeatherWeekday> = z.union([
   z.literal(0),

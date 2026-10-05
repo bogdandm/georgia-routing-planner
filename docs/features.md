@@ -13,7 +13,8 @@ this document whenever it no longer describes the interface.
   primary feature sections, in that order.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
   available when developer mode is enabled. `About this site` sits below Settings and
-  opens author, repository, API, and data-source information.
+  opens author, repository, API, and data-source information. `Show tour` sits last and
+  reopens the onboarding tour on desktop.
 - **Route planning:** starts from `Plan route` in the Tracks header. There is no
   separate planning destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
@@ -71,6 +72,28 @@ decorative profile-and-stats summary.
   clear action is offered for them.
 - `?developer=1` enables diagnostics even when stored settings cannot load.
 - Uncaught React errors render a support-bundle fallback.
+
+### Onboarding tour
+
+The first desktop visit opens a tour unless it starts from a shared-track link. Each
+step switches to one section and shows all its hints at once: the step's controls are
+spotlighted over a dimmed workspace, with short callouts that favor icon-only buttons
+and hidden actions such as right-click point actions. Steps cover the map controls and
+lower rail, Tracks, Track details, Markers, Layers, Satellite, Weather, and User. Hints
+whose controls are absent, hidden, or off-screen are omitted. While a step is shown,
+collapsed navigation, track details over the Tracks list, and Satellite results stay
+hidden without changing their saved state.
+
+Track details imports the bundled example `public/onboarding/sakhizare-from-above.gpx`
+as an unsaved preview, which is never stored or synchronized. Leaving that step or
+closing the tour discards it. The step is left out when the tour would replace an
+unsaved preview, shared track or shared-track link, route plan, or multi-track
+selection.
+
+**Next**, **Back**, the arrow keys, **Skip tour**, **Done**, and Escape navigate or
+close the tour; closing returns to the section open before it. Closing stores completion
+in `ui.preferences`, and **Show tour** in the rail opens it again. Smartphones do not
+show the tour; switching to the smartphone layout closes it without storing completion.
 
 ### User
 

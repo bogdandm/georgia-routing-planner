@@ -319,6 +319,7 @@ export function MapSearchPlaceholder() {
     <Paper
       component="section"
       aria-label={t`Map search`}
+      data-tour="map-search"
       elevation={4}
       sx={{
         position: 'absolute',

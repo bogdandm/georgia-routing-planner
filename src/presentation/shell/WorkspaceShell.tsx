@@ -30,6 +30,11 @@ import { cancelMarkerPlacement } from '@/presentation/map/mapInteractionStore';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
+import {
+  firstOnboardingTourStep,
+  OnboardingTour,
+  type OnboardingTourStepId,
+} from '@/presentation/shell/OnboardingTour';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
@@ -49,6 +54,7 @@ import {
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
 import { RoutePlanStatus } from '@/presentation/tracks/RoutePlanControls';
+import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
 /* eslint-disable -- CSS queries, identifiers, events, and diagnostics are machine data. */
@@ -71,6 +77,7 @@ interface UiPreferenceValues {
   readonly markerSort: MarkerSort;
   readonly navigationCollapsed: boolean;
   readonly trackSort: TrackSort;
+  readonly onboardingCompleted: boolean;
 }
 
 const mapCameraMargin = 56;
@@ -102,6 +109,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const settingsOpen = useUiStore((state) => state.settingsOpen);
+  const onboardingCompleted = useUiStore((state) => state.onboardingCompleted);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setDeveloperDrawerOpen = useUiStore((state) => state.setDeveloperDrawerOpen);
   const setDeveloperMode = useUiStore((state) => state.setDeveloperMode);
@@ -114,7 +122,16 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setSettingsOpen = useUiStore((state) => state.setSettingsOpen);
+  const setOnboardingCompleted = useUiStore((state) => state.setOnboardingCompleted);
   const [controlledFailure, setControlledFailure] = useState(false);
+  // The first desktop visit opens the tour unless it starts from a shared-track link.
+  const [tourStep, setTourStep] = useState<OnboardingTourStepId | null>(() =>
+    !onboardingCompleted &&
+    !window.matchMedia(smartphoneViewportQuery).matches &&
+    parseTrackShareLocation(window.location.hash).kind === 'none'
+      ? firstOnboardingTourStep
+      : null,
+  );
   const smartphoneViewport = useMediaQuery(smartphoneViewportQuery);
   const auxiliaryOverlayViewport = useMediaQuery(auxiliaryOverlayViewportQuery);
   const workspaceShellRef = useRef<HTMLDivElement>(null);
@@ -246,6 +263,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         locale,
         markerSort,
         trackSort,
+        onboardingCompleted,
       });
     },
     [
@@ -254,6 +272,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       markerSort,
       locale,
       trackSort,
+      onboardingCompleted,
       persistUiPreferences,
       setNavigationCollapsed,
     ],
@@ -275,6 +294,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       locale,
       markerSort,
       trackSort,
+      onboardingCompleted,
     });
   };
 
@@ -287,6 +307,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       locale,
       markerSort,
       trackSort,
+      onboardingCompleted,
     });
   };
 
@@ -299,6 +320,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       locale,
       markerSort: value,
       trackSort,
+      onboardingCompleted,
     });
   };
 
@@ -311,6 +333,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       locale,
       markerSort,
       trackSort: value,
+      onboardingCompleted,
     });
   };
 
@@ -323,6 +346,22 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       locale: nextLocale,
       markerSort,
       trackSort,
+      onboardingCompleted,
+    });
+  };
+
+  const finishTour = (completed: boolean) => {
+    setTourStep(null);
+    if (!completed) return;
+    setOnboardingCompleted(true);
+    void persistUiPreferences({
+      developerMode,
+      navigationCollapsed,
+      elevationGradeLegendDismissed,
+      locale,
+      markerSort,
+      trackSort,
+      onboardingCompleted: true,
     });
   };
   useEffect(() => {
@@ -336,7 +375,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     if (activeTab !== 'tracks') handleSectionChange('tracks');
     if (smartphoneViewport) {
       setMobileWorkspaceOpen(true);
-    } else if (navigationCollapsed) {
+    } else if (navigationCollapsed && tourStep === null) {
       handleNavigationCollapsedChange(false);
     }
   }, [
@@ -345,6 +384,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     handleSectionChange,
     importState,
     navigationCollapsed,
+    tourStep,
     setMobileWorkspaceOpen,
     smartphoneViewport,
   ]);
@@ -390,18 +430,23 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     setMobileTrackDetailsExpanded(false);
   }
   const activeTrackOpen = activeTab === 'tracks' && trackDetailsExist;
+  // Tour steps that point at sidebar controls keep detail panes closed; the tour
+  // never changes the stored pane or navigation state, so they return afterwards.
   const trackDetailsOpen =
     activeTrackOpen &&
+    tourStep !== 'library' &&
     (smartphoneViewport
       ? mobileTrackDetailsExpanded
       : !multiTrackDetailsExist ||
         !auxiliaryOverlayViewport ||
         !multiTrackDetailsDismissed);
-  const satelliteResultsOpen = activeTab === 'satellite' && satellitePaneOpen;
+  const satelliteResultsOpen =
+    activeTab === 'satellite' && satellitePaneOpen && tourStep !== 'satellite';
   const auxiliaryOpen = trackDetailsOpen || satelliteResultsOpen;
   const mobileTrackDisclosureOpen =
     smartphoneViewport && trackDetailsExist && !mobileWorkspaceOpen;
-  const desktopNavigationCollapsed = !smartphoneViewport && navigationCollapsed;
+  const desktopNavigationCollapsed =
+    !smartphoneViewport && navigationCollapsed && tourStep === null;
   const collapsedTrackSummary =
     desktopNavigationCollapsed && activeTrackMetrics !== null ? (
       <CompactTrackSummary metrics={activeTrackMetrics} profile={summaryProfile} />
@@ -674,6 +719,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             onOpenSettings={() => {
               setSettingsOpen(true);
             }}
+            onStartTour={
+              smartphoneViewport
+                ? null
+                : () => {
+                    setSettingsOpen(false);
+                    setTourStep(firstOnboardingTourStep);
+                  }
+            }
             onShare={() => {
               setSharePageUrl(window.location.href);
               setShareOpen(true);
@@ -807,7 +860,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             }}
           />
         </Box>
-        {!smartphoneViewport && !navigationCollapsed ? (
+        {!desktopNavigationCollapsed && !smartphoneViewport ? (
           <Tooltip title={t`Hide navigation`} placement="right">
             <IconButton
               aria-label={t`Hide navigation`}
@@ -902,6 +955,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         }}
       />
       <RemoteDeletionDialog />
+      {tourStep === null ? null : (
+        <OnboardingTour
+          step={tourStep}
+          smartphoneViewport={smartphoneViewport}
+          onStepChange={setTourStep}
+          onClose={finishTour}
+        />
+      )}
       {developerMode ? (
         <DeveloperDrawer
           open={developerDrawerOpen}

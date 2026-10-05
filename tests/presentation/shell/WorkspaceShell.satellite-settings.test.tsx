@@ -854,6 +854,7 @@ describe('WorkspaceShell', () => {
         elevationGradeLegendDismissed: false,
         markerSort: 'created',
         trackSort: 'created',
+        onboardingCompleted: true,
       });
     });
   });

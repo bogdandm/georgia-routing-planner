@@ -144,7 +144,7 @@ export function TrackMarkersSection({
   const markerCount = markers.length;
 
   return (
-    <Box component="section">
+    <Box component="section" data-tour="track-markers">
       <Box
         sx={{
           minHeight: 44,

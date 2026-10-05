@@ -146,6 +146,11 @@ export default tseslint.config(
       'src/presentation/tracks/TrackThumbnailImage.tsx',
       'src/presentation/tracks/TrackFolderEditorDialog.tsx',
       'src/presentation/tracks/trackFormatters.ts',
+      'src/presentation/markers/MarkersWorkspace.tsx',
+      'src/presentation/markers/MarkerEditorDialog.tsx',
+      'src/presentation/markers/MarkerIconPicker.tsx',
+      'src/presentation/markers/MarkerWeatherSettingsDialog.tsx',
+      'src/presentation/markers/markerCatalog.tsx',
     ],
     plugins: { lingui },
     rules: {

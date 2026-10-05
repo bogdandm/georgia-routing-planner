@@ -317,7 +317,6 @@ describe('WorkspaceShell', () => {
         sceneKey: 'sentinel-2-l2a:selected-while-rendering',
         previousSceneKey: 'sentinel-2-l2a:previously-rendered',
         stage: 'rendering',
-        message: 'Rendering selected scene',
         startedAt: 1,
       },
     });
@@ -374,7 +373,6 @@ describe('WorkspaceShell', () => {
         sceneKey: 'sentinel-2-l2a:shared-before-raster',
         previousSceneKey: null,
         stage: 'preparing',
-        message: 'Preparing the selected scene',
         startedAt: 1,
       },
     });
@@ -504,7 +502,7 @@ describe('WorkspaceShell', () => {
     expect(within(acquisitionCalendar).getAllByRole('columnheader')).toHaveLength(7);
     expect(within(acquisitionCalendar).getAllByRole('gridcell')).toHaveLength(31);
     expect(
-      screen.getByRole('gridcell', { name: '1 Jul 2026, no loaded imagery' }),
+      screen.getByRole('gridcell', { name: 'Jul 1, 2026, no loaded imagery' }),
     ).toHaveStyle({ height: '40px' });
     const searchAreaSource = screen.getByRole('combobox', {
       name: 'Search area source',
@@ -695,7 +693,7 @@ describe('WorkspaceShell', () => {
     return { applyMosaic, clearMosaic, firstSearch, result, search, scene };
   }
 
-  async function renderReadyMosaic(selectedDate = '17 Jul 2026') {
+  async function renderReadyMosaic(selectedDate = 'Jul 17, 2026') {
     const setup = setupMosaic();
     const user = userEvent.setup();
     renderWorkspaceShell();
@@ -717,14 +715,14 @@ describe('WorkspaceShell', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
     await user.click(screen.getByRole('button', { name: 'Mosaic' }));
-    await user.click(screen.getByRole('gridcell', { name: '17 Jul 2026' }));
+    await user.click(screen.getByRole('gridcell', { name: 'Jul 17, 2026' }));
     await user.click(screen.getByRole('button', { name: 'Show mosaic' }));
     await waitFor(() => {
       expect(search).toHaveBeenCalledTimes(1);
     });
     const firstSignal = search.mock.calls[0]?.[1];
     expect(screen.getByText('Searching Sentinel archive…')).toBeVisible();
-    await user.click(screen.getByRole('gridcell', { name: '18 Jul 2026' }));
+    await user.click(screen.getByRole('gridcell', { name: 'Jul 18, 2026' }));
     expect(firstSignal?.aborted).toBe(true);
     expect(clearMosaic).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: 'Show mosaic' }));
@@ -745,7 +743,7 @@ describe('WorkspaceShell', () => {
   });
 
   it('refreshes a ready Mosaic after an off-pane viewport change', async () => {
-    const { applyMosaic, search, user } = await renderReadyMosaic('18 Jul 2026');
+    const { applyMosaic, search, user } = await renderReadyMosaic('Jul 18, 2026');
     const refreshedViewport = {
       bounds: { west: 44.2, south: 42.1, east: 44.8, north: 42.7 },
       center: { longitude: 44.5, latitude: 42.4 },
@@ -771,7 +769,7 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     expect(screen.getByText('Coverage: 100.0%')).toBeVisible();
     expect(screen.getByText('Rendered images: 1')).toBeVisible();
-    expect(screen.getByText('Date range: 17 Jul 2026 to 18 Jul 2026')).toBeVisible();
+    expect(screen.getByText('Date range: Jul 17, 2026 to Jul 18, 2026')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Mosaic' })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -784,7 +782,7 @@ describe('WorkspaceShell', () => {
     expect(clearMosaic).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole('button', { name: 'Mosaic' }));
     expect(screen.getByRole('button', { name: 'Show mosaic' })).toBeDisabled();
-    expect(screen.getByRole('gridcell', { name: '17 Jul 2026' })).not.toHaveAttribute(
+    expect(screen.getByRole('gridcell', { name: 'Jul 17, 2026' })).not.toHaveAttribute(
       'aria-selected',
       'true',
     );

@@ -391,7 +391,7 @@ describe('WorkspaceShell', () => {
         name: 'Images near 42.5000, 44.5000',
       }),
     ).toBeVisible();
-    expect(screen.getByText(/12 Jul 2026 · 14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByText(/Jul 12, 2026 · 14:12 GMT\+4/u)).toBeVisible();
     expect(screen.queryByText('Sentinel-2a')).not.toBeInTheDocument();
     expect(screen.getByText('100% coverage')).toBeVisible();
     expect(screen.queryByLabelText(/Low viewport coverage/u)).not.toBeInTheDocument();
@@ -403,10 +403,11 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
     await user.click(
       screen.getByRole('gridcell', {
-        name: /12 Jul 2026, imagery available/u,
+        name: /Jul 12, 2026, imagery available/u,
       }),
     );
-    expect(screen.getByText('Image failed to apply')).toBeVisible();
+    const failedSceneDetails = screen.getByText('Image failed to apply').parentElement;
+    expect(failedSceneDetails).toHaveTextContent('The map is not ready yet.');
     expect(services.sentinelQueryDiagnostics.getSnapshot().status).toBe('success');
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
@@ -446,10 +447,10 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Search images' }));
-    expect(await screen.findByText(/12 Jul 2026 · 14:12 GMT\+4/u)).toBeVisible();
+    expect(await screen.findByText(/Jul 12, 2026 · 14:12 GMT\+4/u)).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Load more images' }));
 
-    expect(await screen.findByText(/18 Jun 2026 · 14:12 GMT\+4/u)).toBeVisible();
+    expect(await screen.findByText(/Jun 18, 2026 · 14:12 GMT\+4/u)).toBeVisible();
     expect(requestedStarts).toEqual(['2026-07-01', '2026-06-01']);
     expect(screen.getByRole('button', { name: 'Load more images' })).toBeVisible();
   });
@@ -498,7 +499,7 @@ describe('WorkspaceShell', () => {
 
     expect(await screen.findByText('1 image · 1 acquisition day')).toBeVisible();
     const restoredCard = screen.getByRole('button', {
-      name: 'Remove 18 Jun 2026 imagery from map',
+      name: 'Remove Jun 18, 2026 imagery from map',
     });
     expect(restoredCard).toHaveAttribute('aria-pressed', 'true');
     expect(
@@ -519,7 +520,7 @@ describe('WorkspaceShell', () => {
 
     expect(clearScene).toHaveBeenCalledOnce();
     expect(
-      screen.getByRole('button', { name: 'Apply 18 Jun 2026 imagery' }),
+      screen.getByRole('button', { name: 'Apply Jun 18, 2026 imagery' }),
     ).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -562,19 +563,19 @@ describe('WorkspaceShell', () => {
     expect(screen.getByRole('grid', { name: 'May 2026' })).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Search images' }));
-    expect(await screen.findByText(/14 May 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(await screen.findByText(/May 14, 2026.*14:12 GMT\+4/u)).toBeVisible();
     expect(screen.getByRole('grid', { name: 'May 2026' })).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
-    expect(await screen.findByText(/18 Jun 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(await screen.findByText(/Jun 18, 2026.*14:12 GMT\+4/u)).toBeVisible();
     expect(screen.getByRole('grid', { name: 'June 2026' })).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
-    expect(await screen.findByText(/12 Jul 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(await screen.findByText(/Jul 12, 2026.*14:12 GMT\+4/u)).toBeVisible();
     expect(screen.getByRole('grid', { name: 'July 2026' })).toBeVisible();
 
-    expect(screen.getByText(/14 May 2026.*14:12 GMT\+4/u)).toBeVisible();
-    expect(screen.getByText(/18 Jun 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByText(/May 14, 2026.*14:12 GMT\+4/u)).toBeVisible();
+    expect(screen.getByText(/Jun 18, 2026.*14:12 GMT\+4/u)).toBeVisible();
     expect(requests).toEqual([
       { startDate: '2026-05-01', endDate: '2026-05-31' },
       { startDate: '2026-06-01', endDate: '2026-06-30' },
@@ -687,7 +688,7 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Search images' }));
     const dateShortcut = await screen.findByRole('gridcell', {
-      name: /12 Jul 2026, imagery available/u,
+      name: /Jul 12, 2026, imagery available/u,
     });
     await user.click(dateShortcut);
     expect(screen.getByText('Best coverage scene')).toBeVisible();
@@ -749,44 +750,44 @@ describe('WorkspaceShell', () => {
     expect(search).toHaveBeenCalledOnce();
     expect(search.mock.calls[0]?.[0].criteria.maxCloudCoverPercent).toBe(100);
     expect(
-      await screen.findByRole('button', { name: 'Apply 9 Jul 2026 imagery' }),
+      await screen.findByRole('button', { name: 'Apply Jul 9, 2026 imagery' }),
     ).toBeVisible();
     expect(
-      screen.queryByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+      screen.queryByRole('button', { name: 'Apply Jul 12, 2026 imagery' }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('gridcell', {
-        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
+        name: /Jul 12, 2026, imagery available, 70% weighted cloud, exceeds/u,
       }),
     ).toBeVisible();
     expect(
       screen.getByRole('gridcell', {
-        name: /9 Jul 2026, imagery available, 10 percent weighted cloud, matches/u,
+        name: /Jul 9, 2026, imagery available, 10% weighted cloud, matches/u,
       }),
     ).toBeVisible();
     await user.click(
       screen.getByRole('gridcell', {
-        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, exceeds/u,
+        name: /Jul 12, 2026, imagery available, 70% weighted cloud, exceeds/u,
       }),
     );
     expect(
-      screen.getByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+      screen.getByRole('button', { name: 'Apply Jul 12, 2026 imagery' }),
     ).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Apply 9 Jul 2026 imagery' }));
+    await user.click(screen.getByRole('button', { name: 'Apply Jul 9, 2026 imagery' }));
     expect(
-      screen.queryByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+      screen.queryByRole('button', { name: 'Apply Jul 12, 2026 imagery' }),
     ).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole('slider', { name: 'Maximum cloud' }), {
       target: { value: '100' },
     });
     expect(
-      screen.getByRole('button', { name: 'Apply 12 Jul 2026 imagery' }),
+      screen.getByRole('button', { name: 'Apply Jul 12, 2026 imagery' }),
     ).toBeVisible();
     expect(screen.getByLabelText('High cloud cover: 70%')).toBeVisible();
     expect(screen.getByLabelText(/Low viewport coverage: 40%/u)).toBeVisible();
     expect(
       screen.getByRole('gridcell', {
-        name: /12 Jul 2026, imagery available, 70 percent weighted cloud, matches/u,
+        name: /Jul 12, 2026, imagery available, 70% weighted cloud, matches/u,
       }),
     ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Search images' }));
@@ -999,7 +1000,7 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('combobox', { name: 'Language' }));
     await user.click(screen.getByRole('option', { name: 'Русский' }));
 
-    expect(await screen.findByRole('heading', { name: 'Настройки' })).toBeVisible();
+    expect(await screen.findByRole('dialog', { name: 'Настройки' })).toBeVisible();
     await waitFor(() => {
       expect(log).toHaveBeenCalledWith({
         level: 'warn',
@@ -1017,7 +1018,7 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Открыть настройки' }));
 
-    expect(screen.getByRole('heading', { name: 'Настройки' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: 'Настройки' })).toBeVisible();
     expect(screen.getByRole('combobox', { name: 'Язык' })).toHaveTextContent('Русский');
   });
 
@@ -1306,7 +1307,6 @@ describe('WorkspaceShell', () => {
           sceneKey: 'sentinel-2-l2a:in-flight',
           previousSceneKey: null,
           stage: 'rendering',
-          message: 'Rendering in progress',
           startedAt: Date.now(),
         },
       });

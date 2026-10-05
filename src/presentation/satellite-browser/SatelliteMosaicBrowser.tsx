@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Alert, Box, Button, Stack, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
@@ -11,17 +12,7 @@ import {
   useSatelliteMosaicShowDisabledReason,
 } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { SatelliteRenderModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingControls';
-
-const dayFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-function formatDate(date: string): string {
-  return dayFormatter.format(new Date(`${date}T00:00:00.000Z`));
-}
+import { satelliteImageryProblemMessage } from '@/presentation/satellite-browser/satelliteProblemMessages';
 
 interface SatelliteMosaicBrowserProps {
   /** Reveals the map on smartphones after the mosaic starts rendering. */
@@ -29,6 +20,7 @@ interface SatelliteMosaicBrowserProps {
 }
 
 export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProps) {
+  const { i18n, t } = useLingui();
   const { clock } = useRuntimeServices();
   const {
     activeDate,
@@ -60,11 +52,36 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
         ? (appliedMosaic.renderProgress?.renderedSceneCount ?? 0)
         : appliedMosaic.sceneKeys.length;
   const hasRenderedScenes = renderedSceneCount > 0;
+  let coverage = '';
+  let firstDate = '';
+  let lastDate = '';
+  if (appliedMosaic.status !== 'empty') {
+    /* eslint-disable lingui/no-unlocalized-strings -- Intl option and ISO date tokens. */
+    const dayFormatter = new Intl.DateTimeFormat(i18n.locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    const coverageFormatter = new Intl.NumberFormat(i18n.locale, {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+    const oldestDate =
+      appliedMosaic.oldestAcquisitionDate ?? appliedMosaic.selectedDate;
+    coverage = coverageFormatter.format(appliedMosaic.coveragePercent / 100);
+    firstDate = dayFormatter.format(new Date(`${oldestDate}T00:00:00.000Z`));
+    lastDate = dayFormatter.format(
+      new Date(`${appliedMosaic.selectedDate}T00:00:00.000Z`),
+    );
+    /* eslint-enable lingui/no-unlocalized-strings */
+  }
 
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       <Typography component="h3" variant="subtitle2">
-        Acquisition calendar
+        <Trans>Acquisition calendar</Trans>
       </Typography>
       <AcquisitionCalendar
         displayMonth={calendarMonth}
@@ -80,12 +97,18 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
         }}
       />
       <Typography variant="body2" color="text.secondary">
-        All dates before it will be selected.
+        <Trans>All dates before it will be selected.</Trans>
       </Typography>
 
       <SatelliteRenderModeSelect onPendingChange={setRenderModePending} />
 
-      <Tooltip title={showDisabledReason ?? 'Fill the settled map view with a Mosaic'}>
+      <Tooltip
+        title={
+          showDisabledReason === null
+            ? t`Fill the settled map view with a Mosaic`
+            : i18n._(showDisabledReason)
+        }
+      >
         <span>
           <Button
             fullWidth
@@ -96,7 +119,7 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
               onShowMap?.();
             }}
           >
-            Show mosaic
+            <Trans>Show mosaic</Trans>
           </Button>
         </span>
       </Tooltip>
@@ -104,27 +127,27 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
       {!shown || activeDate === null || appliedMosaic.status === 'empty' ? null : (
         <Stack spacing={0.75} aria-live="polite">
           {appliedMosaic.status === 'failed' ? (
-            <Alert severity="error">{appliedMosaic.message}</Alert>
+            <Alert severity="error">
+              {i18n._(satelliteImageryProblemMessage(appliedMosaic.problem))}
+            </Alert>
           ) : null}
           {appliedMosaic.status === 'ready' && !hasRenderedScenes ? (
             <Alert severity="info">
-              No Sentinel imagery found through the archive.
+              <Trans>No Sentinel imagery found through the archive.</Trans>
             </Alert>
           ) : null}
           {hasRenderedScenes ? (
             <>
               <Typography variant="body2">
-                Coverage: {appliedMosaic.coveragePercent.toFixed(1)}%
+                <Trans>Coverage: {coverage}</Trans>
               </Typography>
               <Typography variant="body2">
-                Rendered images: {renderedSceneCount}
+                <Trans>Rendered images: {renderedSceneCount}</Trans>
               </Typography>
               <Typography variant="body2">
-                Date range:{' '}
-                {formatDate(
-                  appliedMosaic.oldestAcquisitionDate ?? appliedMosaic.selectedDate,
-                )}{' '}
-                to {formatDate(appliedMosaic.selectedDate)}
+                <Trans>
+                  Date range: {firstDate} to {lastDate}
+                </Trans>
               </Typography>
             </>
           ) : null}
@@ -133,7 +156,7 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
 
       <Box>
         <Typography variant="caption" color="text.secondary">
-          Imagery: Copernicus Sentinel data via Element 84 Earth Search.
+          <Trans>Imagery: Copernicus Sentinel data via Element 84 Earth Search.</Trans>
         </Typography>
       </Box>
     </Stack>

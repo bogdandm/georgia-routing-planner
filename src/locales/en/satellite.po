@@ -12,3 +12,637 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#. js-lingui-id: kqc-Ql
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:521
+msgid "· {cloudPercent} cloud"
+msgstr "· {cloudPercent} cloud"
+
+#. js-lingui-id: DN98QJ
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:516
+msgid "{cloudPercent} cloud"
+msgstr "{cloudPercent} cloud"
+
+#. js-lingui-id: o_H4Mk
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:530
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:539
+msgid "{coveragePercent} coverage"
+msgstr "{coveragePercent} coverage"
+
+#. js-lingui-id: xMxKQ2
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:447
+msgid "{formattedDate}, imagery available, {cloudLabel} weighted cloud, exceeds the current cloud limit"
+msgstr "{formattedDate}, imagery available, {cloudLabel} weighted cloud, exceeds the current cloud limit"
+
+#. js-lingui-id: wByCg7
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:446
+msgid "{formattedDate}, imagery available, {cloudLabel} weighted cloud, matches the current cloud limit"
+msgstr "{formattedDate}, imagery available, {cloudLabel} weighted cloud, matches the current cloud limit"
+
+#. js-lingui-id: g01-Km
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:390
+msgid "{formattedDate}, included in Mosaic range"
+msgstr "{formattedDate}, included in Mosaic range"
+
+#. js-lingui-id: 2lkvQP
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:388
+msgid "{formattedDate}, included in Mosaic range, selected upper bound"
+msgstr "{formattedDate}, included in Mosaic range, selected upper bound"
+
+#. js-lingui-id: -vCWKz
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:444
+msgid "{formattedDate}, no loaded imagery"
+msgstr "{formattedDate}, no loaded imagery"
+
+#. js-lingui-id: 4zd3hw
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:127
+msgid "{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}"
+msgstr "{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}"
+
+#. js-lingui-id: PkGcfQ
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1397
+msgid "{monthLabel} imagery could not be loaded. Try again."
+msgstr "{monthLabel} imagery could not be loaded. Try again."
+
+#. js-lingui-id: CE1MRg
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:271
+msgid "A Mosaic request is already in progress."
+msgstr "A Mosaic request is already in progress."
+
+#. js-lingui-id: Nt_yFd
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:35
+msgid "A returned scene has geometry that cannot be measured."
+msgstr "A returned scene has geometry that cannot be measured."
+
+#. js-lingui-id: Gneek7
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:49
+msgid "A returned scene has geometry that cannot be rendered."
+msgstr "A returned scene has geometry that cannot be rendered."
+
+#. js-lingui-id: 5piGyI
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:59
+msgid "A Sentinel mosaic image could not be rendered. Ready imagery remains visible."
+msgstr "A Sentinel mosaic image could not be rendered. Ready imagery remains visible."
+
+#. js-lingui-id: sYPQI4
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:61
+msgid "A Sentinel mosaic image could not be restored after the map style changed."
+msgstr "A Sentinel mosaic image could not be restored after the map style changed."
+
+#. js-lingui-id: _DlUkp
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:568
+msgid "Acquired {title} · {acquisitionTime}"
+msgstr "Acquired {title} · {acquisitionTime}"
+
+#. js-lingui-id: 7ysE3R
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1410
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:84
+msgid "Acquisition calendar"
+msgstr "Acquisition calendar"
+
+#. js-lingui-id: heDRXb
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:281
+msgid "Acquisition year"
+msgstr "Acquisition year"
+
+#. js-lingui-id: KSDnus
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:100
+msgid "All dates before it will be selected."
+msgstr "All dates before it will be selected."
+
+#. js-lingui-id: bhLu79
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:558
+msgid "Applied imagery is hidden"
+msgstr "Applied imagery is hidden"
+
+#. js-lingui-id: dCjt6C
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:450
+msgid "Apply {title} imagery"
+msgstr "Apply {title} imagery"
+
+#. js-lingui-id: YcHHOJ
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:554
+msgid "Applying true-color imagery…"
+msgstr "Applying true-color imagery…"
+
+#. js-lingui-id: wdRxTD
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:375
+msgid "Applying…"
+msgstr "Applying…"
+
+#. js-lingui-id: R9Khdg
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:125
+msgid "Auto"
+msgstr "Auto"
+
+#. js-lingui-id: FddAt6
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:755
+msgid "Back to satellite search"
+msgstr "Back to satellite search"
+
+#. js-lingui-id: 5TviPn
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1479
+msgid "Cancel search"
+msgstr "Cancel search"
+
+#. js-lingui-id: PhApqn
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:307
+msgid "Choose {monthName} {yearLabel}"
+msgstr "Choose {monthName} {yearLabel}"
+
+#. js-lingui-id: CjtJs6
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:31
+msgid "Choose a date within the Sentinel archive."
+msgstr "Choose a date within the Sentinel archive."
+
+#. js-lingui-id: Ezw1hy
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:274
+msgid "Choose acquisition month and year"
+msgstr "Choose acquisition month and year"
+
+#. js-lingui-id: uXhYg1
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:214
+msgid "Choose acquisition month and year, {displayMonthLabel}"
+msgstr "Choose acquisition month and year, {displayMonthLabel}"
+
+#. js-lingui-id: fkY84N
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:212
+msgid "Choose month and year"
+msgstr "Choose month and year"
+
+#. js-lingui-id: 1KqgUJ
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:264
+msgid "Choose the last date to include in the Mosaic."
+msgstr "Choose the last date to include in the Mosaic."
+
+#. js-lingui-id: XlShQd
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1605
+msgid "Clipboard access failed. Try again."
+msgstr "Clipboard access failed. Try again."
+
+#. js-lingui-id: _MLTZK
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:786
+msgid "Close imagery results"
+msgstr "Close imagery results"
+
+#. js-lingui-id: u7EbBk
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:33
+msgid "Cloud cover must be between 0 and 100 percent."
+msgstr "Cloud cover must be between 0 and 100 percent."
+
+#. js-lingui-id: EcGYZW
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:142
+msgid "Coverage: {coverage}"
+msgstr "Coverage: {coverage}"
+
+#. js-lingui-id: WhB2Yo
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1530
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1545
+msgctxt "satellite search area"
+msgid "Custom"
+msgstr "Custom"
+
+#. js-lingui-id: 7lI4mM
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:148
+msgid "Date range: {firstDate} to {lastDate}"
+msgstr "Date range: {firstDate} to {lastDate}"
+
+#. js-lingui-id: fYUNRJ
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:131
+msgid "Direct"
+msgstr "Direct"
+
+#. js-lingui-id: s_t0ij
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:18
+msgid "Earth Search could not be reached from this browser."
+msgstr "Earth Search could not be reached from this browser."
+
+#. js-lingui-id: CReEb9
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:14
+msgid "Earth Search did not respond in time. Try again."
+msgstr "Earth Search did not respond in time. Try again."
+
+#. js-lingui-id: aKUvlZ
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:16
+msgid "Earth Search is rate limiting requests. Wait and try again."
+msgstr "Earth Search is rate limiting requests. Wait and try again."
+
+#. js-lingui-id: 95Eja3
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:108
+msgid "Fill the settled map view with a Mosaic"
+msgstr "Fill the settled map view with a Mosaic"
+
+#. js-lingui-id: XIRep_
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:618
+msgid "Fit footprint"
+msgstr "Fit footprint"
+
+#. js-lingui-id: uu-bnY
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:309
+msgid "Gamma"
+msgstr "Gamma"
+
+#. js-lingui-id: di6QLI
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:515
+msgid "High cloud cover: {cloudPercent}"
+msgstr "High cloud cover: {cloudPercent}"
+
+#. js-lingui-id: hHoLcB
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:556
+msgid "Image failed to apply"
+msgstr "Image failed to apply"
+
+#. js-lingui-id: n8JIYw
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:53
+msgid "Imagery tuning values are out of range."
+msgstr "Imagery tuning values are out of range."
+
+#. js-lingui-id: aAbMw4
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:159
+msgid "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
+msgstr "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
+
+#. js-lingui-id: 2LlWfy
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:769
+msgid "Images near {coordinates}"
+msgstr "Images near {coordinates}"
+
+#. js-lingui-id: cXonY8
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:773
+msgid "Latest Sentinel scenes"
+msgstr "Latest Sentinel scenes"
+
+#. js-lingui-id: 7UhcOT
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:866
+msgid "Load more images"
+msgstr "Load more images"
+
+#. js-lingui-id: JWi5n3
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:205
+msgid "Loading {displayMonthLabel} imagery"
+msgstr "Loading {displayMonthLabel} imagery"
+
+#. js-lingui-id: wXmnVV
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:798
+msgid "Loading latest images…"
+msgstr "Loading latest images…"
+
+#. js-lingui-id: _UiOW8
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:866
+msgid "Loading older images…"
+msgstr "Loading older images…"
+
+#. js-lingui-id: faSoF-
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:529
+msgid "Low viewport coverage: {coveragePercent}"
+msgstr "Low viewport coverage: {coveragePercent}"
+
+#. js-lingui-id: FJqkwn
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1549
+msgid "Marker"
+msgstr "Marker"
+
+#. js-lingui-id: TBG9qk
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1437
+msgid "Maximum cloud"
+msgstr "Maximum cloud"
+
+#. js-lingui-id: P18O_B
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:233
+msgid "Next acquisition month"
+msgstr "Next acquisition month"
+
+#. js-lingui-id: g8JmSC
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:229
+msgid "Next month"
+msgstr "Next month"
+
+#. js-lingui-id: lX5HU_
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:55
+msgid "No applied scene is available to fit."
+msgstr "No applied scene is available to fit."
+
+#. js-lingui-id: L-0avQ
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:811
+msgid "No matching images. Increase the cloud limit or move the map."
+msgstr "No matching images. Increase the cloud limit or move the map."
+
+#. js-lingui-id: gaOjjO
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:136
+msgid "No Sentinel imagery found through the archive."
+msgstr "No Sentinel imagery found through the archive."
+
+#. js-lingui-id: NHlrjI
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1531
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1541
+msgid "Point"
+msgstr "Point"
+
+#. js-lingui-id: HTrYLh
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:185
+msgid "Previous acquisition month"
+msgstr "Previous acquisition month"
+
+#. js-lingui-id: 1xwZj_
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:181
+msgid "Previous month"
+msgstr "Previous month"
+
+#. js-lingui-id: kwTqXK
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:594
+msgid "Product {productId}"
+msgstr "Product {productId}"
+
+#. js-lingui-id: sHzcBY
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:139
+msgid "Reads the pre-rendered 8-bit Sentinel visual asset without contacting TiTiler."
+msgstr "Reads the pre-rendered 8-bit Sentinel visual asset without contacting TiTiler."
+
+#. js-lingui-id: yTVcmu
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:276
+msgid "Reflectance ceiling"
+msgstr "Reflectance ceiling"
+
+#. js-lingui-id: DwHtA9
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:244
+msgid "Relief shading could not be updated. Try again."
+msgstr "Relief shading could not be updated. Try again."
+
+#. js-lingui-id: WIbcl9
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:450
+msgid "Remove {title} imagery from map"
+msgstr "Remove {title} imagery from map"
+
+#. js-lingui-id: 8B27IS
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:145
+msgid "Rendered images: {renderedSceneCount}"
+msgstr "Rendered images: {renderedSceneCount}"
+
+#. js-lingui-id: Ccg_Ni
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:371
+msgid "Reset stretch"
+msgstr "Reset stretch"
+
+#. js-lingui-id: OE-IAD
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:247
+msgid "Return to current acquisition month"
+msgstr "Return to current acquisition month"
+
+#. js-lingui-id: -q9LjZ
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:243
+msgid "Return to current month"
+msgstr "Return to current month"
+
+#. js-lingui-id: Ets8ig
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1502
+msgid "Satellite provider configuration is unavailable."
+msgstr "Satellite provider configuration is unavailable."
+
+#. js-lingui-id: CeLKos
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:114
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:118
+msgid "Satellite render"
+msgstr "Satellite render"
+
+#. js-lingui-id: bMlX24
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:336
+msgid "Saturation"
+msgstr "Saturation"
+
+#. js-lingui-id: MjJtR5
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:547
+msgid "Scene border is only {edgeDistance} from the search anchor."
+msgstr "Scene border is only {edgeDistance} from the search anchor."
+
+#. js-lingui-id: pv0_zw
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:601
+msgid "Scene edge {edgeDistance} from search point"
+msgstr "Scene edge {edgeDistance} from search point"
+
+#. js-lingui-id: g6Rc6e
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1604
+msgid "Scene link copied"
+msgstr "Scene link copied"
+
+#. js-lingui-id: YN_ioA
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1519
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1523
+msgid "Search area source"
+msgstr "Search area source"
+
+#. js-lingui-id: qQG0gT
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1489
+msgid "Search images"
+msgstr "Search images"
+
+#. js-lingui-id: NscJt0
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:561
+msgid "Selected for imagery"
+msgstr "Selected for imagery"
+
+#. js-lingui-id: 9h6gGh
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:172
+msgid "Sentinel acquisition calendar"
+msgstr "Sentinel acquisition calendar"
+
+#. js-lingui-id: Ph1Sxj
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:313
+msgid "Sentinel gamma"
+msgstr "Sentinel gamma"
+
+#. js-lingui-id: LpD8qC
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:64
+msgid "Sentinel imagery could not be loaded. Try again."
+msgstr "Sentinel imagery could not be loaded. Try again."
+
+#. js-lingui-id: 3iZH3q
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:729
+msgid "Sentinel imagery results"
+msgstr "Sentinel imagery results"
+
+#. js-lingui-id: vc__Ky
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:262
+msgid "Sentinel imagery stretch"
+msgstr "Sentinel imagery stretch"
+
+#. js-lingui-id: lzgeYi
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:269
+msgid "Sentinel Mosaic search is unavailable."
+msgstr "Sentinel Mosaic search is unavailable."
+
+#. js-lingui-id: ZNKUxF
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:280
+msgid "Sentinel reflectance ceiling"
+msgstr "Sentinel reflectance ceiling"
+
+#. js-lingui-id: _JcFD-
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:340
+msgid "Sentinel saturation"
+msgstr "Sentinel saturation"
+
+#. js-lingui-id: sGH11W
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:128
+msgid "Server"
+msgstr "Server"
+
+#. js-lingui-id: Tz0i8g
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1514
+msgid "Settings"
+msgstr "Settings"
+
+#. js-lingui-id: uIZ2tg
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:630
+msgid "Share link"
+msgstr "Share link"
+
+#. js-lingui-id: w4bkhu
+#: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:122
+msgid "Show mosaic"
+msgstr "Show mosaic"
+
+#. js-lingui-id: cmfdzj
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:239
+msgid "Show relief shading above satellite imagery"
+msgstr "Show relief shading above satellite imagery"
+
+#. js-lingui-id: dqKoCE
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:268
+msgid "Stored locally. Release a slider to replace the active raster; lower ceilings brighten terrain but can clip bright snow."
+msgstr "Stored locally. Release a slider to replace the active raster; lower ceilings brighten terrain but can clip bright snow."
+
+#. js-lingui-id: sGmQE_
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:90
+msgid "The imagery renderer did not finish in time (HTTP {httpStatus}). The current map remains usable; retry the scene."
+msgstr "The imagery renderer did not finish in time (HTTP {httpStatus}). The current map remains usable; retry the scene."
+
+#. js-lingui-id: Wmq0-5
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:83
+msgid "The imagery renderer did not finish in time. The current map remains usable; retry the scene."
+msgstr "The imagery renderer did not finish in time. The current map remains usable; retry the scene."
+
+#. js-lingui-id: -IkDDg
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:84
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:98
+msgid "The imagery renderer did not return a usable tile. The current map remains usable; retry or reset the imagery stretch."
+msgstr "The imagery renderer did not return a usable tile. The current map remains usable; retry or reset the imagery stretch."
+
+#. js-lingui-id: gioIxA
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:88
+msgid "The imagery renderer is rate-limiting requests (HTTP {httpStatus}). The current map remains usable; wait briefly, then retry."
+msgstr "The imagery renderer is rate-limiting requests (HTTP {httpStatus}). The current map remains usable; wait briefly, then retry."
+
+#. js-lingui-id: sa3fEL
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:92
+msgid "The imagery renderer is temporarily unavailable (HTTP {httpStatus}). The current map remains usable; retry shortly."
+msgstr "The imagery renderer is temporarily unavailable (HTTP {httpStatus}). The current map remains usable; retry shortly."
+
+#. js-lingui-id: sZRHup
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:96
+msgid "The imagery renderer rejected the tile request (HTTP {httpStatus}). The current map remains usable; review the provider configuration."
+msgstr "The imagery renderer rejected the tile request (HTTP {httpStatus}). The current map remains usable; review the provider configuration."
+
+#. js-lingui-id: 68G0Td
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:95
+msgid "The imagery renderer rejected these stretch values (HTTP {httpStatus}). Reset the imagery stretch or try less extreme values."
+msgstr "The imagery renderer rejected these stretch values (HTTP {httpStatus}). Reset the imagery stretch or try less extreme values."
+
+#. js-lingui-id: a9VCLs
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:805
+msgid "The imagery search could not be completed."
+msgstr "The imagery search could not be completed."
+
+#. js-lingui-id: UsPAMl
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:79
+msgid "The imagery tile request failed because of a network connection error. The current map remains usable; retry the scene."
+msgstr "The imagery tile request failed because of a network connection error. The current map remains usable; retry the scene."
+
+#. js-lingui-id: CSQKW0
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:76
+msgid "The imagery tile request received no HTTP response (network, CORS, or provider connection failure). The current map remains usable; retry the scene."
+msgstr "The imagery tile request received no HTTP response (network, CORS, or provider connection failure). The current map remains usable; retry the scene."
+
+#. js-lingui-id: bf7D7L
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:45
+msgid "The map is not ready yet."
+msgstr "The map is not ready yet."
+
+#. js-lingui-id: SzNloy
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:23
+msgid "The satellite catalog could not complete this search."
+msgstr "The satellite catalog could not complete this search."
+
+#. js-lingui-id: LGQ4dQ
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:57
+msgid "The true-color image could not be rendered. The vector basemap remains available."
+msgstr "The true-color image could not be rendered. The vector basemap remains available."
+
+#. js-lingui-id: 5YDfUn
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:25
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:51
+msgid "This area needs too many Sentinel images. Zoom in and try again."
+msgstr "This area needs too many Sentinel images. Zoom in and try again."
+
+#. js-lingui-id: ovWEYI
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:27
+msgid "This map view cannot be searched. Pan or zoom the map and try again."
+msgstr "This map view cannot be searched. Pan or zoom the map and try again."
+
+#. js-lingui-id: HUfyUv
+#: src/presentation/satellite-browser/satelliteProblemMessages.ts:47
+msgid "This scene has no supported true-color asset."
+msgstr "This scene has no supported true-color asset."
+
+#. js-lingui-id: MEUnNF
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:585
+msgid "Tile {tileId} · Orbit {orbit}"
+msgstr "Tile {tileId} · Orbit {orbit}"
+
+#. js-lingui-id: 8m2Wwx
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:560
+msgid "True-color imagery applied"
+msgstr "True-color imagery applied"
+
+#. js-lingui-id: jqzUyM
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:434
+msgid "Unavailable"
+msgstr "Unavailable"
+
+#. js-lingui-id: 5upB_g
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:138
+msgid "Uses only TiTiler. Provider failures do not switch to direct imagery."
+msgstr "Uses only TiTiler. Provider failures do not switch to direct imagery."
+
+#. js-lingui-id: A5HYbB
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1553
+msgid "Uses the map center point or a custom area for imagery search."
+msgstr "Uses the map center point or a custom area for imagery search."
+
+#. js-lingui-id: fNiysJ
+#: src/presentation/satellite-browser/SatelliteRenderingControls.tsx:136
+msgid "Uses TiTiler first and switches to direct pre-rendered Sentinel imagery when it is unavailable."
+msgstr "Uses TiTiler first and switches to direct pre-rendered Sentinel imagery when it is unavailable."
+
+#. js-lingui-id: 6gnYNj
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:267
+msgid "Wait for the map to become available."
+msgstr "Wait for the map to become available."
+
+#. js-lingui-id: EYcFwy
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:270
+msgid "Wait for the map to enter 2D mode."
+msgstr "Wait for the map to enter 2D mode."
+
+#. js-lingui-id: bRHm58
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:265
+msgid "Wait for the map to stop moving."
+msgstr "Wait for the map to stop moving."
+
+#. js-lingui-id: 0fH7ww
+#: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx:273
+msgid "Wait for the satellite renderer change to finish."
+msgstr "Wait for the satellite renderer change to finish."
+
+#. js-lingui-id: H7wWdy
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1497
+msgid "Waiting for the map viewport to become ready."
+msgstr "Waiting for the map viewport to become ready."

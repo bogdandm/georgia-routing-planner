@@ -88,7 +88,6 @@ export function MarkerWeatherSettingsDialog({
       fullWidth
       maxWidth="xs"
       onClose={saving ? undefined : onClose}
-      // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
       aria-labelledby="marker-weather-settings-title"
     >
       <DialogTitle id="marker-weather-settings-title">

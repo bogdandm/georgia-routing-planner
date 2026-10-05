@@ -1513,7 +1513,6 @@ export function MapWorkspace({
       >
         <Paper
           role="dialog"
-          // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
           aria-labelledby="map-point-inspector-title"
           elevation={8}
           sx={{

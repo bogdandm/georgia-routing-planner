@@ -1294,7 +1294,7 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     await user.click(
       within(adjacentResults).getByRole('button', {
-        name: 'Apply 12 Jul 2026 imagery',
+        name: 'Apply Jul 12, 2026 imagery',
       }),
     );
     expect(adjacentResults).toBeVisible();
@@ -1324,7 +1324,7 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Open workspace' }));
     await user.click(screen.getByRole('button', { name: 'Search images' }));
     await user.click(
-      await screen.findByRole('button', { name: 'Apply 9 Jul 2026 imagery' }),
+      await screen.findByRole('button', { name: 'Apply Jul 9, 2026 imagery' }),
     );
 
     expect(screen.getByLabelText('Fake map')).toBe(map);

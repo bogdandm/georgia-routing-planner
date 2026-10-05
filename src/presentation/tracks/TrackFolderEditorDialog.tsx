@@ -101,7 +101,6 @@ function OpenTrackFolderEditorDialog({
       fullScreen={compact}
       fullWidth
       maxWidth="xs"
-      // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
       aria-labelledby="track-folder-editor-title"
       onClose={saving ? undefined : onCancel}
     >

@@ -139,9 +139,9 @@ msgid "Camping"
 msgstr "Кемпинг"
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/markers/MarkerEditorDialog.tsx:250
+#: src/presentation/markers/MarkerEditorDialog.tsx:249
 #: src/presentation/markers/MarkersWorkspace.tsx:1266
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:261
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:260
 msgid "Cancel"
 msgstr "Отмена"
 
@@ -176,7 +176,7 @@ msgid "Change icon and color"
 msgstr "Изменить значок и цвет"
 
 #. js-lingui-id: uphuXx
-#: src/presentation/markers/MarkerEditorDialog.tsx:210
+#: src/presentation/markers/MarkerEditorDialog.tsx:209
 msgid "Choose {colorLabel} marker color"
 msgstr "Выбрать цвет «{colorLabel}»"
 
@@ -186,7 +186,7 @@ msgid "Choose {iconLabel} icon"
 msgstr "Выбрать значок «{iconLabel}»"
 
 #. js-lingui-id: zgwOuR
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:211
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:210
 msgid "Choose a different hour"
 msgstr "Выберите другой час"
 
@@ -196,12 +196,12 @@ msgid "Choose Folder icon"
 msgstr "Выбрать значок папки"
 
 #. js-lingui-id: YSc5Fk
-#: src/presentation/markers/MarkerEditorDialog.tsx:187
+#: src/presentation/markers/MarkerEditorDialog.tsx:186
 msgid "Choose marker icon"
 msgstr "Значок метки"
 
 #. js-lingui-id: 9r-R5E
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:147
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:146
 msgid "Choose one or two weekdays. Clear all days to disable marker forecasts."
 msgstr "Выберите один или два дня недели. Снимите выбор со всех дней, чтобы отключить прогноз для меток."
 
@@ -216,7 +216,7 @@ msgid "City"
 msgstr "Город"
 
 #. js-lingui-id: TPzi7X
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:257
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:256
 msgid "Clear forecast"
 msgstr "Отключить прогноз"
 
@@ -253,22 +253,22 @@ msgid "Cottage"
 msgstr "Коттедж"
 
 #. js-lingui-id: hYgDIe
-#: src/presentation/markers/MarkerEditorDialog.tsx:253
+#: src/presentation/markers/MarkerEditorDialog.tsx:252
 msgid "Create"
 msgstr "Создать"
 
 #. js-lingui-id: xCBfsE
-#: src/presentation/markers/MarkerEditorDialog.tsx:149
+#: src/presentation/markers/MarkerEditorDialog.tsx:148
 msgid "Create marker"
 msgstr "Новая метка"
 
 #. js-lingui-id: 1m0D98
-#: src/presentation/markers/MarkerEditorDialog.tsx:151
+#: src/presentation/markers/MarkerEditorDialog.tsx:150
 msgid "Create track marker"
 msgstr "Новая метка трека"
 
 #. js-lingui-id: 8Tg_JR
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:174
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:173
 msgid "Custom"
 msgstr "Свои часы"
 
@@ -283,7 +283,7 @@ msgid "Danger"
 msgstr "Опасность"
 
 #. js-lingui-id: H7OUPr
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:168
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:167
 msgid "Day"
 msgstr "День"
 
@@ -411,12 +411,12 @@ msgid "Football"
 msgstr "Футбол"
 
 #. js-lingui-id: uxevBu
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:106
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:105
 msgid "Forecast days"
 msgstr "Дни прогноза"
 
 #. js-lingui-id: Eg64c5
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:161
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:160
 msgid "Forecast period"
 msgstr "Период прогноза"
 
@@ -426,7 +426,7 @@ msgid "Forecast unavailable"
 msgstr "Прогноз недоступен"
 
 #. js-lingui-id: dlP1MH
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:110
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:109
 msgid "Forecast weekdays"
 msgstr "Дни недели для прогноза"
 
@@ -441,7 +441,7 @@ msgid "Fort"
 msgstr "Форт"
 
 #. js-lingui-id: ejVYRQ
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:183
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:182
 msgid "From"
 msgstr "С"
 
@@ -491,7 +491,7 @@ msgid "Hotel"
 msgstr "Отель"
 
 #. js-lingui-id: yY8wAv
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:155
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:154
 msgid "Hours"
 msgstr "Часы"
 
@@ -583,12 +583,12 @@ msgid "Marker actions for {0}"
 msgstr "Действия с меткой {0}"
 
 #. js-lingui-id: h0lLI7
-#: src/presentation/markers/MarkerEditorDialog.tsx:153
+#: src/presentation/markers/MarkerEditorDialog.tsx:152
 msgid "Marker appearance"
 msgstr "Вид метки"
 
 #. js-lingui-id: Mw-Nnb
-#: src/presentation/markers/MarkerEditorDialog.tsx:196
+#: src/presentation/markers/MarkerEditorDialog.tsx:195
 msgid "Marker color"
 msgstr "Цвет метки"
 
@@ -604,7 +604,7 @@ msgid "Marker icon categories row {0}"
 msgstr "Строка {0} категорий значков маркеров"
 
 #. js-lingui-id: lTIIr2
-#: src/presentation/markers/MarkerEditorDialog.tsx:161
+#: src/presentation/markers/MarkerEditorDialog.tsx:160
 #: src/presentation/markers/MarkersWorkspace.tsx:1238
 msgid "Marker name"
 msgstr "Название метки"
@@ -615,7 +615,7 @@ msgid "Marker names must be 200 characters or fewer."
 msgstr "Название метки должно быть не длиннее 200 символов."
 
 #. js-lingui-id: plST6S
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:95
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:94
 msgid "Marker weather"
 msgstr "Погода для меток"
 
@@ -680,7 +680,7 @@ msgid "Newest"
 msgstr "Сначала новые"
 
 #. js-lingui-id: jnd7HN
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:171
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:170
 msgid "Night"
 msgstr "Ночь"
 
@@ -836,9 +836,9 @@ msgid "Sailing"
 msgstr "Парусный спорт"
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/markers/MarkerEditorDialog.tsx:253
+#: src/presentation/markers/MarkerEditorDialog.tsx:252
 #: src/presentation/markers/MarkersWorkspace.tsx:1258
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:274
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:273
 msgid "Save"
 msgstr "Сохранить"
 
@@ -884,7 +884,7 @@ msgid "Shelter"
 msgstr "Укрытие"
 
 #. js-lingui-id: MGBNt5
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:245
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:244
 msgid "Show forecasts on the map"
 msgstr "Показывать прогноз на карте"
 
@@ -1009,7 +1009,7 @@ msgid "The marker could not be renamed."
 msgstr "Не удалось переименовать метку."
 
 #. js-lingui-id: BzBVfV
-#: src/presentation/markers/MarkerEditorDialog.tsx:179
+#: src/presentation/markers/MarkerEditorDialog.tsx:178
 msgid "The marker could not be saved."
 msgstr "Не удалось сохранить метку."
 
@@ -1054,7 +1054,7 @@ msgid "Tsunami"
 msgstr "Цунами"
 
 #. js-lingui-id: zDfdMJ
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:206
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:205
 msgid "Until"
 msgstr "До"
 
@@ -1099,7 +1099,7 @@ msgid "Waves"
 msgstr "Волны"
 
 #. js-lingui-id: sm9vv3
-#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:101
+#: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:100
 msgid "Weather settings could not be saved."
 msgstr "Не удалось сохранить настройки погоды."
 

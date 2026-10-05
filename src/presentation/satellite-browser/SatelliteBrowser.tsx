@@ -1,3 +1,5 @@
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
@@ -37,7 +39,10 @@ import {
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
-import { SatelliteSearchError } from '@/application/satellite/SatelliteSearchError';
+import {
+  SatelliteSearchError,
+  type SatelliteSearchErrorCode,
+} from '@/application/satellite/SatelliteSearchError';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   SatelliteProductLevel,
@@ -68,6 +73,10 @@ import { AcquisitionCalendar } from '@/presentation/satellite-browser/Acquisitio
 import { SatelliteRenderingControls } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
 import {
+  satelliteImageryProblemMessage,
+  satelliteSearchErrorMessage,
+} from '@/presentation/satellite-browser/satelliteProblemMessages';
+import {
   beginSatelliteRequest,
   completeSatelliteRequest,
   failSatelliteRequest,
@@ -85,7 +94,11 @@ interface SatelliteBrowserProps {
 type SearchState =
   | { readonly status: 'idle' }
   | { readonly status: 'loading' }
-  | { readonly status: 'error'; readonly message: string }
+  | {
+      readonly status: 'error';
+      /** `null` when the search failed outside the satellite application boundary. */
+      readonly searchErrorCode: SatelliteSearchErrorCode | null;
+    }
   | { readonly status: 'success'; readonly result: SatelliteSearchResult };
 
 function SatelliteSearchRequestRunner({
@@ -111,26 +124,61 @@ const resultPageSize = 8;
 const calendarMonthLoadDelayMs = 300;
 const catalogCloudCoverCeilingPercent = 100;
 const sentinelArchiveFirstMonth = '2015-06';
-const monthFormatter = new Intl.DateTimeFormat('en-GB', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
+const resultSummaryMessage = msg({
+  message:
+    '{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}',
 });
-const dayFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-function formatAcquisitionTime(acquiredAt: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-    timeZone,
-    timeZoneName: 'short',
-  }).format(acquiredAt);
+
+interface MonthLoadError {
+  readonly month: string;
+  readonly searchErrorCode: SatelliteSearchErrorCode | null;
 }
+
+/** Display-only formats; acquisition days and months are UTC calendar dates. */
+interface DisplayFormats {
+  readonly month: Intl.DateTimeFormat;
+  readonly day: Intl.DateTimeFormat;
+  readonly percent: Intl.NumberFormat;
+  readonly kilometers: Intl.NumberFormat;
+  /** Local acquisition time at the searched place, e.g. `14:12 GMT+4`. */
+  readonly acquisitionTime: (acquiredAt: Date, timeZone: string) => string;
+}
+
+/* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+function createDisplayFormats(locale: string): DisplayFormats {
+  return {
+    month: new Intl.DateTimeFormat(locale, {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }),
+    day: new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }),
+    percent: new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+    }),
+    kilometers: new Intl.NumberFormat(locale, {
+      style: 'unit',
+      unit: 'kilometer',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }),
+    acquisitionTime: (acquiredAt, timeZone) =>
+      new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+        timeZone,
+        timeZoneName: 'short',
+      }).format(acquiredAt),
+  };
+}
+/* eslint-enable lingui/no-unlocalized-strings */
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -149,6 +197,7 @@ interface SubmittedSearch {
 }
 
 function searchMonthRange(month: string, today: Date): SearchMonthRange {
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
   const start = new Date(`${month}-01T00:00:00.000Z`);
   const currentMonth = `${String(today.getUTCFullYear()).padStart(4, '0')}-${String(
     today.getUTCMonth() + 1,
@@ -171,6 +220,7 @@ function currentSearchMonth(today: Date): SearchMonthRange {
 }
 
 function previousSearchMonth(month: string): SearchMonthRange {
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
   const current = new Date(`${month}-01T00:00:00.000Z`);
   const start = new Date(
     Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1),
@@ -339,6 +389,7 @@ function visibleGroups(
 
 function SceneCard({
   appliedImagery,
+  formats,
   match,
   selected,
   showBottomDivider,
@@ -348,6 +399,7 @@ function SceneCard({
   onSelect,
 }: {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
+  readonly formats: DisplayFormats;
   readonly match: SatelliteSceneMatch;
   readonly selected: boolean;
   readonly showBottomDivider: boolean;
@@ -356,6 +408,7 @@ function SceneCard({
   readonly onFitFootprint: () => void;
   readonly onSelect: () => void;
 }) {
+  const { i18n, t } = useLingui();
   const { scene, coverage } = match;
   const sceneKey = satelliteSceneKey(scene);
   const applying =
@@ -369,7 +422,19 @@ function SceneCard({
     appliedImagery.sceneKey === sceneKey;
   const hidden = appliedImagery.status === 'hidden' && applied;
   const acquiredAt = new Date(scene.acquiredAt);
-  const title = dayFormatter.format(acquiredAt);
+  const title = formats.day.format(acquiredAt);
+  const acquisitionTime = formats.acquisitionTime(acquiredAt, timeZone);
+  const cloudPercent = formats.percent.format(
+    Math.round(scene.cloudCoverPercent) / 100,
+  );
+  const coveragePercent = formats.percent.format(
+    Math.round(coverage.viewportCoveragePercent) / 100,
+  );
+  const edgeDistance = formats.kilometers.format(coverage.distanceToSceneEdgeKm);
+  const unavailable = t`Unavailable`;
+  const tileId = scene.tileId ?? unavailable;
+  const orbit = scene.orbit ?? unavailable;
+  const productId = scene.productId ?? unavailable;
   return (
     <Box
       id={`satellite-scene-${encodeURIComponent(scene.id)}`}
@@ -382,7 +447,7 @@ function SceneCard({
     >
       <ListItemButton
         aria-label={
-          applied ? `Remove ${title} imagery from map` : `Apply ${title} imagery`
+          applied ? t`Remove ${title} imagery from map` : t`Apply ${title} imagery`
         }
         aria-pressed={selected}
         selected={selected}
@@ -433,7 +498,7 @@ function SceneCard({
           )}
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography variant="subtitle2" noWrap title={title}>
-              {title} · {formatAcquisitionTime(acquiredAt, timeZone)}
+              {title} · {acquisitionTime}
             </Typography>
             <Stack
               direction="row"
@@ -447,13 +512,13 @@ function SceneCard({
                 <Chip
                   size="small"
                   color="error"
-                  aria-label={`High cloud cover: ${scene.cloudCoverPercent.toFixed(0)}%`}
-                  label={`${scene.cloudCoverPercent.toFixed(0)}% cloud`}
+                  aria-label={t`High cloud cover: ${cloudPercent}`}
+                  label={t`${cloudPercent} cloud`}
                   sx={{ height: 20 }}
                 />
               ) : (
                 <Typography variant="caption" color="text.secondary">
-                  · {scene.cloudCoverPercent.toFixed(0)}% cloud
+                  <Trans>· {cloudPercent} cloud</Trans>
                 </Typography>
               )}
             </Stack>
@@ -461,8 +526,8 @@ function SceneCard({
               <Chip
                 size="small"
                 color="warning"
-                aria-label={`Low viewport coverage: ${coverage.viewportCoveragePercent.toFixed(0)}%`}
-                label={`${coverage.viewportCoveragePercent.toFixed(0)}% coverage`}
+                aria-label={t`Low viewport coverage: ${coveragePercent}`}
+                label={t`${coveragePercent} coverage`}
                 sx={{ height: 20, my: 0.25 }}
               />
             ) : (
@@ -471,7 +536,7 @@ function SceneCard({
                 color="text.secondary"
                 sx={{ display: 'block', minHeight: 20 }}
               >
-                {coverage.viewportCoveragePercent.toFixed(0)}% coverage
+                <Trans>{coveragePercent} coverage</Trans>
               </Typography>
             )}
           </Box>
@@ -479,29 +544,30 @@ function SceneCard({
         </Stack>
         {coverage.hasEdgeWarning ? (
           <Alert severity="error" icon={false} sx={{ borderRadius: 0, py: 0 }}>
-            Scene border is only {coverage.distanceToSceneEdgeKm.toFixed(1)} km from the
-            search anchor.
+            <Trans>Scene border is only {edgeDistance} from the search anchor.</Trans>
           </Alert>
         ) : null}
         {selected ? (
           <Box sx={{ px: 2, pb: applied ? 0 : 2 }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
               {applying
-                ? 'Applying true-color imagery…'
+                ? t`Applying true-color imagery…`
                 : failed
-                  ? 'Image failed to apply'
+                  ? t`Image failed to apply`
                   : hidden
-                    ? 'Applied imagery is hidden'
+                    ? t`Applied imagery is hidden`
                     : applied
-                      ? 'True-color imagery applied'
-                      : 'Selected for imagery'}
+                      ? t`True-color imagery applied`
+                      : t`Selected for imagery`}
             </Typography>
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ display: 'block' }}
             >
-              Acquired {title} · {formatAcquisitionTime(acquiredAt, timeZone)}
+              <Trans>
+                Acquired {title} · {acquisitionTime}
+              </Trans>
             </Typography>
             <Typography
               variant="caption"
@@ -510,25 +576,29 @@ function SceneCard({
             >
               {scene.attribution}
             </Typography>
-            {failed ? <Alert severity="error">{appliedImagery.message}</Alert> : null}
+            {failed ? (
+              <Alert severity="error">
+                {i18n._(satelliteImageryProblemMessage(appliedImagery.problem))}
+              </Alert>
+            ) : null}
             <Typography variant="caption" color="text.secondary">
-              Tile {scene.tileId ?? 'Unavailable'} · Orbit{' '}
-              {scene.orbit ?? 'Unavailable'}
+              <Trans>
+                Tile {tileId} · Orbit {orbit}
+              </Trans>
             </Typography>
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ display: 'block', wordBreak: 'break-all' }}
             >
-              Product {scene.productId ?? 'Unavailable'}
+              <Trans>Product {productId}</Trans>
             </Typography>
             <Typography
               variant="caption"
               color="text.secondary"
               sx={{ display: 'block' }}
             >
-              Scene edge {coverage.distanceToSceneEdgeKm.toFixed(1)} km from search
-              point
+              <Trans>Scene edge {edgeDistance} from search point</Trans>
             </Typography>
           </Box>
         ) : null}
@@ -545,7 +615,7 @@ function SceneCard({
               '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
             }}
           >
-            Fit footprint
+            <Trans>Fit footprint</Trans>
           </Button>
           <Button
             color="inherit"
@@ -557,7 +627,7 @@ function SceneCard({
               '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
             }}
           >
-            Share link
+            <Trans>Share link</Trans>
           </Button>
         </Stack>
       ) : null}
@@ -569,6 +639,7 @@ function SatelliteResultsPane({
   appliedImagery,
   coordinates,
   canLoadOlder,
+  formats,
   loadMoreError,
   loadingMore,
   onAutoLoadMore,
@@ -587,6 +658,7 @@ function SatelliteResultsPane({
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly coordinates: string;
   readonly canLoadOlder: boolean;
+  readonly formats: DisplayFormats;
   readonly loadMoreError: string | null;
   readonly loadingMore: boolean;
   readonly onAutoLoadMore: () => void;
@@ -602,6 +674,7 @@ function SatelliteResultsPane({
   readonly timeZone: string;
   readonly visibleCount: number;
 }) {
+  const { i18n, t } = useLingui();
   const result = searchState.status === 'success' ? searchState.result : null;
   const groups = result === null ? [] : visibleGroups(result, visibleCount);
   const shownCount = groups.reduce((count, group) => count + group.scenes.length, 0);
@@ -653,7 +726,7 @@ function SatelliteResultsPane({
   return (
     <Box
       component="aside"
-      aria-label="Sentinel imagery results"
+      aria-label={t`Sentinel imagery results`}
       sx={{
         width: overlay ? '100%' : { xs: 404, xl: 440 },
         height: '100%',
@@ -679,7 +752,7 @@ function SatelliteResultsPane({
         {overlay ? (
           <IconButton
             size="small"
-            aria-label="Back to satellite search"
+            aria-label={t`Back to satellite search`}
             onClick={onClose}
             sx={{ mr: 1 }}
           >
@@ -693,16 +766,26 @@ function SatelliteResultsPane({
             noWrap
             sx={{ fontWeight: 700 }}
           >
-            Images near {coordinates}
+            <Trans>Images near {coordinates}</Trans>
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {result === null
-              ? 'Latest Sentinel scenes'
-              : `${String(result.sceneCount)} image${result.sceneCount === 1 ? '' : 's'} · ${String(result.acquisitionDateCount)} acquisition day${result.acquisitionDateCount === 1 ? '' : 's'}`}
+              ? t`Latest Sentinel scenes`
+              : i18n._({
+                  ...resultSummaryMessage,
+                  values: {
+                    imageCount: result.sceneCount,
+                    dayCount: result.acquisitionDateCount,
+                  },
+                })}
           </Typography>
         </Box>
         {!overlay ? (
-          <IconButton size="small" aria-label="Close imagery results" onClick={onClose}>
+          <IconButton
+            size="small"
+            aria-label={t`Close imagery results`}
+            onClick={onClose}
+          >
             <CloseIcon fontSize="small" />
           </IconButton>
         ) : null}
@@ -711,15 +794,21 @@ function SatelliteResultsPane({
         {searchState.status === 'loading' ? (
           <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
             <CircularProgress size={20} />
-            <Typography variant="body2">Loading latest images…</Typography>
+            <Typography variant="body2">
+              <Trans>Loading latest images…</Trans>
+            </Typography>
           </Stack>
         ) : null}
         {searchState.status === 'error' ? (
-          <Alert severity="error">{searchState.message}</Alert>
+          <Alert severity="error">
+            {searchState.searchErrorCode === null
+              ? t`The imagery search could not be completed.`
+              : i18n._(satelliteSearchErrorMessage(searchState.searchErrorCode))}
+          </Alert>
         ) : null}
         {result?.sceneCount === 0 ? (
           <Alert severity="info">
-            No matching images. Increase the cloud limit or move the map.
+            <Trans>No matching images. Increase the cloud limit or move the map.</Trans>
           </Alert>
         ) : null}
         <Stack spacing={0} sx={{ mx: -2 }}>
@@ -730,7 +819,8 @@ function SatelliteResultsPane({
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Divider sx={{ width: 24 }} />
                   <Typography variant="body2" color="text.secondary" noWrap>
-                    {monthFormatter.format(new Date(`${group.date}T00:00:00.000Z`))}
+                    {/* eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token. */}
+                    {formats.month.format(new Date(`${group.date}T00:00:00.000Z`))}
                   </Typography>
                   <Divider sx={{ flex: 1 }} />
                 </Stack>
@@ -738,6 +828,7 @@ function SatelliteResultsPane({
               {group.scenes.map((match, sceneIndex) => (
                 <SceneCard
                   appliedImagery={appliedImagery}
+                  formats={formats}
                   key={`${match.scene.collection}:${match.scene.id}`}
                   match={match}
                   selected={match.scene.id === selectedSceneId}
@@ -772,7 +863,7 @@ function SatelliteResultsPane({
             disabled={loadingMore}
             onClick={onLoadMore}
           >
-            {loadingMore ? 'Loading older images…' : 'Load more images'}
+            {loadingMore ? t`Loading older images…` : t`Load more images`}
           </Button>
         ) : null}
       </Box>
@@ -796,6 +887,8 @@ export function SatelliteBrowser({
     mapViewport,
     searchSatelliteScenes,
   } = useRuntimeServices();
+  const { i18n, t } = useLingui();
+  const formats = useMemo(() => createDisplayFormats(i18n.locale), [i18n.locale]);
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const selectedMapScene = useStore(mapLayerStore, (state) => state.selectedScene);
   const [today] = useState(() => clock.now());
@@ -810,6 +903,7 @@ export function SatelliteBrowser({
     string | null
   >(null);
   const [submittedCoordinates, setSubmittedCoordinates] = useState(fallbackCoordinates);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- IANA time zone ID.
   const [submittedTimeZone, setSubmittedTimeZone] = useState('Asia/Tbilisi');
   const [submittedSearch, setSubmittedSearch] = useState<SubmittedSearch | null>(null);
   const [loadedMonths, setLoadedMonths] = useState<ReadonlySet<string>>(
@@ -817,7 +911,7 @@ export function SatelliteBrowser({
   );
   const [loadingMonth, setLoadingMonth] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<MonthLoadError | null>(null);
   const [autoLoadAttempts, setAutoLoadAttempts] = useState(0);
   const [scrollRequestId, setScrollRequestId] = useState(0);
   const request = useRef<AbortController | null>(null);
@@ -826,6 +920,7 @@ export function SatelliteBrowser({
   const cloudCoverChangedByUser = useRef(false);
   const previousViewport = useRef<SatelliteSearchViewport | null>(null);
   const [copyLinkStatus, setCopyLinkStatus] = useState<'idle' | 'copied' | 'failed'>(
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     'idle',
   );
   const subscribeToViewport = useCallback(
@@ -853,6 +948,7 @@ export function SatelliteBrowser({
     viewport === null || satelliteSearchAnchor === null
       ? viewport
       : { ...viewport, center: satelliteSearchAnchor };
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- State tokens.
   const searchAreaSource = satelliteSearchAnchor === null ? 'viewport' : 'custom';
 
   useEffect(() => {
@@ -1046,11 +1142,10 @@ export function SatelliteBrowser({
     await loadMonth()
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        const message =
-          error instanceof SatelliteSearchError
-            ? error.message
-            : `${monthFormatter.format(new Date(`${range.month}-01T00:00:00.000Z`))} imagery could not be loaded. Try again.`;
-        setLoadMoreError(message);
+        setLoadMoreError({
+          month: range.month,
+          searchErrorCode: error instanceof SatelliteSearchError ? error.code : null,
+        });
         failSatelliteRequest();
       })
       .finally(() => {
@@ -1125,13 +1220,9 @@ export function SatelliteBrowser({
     await searchCatalog()
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
-        const message =
-          error instanceof SatelliteSearchError
-            ? error.message
-            : 'The imagery search could not be completed.';
         setSearchState({
           status: 'error',
-          message,
+          searchErrorCode: error instanceof SatelliteSearchError ? error.code : null,
         });
         failSatelliteRequest();
       })
@@ -1253,6 +1344,7 @@ export function SatelliteBrowser({
   const copySceneLink = async (sceneKey: string) => {
     const camera = mapDiagnostics.getSnapshot()?.camera;
     if (camera === undefined) {
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setCopyLinkStatus('failed');
       return;
     }
@@ -1260,8 +1352,10 @@ export function SatelliteBrowser({
       await navigator.clipboard.writeText(
         createMapShareUrl(window.location.href, camera, sceneKey),
       );
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setCopyLinkStatus('copied');
     } catch {
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setCopyLinkStatus('failed');
     }
   };
@@ -1292,6 +1386,18 @@ export function SatelliteBrowser({
     if (resultsOpen) setScrollRequestId((requestId) => requestId + 1);
   };
 
+  let loadMoreErrorMessage: string | null = null;
+  if (loadMoreError !== null) {
+    const monthLabel = formats.month.format(
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
+      new Date(`${loadMoreError.month}-01T00:00:00.000Z`),
+    );
+    loadMoreErrorMessage =
+      loadMoreError.searchErrorCode === null
+        ? t`${monthLabel} imagery could not be loaded. Try again.`
+        : i18n._(satelliteSearchErrorMessage(loadMoreError.searchErrorCode));
+  }
+
   return (
     <>
       <SatelliteSearchRequestRunner
@@ -1301,7 +1407,7 @@ export function SatelliteBrowser({
       />
       <Stack spacing={2} sx={{ p: 2 }}>
         <Typography component="h3" variant="subtitle2">
-          Acquisition calendar
+          <Trans>Acquisition calendar</Trans>
         </Typography>
         <AcquisitionCalendar
           displayMonth={calendarMonth}
@@ -1317,8 +1423,8 @@ export function SatelliteBrowser({
             onSelectDate: selectCalendarDate,
           }}
         />
-        {loadMoreError === null || resultsOpen ? null : (
-          <Alert severity="error">{loadMoreError}</Alert>
+        {loadMoreErrorMessage === null || resultsOpen ? null : (
+          <Alert severity="error">{loadMoreErrorMessage}</Alert>
         )}
         <Stack spacing={1}>
           <Box sx={{ px: 1 }}>
@@ -1328,10 +1434,10 @@ export function SatelliteBrowser({
                 variant="body2"
                 sx={{ flex: 1 }}
               >
-                Maximum cloud
+                <Trans>Maximum cloud</Trans>
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                ≤ {maxCloudCoverPercent}%
+                ≤ {formats.percent.format(maxCloudCoverPercent / 100)}
               </Typography>
             </Stack>
             <Slider
@@ -1370,7 +1476,7 @@ export function SatelliteBrowser({
 
           {searchState.status === 'loading' ? (
             <Button fullWidth color="inherit" variant="outlined" onClick={cancelSearch}>
-              Cancel search
+              <Trans>Cancel search</Trans>
             </Button>
           ) : (
             <Button
@@ -1380,18 +1486,20 @@ export function SatelliteBrowser({
               disabled={!canSearch}
               onClick={() => void runSearch()}
             >
-              Search images
+              <Trans>Search images</Trans>
             </Button>
           )}
         </Stack>
 
         <Box aria-live="polite">
           {viewport === null ? (
-            <Alert severity="info">Waiting for the map viewport to become ready.</Alert>
+            <Alert severity="info">
+              <Trans>Waiting for the map viewport to become ready.</Trans>
+            </Alert>
           ) : null}
           {searchUnavailable ? (
             <Alert severity="error">
-              Satellite provider configuration is unavailable.
+              <Trans>Satellite provider configuration is unavailable.</Trans>
             </Alert>
           ) : null}
         </Box>
@@ -1403,22 +1511,24 @@ export function SatelliteBrowser({
             component="h3"
             variant="subtitle2"
           >
-            Settings
+            <Trans>Settings</Trans>
           </Typography>
           <Stack spacing={1.5} sx={{ mt: 2, px: 1 }}>
             <FormControl size="small" fullWidth data-tour="satellite-search-area">
               <InputLabel id="satellite-search-area-label">
-                Search area source
+                <Trans>Search area source</Trans>
               </InputLabel>
               <Select
                 labelId="satellite-search-area-label"
-                label="Search area source"
+                label={t`Search area source`}
                 value={searchAreaSource}
                 onChange={changeSearchAreaSource}
                 renderValue={() => (
                   <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
                     <Typography variant="body2" sx={{ minWidth: 72, fontWeight: 700 }}>
-                      {searchAreaSource === 'custom' ? 'Custom' : 'Point'}
+                      {searchAreaSource === 'custom'
+                        ? t({ message: 'Custom', context: 'satellite search area' })
+                        : t`Point`}
                     </Typography>
                     <Divider orientation="vertical" flexItem />
                     <Typography variant="body2" color="text.secondary" noWrap>
@@ -1427,18 +1537,22 @@ export function SatelliteBrowser({
                   </Stack>
                 )}
               >
-                <MenuItem value="viewport">Point</MenuItem>
+                <MenuItem value="viewport">
+                  <Trans>Point</Trans>
+                </MenuItem>
                 {searchAreaSource === 'custom' ? (
                   <MenuItem value="custom" disabled>
-                    Custom
+                    <Trans context="satellite search area">Custom</Trans>
                   </MenuItem>
                 ) : null}
                 <MenuItem value="marker" disabled>
-                  Marker
+                  <Trans>Marker</Trans>
                 </MenuItem>
               </Select>
               <FormHelperText>
-                Uses the map center point or a custom area for imagery search.
+                <Trans>
+                  Uses the map center point or a custom area for imagery search.
+                </Trans>
               </FormHelperText>
             </FormControl>
             <SatelliteRenderingControls />
@@ -1451,9 +1565,10 @@ export function SatelliteBrowser({
               appliedImagery={appliedImagery}
               coordinates={paneCoordinates}
               canLoadOlder={nextArchiveMonth !== null}
+              formats={formats}
               overlay={auxiliaryOverlay}
               loadingMore={loadingMore}
-              loadMoreError={loadMoreError}
+              loadMoreError={loadMoreErrorMessage}
               onAutoLoadMore={() => {
                 if (autoLoadAttempts >= 3) return;
                 setAutoLoadAttempts((attempts) => attempts + 1);
@@ -1486,10 +1601,11 @@ export function SatelliteBrowser({
         autoHideDuration={copyLinkStatus === 'copied' ? 2_500 : 4_000}
         message={
           copyLinkStatus === 'copied'
-            ? 'Scene link copied'
-            : 'Clipboard access failed. Try again.'
+            ? t`Scene link copied`
+            : t`Clipboard access failed. Try again.`
         }
         onClose={() => {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
           setCopyLinkStatus('idle');
         }}
       />

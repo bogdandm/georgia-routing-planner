@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -23,23 +24,44 @@ import { calculateWeightedCloudCover } from '@/domain/satellite/calculateWeighte
 import { appColors } from '@/presentation/theme/appColors';
 
 const sentinelArchiveFirstMonth = '2015-06';
-const weekDays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
-const calendarMonthNames = Array.from({ length: 12 }, (_value, month) =>
-  new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' }).format(
-    new Date(Date.UTC(2020, month, 1)),
-  ),
-);
-const monthFormatter = new Intl.DateTimeFormat('en-GB', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-const dayFormatter = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
+
+/* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+/** Display-only calendar labels in `locale`; calendar dates are formatted in UTC. */
+function createCalendarLabels(locale: string) {
+  const weekdayFormatter = new Intl.DateTimeFormat(locale, {
+    weekday: 'short',
+    timeZone: 'UTC',
+  });
+  const monthNameFormatter = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    timeZone: 'UTC',
+  });
+  return {
+    // The grid starts on Sunday; 7 January 2024 was a Sunday.
+    weekDays: Array.from({ length: 7 }, (_value, weekday) =>
+      weekdayFormatter.format(Date.UTC(2024, 0, 7 + weekday)),
+    ),
+    monthNames: Array.from({ length: 12 }, (_value, month) =>
+      monthNameFormatter.format(Date.UTC(2020, month, 1)),
+    ),
+    month: new Intl.DateTimeFormat(locale, {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }),
+    day: new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    }),
+    percent: new Intl.NumberFormat(locale, {
+      style: 'percent',
+      maximumFractionDigits: 0,
+    }),
+  };
+}
+/* eslint-enable lingui/no-unlocalized-strings */
 
 export type AcquisitionCalendarMode =
   | {
@@ -77,6 +99,8 @@ export function AcquisitionCalendar({
   today,
   mode,
 }: AcquisitionCalendarProps) {
+  const { i18n, t } = useLingui();
+  const labels = useMemo(() => createCalendarLabels(i18n.locale), [i18n.locale]);
   const [monthPickerAnchor, setMonthPickerAnchor] = useState<HTMLElement | null>(null);
   const monthPickerOpen = monthPickerAnchor !== null;
   const todayDate = toDateInputValue(today);
@@ -86,9 +110,11 @@ export function AcquisitionCalendar({
       : sentinelArchiveFirstMonth;
   const latestDate =
     mode.kind === 'scene' ? (mode.result?.groups[0]?.date ?? todayDate) : todayDate;
+  /* eslint-disable lingui/no-unlocalized-strings -- ISO date tokens. */
   const displayMonthDate = new Date(`${displayMonth}-01T00:00:00.000Z`);
   const minimumMonthDate = new Date(`${minimumMonth}-01T00:00:00.000Z`);
   const maximumMonthDate = new Date(`${maximumMonth}-01T00:00:00.000Z`);
+  /* eslint-enable lingui/no-unlocalized-strings */
   const loadingMonth = mode.kind === 'scene' ? mode.loadingMonth : null;
 
   const availability = useMemo(() => {
@@ -139,8 +165,11 @@ export function AcquisitionCalendar({
     setMonthPickerAnchor(null);
   };
 
+  const displayMonthLabel = labels.month.format(displayMonthDate);
+  const yearLabel = String(year);
+
   return (
-    <Box aria-label="Sentinel acquisition calendar" data-tour="satellite-calendar">
+    <Box aria-label={t`Sentinel acquisition calendar`} data-tour="satellite-calendar">
       <Box
         sx={{
           display: 'grid',
@@ -149,11 +178,11 @@ export function AcquisitionCalendar({
           mb: 0.5,
         }}
       >
-        <Tooltip title="Previous month">
+        <Tooltip title={t`Previous month`}>
           <span style={{ display: 'flex', width: 'fit-content' }}>
             <IconButton
               size="small"
-              aria-label="Previous acquisition month"
+              aria-label={t`Previous acquisition month`}
               disabled={navigationDisabled || displayMonth <= minimumMonth}
               onClick={() => {
                 changeMonth(-1);
@@ -173,16 +202,16 @@ export function AcquisitionCalendar({
               size={14}
               aria-label={
                 loadingMonth === displayMonth
-                  ? `Loading ${monthFormatter.format(displayMonthDate)} imagery`
+                  ? t`Loading ${displayMonthLabel} imagery`
                   : undefined
               }
               aria-hidden={loadingMonth === displayMonth ? undefined : true}
               sx={{ visibility: loadingMonth === displayMonth ? 'visible' : 'hidden' }}
             />
           </Box>
-          <Tooltip title="Choose month and year">
+          <Tooltip title={t`Choose month and year`}>
             <ButtonBase
-              aria-label={`Choose acquisition month and year, ${monthFormatter.format(displayMonthDate)}`}
+              aria-label={t`Choose acquisition month and year, ${displayMonthLabel}`}
               aria-expanded={monthPickerOpen}
               onClick={(event) => {
                 setMonthPickerAnchor((anchor) =>
@@ -191,19 +220,17 @@ export function AcquisitionCalendar({
               }}
               sx={{ gap: 0.25, borderRadius: 1, pl: 0.5, pr: 0.25 }}
             >
-              <Typography variant="subtitle2">
-                {monthFormatter.format(displayMonthDate)}
-              </Typography>
+              <Typography variant="subtitle2">{displayMonthLabel}</Typography>
               <KeyboardArrowDownIcon fontSize="small" />
             </ButtonBase>
           </Tooltip>
         </Stack>
         <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-          <Tooltip title="Next month">
+          <Tooltip title={t`Next month`}>
             <span style={{ display: 'flex' }}>
               <IconButton
                 size="small"
-                aria-label="Next acquisition month"
+                aria-label={t`Next acquisition month`}
                 disabled={navigationDisabled || displayMonth >= maximumMonth}
                 onClick={() => {
                   changeMonth(1);
@@ -213,11 +240,11 @@ export function AcquisitionCalendar({
               </IconButton>
             </span>
           </Tooltip>
-          <Tooltip title="Return to current month">
+          <Tooltip title={t`Return to current month`}>
             <span style={{ display: 'flex' }}>
               <IconButton
                 size="small"
-                aria-label="Return to current acquisition month"
+                aria-label={t`Return to current acquisition month`}
                 disabled={navigationDisabled || displayMonth >= maximumMonth}
                 onClick={() => {
                   onMonthChange(maximumMonth);
@@ -244,14 +271,14 @@ export function AcquisitionCalendar({
           <Paper
             elevation={8}
             role="group"
-            aria-label="Choose acquisition month and year"
+            aria-label={t`Choose acquisition month and year`}
             sx={{ width: 280, maxWidth: 'calc(100vw - 32px)', p: 1 }}
           >
             <Select
               fullWidth
               size="small"
               value={year}
-              inputProps={{ 'aria-label': 'Acquisition year' }}
+              inputProps={{ 'aria-label': t`Acquisition year` }}
               onChange={(event) => {
                 selectYear(event.target.value);
               }}
@@ -270,14 +297,14 @@ export function AcquisitionCalendar({
                 gap: 0.5,
               }}
             >
-              {calendarMonthNames.map((monthName, monthIndex) => {
+              {labels.monthNames.map((monthName, monthIndex) => {
                 const candidate = `${String(year).padStart(4, '0')}-${String(monthIndex + 1).padStart(2, '0')}`;
                 const unavailable =
                   candidate < minimumMonth || candidate > maximumMonth;
                 return (
                   <ButtonBase
                     key={monthName}
-                    aria-label={`Choose ${monthName} ${String(year)}`}
+                    aria-label={t`Choose ${monthName} ${yearLabel}`}
                     aria-pressed={monthIndex === month}
                     disabled={unavailable}
                     onClick={() => {
@@ -302,11 +329,11 @@ export function AcquisitionCalendar({
       </Popper>
       <Box
         role="grid"
-        aria-label={monthFormatter.format(displayMonthDate)}
+        aria-label={displayMonthLabel}
         sx={{ display: 'grid', rowGap: 0.5 }}
       >
         <Box role="row" sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-          {weekDays.map((day) => (
+          {labels.weekDays.map((day) => (
             <Typography
               key={day}
               role="columnheader"
@@ -339,7 +366,8 @@ export function AcquisitionCalendar({
                 );
               }
               const date = `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const formattedDate = dayFormatter.format(
+              const formattedDate = labels.day.format(
+                // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
                 new Date(`${date}T00:00:00.000Z`),
               );
               if (mode.kind === 'mosaic') {
@@ -355,7 +383,13 @@ export function AcquisitionCalendar({
                     role="gridcell"
                     disabled={disabled}
                     aria-selected={selected}
-                    aria-label={`${formattedDate}${inRange ? ', included in Mosaic range' : ''}${selected ? ', selected upper bound' : ''}`}
+                    aria-label={
+                      selected
+                        ? t`${formattedDate}, included in Mosaic range, selected upper bound`
+                        : inRange
+                          ? t`${formattedDate}, included in Mosaic range`
+                          : formattedDate
+                    }
                     onClick={() => {
                       mode.onSelectDate(date);
                     }}
@@ -393,6 +427,10 @@ export function AcquisitionCalendar({
               const isLatest = date === latestDate && cloud !== undefined;
               const matchesCloudFilter =
                 cloud !== undefined && cloud <= mode.maxCloudCoverPercent;
+              const cloudLabel =
+                cloud === undefined
+                  ? ''
+                  : labels.percent.format(Math.round(cloud) / 100);
               return (
                 <ButtonBase
                   key={date}
@@ -403,8 +441,10 @@ export function AcquisitionCalendar({
                   }}
                   aria-label={
                     cloud === undefined
-                      ? `${formattedDate}, no loaded imagery`
-                      : `${formattedDate}, imagery available, ${cloud.toFixed(0)} percent weighted cloud, ${matchesCloudFilter ? 'matches' : 'exceeds'} the current cloud limit`
+                      ? t`${formattedDate}, no loaded imagery`
+                      : matchesCloudFilter
+                        ? t`${formattedDate}, imagery available, ${cloudLabel} weighted cloud, matches the current cloud limit`
+                        : t`${formattedDate}, imagery available, ${cloudLabel} weighted cloud, exceeds the current cloud limit`
                   }
                   sx={{
                     height: 40,
@@ -441,7 +481,7 @@ export function AcquisitionCalendar({
                       variant="caption"
                       sx={{ color: 'inherit', lineHeight: 1 }}
                     >
-                      {cloud.toFixed(0)}%
+                      {cloudLabel}
                     </Typography>
                   )}
                 </ButtonBase>

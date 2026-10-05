@@ -28,6 +28,9 @@ export const noUnlocalizedStringsRule = [
       'key',
       'aria-haspopup',
       'aria-hidden',
+      // ARIA ID references and live-region politeness tokens.
+      'aria-labelledby',
+      'aria-live',
       // Non-visible MUI presentation and layout enum values.
       'align',
       'alignContent',
@@ -49,12 +52,14 @@ export const noUnlocalizedStringsRule = [
       'size',
       'spacing',
       'variant',
+      'valueLabelDisplay',
       'vertical',
     ],
     ignoreFunctions: [
       // DOM selectors, element tags, event names, and media queries are never copy.
       'document.querySelector',
       'document.createElement',
+      'document.getElementById',
       '*.addEventListener',
       '*.removeEventListener',
       'useMediaQuery',
@@ -154,6 +159,12 @@ export default tseslint.config(
       'src/presentation/markers/MarkerIconPicker.tsx',
       'src/presentation/markers/MarkerWeatherSettingsDialog.tsx',
       'src/presentation/markers/markerCatalog.tsx',
+      'src/presentation/satellite-browser/AcquisitionCalendar.tsx',
+      'src/presentation/satellite-browser/SatelliteBrowser.tsx',
+      'src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx',
+      'src/presentation/satellite-browser/SatelliteMosaicProvider.tsx',
+      'src/presentation/satellite-browser/SatelliteRenderingControls.tsx',
+      'src/presentation/satellite-browser/satelliteProblemMessages.ts',
     ],
     plugins: { lingui },
     rules: {

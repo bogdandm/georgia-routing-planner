@@ -448,7 +448,6 @@ export function TrackWeatherSection({
                     step={0.05}
                     marks={[{ value: 1 }]}
                     value={paceDraft}
-                    // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI enum.
                     valueLabelDisplay="auto"
                     valueLabelFormat={formatPace}
                     getAriaValueText={formatPace}

@@ -344,7 +344,11 @@ describe('TrackSyncWorkerServer', () => {
     const gateway = {
       folderSnapshot: vi.fn(() =>
         Promise.resolve([
-          { folder_id: 'imports', revision: 1, payload: folder('imports', 'Imports', 0) },
+          {
+            folder_id: 'imports',
+            revision: 1,
+            payload: folder('imports', 'Imports', 0),
+          },
           { folder_id: 'folder:trips', revision: 7, payload: accountTrips },
         ]),
       ),
@@ -935,12 +939,18 @@ describe('TrackSyncWorkerServer', () => {
         geometryVersion: 2,
       },
     };
-    const mutate = vi.fn().mockResolvedValue({ outcome: 'existing' as const, revision: 13 });
+    const mutate = vi
+      .fn()
+      .mockResolvedValue({ outcome: 'existing' as const, revision: 13 });
     const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
     new TrackSyncWorkerServer(serverEndpoint, database, () => ({
       folderSnapshot: vi.fn(() =>
         Promise.resolve([
-          { folder_id: 'imports', revision: 1, payload: folder('imports', 'Imports', 0) },
+          {
+            folder_id: 'imports',
+            revision: 1,
+            payload: folder('imports', 'Imports', 0),
+          },
           { folder_id: trips.id, revision: 2, payload: trips },
         ]),
       ),

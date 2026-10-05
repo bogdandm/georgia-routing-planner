@@ -1916,11 +1916,20 @@ export class TrackSyncWorkerServer {
         state.pendingKind === 'upsert' &&
         state.remoteRevision === null
       ) {
-        const remoteMetadata = firstRemote?.metadata;
+        // The decision needs the metadata of exactly this revision; a record that
+        // changed since the snapshot stays pending for the next run.
+        if (firstRemote?.revision !== result.revision) {
+          return {
+            state: entry.state,
+            deleteLocal: false,
+            remoteTrackDeletion: null,
+            adoptRemote: false,
+          };
+        }
         if (
           entry.pair !== null &&
           editedAfter(
-            remoteMetadata?.updatedAt ?? remoteMetadata?.savedAt,
+            firstRemote.metadata.updatedAt ?? firstRemote.metadata.savedAt,
             entry.pair.summary.updatedAt,
           )
         ) {

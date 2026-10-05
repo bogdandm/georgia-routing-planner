@@ -499,7 +499,8 @@ prepares local pairs. A new or different owner resets remembered remote revision
 tombstones to pending upserts while keeping local tracks. A pending track or folder
 upsert without a remembered revision that finds an existing account record adopts that
 record when its `updatedAt` is later and uploads the local copy otherwise, so a browser
-joining with stale copies keeps names and folder placements made on other devices.
+joining with stale copies keeps names and folder placements made on other devices. A
+track record that changed after the snapshot stays pending until the next run.
 
 Folders reconcile before tracks so downloaded tracks can validate their placement.
 Folder upserts and deletes use exact base revisions; a conflict retries the local edit

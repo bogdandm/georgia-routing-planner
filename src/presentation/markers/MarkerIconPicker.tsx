@@ -109,12 +109,14 @@ export function MarkerIconPicker({
     return markerIconCatalog.filter((entry) => {
       const localizedLabel = i18n._(entry.labelMessage);
       const localizedCategory = i18n._(markerIconSectionLabels[entry.category]);
+      /* eslint-disable lingui/no-unlocalized-strings -- Stable English keys and category tokens double as search aliases. */
       return (
-        entry.label.toLocaleLowerCase('en').includes(normalizedQuery) ||
+        entry.key.replaceAll('-', ' ').includes(normalizedQuery) ||
         entry.category.toLocaleLowerCase('en').includes(normalizedQuery) ||
         localizedLabel.toLocaleLowerCase(locale).includes(normalizedQuery) ||
         localizedCategory.toLocaleLowerCase(locale).includes(normalizedQuery)
       );
+      /* eslint-enable lingui/no-unlocalized-strings */
     });
   }, [i18n, locale, query, recentIcons, section]);
   const folderLabel = t`Folder`;
@@ -122,6 +124,7 @@ export function MarkerIconPicker({
   const showFolder =
     allowFolder &&
     (normalizedQuery.length === 0 ||
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- English search alias.
       'folder'.includes(normalizedQuery) ||
       folderLabel.toLocaleLowerCase(locale).includes(normalizedQuery));
   const selectedLabel =

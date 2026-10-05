@@ -1,3 +1,6 @@
+import type { I18n, MessageDescriptor } from '@lingui/core';
+import { msg, select } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
 import EditIcon from '@mui/icons-material/Edit';
@@ -43,12 +46,14 @@ import {
   selectMarkerWeatherForecast,
   type MarkerWeatherForecast,
   type MarkerWeatherForecastPeriod,
+  type MarkerWeatherPeriodSelection,
   type WeatherIntervalPreferences,
 } from '@/application/weather/MarkerWeatherForecast';
 import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
+  MarkerNameError,
   SAVED_MARKER_SCHEMA_VERSION,
   normalizeMarkerName,
   type MarkerIconKey,
@@ -71,8 +76,10 @@ import {
 } from '@/presentation/markers/markerCatalog';
 import { PinheadIcon } from '@/presentation/markers/PinheadIcon';
 import { MarkerWeatherSettingsDialog } from '@/presentation/markers/MarkerWeatherSettingsDialog';
+import { createMarkerWeatherDateLabels } from '@/presentation/markers/markerWeatherDateLabels';
 import {
   MarkerEditorDialog,
+  markerNameProblemMessages,
   type MarkerAppearance,
 } from '@/presentation/markers/MarkerEditorDialog';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -111,7 +118,8 @@ interface MarkerHourlyForecastRequest {
   readonly anchorElement: HTMLElement;
   readonly triggerElement: HTMLElement;
   readonly startTime: string;
-  readonly title: string;
+  readonly date: string;
+  readonly periodKind: MarkerWeatherPeriodSelection['kind'];
 }
 
 const markerWeatherRequestConcurrency = 4;
@@ -123,8 +131,6 @@ interface MarkersWorkspaceValue {
   readonly markers: readonly SavedMarker[];
   readonly sortedMarkers: readonly SavedMarker[];
   readonly loadState: MarkerLoadState;
-  readonly loadError: string | null;
-  readonly notice: string | null;
   readonly mapCenter: MapCoordinate | null;
   readonly retryLoad: () => Promise<void>;
   readonly openAppearanceEditor: (marker: SavedMarker) => void;
@@ -143,6 +149,7 @@ interface MarkersWorkspaceValue {
 
 const MarkersWorkspaceContext = createContext<MarkersWorkspaceValue | null>(null);
 
+/* eslint-disable lingui/no-unlocalized-strings -- BCP 47 locale tokens keep ordering deterministic. */
 function compareMarkerNames(left: SavedMarker, right: SavedMarker): number {
   const byName = left.normalizedName.localeCompare(right.normalizedName, 'en');
   return byName === 0 ? left.id.localeCompare(right.id, 'en') : byName;
@@ -205,41 +212,9 @@ function sortMarkers(
     return byDistance === 0 ? compareMarkerNames(left, right) : byDistance;
   });
 }
+/* eslint-enable lingui/no-unlocalized-strings */
 
-const markerWeatherWeekdayLabels = [
-  'Sun',
-  'Mon',
-  'Tue',
-  'Wed',
-  'Thu',
-  'Fri',
-  'Sat',
-] as const;
-const markerWeatherMonthLabels = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
-
-function markerWeatherDateParts(date: string): {
-  readonly dateLabel: string;
-  readonly weekday: string;
-} {
-  const value = new Date(`${date}T00:00:00.000Z`);
-  const weekday = markerWeatherWeekdayLabels[value.getUTCDay()] ?? '';
-  const month = markerWeatherMonthLabels[value.getUTCMonth()] ?? '';
-  return { weekday, dateLabel: `${value.getUTCDate().toString()} ${month}` };
-}
-
+/* eslint-disable lingui/no-unlocalized-strings -- Open-Meteo local ISO time tokens. */
 function markerWeatherPreviewStartTime(
   forecast: PointWeatherForecast,
   selected: MarkerWeatherForecastPeriod,
@@ -264,6 +239,7 @@ function markerWeatherPreviewStartTime(
   }
   return startHour.time;
 }
+/* eslint-enable lingui/no-unlocalized-strings */
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useOptionalMarkersWorkspace(): MarkersWorkspaceValue | null {
@@ -282,6 +258,7 @@ function markerWeatherCacheKey(marker: SavedMarker, preferenceKey: string): stri
     marker.id,
     marker.coordinate[0],
     marker.coordinate[1],
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Cache key token.
     marker.elevationMeters ?? 'unresolved',
     preferenceKey,
   ].join(':');
@@ -299,6 +276,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     savedMarkers,
     userData,
   } = useRuntimeServices();
+  const { i18n, t } = useLingui();
   const activeTab = useUiStore((state) => state.activeTab);
   const markerSort = useUiStore((state) => state.markerSort);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
@@ -328,9 +306,8 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const [markers, setMarkers] = useState<readonly SavedMarker[]>([]);
   const [recentIconKeys, setRecentIconKeys] = useState<readonly MarkerIconKey[]>([]);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
   const [loadState, setLoadState] = useState<MarkerLoadState>('loading');
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [editorDraft, setEditorDraft] = useState<MarkerEditorDraft | null>(null);
   const [weatherPreferences, setWeatherPreferences] =
     useState<WeatherIntervalPreferences>(defaultWeatherIntervalPreferences);
@@ -347,8 +324,8 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const weatherCache = useRef(new Map<string, MarkerWeatherForecastState>());
 
   const loadMarkers = useCallback(async () => {
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     setLoadState('loading');
-    setLoadError(null);
     try {
       const [loaded, loadedRecentIconKeys] = await Promise.all([
         savedMarkers.listSavedMarkers(),
@@ -362,10 +339,11 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       ]);
       setMarkers(loaded);
       setRecentIconKeys(loadedRecentIconKeys);
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setLoadState('ready');
     } catch {
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setLoadState('failed');
-      setLoadError('Saved markers could not be loaded.');
     }
   }, [database, logger, savedMarkers]);
 
@@ -552,7 +530,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     const command = markerCreationCommand;
     const timer = window.setTimeout(() => {
       consumeMarkerCreationCommand(command.id);
-      setNotice(null);
       setEditorDraft({
         mode: 'create',
         coordinate: { ...command.coordinate },
@@ -711,16 +688,10 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       if (weather?.status !== 'ready') return;
       const selected = weather.selection.periods.find((period) => period.date === date);
       if (selected === undefined) return;
-      const { dateLabel, weekday } = markerWeatherDateParts(selected.date);
-      const periodLabel =
-        weatherPreferences.period.kind === 'day'
-          ? 'Day'
-          : weatherPreferences.period.kind === 'night'
-            ? 'Night'
-            : 'Custom';
       setWeatherPreview({
         markerId,
         anchorElement:
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM selector.
           triggerElement.closest<HTMLElement>('[data-marker-weather-anchor]') ??
           triggerElement,
         triggerElement,
@@ -729,7 +700,8 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
           selected,
           weatherPreferences,
         ),
-        title: `24-hour forecast · ${periodLabel} · ${weekday}, ${dateLabel}`,
+        date: selected.date,
+        periodKind: weatherPreferences.period.kind,
       });
     },
     [weatherByMarkerId, weatherPreferences],
@@ -766,6 +738,18 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     () => sortMarkers(markers, markerSort, sortCenter),
     [markerSort, markers, sortCenter],
   );
+  const weatherPreviewTitle = useMemo(() => {
+    if (weatherPreview === null) return '';
+    const { date, periodKind } = weatherPreview;
+    const { dateLabel, weekday } = createMarkerWeatherDateLabels(i18n.locale).date(
+      date,
+    );
+    return t`24-hour forecast · ${select(periodKind, {
+      day: 'Day',
+      night: 'Night',
+      other: 'Custom',
+    })} · ${weekday}, ${dateLabel}`;
+  }, [i18n.locale, t, weatherPreview]);
   const weatherPreviewMarker =
     weatherPreview === null
       ? undefined
@@ -779,8 +763,6 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       markers,
       sortedMarkers,
       loadState,
-      loadError,
-      notice,
       mapCenter,
       retryLoad: loadMarkers,
       openAppearanceEditor: (marker) => {
@@ -798,11 +780,9 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     }),
     [
       deleteMarker,
-      loadError,
       loadMarkers,
       loadState,
       markers,
-      notice,
       openWeatherPreview,
       renameMarker,
       sortedMarkers,
@@ -858,7 +838,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
           anchorElement={weatherPreview.anchorElement}
           forecast={weatherPreviewState.forecast}
           startTime={weatherPreview.startTime}
-          title={weatherPreview.title}
+          title={weatherPreviewTitle}
           triggerElement={weatherPreview.triggerElement}
           onClose={() => {
             setWeatherPreview(null);
@@ -876,16 +856,18 @@ interface MarkerSortControlProps {
   readonly onMarkerSortChange: (sort: MarkerSort) => Promise<boolean>;
 }
 
-const markerSortLabels: Readonly<Record<MarkerSort, string>> = {
-  created: 'Newest',
-  name: 'Name',
-  color: 'Icon color',
-  icon: 'Icon and distance',
-  distance: 'Distance from map center',
+const markerSortLabels: Readonly<Record<MarkerSort, MessageDescriptor>> = {
+  created: msg`Newest`,
+  name: msg`Name`,
+  color: msg`Icon color`,
+  icon: msg`Icon and distance`,
+  distance: msg`Distance from map center`,
 };
 
 export function MarkerSortControl({ onMarkerSortChange }: MarkerSortControlProps) {
+  const { i18n, t } = useLingui();
   const markerSort = useUiStore((state) => state.markerSort);
+  const markerSortLabel = i18n._(markerSortLabels[markerSort]);
   const [sortSaveError, setSortSaveError] = useState(false);
   const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
 
@@ -897,10 +879,10 @@ export function MarkerSortControl({ onMarkerSortChange }: MarkerSortControlProps
 
   return (
     <>
-      <Tooltip title={`Sort: ${markerSortLabels[markerSort]}`}>
+      <Tooltip title={t`Sort: ${markerSortLabel}`}>
         <IconButton
           size="small"
-          aria-label={`Sort markers. Current: ${markerSortLabels[markerSort]}`}
+          aria-label={t`Sort markers. Current: ${markerSortLabel}`}
           aria-haspopup="menu"
           onClick={(event) => {
             setSortAnchor(event.currentTarget);
@@ -924,14 +906,14 @@ export function MarkerSortControl({ onMarkerSortChange }: MarkerSortControlProps
               void chooseSort(sort);
             }}
           >
-            {markerSortLabels[sort]}
+            {i18n._(markerSortLabels[sort])}
           </MenuItem>
         ))}
       </Menu>
       <Snackbar
         open={sortSaveError}
         autoHideDuration={4_000}
-        message="Sort preference could not be saved"
+        message={t`Sort preference could not be saved`}
         onClose={() => {
           setSortSaveError(false);
         }}
@@ -940,22 +922,23 @@ export function MarkerSortControl({ onMarkerSortChange }: MarkerSortControlProps
   );
 }
 
-const markerDistanceFormatter = new Intl.NumberFormat('en', {
-  maximumFractionDigits: 1,
-});
-
+/** Display-only distance from the map center in the active locale. */
 function markerDistanceLabel(
   marker: SavedMarker,
   center: MapCoordinate | null,
+  i18n: I18n,
 ): string {
-  if (center === null) return 'Distance unavailable';
+  if (center === null) return i18n._(msg`Distance unavailable`);
   const distanceKm = geodesicDistanceKm(
     center.latitude,
     center.longitude,
     marker.coordinate[1],
     marker.coordinate[0],
   );
-  return `${markerDistanceFormatter.format(distanceKm)} km away`;
+  const distance = new Intl.NumberFormat(i18n.locale, {
+    maximumFractionDigits: 1,
+  }).format(distanceKm);
+  return i18n._(msg`${distance} km away`);
 }
 
 export function MarkerWeatherSummaryButton({
@@ -969,15 +952,19 @@ export function MarkerWeatherSummaryButton({
   readonly onOpen: (triggerElement: HTMLElement) => void;
   readonly selected: MarkerWeatherForecastPeriod;
 }) {
+  const { i18n, t } = useLingui();
   const temperature = formatWeatherTemperatureRange(
     selected.period.temperatureMinCelsius,
     selected.period.temperatureMaxCelsius,
   );
   const precipitation = formatWeatherMillimetres(selected.period.precipitationMm);
-  const { weekday } = markerWeatherDateParts(selected.date);
+  const { weekday } = useMemo(
+    () => createMarkerWeatherDateLabels(i18n.locale).date(selected.date),
+    [i18n.locale, selected.date],
+  );
   return (
     <ButtonBase
-      aria-label={`Open ${weekday} weather for ${markerName}: ${temperature}, ${precipitation} precipitation`}
+      aria-label={t`Open ${weekday} weather for ${markerName}: ${temperature}, ${precipitation} precipitation`}
       onClick={(event) => {
         onOpen(event.currentTarget);
       }}
@@ -1056,12 +1043,11 @@ interface MarkersPanelProps {
 }
 
 export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
+  const { i18n, t } = useLingui();
   const {
     deleteMarker,
-    loadError,
     loadState,
     mapCenter,
-    notice,
     openAppearanceEditor,
     openWeatherPreview,
     renameMarker,
@@ -1070,14 +1056,18 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
     weatherByMarkerId,
     weatherPreferences,
   } = useMarkersWorkspace();
+  const dateLabels = useMemo(
+    () => createMarkerWeatherDateLabels(i18n.locale),
+    [i18n.locale],
+  );
   const [actionAnchor, setActionAnchor] = useState<HTMLElement | null>(null);
   const [actionMarker, setActionMarker] = useState<SavedMarker | null>(null);
   const [renameTarget, setRenameTarget] = useState<SavedMarker | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<MessageDescriptor | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const [markerHoverSuppressed, setMarkerHoverSuppressed] = useState(false);
   const weatherColumnPeriods = useMemo(() => {
@@ -1105,7 +1095,9 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
       setRenameError(null);
     } catch (error) {
       setRenameError(
-        error instanceof Error ? error.message : 'The marker could not be renamed.',
+        error instanceof MarkerNameError
+          ? markerNameProblemMessages[error.problem]
+          : msg`The marker could not be renamed.`,
       );
     }
   };
@@ -1116,14 +1108,12 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
       return;
     }
     setDeletingId(marker.id);
-    setDeleteError(null);
+    setDeleteFailed(false);
     setActionAnchor(null);
     setActionMarker(null);
     void deleteMarker(marker)
-      .catch((error: unknown) => {
-        setDeleteError(
-          error instanceof Error ? error.message : 'The marker could not be deleted.',
-        );
+      .catch(() => {
+        setDeleteFailed(true);
       })
       .finally(() => {
         setDeletingId(null);
@@ -1144,7 +1134,9 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
       {loadState === 'loading' ? (
         <Stack direction="row" spacing={1} role="status" sx={{ alignItems: 'center' }}>
           <CircularProgress size={20} />
-          <Typography>Loading saved markers</Typography>
+          <Typography>
+            <Trans>Loading saved markers</Trans>
+          </Typography>
         </Stack>
       ) : null}
       {loadState === 'failed' ? (
@@ -1152,25 +1144,30 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
           severity="error"
           action={
             <Button color="inherit" size="small" onClick={() => void retryLoad()}>
-              Retry
+              <Trans>Retry</Trans>
             </Button>
           }
         >
-          {loadError}
+          <Trans>Saved markers could not be loaded.</Trans>
         </Alert>
       ) : null}
-      {notice !== null ? <Alert severity="warning">{notice}</Alert> : null}
-      {deleteError !== null ? <Alert severity="warning">{deleteError}</Alert> : null}
+      {deleteFailed ? (
+        <Alert severity="warning">
+          <Trans>The marker could not be deleted.</Trans>
+        </Alert>
+      ) : null}
       {loadState === 'ready' && sortedMarkers.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover' }}>
           <Typography variant="body2" color="text.secondary">
-            No saved markers yet. Use New marker, then choose a point on the map.
+            <Trans>
+              No saved markers yet. Use New marker, then choose a point on the map.
+            </Trans>
           </Typography>
         </Paper>
       ) : null}
       {loadState === 'ready' && sortedMarkers.length > 0 ? (
         <List
-          aria-label="Saved markers"
+          aria-label={t`Saved markers`}
           disablePadding
           sx={{ display: 'grid', gap: 1.5, '@media (width < 900px)': { gap: 1 } }}
         >
@@ -1178,7 +1175,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
             <Box
               component="li"
               role="group"
-              aria-label="Marker forecast days"
+              aria-label={t`Marker forecast days`}
               sx={{
                 display: 'grid',
                 gridTemplateColumns: `minmax(0, 1fr) repeat(${String(weatherPreferences.weekdays.length)}, ${String(markerWeatherCellWidth)}px)`,
@@ -1199,11 +1196,11 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       color="text.secondary"
                       sx={{ py: 0.5, px: 0, lineHeight: 1.1, textAlign: 'center' }}
                     >
-                      {markerWeatherWeekdayLabels[weekday]}
+                      {dateLabels.weekday(weekday)}
                     </Typography>
                   ))
                 : weatherColumnPeriods.map((period) => {
-                    const { dateLabel, weekday } = markerWeatherDateParts(period.date);
+                    const { dateLabel, weekday } = dateLabels.date(period.date);
                     return (
                       <Typography
                         key={period.date}
@@ -1238,14 +1235,14 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                     <TextField
                       autoFocus
                       size="small"
-                      label="Marker name"
+                      label={t`Marker name`}
                       value={renameValue}
                       onChange={(event) => {
                         setRenameValue(event.target.value);
                         setRenameError(null);
                       }}
                       error={renameError !== null}
-                      helperText={renameError}
+                      helperText={renameError === null ? null : i18n._(renameError)}
                       slotProps={{ htmlInput: { maxLength: 200 } }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') void saveRename();
@@ -1258,7 +1255,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         variant="contained"
                         size="small"
                       >
-                        Save
+                        <Trans>Save</Trans>
                       </Button>
                       <Button
                         onClick={() => {
@@ -1266,7 +1263,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                         }}
                         size="small"
                       >
-                        Cancel
+                        <Trans>Cancel</Trans>
                       </Button>
                     </Stack>
                   </Stack>
@@ -1279,9 +1276,11 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
             const deleting = deletingId === marker.id;
             const hovered = hoveredMarkerId === marker.id;
             const weather = weatherByMarkerId.get(marker.id);
+            /* eslint-disable lingui/no-unlocalized-strings -- CSS class names. */
             const deleteActionClassName = `marker-row-action${
               pending ? ' marker-row-action--pending' : ''
             }`;
+            /* eslint-enable lingui/no-unlocalized-strings */
             return (
               <ClickAwayListener
                 key={marker.id}
@@ -1389,7 +1388,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           {marker.name}
                         </Typography>
                         <Typography variant="body2" color="text.secondary" noWrap>
-                          {markerDistanceLabel(marker, mapCenter)}
+                          {markerDistanceLabel(marker, mapCenter, i18n)}
                         </Typography>
                       </Box>
                     </Stack>
@@ -1404,7 +1403,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                       }
                       aria-label={
                         weather === undefined || weather.status === 'loading'
-                          ? `Loading weather for ${marker.name}`
+                          ? t`Loading weather for ${marker.name}`
                           : undefined
                       }
                       sx={{
@@ -1449,7 +1448,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                             px: 1,
                           }}
                         >
-                          Forecast unavailable
+                          <Trans>Forecast unavailable</Trans>
                         </Typography>
                       ) : (
                         weatherPreferences.weekdays.map((weekday, index) => (
@@ -1466,7 +1465,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                           >
                             <CircularProgress size={14} />
                             <Typography variant="caption" color="text.secondary">
-                              Loading
+                              <Trans>Loading</Trans>
                             </Typography>
                           </Stack>
                         ))
@@ -1512,12 +1511,12 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                   >
                     <Tooltip
                       disableHoverListener={markerHoverSuppressed}
-                      title="Marker actions"
+                      title={t`Marker actions`}
                     >
                       <IconButton
                         className="marker-row-action"
                         size="small"
-                        aria-label={`Marker actions for ${marker.name}`}
+                        aria-label={t`Marker actions for ${marker.name}`}
                         onClick={(event) => {
                           if (event.detail > 0) {
                             setMarkerHoverSuppressed(true);
@@ -1541,15 +1540,15 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
                     </Tooltip>
                     <Tooltip
                       disableHoverListener={markerHoverSuppressed}
-                      title={pending ? 'Confirm deletion' : 'Delete marker'}
+                      title={pending ? t`Confirm deletion` : t`Delete marker`}
                     >
                       <IconButton
                         className={deleteActionClassName}
                         size="small"
                         aria-label={
                           pending
-                            ? `Confirm deletion of ${marker.name}`
-                            : `Delete ${marker.name}`
+                            ? t`Confirm deletion of ${marker.name}`
+                            : t`Delete ${marker.name}`
                         }
                         color={pending ? 'error' : 'default'}
                         disabled={deleting}
@@ -1605,7 +1604,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
             if (actionMarker !== null) startRename(actionMarker);
           }}
         >
-          <EditIcon fontSize="small" sx={{ mr: 1 }} /> Rename
+          <EditIcon fontSize="small" sx={{ mr: 1 }} /> <Trans>Rename</Trans>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -1614,7 +1613,8 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
             setActionMarker(null);
           }}
         >
-          <PaletteIcon fontSize="small" sx={{ mr: 1 }} /> Change icon and color
+          <PaletteIcon fontSize="small" sx={{ mr: 1 }} />{' '}
+          <Trans>Change icon and color</Trans>
         </MenuItem>
         <MenuItem
           disabled={actionMarker !== null && deletingId === actionMarker.id}
@@ -1637,9 +1637,11 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
           ) : (
             <DeleteOutlineIcon fontSize="small" sx={{ mr: 1 }} />
           )}
-          {actionMarker !== null && pendingDeleteId === actionMarker.id
-            ? 'Confirm deletion'
-            : 'Delete marker'}
+          {actionMarker !== null && pendingDeleteId === actionMarker.id ? (
+            <Trans>Confirm deletion</Trans>
+          ) : (
+            <Trans>Delete marker</Trans>
+          )}
         </MenuItem>
       </Menu>
     </Stack>

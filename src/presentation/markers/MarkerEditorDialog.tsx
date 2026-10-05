@@ -1,3 +1,6 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import CheckIcon from '@mui/icons-material/Check';
 import {
   Alert,
@@ -15,15 +18,27 @@ import {
 import { useState } from 'react';
 
 import {
+  MarkerNameError,
   normalizeMarkerName,
   type MarkerColorKey,
   type MarkerIconKey,
+  type MarkerNameProblem,
   type NormalizedMarkerName,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
 import { markerColorCatalog } from '@/presentation/markers/markerCatalog';
 import { MarkerIconPicker } from '@/presentation/markers/MarkerIconPicker';
 import { appColors } from '@/presentation/theme/appColors';
+
+/** Localized explanations for rejected marker names; shared with inline rename. */
+// eslint-disable-next-line react-refresh/only-export-components
+export const markerNameProblemMessages: Readonly<
+  Record<MarkerNameProblem, MessageDescriptor>
+> = {
+  required: msg`Enter a marker name.`,
+  'too-long': msg`Marker names must be 200 characters or fewer.`,
+  'invalid-character': msg`The marker name contains unsupported characters.`,
+};
 
 export interface MarkerAppearance {
   readonly iconKey: MarkerIconKey;
@@ -44,10 +59,10 @@ interface CreateMarkerEditorDialogProps extends MarkerEditorDialogBaseProps {
     appearance: MarkerAppearance,
   ) => Promise<void>;
 }
+/** Track-marker naming: the track owns position and appearance. */
 interface NameOnlyMarkerEditorDialogProps extends MarkerEditorDialogBaseProps {
   readonly mode: 'name-only';
   readonly initialName: string;
-  readonly title: 'Create track marker';
   readonly onSubmit: (name: NormalizedMarkerName) => Promise<void>;
 }
 
@@ -73,6 +88,7 @@ export function MarkerEditorDialog(props: MarkerEditorDialogProps) {
 }
 
 function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
+  const { i18n, t } = useLingui();
   const editorMarker = props.mode === 'appearance' ? props.marker : null;
   const initialName =
     props.mode === 'appearance' ? (editorMarker?.name ?? '') : props.initialName;
@@ -84,8 +100,8 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
     () => editorMarker?.colorKey ?? 'blue',
   );
   const recentIconKeySource = props.mode === 'name-only' ? null : props.recentIconKeys;
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [nameProblem, setNameProblem] = useState<MarkerNameProblem | null>(null);
+  const [submitFailed, setSubmitFailed] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -93,16 +109,15 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
     if (props.mode !== 'appearance') {
       try {
         normalized = normalizeMarkerName(name);
-        setValidationError(null);
+        setNameProblem(null);
       } catch (error) {
-        setValidationError(
-          error instanceof Error ? error.message : 'The marker name is invalid.',
-        );
+        if (!(error instanceof MarkerNameError)) throw error;
+        setNameProblem(error.problem);
         return;
       }
     }
     setSaving(true);
-    setSubmitError(null);
+    setSubmitFailed(false);
     try {
       const appearance = { iconKey, colorKey } as const;
       if (props.mode === 'create') {
@@ -114,10 +129,8 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
       } else {
         await props.onSubmit(appearance);
       }
-    } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : 'The marker could not be saved.',
-      );
+    } catch {
+      setSubmitFailed(true);
       setSaving(false);
     }
   };
@@ -125,51 +138,62 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
   return (
     <Dialog
       open={props.open}
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
       aria-labelledby="marker-editor-title"
       maxWidth="xs"
       fullWidth
       onClose={saving ? undefined : props.onCancel}
     >
       <DialogTitle id="marker-editor-title">
-        {props.mode === 'create'
-          ? 'Create marker'
-          : props.mode === 'name-only'
-            ? props.title
-            : 'Marker appearance'}
+        {props.mode === 'create' ? (
+          <Trans>Create marker</Trans>
+        ) : props.mode === 'name-only' ? (
+          <Trans>Create track marker</Trans>
+        ) : (
+          <Trans>Marker appearance</Trans>
+        )}
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           {props.mode !== 'appearance' ? (
             <TextField
               autoFocus
-              label="Marker name"
+              label={t`Marker name`}
               value={name}
               onChange={(event) => {
                 setName(event.target.value);
-                setValidationError(null);
-                setSubmitError(null);
+                setNameProblem(null);
+                setSubmitFailed(false);
               }}
-              error={validationError !== null}
-              helperText={validationError}
+              error={nameProblem !== null}
+              helperText={
+                nameProblem === null
+                  ? null
+                  : i18n._(markerNameProblemMessages[nameProblem])
+              }
               slotProps={{ htmlInput: { maxLength: 200 } }}
             />
           ) : null}
-          {submitError !== null ? <Alert severity="error">{submitError}</Alert> : null}
+          {submitFailed ? (
+            <Alert severity="error">
+              <Trans>The marker could not be saved.</Trans>
+            </Alert>
+          ) : null}
           {props.mode === 'name-only' ? null : (
             <Stack spacing={1}>
               <MarkerIconPicker
                 value={iconKey}
                 recentIconKeys={recentIconKeySource ?? []}
-                label="Choose marker icon"
+                label={t`Choose marker icon`}
                 onChange={(selected) => {
                   if (selected === 'folder') return;
                   setIconKey(selected);
-                  setSubmitError(null);
+                  setSubmitFailed(false);
                 }}
               />
               <Box
                 role="group"
-                aria-label="Marker color"
+                aria-label={t`Marker color`}
                 sx={{
                   display: 'flex',
                   flexWrap: 'wrap',
@@ -179,15 +203,16 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
               >
                 {markerColorCatalog.map((color) => {
                   const selected = color.key === colorKey;
+                  const colorLabel = i18n._(color.labelMessage);
                   return (
-                    <Tooltip key={color.key} title={color.label}>
+                    <Tooltip key={color.key} title={colorLabel}>
                       <IconButton
-                        aria-label={`Choose ${color.key} marker color`}
+                        aria-label={t`Choose ${colorLabel} marker color`}
                         aria-pressed={selected}
                         size="small"
                         onClick={() => {
                           setColorKey(color.key);
-                          setSubmitError(null);
+                          setSubmitFailed(false);
                         }}
                         sx={{ width: 26, height: 26, p: 0.25 }}
                       >
@@ -222,10 +247,10 @@ function OpenMarkerEditorDialog(props: MarkerEditorDialogProps) {
       </DialogContent>
       <DialogActions>
         <Button onClick={props.onCancel} disabled={saving}>
-          Cancel
+          <Trans>Cancel</Trans>
         </Button>
         <Button onClick={() => void submit()} disabled={saving} variant="contained">
-          {props.mode === 'appearance' ? 'Save' : 'Create'}
+          {props.mode === 'appearance' ? <Trans>Save</Trans> : <Trans>Create</Trans>}
         </Button>
       </DialogActions>
     </Dialog>

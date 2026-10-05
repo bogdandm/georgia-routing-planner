@@ -2830,7 +2830,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         open={trackMarkerDraft !== null}
         mode="name-only"
         initialName={trackMarkerDraft?.initialName ?? ''}
-        title="Create track marker"
         onCancel={() => {
           setTrackMarkerDraft(null);
         }}

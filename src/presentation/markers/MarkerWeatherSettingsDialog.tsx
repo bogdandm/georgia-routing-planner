@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
 import BedtimeOutlinedIcon from '@mui/icons-material/BedtimeOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
@@ -17,14 +18,17 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import type {
   MarkerWeatherPeriodSelection,
   WeatherIntervalPreferences,
   MarkerWeatherWeekday,
 } from '@/application/weather/MarkerWeatherForecast';
-import { markerWeatherWeekdayOptions } from '@/presentation/markers/markerWeatherWeekdayOptions';
+import {
+  createMarkerWeatherDateLabels,
+  markerWeatherWeekdayOrder,
+} from '@/presentation/markers/markerWeatherDateLabels';
 
 const hourOptions = Array.from({ length: 24 }, (_, hour) => ({
   value: hour,
@@ -44,18 +48,23 @@ export function MarkerWeatherSettingsDialog({
   onClose,
   onSave,
 }: MarkerWeatherSettingsDialogProps) {
+  const { i18n, t } = useLingui();
+  const dateLabels = useMemo(
+    () => createMarkerWeatherDateLabels(i18n.locale),
+    [i18n.locale],
+  );
   const [draft, setDraft] = useState(preferences);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   const save = async (next: WeatherIntervalPreferences) => {
     setSaving(true);
-    setError(null);
+    setSaveFailed(false);
     try {
       await onSave(next);
       onClose();
     } catch {
-      setError('Weather settings could not be saved.');
+      setSaveFailed(true);
     }
     setSaving(false);
   };
@@ -79,19 +88,26 @@ export function MarkerWeatherSettingsDialog({
       fullWidth
       maxWidth="xs"
       onClose={saving ? undefined : onClose}
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Element ID.
       aria-labelledby="marker-weather-settings-title"
     >
-      <DialogTitle id="marker-weather-settings-title">Marker weather</DialogTitle>
+      <DialogTitle id="marker-weather-settings-title">
+        <Trans>Marker weather</Trans>
+      </DialogTitle>
       <DialogContent>
         <Stack spacing={2.5} sx={{ pt: 0.5 }}>
-          {error === null ? null : <Alert severity="error">{error}</Alert>}
+          {saveFailed ? (
+            <Alert severity="error">
+              <Trans>Weather settings could not be saved.</Trans>
+            </Alert>
+          ) : null}
           <Stack spacing={1}>
             <Typography component="h3" variant="subtitle2">
-              Forecast days
+              <Trans>Forecast days</Trans>
             </Typography>
             <ToggleButtonGroup
               fullWidth
-              aria-label="Forecast weekdays"
+              aria-label={t`Forecast weekdays`}
               value={draft.weekdays}
               onChange={(_, values: MarkerWeatherWeekday[]) => {
                 if (values.length > 2) return;
@@ -118,43 +134,44 @@ export function MarkerWeatherSettingsDialog({
                 },
               }}
             >
-              {markerWeatherWeekdayOptions.map((option) => (
-                <ToggleButton
-                  key={option.value}
-                  value={option.value}
-                  aria-label={option.label}
-                >
-                  {option.label}
-                </ToggleButton>
-              ))}
+              {markerWeatherWeekdayOrder.map((weekday) => {
+                const label = dateLabels.weekday(weekday);
+                return (
+                  <ToggleButton key={weekday} value={weekday} aria-label={label}>
+                    {label}
+                  </ToggleButton>
+                );
+              })}
             </ToggleButtonGroup>
             <Typography variant="caption" color="text.secondary">
-              Choose one or two weekdays. Clear all days to disable marker forecasts.
+              <Trans>
+                Choose one or two weekdays. Clear all days to disable marker forecasts.
+              </Trans>
             </Typography>
           </Stack>
 
           <Stack spacing={1}>
             <Typography component="h3" variant="subtitle2">
-              Hours
+              <Trans>Hours</Trans>
             </Typography>
             <ToggleButtonGroup
               exclusive
               fullWidth
               size="small"
-              aria-label="Forecast period"
+              aria-label={t`Forecast period`}
               value={draft.period.kind}
               onChange={(_, kind: MarkerWeatherPeriodSelection['kind'] | null) => {
                 choosePeriod(kind);
               }}
             >
               <ToggleButton value="day" sx={{ gap: 0.75 }}>
-                <WbSunnyOutlinedIcon fontSize="small" /> Day
+                <WbSunnyOutlinedIcon fontSize="small" /> <Trans>Day</Trans>
               </ToggleButton>
               <ToggleButton value="night" sx={{ gap: 0.75 }}>
-                <BedtimeOutlinedIcon fontSize="small" /> Night
+                <BedtimeOutlinedIcon fontSize="small" /> <Trans>Night</Trans>
               </ToggleButton>
               <ToggleButton value="custom" sx={{ gap: 0.75 }}>
-                <ScheduleOutlinedIcon fontSize="small" /> Custom
+                <ScheduleOutlinedIcon fontSize="small" /> <Trans>Custom</Trans>
               </ToggleButton>
             </ToggleButtonGroup>
             {draft.period.kind === 'custom' ? (
@@ -163,7 +180,7 @@ export function MarkerWeatherSettingsDialog({
                   select
                   fullWidth
                   size="small"
-                  label="From"
+                  label={t`From`}
                   value={draft.period.startHour}
                   onChange={(event) => {
                     const startHour = Number(event.target.value);
@@ -186,12 +203,12 @@ export function MarkerWeatherSettingsDialog({
                   select
                   fullWidth
                   size="small"
-                  label="Until"
+                  label={t`Until`}
                   value={draft.period.endHour}
                   error={draft.period.startHour === draft.period.endHour}
                   helperText={
                     draft.period.startHour === draft.period.endHour
-                      ? 'Choose a different hour'
+                      ? t`Choose a different hour`
                       : ' '
                   }
                   onChange={(event) => {
@@ -225,7 +242,7 @@ export function MarkerWeatherSettingsDialog({
                 }}
               />
             }
-            label="Show forecasts on the map"
+            label={t`Show forecasts on the map`}
           />
         </Stack>
       </DialogContent>
@@ -237,11 +254,11 @@ export function MarkerWeatherSettingsDialog({
             void save({ ...draft, weekdays: [] });
           }}
         >
-          Clear forecast
+          <Trans>Clear forecast</Trans>
         </Button>
         <Stack direction="row" spacing={1}>
           <Button disabled={saving} onClick={onClose}>
-            Cancel
+            <Trans>Cancel</Trans>
           </Button>
           <Button
             variant="contained"
@@ -254,7 +271,7 @@ export function MarkerWeatherSettingsDialog({
               void save(draft);
             }}
           >
-            Save
+            <Trans>Save</Trans>
           </Button>
         </Stack>
       </DialogActions>

@@ -191,7 +191,7 @@ describe('MarkersWorkspace', () => {
     expect(
       screen.getAllByRole('button', { name: /Choose .+ marker color/ }),
     ).toHaveLength(10);
-    await user.click(screen.getByRole('button', { name: 'Choose red marker color' }));
+    await user.click(screen.getByRole('button', { name: 'Choose Red marker color' }));
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(async () => {
@@ -523,6 +523,8 @@ describe('MarkersWorkspace', () => {
     await user.click(screen.getByRole('menuitem', { name: /Rename/ }));
     const renameInput = screen.getByRole('textbox', { name: 'Marker name' });
     await user.clear(renameInput);
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Enter a marker name.')).toBeVisible();
     await user.type(renameInput, 'Base camp');
     await user.keyboard('{Enter}');
     expect(await screen.findByRole('button', { name: /^Base camp/ })).toBeVisible();
@@ -540,7 +542,7 @@ describe('MarkersWorkspace', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Activities' }));
     await user.click(screen.getByRole('option', { name: 'Choose Hiking icon' }));
-    await user.click(screen.getByRole('button', { name: 'Choose teal marker color' }));
+    await user.click(screen.getByRole('button', { name: 'Choose Teal marker color' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(async () => {
       await expect(services.database.listSavedMarkers()).resolves.toEqual([
@@ -667,7 +669,7 @@ describe('MarkersWorkspace', () => {
     expect(sunday).toBeVisible();
     expect(
       screen.getByRole('group', { name: 'Marker forecast days' }),
-    ).toHaveTextContent('Sun19 JulMon20 Jul');
+    ).toHaveTextContent('SunJul 19MonJul 20');
   });
 
   it('shows marker interval weather, persists elevation, and opens Weather at the marker', async () => {
@@ -693,8 +695,8 @@ describe('MarkersWorkspace', () => {
     });
     expect(within(forecastDays).getByText('Sat')).toBeVisible();
     expect(within(forecastDays).getByText('Sun')).toBeVisible();
-    expect(within(forecastDays).getByText('18 Jul')).toBeVisible();
-    expect(within(forecastDays).getByText('19 Jul')).toBeVisible();
+    expect(within(forecastDays).getByText('Jul 18')).toBeVisible();
+    expect(within(forecastDays).getByText('Jul 19')).toBeVisible();
     expect(within(saturday).queryByText('Sat')).toBeNull();
     expect(within(sunday).queryByText('Sun')).toBeNull();
     expect(saturday).toBeVisible();
@@ -710,7 +712,7 @@ describe('MarkersWorkspace', () => {
 
     await user.click(saturday);
     const preview = await screen.findByRole('dialog', {
-      name: '24-hour forecast · Day · Sat, 18 Jul',
+      name: '24-hour forecast · Day · Sat, Jul 18',
     });
     expect(
       within(preview).getByRole('table', { name: 'Hourly forecast' }),

@@ -511,7 +511,7 @@ describe('MapLibreLayerController', () => {
     });
     expect(controller.setWeatherOpacity(1.5)).toEqual({
       status: 'failed',
-      message: 'Choose an opacity between 0 and 100 percent.',
+      problem: 'opacity-out-of-range',
     });
     expect(mapLayerStore.getState().weatherMap.enabled).toBe(true);
     expect(map.sources.has(mapSourceIds.weatherClouds)).toBe(true);
@@ -973,7 +973,7 @@ describe('MapLibreLayerController', () => {
 
     expect(controller.setMapLayerPreset('sentinel-2')).toEqual({
       status: 'failed',
-      message: 'Apply a Sentinel scene before choosing this preset.',
+      problem: { code: 'preset-requires-scene' },
     });
     expect(mapLayerStore.getState().visibility).toBe(visibility);
     expect(map.visibility).toEqual(nativeVisibility);

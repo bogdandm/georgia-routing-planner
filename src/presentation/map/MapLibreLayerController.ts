@@ -74,8 +74,11 @@ import {
 } from '@/presentation/map/mapIds';
 import {
   mapLayerStore,
+  type MapLayerProblem,
   type SatelliteImageryProblem,
   type SatelliteMosaicRenderProgress,
+  type TerrainOverlayProblem,
+  type WeatherMapProblem,
 } from '@/presentation/map/mapLayerStore';
 import {
   mapVisualModePaint,
@@ -241,9 +244,11 @@ type RasterSourceReadiness = 'stable' | 'loaded';
 const canceledDirectSourceErrorWindowMs = 5_000;
 const terrainQueuePublishIntervalMs = 250;
 
-type MapLayerVisibilityResult =
+type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
-  | { readonly status: 'failed'; readonly message: string };
+  | { readonly status: 'failed'; readonly problem: Problem };
+
+type MapLayerVisibilityResult = MapLayerCommandResult<MapLayerProblem>;
 
 /** Slider drags apply `live` paint only; the released value is persisted as `commit`. */
 type OpacityChange = 'live' | 'commit';
@@ -253,7 +258,8 @@ type SatelliteImageryCommandResult =
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly problem: SatelliteImageryProblem };
 
-type TerrainOverlayCommandResult = MapLayerVisibilityResult;
+type TerrainOverlayCommandResult = MapLayerCommandResult<TerrainOverlayProblem>;
+type WeatherMapCommandResult = MapLayerCommandResult<WeatherMapProblem>;
 export interface WeatherMapControllerConfiguration {
   readonly model: 'ecmwf_ifs025';
   readonly metadataUrl: string;
@@ -557,7 +563,7 @@ type SceneApplyProblem = Extract<
   }
 >;
 
-/** English text for diagnostics and the layers-owned `errorMessage`. */
+/** English text for the `satellite.imagery.apply-failed` diagnostic event. */
 function describeSceneApplyProblem(problem: SceneApplyProblem): string {
   if (problem.code === 'map-not-ready') return 'The map is not ready yet.';
   if (problem.code === 'unsupported-asset') {
@@ -824,7 +830,7 @@ export class MapLibreLayerController {
   public async setWeatherEnabled(
     enabled: boolean,
     requestedTime: Date = new Date(),
-  ): Promise<MapLayerVisibilityResult> {
+  ): Promise<WeatherMapCommandResult> {
     if (!enabled) {
       this.#weatherMetadataController?.abort();
       this.#weatherMetadataController = null;
@@ -835,7 +841,7 @@ export class MapLibreLayerController {
           enabled: false,
           status: current.validTimes.length === 0 ? 'idle' : 'ready',
           renderProgress: null,
-          message: null,
+          problem: null,
         },
       });
       this.removeWeatherMap();
@@ -843,9 +849,9 @@ export class MapLibreLayerController {
       return { status: 'success' };
     }
 
-    if (this.#map === null) return this.weatherMapFailure('The map is not ready yet.');
+    if (this.#map === null) return this.weatherMapFailure('map-not-ready');
     if (this.weatherMap === undefined) {
-      return this.weatherMapFailure('The weather map provider is unavailable.');
+      return this.weatherMapFailure('provider-unavailable');
     }
     this.disableTerrainForWeatherMap();
 
@@ -859,7 +865,7 @@ export class MapLibreLayerController {
         enabled: true,
         status: 'loading',
         renderProgress: null,
-        message: null,
+        problem: null,
       },
     });
     this.removeWeatherMap();
@@ -872,9 +878,7 @@ export class MapLibreLayerController {
         requestedTime,
       );
       if (selectedTimeIndex < 0) {
-        return this.weatherMapFailure(
-          'Open-Meteo did not provide an available forecast time.',
-        );
+        return this.weatherMapFailure('no-forecast-time');
       }
       await this.ensureWeatherMapProtocol();
       controller.signal.throwIfAborted();
@@ -888,7 +892,7 @@ export class MapLibreLayerController {
           referenceTime: metadata.referenceTime,
           validTimes: [...metadata.validTimes],
           selectedTimeIndex,
-          message: null,
+          problem: null,
         },
       });
       this.logger.log({
@@ -899,7 +903,7 @@ export class MapLibreLayerController {
       return { status: 'success' };
     } catch {
       if (controller.signal.aborted) return { status: 'success' };
-      return this.weatherMapFailure('Open-Meteo weather map data is unavailable.');
+      return this.weatherMapFailure('data-unavailable');
     } finally {
       if (this.#weatherMetadataController === controller) {
         this.#weatherMetadataController = null;
@@ -907,34 +911,30 @@ export class MapLibreLayerController {
     }
   }
 
-  public selectWeatherForecastTime(requestedTime: Date): MapLayerVisibilityResult {
+  public selectWeatherForecastTime(requestedTime: Date): WeatherMapCommandResult {
     const state = mapLayerStore.getState().weatherMap;
     if (!state.enabled || state.status !== 'ready') {
-      return this.weatherMapCommandFailure(
-        'Enable the weather map before choosing its time.',
-      );
+      return this.weatherMapCommandFailure('not-enabled');
     }
     const selectedTimeIndex = selectNearestForecastTimeIndex(
       state.validTimes,
       requestedTime,
     );
     if (selectedTimeIndex < 0) {
-      return this.weatherMapCommandFailure(
-        'Choose an available weather forecast time.',
-      );
+      return this.weatherMapCommandFailure('time-unavailable');
     }
     if (selectedTimeIndex !== state.selectedTimeIndex) {
       try {
         this.replaceWeatherMapFrame(selectedTimeIndex);
       } catch {
-        return this.weatherMapFailure('The selected weather frame could not be shown.');
+        return this.weatherMapFailure('frame-failed');
       }
     }
     mapLayerStore.setState({
       weatherMap: {
         ...mapLayerStore.getState().weatherMap,
         selectedTimeIndex,
-        message: null,
+        problem: null,
       },
     });
     return { status: 'success' };
@@ -943,15 +943,13 @@ export class MapLibreLayerController {
   public setWeatherOpacity(
     opacity: number,
     change: OpacityChange = 'commit',
-  ): MapLayerVisibilityResult {
+  ): WeatherMapCommandResult {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
-      return this.weatherMapCommandFailure(
-        'Choose an opacity between 0 and 100 percent.',
-      );
+      return this.weatherMapCommandFailure('opacity-out-of-range');
     }
     const weatherMap = mapLayerStore.getState().weatherMap;
     mapLayerStore.setState({
-      weatherMap: { ...weatherMap, opacity, message: null },
+      weatherMap: { ...weatherMap, opacity, problem: null },
     });
     this.applyWeatherMapOpacity();
     if (change === 'commit') this.persistStableState();
@@ -964,16 +962,14 @@ export class MapLibreLayerController {
   ): MapLayerVisibilityResult {
     const map = this.#map;
     if (map === null) {
-      return this.visibilityFailure('The map is not ready yet.');
+      return this.visibilityFailure({ code: 'map-not-ready' });
     }
     if (
       visible &&
       mapLayerStore.getState().weatherMap.enabled &&
       (layerId === 'terrain-relief' || layerId === 'elevation-isolines')
     ) {
-      return this.visibilityFailure(
-        'Disable the weather map before enabling terrain overlays.',
-      );
+      return this.visibilityFailure({ code: 'weather-hides-terrain' });
     }
 
     const state = mapLayerStore.getState();
@@ -983,7 +979,7 @@ export class MapLibreLayerController {
         state.appliedImagery.status === 'empty' &&
         this.#mosaicEntries.size === 0)
     ) {
-      return this.visibilityFailure('Apply a Sentinel scene before changing it.');
+      return this.visibilityFailure({ code: 'scene-required' });
     }
 
     const nativeLayerIds = this.nativeLayerIds(layerId);
@@ -991,7 +987,7 @@ export class MapLibreLayerController {
       (nativeId) => map.getLayer(nativeId) === undefined,
     );
     if (missing.length > 0) {
-      return this.visibilityFailure('The requested map layer is not available yet.');
+      return this.visibilityFailure({ code: 'layer-unavailable' });
     }
 
     const visibility = { ...state.visibility, [layerId]: visible };
@@ -1037,7 +1033,7 @@ export class MapLibreLayerController {
     if (layerId === 'satellite-imagery') {
       appliedImagery = this.withRasterVisibility(state.appliedImagery, visible);
     }
-    mapLayerStore.setState({ visibility, appliedImagery, errorMessage: null });
+    mapLayerStore.setState({ visibility, appliedImagery, layerProblem: null });
     let terrainResult: TerrainOverlayCommandResult | null = null;
     if (staticBasemapSelected || layerId === 'satellite-imagery') {
       this.applyBaseLayerVisibility();
@@ -1050,22 +1046,25 @@ export class MapLibreLayerController {
       name: 'map.layer.visibility-changed',
       data: { category: layerId, status: visible ? 'visible' : 'hidden' },
     });
-    return terrainResult ?? { status: 'success' };
+    return terrainResult?.status === 'failed'
+      ? {
+          status: 'failed',
+          problem: { code: 'terrain-overlay-failed', problem: terrainResult.problem },
+        }
+      : { status: 'success' };
   }
 
   public setMapLayerPreset(preset: MapLayerPreset): MapLayerVisibilityResult {
     const map = this.#map;
     if (map === null) {
-      return this.visibilityFailure('The map is not ready yet.');
+      return this.visibilityFailure({ code: 'map-not-ready' });
     }
     if (
       preset === 'sentinel-2' &&
       this.getAppliedScene() === null &&
       this.#mosaicEntries.size === 0
     ) {
-      return this.visibilityFailure(
-        'Apply a Sentinel scene before choosing this preset.',
-      );
+      return this.visibilityFailure({ code: 'preset-requires-scene' });
     }
 
     const state = mapLayerStore.getState();
@@ -1084,7 +1083,7 @@ export class MapLibreLayerController {
     mapLayerStore.setState({
       visibility,
       appliedImagery,
-      errorMessage: null,
+      layerProblem: null,
     });
     this.applyBaseLayerVisibility();
     for (const sentinelLayerId of this.nativeLayerIds('satellite-imagery')) {
@@ -1104,7 +1103,12 @@ export class MapLibreLayerController {
       name: 'map.layer-preset.changed',
       data: { preset },
     });
-    return terrainResult;
+    return terrainResult.status === 'failed'
+      ? {
+          status: 'failed',
+          problem: { code: 'terrain-overlay-failed', problem: terrainResult.problem },
+        }
+      : terrainResult;
   }
 
   public setOpenStreetMapOpacity(
@@ -1112,10 +1116,10 @@ export class MapLibreLayerController {
     change: OpacityChange = 'commit',
   ): MapLayerVisibilityResult {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
-      return this.visibilityFailure('Choose an opacity between 0 and 100 percent.');
+      return this.visibilityFailure({ code: 'opacity-out-of-range' });
     }
-    if (this.#map === null) return this.visibilityFailure('The map is not ready yet.');
-    mapLayerStore.setState({ openStreetMapOpacity: opacity, errorMessage: null });
+    if (this.#map === null) return this.visibilityFailure({ code: 'map-not-ready' });
+    mapLayerStore.setState({ openStreetMapOpacity: opacity, layerProblem: null });
     this.applyOpenStreetMapOpacity(true);
     if (change === 'live') return { status: 'success' };
     this.persistStableState();
@@ -1132,10 +1136,10 @@ export class MapLibreLayerController {
     change: OpacityChange = 'commit',
   ): MapLayerVisibilityResult {
     if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
-      return this.visibilityFailure('Choose an opacity between 0 and 100 percent.');
+      return this.visibilityFailure({ code: 'opacity-out-of-range' });
     }
-    if (this.#map === null) return this.visibilityFailure('The map is not ready yet.');
-    mapLayerStore.setState({ importedTrackOpacity: opacity, errorMessage: null });
+    if (this.#map === null) return this.visibilityFailure({ code: 'map-not-ready' });
+    mapLayerStore.setState({ importedTrackOpacity: opacity, layerProblem: null });
     this.applyImportedTrackPaint();
     if (change === 'live') return { status: 'success' };
     this.persistStableState();
@@ -1171,7 +1175,7 @@ export class MapLibreLayerController {
           ),
       );
     if (!valid || segments.length === 0) {
-      return this.visibilityFailure('The imported track geometry is invalid.');
+      return this.visibilityFailure({ code: 'track-geometry-invalid' });
     }
     this.#importedTrackGeometry = {
       type: 'MultiLineString',
@@ -1266,7 +1270,7 @@ export class MapLibreLayerController {
       ) ||
       !waypoints.every((coordinate) => validCoordinate(coordinate))
     ) {
-      return this.visibilityFailure('The planned line geometry is invalid.');
+      return this.visibilityFailure({ code: 'planned-line-geometry-invalid' });
     }
     return this.updatePlannedLine(overlay, {
       sections: sections.map((section) => ({
@@ -1469,7 +1473,7 @@ export class MapLibreLayerController {
       appliedImagery: { status: 'empty' },
       selectedScene: null,
       automaticAlternativeProviderState: 'inactive',
-      errorMessage: null,
+      layerProblem: null,
     });
     this.applyMapVisualMode();
     this.persistStableState();
@@ -1676,7 +1680,7 @@ export class MapLibreLayerController {
         },
         satelliteRenderingMode: persisted.satelliteRenderingMode,
         satelliteRenderingTuning: { ...persisted.renderingTuning },
-        errorMessage: null,
+        layerProblem: null,
       });
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
@@ -1712,7 +1716,7 @@ export class MapLibreLayerController {
       ...(mode === 'auto'
         ? {}
         : { automaticAlternativeProviderState: 'inactive' as const }),
-      errorMessage: null,
+      layerProblem: null,
     });
     // Rendering mode is a durable user choice, not a property of one successful scene.
     // Save it before a potentially long local render so reload preserves the selection.
@@ -1758,9 +1762,7 @@ export class MapLibreLayerController {
     value: TerrainOverlayPreferences,
   ): TerrainOverlayCommandResult {
     if (!supportedContourIntervals.includes(value.contourIntervalMeters)) {
-      return this.terrainOverlayFailure(
-        'Choose a supported contour distance that divides the 200 m index interval.',
-      );
+      return this.terrainOverlayFailure('unsupported-contour-interval');
     }
     const previous = this.#terrainOverlayPreferences;
     this.#terrainOverlayPreferences = { ...value };
@@ -1771,7 +1773,7 @@ export class MapLibreLayerController {
         terrainOverlays: {
           initialized: false,
           preferences: { ...value },
-          message: null,
+          problem: null,
         },
       });
       this.persistStableState();
@@ -1816,7 +1818,7 @@ export class MapLibreLayerController {
     this.#renderingTuning = { ...tuning };
     mapLayerStore.setState({
       satelliteRenderingTuning: { ...tuning },
-      errorMessage: null,
+      layerProblem: null,
     });
     if (this.#appliedScene === null) {
       this.persistStableState();
@@ -1881,7 +1883,7 @@ export class MapLibreLayerController {
         stage: 'preparing',
         startedAt,
       },
-      errorMessage: null,
+      layerProblem: null,
     });
 
     const slot = this.#activeSlot === rasterSlots[0] ? rasterSlots[1] : rasterSlots[0];
@@ -1973,7 +1975,7 @@ export class MapLibreLayerController {
           'satellite-imagery': true,
           'napr-orthophoto': false,
         },
-        errorMessage: null,
+        layerProblem: null,
       });
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
@@ -2661,22 +2663,20 @@ export class MapLibreLayerController {
       return;
     }
     this.#contourFailureReported = true;
-    this.terrainOverlayFailure(
-      'Elevation isolines could not be generated. Relief and the base map remain available.',
-    );
+    this.terrainOverlayFailure('contours-failed');
   };
 
   private reconcileTerrainOverlays(): TerrainOverlayCommandResult {
     const map = this.#map;
     if (map === null) {
-      return this.terrainOverlayFailure('The map is not ready yet.');
+      return this.terrainOverlayFailure('map-not-ready');
     }
     if (map.getLayer(mapLayerIds.background) === undefined) {
       mapLayerStore.setState({
         terrainOverlays: {
           initialized: false,
           preferences: { ...this.#terrainOverlayPreferences },
-          message: null,
+          problem: null,
         },
       });
       return { status: 'success' };
@@ -2772,14 +2772,14 @@ export class MapLibreLayerController {
       const published = mapLayerStore.getState().terrainOverlays;
       if (
         !published.initialized ||
-        published.message !== null ||
+        published.problem !== null ||
         published.preferences !== this.#terrainOverlayPreferences
       ) {
         mapLayerStore.setState({
           terrainOverlays: {
             initialized: true,
             preferences: this.#terrainOverlayPreferences,
-            message: null,
+            problem: null,
           },
         });
       }
@@ -2796,9 +2796,7 @@ export class MapLibreLayerController {
       }
       return { status: 'success' };
     } catch {
-      return this.terrainOverlayFailure(
-        'Terrain relief could not be rendered. The base map remains available.',
-      );
+      return this.terrainOverlayFailure('relief-render-failed');
     }
   }
 
@@ -2930,15 +2928,17 @@ export class MapLibreLayerController {
     );
   }
 
-  private terrainOverlayFailure(message: string): TerrainOverlayCommandResult {
+  private terrainOverlayFailure(
+    problem: TerrainOverlayProblem,
+  ): TerrainOverlayCommandResult {
     mapLayerStore.setState({
       terrainOverlays: {
         initialized: false,
         preferences: { ...this.#terrainOverlayPreferences },
-        message,
+        problem,
       },
     });
-    return { status: 'failed', message };
+    return { status: 'failed', problem };
   }
 
   private normalizeImageryVisibility(
@@ -3439,7 +3439,7 @@ export class MapLibreLayerController {
       }
       return { status: 'success' };
     } catch {
-      return this.visibilityFailure('The planned line could not be rendered.');
+      return this.visibilityFailure({ code: 'planned-line-render-failed' });
     }
   }
 
@@ -3539,7 +3539,7 @@ export class MapLibreLayerController {
       this.ensureImportedTrackLayerOrder(map);
       return { status: 'success' };
     } catch {
-      return this.visibilityFailure('The imported track could not be rendered.');
+      return this.visibilityFailure({ code: 'track-render-failed' });
     }
   }
 
@@ -4519,19 +4519,21 @@ export class MapLibreLayerController {
     }
   }
 
-  private weatherMapCommandFailure(message: string): MapLayerVisibilityResult {
+  private weatherMapCommandFailure(
+    problem: WeatherMapProblem,
+  ): WeatherMapCommandResult {
     const current = mapLayerStore.getState().weatherMap;
     mapLayerStore.setState({
       weatherMap: {
         ...current,
-        message,
+        problem,
       },
     });
     this.logger.log({ level: 'warn', name: 'weather.map.command-failed' });
-    return { status: 'failed', message };
+    return { status: 'failed', problem };
   }
 
-  private weatherMapFailure(message: string): MapLayerVisibilityResult {
+  private weatherMapFailure(problem: WeatherMapProblem): WeatherMapCommandResult {
     const current = mapLayerStore.getState().weatherMap;
     mapLayerStore.setState({
       weatherMap: {
@@ -4539,13 +4541,13 @@ export class MapLibreLayerController {
         enabled: false,
         status: 'error',
         renderProgress: null,
-        message,
+        problem,
       },
     });
     this.removeWeatherMap();
     this.restoreTerrainAfterWeatherMap();
     this.logger.log({ level: 'warn', name: 'weather.map.failed' });
-    return { status: 'failed', message };
+    return { status: 'failed', problem };
   }
 
   private withRasterVisibility(
@@ -4574,10 +4576,10 @@ export class MapLibreLayerController {
         };
   }
 
-  private visibilityFailure(message: string): MapLayerVisibilityResult {
-    mapLayerStore.setState({ errorMessage: message });
+  private visibilityFailure(problem: MapLayerProblem): MapLayerVisibilityResult {
+    mapLayerStore.setState({ layerProblem: problem });
     this.logger.log({ level: 'warn', name: 'map.layer.visibility-failed' });
-    return { status: 'failed', message };
+    return { status: 'failed', problem };
   }
 
   private applyFailure(
@@ -4588,7 +4590,7 @@ export class MapLibreLayerController {
     const message = describeSceneApplyProblem(problem);
     mapLayerStore.setState({
       appliedImagery: { status: 'failed', sceneKey, previousSceneKey, problem },
-      errorMessage: message,
+      layerProblem: { code: 'satellite-imagery-failed', problem },
     });
     this.logger.log({
       level: 'warn',

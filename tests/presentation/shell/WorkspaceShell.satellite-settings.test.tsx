@@ -1179,8 +1179,10 @@ describe('WorkspaceShell', () => {
   it('opens the localized generic map error from the lightweight status line', async () => {
     const user = userEvent.setup();
     mapLayerStore.setState({
-      errorMessage:
-        'The imagery renderer rejected these stretch values. Reset the imagery stretch or try less extreme values.',
+      layerProblem: {
+        code: 'satellite-imagery-failed',
+        problem: { code: 'tile-failed', reason: 'http-client', httpStatus: 400 },
+      },
     });
     renderOperationalStatus();
 

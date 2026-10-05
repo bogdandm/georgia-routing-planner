@@ -65,7 +65,7 @@ export function OperationalStatus() {
     mapLayerStore,
     (state) => state.automaticAlternativeProviderState,
   );
-  const layerError = useStore(mapLayerStore, (state) => state.errorMessage);
+  const layerProblem = useStore(mapLayerStore, (state) => state.layerProblem);
   const terrainQueue = useStore(mapLayerStore, (state) => state.terrainComputeQueue);
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const requestStatus = useStore(satelliteRequestStatusStore);
@@ -149,7 +149,7 @@ export function OperationalStatus() {
       startedAt: null,
       announcement: 'polite',
     };
-  } else if (layerError !== null) {
+  } else if (layerProblem !== null) {
     display = {
       kind: 'error',
       message: t`A map layer update failed. Try again.`,

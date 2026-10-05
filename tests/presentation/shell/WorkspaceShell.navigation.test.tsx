@@ -536,6 +536,38 @@ describe('WorkspaceShell', () => {
     expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(false);
     expect(mapInteractionStore.getState().weatherForecastRequest).toBeNull();
   });
+
+  it('shows typed map-layer, terrain, and weather problems in the Layers panel', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Layers' }));
+    const layersTools = screen.getByRole('complementary', { name: 'Layers tools' });
+
+    act(() => {
+      mapLayerStore.setState((state) => ({
+        layerProblem: {
+          code: 'satellite-imagery-failed',
+          problem: { code: 'tile-failed', reason: 'http-server', httpStatus: 503 },
+        },
+        terrainOverlays: { ...state.terrainOverlays, problem: 'contours-failed' },
+        weatherMap: { ...state.weatherMap, problem: 'data-unavailable' },
+      }));
+    });
+
+    expect(
+      within(layersTools).getByText(
+        'The imagery renderer is temporarily unavailable (HTTP 503). The current map remains usable; retry shortly.',
+      ),
+    ).toBeVisible();
+    expect(
+      within(layersTools).getByText(
+        'Elevation isolines could not be generated. Relief and the base map remain available.',
+      ),
+    ).toBeVisible();
+    expect(
+      within(layersTools).getByText('Open-Meteo weather map data is unavailable.'),
+    ).toBeVisible();
+  });
   it('retains the loaded Weather forecast across workspace navigation', async () => {
     const user = userEvent.setup();
     const execute = vi.spyOn(services.pointWeatherForecast, 'execute');

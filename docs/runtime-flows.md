@@ -496,14 +496,17 @@ credential.
 
 Before any remote call, the worker records `sync.user-id` in the transaction that
 prepares local pairs. A new or different owner resets remembered remote revisions and
-tombstones to pending upserts while keeping local tracks.
+tombstones to pending upserts while keeping local tracks. A pending track or folder
+upsert without a remembered revision that finds an existing account record adopts that
+record when its `updatedAt` is later and uploads the local copy otherwise, so a browser
+joining with stale copies keeps names and folder placements made on other devices.
 
 Folders reconcile before tracks so downloaded tracks can validate their placement.
 Folder upserts and deletes use exact base revisions; a conflict retries the local edit
 on the newer revision (last writer wins). An untouched local **Imports** placeholder
-adopts the account's existing record. Order is uploaded separately through one atomic
-`folder-reorder` call; readers order by position, then ID. A remote folder deletion only
-clears local placement, and unknown folder IDs read as unfiled.
+always adopts the account's existing record. Order is uploaded separately through one
+atomic `folder-reorder` call; readers order by position, then ID. A remote folder
+deletion only clears local placement, and unknown folder IDs read as unfiled.
 
 Each snapshot is grouped by lineage. A ready GRPT v2 member is the lineage head even
 over a higher-revision v1 predecessor. A browser holding source elevation for a v1

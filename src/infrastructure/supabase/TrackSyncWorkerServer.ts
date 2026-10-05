@@ -305,6 +305,19 @@ function folderStatesEqual(left: FolderSyncState, right: FolderSyncState): boole
   );
 }
 
+/**
+ * A local upsert that never had a remote revision (new account binding, re-import, or
+ * lineage promotion) adopts an existing account record edited after the local copy, so
+ * stale local metadata such as the default Imports placement never overwrites a newer
+ * edit from another device.
+ */
+function editedAfter(remoteUpdatedAt: unknown, localUpdatedAt: string): boolean {
+  return (
+    typeof remoteUpdatedAt === 'string' &&
+    Date.parse(remoteUpdatedAt) > Date.parse(localUpdatedAt)
+  );
+}
+
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -1038,6 +1051,9 @@ export class TrackSyncWorkerServer {
     let usage = await gateway.status(signal);
     const firstSnapshot = await gateway.snapshot(signal);
     const firstLineages = readyLineages(firstSnapshot);
+    const firstRemoteByHash = new Map(
+      firstSnapshot.map((record) => [record.content_hash, record]),
+    );
     const localByLineage = new Map(
       local.map((entry) => [entry.state.lineageHash, entry]),
     );
@@ -1055,14 +1071,21 @@ export class TrackSyncWorkerServer {
     if (totalItems > completedItems) publishProgress();
     const remoteDeletionCandidates = new Map<string, RemoteTrackDeletionCandidate>();
     const mutationStates = new Map<string, TrackSyncState | null>();
+    const adoptedTrackIds = new Set<string>();
     for (const entry of [...local].sort(
       (left, right) =>
         Number(right.state.pendingKind === 'delete') -
         Number(left.state.pendingKind === 'delete'),
     )) {
       if (entry.state.pendingKind === null) continue;
-      const outcome = await this.applyPending(entry, gateway, signal);
+      const outcome = await this.applyPending(
+        entry,
+        firstRemoteByHash.get(entry.state.contentHash),
+        gateway,
+        signal,
+      );
       mutationStates.set(entry.state.trackId, outcome.state);
+      if (outcome.adoptRemote) adoptedTrackIds.add(entry.state.trackId);
       if (outcome.remoteTrackDeletion !== null) {
         remoteDeletionCandidates.set(
           outcome.remoteTrackDeletion.trackId,
@@ -1109,6 +1132,7 @@ export class TrackSyncWorkerServer {
         initial?.pair?.summary.favorite === entry.pair?.summary.favorite &&
         initial?.pair?.summary.folderId === entry.pair?.summary.folderId;
       let effective: TrackSyncState | null = entry.state;
+      let adoptRemote = false;
       if (
         entry.pair === null &&
         entry.state.pendingKind === 'delete' &&
@@ -1122,6 +1146,7 @@ export class TrackSyncWorkerServer {
         };
       } else if (stateUnchangedSinceScan && pairUnchangedSinceScan && hasMutation) {
         effective = mutationState ?? null;
+        adoptRemote = adoptedTrackIds.has(entry.state.trackId);
       }
       if (effective === null) {
         if (entry.pair === null) deleted.add(entry.state.trackId);
@@ -1139,7 +1164,7 @@ export class TrackSyncWorkerServer {
         if (
           remoteIsOlder ||
           effective.pendingKind !== null ||
-          (matchesHead && entry.pair !== null)
+          (matchesHead && entry.pair !== null && !adoptRemote)
         ) {
           if (!syncStatesEqual(effective, entry.state)) states.push(effective);
           continue;
@@ -1177,7 +1202,7 @@ export class TrackSyncWorkerServer {
         continue;
       }
       handledLineages.add(remoteIdentity(remote).lineageHash);
-      if (effective.remoteRevision === remote.revision) {
+      if (effective.remoteRevision === remote.revision && !adoptRemote) {
         if (!syncStatesEqual(effective, entry.state)) states.push(effective);
         continue;
       }
@@ -1327,7 +1352,9 @@ export class TrackSyncWorkerServer {
     if (anticipated > 0) addItems(anticipated);
 
     // Folder content conflicts resolve as last writer wins: a conflict retries the
-    // local edit on the newer revision. Order is not part of these writes; the
+    // local edit on the newer revision. A folder this browser never acknowledged
+    // adopts the account record when it is the untouched Imports placeholder or
+    // older than that record. Order is not part of these writes; the
     // server keeps an existing folder's position and reorders arrive as one list.
     const acknowledgements = new Map<string, FolderSyncState | null>();
     for (const entry of pending) {
@@ -1337,7 +1364,8 @@ export class TrackSyncWorkerServer {
         entry.state.remoteRevision === null &&
         remote !== undefined &&
         entry.folder !== null &&
-        isImportsPlaceholder(entry.folder)
+        (isImportsPlaceholder(entry.folder) ||
+          editedAfter(remote.payload.updatedAt, entry.folder.updatedAt))
       ) {
         acknowledgements.set(entry.state.folderId, {
           ...entry.state,
@@ -1843,12 +1871,15 @@ export class TrackSyncWorkerServer {
 
   private async applyPending(
     entry: { readonly pair: LocalTrackSyncPair | null; readonly state: TrackSyncState },
+    firstRemote: RemoteRecord | undefined,
     gateway: RemoteGateway,
     signal: AbortSignal,
   ): Promise<{
     readonly state: TrackSyncState | null;
     readonly deleteLocal: boolean;
     readonly remoteTrackDeletion: RemoteTrackDeletionCandidate | null;
+    /** The account record is newer; the merge downloads it instead of uploading. */
+    readonly adoptRemote: boolean;
   }> {
     let state = entry.state;
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -1862,12 +1893,14 @@ export class TrackSyncWorkerServer {
               trackId: entry.pair.summary.id,
               name: entry.pair.summary.name,
             },
+            adoptRemote: false,
           };
         }
         return {
           state: null,
           deleteLocal: entry.pair === null,
           remoteTrackDeletion: null,
+          adoptRemote: false,
         };
       }
       if (result.outcome === 'reserved') {
@@ -1875,6 +1908,7 @@ export class TrackSyncWorkerServer {
           state: entry.state,
           deleteLocal: false,
           remoteTrackDeletion: null,
+          adoptRemote: false,
         };
       }
       if (
@@ -1882,6 +1916,21 @@ export class TrackSyncWorkerServer {
         state.pendingKind === 'upsert' &&
         state.remoteRevision === null
       ) {
+        const remoteMetadata = firstRemote?.metadata;
+        if (
+          entry.pair !== null &&
+          editedAfter(
+            remoteMetadata?.updatedAt ?? remoteMetadata?.savedAt,
+            entry.pair.summary.updatedAt,
+          )
+        ) {
+          return {
+            state: { ...state, remoteRevision: result.revision, pendingKind: null },
+            deleteLocal: false,
+            remoteTrackDeletion: null,
+            adoptRemote: true,
+          };
+        }
         state = { ...state, remoteRevision: result.revision };
         continue;
       }
@@ -1891,24 +1940,32 @@ export class TrackSyncWorkerServer {
             state: entry.state,
             deleteLocal: false,
             remoteTrackDeletion: null,
+            adoptRemote: false,
           };
         }
         state = { ...state, remoteRevision: result.revision };
         continue;
       }
       if (state.pendingKind === 'delete') {
-        return { state: null, deleteLocal: true, remoteTrackDeletion: null };
+        return {
+          state: null,
+          deleteLocal: true,
+          remoteTrackDeletion: null,
+          adoptRemote: false,
+        };
       }
       return {
         state: { ...state, remoteRevision: result.revision, pendingKind: null },
         deleteLocal: false,
         remoteTrackDeletion: null,
+        adoptRemote: false,
       };
     }
     return {
       state: entry.state,
       deleteLocal: false,
       remoteTrackDeletion: null,
+      adoptRemote: false,
     };
   }
 }

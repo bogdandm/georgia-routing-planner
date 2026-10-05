@@ -124,7 +124,7 @@ const tourSteps: readonly TourStep[] = [
       {
         targets: ['.maplibregl-ctrl-top-right'],
         anchor: 'spotlight',
-        placement: 'left',
+        placement: 'left-end',
         rows: [
           { icon: MyLocationOutlinedIcon, text: msg`Show your location.` },
           {

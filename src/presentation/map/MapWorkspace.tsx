@@ -32,10 +32,7 @@ import Map, {
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import type {
-  MapCamera as PersistedMapCamera,
-  MapViewState,
-} from '@/application/ports/MapCameraRepository';
+import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type {
   MapFacade,
   MapInteractionMode,
@@ -241,9 +238,9 @@ function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
 }
 
 async function loadMapViewWithDeadline(
-  load: () => Promise<PersistedMapCamera | null>,
+  load: () => Promise<MapViewState | null>,
   timeoutMs: number,
-): Promise<PersistedMapCamera | null> {
+): Promise<MapViewState | null> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -300,13 +297,13 @@ export function MapWorkspace({
     [],
   );
   const [restoredView, setRestoredView] = useState<MapViewState | null>(null);
-  const [sharedTerrainUrlIntentActive, setSharedTerrainUrlIntentActive] = useState(
-    () => sharedMapView?.orientation.mode === '3d',
-  );
+  // Cleared by a direct 2D/3D choice or Mosaic so a restored 3D view cannot override it.
+  const [startupTerrainIntentActive, setStartupTerrainIntentActive] = useState(true);
   const [sharedSceneToApply, setSharedSceneToApply] = useState<SatelliteScene | null>(
     null,
   );
-  const sharedTerrainStartRequested = useRef(false);
+  // Set once the startup 3D intent is started or superseded by Mosaic.
+  const startupTerrainConsumed = useRef(false);
   const sharedSceneApplyController = useRef<AbortController | null>(null);
   const sharedSceneRestorationCancelled = useRef(false);
   const sharedWeatherMapRestoreRequested = useRef(false);
@@ -554,13 +551,13 @@ export function MapWorkspace({
     setSheetInspection(pointInspection);
   }
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
-  const sharedTerrainRequested = sharedMapView?.orientation.mode === '3d';
+  const startupTerrainRequested = restoredView?.terrainMode === 'terrain';
   const terrainState: TerrainControlState =
     terrainCommandState ??
     (mosaicActive
       ? 'flat'
-      : sharedTerrainRequested &&
-          sharedTerrainUrlIntentActive &&
+      : startupTerrainRequested &&
+          startupTerrainIntentActive &&
           snapshot.lifecycle === 'loading'
         ? 'terrain'
         : snapshot.terrainMode);
@@ -877,49 +874,55 @@ export function MapWorkspace({
   const handleTerrainControlChange = useCallback(
     (mode: 'flat' | 'terrain') => {
       if (mosaicActive && mode === 'terrain') return;
-      // A direct user choice supersedes the startup intent from a shared URL, including
+      // A direct user choice supersedes the restored or shared startup view, including
       // while MapLibre is still loading and its diagnostics snapshot remains stale.
-      setSharedTerrainUrlIntentActive(false);
+      setStartupTerrainIntentActive(false);
+      cameraPersistence.setStartupTerrainPending(false);
       void handleTerrainModeChange(mode);
     },
-    [handleTerrainModeChange, mosaicActive],
+    [cameraPersistence, handleTerrainModeChange, mosaicActive],
   );
 
   useEffect(() => {
     if (!mosaicActive) return;
     let active = true;
-    sharedTerrainStartRequested.current = true;
+    startupTerrainConsumed.current = true;
+    cameraPersistence.setStartupTerrainPending(false);
     queueMicrotask(() => {
       if (!active) return;
-      setSharedTerrainUrlIntentActive(false);
+      setStartupTerrainIntentActive(false);
       void handleTerrainModeChange('flat');
     });
     return () => {
       active = false;
     };
-  }, [handleTerrainModeChange, mosaicActive]);
+  }, [cameraPersistence, handleTerrainModeChange, mosaicActive]);
 
   useEffect(() => {
     if (
-      !sharedTerrainRequested ||
+      !startupTerrainRequested ||
       mosaicActive ||
-      !sharedTerrainUrlIntentActive ||
-      sharedTerrainStartRequested.current ||
+      !startupTerrainIntentActive ||
+      startupTerrainConsumed.current ||
       snapshot.lifecycle !== 'ready' ||
       snapshot.terrainMode === 'terrain'
     ) {
       return;
     }
     // Keep optional DEM tiles out of MapLibre's initial load gate. Once the base map is
-    // usable, consume the shared URL intent through the normal terrain transition so
-    // its timeout, retries, cancellation, and flat-map fallback remain authoritative.
-    sharedTerrainStartRequested.current = true;
-    void handleTerrainModeChange('terrain');
+    // usable, consume the restored or shared 3D intent through the normal terrain
+    // transition so its timeout, retries, cancellation, and flat-map fallback remain
+    // authoritative.
+    startupTerrainConsumed.current = true;
+    void handleTerrainModeChange('terrain').finally(() => {
+      cameraPersistence.setStartupTerrainPending(false);
+    });
   }, [
+    cameraPersistence,
     mosaicActive,
     handleTerrainModeChange,
-    sharedTerrainRequested,
-    sharedTerrainUrlIntentActive,
+    startupTerrainRequested,
+    startupTerrainIntentActive,
     snapshot.lifecycle,
     snapshot.terrainMode,
   ]);
@@ -967,14 +970,26 @@ export function MapWorkspace({
     void loadMapViewWithDeadline(() => mapCameraRepository.load(), restoreTimeoutMs)
       .then((view) => {
         if (active) {
-          const fallback = view ?? defaultGeorgiaCamera;
-          setRestoredView({
-            camera: applySharedMapView(
-              { ...fallback, bearing: 0, pitch: 0 },
-              sharedMapView,
-            ),
-            terrainMode: sharedMapView?.orientation.mode === '3d' ? 'terrain' : 'flat',
-          });
+          // An explicit share URL owns the startup camera and mode over the local view.
+          const requestedView: MapViewState =
+            sharedMapView === null
+              ? (view ?? { camera: defaultGeorgiaCamera, terrainMode: 'flat' })
+              : {
+                  camera: applySharedMapView(defaultGeorgiaCamera, sharedMapView),
+                  terrainMode:
+                    sharedMapView.orientation.mode === '3d' ? 'terrain' : 'flat',
+                };
+          // Mosaic started before storage resolved has already superseded the 3D intent.
+          const startupView: MapViewState = startupTerrainConsumed.current
+            ? {
+                camera: { ...requestedView.camera, bearing: 0, pitch: 0 },
+                terrainMode: 'flat',
+              }
+            : requestedView;
+          cameraPersistence.setStartupTerrainPending(
+            startupView.terrainMode === 'terrain',
+          );
+          setRestoredView(startupView);
         }
       })
       .catch(() => {
@@ -989,7 +1004,7 @@ export function MapWorkspace({
     return () => {
       active = false;
     };
-  }, [logger, mapCameraRepository, restoreTimeoutMs, sharedMapView]);
+  }, [cameraPersistence, logger, mapCameraRepository, restoreTimeoutMs, sharedMapView]);
 
   useEffect(() => {
     const shared = sharedMapView;

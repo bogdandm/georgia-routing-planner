@@ -547,37 +547,60 @@ describe('AppDatabase', () => {
     await expect(database.settings.get('__healthcheck__')).resolves.toBeUndefined();
   });
 
-  it('stores only a versioned 2D position and clamps it to supported ranges', async () => {
+  it('stores a 2D view without orientation and clamps it to supported ranges', async () => {
     await database.save({
-      ...camera,
-      longitude: 500,
-      latitude: -100,
-      zoom: 30,
-      bearing: -500,
-      pitch: 100,
+      camera: {
+        longitude: 500,
+        latitude: -100,
+        zoom: 30,
+        bearing: -500,
+        pitch: 100,
+      },
+      terrainMode: 'flat',
     });
 
-    await expect(database.load()).resolves.toEqual({
+    const flatCamera = {
       longitude: 180,
       latitude: -85,
       zoom: 20,
       bearing: 0,
       pitch: 0,
+    };
+    await expect(database.load()).resolves.toEqual({
+      camera: flatCamera,
+      terrainMode: 'flat',
     });
     await expect(database.settings.get('map.camera')).resolves.toEqual(
       expect.objectContaining({
-        value: {
-          schemaVersion: 3,
-          camera: { longitude: 180, latitude: -85, zoom: 20 },
-        },
+        value: { schemaVersion: 4, terrainMode: 'flat', camera: flatCamera },
       }),
     );
+  });
+
+  it('restores a 3D view with its clamped bearing and pitch', async () => {
+    await database.save({
+      camera: { ...camera, bearing: -500, pitch: 100 },
+      terrainMode: 'terrain',
+    });
+
+    await expect(database.load()).resolves.toEqual({
+      camera: { ...camera, bearing: -180, pitch: 85 },
+      terrainMode: 'terrain',
+    });
   });
 
   it.each([
     { schemaVersion: 1, camera },
     { schemaVersion: 2, camera, terrainMode: 'terrain' },
-  ])('loads legacy camera schema $schemaVersion as a flat camera', async (value) => {
+    {
+      schemaVersion: 3,
+      camera: {
+        longitude: camera.longitude,
+        latitude: camera.latitude,
+        zoom: camera.zoom,
+      },
+    },
+  ])('loads legacy camera schema $schemaVersion as a flat view', async (value) => {
     await database.settings.put({
       key: 'map.camera',
       value,
@@ -585,35 +608,44 @@ describe('AppDatabase', () => {
     });
 
     await expect(database.load()).resolves.toEqual({
-      longitude: camera.longitude,
-      latitude: camera.latitude,
-      zoom: camera.zoom,
-      bearing: 0,
-      pitch: 0,
+      camera: {
+        longitude: camera.longitude,
+        latitude: camera.latitude,
+        zoom: camera.zoom,
+        bearing: 0,
+        pitch: 0,
+      },
+      terrainMode: 'flat',
     });
   });
 
-  it('repairs only a corrupt camera record and emits one bounded warning', async () => {
-    await database.settings.put({
-      key: 'map.camera',
-      value: { schemaVersion: 1, camera: { ...camera, zoom: Number.NaN } },
-      updatedAt: '2026-07-18T00:00:00.000Z',
-    });
-    await database.settings.put({
-      key: 'unrelated.setting',
-      value: true,
-      updatedAt: '2026-07-18T00:00:00.000Z',
-    });
+  it.each([
+    { schemaVersion: 1, camera: { ...camera, zoom: Number.NaN } },
+    { schemaVersion: 4, camera, terrainMode: 'globe' },
+  ])(
+    'repairs only a corrupt camera record and emits one bounded warning',
+    async (value) => {
+      await database.settings.put({
+        key: 'map.camera',
+        value,
+        updatedAt: '2026-07-18T00:00:00.000Z',
+      });
+      await database.settings.put({
+        key: 'unrelated.setting',
+        value: true,
+        updatedAt: '2026-07-18T00:00:00.000Z',
+      });
 
-    await expect(database.load()).resolves.toBeNull();
-    await expect(database.settings.get('map.camera')).resolves.toBeUndefined();
-    await expect(database.settings.get('unrelated.setting')).resolves.toBeDefined();
-    expect(
-      services.logger
-        .getEvents()
-        .filter((event) => event.name === 'storage.map-camera.repaired'),
-    ).toHaveLength(1);
-  });
+      await expect(database.load()).resolves.toBeNull();
+      await expect(database.settings.get('map.camera')).resolves.toBeUndefined();
+      await expect(database.settings.get('unrelated.setting')).resolves.toBeDefined();
+      expect(
+        services.logger
+          .getEvents()
+          .filter((event) => event.name === 'storage.map-camera.repaired'),
+      ).toHaveLength(1);
+    },
+  );
 
   it('surfaces camera storage read and write failures to the caller', async () => {
     vi.spyOn(database.settings, 'get').mockRejectedValueOnce(
@@ -624,7 +656,9 @@ describe('AppDatabase', () => {
     vi.spyOn(database.settings, 'put').mockRejectedValueOnce(
       new Error('write unavailable'),
     );
-    await expect(database.save(camera)).rejects.toThrow('write unavailable');
+    await expect(database.save({ camera, terrainMode: 'flat' })).rejects.toThrow(
+      'write unavailable',
+    );
   });
 
   it('upgrades version 5 without changing existing rows and creates savedMarkers', async () => {

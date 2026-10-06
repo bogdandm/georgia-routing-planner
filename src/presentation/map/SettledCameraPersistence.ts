@@ -10,6 +10,7 @@ import type {
  */
 export class SettledCameraPersistence {
   #pendingView: MapViewState | null = null;
+  #startupTerrainPending = false;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #saving: Promise<void> = Promise.resolve();
 
@@ -20,9 +21,20 @@ export class SettledCameraPersistence {
     private readonly debounceMs = 400,
   ) {}
 
+  /**
+   * Marks a restored or shared 3D view that is still mounted flat until terrain starts.
+   * Its provisional flat views are stored as 3D so a reload in that window keeps 3D.
+   */
+  public setStartupTerrainPending(pending: boolean): void {
+    this.#startupTerrainPending = pending;
+  }
+
   /** Schedules the latest settled view without extending an active debounce window. */
   public schedule(view: MapViewState): void {
-    this.#pendingView = view;
+    this.#pendingView =
+      this.#startupTerrainPending && view.terrainMode === 'flat'
+        ? { ...view, terrainMode: 'terrain' }
+        : view;
     if (this.#timer !== null) {
       return;
     }
@@ -49,7 +61,7 @@ export class SettledCameraPersistence {
 
     this.#saving = this.#saving.then(async () => {
       try {
-        await this.repository.save(view.camera);
+        await this.repository.save(view);
       } catch {
         this.logger.log({ level: 'warn', name: 'storage.map-camera.save-failed' });
         this.onFailure();

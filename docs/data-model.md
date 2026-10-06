@@ -71,7 +71,7 @@ upsert.
 | Key                             | Value                                                                                                                                              |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort, completed onboarding tour |
-| `map.camera`                    | Schema version 3: last settled longitude, latitude, and zoom; bearing and pitch are session-only                                                   |
+| `map.camera`                    | Schema version 4: terrain mode and last settled longitude, latitude, and zoom; bearing and pitch kept only in 3D; versions 1-3 load as 2D          |
 | `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options                                       |
 | `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                       |
 | `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                               |

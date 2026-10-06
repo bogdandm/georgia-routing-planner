@@ -5,6 +5,7 @@ import { expect, test, type Page, type Worker } from '@playwright/test';
 import { installMapProviderFixtures } from './installMapProviderFixtures';
 
 interface StoredMapView {
+  readonly terrainMode: 'flat' | 'terrain';
   readonly camera: { readonly longitude: number; readonly zoom: number };
 }
 
@@ -165,10 +166,14 @@ test('keeps production terrain and contours on the module worker through reload'
     .poll(async () => (await readStoredMapView(page))?.camera.longitude)
     .not.toBe(longitudeBeforeMove);
 
-  // Return to flat mode before the worker teardown/recreation proof.
+  // Return to flat mode before the worker teardown/recreation proof. The reload restores
+  // the persisted mode, so wait for the flat view to be stored first.
   const flatButton = page.getByRole('button', { name: 'Show flat 2D map' });
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode)
+    .toBe('flat');
 
   expect(terrainWorkers).toHaveLength(1);
   expect(closedTerrainWorkers.has(originalTerrainWorker)).toBe(false);

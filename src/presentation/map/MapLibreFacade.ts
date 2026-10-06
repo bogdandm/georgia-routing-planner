@@ -599,6 +599,18 @@ export class MapLibreFacade implements MapFacade {
       if (this.#snapshot.terrainMode !== mode) {
         this.updateSnapshot({ terrainMode: mode });
       }
+      // A restored or shared 3D view mounts as a pitched flat map until terrain starts.
+      // Choosing 2D must level that camera and persist the flat mode. Jump only when
+      // leveling is needed so a redundant request cannot interrupt navigation; jumpTo
+      // emits `moveend`, whose handler persists the leveled view.
+      if (mode === 'flat' && this.#map !== null) {
+        const camera = this.readCamera(this.#map);
+        if (camera.bearing !== 0 || camera.pitch !== 0) {
+          this.#map.jumpTo({ bearing: 0, pitch: 0 });
+        } else {
+          this.onViewSettled({ camera, terrainMode: 'flat' });
+        }
+      }
       return Promise.resolve({ status: 'success', mode });
     }
 

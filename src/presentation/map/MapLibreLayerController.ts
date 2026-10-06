@@ -350,6 +350,26 @@ export interface ImportedTrackHighlightSegment {
   readonly color: string;
 }
 
+function copyImportedTrackHighlightSegments(
+  segments: readonly ImportedTrackHighlightSegment[] | null,
+): readonly ImportedTrackHighlightSegment[] {
+  return (
+    segments?.flatMap((segment) =>
+      segment.coordinates.length < 2
+        ? []
+        : [
+            {
+              color: segment.color,
+              coordinates: segment.coordinates.map(([longitude, latitude]) => [
+                longitude,
+                latitude,
+              ]),
+            },
+          ],
+    ) ?? []
+  );
+}
+
 const logicalNativeLayerGroups: Readonly<
   Record<
     Exclude<LogicalMapLayerId, 'satellite-imagery' | 'scene-footprint'>,
@@ -400,14 +420,21 @@ const logicalNativeLayerGroups: Readonly<
   'imported-tracks': [
     importedTrackLayerIds.casing,
     importedTrackLayerIds.line,
+    importedTrackLayerIds.focusCasing,
+    importedTrackLayerIds.focusLine,
     importedTrackLayerIds.endpoints,
     importedTrackLayerIds.trace,
   ],
-  'track-elevation-gradient': [importedTrackLayerIds.highlight],
+  'track-elevation-gradient': [
+    importedTrackLayerIds.highlight,
+    importedTrackLayerIds.focusHighlight,
+  ],
 };
 
 const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
+/** Opacity multiplier for the track outside a focused climb or descent. */
+const importedTrackDimmedOpacityFactor = 0.3;
 
 interface ImportedTrackEndpoint {
   readonly kind: TrackEndpointKind;
@@ -645,12 +672,14 @@ export class MapLibreLayerController {
   };
   #importedTrackEndpoints: readonly ImportedTrackEndpoint[] = [];
   #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
+  #importedTrackFocusSegments: readonly ImportedTrackHighlightSegment[] = [];
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   readonly #plannedLines: Record<PlannedLineOverlay, PlannedLineState> = {
     'route-plan': emptyPlannedLine,
     measurement: emptyPlannedLine,
   };
   #appliedImportedTrackOpacity: number | null = null;
+  #appliedUnfocusedImportedTrackOpacity: number | null = null;
   readonly #importedTrackLayerAnchors = new Map<string, unknown>();
   #savedMarkers: readonly SavedMarker[] = [];
   #trackMarkers: readonly TrackMarker[] = [];
@@ -792,6 +821,7 @@ export class MapLibreLayerController {
     this.#appliedOpenStreetMapOpacity = null;
     this.#openStreetMapOpacityLayerAnchors.clear();
     this.#appliedImportedTrackOpacity = null;
+    this.#appliedUnfocusedImportedTrackOpacity = null;
     this.#importedTrackLayerAnchors.clear();
     this.#savedMarkerGeneration += 1;
     this.#savedMarkerImages.clear();
@@ -1020,15 +1050,16 @@ export class MapLibreLayerController {
         layerId === 'track-elevation-gradient' ? highlightVisible : visible;
       map.setLayoutProperty(nativeId, 'visibility', nativeVisible ? 'visible' : 'none');
     }
-    if (
-      layerId === 'imported-tracks' &&
-      map.getLayer(importedTrackLayerIds.highlight) !== undefined
-    ) {
-      map.setLayoutProperty(
-        importedTrackLayerIds.highlight,
-        'visibility',
-        highlightVisible ? 'visible' : 'none',
-      );
+    if (layerId === 'imported-tracks') {
+      for (const nativeId of logicalNativeLayerGroups['track-elevation-gradient']) {
+        if (map.getLayer(nativeId) !== undefined) {
+          map.setLayoutProperty(
+            nativeId,
+            'visibility',
+            highlightVisible ? 'visible' : 'none',
+          );
+        }
+      }
     }
     if (layerId === 'satellite-imagery') {
       appliedImagery = this.withRasterVisibility(state.appliedImagery, visible);
@@ -1202,10 +1233,12 @@ export class MapLibreLayerController {
     this.#importedTrackGeometry = { type: 'MultiLineString', coordinates: [] };
     this.#importedTrackEndpoints = [];
     this.#importedTrackHighlightSegments = [];
+    this.#importedTrackFocusSegments = [];
     this.#importedTrackTraceCoordinate = null;
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackEndpoints);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackHighlight);
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackFocus);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
@@ -1215,21 +1248,20 @@ export class MapLibreLayerController {
   public setImportedTrackHighlight(
     segments: readonly ImportedTrackHighlightSegment[] | null,
   ): void {
-    this.#importedTrackHighlightSegments =
-      segments?.flatMap((segment) =>
-        segment.coordinates.length < 2
-          ? []
-          : [
-              {
-                color: segment.color,
-                coordinates: segment.coordinates.map(([longitude, latitude]) => [
-                  longitude,
-                  latitude,
-                ]),
-              },
-            ],
-      ) ?? [];
+    this.#importedTrackHighlightSegments = copyImportedTrackHighlightSegments(segments);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackHighlight);
+    this.reconcileImportedTrackHighlight();
+  }
+
+  /**
+   * Draws one climb or descent above the track and dims the rest of the track; `null`
+   * or no drawable segment restores the undimmed track.
+   */
+  public setImportedTrackFocus(
+    segments: readonly ImportedTrackHighlightSegment[] | null,
+  ): void {
+    this.#importedTrackFocusSegments = copyImportedTrackHighlightSegments(segments);
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackFocus);
     this.reconcileImportedTrackHighlight();
   }
 
@@ -3543,45 +3575,89 @@ export class MapLibreLayerController {
     }
   }
 
+  /** Owns the grade highlight and the focused-segment overlay drawn above it. */
   private reconcileImportedTrackHighlight(): void {
     const map = this.#map;
     if (map?.getLayer(mapLayerIds.background) === undefined) return;
-    this.syncGeoJsonSource(
-      map,
-      mapSourceIds.importedTrackHighlight,
-      (): FeatureCollection<LineString, { readonly color: string }> => ({
-        type: 'FeatureCollection',
-        features: this.#importedTrackHighlightSegments.map((segment) => ({
-          type: 'Feature',
-          properties: { color: segment.color },
-          geometry: {
-            type: 'LineString',
-            coordinates: segment.coordinates.map(([longitude, latitude]) => [
-              longitude,
-              latitude,
-            ]),
-          },
-        })),
-      }),
+    const lineFeatures = (
+      segments: readonly ImportedTrackHighlightSegment[],
+    ): FeatureCollection<LineString, { readonly color: string }> => ({
+      type: 'FeatureCollection',
+      features: segments.map((segment) => ({
+        type: 'Feature',
+        properties: { color: segment.color },
+        geometry: {
+          type: 'LineString',
+          coordinates: segment.coordinates.map(([longitude, latitude]) => [
+            longitude,
+            latitude,
+          ]),
+        },
+      })),
+    });
+    this.syncGeoJsonSource(map, mapSourceIds.importedTrackHighlight, () =>
+      lineFeatures(this.#importedTrackHighlightSegments),
     );
-    if (map.getLayer(importedTrackLayerIds.highlight) === undefined) {
-      map.addLayer({
+    this.syncGeoJsonSource(map, mapSourceIds.importedTrackFocus, () =>
+      lineFeatures(this.#importedTrackFocusSegments),
+    );
+    const { visibility, importedTrackOpacity } = mapLayerStore.getState();
+    const trackVisibility = visibility['imported-tracks'] ? 'visible' : 'none';
+    const highlightVisibility = this.importedTrackHighlightVisible(visibility)
+      ? 'visible'
+      : 'none';
+    // A `null` color paints each feature with its own grade color.
+    const lineLayers: readonly {
+      readonly id: string;
+      readonly source: string;
+      readonly visibility: 'visible' | 'none';
+      readonly color: string | null;
+      readonly width: number;
+    }[] = [
+      {
         id: importedTrackLayerIds.highlight,
-        type: 'line',
         source: mapSourceIds.importedTrackHighlight,
+        visibility: highlightVisibility,
+        color: null,
+        width: importedTrackLineWidth,
+      },
+      {
+        id: importedTrackLayerIds.focusCasing,
+        source: mapSourceIds.importedTrackFocus,
+        visibility: trackVisibility,
+        color: mapVisualPalette.userGeometry.gpxTrackCasing,
+        width: importedTrackCasingWidth,
+      },
+      {
+        id: importedTrackLayerIds.focusLine,
+        source: mapSourceIds.importedTrackFocus,
+        visibility: trackVisibility,
+        color: mapVisualPalette.userGeometry.gpxTrack,
+        width: importedTrackLineWidth,
+      },
+      {
+        id: importedTrackLayerIds.focusHighlight,
+        source: mapSourceIds.importedTrackFocus,
+        visibility: highlightVisibility,
+        color: null,
+        width: importedTrackLineWidth,
+      },
+    ];
+    for (const layer of lineLayers) {
+      if (map.getLayer(layer.id) !== undefined) continue;
+      map.addLayer({
+        id: layer.id,
+        type: 'line',
+        source: layer.source,
         layout: {
-          visibility: this.importedTrackHighlightVisible(
-            mapLayerStore.getState().visibility,
-          )
-            ? 'visible'
-            : 'none',
+          visibility: layer.visibility,
           'line-cap': 'round',
           'line-join': 'round',
         },
         paint: {
-          'line-color': ['get', 'color'],
-          'line-width': importedTrackLineWidth,
-          'line-opacity': mapLayerStore.getState().importedTrackOpacity,
+          'line-color': layer.color ?? ['get', 'color'],
+          'line-width': layer.width,
+          'line-opacity': importedTrackOpacity,
         },
       });
     }
@@ -3640,6 +3716,9 @@ export class MapLibreLayerController {
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
+      importedTrackLayerIds.focusCasing,
+      importedTrackLayerIds.focusLine,
+      importedTrackLayerIds.focusHighlight,
       importedTrackLayerIds.endpoints,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getLayersOrder();
@@ -3665,30 +3744,43 @@ export class MapLibreLayerController {
     this.ensureSavedMarkerLayerOrder(map);
   }
 
+  /** Applies the shared track opacity; a focused segment dims every other track line. */
   private applyImportedTrackPaint(): void {
     const map = this.#map;
     if (map === null) return;
     const { importedTrackOpacity: opacity } = mapLayerStore.getState();
-    const opacityPropertiesByLayer = [
-      [importedTrackLayerIds.casing, ['line-opacity']],
-      [importedTrackLayerIds.line, ['line-opacity']],
-      [importedTrackLayerIds.highlight, ['line-opacity']],
-      [importedTrackLayerIds.endpoints, ['icon-opacity']],
+    const unfocusedOpacity =
+      this.#importedTrackFocusSegments.length === 0
+        ? opacity
+        : opacity * importedTrackDimmedOpacityFactor;
+    const opacityByLayer = [
+      [importedTrackLayerIds.casing, 'line-opacity', unfocusedOpacity],
+      [importedTrackLayerIds.line, 'line-opacity', unfocusedOpacity],
+      [importedTrackLayerIds.highlight, 'line-opacity', unfocusedOpacity],
+      [importedTrackLayerIds.focusCasing, 'line-opacity', opacity],
+      [importedTrackLayerIds.focusLine, 'line-opacity', opacity],
+      [importedTrackLayerIds.focusHighlight, 'line-opacity', opacity],
+      [importedTrackLayerIds.endpoints, 'icon-opacity', opacity],
     ] as const;
-    const layerChanged = opacityPropertiesByLayer.some(
+    const layerChanged = opacityByLayer.some(
       ([layerId]) =>
         map.getLayer(layerId) !== this.#importedTrackLayerAnchors.get(layerId),
     );
-    if (opacity === this.#appliedImportedTrackOpacity && !layerChanged) return;
-    for (const [layerId, properties] of opacityPropertiesByLayer) {
+    if (
+      opacity === this.#appliedImportedTrackOpacity &&
+      unfocusedOpacity === this.#appliedUnfocusedImportedTrackOpacity &&
+      !layerChanged
+    ) {
+      return;
+    }
+    for (const [layerId, property, value] of opacityByLayer) {
       if (map.getLayer(layerId) !== undefined) {
-        for (const property of properties) {
-          map.setPaintProperty(layerId, property, opacity);
-        }
+        map.setPaintProperty(layerId, property, value);
         this.#importedTrackLayerAnchors.set(layerId, map.getLayer(layerId));
       }
     }
     this.#appliedImportedTrackOpacity = opacity;
+    this.#appliedUnfocusedImportedTrackOpacity = unfocusedOpacity;
   }
 
   private currentMapVisualMode(): MapVisualMode {

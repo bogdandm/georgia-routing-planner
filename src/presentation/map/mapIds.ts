@@ -16,6 +16,7 @@ export const mapSourceIds = {
   sentinelFootprint: 'sentinel-footprint',
   importedTrack: 'imported-track',
   importedTrackHighlight: 'imported-track-highlight',
+  importedTrackFocus: 'imported-track-focus',
   importedTrackTrace: 'imported-track-trace',
   importedTrackEndpoints: 'imported-track-endpoints',
   routePlan: 'route-plan',
@@ -70,6 +71,9 @@ export const importedTrackLayerIds = {
   casing: 'imported-track-casing',
   line: 'imported-track-line',
   highlight: 'imported-track-highlight',
+  focusCasing: 'imported-track-focus-casing',
+  focusLine: 'imported-track-focus-line',
+  focusHighlight: 'imported-track-focus-highlight',
   endpoints: 'imported-track-endpoints',
   trace: 'imported-track-trace',
 } as const;

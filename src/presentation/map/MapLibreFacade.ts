@@ -50,6 +50,7 @@ import {
   type MapPointInspection,
   type NearbyPoi,
   type MapSourceFailure,
+  type MapTravelDirection,
   type MapViewportBounds,
   type MapViewportSnapshot,
   type MapWebGlCapabilities,
@@ -60,6 +61,18 @@ import {
   formatDistanceWithMeters,
   formatElevationChange,
 } from '@/presentation/tracks/trackFormatters';
+
+/** Navigator-style camera pitch for fits that face a travel direction in 3D. */
+const directedFitPitchDegrees = 45;
+
+/** Web Mercator screen bearing from `from` to `to`, matching MapLibre's rotation. */
+function travelBearingDegrees({ from, to }: MapTravelDirection): number {
+  const mercatorY = (latitude: number) =>
+    Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
+  const east = ((to.longitude - from.longitude) * Math.PI) / 180;
+  const north = mercatorY(to.latitude) - mercatorY(from.latitude);
+  return (Math.atan2(east, north) * 180) / Math.PI;
+}
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -514,9 +527,14 @@ export class MapLibreFacade implements MapFacade {
     bounds: MapViewportBounds,
     maxZoom: number,
     padding?: MapFitPadding,
+    direction?: MapTravelDirection,
   ): void {
     const map = this.#map;
     if (map === null) return;
+    const faceDirection =
+      direction !== undefined && this.#snapshot.terrainMode === 'terrain';
+    // MapLibre computes the fit as if unpitched. At 45° the far half compresses and the
+    // near half grows by at most a third, so the padded span stays essentially in view.
     map.fitBounds(
       [
         [bounds.west, bounds.south],
@@ -526,8 +544,8 @@ export class MapLibreFacade implements MapFacade {
         padding: padding ?? 56,
         maxZoom,
         duration: 650,
-        bearing: map.getBearing(),
-        pitch: map.getPitch(),
+        bearing: faceDirection ? travelBearingDegrees(direction) : map.getBearing(),
+        pitch: faceDirection ? directedFitPitchDegrees : map.getPitch(),
       },
     );
     this.logger.log({

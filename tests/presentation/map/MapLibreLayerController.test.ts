@@ -1142,6 +1142,9 @@ describe('MapLibreLayerController', () => {
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
+      importedTrackLayerIds.focusCasing,
+      importedTrackLayerIds.focusLine,
+      importedTrackLayerIds.focusHighlight,
       importedTrackLayerIds.endpoints,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
     expect(importedTrackLineLayerIdsInOrder).toEqual(
@@ -1670,6 +1673,95 @@ describe('MapLibreLayerController', () => {
       'data.features',
       [],
     );
+  });
+
+  it('dims the track outside a focused segment and restores it', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [44.2, 42.2],
+          [44.3, 42.3],
+          [44.4, 42.4],
+        ],
+      ],
+    ]);
+    controller.setImportedTrackOpacity(0.8);
+    const focus = {
+      color: '#D6A100',
+      coordinates: [
+        [44.3, 42.3],
+        [44.4, 42.4],
+      ] as const,
+    };
+    const opacityOf = (layerId: string) =>
+      map.paintProperties.get(
+        `${layerId}.${layerId === importedTrackLayerIds.endpoints ? 'icon' : 'line'}-opacity`,
+      );
+    const unfocusedLayerIds = [
+      importedTrackLayerIds.casing,
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.highlight,
+    ];
+    const fullOpacityLayerIds = [
+      importedTrackLayerIds.focusCasing,
+      importedTrackLayerIds.focusLine,
+      importedTrackLayerIds.focusHighlight,
+      importedTrackLayerIds.endpoints,
+    ];
+
+    controller.setImportedTrackFocus([focus]);
+
+    expect(map.sources.get(mapSourceIds.importedTrackFocus)).toHaveProperty(
+      'data.features',
+      [
+        {
+          type: 'Feature',
+          properties: { color: '#D6A100' },
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [44.3, 42.3],
+              [44.4, 42.4],
+            ],
+          },
+        },
+      ],
+    );
+    expect(map.layers.get(importedTrackLayerIds.focusHighlight)).toMatchObject({
+      source: mapSourceIds.importedTrackFocus,
+      paint: { 'line-color': ['get', 'color'] },
+    });
+    for (const layerId of unfocusedLayerIds) {
+      expect(opacityOf(layerId)).toBeCloseTo(0.24);
+    }
+    for (const layerId of fullOpacityLayerIds) {
+      expect(opacityOf(layerId)).toBe(0.8);
+    }
+
+    expect(controller.setLayerVisibility('track-elevation-gradient', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.focusHighlight)).toBe('none');
+    expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(importedTrackLayerIds.focusCasing)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.focusLine)).toBe('none');
+
+    controller.setImportedTrackFocus(null);
+
+    expect(map.sources.get(mapSourceIds.importedTrackFocus)).toHaveProperty(
+      'data.features',
+      [],
+    );
+    for (const layerId of [...unfocusedLayerIds, ...fullOpacityLayerIds]) {
+      expect(opacityOf(layerId)).toBe(0.8);
+    }
   });
 
   it('moves and clears the imported-track trace point', () => {

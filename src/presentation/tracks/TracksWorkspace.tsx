@@ -4341,6 +4341,8 @@ function InteractiveElevationProfile({
   const [hoveredSegment, setHoveredSegment] = useState<{
     readonly profile: ElevationProfile;
     readonly index: number;
+    /** Only Climbs & Descents rows focus the segment on the map; chart hover does not. */
+    readonly fromList: boolean;
   } | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<{
     readonly profile: ElevationProfile;
@@ -4360,18 +4362,70 @@ function InteractiveElevationProfile({
   }, [mapLayers, profile]);
   const hoveredSegmentIndex =
     hoveredSegment?.profile === profile ? hoveredSegment.index : null;
+  const mapFocusSegmentIndex =
+    hoveredSegment?.profile === profile && hoveredSegment.fromList
+      ? hoveredSegment.index
+      : null;
   const selectedSegmentIndex =
     selectedSegment?.profile === profile ? selectedSegment.index : null;
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
-  const onSegmentHoverChange = (nextSegmentIndex: number | null) => {
+  useEffect(() => {
+    const segment =
+      mapFocusSegmentIndex === null
+        ? undefined
+        : profile.segments[mapFocusSegmentIndex];
+    if (mapLayers === null || segment === undefined) return;
+    mapLayers.setImportedTrackFocus(
+      segment.gradeSubsegments.map((gradeSubsegment) => ({
+        coordinates: profile.points
+          .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
+          .map((point) => point.coordinate),
+        color: appColors.elevationGrade[gradeSubsegment.band],
+      })),
+    );
+    return () => {
+      mapLayers.setImportedTrackFocus(null);
+    };
+  }, [mapFocusSegmentIndex, mapLayers, profile]);
+  const onSegmentHoverChange = (nextSegmentIndex: number | null, fromList: boolean) => {
     if (nextSegmentIndex === null) {
       setHoveredSegment(null);
       return;
     }
     setHoveredSegment((current) =>
-      current?.profile === profile && current.index === nextSegmentIndex
+      current?.profile === profile &&
+      current.index === nextSegmentIndex &&
+      current.fromList === fromList
         ? current
-        : { profile, index: nextSegmentIndex },
+        : { profile, index: nextSegmentIndex, fromList },
+    );
+  };
+  /** Fits the segment; in 3D the camera faces from its start toward its finish. */
+  const fitSegmentOnMap = (segmentIndex: number) => {
+    const segment = profile.segments[segmentIndex];
+    if (segment === undefined) return;
+    const coordinates = profile.points
+      .slice(segment.startSampleIndex, segment.endSampleIndex + 1)
+      .map((point) => point.coordinate);
+    const start = coordinates[0];
+    const finish = coordinates.at(-1);
+    if (start === undefined || finish === undefined) return;
+    const longitudes = coordinates.map(([longitude]) => longitude);
+    const latitudes = coordinates.map(([, latitude]) => latitude);
+    requestMapFitBounds(
+      {
+        west: Math.min(...longitudes),
+        south: Math.min(...latitudes),
+        east: Math.max(...longitudes),
+        north: Math.max(...latitudes),
+      },
+      16,
+      {
+        direction: {
+          from: { longitude: start[0], latitude: start[1] },
+          to: { longitude: finish[0], latitude: finish[1] },
+        },
+      },
     );
   };
   const onSegmentSelectionChange = (nextSegmentIndex: number | null) => {
@@ -4403,7 +4457,9 @@ function InteractiveElevationProfile({
             tracedPoint.current = point;
             mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
           }}
-          onSegmentHoverChange={onSegmentHoverChange}
+          onSegmentHoverChange={(index) => {
+            onSegmentHoverChange(index, false);
+          }}
           onSegmentSelectionChange={onSegmentSelectionChange}
           onPointClick={(point) => {
             requestMapNavigation({
@@ -4431,8 +4487,13 @@ function InteractiveElevationProfile({
           segments={profile.segments}
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
-          onSegmentHoverChange={onSegmentHoverChange}
-          onSegmentSelectionChange={onSegmentSelectionChange}
+          onSegmentHoverChange={(index) => {
+            onSegmentHoverChange(index, true);
+          }}
+          onSegmentSelectionChange={(index) => {
+            onSegmentSelectionChange(index);
+            if (index !== null) fitSegmentOnMap(index);
+          }}
         />
       ) : null}
     </Stack>

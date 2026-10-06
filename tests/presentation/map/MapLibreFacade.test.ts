@@ -369,6 +369,38 @@ describe('MapLibreFacade', () => {
     });
   });
 
+  it('faces a directed fit from start to finish at 45 degrees only in 3D', () => {
+    const services = createTestServices();
+    const bounds = { west: 44, south: 42, east: 44.1, north: 42.05 };
+    const westward = {
+      from: { longitude: 44.1, latitude: 42 },
+      to: { longitude: 44, latitude: 42 },
+    };
+    const flatMap = new FakeNativeMap();
+    const flatFacade = new MapLibreFacade(services.logger);
+    flatFacade.attach(flatMap as unknown as MapLibreMap);
+    flatFacade.fitBounds(bounds, 16, undefined, westward);
+    expect(flatMap.fitBoundsCalls.at(-1)).toMatchObject({
+      maxZoom: 16,
+      bearing: flatMap.getBearing(),
+      pitch: flatMap.getPitch(),
+    });
+
+    const terrainMap = new FakeNativeMap();
+    terrainMap.initialTerrain = { source: 'terrain-dem' };
+    const terrainFacade = new MapLibreFacade(services.logger);
+    terrainFacade.attach(terrainMap as unknown as MapLibreMap);
+    terrainMap.fire('style.load');
+    terrainFacade.fitBounds(bounds, 16, undefined, westward);
+    expect(terrainMap.fitBoundsCalls.at(-1)).toMatchObject({ bearing: -90, pitch: 45 });
+
+    terrainFacade.fitBounds(bounds, 16, undefined, {
+      from: westward.to,
+      to: { longitude: 44, latitude: 41.9 },
+    });
+    expect(terrainMap.fitBoundsCalls.at(-1)).toMatchObject({ bearing: 180, pitch: 45 });
+  });
+
   it('preserves subscribers while the native ref detaches and reattaches', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

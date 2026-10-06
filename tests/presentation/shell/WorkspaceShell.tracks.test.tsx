@@ -2389,6 +2389,7 @@ describe('WorkspaceShell', () => {
     expect(mapLayers).not.toBeNull();
     if (mapLayers === null) return;
     const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
+    const setImportedTrackFocus = vi.spyOn(mapLayers, 'setImportedTrackFocus');
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
       schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:test-1',
@@ -2487,14 +2488,34 @@ describe('WorkspaceShell', () => {
       );
     }
     const highlightCallCount = setImportedTrackHighlight.mock.calls.length;
+    const trackFitCommand = mapInteractionStore.getState().fitBoundsCommand;
+    expect(trackFitCommand).toMatchObject({
+      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
+    });
+    expect(trackFitCommand?.padding).toBeUndefined();
+    expect(trackFitCommand?.direction).toBeUndefined();
     const elevationDisclosure = within(details).getByRole('button', {
       name: 'Climbs & Descents',
     });
     expect(elevationDisclosure).toHaveAttribute('aria-expanded', 'false');
     await user.click(elevationDisclosure);
     const climb = within(details).getByRole('button', { name: /^Climb 1/u });
+    await user.hover(climb);
+    const focusedSegments = setImportedTrackFocus.mock.lastCall?.[0];
+    expect(focusedSegments?.length).toBeGreaterThan(0);
+    expect(focusedSegments?.[0]?.coordinates[0]).toEqual([44, 42]);
     await user.click(climb);
     expect(climb).toHaveAttribute('aria-pressed', 'true');
+    expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
+      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
+      maxZoom: 16,
+      direction: {
+        from: { longitude: 44, latitude: 42 },
+        to: { longitude: 44.03, latitude: 42.03 },
+      },
+    });
+    await user.unhover(climb);
+    expect(setImportedTrackFocus).toHaveBeenLastCalledWith(null);
     expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
     expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
@@ -2521,11 +2542,6 @@ describe('WorkspaceShell', () => {
     expect(
       discard.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    const fitBoundsCommand = mapInteractionStore.getState().fitBoundsCommand;
-    expect(fitBoundsCommand).toMatchObject({
-      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
-    });
-    expect(fitBoundsCommand?.padding).toBeUndefined();
     const leaveEvent = new Event('beforeunload', { cancelable: true });
     expect(window.dispatchEvent(leaveEvent)).toBe(false);
 

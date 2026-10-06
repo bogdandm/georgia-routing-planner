@@ -31,6 +31,15 @@ export interface MapFitPadding {
   readonly left: number;
 }
 
+/**
+ * Direction of travel through fitted bounds. In 3D the camera turns so `from` sits at
+ * the bottom of the screen and `to` at the top; flat maps keep their orientation.
+ */
+export interface MapTravelDirection {
+  readonly from: MapCoordinate;
+  readonly to: MapCoordinate;
+}
+
 export interface MapViewportSnapshot {
   readonly bounds: MapViewportBounds;
   readonly center: MapCoordinate;

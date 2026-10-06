@@ -685,12 +685,12 @@ export function MapWorkspace({
     if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
     runThenConsume(
       () => {
-        const padding = fitBoundsCommand.padding ?? getNavigationPadding?.();
-        if (padding === undefined) {
-          facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom);
-        } else {
-          facade.fitBounds(fitBoundsCommand.bounds, fitBoundsCommand.maxZoom, padding);
-        }
+        facade.fitBounds(
+          fitBoundsCommand.bounds,
+          fitBoundsCommand.maxZoom,
+          fitBoundsCommand.padding ?? getNavigationPadding?.(),
+          fitBoundsCommand.direction,
+        );
       },
       () => {
         consumeMapFitBoundsCommand(fitBoundsCommand.id);

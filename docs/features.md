@@ -227,12 +227,15 @@ Downloads preserve segments, name, canonical elevation, and aligned timestamps. 
 writes track markers as root `<wpt>` elements before `<trk>`; KML is geometry-only.
 
 With usable elevation, the map colors every non-flat climb/descent grade subsegment of
-the active track, leaving flat spans blue; chart and Climbs & Descents hover stay
-panel-only. The interactive distance profile has axes, tooltip, and a map marker at the
-highlighted point. Source elevation drives the profile, grades, and climbs unless it has
-no complete run, in which case the Terrarium profile is used. On desktop and tablet, a
-lower-right grade legend explains the colors; its dismissal persists and the profile
-chart offers **Show track grade legend** to restore it.
+the active track, leaving flat spans blue; chart hover stays panel-only. Hovering or
+focusing a Climbs & Descents row dims the track outside that climb or descent on the
+map. Selecting a row fits the map to the segment; in 3D the camera also turns to face
+from its start toward its finish at a 45° pitch, so the start sits at the bottom of the
+screen and the finish at the top. The interactive distance profile has axes, tooltip,
+and a map marker at the highlighted point. Source elevation drives the profile, grades,
+and climbs unless it has no complete run, in which case the Terrarium profile is used.
+On desktop and tablet, a lower-right grade legend explains the colors; its dismissal
+persists and the profile chart offers **Show track grade legend** to restore it.
 
 Editable single tracks show a collapsed **Markers** section with an add action, map
 navigation, inline rename, and two-stage deletion. Only the active editable track

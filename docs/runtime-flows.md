@@ -471,10 +471,15 @@ waypoints.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the
-lower-right grade legend appears with it. Chart and climb hovers change panel emphasis
-only; the chart point drives a separate transient trace-point source. Import and track
-selection issue one fit command padded for the Tracks panes; closing clears the source
-without touching storage or the camera.
+lower-right grade legend appears with it. Chart hover changes panel emphasis only; the
+chart point drives a separate transient trace-point source. A hovered Climbs & Descents
+row sends that segment's grade subsegments to `setImportedTrackFocus`, a transient focus
+source drawn with its own casing, line, and grade layers above the highlight; while it
+is non-empty the base casing, line, and highlight drop to 30% of the track opacity.
+Selecting a row issues a fit command with the segment's start-to-finish direction, which
+the facade turns into a Web Mercator bearing and 45° pitch only in terrain mode. Import
+and track selection issue one fit command padded for the Tracks panes; closing clears
+the sources without touching storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
 authoritative; calculated Terrarium elevation is the profile fallback only when no

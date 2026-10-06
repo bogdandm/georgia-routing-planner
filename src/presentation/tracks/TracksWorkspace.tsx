@@ -1308,9 +1308,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return;
     }
     mapLayers?.clearPlannedLineGeometry('route-plan');
+    // Tracks without source elevation fit again once their DEM samples arrive, so the
+    // 3D fit can see their relief.
+    const awaitsDemRelief =
+      active.kind !== 'saved' &&
+      active.preparationStatus === 'ready' &&
+      active.sourceProfile === null;
+    const demRelief = awaitsDemRelief && active.calculatedSegments !== null;
     const trackId =
       active.kind === 'preview' || active.kind === 'shared'
-        ? `${active.id}:${active.preparationStatus}`
+        ? // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
+          `${active.id}:${active.preparationStatus}${demRelief ? ':dem' : ''}`
         : active.summary.id;
     if (renderedTrackId.current === trackId) return;
     const segments =
@@ -1320,17 +1328,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? active.sourceSegments
             : active.parsed.segments
           ).map((segment) => segment.points.map((point) => point.coordinate));
-    // The 3D fit needs relief; tracks without source elevation use their DEM samples,
-    // which saving promotes to the primary points.
+    // The 3D fit needs relief. Saving promotes DEM samples to the primary points; before
+    // that, DEM samples join the drawn source points, which keep any span the DEM missed.
     const elevatedPoints =
       active.kind === 'saved'
         ? active.content.trackPoints.flat()
-        : active.preparationStatus !== 'ready'
-          ? active.parsed.segments.flatMap((segment) => segment.points)
-          : (active.sourceProfile === null
-              ? (active.calculatedSegments ?? active.sourceSegments)
-              : active.sourceSegments
-            ).flatMap((segment) => segment.points);
+        : [
+            ...(active.preparationStatus === 'ready'
+              ? active.sourceSegments
+              : active.parsed.segments
+            ).flatMap((segment) => segment.points),
+            ...(awaitsDemRelief && active.calculatedSegments !== null
+              ? active.calculatedSegments.flatMap((segment) => segment.points)
+              : []),
+          ];
     const metrics =
       active.kind === 'saved'
         ? active.summary.metrics

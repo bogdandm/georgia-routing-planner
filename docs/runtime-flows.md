@@ -485,12 +485,13 @@ never looks dimmed. Selecting a row issues a fit command with the segment's
 antimeridian-aware bounds and a travel path: its points with elevation, facing start to
 finish. Import and track selection issue one fit command padded for the Tracks panes
 whose path faces `trackOutboundDirection`: start to finish, or start to the farthest
-point for an `isLoop` track. Tracks without source elevation contribute their DEM
-samples. Flat mode fits the bounds in the current orientation. In terrain mode the
-facade instead flies to the result of `directedCameraFit`: MapLibre fits as if unpitched
-and ignores relief, so at 45° the far half compresses and points above the terrain under
-the center rise toward the horizon. The solver projects the path through MapLibre's
-pinhole camera at the target pitch. It uses rendered terrain heights from
+point for an `isLoop` track. Tracks without source elevation add their DEM samples to
+the drawn points and fit again once those samples arrive; drawing another track clears
+any focus at once. Flat mode fits the bounds in the current orientation. In terrain mode
+the facade instead flies to the result of `directedCameraFit`: MapLibre fits as if
+unpitched and ignores relief, so at 45° the far half compresses and points above the
+terrain under the center rise toward the horizon. The solver projects the path through
+MapLibre's pinhole camera at the target pitch. It uses rendered terrain heights from
 `queryTerrainElevation` inside the current view and track elevations elsewhere, and
 keeps about 500 points: the per-window extremes across, along, and in elevation. It
 re-solves until the camera sits on the terrain under its own center, at that latitude's

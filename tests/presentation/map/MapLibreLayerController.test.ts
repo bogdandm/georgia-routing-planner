@@ -1771,8 +1771,11 @@ describe('MapLibreLayerController', () => {
       '#0F766E',
     );
     for (const layerId of trackLayerIds) expect(opacityOf(layerId)).toBeCloseTo(0.24);
-    expectSlot(slotB, 0.8, { duration: 300, delay: 0 });
+    // The incoming slot resets first, then fades in after the frame renders the reset.
     expectSlot(slotA, 0, { duration: 300, delay: 0 });
+    expectSlot(slotB, 0, { duration: 0, delay: 0 });
+    map.fire('render', {});
+    expectSlot(slotB, 0.8, { duration: 300, delay: 0 });
 
     expect(controller.setLayerVisibility('track-elevation-gradient', false)).toEqual({
       status: 'success',
@@ -1788,6 +1791,21 @@ describe('MapLibreLayerController', () => {
     for (const layerId of trackLayerIds) expect(opacityOf(layerId)).toBe(0.8);
     // The released segment stays drawn while the track fades back, then hides.
     expectSlot(slotB, 0, { duration: 0, delay: 300 });
+
+    controller.setImportedTrackFocus([climb]);
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [45, 43],
+          [45.1, 43.1],
+        ],
+      ],
+    ]);
+
+    // A newly drawn track drops the previous track's focus at once.
+    for (const layerId of trackLayerIds) expect(opacityOf(layerId)).toBe(0.8);
+    expectSlot(slotA, 0, { duration: 0, delay: 0 });
+    expectSlot(slotB, 0, { duration: 0, delay: 0 });
   });
 
   it('moves and clears the imported-track trace point', () => {

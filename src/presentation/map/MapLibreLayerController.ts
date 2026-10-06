@@ -707,6 +707,8 @@ export class MapLibreLayerController {
   ] = [[], []];
   #activeImportedTrackFocusSlot: ImportedTrackFocusSlot = 0;
   #importedTrackFocused = false;
+  /** Cancels a cross-fade waiting for the frame that renders its slot reset. */
+  #cancelImportedTrackFocusReveal: (() => void) | null = null;
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   readonly #plannedLines: Record<PlannedLineOverlay, PlannedLineState> = {
     'route-plan': emptyPlannedLine,
@@ -836,6 +838,7 @@ export class MapLibreLayerController {
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);
+    this.#cancelImportedTrackFocusReveal?.();
     this.cancelRasterRecovery();
     this.#activeApplyController?.abort();
     this.#mosaicApplyController?.abort();
@@ -1260,6 +1263,8 @@ export class MapLibreLayerController {
     });
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackEndpoints);
+    // A new track must not inherit the previous one's lingering focus overlay.
+    this.resetImportedTrackFocus();
     return this.reconcileImportedTrack();
   }
 
@@ -1267,19 +1272,12 @@ export class MapLibreLayerController {
     this.#importedTrackGeometry = { type: 'MultiLineString', coordinates: [] };
     this.#importedTrackEndpoints = [];
     this.#importedTrackHighlightSegments = [];
-    this.#importedTrackFocusSegments[0] = [];
-    this.#importedTrackFocusSegments[1] = [];
-    this.#importedTrackFocused = false;
+    this.resetImportedTrackFocus();
     this.#importedTrackTraceCoordinate = null;
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrack);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackEndpoints);
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackHighlight);
-    for (const slot of importedTrackFocusSlots) {
-      this.#currentGeoJsonSources.delete(slot.source);
-    }
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
-    this.setImportedTrackFocusOpacity(0, 0, { duration: 0, delay: 0 });
-    this.setImportedTrackFocusOpacity(1, 0, { duration: 0, delay: 0 });
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
@@ -1305,6 +1303,7 @@ export class MapLibreLayerController {
     const focusSegments = copyImportedTrackHighlightSegments(segments);
     const { importedTrackOpacity: opacity } = mapLayerStore.getState();
     const previousSlot = this.#activeImportedTrackFocusSlot;
+    this.#cancelImportedTrackFocusReveal?.();
     if (focusSegments.length === 0) {
       if (!this.#importedTrackFocused) return;
       this.#importedTrackFocused = false;
@@ -1321,14 +1320,48 @@ export class MapLibreLayerController {
         ? 1
         : 0
       : previousSlot;
+    const otherSlot: ImportedTrackFocusSlot = slot === 0 ? 1 : 0;
     this.#activeImportedTrackFocusSlot = slot;
     this.#importedTrackFocusSegments[slot] = focusSegments;
     this.#importedTrackFocused = true;
     this.#currentGeoJsonSources.delete(importedTrackFocusSlots[slot].source);
     this.reconcileImportedTrackHighlight();
-    const fade = { duration: switching ? mapPaintFadeMilliseconds : 0, delay: 0 };
-    this.setImportedTrackFocusOpacity(slot, opacity, fade);
-    this.setImportedTrackFocusOpacity(slot === 0 ? 1 : 0, 0, fade);
+    if (!switching) {
+      this.setImportedTrackFocusOpacity(slot, opacity, { duration: 0, delay: 0 });
+      this.setImportedTrackFocusOpacity(otherSlot, 0, { duration: 0, delay: 0 });
+      return;
+    }
+    // Cross-fade. The incoming slot may still be fading out an earlier segment, so it
+    // drops to zero first and fades in after the frame that renders that reset; MapLibre
+    // applies only the last paint change made within one frame.
+    const fade = { duration: mapPaintFadeMilliseconds, delay: 0 };
+    this.setImportedTrackFocusOpacity(otherSlot, 0, fade);
+    this.setImportedTrackFocusOpacity(slot, 0, { duration: 0, delay: 0 });
+    const map = this.#map;
+    if (map === null) return;
+    const reveal = () => {
+      cancel();
+      this.setImportedTrackFocusOpacity(slot, opacity, fade);
+    };
+    const cancel = () => {
+      map.off('render', reveal);
+      this.#cancelImportedTrackFocusReveal = null;
+    };
+    this.#cancelImportedTrackFocusReveal = cancel;
+    map.on('render', reveal);
+  }
+
+  /** Hides both focus slots at once and forgets their segments. */
+  private resetImportedTrackFocus(): void {
+    this.#cancelImportedTrackFocusReveal?.();
+    this.#importedTrackFocused = false;
+    for (const [slot, { source }] of importedTrackFocusSlots.entries()) {
+      if (this.#importedTrackFocusSegments[slot]?.length === 0) continue;
+      this.#importedTrackFocusSegments[slot] = [];
+      this.#currentGeoJsonSources.delete(source);
+    }
+    this.setImportedTrackFocusOpacity(0, 0, { duration: 0, delay: 0 });
+    this.setImportedTrackFocusOpacity(1, 0, { duration: 0, delay: 0 });
   }
 
   public setImportedTrackTracePoint(

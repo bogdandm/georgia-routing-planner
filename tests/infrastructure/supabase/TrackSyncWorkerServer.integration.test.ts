@@ -330,6 +330,60 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
+  it('adopts a newer account folder instead of uploading a stale local edit', async () => {
+    await database.trackFolders.put({
+      ...folder('folder:trips', 'Trips', 1),
+      updatedAt: '2026-09-28T01:00:00.000Z',
+    });
+    const accountTrips = {
+      ...folder('folder:trips', 'Summer trips', 1),
+      iconKey: 'hiking' as const,
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    };
+    const mutateFolder = vi.fn();
+    const gateway = {
+      folderSnapshot: vi.fn(() =>
+        Promise.resolve([
+          {
+            folder_id: 'imports',
+            revision: 1,
+            payload: folder('imports', 'Imports', 0),
+          },
+          { folder_id: 'folder:trips', revision: 7, payload: accountTrips },
+        ]),
+      ),
+      mutateFolder,
+      status: vi.fn().mockResolvedValue({
+        usedBytes: 0,
+        reservedBytes: 0,
+        limitBytes: 8_388_608,
+      }),
+      snapshot: vi.fn().mockResolvedValue([]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    expect(mutateFolder).not.toHaveBeenCalled();
+    await expect(database.trackFolders.get('folder:trips')).resolves.toEqual(
+      accountTrips,
+    );
+    await expect(database.folderSyncStates.get('folder:trips')).resolves.toMatchObject({
+      remoteRevision: 7,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
+
   it('uploads a local reorder as one complete order and then adopts it', async () => {
     const trips = folder('folder:trips', 'Trips', 1);
     const imports = folder('imports', 'Imports', 0);
@@ -821,7 +875,8 @@ describe('TrackSyncWorkerServer', () => {
           {
             ...remote,
             revision: rebased ? 14 : 13,
-            metadata: { favorite: rebased },
+            // Older than the local copy, so the local metadata is uploaded.
+            metadata: { favorite: rebased, updatedAt: '2026-07-01T00:00:00.000Z' },
           },
         ]);
       }),
@@ -851,6 +906,84 @@ describe('TrackSyncWorkerServer', () => {
     );
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
       remoteRevision: 14,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
+
+  it('adopts a newer account placement for a track this browser never synchronized', async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    // A browser joining the account still holds its original Imports copy.
+    const stale = summary('local:stale-copy');
+    await database.saveLocalTrack(stale, content(stale.id));
+    const trips = folder('folder:trips', 'Trips', 1);
+    const compressed = gzipSync(encodeTrackSyncGeometry(content(stale.id)));
+    const remote = {
+      content_hash: contentHash,
+      revision: 13,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: compressed.byteLength,
+      metadata: {
+        name: 'Sorted track',
+        savedAt: stale.savedAt,
+        updatedAt: '2026-10-05T19:48:00.000Z',
+        sourceFilename: stale.sourceFilename,
+        sourceFormat: 'gpx',
+        favorite: false,
+        geometryKind: 'track',
+        folderId: trips.id,
+        metadata: { version: '1.1', links: [] },
+        warnings: [],
+        lineageHash: legacyContentHash,
+        geometryVersion: 2,
+      },
+    };
+    const mutate = vi
+      .fn()
+      .mockResolvedValue({ outcome: 'existing' as const, revision: 13 });
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      folderSnapshot: vi.fn(() =>
+        Promise.resolve([
+          {
+            folder_id: 'imports',
+            revision: 1,
+            payload: folder('imports', 'Imports', 0),
+          },
+          { folder_id: trips.id, revision: 2, payload: trips },
+        ]),
+      ),
+      mutateFolder: vi.fn(),
+      status: () =>
+        Promise.resolve({
+          usedBytes: compressed.byteLength,
+          reservedBytes: 0,
+          limitBytes: 8_388_608,
+        }),
+      snapshot: vi.fn().mockResolvedValue([remote]),
+      mutate,
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn().mockResolvedValue(compressed),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    expect(mutate).toHaveBeenCalledTimes(1);
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({
+        id: stale.id,
+        name: 'Sorted track',
+        folderId: trips.id,
+      }),
+    ]);
+    await expect(database.loadTrackSyncState(stale.id)).resolves.toMatchObject({
+      remoteRevision: 13,
       pendingKind: null,
     });
     client.dispose();

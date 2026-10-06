@@ -142,10 +142,21 @@ export function ClimbsDescentsSection({
               <Trans>No significant climbs or descents.</Trans>
             </Typography>
           ) : (
+            // Rows only claim the hover; the list releases it, so crossing the gap
+            // between rows keeps the map focused instead of flashing the whole track.
             <Stack
               component="ul"
               spacing={0.75}
               aria-label={t`Route climbs and descents`}
+              onPointerLeave={() => {
+                onSegmentHoverChange(null);
+              }}
+              onBlur={(event) => {
+                const next = event.relatedTarget;
+                if (!(next instanceof Node) || !event.currentTarget.contains(next)) {
+                  onSegmentHoverChange(null);
+                }
+              }}
               sx={{ m: 0, p: 0, listStyle: 'none' }}
             >
               {directionalSegments.map(({ segment, segmentIndex, typeNumber }) => {
@@ -189,14 +200,8 @@ export function ClimbsDescentsSection({
                       onFocus={() => {
                         onSegmentHoverChange(segmentIndex);
                       }}
-                      onBlur={() => {
-                        onSegmentHoverChange(null);
-                      }}
                       onPointerEnter={() => {
                         onSegmentHoverChange(segmentIndex);
-                      }}
-                      onPointerLeave={() => {
-                        onSegmentHoverChange(null);
                       }}
                       sx={{
                         width: '100%',

@@ -1675,7 +1675,7 @@ describe('MapLibreLayerController', () => {
     );
   });
 
-  it('dims the track outside a focused segment and restores it', () => {
+  it('dims the track outside a focused segment and releases it after the fade', () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -1755,12 +1755,16 @@ describe('MapLibreLayerController', () => {
 
     controller.setImportedTrackFocus(null);
 
-    expect(map.sources.get(mapSourceIds.importedTrackFocus)).toHaveProperty(
-      'data.features',
-      [],
-    );
-    for (const layerId of [...unfocusedLayerIds, ...fullOpacityLayerIds]) {
+    for (const layerId of [...unfocusedLayerIds, importedTrackLayerIds.endpoints]) {
       expect(opacityOf(layerId)).toBe(0.8);
+    }
+    // The overlay keeps the segment fully drawn while the track fades back, then hides.
+    for (const layerId of fullOpacityLayerIds.slice(0, 3)) {
+      expect(opacityOf(layerId)).toBe(0);
+      expect(map.paintProperties.get(`${layerId}.line-opacity-transition`)).toEqual({
+        duration: 0,
+        delay: 300,
+      });
     }
   });
 

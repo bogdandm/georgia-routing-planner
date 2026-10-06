@@ -2078,7 +2078,7 @@ describe('MapWorkspace', () => {
     if (mapLayers === null) return;
     vi.spyOn(mapLayers, 'setMapLayerPreset').mockReturnValue({
       status: 'failed',
-      message: 'The map is not ready yet.',
+      problem: { code: 'map-not-ready' },
     });
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });

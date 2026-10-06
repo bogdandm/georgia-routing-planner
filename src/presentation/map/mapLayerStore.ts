@@ -98,10 +98,54 @@ export type AppliedSatelliteMosaicSnapshot =
       readonly problem: SatelliteImageryProblem;
     } & AppliedSatelliteMosaicFields);
 
+/**
+ * Why a map-layer command failed. The layers panel maps each code to localized copy;
+ * `satellite-imagery-failed` reuses the satellite imagery problem mapping.
+ * `terrain-overlay-failed` is only returned by commands; the store publishes that
+ * failure in `terrainOverlays.problem` instead of `layerProblem`.
+ */
+export type MapLayerProblem =
+  | { readonly code: 'map-not-ready' }
+  | { readonly code: 'weather-hides-terrain' }
+  | { readonly code: 'scene-required' }
+  | { readonly code: 'preset-requires-scene' }
+  | { readonly code: 'layer-unavailable' }
+  | { readonly code: 'opacity-out-of-range' }
+  | { readonly code: 'track-geometry-invalid' }
+  | { readonly code: 'track-render-failed' }
+  | { readonly code: 'planned-line-geometry-invalid' }
+  | { readonly code: 'planned-line-render-failed' }
+  | {
+      readonly code: 'satellite-imagery-failed';
+      readonly problem: SatelliteImageryProblem;
+    }
+  | {
+      readonly code: 'terrain-overlay-failed';
+      readonly problem: TerrainOverlayProblem;
+    };
+
+/** Why terrain relief or contour overlays could not be configured or rendered. */
+export type TerrainOverlayProblem =
+  | 'map-not-ready'
+  | 'unsupported-contour-interval'
+  | 'relief-render-failed'
+  | 'contours-failed';
+
+/** Why the weather map could not be enabled or changed. */
+export type WeatherMapProblem =
+  | 'map-not-ready'
+  | 'provider-unavailable'
+  | 'data-unavailable'
+  | 'no-forecast-time'
+  | 'frame-failed'
+  | 'not-enabled'
+  | 'time-unavailable'
+  | 'opacity-out-of-range';
+
 interface TerrainOverlaySnapshot {
   readonly initialized: boolean;
   readonly preferences: TerrainOverlayPreferences;
-  readonly message: string | null;
+  readonly problem: TerrainOverlayProblem | null;
 }
 export interface WeatherMapSnapshot {
   readonly enabled: boolean;
@@ -114,14 +158,14 @@ export interface WeatherMapSnapshot {
     readonly loadedSourceCount: number;
     readonly totalSourceCount: number;
   } | null;
-  readonly message: string | null;
+  readonly problem: WeatherMapProblem | null;
 }
 
 interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly appliedMosaic: AppliedSatelliteMosaicSnapshot;
   readonly automaticAlternativeProviderState: 'inactive' | 'switching' | 'active';
-  readonly errorMessage: string | null;
+  readonly layerProblem: MapLayerProblem | null;
   readonly terrainComputeStatus: TerrainComputeStatus;
   readonly terrainComputeQueue: TerrainComputeQueueState;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
@@ -138,7 +182,7 @@ const initialMapLayerState: MapLayerState = {
   appliedImagery: { status: 'empty' },
   appliedMosaic: { status: 'empty' },
   automaticAlternativeProviderState: 'inactive',
-  errorMessage: null,
+  layerProblem: null,
   terrainComputeStatus: 'worker',
   terrainComputeQueue: {
     executionMode: 'worker',
@@ -172,7 +216,7 @@ const initialMapLayerState: MapLayerState = {
   terrainOverlays: {
     initialized: false,
     preferences: defaultTerrainOverlayPreferences,
-    message: null,
+    problem: null,
   },
   weatherMap: {
     enabled: false,
@@ -182,7 +226,7 @@ const initialMapLayerState: MapLayerState = {
     validTimes: [],
     selectedTimeIndex: null,
     renderProgress: null,
-    message: null,
+    problem: null,
   },
 };
 

@@ -86,6 +86,8 @@ function WorkspaceRailIconButton({
 interface WorkspaceRailProps {
   readonly collapsed: boolean;
   readonly collapsedSummary: ReactNode | null;
+  /** Feature controls shown below the collapsed bar, left-aligned with it. */
+  readonly collapsedControls: ReactNode | null;
   readonly squareEdges: boolean;
   readonly activeTab: WorkspaceTab;
   readonly developerToolsOpen: boolean;
@@ -106,6 +108,7 @@ interface WorkspaceRailProps {
 export function WorkspaceRail({
   collapsed,
   collapsedSummary,
+  collapsedControls,
   squareEdges,
   activeTab,
   developerToolsOpen,
@@ -375,6 +378,19 @@ export function WorkspaceRail({
           </ButtonBase>
         </Tooltip>
       )}
+      {collapsed && collapsedControls !== null ? (
+        <Box
+          sx={{
+            position: 'relative',
+            zIndex: 1,
+            alignSelf: 'flex-start',
+            mt: 1,
+            ml: 0.75,
+          }}
+        >
+          {collapsedControls}
+        </Box>
+      ) : null}
 
       <Tabs
         aria-label={t`Workspace sections`}

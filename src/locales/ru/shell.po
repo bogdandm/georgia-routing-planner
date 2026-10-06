@@ -110,8 +110,8 @@ msgid "A short tour of controls that are easy to miss. Each step shows one secti
 msgstr "Короткий тур по элементам, которые легко не заметить. Каждый шаг показывает один раздел."
 
 #. js-lingui-id: uqTLqP
-#: src/presentation/shell/WorkspaceRail.tsx:547
-#: src/presentation/shell/WorkspaceRail.tsx:548
+#: src/presentation/shell/WorkspaceRail.tsx:563
+#: src/presentation/shell/WorkspaceRail.tsx:564
 msgid "About this site"
 msgstr "О сайте"
 
@@ -227,7 +227,7 @@ msgid "Clear map search"
 msgstr "Очистить поиск по карте"
 
 #. js-lingui-id: G1X31l
-#: src/presentation/shell/WorkspaceShell.tsx:622
+#: src/presentation/shell/WorkspaceShell.tsx:652
 msgid "Click the map to choose the route start and destination."
 msgstr "Нажмите на карту, чтобы выбрать начало и конец маршрута."
 
@@ -282,8 +282,8 @@ msgid "Deterministic 9 km model forecast; not a measured weather-station observa
 msgstr "Детерминированный прогноз модели с разрешением 9 км, а не измерение метеостанции."
 
 #. js-lingui-id: HIQP0Z
-#: src/presentation/shell/WorkspaceRail.tsx:500
-#: src/presentation/shell/WorkspaceRail.tsx:501
+#: src/presentation/shell/WorkspaceRail.tsx:516
+#: src/presentation/shell/WorkspaceRail.tsx:517
 msgid "Developer diagnostics"
 msgstr "Диагностика для разработчиков"
 
@@ -339,17 +339,17 @@ msgid "Exit multi-track selection"
 msgstr "Выйти из выбора нескольких треков"
 
 #. js-lingui-id: O6Fpju
-#: src/presentation/shell/WorkspaceShell.tsx:554
+#: src/presentation/shell/WorkspaceShell.tsx:584
 msgid "Expand multiple track details"
 msgstr "Развернуть сведения о нескольких треках"
 
 #. js-lingui-id: NiF6zY
-#: src/presentation/shell/WorkspaceShell.tsx:557
+#: src/presentation/shell/WorkspaceShell.tsx:587
 msgid "Expand track details"
 msgstr "Развернуть сведения о треке"
 
 #. js-lingui-id: SNJ-Dv
-#: src/presentation/shell/WorkspaceShell.tsx:556
+#: src/presentation/shell/WorkspaceShell.tsx:586
 msgid "Expand unsaved track details"
 msgstr "Развернуть сведения о несохранённом треке"
 
@@ -399,13 +399,13 @@ msgid "Heap limit"
 msgstr "Предельный размер кучи"
 
 #. js-lingui-id: T7ZWsE
-#: src/presentation/shell/WorkspaceShell.tsx:864
-#: src/presentation/shell/WorkspaceShell.tsx:866
+#: src/presentation/shell/WorkspaceShell.tsx:895
+#: src/presentation/shell/WorkspaceShell.tsx:897
 msgid "Hide navigation"
 msgstr "Скрыть навигацию"
 
 #. js-lingui-id: 2zEnx6
-#: src/presentation/shell/WorkspaceRail.tsx:325
+#: src/presentation/shell/WorkspaceRail.tsx:328
 msgid "Hide navigation from Trail Planner logo"
 msgstr "Скрыть навигацию через логотип Trail Planner"
 
@@ -468,7 +468,7 @@ msgstr "Язык и хранилище."
 
 #. js-lingui-id: Dq6GG7
 #: src/presentation/shell/OnboardingTour.tsx:310
-#: src/presentation/shell/WorkspaceRail.tsx:436
+#: src/presentation/shell/WorkspaceRail.tsx:452
 #: src/presentation/shell/WorkspaceSidebar.tsx:84
 msgid "Layers"
 msgstr "Слои"
@@ -556,7 +556,7 @@ msgstr "Настройки погоды для меток. Прогноз отк
 
 #. js-lingui-id: Rcw29-
 #: src/presentation/shell/OnboardingTour.tsx:288
-#: src/presentation/shell/WorkspaceRail.tsx:428
+#: src/presentation/shell/WorkspaceRail.tsx:444
 #: src/presentation/shell/WorkspaceSidebar.tsx:83
 msgid "Markers"
 msgstr "Метки"
@@ -648,7 +648,7 @@ msgid "Open meteoblue.com"
 msgstr "Открыть meteoblue.com"
 
 #. js-lingui-id: Yp-Hi_
-#: src/presentation/shell/WorkspaceRail.tsx:539
+#: src/presentation/shell/WorkspaceRail.tsx:555
 msgid "Open settings"
 msgstr "Открыть настройки"
 
@@ -658,7 +658,7 @@ msgid "Open the point on meteoblue.com or windy.com."
 msgstr "Открыть точку на meteoblue.com или windy.com."
 
 #. js-lingui-id: BgoQna
-#: src/presentation/shell/WorkspaceRail.tsx:270
+#: src/presentation/shell/WorkspaceRail.tsx:273
 msgid "Open tracks"
 msgstr "Открыть треки"
 
@@ -668,7 +668,7 @@ msgid "Open windy.com"
 msgstr "Открыть windy.com"
 
 #. js-lingui-id: Gc_l1s
-#: src/presentation/shell/WorkspaceShell.tsx:486
+#: src/presentation/shell/WorkspaceShell.tsx:503
 msgid "Open workspace"
 msgstr "Открыть рабочую область"
 
@@ -779,7 +779,7 @@ msgid "Pond"
 msgstr "Пруд"
 
 #. js-lingui-id: fwASbQ
-#: src/presentation/shell/WorkspaceShell.tsx:582
+#: src/presentation/shell/WorkspaceShell.tsx:612
 msgid "Preparing terrain and elevation…"
 msgstr "Подготовка рельефа и высот…"
 
@@ -856,7 +856,7 @@ msgid "Ruler: click points on the map to measure distance and height difference.
 msgstr "Линейка: отмечайте точки на карте, чтобы измерить расстояние и перепад высот."
 
 #. js-lingui-id: QENfSy
-#: src/presentation/shell/WorkspaceRail.tsx:444
+#: src/presentation/shell/WorkspaceRail.tsx:460
 msgid "Satellite"
 msgstr "Спутник"
 
@@ -896,7 +896,7 @@ msgid "Satellite search is unavailable because its provider configuration is inv
 msgstr "Поиск спутниковых сцен недоступен из-за недопустимой конфигурации провайдера."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/shell/WorkspaceShell.tsx:547
+#: src/presentation/shell/WorkspaceShell.tsx:567
 msgid "Save"
 msgstr "Сохранить"
 
@@ -994,7 +994,7 @@ msgstr "Поиск Sentinel отменён"
 
 #. js-lingui-id: Tz0i8g
 #: src/presentation/shell/SettingsDialog.tsx:75
-#: src/presentation/shell/WorkspaceRail.tsx:540
+#: src/presentation/shell/WorkspaceRail.tsx:556
 msgid "Settings"
 msgstr "Настройки"
 
@@ -1004,12 +1004,12 @@ msgid "Settings tabs"
 msgstr "Вкладки настроек"
 
 #. js-lingui-id: Z8lGw6
-#: src/presentation/shell/WorkspaceRail.tsx:482
+#: src/presentation/shell/WorkspaceRail.tsx:498
 msgid "Share"
 msgstr "Поделиться"
 
 #. js-lingui-id: bdo1_8
-#: src/presentation/shell/WorkspaceRail.tsx:461
+#: src/presentation/shell/WorkspaceRail.tsx:477
 msgid "Share map view"
 msgstr "Поделиться видом карты"
 
@@ -1029,13 +1029,13 @@ msgid "Show map"
 msgstr "Показать карту"
 
 #. js-lingui-id: nPDRCU
-#: src/presentation/shell/WorkspaceRail.tsx:285
-#: src/presentation/shell/WorkspaceRail.tsx:287
+#: src/presentation/shell/WorkspaceRail.tsx:288
+#: src/presentation/shell/WorkspaceRail.tsx:290
 msgid "Show navigation"
 msgstr "Показать навигацию"
 
 #. js-lingui-id: rvH1WP
-#: src/presentation/shell/WorkspaceRail.tsx:242
+#: src/presentation/shell/WorkspaceRail.tsx:245
 msgid "Show navigation from Trail Planner logo"
 msgstr "Показать навигацию через логотип Trail Planner"
 
@@ -1045,8 +1045,8 @@ msgid "Show this tour again."
 msgstr "Показать этот тур снова."
 
 #. js-lingui-id: fOJVzK
-#: src/presentation/shell/WorkspaceRail.tsx:555
-#: src/presentation/shell/WorkspaceRail.tsx:556
+#: src/presentation/shell/WorkspaceRail.tsx:571
+#: src/presentation/shell/WorkspaceRail.tsx:572
 msgid "Show tour"
 msgstr "Показать тур"
 
@@ -1202,13 +1202,13 @@ msgid "Track details"
 msgstr "Сведения о треке"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/shell/WorkspaceShell.tsx:529
+#: src/presentation/shell/WorkspaceShell.tsx:549
 msgid "Track name"
 msgstr "Название трека"
 
 #. js-lingui-id: 2eFlmt
 #: src/presentation/shell/OnboardingTour.tsx:181
-#: src/presentation/shell/WorkspaceRail.tsx:420
+#: src/presentation/shell/WorkspaceRail.tsx:436
 #: src/presentation/shell/WorkspaceSidebar.tsx:80
 msgid "Tracks"
 msgstr "Треки"
@@ -1224,28 +1224,28 @@ msgid "Used heap"
 msgstr "Используемая память кучи"
 
 #. js-lingui-id: 7PzzBU
-#: src/presentation/shell/WorkspaceRail.tsx:136
+#: src/presentation/shell/WorkspaceRail.tsx:139
 #: src/presentation/shell/WorkspaceSidebar.tsx:85
 msgid "User"
 msgstr "Профиль"
 
 #. js-lingui-id: U-HJ5R
-#: src/presentation/shell/WorkspaceRail.tsx:145
+#: src/presentation/shell/WorkspaceRail.tsx:148
 msgid "User synchronization failed"
 msgstr "Синхронизация профиля не удалась"
 
 #. js-lingui-id: HIxhHX
-#: src/presentation/shell/WorkspaceRail.tsx:141
+#: src/presentation/shell/WorkspaceRail.tsx:144
 msgid "User synchronization in progress"
 msgstr "Синхронизация профиля выполняется"
 
 #. js-lingui-id: HtyM5h
-#: src/presentation/shell/WorkspaceRail.tsx:149
+#: src/presentation/shell/WorkspaceRail.tsx:152
 msgid "User synchronization needs a deletion decision"
 msgstr "Для синхронизации профиля нужно решить, удалять ли данные"
 
 #. js-lingui-id: ie5oY0
-#: src/presentation/shell/WorkspaceRail.tsx:153
+#: src/presentation/shell/WorkspaceRail.tsx:156
 msgid "User synchronization successful"
 msgstr "Профиль успешно синхронизирован"
 
@@ -1281,7 +1281,7 @@ msgstr "Водопад"
 
 #. js-lingui-id: mJZLtT
 #: src/presentation/shell/OnboardingTour.tsx:368
-#: src/presentation/shell/WorkspaceRail.tsx:452
+#: src/presentation/shell/WorkspaceRail.tsx:468
 #: src/presentation/shell/WorkspaceSidebar.tsx:82
 msgid "Weather"
 msgstr "Погода"
@@ -1307,12 +1307,12 @@ msgid "Weather map: clouds, rain, and wind."
 msgstr "Карта погоды: облака, осадки и ветер."
 
 #. js-lingui-id: V6AIOn
-#: src/presentation/shell/WorkspaceRail.tsx:167
+#: src/presentation/shell/WorkspaceRail.tsx:170
 msgid "Workspace navigation"
 msgstr "Навигация по рабочим разделам"
 
 #. js-lingui-id: gcs5ce
-#: src/presentation/shell/WorkspaceRail.tsx:380
+#: src/presentation/shell/WorkspaceRail.tsx:396
 msgid "Workspace sections"
 msgstr "Разделы рабочей области"
 

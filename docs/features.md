@@ -34,7 +34,8 @@ full-height rail and contextual tools without remounting the map; **Show map** a
 Trail Planner logo return to the same map. An active track appears over the map as a
 collapsed disclosure with distance, recorded time, ascent, and descent, drawn over a
 decorative grade-colored profile when elevation is usable. An unsaved preview's
-disclosure also offers **Track name** and **Save**. Expanding it reveals the full
+disclosure also offers **Track name** and **Save**; a route plan's disclosure offers
+**Undo** and the **Routes | Line** next-segment mode. Expanding it reveals the full
 editor; collapsing keeps the active track, while closing clears it.
 
 An action whose result is on the map closes the workspace, and a map action whose result
@@ -58,7 +59,9 @@ chooser, and the ruler.
 
 Navigation collapses to the clickable Trail Planner logo, which keeps the same size and
 position in both states. With an active track, the collapsed state also shows the
-decorative profile-and-stats summary.
+decorative profile-and-stats summary. During route planning, **Undo** and the **Routes |
+Line** next-segment mode sit below it, so planning continues without reopening the
+panel.
 
 - Owner: `src/presentation/shell`; visual tokens in
   `src/presentation/theme/appColors.ts` and the Material UI theme.

@@ -25,6 +25,7 @@ import {
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import type {
   MapLibreLayerController,
   PlannedLineOverlay,
@@ -50,7 +51,7 @@ import {
   type MapPointInspection,
   type NearbyPoi,
   type MapSourceFailure,
-  type MapTravelDirection,
+  type MapTravelPath,
   type MapViewportBounds,
   type MapViewportSnapshot,
   type MapWebGlCapabilities,
@@ -62,20 +63,8 @@ import {
   formatElevationChange,
 } from '@/presentation/tracks/trackFormatters';
 
-/** Navigator-style camera pitch for fits that face a travel direction in 3D. */
+/** Navigator-style camera pitch for fits that face a travel path in 3D. */
 const directedFitPitchDegrees = 45;
-
-/** Web Mercator screen bearing from `from` to `to`, matching MapLibre's rotation. */
-function travelBearingDegrees({ from, to }: MapTravelDirection): number {
-  const mercatorY = (latitude: number) =>
-    Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
-  // Wrap the longitude delta into [-180°, 180°) so antimeridian crossings go the short way.
-  const eastDegrees =
-    ((((to.longitude - from.longitude + 180) % 360) + 360) % 360) - 180;
-  const east = (eastDegrees * Math.PI) / 180;
-  const north = mercatorY(to.latitude) - mercatorY(from.latitude);
-  return (Math.atan2(east, north) * 180) / Math.PI;
-}
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -530,44 +519,56 @@ export class MapLibreFacade implements MapFacade {
     bounds: MapViewportBounds,
     maxZoom: number,
     padding?: MapFitPadding,
-    direction?: MapTravelDirection,
+    path?: MapTravelPath,
   ): void {
     const map = this.#map;
     if (map === null) return;
-    let bearing = map.getBearing();
-    let pitch = map.getPitch();
-    let fitPadding: number | MapFitPadding = padding ?? 56;
-    if (direction !== undefined && this.#snapshot.terrainMode === 'terrain') {
-      bearing = travelBearingDegrees(direction);
-      pitch = directedFitPitchDegrees;
-      // MapLibre fits as if unpitched. Perspective keeps the near half vertically inside
-      // the fit but widens ground at the bottom edge by 1 / (1 - tan(fov/2) * sin(pitch)),
-      // about 1.3x at 45 degrees; narrowing the fitted width by that factor keeps a wide
-      // switchback segment's near end inside the padded area.
-      const basePadding = padding ?? { top: 56, right: 56, bottom: 56, left: 56 };
-      const nearEdgeScale =
-        1 /
-        (1 -
-          Math.tan((map.getVerticalFieldOfView() * Math.PI) / 360) *
-            Math.sin((pitch * Math.PI) / 180));
-      const availableWidth = Math.max(
-        0,
-        map.getCanvas().clientWidth - basePadding.left - basePadding.right,
+    const canvas = map.getCanvas();
+    // Terrain is sampled only inside the current view: elsewhere no DEM tile is rendered
+    // and MapLibre would report sea level.
+    const visibleBounds = map.getBounds();
+    const directedFit =
+      path === undefined || this.#snapshot.terrainMode !== 'terrain'
+        ? null
+        : directedCameraFit({
+            path,
+            viewport: { width: canvas.clientWidth, height: canvas.clientHeight },
+            padding: padding ?? { top: 56, right: 56, bottom: 56, left: 56 },
+            pitchDegrees: directedFitPitchDegrees,
+            fieldOfViewDegrees: map.getVerticalFieldOfView(),
+            terrainExaggeration: this.provider?.terrain.exaggeration ?? 1,
+            maxZoom,
+            renderedElevationAt: ({ longitude, latitude }) =>
+              visibleBounds.contains([longitude, latitude])
+                ? map.queryTerrainElevation([longitude, latitude])
+                : null,
+          });
+    if (directedFit === null) {
+      map.fitBounds(
+        [
+          [bounds.west, bounds.south],
+          [bounds.east, bounds.north],
+        ],
+        {
+          padding: padding ?? 56,
+          maxZoom,
+          duration: 650,
+          bearing: map.getBearing(),
+          pitch: map.getPitch(),
+        },
       );
-      const sidePadding = (availableWidth * (1 - 1 / nearEdgeScale)) / 2;
-      fitPadding = {
-        ...basePadding,
-        left: basePadding.left + sidePadding,
-        right: basePadding.right + sidePadding,
-      };
+    } else {
+      // The solver assumes the vanishing point at the canvas center, so clear padding.
+      map.flyTo({
+        center: [directedFit.center.longitude, directedFit.center.latitude],
+        zoom: directedFit.zoom,
+        bearing: directedFit.bearing,
+        pitch: directedFitPitchDegrees,
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+        duration: 650,
+        essential: true,
+      });
     }
-    map.fitBounds(
-      [
-        [bounds.west, bounds.south],
-        [bounds.east, bounds.north],
-      ],
-      { padding: fitPadding, maxZoom, duration: 650, bearing, pitch },
-    );
     this.logger.log({
       level: 'info',
       name: 'map.navigation.bounds-requested',

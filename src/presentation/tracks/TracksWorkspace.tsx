@@ -213,7 +213,11 @@ import {
   requestMapNavigation,
   requestMarkerPlacement,
 } from '@/presentation/map/mapInteractionStore';
-import type { MapCoordinate, MapViewportBounds } from '@/presentation/map/mapTypes';
+import type {
+  MapCoordinate,
+  MapTravelPath,
+  MapViewportBounds,
+} from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { TrackThumbnailImage } from '@/presentation/tracks/TrackThumbnailImage';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -1309,13 +1313,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? `${active.id}:${active.preparationStatus}`
         : active.summary.id;
     if (renderedTrackId.current === trackId) return;
-    const segments =
+    const trackPoints =
       active.kind === 'saved'
-        ? localTrackSegments(active.content)
+        ? active.content.trackPoints
         : (active.preparationStatus === 'ready'
             ? active.sourceSegments
             : active.parsed.segments
-          ).map((segment) => segment.points.map((point) => point.coordinate));
+          ).map((segment) => segment.points);
+    const segments = trackPoints.map((points) =>
+      points.map((point) => point.coordinate),
+    );
     const metrics =
       active.kind === 'saved'
         ? active.summary.metrics
@@ -1333,12 +1340,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         15,
         direction === null
           ? {}
-          : {
-              direction: {
-                from: { longitude: direction.from[0], latitude: direction.from[1] },
-                to: { longitude: direction.to[0], latitude: direction.to[1] },
-              },
-            },
+          : { path: mapTravelPath(direction.from, direction.to, trackPoints.flat()) },
       );
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
@@ -4275,6 +4277,23 @@ function downloadFile(
   URL.revokeObjectURL(url);
 }
 
+/** A 3D fit path facing from `from` toward `to` that keeps `points` in view. */
+function mapTravelPath(
+  from: TrackCoordinate,
+  to: TrackCoordinate,
+  points: readonly TrackPoint[],
+): MapTravelPath {
+  return {
+    from: { longitude: from[0], latitude: from[1] },
+    to: { longitude: to[0], latitude: to[1] },
+    points: points.map(({ coordinate: [longitude, latitude], elevationMeters }) =>
+      elevationMeters === undefined
+        ? { longitude, latitude }
+        : { longitude, latitude, elevationMeters },
+    ),
+  };
+}
+
 /** Unwraps antimeridian-crossing track bounds so MapLibre fits the short way around. */
 function mapFitBoundsForTrack(bounds: TrackBounds): MapViewportBounds {
   return {
@@ -4419,12 +4438,7 @@ function InteractiveElevationProfile({
     requestMapFitBounds(
       mapFitBoundsForTrack(calculateTrackMetrics([{ points }]).bounds),
       16,
-      {
-        direction: {
-          from: { longitude: start[0], latitude: start[1] },
-          to: { longitude: finish[0], latitude: finish[1] },
-        },
-      },
+      { path: mapTravelPath(start, finish, points) },
     );
   };
   const onSegmentSelectionChange = (nextSegmentIndex: number | null) => {

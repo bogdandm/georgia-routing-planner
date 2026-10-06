@@ -4,7 +4,7 @@ import type { PointWeatherForecastPeriod } from '@/application/weather/GetPointW
 import type {
   MapCoordinate,
   MapFitPadding,
-  MapTravelDirection,
+  MapTravelPath,
   MapViewportBounds,
 } from '@/presentation/map/mapTypes';
 
@@ -22,7 +22,7 @@ interface MapFitBoundsCommand {
   readonly bounds: MapViewportBounds;
   readonly maxZoom: number;
   readonly padding?: MapFitPadding;
-  readonly direction?: MapTravelDirection;
+  readonly path?: MapTravelPath;
 }
 
 interface MapPointInspectionCommand {
@@ -109,7 +109,7 @@ export function requestMapFitBounds(
   maxZoom: number,
   options: {
     readonly padding?: MapFitPadding;
-    readonly direction?: MapTravelDirection;
+    readonly path?: MapTravelPath;
   } = {},
 ): void {
   nextCommandId += 1;
@@ -118,13 +118,14 @@ export function requestMapFitBounds(
     bounds: MapViewportBounds;
     maxZoom: number;
     padding?: MapFitPadding;
-    direction?: MapTravelDirection;
+    path?: MapTravelPath;
   } = { id: nextCommandId, bounds: { ...bounds }, maxZoom };
   if (options.padding !== undefined) command.padding = { ...options.padding };
-  if (options.direction !== undefined) {
-    command.direction = {
-      from: { ...options.direction.from },
-      to: { ...options.direction.to },
+  if (options.path !== undefined) {
+    command.path = {
+      from: { ...options.path.from },
+      to: { ...options.path.to },
+      points: options.path.points.map((point) => ({ ...point })),
     };
   }
   mapInteractionStore.setState({

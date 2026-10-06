@@ -6,7 +6,7 @@ import type {
   MapCoordinate,
   MapPointInspection,
   NearbyPoi,
-  MapTravelDirection,
+  MapTravelPath,
   MapViewportBounds,
   MapViewportSnapshot,
   TerrainMode,
@@ -76,13 +76,14 @@ export interface MapFacade {
 
   /**
    * Fits a serializable geographic area without exposing native MapLibre bounds. With a
-   * travel direction in 3D, the camera faces along it at a fixed pitch.
+   * travel path in 3D, the camera faces along it at a fixed pitch and keeps its points
+   * in view at their elevations.
    */
   fitBounds(
     bounds: MapViewportBounds,
     maxZoom: number,
     padding?: MapFitPadding,
-    direction?: MapTravelDirection,
+    path?: MapTravelPath,
   ): void;
 
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */

@@ -689,7 +689,7 @@ export function MapWorkspace({
           fitBoundsCommand.bounds,
           fitBoundsCommand.maxZoom,
           fitBoundsCommand.padding ?? getNavigationPadding?.(),
-          fitBoundsCommand.direction,
+          fitBoundsCommand.path,
         );
       },
       () => {

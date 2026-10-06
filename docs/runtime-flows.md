@@ -476,13 +476,19 @@ chart point drives a separate transient trace-point source. A hovered Climbs & D
 row sends that segment's grade subsegments to `setImportedTrackFocus`, a transient focus
 source drawn with its own casing, line, and grade layers above the highlight; while it
 is non-empty the base casing, line, and highlight drop to 30% of the track opacity.
-Selecting a row issues a fit command with the segment's antimeridian-aware bounds and
-start-to-finish direction. Only in terrain mode does the facade turn it into a Web
-Mercator bearing and 45° pitch, widening the side padding by the perspective scale at
-the near screen edge because MapLibre computes fits as if unpitched. Import and track
-selection issue one fit command padded for the Tracks panes, directed by
+Selecting a row issues a fit command with the segment's antimeridian-aware bounds and a
+travel path: its points with elevation, facing start to finish. Import and track
+selection issue one fit command padded for the Tracks panes whose path faces
 `trackOutboundDirection`: start to finish, or start to the farthest point for an
-`isLoop` track. Closing clears the sources without touching storage or the camera.
+`isLoop` track. Flat mode fits the bounds in the current orientation. In terrain mode
+the facade instead flies to the result of `directedCameraFit`: MapLibre fits as if
+unpitched and ignores relief, so at 45° the far half compresses and points above the
+terrain under the center rise toward the horizon. The solver projects the path through
+MapLibre's pinhole camera at the target pitch, using rendered terrain heights from
+`queryTerrainElevation` inside the current view and track elevations elsewhere, and
+re-solves until the camera sits on the terrain under its own center. It balances the
+points against the padded edges and keeps the highest zoom that fits. Closing clears the
+sources without touching storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
 authoritative; calculated Terrarium elevation is the profile fallback only when no

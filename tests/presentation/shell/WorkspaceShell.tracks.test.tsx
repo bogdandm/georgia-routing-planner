@@ -2330,9 +2330,13 @@ describe('WorkspaceShell', () => {
       bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
       maxZoom: 15,
       padding: undefined,
-      direction: {
+      path: {
         from: { longitude: 44, latitude: 42 },
         to: { longitude: 44.01, latitude: 42.01 },
+        points: [
+          { longitude: 44, latitude: 42, elevationMeters: 1_000 },
+          { longitude: 44.01, latitude: 42.01, elevationMeters: 1_120 },
+        ],
       },
     };
     renderWorkspaceShell(
@@ -2497,7 +2501,7 @@ describe('WorkspaceShell', () => {
       bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
     });
     expect(trackFitCommand?.padding).toBeUndefined();
-    expect(trackFitCommand?.direction).toEqual({
+    expect(trackFitCommand?.path).toMatchObject({
       from: { longitude: 44, latitude: 42 },
       to: { longitude: 44.03, latitude: 42.03 },
     });
@@ -2516,7 +2520,7 @@ describe('WorkspaceShell', () => {
     expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
       bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
       maxZoom: 16,
-      direction: {
+      path: {
         from: { longitude: 44, latitude: 42 },
         to: { longitude: 44.03, latitude: 42.03 },
       },

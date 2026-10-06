@@ -25,6 +25,8 @@ import {
   normalizeMapCamera,
   type MapCamera,
   type MapCameraRepository,
+  type MapViewMode,
+  type MapViewState,
 } from '@/application/ports/MapCameraRepository';
 import {
   TrackFolderStorageError,
@@ -465,25 +467,33 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
 const mapCameraKey = 'map.camera';
 
 interface PersistedMapView {
-  readonly schemaVersion: 3;
-  readonly camera: Pick<MapCamera, 'longitude' | 'latitude' | 'zoom'>;
+  readonly schemaVersion: 4;
+  readonly terrainMode: MapViewMode;
+  /** Bearing and pitch are always zero for a flat view. */
+  readonly camera: MapCamera;
 }
 
-function readPersistedCamera(value: unknown): MapCamera | null {
+function readPersistedView(value: unknown): MapViewState | null {
   if (typeof value !== 'object' || value === null) return null;
 
   const candidate = value as Record<string, unknown>;
-  const storedCamera =
-    candidate.schemaVersion === 3 &&
-    typeof candidate.camera === 'object' &&
-    candidate.camera !== null
-      ? { ...(candidate.camera as Record<string, unknown>), bearing: 0, pitch: 0 }
-      : candidate.camera;
-  const camera = normalizeMapCamera(storedCamera);
-  if (camera === null || ![1, 2, 3].includes(candidate.schemaVersion as number)) {
-    return null;
-  }
-  return { ...camera, bearing: 0, pitch: 0 };
+  // Versions 1-3 predate durable 3D restoration and always restart flat.
+  const terrainMode =
+    candidate.schemaVersion === 4
+      ? candidate.terrainMode
+      : [1, 2, 3].includes(candidate.schemaVersion as number)
+        ? 'flat'
+        : null;
+  if (terrainMode !== 'flat' && terrainMode !== 'terrain') return null;
+  if (typeof candidate.camera !== 'object' || candidate.camera === null) return null;
+
+  const storedCamera = candidate.camera as Record<string, unknown>;
+  const camera = normalizeMapCamera(
+    terrainMode === 'terrain'
+      ? storedCamera
+      : { ...storedCamera, bearing: 0, pitch: 0 },
+  );
+  return camera === null ? null : { camera, terrainMode };
 }
 
 const maximumCloudCoverPercentSchema = z.number().min(0).max(100);
@@ -3694,13 +3704,13 @@ export class AppDatabase
     });
   }
 
-  /** Loads the last 2D camera while accepting the two previous local record versions. */
-  public async load(): Promise<MapCamera | null> {
+  /** Loads the last settled view; versions 1-3 load as flat views. */
+  public async load(): Promise<MapViewState | null> {
     const record = await this.settings.get(mapCameraKey);
     if (record === undefined) return null;
 
-    const camera = readPersistedCamera(record.value);
-    if (camera !== null) return camera;
+    const view = readPersistedView(record.value);
+    if (view !== null) return view;
 
     await this.settings.delete(mapCameraKey);
     this.logger.log({
@@ -3711,9 +3721,9 @@ export class AppDatabase
     return null;
   }
 
-  /** Stores only the settled 2D position; 3D orientation remains session-only. */
-  public async save(camera: MapCamera): Promise<void> {
-    const normalized = normalizeMapCamera(camera);
+  /** Stores the settled view; 2D views drop bearing and pitch. */
+  public async save(view: MapViewState): Promise<void> {
+    const normalized = normalizeMapCamera(view.camera);
     if (normalized === null) {
       throw new Error('Map camera contains non-finite values.');
     }
@@ -3721,12 +3731,12 @@ export class AppDatabase
     await this.settings.put({
       key: mapCameraKey,
       value: {
-        schemaVersion: 3,
-        camera: {
-          longitude: normalized.longitude,
-          latitude: normalized.latitude,
-          zoom: normalized.zoom,
-        },
+        schemaVersion: 4,
+        terrainMode: view.terrainMode,
+        camera:
+          view.terrainMode === 'terrain'
+            ? normalized
+            : { ...normalized, bearing: 0, pitch: 0 },
       } satisfies PersistedMapView,
       updatedAt: new Date().toISOString(),
     });

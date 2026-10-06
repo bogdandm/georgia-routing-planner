@@ -7,10 +7,13 @@ interface StoredCamera {
   readonly longitude: number;
   readonly latitude: number;
   readonly zoom: number;
+  readonly bearing: number;
+  readonly pitch: number;
 }
 
 interface StoredMapView {
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 4;
+  readonly terrainMode: 'flat' | 'terrain';
   readonly camera: StoredCamera;
 }
 
@@ -154,12 +157,14 @@ test('keeps closed smartphone workspace surfaces off the map gesture target', as
   ).toBe(true);
 });
 
-test('persists a settled 2D position and restarts flat after reload', async ({
+test('restores the persisted 2D/3D mode and 3D camera after reload', async ({
   page,
 }) => {
-  test.setTimeout(45_000);
+  test.setTimeout(90_000);
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
+  const flatButton = page.getByRole('button', { name: 'Show flat 2D map' });
+  const terrainButton = page.getByRole('button', { name: 'Show 3D terrain map' });
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 15_000,
   });
@@ -172,37 +177,54 @@ test('persists a settled 2D position and restarts flat after reload', async ({
     .not.toBeNull();
   expect((await readStoredCamera(page))?.zoom).not.toBeCloseTo(5.8, 1);
 
-  await page.getByRole('button', { name: 'Show 3D terrain map' }).click();
-  await expect(page.getByRole('button', { name: 'Show 3D terrain map' })).toBeEnabled({
-    timeout: terrainPersistenceTimeoutMs,
-  });
-  const cameraBeforeReload = await readStoredCamera(page);
-  expect(cameraBeforeReload).not.toBeNull();
-  expect(Object.keys(cameraBeforeReload ?? {}).toSorted()).toEqual([
-    'latitude',
-    'longitude',
-    'zoom',
-  ]);
-  expect(await readStoredMapView(page)).not.toHaveProperty('terrainMode');
+  await terrainButton.click();
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: terrainPersistenceTimeoutMs,
+    })
+    .toBe('terrain');
+  const viewBeforeReload = await readStoredMapView(page);
+  expect(viewBeforeReload?.camera.pitch).toBeGreaterThan(0);
 
   await page.reload();
   await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
     timeout: 15_000,
   });
-  await expect(page.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
+  await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
+  await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
   await canvas.focus();
   await page.keyboard.press('ArrowRight');
   await expect
     .poll(async () => (await readStoredCamera(page))?.longitude, {
       timeout: cameraPersistenceTimeoutMs,
     })
-    .not.toBe(cameraBeforeReload?.longitude);
-  const cameraAfterReload = await readStoredCamera(page);
+    .not.toBe(viewBeforeReload?.camera.longitude);
+  const viewAfterReload = await readStoredMapView(page);
+  expect(viewAfterReload?.terrainMode).toBe('terrain');
+  expect(viewAfterReload?.camera.zoom).toBeCloseTo(
+    viewBeforeReload?.camera.zoom ?? 0,
+    2,
+  );
+  expect(viewAfterReload?.camera.pitch).toBeCloseTo(
+    viewBeforeReload?.camera.pitch ?? 0,
+    1,
+  );
+  expect(viewAfterReload?.camera.bearing).toBeCloseTo(
+    viewBeforeReload?.camera.bearing ?? 0,
+    1,
+  );
 
-  expect(cameraAfterReload?.zoom).toBeCloseTo(cameraBeforeReload?.zoom ?? 0, 4);
+  await flatButton.click();
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .toBe('flat');
+  await page.reload();
+  await expect(workspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('selects shared 3D mode immediately and mounts its terrain state directly', async ({
@@ -308,6 +330,11 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   ).toBeVisible();
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
+  await expect
+    .poll(async () => (await readStoredMapView(page))?.terrainMode, {
+      timeout: cameraPersistenceTimeoutMs,
+    })
+    .toBe('flat');
   const cameraAfterTerrain = await readStoredCamera(page);
   expect(cameraAfterTerrain?.longitude).toBeCloseTo(
     cameraBeforeTerrain?.longitude ?? 0,
@@ -318,11 +345,8 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
     4,
   );
   expect(cameraAfterTerrain?.zoom).toBeCloseTo(cameraBeforeTerrain?.zoom ?? 0, 4);
-  expect(Object.keys(cameraAfterTerrain ?? {}).toSorted()).toEqual([
-    'latitude',
-    'longitude',
-    'zoom',
-  ]);
+  expect(cameraAfterTerrain?.bearing).toBe(0);
+  expect(cameraAfterTerrain?.pitch).toBe(0);
   await expect(page.getByTestId('map-workspace')).toHaveAttribute(
     'data-map-state',
     'ready',

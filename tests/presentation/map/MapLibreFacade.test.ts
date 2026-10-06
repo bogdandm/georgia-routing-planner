@@ -625,6 +625,34 @@ describe('MapLibreFacade', () => {
     });
   });
 
+  it('levels and persists a restored pitched flat map when 2D is chosen before terrain', async () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const onViewSettled = vi.fn();
+    const facade = new MapLibreFacade(services.logger, onViewSettled);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+
+    await expect(facade.setTerrainMode('flat')).resolves.toEqual({
+      status: 'success',
+      mode: 'flat',
+    });
+
+    const flatView = {
+      camera: { longitude: 44.8, latitude: 41.7, zoom: 8, bearing: 0, pitch: 0 },
+      terrainMode: 'flat',
+    };
+    expect(nativeMap.terrainValues).toEqual([]);
+    expect(nativeMap.jumpCalls).toHaveLength(1);
+    expect(onViewSettled).toHaveBeenLastCalledWith(flatView);
+
+    // A redundant 2D request on a level map must not interrupt navigation.
+    onViewSettled.mockClear();
+    await facade.setTerrainMode('flat');
+    expect(nativeMap.jumpCalls).toHaveLength(1);
+    expect(onViewSettled).toHaveBeenCalledExactlyOnceWith(flatView);
+    facade.destroy();
+  });
+
   it('does not persist the temporary level camera used to enter 3D safely', async () => {
     const services = createTestServices();
     const provider = services.mapProviderConfiguration;

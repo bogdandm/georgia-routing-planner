@@ -492,8 +492,9 @@ Relief shading and client-generated contours (labeled 200 m index lines, minor s
 20–100 m, default 50 m) use the shared DEM with conservative repair. Contour work runs
 in a terrain worker and falls back to inline work with a Layers warning if the worker
 cannot recover. The 2D/3D control reuses the same map and DEM source; failed 3D
-activation returns to 2D and reports in the status line. Reloads start in 2D: only
-center and zoom persist. Details are in [runtime flows](./runtime-flows.md).
+activation returns to 2D and reports in the status line. Reloads restore the last
+settled mode: 2D keeps center and zoom, 3D also keeps bearing and pitch and re-enters
+terrain once the map is ready. Details are in [runtime flows](./runtime-flows.md).
 
 Map errors are classified and shown in the status line; offline messaging promises only
 that already rendered areas may stay visible. Retry and recovery rules are in

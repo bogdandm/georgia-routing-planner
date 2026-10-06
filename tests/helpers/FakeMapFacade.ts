@@ -13,6 +13,7 @@ import {
   type MapFitPadding,
   type MapPointInspection,
   type NearbyPoi,
+  type MapTravelPath,
   type MapViewportBounds,
   type MapViewportSnapshot,
   type TerrainMode,
@@ -38,6 +39,7 @@ export class FakeMapFacade implements MapFacade {
     readonly bounds: MapViewportBounds;
     readonly maxZoom: number;
     readonly padding: MapFitPadding | undefined;
+    readonly path: MapTravelPath | undefined;
   }[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
   public readonly pointInspectionContent = document.createElement('div');
@@ -178,8 +180,9 @@ export class FakeMapFacade implements MapFacade {
     bounds: MapViewportBounds,
     maxZoom: number,
     padding?: MapFitPadding,
+    path?: MapTravelPath,
   ): void {
-    this.fitBoundsRequests.push({ bounds, maxZoom, padding });
+    this.fitBoundsRequests.push({ bounds, maxZoom, padding, path });
   }
 
   public setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult> {

@@ -25,6 +25,7 @@ import {
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import type {
   MapLibreLayerController,
   PlannedLineOverlay,
@@ -50,6 +51,7 @@ import {
   type MapPointInspection,
   type NearbyPoi,
   type MapSourceFailure,
+  type MapTravelPath,
   type MapViewportBounds,
   type MapViewportSnapshot,
   type MapWebGlCapabilities,
@@ -60,6 +62,9 @@ import {
   formatDistanceWithMeters,
   formatElevationChange,
 } from '@/presentation/tracks/trackFormatters';
+
+/** Navigator-style camera pitch for fits that face a travel path in 3D. */
+const directedFitPitchDegrees = 45;
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -514,22 +519,56 @@ export class MapLibreFacade implements MapFacade {
     bounds: MapViewportBounds,
     maxZoom: number,
     padding?: MapFitPadding,
+    path?: MapTravelPath,
   ): void {
     const map = this.#map;
     if (map === null) return;
-    map.fitBounds(
-      [
-        [bounds.west, bounds.south],
-        [bounds.east, bounds.north],
-      ],
-      {
-        padding: padding ?? 56,
-        maxZoom,
+    const canvas = map.getCanvas();
+    // Terrain is sampled only inside the current view: elsewhere no DEM tile is rendered
+    // and MapLibre would report sea level.
+    const visibleBounds = map.getBounds();
+    const directedFit =
+      path === undefined || this.#snapshot.terrainMode !== 'terrain'
+        ? null
+        : directedCameraFit({
+            path,
+            viewport: { width: canvas.clientWidth, height: canvas.clientHeight },
+            padding: padding ?? { top: 56, right: 56, bottom: 56, left: 56 },
+            pitchDegrees: directedFitPitchDegrees,
+            fieldOfViewDegrees: map.getVerticalFieldOfView(),
+            terrainExaggeration: this.provider?.terrain.exaggeration ?? 1,
+            maxZoom,
+            renderedElevationAt: ({ longitude, latitude }) =>
+              visibleBounds.contains([longitude, latitude])
+                ? map.queryTerrainElevation([longitude, latitude])
+                : null,
+          });
+    if (directedFit === null) {
+      map.fitBounds(
+        [
+          [bounds.west, bounds.south],
+          [bounds.east, bounds.north],
+        ],
+        {
+          padding: padding ?? 56,
+          maxZoom,
+          duration: 650,
+          bearing: map.getBearing(),
+          pitch: map.getPitch(),
+        },
+      );
+    } else {
+      // The solver assumes the vanishing point at the canvas center, so clear padding.
+      map.flyTo({
+        center: [directedFit.center.longitude, directedFit.center.latitude],
+        zoom: directedFit.zoom,
+        bearing: directedFit.bearing,
+        pitch: directedFitPitchDegrees,
+        padding: { top: 0, right: 0, bottom: 0, left: 0 },
         duration: 650,
-        bearing: map.getBearing(),
-        pitch: map.getPitch(),
-      },
-    );
+        essential: true,
+      });
+    }
     this.logger.log({
       level: 'info',
       name: 'map.navigation.bounds-requested',

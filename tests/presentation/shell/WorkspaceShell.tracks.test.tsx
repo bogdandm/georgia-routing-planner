@@ -1984,6 +1984,56 @@ describe('WorkspaceShell', () => {
     });
   });
 
+  it('hands the map the next climb or descent directly when the pointer moves rows', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackFocus = vi.spyOn(mapLayers, 'setImportedTrackFocus');
+    const { container } = renderWorkspaceShell();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 0, 420, 264),
+    );
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+    const points = [1_000, 1_200, 1_400, 1_200, 1_000]
+      .map(
+        (elevation, index) =>
+          `<trkpt lat="${String(42 + index * 0.01)}" lon="44"><ele>${String(elevation)}</ele></trkpt>`,
+      )
+      .join('');
+    const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Ridge</name><trkseg>${points}</trkseg></trk></gpx>`;
+    const file = new File([xml], 'Ridge.gpx', { type: 'application/gpx+xml' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+
+    await user.upload(input, file);
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await user.click(
+      await within(details).findByRole('button', { name: 'Climbs & Descents' }),
+    );
+    const climb = within(details).getByRole('button', { name: /^Climb 1/u });
+    const descent = within(details).getByRole('button', { name: /^Descent 1/u });
+    await user.hover(climb);
+    setImportedTrackFocus.mockClear();
+    // user-event omits `relatedTarget`, which React reads as leaving the whole list;
+    // a browser names the row the pointer moves to.
+    fireEvent.pointerOut(climb, { relatedTarget: descent });
+    fireEvent.pointerOver(descent, { relatedTarget: climb });
+
+    // A `null` in between would turn the map's cross-fade into a fade out and back in.
+    expect(
+      setImportedTrackFocus.mock.calls.map(([segments]) => segments),
+    ).not.toContain(null);
+    expect(
+      setImportedTrackFocus.mock.lastCall?.[0]?.at(-1)?.coordinates.at(-1),
+    ).toEqual([44, 42.04]);
+    await user.unhover(descent);
+    expect(setImportedTrackFocus).toHaveBeenLastCalledWith(null);
+  });
+
   it('publishes a hovered elevation sample to the map trace only when it changes', async () => {
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();
@@ -2327,6 +2377,14 @@ describe('WorkspaceShell', () => {
       bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
       maxZoom: 15,
       padding: undefined,
+      path: {
+        from: { longitude: 44, latitude: 42 },
+        to: { longitude: 44.01, latitude: 42.01 },
+        points: [
+          { longitude: 44, latitude: 42, elevationMeters: 1_000 },
+          { longitude: 44.01, latitude: 42.01, elevationMeters: 1_120 },
+        ],
+      },
     };
     renderWorkspaceShell(
       <MapWorkspace
@@ -2386,6 +2444,7 @@ describe('WorkspaceShell', () => {
     expect(mapLayers).not.toBeNull();
     if (mapLayers === null) return;
     const setImportedTrackHighlight = vi.spyOn(mapLayers, 'setImportedTrackHighlight');
+    const setImportedTrackFocus = vi.spyOn(mapLayers, 'setImportedTrackFocus');
     vi.spyOn(services.database, 'loadLocalTrackContent').mockResolvedValue({
       schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
       trackId: 'local:test-1',
@@ -2484,14 +2543,37 @@ describe('WorkspaceShell', () => {
       );
     }
     const highlightCallCount = setImportedTrackHighlight.mock.calls.length;
+    const trackFitCommand = mapInteractionStore.getState().fitBoundsCommand;
+    expect(trackFitCommand).toMatchObject({
+      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
+    });
+    expect(trackFitCommand?.padding).toBeUndefined();
+    expect(trackFitCommand?.path).toMatchObject({
+      from: { longitude: 44, latitude: 42 },
+      to: { longitude: 44.03, latitude: 42.03 },
+    });
     const elevationDisclosure = within(details).getByRole('button', {
       name: 'Climbs & Descents',
     });
     expect(elevationDisclosure).toHaveAttribute('aria-expanded', 'false');
     await user.click(elevationDisclosure);
     const climb = within(details).getByRole('button', { name: /^Climb 1/u });
+    await user.hover(climb);
+    const focusedSegments = setImportedTrackFocus.mock.lastCall?.[0];
+    expect(focusedSegments?.length).toBeGreaterThan(0);
+    expect(focusedSegments?.[0]?.coordinates[0]).toEqual([44, 42]);
     await user.click(climb);
     expect(climb).toHaveAttribute('aria-pressed', 'true');
+    expect(mapInteractionStore.getState().fitBoundsCommand).toMatchObject({
+      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
+      maxZoom: 16,
+      path: {
+        from: { longitude: 44, latitude: 42 },
+        to: { longitude: 44.03, latitude: 42.03 },
+      },
+    });
+    await user.unhover(climb);
+    expect(setImportedTrackFocus).toHaveBeenLastCalledWith(null);
     expect(setImportedTrackHighlight).toHaveBeenCalledTimes(highlightCallCount);
     expect(setImportedTrackHighlight.mock.lastCall?.[0]).toEqual(highlightedSegments);
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
@@ -2518,11 +2600,6 @@ describe('WorkspaceShell', () => {
     expect(
       discard.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    const fitBoundsCommand = mapInteractionStore.getState().fitBoundsCommand;
-    expect(fitBoundsCommand).toMatchObject({
-      bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
-    });
-    expect(fitBoundsCommand?.padding).toBeUndefined();
     const leaveEvent = new Event('beforeunload', { cancelable: true });
     expect(window.dispatchEvent(leaveEvent)).toBe(false);
 

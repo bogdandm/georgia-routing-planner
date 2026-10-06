@@ -749,10 +749,7 @@ describe('MapWorkspace', () => {
 
     act(() => {
       requestMapFitBounds({ west: 43.1, south: 41.6, east: 44.2, north: 42.4 }, 15, {
-        top: 56,
-        right: 56,
-        bottom: 56,
-        left: 840,
+        padding: { top: 56, right: 56, bottom: 56, left: 840 },
       });
     });
     expect(facade.fitBoundsRequests).toEqual([]);

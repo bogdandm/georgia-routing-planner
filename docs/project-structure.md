@@ -167,7 +167,9 @@ Provider URLs, tile bytes, graphs, and caches never enter React or application p
 [`MapWorkspace.tsx`](../src/presentation/map/MapWorkspace.tsx) translates React state
 and user commands, including the shared point actions.
 [`MapLibreFacade.ts`](../src/presentation/map/MapLibreFacade.ts) owns the native object,
-event listeners, error aggregation, WebGL state, point inspection, and cleanup.
+event listeners, error aggregation, WebGL state, point inspection, and cleanup. Its 3D
+track fits use the pure pitched, terrain-aware camera solver in
+[`directedCameraFit.ts`](../src/presentation/map/directedCameraFit.ts).
 [`mapStyleFactory.ts`](../src/presentation/map/mapStyleFactory.ts) is pure and uses the
 stable, typed IDs and insertion points in `mapIds.ts`; new layers extend that ordering
 instead of scattering MapLibre identifiers. `mapVisualPalette.ts` is the single owner of

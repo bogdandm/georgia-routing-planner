@@ -1142,6 +1142,12 @@ describe('MapLibreLayerController', () => {
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
+      importedTrackLayerIds.focusCasingA,
+      importedTrackLayerIds.focusLineA,
+      importedTrackLayerIds.focusHighlightA,
+      importedTrackLayerIds.focusCasingB,
+      importedTrackLayerIds.focusLineB,
+      importedTrackLayerIds.focusHighlightB,
       importedTrackLayerIds.endpoints,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
     expect(importedTrackLineLayerIdsInOrder).toEqual(
@@ -1670,6 +1676,101 @@ describe('MapLibreLayerController', () => {
       'data.features',
       [],
     );
+  });
+
+  it('fades focus in, across segments, and out frame by frame', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame'] });
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [44.2, 42.2],
+          [44.3, 42.3],
+          [44.4, 42.4],
+        ],
+      ],
+    ]);
+    controller.setImportedTrackOpacity(0.8);
+    const climb = {
+      color: '#D6A100',
+      coordinates: [
+        [44.3, 42.3],
+        [44.4, 42.4],
+      ] as const,
+    };
+    const descent = {
+      color: '#0F766E',
+      coordinates: [
+        [44.2, 42.2],
+        [44.3, 42.3],
+      ] as const,
+    };
+    const opacityOf = (layerId: string) =>
+      map.paintProperties.get(`${layerId}.line-opacity`);
+    const track = () => opacityOf(importedTrackLayerIds.line);
+    const slotA = () => opacityOf(importedTrackLayerIds.focusLineA);
+    const slotB = () => opacityOf(importedTrackLayerIds.focusLineB);
+
+    controller.setImportedTrackFocus([climb]);
+
+    expect(map.sources.get(mapSourceIds.importedTrackFocusA)).toHaveProperty(
+      'data.features.0.properties.color',
+      '#D6A100',
+    );
+    expect(track()).toBe(0.8);
+    vi.advanceTimersByTime(150);
+    // Halfway through the fade the track is partly dimmed and the segment partly shown.
+    expect(track()).toBeLessThan(0.8);
+    expect(track()).toBeGreaterThan(0.12);
+    expect(slotA()).toBeGreaterThan(0);
+    expect(slotA()).toBeLessThan(0.8);
+    vi.advanceTimersByTime(300);
+    expect(track()).toBeCloseTo(0.12);
+    expect(slotA()).toBe(0.8);
+    expect(
+      map.paintProperties.get(`${importedTrackLayerIds.endpoints}.icon-opacity`),
+    ).toBe(0.8);
+
+    controller.setImportedTrackFocus([descent]);
+    vi.advanceTimersByTime(150);
+    // A cross-fade keeps the track dimmed while one segment replaces the other.
+    expect(map.sources.get(mapSourceIds.importedTrackFocusB)).toHaveProperty(
+      'data.features.0.properties.color',
+      '#0F766E',
+    );
+    expect(track()).toBeCloseTo(0.12);
+    expect(slotA()).toBeGreaterThan(0);
+    expect(slotB()).toBeGreaterThan(0);
+    expect((slotA() as number) + (slotB() as number)).toBeCloseTo(0.8);
+    vi.advanceTimersByTime(300);
+    expect(slotA()).toBe(0);
+    expect(slotB()).toBe(0.8);
+
+    controller.setImportedTrackFocus(null);
+    vi.advanceTimersByTime(450);
+    expect(track()).toBe(0.8);
+    expect(slotB()).toBe(0);
+
+    controller.setImportedTrackFocus([climb]);
+    vi.advanceTimersByTime(450);
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [45, 43],
+          [45.1, 43.1],
+        ],
+      ],
+    ]);
+
+    // A newly drawn track drops the previous track's focus at once.
+    expect(track()).toBe(0.8);
+    expect(slotA()).toBe(0);
+    expect(slotB()).toBe(0);
+    vi.useRealTimers();
   });
 
   it('moves and clears the imported-track trace point', () => {

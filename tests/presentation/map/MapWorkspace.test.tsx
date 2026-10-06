@@ -4,6 +4,7 @@ import { Children, act, isValidElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 
+import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import {
   GRADE_BANDS_ASCENDING,
   GRADE_BAND_THRESHOLDS_PCT,
@@ -881,7 +882,8 @@ describe('MapWorkspace', () => {
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
-        load: () => Promise.resolve(restoredCamera),
+        load: () =>
+          Promise.resolve({ camera: restoredCamera, terrainMode: 'flat' as const }),
         save: () => Promise.resolve(),
       },
     };
@@ -901,18 +903,52 @@ describe('MapWorkspace', () => {
     await expect(screen.findByText('Restored zoom 10')).resolves.toBeVisible();
   });
 
-  it('always restores a persisted camera in 2D', async () => {
+  it('restores a persisted 2D view without starting terrain', async () => {
     const facade = new FakeMapFacade();
     const services = {
       ...createTestServices(),
       mapCameraRepository: {
         load: () =>
           Promise.resolve({
-            longitude: 45.2,
-            latitude: 42.4,
-            zoom: 10,
-            bearing: 18,
-            pitch: 25,
+            camera: { longitude: 45.2, latitude: 42.4, zoom: 10, bearing: 0, pitch: 0 },
+            terrainMode: 'flat' as const,
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Restored flat map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Restored flat map');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    expect(facade.terrainModeRequests).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('restores a persisted 3D view and enables terrain once the map is ready', async () => {
+    const facade = new FakeMapFacade();
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          Promise.resolve({
+            camera: {
+              longitude: 45.2,
+              latitude: 42.4,
+              zoom: 10,
+              bearing: 18,
+              pitch: 25,
+            },
+            terrainMode: 'terrain' as const,
           }),
         save: () => Promise.resolve(),
       },
@@ -924,7 +960,7 @@ describe('MapWorkspace', () => {
           facade={facade}
           mapCanvas={(initialCamera) => (
             <div>
-              Restored flat map {String(initialCamera.bearing)}/
+              Restored 3D map {String(initialCamera.bearing)}/
               {String(initialCamera.pitch)}
             </div>
           )}
@@ -932,16 +968,106 @@ describe('MapWorkspace', () => {
       </RuntimeServicesProvider>,
     );
 
-    await screen.findByText('Restored flat map 0/0');
-    expect(facade.terrainModeRequests).toEqual([]);
-    act(() => {
-      facade.setSnapshot({ lifecycle: 'ready' });
-    });
-    expect(facade.terrainModeRequests).toEqual([]);
-    expect(screen.getByRole('button', { name: 'Show flat 2D map' })).toHaveAttribute(
+    await screen.findByText('Restored 3D map 18/25');
+    expect(screen.getByRole('button', { name: 'Show 3D terrain map' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
+    expect(facade.terrainModeRequests).toEqual([]);
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+  });
+
+  it('mounts a persisted 3D view flat when Mosaic starts before storage resolves', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    let resolveLoad!: (view: MapViewState) => void;
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          new Promise<MapViewState>((resolve) => {
+            resolveLoad = resolve;
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <SatelliteMosaicProvider>
+          <MosaicModeButton />
+          <MapWorkspace
+            facade={facade}
+            mapCanvas={(initialCamera) => (
+              <div>
+                Early Mosaic map {String(initialCamera.bearing)}/
+                {String(initialCamera.pitch)}
+              </div>
+            )}
+          />
+        </SatelliteMosaicProvider>
+      </RuntimeServicesProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Mosaic mode' }));
+    act(() => {
+      resolveLoad({
+        camera: { longitude: 45.2, latitude: 42.4, zoom: 10, bearing: 18, pitch: 25 },
+        terrainMode: 'terrain',
+      });
+    });
+
+    await screen.findByText('Early Mosaic map 0/0');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    expect(facade.terrainModeRequests).toEqual(['flat']);
+  });
+
+  it('lets a shared 2D URL override a persisted 3D view', async () => {
+    window.history.replaceState(null, '', '/?map=2&lat=41.7&lon=44.8&z=13.25&view=2d');
+    const facade = new FakeMapFacade();
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          Promise.resolve({
+            camera: {
+              longitude: 45.2,
+              latitude: 42.4,
+              zoom: 10,
+              bearing: 18,
+              pitch: 25,
+            },
+            terrainMode: 'terrain' as const,
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={(initialCamera) => (
+            <div>
+              Shared flat map {String(initialCamera.zoom)}/{String(initialCamera.pitch)}
+            </div>
+          )}
+        />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Shared flat map 13.25/0');
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    expect(facade.terrainModeRequests).toEqual([]);
   });
 
   it('disables native box zoom and right-button camera drag in both map modes', async () => {

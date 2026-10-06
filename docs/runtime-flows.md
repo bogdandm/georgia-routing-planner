@@ -55,15 +55,18 @@ combines both owners so neither clears the other.
 
 ## Settled map-view write and restore
 
-1. Startup reads one versioned center-and-zoom value and forces bearing and pitch to 0.
-2. A 3D share URL restores bearing and pitch and selects 3D, but the first style stays
-   flat so DEM tiles cannot delay readiness; terrain starts after Ready through the
-   normal retry path. Selecting 2D during loading supersedes the URL intent.
+1. Startup reads one versioned view. A 2D view restores center and zoom with bearing and
+   pitch at 0; a 3D view also restores bearing and pitch and selects 3D. A share URL
+   replaces the stored view and mode entirely.
+2. A restored or shared 3D view mounts as a pitched flat style so DEM tiles cannot delay
+   readiness; terrain starts after Ready through the normal retry path. Until that
+   attempt settles, settled flat views are still stored as 3D. Selecting 2D or Mosaic
+   during loading supersedes that intent, levels the camera, and stores a 2D view.
 3. On `moveend` the facade reads center, zoom, bearing, pitch, and terrain mode, updates
    its snapshot, and calls the view-settled port.
 4. `SettledCameraPersistence` keeps only the newest view during a 400 ms debounce, then
-   the repository writes center and zoom. Writes are chained so saves cannot overtake
-   one another.
+   the repository writes the terrain mode with center and zoom, plus bearing and pitch
+   only in 3D. Writes are chained so saves cannot overtake one another.
 5. A save failure is logged and shown as a non-blocking warning.
 
 Continuous `move`/render events never reach React, IndexedDB, or diagnostics.

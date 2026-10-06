@@ -2312,11 +2312,8 @@ describe('WorkspaceShell', () => {
     await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
     await services.database.saveLatestOpenedTrackId(summary.id);
     await services.mapCameraRepository.save({
-      longitude: 45.2,
-      latitude: 42.4,
-      zoom: 10,
-      bearing: 0,
-      pitch: 0,
+      camera: { longitude: 45.2, latitude: 42.4, zoom: 10, bearing: 0, pitch: 0 },
+      terrainMode: 'flat',
     });
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();

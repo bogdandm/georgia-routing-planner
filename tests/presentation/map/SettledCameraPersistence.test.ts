@@ -24,7 +24,7 @@ afterEach(() => {
 describe('SettledCameraPersistence', () => {
   it('coalesces settled camera events and flushes the final value', async () => {
     vi.useFakeTimers();
-    const save = vi.fn((_camera: MapCamera) => Promise.resolve());
+    const save = vi.fn((_view: MapViewState) => Promise.resolve());
     const repository: MapCameraRepository = {
       load: () => Promise.resolve(null),
       save,
@@ -43,7 +43,29 @@ describe('SettledCameraPersistence', () => {
     await persistence.flush();
 
     expect(save).toHaveBeenCalledTimes(1);
-    expect(save).toHaveBeenCalledWith({ ...camera, zoom: 11 });
+    expect(save).toHaveBeenCalledWith({ ...view, camera: { ...camera, zoom: 11 } });
+  });
+
+  it('stores provisional flat views as 3D until pending startup terrain settles', async () => {
+    const save = vi.fn((_view: MapViewState) => Promise.resolve());
+    const persistence = new SettledCameraPersistence(
+      { load: () => Promise.resolve(null), save },
+      createTestServices().logger,
+      vi.fn(),
+    );
+    const flatView: MapViewState = { camera, terrainMode: 'flat' };
+
+    persistence.setStartupTerrainPending(true);
+    persistence.schedule(flatView);
+    await persistence.flush();
+    persistence.setStartupTerrainPending(false);
+    persistence.schedule(flatView);
+    await persistence.flush();
+
+    expect(save.mock.calls.map(([saved]) => saved.terrainMode)).toEqual([
+      'terrain',
+      'flat',
+    ]);
   });
 
   it('keeps camera interaction usable and reports a failed write', async () => {

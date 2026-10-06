@@ -15,12 +15,13 @@ export interface MapViewState {
 }
 
 /**
- * Persists the last settled position without durable 3D orientation. Loaded cameras
- * always use zero bearing and pitch so an ordinary restart begins in 2D.
+ * Persists the last settled view. A 2D view keeps only center and zoom; loaded flat
+ * views always use zero bearing and pitch. A 3D view also keeps bearing and pitch so a
+ * restart re-enters terrain with the same camera.
  */
 export interface MapCameraRepository {
-  load(): Promise<MapCamera | null>;
-  save(camera: MapCamera): Promise<void>;
+  load(): Promise<MapViewState | null>;
+  save(view: MapViewState): Promise<void>;
 }
 
 const cameraKeys = [

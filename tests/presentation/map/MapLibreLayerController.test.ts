@@ -1142,9 +1142,12 @@ describe('MapLibreLayerController', () => {
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
-      importedTrackLayerIds.focusCasing,
-      importedTrackLayerIds.focusLine,
-      importedTrackLayerIds.focusHighlight,
+      importedTrackLayerIds.focusCasingA,
+      importedTrackLayerIds.focusLineA,
+      importedTrackLayerIds.focusHighlightA,
+      importedTrackLayerIds.focusCasingB,
+      importedTrackLayerIds.focusLineB,
+      importedTrackLayerIds.focusHighlightB,
       importedTrackLayerIds.endpoints,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
     expect(importedTrackLineLayerIdsInOrder).toEqual(
@@ -1675,7 +1678,7 @@ describe('MapLibreLayerController', () => {
     );
   });
 
-  it('dims the track outside a focused segment and releases it after the fade', () => {
+  it('dims the track around a focused segment and cross-fades focus changes', () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -1691,32 +1694,53 @@ describe('MapLibreLayerController', () => {
       ],
     ]);
     controller.setImportedTrackOpacity(0.8);
-    const focus = {
+    const climb = {
       color: '#D6A100',
       coordinates: [
         [44.3, 42.3],
         [44.4, 42.4],
       ] as const,
     };
-    const opacityOf = (layerId: string) =>
-      map.paintProperties.get(
-        `${layerId}.${layerId === importedTrackLayerIds.endpoints ? 'icon' : 'line'}-opacity`,
-      );
-    const unfocusedLayerIds = [
+    const descent = {
+      color: '#0F766E',
+      coordinates: [
+        [44.2, 42.2],
+        [44.3, 42.3],
+      ] as const,
+    };
+    const slotA = [
+      importedTrackLayerIds.focusCasingA,
+      importedTrackLayerIds.focusLineA,
+      importedTrackLayerIds.focusHighlightA,
+    ];
+    const slotB = [
+      importedTrackLayerIds.focusCasingB,
+      importedTrackLayerIds.focusLineB,
+      importedTrackLayerIds.focusHighlightB,
+    ];
+    const trackLayerIds = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
     ];
-    const fullOpacityLayerIds = [
-      importedTrackLayerIds.focusCasing,
-      importedTrackLayerIds.focusLine,
-      importedTrackLayerIds.focusHighlight,
-      importedTrackLayerIds.endpoints,
-    ];
+    const opacityOf = (layerId: string) =>
+      map.paintProperties.get(`${layerId}.line-opacity`);
+    const expectSlot = (
+      layerIds: readonly string[],
+      opacity: number,
+      transition: { duration: number; delay: number },
+    ) => {
+      for (const layerId of layerIds) {
+        expect(opacityOf(layerId)).toBe(opacity);
+        expect(map.paintProperties.get(`${layerId}.line-opacity-transition`)).toEqual(
+          transition,
+        );
+      }
+    };
 
-    controller.setImportedTrackFocus([focus]);
+    controller.setImportedTrackFocus([climb]);
 
-    expect(map.sources.get(mapSourceIds.importedTrackFocus)).toHaveProperty(
+    expect(map.sources.get(mapSourceIds.importedTrackFocusA)).toHaveProperty(
       'data.features',
       [
         {
@@ -1732,40 +1756,38 @@ describe('MapLibreLayerController', () => {
         },
       ],
     );
-    expect(map.layers.get(importedTrackLayerIds.focusHighlight)).toMatchObject({
-      source: mapSourceIds.importedTrackFocus,
-      paint: { 'line-color': ['get', 'color'] },
-    });
-    for (const layerId of unfocusedLayerIds) {
-      expect(opacityOf(layerId)).toBeCloseTo(0.24);
-    }
-    for (const layerId of fullOpacityLayerIds) {
-      expect(opacityOf(layerId)).toBe(0.8);
-    }
+    for (const layerId of trackLayerIds) expect(opacityOf(layerId)).toBeCloseTo(0.24);
+    expect(
+      map.paintProperties.get(`${importedTrackLayerIds.endpoints}.icon-opacity`),
+    ).toBe(0.8);
+    // Entering shows the segment at once while the track fades down.
+    expectSlot(slotA, 0.8, { duration: 0, delay: 0 });
+    expectSlot(slotB, 0, { duration: 0, delay: 0 });
+
+    controller.setImportedTrackFocus([descent]);
+
+    expect(map.sources.get(mapSourceIds.importedTrackFocusB)).toHaveProperty(
+      'data.features.0.properties.color',
+      '#0F766E',
+    );
+    for (const layerId of trackLayerIds) expect(opacityOf(layerId)).toBeCloseTo(0.24);
+    expectSlot(slotB, 0.8, { duration: 300, delay: 0 });
+    expectSlot(slotA, 0, { duration: 300, delay: 0 });
 
     expect(controller.setLayerVisibility('track-elevation-gradient', false)).toEqual({
       status: 'success',
     });
-    expect(map.visibility.get(importedTrackLayerIds.focusHighlight)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.focusHighlightB)).toBe('none');
     expect(controller.setLayerVisibility('imported-tracks', false)).toEqual({
       status: 'success',
     });
-    expect(map.visibility.get(importedTrackLayerIds.focusCasing)).toBe('none');
-    expect(map.visibility.get(importedTrackLayerIds.focusLine)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.focusLineB)).toBe('none');
 
     controller.setImportedTrackFocus(null);
 
-    for (const layerId of [...unfocusedLayerIds, importedTrackLayerIds.endpoints]) {
-      expect(opacityOf(layerId)).toBe(0.8);
-    }
-    // The overlay keeps the segment fully drawn while the track fades back, then hides.
-    for (const layerId of fullOpacityLayerIds.slice(0, 3)) {
-      expect(opacityOf(layerId)).toBe(0);
-      expect(map.paintProperties.get(`${layerId}.line-opacity-transition`)).toEqual({
-        duration: 0,
-        delay: 300,
-      });
-    }
+    for (const layerId of trackLayerIds) expect(opacityOf(layerId)).toBe(0.8);
+    // The released segment stays drawn while the track fades back, then hides.
+    expectSlot(slotB, 0, { duration: 0, delay: 300 });
   });
 
   it('moves and clears the imported-track trace point', () => {

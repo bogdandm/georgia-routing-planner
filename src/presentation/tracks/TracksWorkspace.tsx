@@ -132,6 +132,7 @@ import {
 } from '@/domain/tracks/trackFolder';
 import {
   calculateTrackMetrics,
+  trackOutboundDirection,
   type TrackBounds,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
@@ -1325,7 +1326,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
     if (initiallyRestoredTrackId.current !== trackId) {
-      requestMapFitBounds(mapFitBoundsForTrack(metrics.bounds), 15);
+      // In 3D the camera faces along the track so its start sits at the bottom.
+      const direction = trackOutboundDirection(segments);
+      requestMapFitBounds(
+        mapFitBoundsForTrack(metrics.bounds),
+        15,
+        direction === null
+          ? {}
+          : {
+              direction: {
+                from: { longitude: direction.from[0], latitude: direction.from[1] },
+                to: { longitude: direction.to[0], latitude: direction.to[1] },
+              },
+            },
+      );
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 

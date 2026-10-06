@@ -210,16 +210,19 @@ valid.
 
 Selecting a track draws it in bright blue with a green Play start and a red Stop finish
 marker, fits its bounds around the open panes, and opens a detail pane with metrics,
-actions, provenance, and an elevation profile. The stats grid shows duration, distance,
-average speed, and **Elevation gain**/**Elevation loss**; tracks with source elevation
-also list the calculated Terrarium gain and loss. Without recorded time, duration is an
-**Estimated time** (`≈`) from DIN 33466 hiking rates: 4 km/h horizontally, 300 m/h
-ascent, and 500 m/h descent, with the larger of the horizontal and vertical times
-counted fully and the smaller by half. Breaks are not included. Missing measurements are
-omitted. Source file, point/segment counts, and the saved timestamp follow. Closing the
-track removes its geometry without moving the camera. From 900 through 1899 CSS pixels,
-**Back to tracks** restores the prior list state; at 1900 and above the pane stays
-adjacent and uses **Close track**.
+actions, provenance, and an elevation profile. In 3D the fit also turns the camera to a
+45° pitch with the start at the bottom of the screen: a one-way track faces its finish,
+while a loop faces its point farthest from the start, so its finish stays at the bottom
+too. The stats grid shows duration, distance, average speed, and **Elevation
+gain**/**Elevation loss**; tracks with source elevation also list the calculated
+Terrarium gain and loss. Without recorded time, duration is an **Estimated time** (`≈`)
+from DIN 33466 hiking rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent,
+with the larger of the horizontal and vertical times counted fully and the smaller by
+half. Breaks are not included. Missing measurements are omitted. Source file,
+point/segment counts, and the saved timestamp follow. Closing the track removes its
+geometry without moving the camera. From 900 through 1899 CSS pixels, **Back to tracks**
+restores the prior list state; at 1900 and above the pane stays adjacent and uses
+**Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
 **Download KML**, sharing, **Rename** (an inline name editor), and **Delete track**.

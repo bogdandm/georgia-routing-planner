@@ -2330,6 +2330,10 @@ describe('WorkspaceShell', () => {
       bounds: { west: 44, south: 42, east: 44.01, north: 42.01 },
       maxZoom: 15,
       padding: undefined,
+      direction: {
+        from: { longitude: 44, latitude: 42 },
+        to: { longitude: 44.01, latitude: 42.01 },
+      },
     };
     renderWorkspaceShell(
       <MapWorkspace
@@ -2493,7 +2497,10 @@ describe('WorkspaceShell', () => {
       bounds: { west: 44, south: 42, east: 44.03, north: 42.03 },
     });
     expect(trackFitCommand?.padding).toBeUndefined();
-    expect(trackFitCommand?.direction).toBeUndefined();
+    expect(trackFitCommand?.direction).toEqual({
+      from: { longitude: 44, latitude: 42 },
+      to: { longitude: 44.03, latitude: 42.03 },
+    });
     const elevationDisclosure = within(details).getByRole('button', {
       name: 'Climbs & Descents',
     });

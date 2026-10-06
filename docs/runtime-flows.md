@@ -480,8 +480,9 @@ Selecting a row issues a fit command with the segment's antimeridian-aware bound
 start-to-finish direction. Only in terrain mode does the facade turn it into a Web
 Mercator bearing and 45° pitch, widening the side padding by the perspective scale at
 the near screen edge because MapLibre computes fits as if unpitched. Import and track
-selection issue one fit command padded for the Tracks panes; closing clears the sources
-without touching storage or the camera.
+selection issue one fit command padded for the Tracks panes, directed by
+`trackOutboundDirection`: start to finish, or start to the farthest point for an
+`isLoop` track. Closing clears the sources without touching storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
 authoritative; calculated Terrarium elevation is the profile fallback only when no

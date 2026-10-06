@@ -576,3 +576,27 @@ export function isLoop(segments: readonly (readonly TrackCoordinate[])[]): boole
     Math.min(LOOP_START_FINISH_GAP_METERS, total / 2)
   );
 }
+
+/**
+ * Direction the track leads away from its start: toward the finish, or for loops (whose
+ * finish lies beside the start) toward the point farthest from the start.
+ */
+export function trackOutboundDirection(
+  segments: readonly (readonly TrackCoordinate[])[],
+): { readonly from: TrackCoordinate; readonly to: TrackCoordinate } | null {
+  const path = segments.flat();
+  const start = path[0];
+  const finish = path.at(-1);
+  if (start === undefined || finish === undefined) return null;
+  if (!isLoop(segments)) return { from: start, to: finish };
+  let farthest = start;
+  let farthestMeters = 0;
+  for (const coordinate of path) {
+    const distance = geodesicDistanceMeters(start, coordinate);
+    if (distance > farthestMeters) {
+      farthestMeters = distance;
+      farthest = coordinate;
+    }
+  }
+  return { from: start, to: farthest };
+}

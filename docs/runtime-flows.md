@@ -476,10 +476,12 @@ chart point drives a separate transient trace-point source. A hovered Climbs & D
 row sends that segment's grade subsegments to `setImportedTrackFocus`, a transient focus
 source drawn with its own casing, line, and grade layers above the highlight; while it
 is non-empty the base casing, line, and highlight drop to 30% of the track opacity.
-Selecting a row issues a fit command with the segment's start-to-finish direction, which
-the facade turns into a Web Mercator bearing and 45° pitch only in terrain mode. Import
-and track selection issue one fit command padded for the Tracks panes; closing clears
-the sources without touching storage or the camera.
+Selecting a row issues a fit command with the segment's antimeridian-aware bounds and
+start-to-finish direction. Only in terrain mode does the facade turn it into a Web
+Mercator bearing and 45° pitch, widening the side padding by the perspective scale at
+the near screen edge because MapLibre computes fits as if unpitched. Import and track
+selection issue one fit command padded for the Tracks panes; closing clears the sources
+without touching storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
 authoritative; calculated Terrarium elevation is the profile fallback only when no

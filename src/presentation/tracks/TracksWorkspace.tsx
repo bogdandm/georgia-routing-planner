@@ -132,6 +132,7 @@ import {
 } from '@/domain/tracks/trackFolder';
 import {
   calculateTrackMetrics,
+  type TrackBounds,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 import type {
@@ -211,7 +212,7 @@ import {
   requestMapNavigation,
   requestMarkerPlacement,
 } from '@/presentation/map/mapInteractionStore';
-import type { MapCoordinate } from '@/presentation/map/mapTypes';
+import type { MapCoordinate, MapViewportBounds } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { TrackThumbnailImage } from '@/presentation/tracks/TrackThumbnailImage';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -1282,17 +1283,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           selection.content.trackPoints.map((points) => ({ points })),
         ),
       );
-      requestMapFitBounds(
-        {
-          west: metrics.bounds.west,
-          south: metrics.bounds.south,
-          east: metrics.bounds.crossesAntimeridian
-            ? metrics.bounds.east + 360
-            : metrics.bounds.east,
-          north: metrics.bounds.north,
-        },
-        15,
-      );
+      requestMapFitBounds(mapFitBoundsForTrack(metrics.bounds), 15);
       return;
     }
     if (active === null) {
@@ -1334,17 +1325,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
     if (initiallyRestoredTrackId.current !== trackId) {
-      requestMapFitBounds(
-        {
-          west: metrics.bounds.west,
-          south: metrics.bounds.south,
-          east: metrics.bounds.crossesAntimeridian
-            ? metrics.bounds.east + 360
-            : metrics.bounds.east,
-          north: metrics.bounds.north,
-        },
-        15,
-      );
+      requestMapFitBounds(mapFitBoundsForTrack(metrics.bounds), 15);
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 
@@ -4280,6 +4261,16 @@ function downloadFile(
   URL.revokeObjectURL(url);
 }
 
+/** Unwraps antimeridian-crossing track bounds so MapLibre fits the short way around. */
+function mapFitBoundsForTrack(bounds: TrackBounds): MapViewportBounds {
+  return {
+    west: bounds.west,
+    south: bounds.south,
+    east: bounds.crossesAntimeridian ? bounds.east + 360 : bounds.east,
+    north: bounds.north,
+  };
+}
+
 function elevationProfileInputSegments(
   segments: readonly (readonly TrackPoint[])[],
 ): readonly (readonly ElevationProfileInputPoint[])[] | null {
@@ -4341,8 +4332,12 @@ function InteractiveElevationProfile({
   const [hoveredSegment, setHoveredSegment] = useState<{
     readonly profile: ElevationProfile;
     readonly index: number;
-    /** Only Climbs & Descents rows focus the segment on the map; chart hover does not. */
-    readonly fromList: boolean;
+  } | null>(null);
+  // Only Climbs & Descents rows focus a segment on the map; chart hover stays panel-only
+  // and must not cancel a row that still has pointer or keyboard focus.
+  const [listHoveredSegment, setListHoveredSegment] = useState<{
+    readonly profile: ElevationProfile;
+    readonly index: number;
   } | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<{
     readonly profile: ElevationProfile;
@@ -4363,9 +4358,7 @@ function InteractiveElevationProfile({
   const hoveredSegmentIndex =
     hoveredSegment?.profile === profile ? hoveredSegment.index : null;
   const mapFocusSegmentIndex =
-    hoveredSegment?.profile === profile && hoveredSegment.fromList
-      ? hoveredSegment.index
-      : null;
+    listHoveredSegment?.profile === profile ? listHoveredSegment.index : null;
   const selectedSegmentIndex =
     selectedSegment?.profile === profile ? selectedSegment.index : null;
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
@@ -4387,38 +4380,30 @@ function InteractiveElevationProfile({
       mapLayers.setImportedTrackFocus(null);
     };
   }, [mapFocusSegmentIndex, mapLayers, profile]);
-  const onSegmentHoverChange = (nextSegmentIndex: number | null, fromList: boolean) => {
+  const onSegmentHoverChange = (nextSegmentIndex: number | null) => {
     if (nextSegmentIndex === null) {
       setHoveredSegment(null);
       return;
     }
     setHoveredSegment((current) =>
-      current?.profile === profile &&
-      current.index === nextSegmentIndex &&
-      current.fromList === fromList
+      current?.profile === profile && current.index === nextSegmentIndex
         ? current
-        : { profile, index: nextSegmentIndex, fromList },
+        : { profile, index: nextSegmentIndex },
     );
   };
   /** Fits the segment; in 3D the camera faces from its start toward its finish. */
   const fitSegmentOnMap = (segmentIndex: number) => {
     const segment = profile.segments[segmentIndex];
     if (segment === undefined) return;
-    const coordinates = profile.points
-      .slice(segment.startSampleIndex, segment.endSampleIndex + 1)
-      .map((point) => point.coordinate);
-    const start = coordinates[0];
-    const finish = coordinates.at(-1);
+    const points = profile.points.slice(
+      segment.startSampleIndex,
+      segment.endSampleIndex + 1,
+    );
+    const start = points[0]?.coordinate;
+    const finish = points.at(-1)?.coordinate;
     if (start === undefined || finish === undefined) return;
-    const longitudes = coordinates.map(([longitude]) => longitude);
-    const latitudes = coordinates.map(([, latitude]) => latitude);
     requestMapFitBounds(
-      {
-        west: Math.min(...longitudes),
-        south: Math.min(...latitudes),
-        east: Math.max(...longitudes),
-        north: Math.max(...latitudes),
-      },
+      mapFitBoundsForTrack(calculateTrackMetrics([{ points }]).bounds),
       16,
       {
         direction: {
@@ -4457,9 +4442,7 @@ function InteractiveElevationProfile({
             tracedPoint.current = point;
             mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
           }}
-          onSegmentHoverChange={(index) => {
-            onSegmentHoverChange(index, false);
-          }}
+          onSegmentHoverChange={onSegmentHoverChange}
           onSegmentSelectionChange={onSegmentSelectionChange}
           onPointClick={(point) => {
             requestMapNavigation({
@@ -4488,7 +4471,8 @@ function InteractiveElevationProfile({
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
           onSegmentHoverChange={(index) => {
-            onSegmentHoverChange(index, true);
+            onSegmentHoverChange(index);
+            setListHoveredSegment(index === null ? null : { profile, index });
           }}
           onSegmentSelectionChange={(index) => {
             onSegmentSelectionChange(index);

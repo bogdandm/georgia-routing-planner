@@ -69,7 +69,10 @@ const directedFitPitchDegrees = 45;
 function travelBearingDegrees({ from, to }: MapTravelDirection): number {
   const mercatorY = (latitude: number) =>
     Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
-  const east = ((to.longitude - from.longitude) * Math.PI) / 180;
+  // Wrap the longitude delta into [-180°, 180°) so antimeridian crossings go the short way.
+  const eastDegrees =
+    ((((to.longitude - from.longitude + 180) % 360) + 360) % 360) - 180;
+  const east = (eastDegrees * Math.PI) / 180;
   const north = mercatorY(to.latitude) - mercatorY(from.latitude);
   return (Math.atan2(east, north) * 180) / Math.PI;
 }
@@ -531,22 +534,39 @@ export class MapLibreFacade implements MapFacade {
   ): void {
     const map = this.#map;
     if (map === null) return;
-    const faceDirection =
-      direction !== undefined && this.#snapshot.terrainMode === 'terrain';
-    // MapLibre computes the fit as if unpitched. At 45° the far half compresses and the
-    // near half grows by at most a third, so the padded span stays essentially in view.
+    let bearing = map.getBearing();
+    let pitch = map.getPitch();
+    let fitPadding: number | MapFitPadding = padding ?? 56;
+    if (direction !== undefined && this.#snapshot.terrainMode === 'terrain') {
+      bearing = travelBearingDegrees(direction);
+      pitch = directedFitPitchDegrees;
+      // MapLibre fits as if unpitched. Perspective keeps the near half vertically inside
+      // the fit but widens ground at the bottom edge by 1 / (1 - tan(fov/2) * sin(pitch)),
+      // about 1.3x at 45 degrees; narrowing the fitted width by that factor keeps a wide
+      // switchback segment's near end inside the padded area.
+      const basePadding = padding ?? { top: 56, right: 56, bottom: 56, left: 56 };
+      const nearEdgeScale =
+        1 /
+        (1 -
+          Math.tan((map.getVerticalFieldOfView() * Math.PI) / 360) *
+            Math.sin((pitch * Math.PI) / 180));
+      const availableWidth = Math.max(
+        0,
+        map.getCanvas().clientWidth - basePadding.left - basePadding.right,
+      );
+      const sidePadding = (availableWidth * (1 - 1 / nearEdgeScale)) / 2;
+      fitPadding = {
+        ...basePadding,
+        left: basePadding.left + sidePadding,
+        right: basePadding.right + sidePadding,
+      };
+    }
     map.fitBounds(
       [
         [bounds.west, bounds.south],
         [bounds.east, bounds.north],
       ],
-      {
-        padding: padding ?? 56,
-        maxZoom,
-        duration: 650,
-        bearing: faceDirection ? travelBearingDegrees(direction) : map.getBearing(),
-        pitch: faceDirection ? directedFitPitchDegrees : map.getPitch(),
-      },
+      { padding: fitPadding, maxZoom, duration: 650, bearing, pitch },
     );
     this.logger.log({
       level: 'info',

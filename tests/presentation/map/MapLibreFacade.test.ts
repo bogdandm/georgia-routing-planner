@@ -64,6 +64,10 @@ class FakeNativeMap {
     return this.#canvas;
   }
 
+  public getVerticalFieldOfView(): number {
+    return 36.87;
+  }
+
   public loaded(): boolean {
     return false;
   }
@@ -382,23 +386,39 @@ describe('MapLibreFacade', () => {
     flatFacade.fitBounds(bounds, 16, undefined, westward);
     expect(flatMap.fitBoundsCalls.at(-1)).toMatchObject({
       maxZoom: 16,
+      padding: 56,
       bearing: flatMap.getBearing(),
       pitch: flatMap.getPitch(),
     });
 
     const terrainMap = new FakeNativeMap();
     terrainMap.initialTerrain = { source: 'terrain-dem' };
+    Object.defineProperty(terrainMap.getCanvas(), 'clientWidth', { value: 1000 });
     const terrainFacade = new MapLibreFacade(services.logger);
     terrainFacade.attach(terrainMap as unknown as MapLibreMap);
     terrainMap.fire('style.load');
     terrainFacade.fitBounds(bounds, 16, undefined, westward);
-    expect(terrainMap.fitBoundsCalls.at(-1)).toMatchObject({ bearing: -90, pitch: 45 });
+    const westwardFit = terrainMap.fitBoundsCalls.at(-1);
+    expect(westwardFit).toMatchObject({ bearing: -90, pitch: 45 });
+    // The 888 px wide padded area shrinks by the 1.31x near-edge perspective scale.
+    expect(westwardFit).toHaveProperty('padding.top', 56);
+    expect(westwardFit).toHaveProperty('padding.left', expect.closeTo(160.65, 1));
+    expect(westwardFit).toHaveProperty('padding.right', expect.closeTo(160.65, 1));
 
     terrainFacade.fitBounds(bounds, 16, undefined, {
       from: westward.to,
       to: { longitude: 44, latitude: 41.9 },
     });
     expect(terrainMap.fitBoundsCalls.at(-1)).toMatchObject({ bearing: 180, pitch: 45 });
+
+    terrainFacade.fitBounds(bounds, 16, undefined, {
+      from: { longitude: 179.99, latitude: 0 },
+      to: { longitude: -179.99, latitude: 0 },
+    });
+    expect(terrainMap.fitBoundsCalls.at(-1)).toHaveProperty(
+      'bearing',
+      expect.closeTo(90, 6),
+    );
   });
 
   it('preserves subscribers while the native ref detaches and reattaches', () => {

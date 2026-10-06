@@ -4398,6 +4398,7 @@ function InteractiveElevationProfile({
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
+      mapLayers?.setImportedTrackFocus(null);
     },
     [mapLayers],
   );
@@ -4414,23 +4415,21 @@ function InteractiveElevationProfile({
   const selectedSegmentIndex =
     selectedSegment?.profile === profile ? selectedSegment.index : null;
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
+  // Publishes the current focus directly: a cleanup would send `null` between two rows
+  // and turn the map's cross-fade into a fade out and in.
   useEffect(() => {
     const segment =
       mapFocusSegmentIndex === null
         ? undefined
         : profile.segments[mapFocusSegmentIndex];
-    if (mapLayers === null || segment === undefined) return;
-    mapLayers.setImportedTrackFocus(
-      segment.gradeSubsegments.map((gradeSubsegment) => ({
+    mapLayers?.setImportedTrackFocus(
+      segment?.gradeSubsegments.map((gradeSubsegment) => ({
         coordinates: profile.points
           .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
           .map((point) => point.coordinate),
         color: appColors.elevationGrade[gradeSubsegment.band],
-      })),
+      })) ?? null,
     );
-    return () => {
-      mapLayers.setImportedTrackFocus(null);
-    };
   }, [mapFocusSegmentIndex, mapLayers, profile]);
   const onSegmentHoverChange = (nextSegmentIndex: number | null) => {
     if (nextSegmentIndex === null) {

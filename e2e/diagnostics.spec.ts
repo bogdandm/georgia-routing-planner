@@ -135,6 +135,8 @@ test('captures failures and exports an inspectable redacted bundle', async ({
       'imported-track',
       'imported-track-endpoints',
       'imported-track-highlight',
+      'imported-track-focus-a',
+      'imported-track-focus-b',
       'imported-track-trace',
       'route-plan',
       'measurement',

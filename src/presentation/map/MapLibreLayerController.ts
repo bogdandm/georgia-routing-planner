@@ -437,13 +437,14 @@ const logicalNativeLayerGroups: Readonly<
 const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
 /** Opacity multiplier for the track outside a focused climb or descent. */
-const importedTrackDimmedOpacityFactor = 0.3;
-/** MapLibre's default paint transition, which the track's dimming fade uses. */
-const mapPaintFadeMilliseconds = 300;
+const importedTrackDimmedOpacityFactor = 0.15;
 /**
- * Two overlay slots let a newly focused segment fade in while the previous one fades out;
- * each slot draws its own casing, line, and grade colors above the track.
+ * Focus fades write their opacity every animation frame instead of using MapLibre paint
+ * transitions: with 3D terrain, line layers are drawn into cached terrain textures that a
+ * transition never redraws, while each paint change redraws them.
  */
+const importedTrackFocusFadeMilliseconds = 300;
+/** Two overlays let the next climb or descent fade in while the previous one fades out. */
 const importedTrackFocusSlots = [
   {
     source: mapSourceIds.importedTrackFocusA,
@@ -462,7 +463,6 @@ const importedTrackFocusSlots = [
     ],
   },
 ] as const;
-type ImportedTrackFocusSlot = 0 | 1;
 
 interface ImportedTrackEndpoint {
   readonly kind: TrackEndpointKind;
@@ -700,23 +700,24 @@ export class MapLibreLayerController {
   };
   #importedTrackEndpoints: readonly ImportedTrackEndpoint[] = [];
   #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
-  /** Segments per focus slot; a released slot keeps its geometry while it fades. */
+  /** Segment, current visibility, and target visibility (0–1) of each focus overlay. */
   readonly #importedTrackFocusSegments: [
     readonly ImportedTrackHighlightSegment[],
     readonly ImportedTrackHighlightSegment[],
   ] = [[], []];
-  #activeImportedTrackFocusSlot: ImportedTrackFocusSlot = 0;
-  #importedTrackFocused = false;
-  /** Cancels a cross-fade waiting for the frame that renders its slot reset. */
-  #cancelImportedTrackFocusReveal: (() => void) | null = null;
+  readonly #importedTrackFocusWeights: [number, number] = [0, 0];
+  readonly #importedTrackFocusTargets: [number, number] = [0, 0];
+  #importedTrackFocusFrame: number | null = null;
   #importedTrackTraceCoordinate: readonly [number, number] | null = null;
   readonly #plannedLines: Record<PlannedLineOverlay, PlannedLineState> = {
     'route-plan': emptyPlannedLine,
     measurement: emptyPlannedLine,
   };
-  #appliedImportedTrackOpacity: number | null = null;
-  #appliedImportedTrackFocused: boolean | null = null;
-  readonly #importedTrackLayerAnchors = new Map<string, unknown>();
+  /** Last opacity written per track layer; a recreated native layer is written again. */
+  readonly #importedTrackPaint = new Map<
+    string,
+    { readonly layer: unknown; readonly value: number }
+  >();
   #savedMarkers: readonly SavedMarker[] = [];
   #trackMarkers: readonly TrackMarker[] = [];
   #savedMarkerGeneration = 0;
@@ -838,7 +839,10 @@ export class MapLibreLayerController {
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);
-    this.#cancelImportedTrackFocusReveal?.();
+    if (this.#importedTrackFocusFrame !== null) {
+      cancelAnimationFrame(this.#importedTrackFocusFrame);
+      this.#importedTrackFocusFrame = null;
+    }
     this.cancelRasterRecovery();
     this.#activeApplyController?.abort();
     this.#mosaicApplyController?.abort();
@@ -857,9 +861,7 @@ export class MapLibreLayerController {
     this.#visualModeLayerAnchors.clear();
     this.#appliedOpenStreetMapOpacity = null;
     this.#openStreetMapOpacityLayerAnchors.clear();
-    this.#appliedImportedTrackOpacity = null;
-    this.#appliedImportedTrackFocused = null;
-    this.#importedTrackLayerAnchors.clear();
+    this.#importedTrackPaint.clear();
     this.#savedMarkerGeneration += 1;
     this.#savedMarkerImages.clear();
     this.#savedMarkerImageIds.clear();
@@ -1292,76 +1294,56 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Draws one climb or descent above the track and dims the rest of the track.
-   * Entering shows the segment at once while the track fades down; moving to another
-   * segment cross-fades the two; `null` fades the track back and hides the overlay when
-   * that fade ends, so the focused segment never looks dimmed.
+   * Fades one climb or descent in above the track while the rest of the track dims;
+   * another segment cross-fades in, and `null` fades the track back.
    */
   public setImportedTrackFocus(
     segments: readonly ImportedTrackHighlightSegment[] | null,
   ): void {
     const focusSegments = copyImportedTrackHighlightSegments(segments);
-    const { importedTrackOpacity: opacity } = mapLayerStore.getState();
-    const previousSlot = this.#activeImportedTrackFocusSlot;
-    this.#cancelImportedTrackFocusReveal?.();
+    const weights = this.#importedTrackFocusWeights;
+    const targets = this.#importedTrackFocusTargets;
     if (focusSegments.length === 0) {
-      if (!this.#importedTrackFocused) return;
-      this.#importedTrackFocused = false;
+      targets[0] = 0;
+      targets[1] = 0;
+    } else {
+      // The less visible overlay takes the new segment and starts hidden.
+      const slot = weights[0] <= weights[1] ? 0 : 1;
+      this.#importedTrackFocusSegments[slot] = focusSegments;
+      weights[slot] = 0;
+      targets[slot] = 1;
+      targets[slot === 0 ? 1 : 0] = 0;
+      this.#currentGeoJsonSources.delete(importedTrackFocusSlots[slot].source);
+      this.reconcileImportedTrackHighlight();
+    }
+    if (this.#importedTrackFocusFrame !== null) return;
+    let previousTime: number | null = null;
+    const step = (time: number) => {
+      const progress =
+        (time - (previousTime ?? time)) / importedTrackFocusFadeMilliseconds;
+      previousTime = time;
+      for (const slot of [0, 1] as const) {
+        weights[slot] =
+          weights[slot] < targets[slot]
+            ? Math.min(targets[slot], weights[slot] + progress)
+            : Math.max(targets[slot], weights[slot] - progress);
+      }
       this.applyImportedTrackPaint();
-      this.setImportedTrackFocusOpacity(previousSlot, 0, {
-        duration: 0,
-        delay: mapPaintFadeMilliseconds,
-      });
-      return;
-    }
-    const switching = this.#importedTrackFocused;
-    const slot: ImportedTrackFocusSlot = switching
-      ? previousSlot === 0
-        ? 1
-        : 0
-      : previousSlot;
-    const otherSlot: ImportedTrackFocusSlot = slot === 0 ? 1 : 0;
-    this.#activeImportedTrackFocusSlot = slot;
-    this.#importedTrackFocusSegments[slot] = focusSegments;
-    this.#importedTrackFocused = true;
-    this.#currentGeoJsonSources.delete(importedTrackFocusSlots[slot].source);
-    this.reconcileImportedTrackHighlight();
-    if (!switching) {
-      this.setImportedTrackFocusOpacity(slot, opacity, { duration: 0, delay: 0 });
-      this.setImportedTrackFocusOpacity(otherSlot, 0, { duration: 0, delay: 0 });
-      return;
-    }
-    // Cross-fade. The incoming slot may still be fading out an earlier segment, so it
-    // drops to zero first and fades in after the frame that renders that reset; MapLibre
-    // applies only the last paint change made within one frame.
-    const fade = { duration: mapPaintFadeMilliseconds, delay: 0 };
-    this.setImportedTrackFocusOpacity(otherSlot, 0, fade);
-    this.setImportedTrackFocusOpacity(slot, 0, { duration: 0, delay: 0 });
-    const map = this.#map;
-    if (map === null) return;
-    const reveal = () => {
-      cancel();
-      this.setImportedTrackFocusOpacity(slot, opacity, fade);
+      const settled = weights[0] === targets[0] && weights[1] === targets[1];
+      this.#importedTrackFocusFrame = settled ? null : requestAnimationFrame(step);
     };
-    const cancel = () => {
-      map.off('render', reveal);
-      this.#cancelImportedTrackFocusReveal = null;
-    };
-    this.#cancelImportedTrackFocusReveal = cancel;
-    map.on('render', reveal);
+    this.#importedTrackFocusFrame = requestAnimationFrame(step);
   }
 
-  /** Hides both focus slots at once and forgets their segments. */
+  /** Hides both focus overlays at once and forgets their segments. */
   private resetImportedTrackFocus(): void {
-    this.#cancelImportedTrackFocusReveal?.();
-    this.#importedTrackFocused = false;
     for (const [slot, { source }] of importedTrackFocusSlots.entries()) {
+      this.#importedTrackFocusWeights[slot] = 0;
+      this.#importedTrackFocusTargets[slot] = 0;
       if (this.#importedTrackFocusSegments[slot]?.length === 0) continue;
       this.#importedTrackFocusSegments[slot] = [];
       this.#currentGeoJsonSources.delete(source);
     }
-    this.setImportedTrackFocusOpacity(0, 0, { duration: 0, delay: 0 });
-    this.setImportedTrackFocusOpacity(1, 0, { duration: 0, delay: 0 });
   }
 
   public setImportedTrackTracePoint(
@@ -3620,6 +3602,7 @@ export class MapLibreLayerController {
             'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
             'line-width': importedTrackCasingWidth,
             'line-opacity': importedTrackOpacity,
+            'line-opacity-transition': { duration: 0, delay: 0 },
           },
         });
       }
@@ -3633,6 +3616,7 @@ export class MapLibreLayerController {
             'line-color': mapVisualPalette.userGeometry.gpxTrack,
             'line-width': importedTrackLineWidth,
             'line-opacity': importedTrackOpacity,
+            'line-opacity-transition': { duration: 0, delay: 0 },
           },
         });
       }
@@ -3702,7 +3686,7 @@ export class MapLibreLayerController {
         lineFeatures(this.#importedTrackFocusSegments[slot] ?? []),
       );
     }
-    const { visibility, importedTrackOpacity } = mapLayerStore.getState();
+    const { visibility } = mapLayerStore.getState();
     const trackVisibility: 'visible' | 'none' = visibility['imported-tracks']
       ? 'visible'
       : 'none';
@@ -3752,12 +3736,8 @@ export class MapLibreLayerController {
         ],
       ),
     ];
-    const activeFocusLayerIds: readonly string[] = this.#importedTrackFocused
-      ? importedTrackFocusSlots[this.#activeImportedTrackFocusSlot].layerIds
-      : [];
     for (const layer of lineLayers) {
       if (map.getLayer(layer.id) !== undefined) continue;
-      const focusLayer = layer.source !== mapSourceIds.importedTrackHighlight;
       map.addLayer({
         id: layer.id,
         type: 'line',
@@ -3770,11 +3750,9 @@ export class MapLibreLayerController {
         paint: {
           'line-color': layer.color ?? ['get', 'color'],
           'line-width': layer.width,
-          // Focus slots are hidden unless they hold the current focus.
-          'line-opacity':
-            !focusLayer || activeFocusLayerIds.includes(layer.id)
-              ? importedTrackOpacity
-              : 0,
+          // applyImportedTrackPaint sets the real opacity right after creation.
+          'line-opacity': 0,
+          'line-opacity-transition': { duration: 0, delay: 0 },
         },
       });
     }
@@ -3860,59 +3838,54 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Applies the shared track opacity to the track and its endpoints, dimming the track
-   * while a segment is focused. The active focus slot follows opacity changes at once.
+   * Writes the shared track opacity, dimming the track by how visible the focus overlays
+   * are; only changed values reach MapLibre.
    */
   private applyImportedTrackPaint(): void {
     const map = this.#map;
     if (map === null) return;
     const { importedTrackOpacity: opacity } = mapLayerStore.getState();
-    const focused = this.#importedTrackFocused;
-    const trackOpacity = focused ? opacity * importedTrackDimmedOpacityFactor : opacity;
-    const opacityByLayer = [
+    // Smoothstep eases each overlay; the track dims by their combined visibility, which
+    // stays constant through a cross-fade.
+    const [first, second] = this.#importedTrackFocusWeights.map(
+      (weight) => weight * weight * (3 - 2 * weight),
+    );
+    const focusVisibility = [first ?? 0, second ?? 0] as const;
+    const dimming =
+      Math.min(1, focusVisibility[0] + focusVisibility[1]) *
+      (1 - importedTrackDimmedOpacityFactor);
+    const trackOpacity = opacity * (1 - dimming);
+    const opacityByLayer: readonly (readonly [
+      string,
+      'line-opacity' | 'icon-opacity',
+      number,
+    ])[] = [
       [importedTrackLayerIds.casing, 'line-opacity', trackOpacity],
       [importedTrackLayerIds.line, 'line-opacity', trackOpacity],
       [importedTrackLayerIds.highlight, 'line-opacity', trackOpacity],
+      ...importedTrackFocusSlots.flatMap(({ layerIds }, slot) =>
+        layerIds.map(
+          (layerId) =>
+            [
+              layerId,
+              'line-opacity',
+              opacity * focusVisibility[slot === 0 ? 0 : 1],
+            ] as const,
+        ),
+      ),
       [importedTrackLayerIds.endpoints, 'icon-opacity', opacity],
-    ] as const;
-    const layerChanged = opacityByLayer.some(
-      ([layerId]) =>
-        map.getLayer(layerId) !== this.#importedTrackLayerAnchors.get(layerId),
-    );
-    const opacityChanged = opacity !== this.#appliedImportedTrackOpacity;
-    if (
-      !opacityChanged &&
-      focused === this.#appliedImportedTrackFocused &&
-      !layerChanged
-    ) {
-      return;
-    }
+    ];
     for (const [layerId, property, value] of opacityByLayer) {
-      if (map.getLayer(layerId) === undefined) continue;
+      const layer = map.getLayer(layerId);
+      const applied = this.#importedTrackPaint.get(layerId);
+      if (
+        layer === undefined ||
+        (applied?.layer === layer && applied.value === value)
+      ) {
+        continue;
+      }
       map.setPaintProperty(layerId, property, value);
-      this.#importedTrackLayerAnchors.set(layerId, map.getLayer(layerId));
-    }
-    if (opacityChanged && focused) {
-      this.setImportedTrackFocusOpacity(this.#activeImportedTrackFocusSlot, opacity, {
-        duration: 0,
-        delay: 0,
-      });
-    }
-    this.#appliedImportedTrackOpacity = opacity;
-    this.#appliedImportedTrackFocused = focused;
-  }
-
-  private setImportedTrackFocusOpacity(
-    slot: ImportedTrackFocusSlot,
-    opacity: number,
-    transition: { readonly duration: number; readonly delay: number },
-  ): void {
-    const map = this.#map;
-    if (map === null) return;
-    for (const layerId of importedTrackFocusSlots[slot].layerIds) {
-      if (map.getLayer(layerId) === undefined) continue;
-      map.setPaintProperty(layerId, 'line-opacity-transition', { ...transition });
-      map.setPaintProperty(layerId, 'line-opacity', opacity);
+      this.#importedTrackPaint.set(layerId, { layer, value });
     }
   }
 

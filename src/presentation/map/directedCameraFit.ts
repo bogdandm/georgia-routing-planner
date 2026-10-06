@@ -74,25 +74,48 @@ export function directedCameraFit(
   // View frame at zoom 0, origin at `from`: x to the screen right, y away from the camera.
   const originX = mercatorX(path.from.longitude);
   const originY = mercatorWorldY(path.from.latitude);
-  const metersPerUnit =
-    (earthCircumferenceMeters * Math.cos((path.from.latitude * Math.PI) / 180)) /
-    tileSize;
-  const stride = Math.max(1, Math.ceil(path.points.length / maximumFitPoints));
-  const samples = path.points.filter(
-    (_, index) => index % stride === 0 || index === path.points.length - 1,
-  );
-  if (samples.length === 0) return null;
-  const xs: number[] = [];
-  const ys: number[] = [];
-  const renderedHeights: (number | undefined)[] = [];
-  for (const point of samples) {
+  const allXs: number[] = [];
+  const allYs: number[] = [];
+  for (const point of path.points) {
     const dx =
       mercatorX(
         path.from.longitude + wrapLongitudeDelta(point.longitude - path.from.longitude),
       ) - originX;
     const dy = mercatorWorldY(point.latitude) - originY;
-    xs.push(dx * Math.cos(bearingRadians) + dy * Math.sin(bearingRadians));
-    ys.push(dx * Math.sin(bearingRadians) - dy * Math.cos(bearingRadians));
+    allXs.push(dx * Math.cos(bearingRadians) + dy * Math.sin(bearingRadians));
+    allYs.push(dx * Math.sin(bearingRadians) - dy * Math.cos(bearingRadians));
+  }
+  // Long paths keep, per window of consecutive points, the ones extreme across, along,
+  // and in elevation: the points that bound the view, which a plain stride would skip.
+  const elevationsForSampling = path.points.map((point) => point.elevationMeters ?? 0);
+  const windowSize = Math.max(
+    1,
+    Math.ceil((path.points.length * 6) / maximumFitPoints),
+  );
+  const sampleIndices = new Set<number>([path.points.length - 1]);
+  for (let start = 0; start < path.points.length; start += windowSize) {
+    const window = Array.from(
+      { length: Math.min(windowSize, path.points.length - start) },
+      (_, offset) => start + offset,
+    );
+    for (const values of [allXs, allYs, elevationsForSampling]) {
+      const valueAt = (index: number) => values[index] ?? 0;
+      sampleIndices.add(
+        window.reduce((low, index) => (valueAt(index) < valueAt(low) ? index : low)),
+      );
+      sampleIndices.add(
+        window.reduce((high, index) => (valueAt(index) > valueAt(high) ? index : high)),
+      );
+    }
+  }
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const renderedHeights: (number | undefined)[] = [];
+  for (const index of [...sampleIndices].sort((left, right) => left - right)) {
+    const point = path.points[index];
+    if (point === undefined) continue;
+    xs.push(allXs[index] ?? 0);
+    ys.push(allYs[index] ?? 0);
     renderedHeights.push(
       input.renderedElevationAt(point) ??
         (point.elevationMeters === undefined
@@ -100,6 +123,7 @@ export function directedCameraFit(
           : point.elevationMeters * input.terrainExaggeration),
     );
   }
+  if (xs.length === 0) return null;
   const knownHeights = renderedHeights.filter(
     (height): height is number => height !== undefined,
   );
@@ -122,7 +146,11 @@ export function directedCameraFit(
     ),
   );
 
-  const solve = (centerHeight: number) => {
+  // MapLibre scales relief by the Mercator meters per world unit at the camera center.
+  const solve = (centerHeight: number, centerLatitude: number) => {
+    const metersPerUnit =
+      (earthCircumferenceMeters * Math.cos((centerLatitude * Math.PI) / 180)) /
+      tileSize;
     for (let index = 0; index < count; index += 1) {
       const height = renderedHeights[index];
       heights[index] =
@@ -230,13 +258,15 @@ export function directedCameraFit(
         Math.PI,
     };
   };
-  // The terrain under the solved center lifts the camera, so re-solve against it; the
-  // nearest track point stands in where the map has no terrain loaded.
+  // The terrain under the solved center lifts the camera and its latitude sets the relief
+  // scale, so re-solve against both; the nearest track point stands in where the map has
+  // no terrain loaded.
   let centerHeight =
     knownHeights.length === 0
       ? 0
       : (Math.min(...knownHeights) + Math.max(...knownHeights)) / 2;
-  let solution = solve(centerHeight);
+  let centerLatitude = path.from.latitude;
+  let solution = solve(centerHeight, centerLatitude);
   for (let refinement = 0; refinement < 8 && solution !== null; refinement += 1) {
     const { centerX, centerY } = solution;
     let nearestHeight: number | undefined;
@@ -249,11 +279,18 @@ export function directedCameraFit(
         nearestHeight = height;
       }
     }
+    const center = coordinateAt(centerX, centerY);
     const nextHeight =
-      input.renderedElevationAt(coordinateAt(centerX, centerY)) ?? nearestHeight;
-    if (nextHeight === undefined || Math.abs(nextHeight - centerHeight) < 1) break;
+      input.renderedElevationAt(center) ?? nearestHeight ?? centerHeight;
+    if (
+      Math.abs(nextHeight - centerHeight) < 1 &&
+      Math.abs(center.latitude - centerLatitude) < 1e-4
+    ) {
+      break;
+    }
     centerHeight = nextHeight;
-    solution = solve(centerHeight);
+    centerLatitude = center.latitude;
+    solution = solve(centerHeight, centerLatitude);
   }
   if (solution === null) return null;
   return {

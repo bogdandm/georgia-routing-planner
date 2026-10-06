@@ -1313,16 +1313,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? `${active.id}:${active.preparationStatus}`
         : active.summary.id;
     if (renderedTrackId.current === trackId) return;
-    const trackPoints =
+    const segments =
       active.kind === 'saved'
-        ? active.content.trackPoints
+        ? localTrackSegments(active.content)
         : (active.preparationStatus === 'ready'
             ? active.sourceSegments
             : active.parsed.segments
-          ).map((segment) => segment.points);
-    const segments = trackPoints.map((points) =>
-      points.map((point) => point.coordinate),
-    );
+          ).map((segment) => segment.points.map((point) => point.coordinate));
+    // The 3D fit needs relief; tracks without source elevation use their DEM samples,
+    // which saving promotes to the primary points.
+    const elevatedPoints =
+      active.kind === 'saved'
+        ? active.content.trackPoints.flat()
+        : active.preparationStatus !== 'ready'
+          ? active.parsed.segments.flatMap((segment) => segment.points)
+          : (active.sourceProfile === null
+              ? (active.calculatedSegments ?? active.sourceSegments)
+              : active.sourceSegments
+            ).flatMap((segment) => segment.points);
     const metrics =
       active.kind === 'saved'
         ? active.summary.metrics
@@ -1340,7 +1348,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         15,
         direction === null
           ? {}
-          : { path: mapTravelPath(direction.from, direction.to, trackPoints.flat()) },
+          : { path: mapTravelPath(direction.from, direction.to, elevatedPoints) },
       );
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);

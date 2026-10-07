@@ -794,6 +794,41 @@ describe('WorkspaceShell', () => {
     expect(search).toHaveBeenCalledOnce();
   });
 
+  it('marks today and non-selectable predicted Sentinel-2 passes in the calendar', async () => {
+    const acquisitionDays = ['02', '04', '05', '07', '10', '12', '14', '15', '17'];
+    services.database.close();
+    await services.database.delete();
+    setServices(
+      createTestServices({
+        satelliteCatalogGateway: catalogGatewayReturning({
+          totalMatched: acquisitionDays.length,
+          scenes: acquisitionDays.map((day) =>
+            syntheticSatelliteScene(`pass-${day}`, `2026-07-${day}T08:00:00.000Z`),
+          ),
+        }),
+      }),
+    );
+    services.mapViewport.update(testViewport);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Search images' }));
+
+    const predictedDay = await screen.findByRole('gridcell', {
+      name: 'Jul 20, 2026, expected Sentinel-2 pass',
+    });
+    expect(predictedDay).toBeDisabled();
+    expect(
+      screen.getByRole('gridcell', { name: 'Jul 30, 2026, expected Sentinel-2 pass' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('gridcell', { name: 'Jul 21, 2026, no loaded imagery' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('gridcell', { current: 'date' })).toHaveAccessibleName(
+      'Jul 18, 2026, no loaded imagery',
+    );
+  });
+
   it('shows the safe provider error without removing the search controls', async () => {
     services.database.close();
     await services.database.delete();

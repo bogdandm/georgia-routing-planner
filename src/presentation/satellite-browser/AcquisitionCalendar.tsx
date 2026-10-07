@@ -16,14 +16,31 @@ import {
   Stack,
   Tooltip,
   Typography,
+  alpha,
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 
 import type { SatelliteSearchResult } from '@/domain/satellite/SatelliteSearchResult';
 import { calculateWeightedCloudCover } from '@/domain/satellite/calculateWeightedCloudCover';
+import { predictSentinelAcquisitionDates } from '@/domain/satellite/predictSentinelAcquisitionDates';
 import { appColors } from '@/presentation/theme/appColors';
 
 const sentinelArchiveFirstMonth = '2015-06';
+
+/* eslint-disable lingui/no-unlocalized-strings -- CSS tokens. */
+/**
+ * Today's number gets its own translucent circle, so it stays distinct inside the
+ * orange, neutral, and dashed day frames while keeping their text color.
+ */
+const todayNumberSx = {
+  width: 22,
+  height: 22,
+  lineHeight: '22px',
+  borderRadius: '50%',
+  textAlign: 'center',
+  bgcolor: alpha(appColors.brand.deepSpace, 0.14),
+} as const;
+/* eslint-enable lingui/no-unlocalized-strings */
 
 /* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
 /** Display-only calendar labels in `locale`; calendar dates are formatted in UTC. */
@@ -126,6 +143,21 @@ export function AcquisitionCalendar({
     }
     return byDate;
   }, [mode]);
+  const predictedDates = useMemo(
+    () =>
+      mode.kind === 'scene'
+        ? predictSentinelAcquisitionDates(
+            (mode.result?.groups ?? []).flatMap((group) =>
+              group.scenes.map((match) => ({
+                date: group.date,
+                platform: match.scene.platform,
+              })),
+            ),
+            todayDate,
+          )
+        : new Set<string>(),
+    [mode, todayDate],
+  );
   const year = displayMonthDate.getUTCFullYear();
   const month = displayMonthDate.getUTCMonth();
   const minimumYear = minimumMonthDate.getUTCFullYear();
@@ -370,6 +402,10 @@ export function AcquisitionCalendar({
                 // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
                 new Date(`${date}T00:00:00.000Z`),
               );
+              const isToday = date === todayDate;
+              const dayNumberSx = isToday ? todayNumberSx : { lineHeight: 1.1 };
+              // eslint-disable-next-line lingui/no-unlocalized-strings -- ARIA token.
+              const todayToken = isToday ? 'date' : undefined;
               if (mode.kind === 'mosaic') {
                 const disabled = date < mode.archiveStartDate || date > todayDate;
                 const selected = date === mode.selectedDate;
@@ -383,6 +419,7 @@ export function AcquisitionCalendar({
                     role="gridcell"
                     disabled={disabled}
                     aria-selected={selected}
+                    aria-current={todayToken}
                     aria-label={
                       selected
                         ? t`${formattedDate}, included in Mosaic range, selected upper bound`
@@ -416,7 +453,7 @@ export function AcquisitionCalendar({
                       '&.Mui-disabled': { color: 'text.disabled' },
                     }}
                   >
-                    <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                    <Typography variant="caption" sx={dayNumberSx}>
                       {day}
                     </Typography>
                   </ButtonBase>
@@ -424,6 +461,7 @@ export function AcquisitionCalendar({
               }
 
               const cloud = availability.get(date);
+              const predicted = cloud === undefined && predictedDates.has(date);
               const isLatest = date === latestDate && cloud !== undefined;
               const matchesCloudFilter =
                 cloud !== undefined && cloud <= mode.maxCloudCoverPercent;
@@ -436,12 +474,15 @@ export function AcquisitionCalendar({
                   key={date}
                   role="gridcell"
                   disabled={cloud === undefined}
+                  aria-current={todayToken}
                   onClick={() => {
                     mode.onSelectDate(date);
                   }}
                   aria-label={
                     cloud === undefined
-                      ? t`${formattedDate}, no loaded imagery`
+                      ? predicted
+                        ? t`${formattedDate}, expected Sentinel-2 pass`
+                        : t`${formattedDate}, no loaded imagery`
                       : matchesCloudFilter
                         ? t`${formattedDate}, imagery available, ${cloudLabel} weighted cloud, matches the current cloud limit`
                         : t`${formattedDate}, imagery available, ${cloudLabel} weighted cloud, exceeds the current cloud limit`
@@ -454,18 +495,20 @@ export function AcquisitionCalendar({
                     justifyContent: 'center',
                     borderRadius: 1.25,
                     border: 1,
-                    borderColor:
-                      cloud === undefined
+                    borderStyle: predicted ? 'dashed' : 'solid',
+                    borderColor: predicted
+                      ? appColors.border.strong
+                      : cloud === undefined
                         ? 'transparent'
                         : matchesCloudFilter
                           ? appColors.brand.tigerOrange
-                          : 'transparent',
+                          : appColors.border.default,
                     bgcolor:
                       cloud === undefined
                         ? 'transparent'
                         : matchesCloudFilter
                           ? appColors.tag.orange.background
-                          : 'transparent',
+                          : appColors.surface.subtle,
                     color: matchesCloudFilter
                       ? appColors.tag.orange.foreground
                       : 'text.primary',
@@ -473,7 +516,7 @@ export function AcquisitionCalendar({
                     '&.Mui-disabled': { color: 'text.primary' },
                   }}
                 >
-                  <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                  <Typography variant="caption" sx={dayNumberSx}>
                     {day}
                   </Typography>
                   {cloud === undefined ? null : (

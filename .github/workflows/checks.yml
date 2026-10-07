@@ -201,7 +201,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
-    # Chromium installation alone has taken up to four minutes on slow runners.
+    # The runner image already has every shared library Chromium needs; the test step
+    # takes up to four minutes per shard.
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -219,8 +220,11 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # `--with-deps` only added fonts through apt, and the runner's Ubuntu mirror
+      # sometimes serves them at about 60 kB/s, which alone exceeded the job timeout.
+      # Playwright refuses to launch with a clear error if a required library is gone.
       - name: Install Chromium for end-to-end tests
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
       - name: Run end-to-end test shard
         run: pnpm e2e --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - name: Upload browser failure artifacts

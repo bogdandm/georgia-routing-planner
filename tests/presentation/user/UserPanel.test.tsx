@@ -1,24 +1,26 @@
 import { ThemeProvider } from '@mui/material';
-import { act, render, screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   UserDataService,
   UserDataSnapshot,
 } from '@/application/user/UserDataService';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { UserPanel } from '@/presentation/user/UserPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
   return {
     busy: false,
     email: null,
     userId: null,
-    errorMessage: null,
-    noticeMessage: null,
+    problem: null,
+    notice: null,
     status,
     syncEnabled: false,
     syncStatus: 'idle',
@@ -73,7 +75,7 @@ function createService(initial: UserDataSnapshot) {
 }
 
 function renderPanel(userData: UserDataService) {
-  return render(
+  return renderWithI18n(
     <RuntimeServicesProvider services={createTestServices({ userData })}>
       <ThemeProvider theme={createAppTheme()}>
         <UserPanel />
@@ -87,6 +89,10 @@ function accountButton(name: 'Create account' | 'Sign in', index: number) {
   if (button === undefined) throw new Error(`Missing ${name} button.`);
   return button;
 }
+
+beforeEach(() => {
+  activateAppLocale('en');
+});
 
 describe('UserPanel', () => {
   it('submits sign-in credentials and clears the password', async () => {
@@ -132,7 +138,7 @@ describe('UserPanel', () => {
     act(() => {
       userData.set({
         ...snapshot('signed-out'),
-        noticeMessage: 'Check your email to confirm your account, then sign in.',
+        notice: 'registration-confirmation-sent',
       });
     });
     expect(screen.getByRole('status')).toHaveTextContent('Check your email');
@@ -180,7 +186,7 @@ describe('UserPanel', () => {
       createService({
         ...snapshot('error'),
         busy: true,
-        errorMessage: 'Unable to create an account. Try again.',
+        problem: 'sign-up-failed',
       }).service,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to create an account');
@@ -191,7 +197,7 @@ describe('UserPanel', () => {
     const userData = createService({
       ...snapshot('signed-in'),
       email: 'user@example.test',
-      errorMessage: 'Cloud track storage is full.',
+      problem: 'sync-quota-exceeded',
       syncEnabled: true,
       syncStatus: 'error',
       syncUsage: {
@@ -204,7 +210,7 @@ describe('UserPanel', () => {
     renderPanel(userData.service);
 
     expect(screen.getByLabelText('Sync across devices')).toBeChecked();
-    expect(screen.getByText('2.00 MiB / 8 MiB (1.00 MiB reserved)')).toBeVisible();
+    expect(screen.getByText('2.00 MiB / 8.00 MiB (1.00 MiB reserved)')).toBeVisible();
     expect(
       screen.getByRole('progressbar', { name: 'Cloud track quota' }),
     ).toHaveAttribute('aria-valuenow', '37.5');

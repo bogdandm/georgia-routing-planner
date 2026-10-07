@@ -1,6 +1,7 @@
 import type { AuthChangeEvent, Session, SupabaseClient } from '@supabase/supabase-js';
 
 import type {
+  UserDataProblem,
   UserDataService,
   UserDataSnapshot,
   UserDataSyncProgress,
@@ -10,7 +11,6 @@ import {
   isAuthExpiredWorkerError,
   isQuotaWorkerError,
   TrackSyncWorkerClient,
-  syncWorkerErrorMessage,
 } from '@/infrastructure/supabase/TrackSyncWorkerClient';
 
 const emptyUsage = { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 };
@@ -18,8 +18,8 @@ const initialSnapshot: UserDataSnapshot = {
   busy: false,
   email: null,
   userId: null,
-  errorMessage: null,
-  noticeMessage: null,
+  problem: null,
+  notice: null,
   status: 'loading',
   syncEnabled: false,
   syncStatus: 'idle',
@@ -28,19 +28,6 @@ const initialSnapshot: UserDataSnapshot = {
   remoteMarkerDeletions: [],
   syncUsage: emptyUsage,
 };
-const registrationNotice = 'Check your email to confirm your account, then sign in.';
-const signInErrorMessage = 'Unable to sign in. Check your email and password.';
-const signUpErrorMessage = 'Unable to create an account. Try again.';
-const sessionErrorMessage = 'Unable to restore your account session.';
-const signOutErrorMessage = 'Unable to sign out. Try again.';
-const syncErrorMessage =
-  'Synchronization could not finish. Your local tracks, folders, and markers remain available.';
-const syncQuotaErrorMessage =
-  'Cloud track storage is full. Delete a synchronized track and try again.';
-const syncPreferenceErrorMessage =
-  'Unable to update synchronization. Your previous setting is unchanged.';
-const deletionDecisionErrorMessage =
-  'Unable to apply the deletion decision. Your local data remains available.';
 
 /** Bridges session lifecycle and one cancellable worker run to the serializable UI snapshot. */
 export class SupabaseUserDataService implements UserDataService {
@@ -117,7 +104,7 @@ export class SupabaseUserDataService implements UserDataService {
       if (revision === this.#syncPreferenceRevision) {
         this.#setSnapshot({
           ...this.#snapshot,
-          errorMessage: syncPreferenceErrorMessage,
+          problem: 'sync-preference-failed',
         });
       }
       return;
@@ -130,7 +117,7 @@ export class SupabaseUserDataService implements UserDataService {
       syncProgress: enabled ? this.#snapshot.syncProgress : null,
       remoteTrackDeletions: enabled ? this.#snapshot.remoteTrackDeletions : [],
       remoteMarkerDeletions: enabled ? this.#snapshot.remoteMarkerDeletions : [],
-      errorMessage: enabled ? this.#snapshot.errorMessage : null,
+      problem: enabled ? this.#snapshot.problem : null,
     });
     if (!enabled) {
       this.#resyncRequested = false;
@@ -155,7 +142,7 @@ export class SupabaseUserDataService implements UserDataService {
       busy: true,
       syncStatus: 'syncing',
       syncProgress: null,
-      errorMessage: null,
+      problem: null,
     });
     const run = this.#runSynchronization(controller);
     this.#syncRun = run;
@@ -204,7 +191,7 @@ export class SupabaseUserDataService implements UserDataService {
       const restoreMarkerIds = markerCandidates.flatMap((candidate) =>
         selectedMarkers.has(candidate.markerId) ? [] : [candidate.markerId],
       );
-      this.#setSnapshot({ ...this.#snapshot, busy: true, errorMessage: null });
+      this.#setSnapshot({ ...this.#snapshot, busy: true, problem: null });
       await this.database.resolveRemoteDeletions({
         expectedUserId: userId,
         trackCandidateIds: trackCandidates.map((candidate) => candidate.trackId),
@@ -219,7 +206,7 @@ export class SupabaseUserDataService implements UserDataService {
         syncStatus: 'idle',
         remoteTrackDeletions: [],
         remoteMarkerDeletions: [],
-        errorMessage: null,
+        problem: null,
       });
       for (const listener of this.#trackListeners) listener();
       for (const listener of this.#markerListeners) listener();
@@ -232,7 +219,7 @@ export class SupabaseUserDataService implements UserDataService {
         ...this.#snapshot,
         busy: false,
         syncStatus: 'needs-action',
-        errorMessage: deletionDecisionErrorMessage,
+        problem: 'deletion-decision-failed',
       });
     } finally {
       this.#remoteDeletionDecisionInProgress = false;
@@ -273,13 +260,13 @@ export class SupabaseUserDataService implements UserDataService {
         password,
       });
       if (error !== null) {
-        this.#setError(signInErrorMessage);
+        this.#setError('sign-in-failed');
         return;
       }
       this.#setSignedIn(data.session);
       if (this.#snapshot.syncEnabled) void this.synchronizeNow();
     } catch {
-      this.#setError(signInErrorMessage);
+      this.#setError('sign-in-failed');
     }
   }
 
@@ -294,7 +281,7 @@ export class SupabaseUserDataService implements UserDataService {
         error.code !== 'user_already_exists' &&
         error.code !== 'email_exists'
       ) {
-        this.#setError(signUpErrorMessage);
+        this.#setError('sign-up-failed');
         return;
       }
       if (error !== null || data.session === null) {
@@ -303,8 +290,8 @@ export class SupabaseUserDataService implements UserDataService {
           busy: false,
           email: null,
           userId: null,
-          errorMessage: null,
-          noticeMessage: registrationNotice,
+          problem: null,
+          notice: 'registration-confirmation-sent',
           status: 'signed-out',
           syncStatus: 'idle',
           syncProgress: null,
@@ -315,7 +302,7 @@ export class SupabaseUserDataService implements UserDataService {
       this.#setSignedIn(data.session);
       if (this.#snapshot.syncEnabled) void this.synchronizeNow();
     } catch {
-      this.#setError(signUpErrorMessage);
+      this.#setError('sign-up-failed');
     }
   }
 
@@ -327,8 +314,8 @@ export class SupabaseUserDataService implements UserDataService {
       ...this.#snapshot,
       busy: true,
       syncStatus: 'idle',
-      errorMessage: null,
-      noticeMessage: null,
+      problem: null,
+      notice: null,
       syncProgress: null,
       remoteTrackDeletions: [],
     });
@@ -336,16 +323,12 @@ export class SupabaseUserDataService implements UserDataService {
     try {
       const { error } = await this.client.auth.signOut();
       if (error !== null) {
-        this.#setError(
-          signOutErrorMessage,
-          this.#snapshot.email,
-          this.#snapshot.userId,
-        );
+        this.#setError('sign-out-failed', this.#snapshot.email, this.#snapshot.userId);
         return;
       }
       this.#setSignedIn(null);
     } catch {
-      this.#setError(signOutErrorMessage, this.#snapshot.email, this.#snapshot.userId);
+      this.#setError('sign-out-failed', this.#snapshot.email, this.#snapshot.userId);
     }
   }
 
@@ -385,12 +368,12 @@ export class SupabaseUserDataService implements UserDataService {
       const { data, error } = await this.client.auth.getSession();
       if (revision !== this.#sessionRevision) return;
       if (error !== null) {
-        this.#setError(sessionErrorMessage);
+        this.#setError('session-restore-failed');
         return;
       }
       this.#setSignedIn(data.session);
     } catch {
-      if (revision === this.#sessionRevision) this.#setError(sessionErrorMessage);
+      if (revision === this.#sessionRevision) this.#setError('session-restore-failed');
     } finally {
       this.#sessionRestored = true;
       this.#handleStartupSynchronization();
@@ -464,9 +447,7 @@ export class SupabaseUserDataService implements UserDataService {
         busy: false,
         syncStatus: 'error',
         syncProgress: null,
-        errorMessage: isQuotaWorkerError(error)
-          ? syncQuotaErrorMessage
-          : (syncWorkerErrorMessage(error) ?? syncErrorMessage),
+        problem: isQuotaWorkerError(error) ? 'sync-quota-exceeded' : 'sync-failed',
       });
     }
   }
@@ -526,8 +507,8 @@ export class SupabaseUserDataService implements UserDataService {
       busy: true,
       email: null,
       userId: null,
-      errorMessage: null,
-      noticeMessage: null,
+      problem: null,
+      notice: null,
       status: 'signed-out',
       syncStatus: 'idle',
       syncProgress: null,
@@ -537,7 +518,7 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   #setError(
-    errorMessage: string,
+    problem: UserDataProblem,
     email: string | null = null,
     userId: string | null = null,
   ): void {
@@ -546,8 +527,8 @@ export class SupabaseUserDataService implements UserDataService {
       busy: false,
       email,
       userId,
-      errorMessage,
-      noticeMessage: null,
+      problem,
+      notice: null,
       status: 'error',
       syncStatus: 'idle',
       syncProgress: null,
@@ -564,8 +545,8 @@ export class SupabaseUserDataService implements UserDataService {
       busy: false,
       email,
       userId,
-      errorMessage: null,
-      noticeMessage: null,
+      problem: null,
+      notice: null,
       status: userId === null ? 'signed-out' : 'signed-in',
       syncStatus: userId === null ? 'idle' : this.#snapshot.syncStatus,
       syncProgress:

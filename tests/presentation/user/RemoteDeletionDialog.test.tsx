@@ -1,16 +1,18 @@
 import { ThemeProvider } from '@mui/material';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   UserDataService,
   UserDataSnapshot,
 } from '@/application/user/UserDataService';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const candidates = [
   { trackId: 'local:alpha', name: 'Alpha' },
@@ -22,8 +24,8 @@ function snapshot(overrides: Partial<UserDataSnapshot> = {}): UserDataSnapshot {
     busy: false,
     email: 'user@example.test',
     userId: 'user-id',
-    errorMessage: null,
-    noticeMessage: null,
+    problem: null,
+    notice: null,
     status: 'signed-in',
     syncEnabled: true,
     syncStatus: 'needs-action',
@@ -73,7 +75,7 @@ function createService(initial: UserDataSnapshot) {
 }
 
 function renderDialog(userData: UserDataService) {
-  return render(
+  return renderWithI18n(
     <RuntimeServicesProvider services={createTestServices({ userData })}>
       <ThemeProvider theme={createAppTheme()}>
         <RemoteDeletionDialog />
@@ -81,6 +83,10 @@ function renderDialog(userData: UserDataService) {
     </RuntimeServicesProvider>,
   );
 }
+
+beforeEach(() => {
+  activateAppLocale('en');
+});
 
 describe('RemoteDeletionDialog', () => {
   it('restores every track by default', async () => {
@@ -152,8 +158,7 @@ describe('RemoteDeletionDialog', () => {
     const fake = createService(
       snapshot({
         busy: true,
-        errorMessage:
-          'Unable to apply the deletion decision. Your local data remains available.',
+        problem: 'deletion-decision-failed',
       }),
     );
     renderDialog(fake.service);

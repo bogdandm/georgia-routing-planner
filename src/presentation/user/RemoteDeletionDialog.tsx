@@ -1,3 +1,6 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Alert,
   Box,
@@ -22,8 +25,10 @@ import type {
   RemoteMarkerDeletionCandidate,
   RemoteTrackDeletionCandidate,
   UserDataService,
+  UserDataSnapshot,
 } from '@/application/user/UserDataService';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { userDataProblemMessage } from '@/presentation/user/userDataMessages';
 
 function useUserDataSnapshot(userData: UserDataService) {
   const subscribe = useCallback(
@@ -34,25 +39,26 @@ function useUserDataSnapshot(userData: UserDataService) {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-function actionLabel(selectedCount: number, candidateCount: number): string {
-  if (selectedCount === candidateCount) return 'Delete';
-  if (selectedCount === 0) return 'Restore';
-  return 'Delete selected, upload the rest again';
+function actionLabel(selectedCount: number, candidateCount: number): MessageDescriptor {
+  if (selectedCount === candidateCount) return msg`Delete`;
+  if (selectedCount === 0) return msg`Restore`;
+  return msg`Delete selected, upload the rest again`;
 }
 
 function RemoteDeletionForm({
   tracks,
   markers,
   busy,
-  errorMessage,
+  problem,
   userData,
 }: {
   readonly tracks: readonly RemoteTrackDeletionCandidate[];
   readonly markers: readonly RemoteMarkerDeletionCandidate[];
   readonly busy: boolean;
-  readonly errorMessage: string | null;
+  readonly problem: UserDataSnapshot['problem'];
   readonly userData: UserDataService;
 }) {
+  const { i18n, t } = useLingui();
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -85,13 +91,15 @@ function RemoteDeletionForm({
       <DialogContent>
         <Stack spacing={2}>
           <Typography>
-            These items were deleted from your account. Select the items to delete from
-            this browser. Unselected items will be uploaded again.
+            <Trans>
+              These items were deleted from your account. Select the items to delete
+              from this browser. Unselected items will be uploaded again.
+            </Trans>
           </Typography>
           {tracks.length === 0 ? null : (
-            <Box component="section" aria-label="Tracks">
+            <Box component="section" aria-label={t`Tracks`}>
               <Typography component="h3" variant="subtitle2">
-                Tracks
+                <Trans>Tracks</Trans>
               </Typography>
               <Stack spacing={0.5}>
                 {tracks.map((candidate) => (
@@ -117,9 +125,9 @@ function RemoteDeletionForm({
             </Box>
           )}
           {markers.length === 0 ? null : (
-            <Box component="section" aria-label="Markers">
+            <Box component="section" aria-label={t`Markers`}>
               <Typography component="h3" variant="subtitle2">
-                Markers
+                <Trans>Markers</Trans>
               </Typography>
               <Stack spacing={0.5}>
                 {markers.map((candidate) => (
@@ -144,14 +152,14 @@ function RemoteDeletionForm({
               </Stack>
             </Box>
           )}
-          {errorMessage === null ? null : (
-            <Alert severity="error">{errorMessage}</Alert>
+          {problem === null ? null : (
+            <Alert severity="error">{i18n._(userDataProblemMessage(problem))}</Alert>
           )}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button disabled={busy} type="submit" variant="contained">
-          {actionLabel(selectedCount, candidateCount)}
+          {i18n._(actionLabel(selectedCount, candidateCount))}
         </Button>
       </DialogActions>
     </form>
@@ -165,7 +173,9 @@ export function RemoteDeletionDialog() {
   const tracks = snapshot.remoteTrackDeletions;
   const markers = snapshot.remoteMarkerDeletions;
   const candidateKey = [
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Stable candidate key.
     ...tracks.map((candidate) => `track:${candidate.trackId}`),
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Stable candidate key.
     ...markers.map((candidate) => `marker:${candidate.markerId}`),
   ].join('|');
   const open = tracks.length > 0 || markers.length > 0;
@@ -175,14 +185,16 @@ export function RemoteDeletionDialog() {
       open={open}
       aria-labelledby="remote-deletion-title"
     >
-      <DialogTitle id="remote-deletion-title">Items deleted from cloud</DialogTitle>
+      <DialogTitle id="remote-deletion-title">
+        <Trans>Items deleted from cloud</Trans>
+      </DialogTitle>
       {open ? (
         <RemoteDeletionForm
           key={candidateKey}
           busy={snapshot.busy}
           tracks={tracks}
           markers={markers}
-          errorMessage={snapshot.errorMessage}
+          problem={snapshot.problem}
           userData={userData}
         />
       ) : null}

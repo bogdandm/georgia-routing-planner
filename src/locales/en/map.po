@@ -110,7 +110,7 @@ msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
 
 #. js-lingui-id: 5zBbQV
-#: src/presentation/map/MapLibreFacade.ts:1576
+#: src/presentation/map/MapLibreFacade.ts:1579
 msgid "Elevation {elevationChange}"
 msgstr "Elevation {elevationChange}"
 

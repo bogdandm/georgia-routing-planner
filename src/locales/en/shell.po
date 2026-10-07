@@ -15,7 +15,7 @@ msgstr ""
 
 #. js-lingui-id: fPa3dU
 #. placeholder {0}: integerFormatter.format(elapsedSeconds)
-#: src/presentation/shell/OperationalStatus.tsx:309
+#: src/presentation/shell/OperationalStatus.tsx:310
 msgid "{0} s"
 msgstr "{0} s"
 
@@ -95,7 +95,7 @@ msgid "3D share link copied"
 msgstr "3D share link copied"
 
 #. js-lingui-id: 2QU_vt
-#: src/presentation/shell/OperationalStatus.tsx:155
+#: src/presentation/shell/OperationalStatus.tsx:156
 msgid "A map layer update failed. Try again."
 msgstr "A map layer update failed. Try again."
 
@@ -227,7 +227,7 @@ msgid "Clear map search"
 msgstr "Clear map search"
 
 #. js-lingui-id: G1X31l
-#: src/presentation/shell/WorkspaceShell.tsx:672
+#: src/presentation/shell/WorkspaceShell.tsx:674
 msgid "Click the map to choose the route start and destination."
 msgstr "Click the map to choose the route start and destination."
 
@@ -242,7 +242,7 @@ msgid "Close site information"
 msgstr "Close site information"
 
 #. js-lingui-id: 3kh6EI
-#: src/presentation/shell/OperationalStatus.tsx:416
+#: src/presentation/shell/OperationalStatus.tsx:417
 msgid "Contour generation state"
 msgstr "Contour generation state"
 
@@ -257,12 +257,12 @@ msgid "Contours · {queuedCount, number}/{capacity, number} queued{activeCount, 
 msgstr "Contours · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} other { · # active}}"
 
 #. js-lingui-id: 6MnI2U
-#: src/presentation/shell/OperationalStatus.tsx:290
+#: src/presentation/shell/OperationalStatus.tsx:291
 msgid "Contours · compatibility mode"
 msgstr "Contours · compatibility mode"
 
 #. js-lingui-id: DPxFvu
-#: src/presentation/shell/OperationalStatus.tsx:292
+#: src/presentation/shell/OperationalStatus.tsx:293
 msgid "Contours · worker restarting"
 msgstr "Contours · worker restarting"
 
@@ -287,7 +287,7 @@ msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
 msgstr "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
 
 #. js-lingui-id: 2SuOUC
-#: src/presentation/shell/OperationalStatus.tsx:432
+#: src/presentation/shell/OperationalStatus.tsx:433
 msgid "Current map error"
 msgstr "Current map error"
 
@@ -389,7 +389,7 @@ msgid "Exposes local logs, health checks, and diagnostics export. Nothing is upl
 msgstr "Exposes local logs, health checks, and diagnostics export. Nothing is uploaded automatically."
 
 #. js-lingui-id: WVefXI
-#: src/presentation/shell/OperationalStatus.tsx:181
+#: src/presentation/shell/OperationalStatus.tsx:182
 msgid "Finalizing the selected Sentinel scene…"
 msgstr "Finalizing the selected Sentinel scene…"
 
@@ -424,8 +424,8 @@ msgid "Heap limit"
 msgstr "Heap limit"
 
 #. js-lingui-id: T7ZWsE
-#: src/presentation/shell/WorkspaceShell.tsx:915
 #: src/presentation/shell/WorkspaceShell.tsx:917
+#: src/presentation/shell/WorkspaceShell.tsx:919
 msgid "Hide navigation"
 msgstr "Hide navigation"
 
@@ -499,7 +499,7 @@ msgid "Layers"
 msgstr "Layers"
 
 #. js-lingui-id: fytmSS
-#: src/presentation/shell/OperationalStatus.tsx:218
+#: src/presentation/shell/OperationalStatus.tsx:219
 msgid "Loading ECMWF weather map…"
 msgstr "Loading ECMWF weather map…"
 
@@ -515,12 +515,12 @@ msgid "Loading marker weather settings"
 msgstr "Loading marker weather settings"
 
 #. js-lingui-id: kBaj6v
-#: src/presentation/shell/OperationalStatus.tsx:111
+#: src/presentation/shell/OperationalStatus.tsx:112
 msgid "Loading Sentinel imagery for {loadingMonthLabel}"
 msgstr "Loading Sentinel imagery for {loadingMonthLabel}"
 
 #. js-lingui-id: zs-Myh
-#: src/presentation/shell/OperationalStatus.tsx:260
+#: src/presentation/shell/OperationalStatus.tsx:261
 msgid "Loading terrain…"
 msgstr "Loading terrain…"
 
@@ -555,7 +555,7 @@ msgid "Map is unavailable"
 msgstr "Map is unavailable"
 
 #. js-lingui-id: Eu8uJP
-#: src/presentation/shell/OperationalStatus.tsx:134
+#: src/presentation/shell/OperationalStatus.tsx:135
 msgid "Map provider configuration is invalid."
 msgstr "Map provider configuration is invalid."
 
@@ -819,12 +819,12 @@ msgid "Preparing elevation…"
 msgstr "Preparing elevation…"
 
 #. js-lingui-id: 4OgQ0q
-#: src/presentation/shell/OperationalStatus.tsx:176
+#: src/presentation/shell/OperationalStatus.tsx:177
 msgid "Preparing the selected Sentinel scene…"
 msgstr "Preparing the selected Sentinel scene…"
 
 #. js-lingui-id: ckH3fT
-#: src/presentation/shell/OperationalStatus.tsx:124
+#: src/presentation/shell/OperationalStatus.tsx:125
 msgid "Ready"
 msgstr "Ready"
 
@@ -834,22 +834,22 @@ msgid "Refresh"
 msgstr "Refresh"
 
 #. js-lingui-id: 4CSBKd
-#: src/presentation/shell/OperationalStatus.tsx:212
+#: src/presentation/shell/OperationalStatus.tsx:213
 msgid "Rendering Mosaic images"
 msgstr "Rendering Mosaic images"
 
 #. js-lingui-id: T2Bz0t
-#: src/presentation/shell/OperationalStatus.tsx:180
+#: src/presentation/shell/OperationalStatus.tsx:181
 msgid "Rendering the selected Sentinel scene…"
 msgstr "Rendering the selected Sentinel scene…"
 
 #. js-lingui-id: ZhefBt
-#: src/presentation/shell/OperationalStatus.tsx:234
+#: src/presentation/shell/OperationalStatus.tsx:235
 msgid "Rendering weather map"
 msgstr "Rendering weather map"
 
 #. js-lingui-id: J8y4b1
-#: src/presentation/shell/OperationalStatus.tsx:178
+#: src/presentation/shell/OperationalStatus.tsx:179
 msgid "Requesting Sentinel imagery tiles…"
 msgstr "Requesting Sentinel imagery tiles…"
 
@@ -982,12 +982,12 @@ msgid "Searching places"
 msgstr "Searching places"
 
 #. js-lingui-id: llGFzy
-#: src/presentation/shell/OperationalStatus.tsx:194
+#: src/presentation/shell/OperationalStatus.tsx:195
 msgid "Searching Sentinel archive…"
 msgstr "Searching Sentinel archive…"
 
 #. js-lingui-id: ljDmvk
-#: src/presentation/shell/OperationalStatus.tsx:112
+#: src/presentation/shell/OperationalStatus.tsx:113
 msgid "Searching the Earth Search Sentinel catalog…"
 msgstr "Searching the Earth Search Sentinel catalog…"
 
@@ -1013,17 +1013,17 @@ msgid "Select several tracks to see them together and download them as one ZIP."
 msgstr "Select several tracks to see them together and download them as one ZIP."
 
 #. js-lingui-id: _XZQbD
-#: src/presentation/shell/OperationalStatus.tsx:115
+#: src/presentation/shell/OperationalStatus.tsx:116
 msgid "Sentinel catalog ready"
 msgstr "Sentinel catalog ready"
 
 #. js-lingui-id: bXY4Eu
-#: src/presentation/shell/OperationalStatus.tsx:127
+#: src/presentation/shell/OperationalStatus.tsx:128
 msgid "Sentinel imagery search failed. Try again."
 msgstr "Sentinel imagery search failed. Try again."
 
 #. js-lingui-id: 4gZK_l
-#: src/presentation/shell/OperationalStatus.tsx:117
+#: src/presentation/shell/OperationalStatus.tsx:118
 msgid "Sentinel search cancelled"
 msgstr "Sentinel search cancelled"
 
@@ -1054,7 +1054,7 @@ msgid "Share this map view"
 msgstr "Share this map view"
 
 #. js-lingui-id: aa47vg
-#: src/presentation/shell/OperationalStatus.tsx:353
+#: src/presentation/shell/OperationalStatus.tsx:354
 msgid "Show current error details"
 msgstr "Show current error details"
 
@@ -1117,7 +1117,7 @@ msgid "Spring"
 msgstr "Spring"
 
 #. js-lingui-id: V7WtQ5
-#: src/presentation/shell/OperationalStatus.tsx:246
+#: src/presentation/shell/OperationalStatus.tsx:247
 msgid "Starting the map workspace…"
 msgstr "Starting the map workspace…"
 
@@ -1167,12 +1167,12 @@ msgid "The link could not be copied. Select it and copy it manually."
 msgstr "The link could not be copied. Select it and copy it manually."
 
 #. js-lingui-id: UvCiMz
-#: src/presentation/shell/OperationalStatus.tsx:141
+#: src/presentation/shell/OperationalStatus.tsx:142
 msgid "The map could not be loaded."
 msgstr "The map could not be loaded."
 
 #. js-lingui-id: UlwpUw
-#: src/presentation/shell/OperationalStatus.tsx:169
+#: src/presentation/shell/OperationalStatus.tsx:170
 msgid "The map is running in a degraded state."
 msgstr "The map is running in a degraded state."
 
@@ -1187,12 +1187,12 @@ msgid "This link includes the current bearing and pitch."
 msgstr "This link includes the current bearing and pitch."
 
 #. js-lingui-id: m4CMLN
-#: src/presentation/shell/OperationalStatus.tsx:253
+#: src/presentation/shell/OperationalStatus.tsx:254
 msgid "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active."
 msgstr "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active."
 
 #. js-lingui-id: QSF6PW
-#: src/presentation/shell/OperationalStatus.tsx:148
+#: src/presentation/shell/OperationalStatus.tsx:149
 msgid "TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery."
 msgstr "TiTiler is unavailable. Switching to direct pre-rendered Sentinel imagery."
 

@@ -227,7 +227,7 @@ msgid "Browse track file"
 msgstr "Browse track file"
 
 #. js-lingui-id: 9j5JW2
-#: src/presentation/tracks/RoutePlanControls.tsx:101
+#: src/presentation/tracks/RoutePlanControls.tsx:192
 msgid "Building route graph… {graphProgress}"
 msgstr "Building route graph… {graphProgress}"
 
@@ -258,17 +258,17 @@ msgid "Choose folder icon"
 msgstr "Choose folder icon"
 
 #. js-lingui-id: xCJdfg
-#: src/presentation/tracks/RoutePlanControls.tsx:253
+#: src/presentation/tracks/RoutePlanControls.tsx:328
 msgid "Clear"
 msgstr "Clear"
 
 #. js-lingui-id: XWJtTP
-#: src/presentation/tracks/RoutePlanControls.tsx:171
+#: src/presentation/tracks/RoutePlanControls.tsx:262
 msgid "Click the map to choose the next point."
 msgstr "Click the map to choose the next point."
 
 #. js-lingui-id: -7TJ06
-#: src/presentation/tracks/RoutePlanControls.tsx:169
+#: src/presentation/tracks/RoutePlanControls.tsx:260
 msgid "Click the map to choose the route start."
 msgstr "Click the map to choose the route start."
 
@@ -396,7 +396,7 @@ msgid "Detailed track geometry was used instead of companion route geometry."
 msgstr "Detailed track geometry was used instead of companion route geometry."
 
 #. js-lingui-id: bzSI52
-#: src/presentation/tracks/RoutePlanControls.tsx:263
+#: src/presentation/tracks/RoutePlanControls.tsx:338
 #: src/presentation/tracks/TracksWorkspace.tsx:5668
 msgid "Discard"
 msgstr "Discard"
@@ -511,7 +511,7 @@ msgid "Elevation gain (calculated): {calculatedAscent}"
 msgstr "Elevation gain (calculated): {calculatedAscent}"
 
 #. js-lingui-id: y7ubGa
-#: src/presentation/tracks/RoutePlanControls.tsx:161
+#: src/presentation/tracks/RoutePlanControls.tsx:252
 msgid "Elevation is unavailable. The route geometry is ready and can still be saved."
 msgstr "Elevation is unavailable. The route geometry is ready and can still be saved."
 
@@ -647,7 +647,7 @@ msgid "Item dropped."
 msgstr "Item dropped."
 
 #. js-lingui-id: rjuFFw
-#: src/presentation/tracks/RoutePlanControls.tsx:232
+#: src/presentation/tracks/RoutePlanControls.tsx:73
 msgid "Line"
 msgstr "Line"
 
@@ -657,7 +657,7 @@ msgid "Loading elevation tiles: {completedTileCount} of {totalTileCount}"
 msgstr "Loading elevation tiles: {completedTileCount} of {totalTileCount}"
 
 #. js-lingui-id: 92JZwP
-#: src/presentation/tracks/RoutePlanControls.tsx:138
+#: src/presentation/tracks/RoutePlanControls.tsx:229
 msgid "Loading elevation tiles: {completedTiles} of {totalTiles}"
 msgstr "Loading elevation tiles: {completedTiles} of {totalTiles}"
 
@@ -667,12 +667,12 @@ msgid "Loading elevation…"
 msgstr "Loading elevation…"
 
 #. js-lingui-id: FuF595
-#: src/presentation/tracks/RoutePlanControls.tsx:105
+#: src/presentation/tracks/RoutePlanControls.tsx:196
 msgid "Loading route tiles…"
 msgstr "Loading route tiles…"
 
 #. js-lingui-id: 32uZSY
-#: src/presentation/tracks/RoutePlanControls.tsx:95
+#: src/presentation/tracks/RoutePlanControls.tsx:186
 msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Loading route tiles… {loadedTiles}/{totalTiles}"
 
@@ -794,13 +794,13 @@ msgid "Newest"
 msgstr "Newest"
 
 #. js-lingui-id: BxDJ4A
-#: src/presentation/tracks/RoutePlanControls.tsx:216
-#: src/presentation/tracks/RoutePlanControls.tsx:222
+#: src/presentation/tracks/RoutePlanControls.tsx:63
+#: src/presentation/tracks/RoutePlanControls.tsx:303
 msgid "Next segment"
 msgstr "Next segment"
 
 #. js-lingui-id: 6X7FFe
-#: src/presentation/tracks/RoutePlanControls.tsx:60
+#: src/presentation/tracks/RoutePlanControls.tsx:151
 msgid "No connected route was found. Add a closer point or use Line for the next segment."
 msgstr "No connected route was found. Add a closer point or use Line for the next segment."
 
@@ -828,22 +828,22 @@ msgid "No markers for this track."
 msgstr "No markers for this track."
 
 #. js-lingui-id: j_87cK
-#: src/presentation/tracks/RoutePlanControls.tsx:51
+#: src/presentation/tracks/RoutePlanControls.tsx:142
 msgid "No routable trail or road was found within 200 m of the destination point."
 msgstr "No routable trail or road was found within 200 m of the destination point."
 
 #. js-lingui-id: Y06z93
-#: src/presentation/tracks/RoutePlanControls.tsx:55
+#: src/presentation/tracks/RoutePlanControls.tsx:146
 msgid "No routable trail or road was found within 200 m of the selected point."
 msgstr "No routable trail or road was found within 200 m of the selected point."
 
 #. js-lingui-id: IDMNkm
-#: src/presentation/tracks/RoutePlanControls.tsx:41
+#: src/presentation/tracks/RoutePlanControls.tsx:132
 msgid "No routable trail or road was found within 200 m of the start and destination points."
 msgstr "No routable trail or road was found within 200 m of the start and destination points."
 
 #. js-lingui-id: D-Ws8T
-#: src/presentation/tracks/RoutePlanControls.tsx:46
+#: src/presentation/tracks/RoutePlanControls.tsx:137
 msgid "No routable trail or road was found within 200 m of the start point."
 msgstr "No routable trail or road was found within 200 m of the start point."
 
@@ -902,7 +902,7 @@ msgstr "Preparing terrain and elevation"
 
 #. js-lingui-id: fwASbQ
 #: src/presentation/tracks/ElevationProfileChart.tsx:358
-#: src/presentation/tracks/RoutePlanControls.tsx:140
+#: src/presentation/tracks/RoutePlanControls.tsx:231
 #: src/presentation/tracks/TracksWorkspace.tsx:5593
 msgid "Preparing terrain and elevation…"
 msgstr "Preparing terrain and elevation…"
@@ -954,7 +954,7 @@ msgid "Retry sharing status"
 msgstr "Retry sharing status"
 
 #. js-lingui-id: ar-Wm2
-#: src/presentation/tracks/RoutePlanControls.tsx:73
+#: src/presentation/tracks/RoutePlanControls.tsx:164
 msgid "Route calculation exceeded one minute. Add a closer point or try again."
 msgstr "Route calculation exceeded one minute. Add a closer point or try again."
 
@@ -963,28 +963,33 @@ msgstr "Route calculation exceeded one minute. Add a closer point or try again."
 msgid "Route climbs and descents"
 msgstr "Route climbs and descents"
 
+#. js-lingui-id: VezXh4
+#: src/presentation/tracks/RoutePlanControls.tsx:101
+msgid "Route planning"
+msgstr "Route planning"
+
 #. js-lingui-id: e_FNZf
-#: src/presentation/tracks/RoutePlanControls.tsx:172
+#: src/presentation/tracks/RoutePlanControls.tsx:263
 msgid "Route ready. Click the map to add another point."
 msgstr "Route ready. Click the map to add another point."
 
 #. js-lingui-id: kKayYU
-#: src/presentation/tracks/RoutePlanControls.tsx:229
+#: src/presentation/tracks/RoutePlanControls.tsx:70
 msgid "Routes"
 msgstr "Routes"
 
 #. js-lingui-id: YCOaso
-#: src/presentation/tracks/RoutePlanControls.tsx:76
+#: src/presentation/tracks/RoutePlanControls.tsx:167
 msgid "Routing data could not be decoded."
 msgstr "Routing data could not be decoded."
 
 #. js-lingui-id: 82qgjI
-#: src/presentation/tracks/RoutePlanControls.tsx:69
+#: src/presentation/tracks/RoutePlanControls.tsx:160
 msgid "Routing data is unavailable. Try again when you are online."
 msgstr "Routing data is unavailable. Try again when you are online."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/tracks/RoutePlanControls.tsx:271
+#: src/presentation/tracks/RoutePlanControls.tsx:346
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:165
 #: src/presentation/tracks/TrackMarkersSection.tsx:250
 #: src/presentation/tracks/TracksWorkspace.tsx:5682
@@ -1012,8 +1017,8 @@ msgid "Saved tracks and folders could not be loaded from this browser."
 msgstr "Saved tracks and folders could not be loaded from this browser."
 
 #. js-lingui-id: F0N_Cz
-#: src/presentation/tracks/RoutePlanControls.tsx:127
-#: src/presentation/tracks/RoutePlanControls.tsx:129
+#: src/presentation/tracks/RoutePlanControls.tsx:218
+#: src/presentation/tracks/RoutePlanControls.tsx:220
 msgid "Saving route…"
 msgstr "Saving route…"
 
@@ -1023,7 +1028,7 @@ msgid "Search saved tracks"
 msgstr "Search saved tracks"
 
 #. js-lingui-id: IT3aLD
-#: src/presentation/tracks/RoutePlanControls.tsx:103
+#: src/presentation/tracks/RoutePlanControls.tsx:194
 msgid "Searching for a route…"
 msgstr "Searching for a route…"
 
@@ -1281,7 +1286,7 @@ msgid "The track marker could not be renamed."
 msgstr "The track marker could not be renamed."
 
 #. js-lingui-id: Q-1q4e
-#: src/presentation/tracks/RoutePlanControls.tsx:65
+#: src/presentation/tracks/RoutePlanControls.tsx:156
 msgid "This segment covers too large an area. Add an intermediate point."
 msgstr "This segment covers too large an area. Add an intermediate point."
 
@@ -1328,7 +1333,7 @@ msgid "Track markers"
 msgstr "Track markers"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/tracks/RoutePlanControls.tsx:206
+#: src/presentation/tracks/RoutePlanControls.tsx:293
 #: src/presentation/tracks/TracksWorkspace.tsx:5280
 #: src/presentation/tracks/TracksWorkspace.tsx:5579
 msgid "Track name"
@@ -1345,7 +1350,9 @@ msgid "Track name must be 200 characters or fewer."
 msgstr "Track name must be 200 characters or fewer."
 
 #. js-lingui-id: 9uI_rE
-#: src/presentation/tracks/RoutePlanControls.tsx:245
+#: src/presentation/tracks/RoutePlanControls.tsx:104
+#: src/presentation/tracks/RoutePlanControls.tsx:108
+#: src/presentation/tracks/RoutePlanControls.tsx:320
 msgid "Undo"
 msgstr "Undo"
 

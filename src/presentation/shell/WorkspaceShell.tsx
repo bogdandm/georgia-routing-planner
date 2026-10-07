@@ -53,7 +53,10 @@ import {
   TracksWorkspaceProvider,
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
-import { RoutePlanStatus } from '@/presentation/tracks/RoutePlanControls';
+import {
+  RoutePlanQuickControls,
+  RoutePlanStatus,
+} from '@/presentation/tracks/RoutePlanControls';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
@@ -191,6 +194,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     recalculationState,
     savePreview,
     setActiveName,
+    setNextSegmentMode,
+    undoLastRoutePlanPoint,
   } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
@@ -451,6 +456,18 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     desktopNavigationCollapsed && activeTrackMetrics !== null ? (
       <CompactTrackSummary metrics={activeTrackMetrics} profile={summaryProfile} />
     ) : null;
+  // Route plans and multi-track mode are exclusive: each closes the other on entry.
+  const activeRoutePlan = activeTrack?.kind === 'route-plan' ? activeTrack : null;
+  const collapsedRoutePlanControls =
+    desktopNavigationCollapsed && activeRoutePlan !== null ? (
+      <Paper elevation={0} sx={{ p: 0.75, borderRadius: 1.25 }}>
+        <RoutePlanQuickControls
+          draft={activeRoutePlan}
+          onNextSegmentModeChange={setNextSegmentMode}
+          onUndo={undoLastRoutePlanPoint}
+        />
+      </Paper>
+    ) : null;
 
   return (
     <Box
@@ -512,7 +529,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             bottom: 'max(12px, env(safe-area-inset-bottom))',
             left: 12,
             height:
-              !multiTrackDetailsExist && activeTrack?.kind === 'preview' ? 120 : 56,
+              (!multiTrackDetailsExist && activeTrack?.kind === 'preview') ||
+              activeRoutePlan !== null
+                ? 120
+                : 56,
             bgcolor: 'background.paper',
             overflow: 'hidden',
           }}
@@ -546,6 +566,16 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               >
                 <Trans>Save</Trans>
               </Button>
+            </Stack>
+          ) : null}
+          {activeRoutePlan !== null ? (
+            <Stack sx={{ height: 64, px: 1.5, justifyContent: 'center' }}>
+              <RoutePlanQuickControls
+                fullWidth
+                draft={activeRoutePlan}
+                onNextSegmentModeChange={setNextSegmentMode}
+                onUndo={undoLastRoutePlanPoint}
+              />
             </Stack>
           ) : null}
           <ButtonBase
@@ -693,6 +723,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           <WorkspaceRail
             collapsed={desktopNavigationCollapsed}
             collapsedSummary={collapsedTrackSummary}
+            collapsedControls={collapsedRoutePlanControls}
             squareEdges={smartphoneViewport}
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}

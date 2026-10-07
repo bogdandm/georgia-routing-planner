@@ -1,14 +1,17 @@
 import type { I18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
+import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined';
 import {
   Alert,
   Button,
+  IconButton,
   LinearProgress,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import type { ReactElement } from 'react';
@@ -29,6 +32,94 @@ interface RoutePlanControlsProps {
   readonly onNextSegmentModeChange: (mode: RoutePlanSegmentMode) => void;
   readonly onSave: () => void;
   readonly onUndo: () => void;
+}
+
+/** Mode changes wait for the pending leg and queued points, and nothing edits during save. */
+function isRoutePlanLocked(draft: RoutePlanDraft): boolean {
+  return (
+    draft.status === 'calculating' ||
+    draft.status === 'saving' ||
+    draft.pendingRequest !== null ||
+    draft.queuedWaypoints.length > 0
+  );
+}
+
+function NextSegmentModeToggle({
+  draft,
+  fullWidth,
+  onChange,
+}: {
+  readonly draft: RoutePlanDraft;
+  readonly fullWidth: boolean;
+  readonly onChange: (mode: RoutePlanSegmentMode) => void;
+}): ReactElement {
+  const { t } = useLingui();
+  const locked = isRoutePlanLocked(draft);
+  return (
+    <ToggleButtonGroup
+      exclusive
+      fullWidth={fullWidth}
+      size="small"
+      aria-label={t`Next segment`}
+      value={draft.nextSegmentMode}
+      onChange={(_event, value: RoutePlanSegmentMode | null) => {
+        if (value !== null) onChange(value);
+      }}
+    >
+      <ToggleButton value="routes" disabled={locked}>
+        <Trans>Routes</Trans>
+      </ToggleButton>
+      <ToggleButton value="line" disabled={locked}>
+        <Trans>Line</Trans>
+      </ToggleButton>
+    </ToggleButtonGroup>
+  );
+}
+
+/**
+ * Undo and Next segment for planning while the editor is hidden: under the collapsed
+ * desktop navigation and inside the smartphone track disclosure.
+ */
+export function RoutePlanQuickControls({
+  draft,
+  fullWidth = false,
+  onNextSegmentModeChange,
+  onUndo,
+}: {
+  readonly draft: RoutePlanDraft;
+  readonly fullWidth?: boolean;
+  readonly onNextSegmentModeChange: (mode: RoutePlanSegmentMode) => void;
+  readonly onUndo: () => void;
+}): ReactElement {
+  const { t } = useLingui();
+  const undoDisabled = draft.status === 'saving' || draft.waypoints.length === 0;
+  return (
+    <Stack
+      direction="row"
+      spacing={1}
+      role="toolbar"
+      aria-label={t`Route planning`}
+      sx={{ width: fullWidth ? '100%' : undefined, alignItems: 'center' }}
+    >
+      <Tooltip title={t`Undo`}>
+        <span>
+          <IconButton
+            color="inherit"
+            aria-label={t`Undo`}
+            disabled={undoDisabled}
+            onClick={onUndo}
+          >
+            <UndoOutlinedIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <NextSegmentModeToggle
+        draft={draft}
+        fullWidth={fullWidth}
+        onChange={onNextSegmentModeChange}
+      />
+    </Stack>
+  );
 }
 
 function failureMessage(
@@ -194,11 +285,7 @@ export function RoutePlanControls({
   onUndo,
 }: RoutePlanControlsProps): ReactElement {
   const { t } = useLingui();
-  const locked =
-    draft.status === 'calculating' ||
-    draft.status === 'saving' ||
-    draft.pendingRequest !== null ||
-    draft.queuedWaypoints.length > 0;
+  const locked = isRoutePlanLocked(draft);
   return (
     <Stack spacing={2}>
       <TextField
@@ -215,23 +302,11 @@ export function RoutePlanControls({
         <Typography variant="caption" color="text.secondary">
           <Trans>Next segment</Trans>
         </Typography>
-        <ToggleButtonGroup
-          exclusive
+        <NextSegmentModeToggle
           fullWidth
-          size="small"
-          aria-label={t`Next segment`}
-          value={draft.nextSegmentMode}
-          onChange={(_event, value: RoutePlanSegmentMode | null) => {
-            if (value !== null) onNextSegmentModeChange(value);
-          }}
-        >
-          <ToggleButton value="routes" disabled={locked}>
-            <Trans>Routes</Trans>
-          </ToggleButton>
-          <ToggleButton value="line" disabled={locked}>
-            <Trans>Line</Trans>
-          </ToggleButton>
-        </ToggleButtonGroup>
+          draft={draft}
+          onChange={onNextSegmentModeChange}
+        />
       </Stack>
       <RoutePlanStatus draft={draft} elevationProgress={elevationProgress} />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>

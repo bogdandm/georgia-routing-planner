@@ -355,6 +355,51 @@ describe('WorkspaceShell', () => {
     expect(route).not.toHaveBeenCalled();
   }, 30_000);
 
+  it('switches segment mode and undoes points from collapsed navigation', async () => {
+    const route = vi.fn<TrailRouter['route']>();
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Hide navigation from Trail Planner logo' }),
+    );
+
+    const quickControls = screen.getByRole('toolbar', { name: 'Route planning' });
+    expect(within(quickControls).getByRole('button', { name: 'Undo' })).toBeDisabled();
+    await user.click(within(quickControls).getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    const summary = await screen.findByRole('button', { name: 'Open tracks' });
+    expect(within(summary).getByLabelText(/^Distance:/u)).toBeVisible();
+    expect(route).not.toHaveBeenCalled();
+
+    await user.click(within(quickControls).getByRole('button', { name: 'Undo' }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', { name: 'Open tracks' }),
+      ).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Show navigation' }));
+    expect(
+      screen.queryByRole('toolbar', { name: 'Route planning' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Click the map to choose the next point.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
   it('saves accepted route geometry without waiting for elevation', async () => {
     const sampling = { signal: null as AbortSignal | null };
     const sampleMany = vi.fn(

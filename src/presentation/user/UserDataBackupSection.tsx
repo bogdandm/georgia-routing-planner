@@ -56,11 +56,7 @@ export function UserDataBackupSection() {
     setBusy(true);
     setError(null);
     try {
-      await restoreUserDataArchive(
-        database,
-        trackContentHasher,
-        new Uint8Array(await file.arrayBuffer()),
-      );
+      await restoreUserDataArchive(database, trackContentHasher, file);
     } catch {
       setError(t`Data could not be imported from this file. Nothing was changed.`);
       setBusy(false);

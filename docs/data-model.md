@@ -289,14 +289,14 @@ The archive is a gzip-compressed POSIX ustar file, version 1:
 Settings cover every key in the settings table above except `sync.*`. Calculated
 elevation and all synchronization queues stay in the browser.
 
-Import inflates at most 512 MiB, reads geometry from each GPX file through the GPX
-parser, recomputes the content hash and point counts, and validates every record with
-the storage schemas before one IndexedDB transaction writes anything. Records with an
-existing ID are replaced; identical records keep their synchronization state, and
-changed ones queue for upload like local edits. Calculated elevation of a track with
-unchanged geometry is kept. Archived folders come first in the folder order, a track in
-an unknown folder becomes unfiled, and archived settings replace local ones, removing
-keys the archive lacks. Unknown setting keys are ignored.
+Import accepts files and inflated content of at most 512 MiB each, reads geometry from
+each GPX file through the GPX parser, recomputes the content hash and point counts, and
+validates every record with the storage schemas before one IndexedDB transaction writes
+anything. Records with an existing ID are replaced; identical records keep their
+synchronization state, and changed ones queue for upload like local edits. Calculated
+elevation of a track with unchanged geometry is kept. Archived folders come first in the
+folder order, a track in an unknown folder becomes unfiled, and archived settings
+replace local ones, removing keys the archive lacks. Unknown setting keys are ignored.
 
 ## Transient map and satellite state
 

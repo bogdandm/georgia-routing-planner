@@ -176,7 +176,11 @@ describe('user data archive', () => {
 
     const archive = await createUserDataArchive(database, exportedAt);
     const restored = await freshDatabase();
-    await restoreUserDataArchive(restored, hasher, archive);
+    await restoreUserDataArchive(restored, hasher, new Blob([archive]));
+
+    expect(new TextDecoder().decode(gunzipSync(archive))).not.toContain(
+      'calculatedMetrics',
+    );
 
     await expect(restored.listLocalTracks()).resolves.toEqual([expectedSummary]);
     await expect(restored.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
@@ -235,7 +239,7 @@ describe('user data archive', () => {
     await database.saveMaximumCloudCoverPercent(70);
     await database.saveRecentMarkerIconKeys(['place']);
 
-    await restoreUserDataArchive(database, hasher, archive);
+    await restoreUserDataArchive(database, hasher, new Blob([archive]));
 
     await expect(database.listLocalTracks()).resolves.toEqual(stored);
     await expect(database.loadTrackSyncState(summary.id)).resolves.toMatchObject({
@@ -263,6 +267,36 @@ describe('user data archive', () => {
     await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
   });
 
+  it('leaves an unchanged browser untouched when re-importing its own export', async () => {
+    const content = trackContent('local:kazbegi');
+    const summary = await trackSummary(content, 'Kazbegi', null);
+    await database.saveLocalTrack(summary, content);
+    await database.replaceCalculatedTrackElevation(
+      summary.id,
+      {
+        ...summary.metrics,
+        elevationSource: 'dem-assisted',
+        elevationAlgorithmVersion: 4,
+      },
+      content.trackPoints,
+    );
+    const state = await database.loadTrackSyncState(summary.id);
+    if (state === null) throw new Error('Missing track sync state.');
+    const cleanState = { ...state, remoteRevision: 7, pendingKind: null };
+    await database.saveTrackSyncState(cleanState);
+    const tracks = await database.listLocalTracks();
+    const storedContent = await database.loadLocalTrackContent(summary.id);
+
+    const archive = await createUserDataArchive(database, exportedAt);
+    await restoreUserDataArchive(database, hasher, new Blob([archive]));
+
+    await expect(database.listLocalTracks()).resolves.toEqual(tracks);
+    await expect(database.loadLocalTrackContent(summary.id)).resolves.toEqual(
+      storedContent,
+    );
+    await expect(database.loadTrackSyncState(summary.id)).resolves.toEqual(cleanState);
+  });
+
   it('rejects an archive with an invalid record without changing local data', async () => {
     const content = trackContent('local:kazbegi');
     const summary = await trackSummary(content, 'Kazbegi', null);
@@ -281,9 +315,11 @@ describe('user data archive', () => {
     const localSummary = await trackSummary(localContent, 'Local', null);
     await restored.saveLocalTrack(localSummary, localContent);
 
-    await expect(restoreUserDataArchive(restored, hasher, tampered)).rejects.toThrow();
     await expect(
-      restoreUserDataArchive(restored, hasher, new TextEncoder().encode('not gzip')),
+      restoreUserDataArchive(restored, hasher, new Blob([tampered])),
+    ).rejects.toThrow();
+    await expect(
+      restoreUserDataArchive(restored, hasher, new Blob(['not gzip'])),
     ).rejects.toThrow();
 
     await expect(restored.listLocalTracks()).resolves.toEqual([localSummary]);

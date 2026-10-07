@@ -14,17 +14,17 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/user/UserDataBackupSection.tsx:146
+#: src/presentation/user/UserDataBackupSection.tsx:142
 msgid "Cancel"
 msgstr "Отмена"
 
 #. js-lingui-id: HKH-W-
-#: src/presentation/user/UserDataBackupSection.tsx:76
+#: src/presentation/user/UserDataBackupSection.tsx:72
 msgid "Data"
 msgstr "Данные"
 
 #. js-lingui-id: Eg3Qrc
-#: src/presentation/user/UserDataBackupSection.tsx:107
+#: src/presentation/user/UserDataBackupSection.tsx:103
 msgid "Data archive"
 msgstr "Архив данных"
 
@@ -34,36 +34,36 @@ msgid "Data could not be exported."
 msgstr "Не удалось экспортировать данные."
 
 #. js-lingui-id: Jkmjwk
-#: src/presentation/user/UserDataBackupSection.tsx:65
+#: src/presentation/user/UserDataBackupSection.tsx:61
 msgid "Data could not be imported from this file. Nothing was changed."
 msgstr "Не удалось импортировать данные из этого файла. Ничего не изменено."
 
 #. js-lingui-id: BB2-PH
-#: src/presentation/user/UserDataBackupSection.tsx:92
+#: src/presentation/user/UserDataBackupSection.tsx:88
 msgid "Export data as gzip"
 msgstr "Экспортировать данные в gzip"
 
 #. js-lingui-id: l3s5ri
-#: src/presentation/user/UserDataBackupSection.tsx:154
+#: src/presentation/user/UserDataBackupSection.tsx:150
 msgid "Import"
 msgstr "Импортировать"
 
 #. js-lingui-id: 4zGHqT
-#: src/presentation/user/UserDataBackupSection.tsx:100
+#: src/presentation/user/UserDataBackupSection.tsx:96
 msgid "Import data from gzip"
 msgstr "Импортировать данные из gzip"
 
 #. js-lingui-id: YZTjDW
-#: src/presentation/user/UserDataBackupSection.tsx:129
+#: src/presentation/user/UserDataBackupSection.tsx:125
 msgid "Import data?"
 msgstr "Импортировать данные?"
 
 #. js-lingui-id: FH9Hxp
-#: src/presentation/user/UserDataBackupSection.tsx:83
+#: src/presentation/user/UserDataBackupSection.tsx:79
 msgid "Tracks as GPX files, with track metadata, markers, and settings."
 msgstr "Треки в виде файлов GPX, их метаданные, метки и настройки."
 
 #. js-lingui-id: -x_CUs
-#: src/presentation/user/UserDataBackupSection.tsx:133
+#: src/presentation/user/UserDataBackupSection.tsx:129
 msgid "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."
 msgstr "Треки, папки и метки из архива заменят элементы с теми же ID, остальные элементы сохранятся. Настройки будут заменены настройками из архива. После этого страница перезагрузится."

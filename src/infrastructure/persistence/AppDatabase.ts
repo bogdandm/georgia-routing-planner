@@ -3674,14 +3674,23 @@ export class AppDatabase
             summary.calculatedMetrics = existingSummary.calculatedMetrics;
             content.calculatedTrackPoints = existingContent.calculatedTrackPoints;
           }
+          // Re-parsing restores the schema key order that `sameRecord` relies on.
+          const restoredSummary = parseLocalTrackSummary(summary);
+          const restoredContent = parseLocalTrackContent(content);
+          if (restoredSummary === null || restoredContent === null) {
+            throw new LocalTrackStorageError(
+              'record-invalid',
+              'The local track record is invalid.',
+            );
+          }
           if (
-            sameRecord(existingSummary, summary) &&
-            sameRecord(existingContent, content)
+            sameRecord(existingSummary, restoredSummary) &&
+            sameRecord(existingContent, restoredContent)
           ) {
             continue;
           }
-          await this.localTracks.put(summary);
-          await this.localTrackContents.put(content);
+          await this.localTracks.put(restoredSummary);
+          await this.localTrackContents.put(restoredContent);
           const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
           // validateLocalTrackSyncPair already rejected pairs without a content hash.
           const contentHash = pair.summary.contentHash ?? '';

@@ -29,7 +29,7 @@ const tarBlockBytes = 512;
 const tarNameBytes = 100;
 // `tracks/` + stem + ` (99999)` + `.gpx` stays within the 100-byte ustar name field.
 const maximumTrackStemBytes = 80;
-// Decompressed bound for an untrusted archive, enforced while inflating.
+// Bound for an untrusted archive, enforced on the file and again while inflating.
 const maximumArchiveBytes = 512 * 1024 * 1024;
 const gunzipChunkBytes = 64 * 1024;
 // A stored track holds at most 100,000 points, which fits well within this GPX size.
@@ -61,7 +61,7 @@ const settingsDocumentSchema = z.object({
 export async function createUserDataArchive(
   database: AppDatabase,
   exportedAt: Date,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   const backup = await database.readUserDataBackup();
   const gpxFiles: [string, Uint8Array][] = [];
   const usedNames = new Set<string>();
@@ -77,7 +77,9 @@ export async function createUserDataArchive(
     usedNames.add(filename);
     const file = `tracks/${filename}`;
     gpxFiles.push([file, strToU8(exportTrackAsGpx(summary, content))]);
-    tracks.push({ file, summary });
+    // Calculated elevation is browser-local derived data and stays out of the archive.
+    const { calculatedMetrics: _calculatedMetrics, ...archivedSummary } = summary;
+    tracks.push({ file, summary: archivedSummary });
     if (content.markers.length > 0) {
       trackMarkers.push({ trackId: summary.id, markers: content.markers });
     }
@@ -109,9 +111,12 @@ export async function createUserDataArchive(
 export async function restoreUserDataArchive(
   database: AppDatabase,
   hasher: TrackContentHasher,
-  archive: Uint8Array,
+  archive: Blob,
 ): Promise<void> {
-  const files = readTar(gunzipBounded(archive));
+  if (archive.size > maximumArchiveBytes) {
+    throw new Error('The data archive is larger than the import limit.');
+  }
+  const files = readTar(gunzipBounded(new Uint8Array(await archive.arrayBuffer())));
   const tracksDocument = tracksDocumentSchema.parse(readJsonFile(files, tracksFile));
   const markersDocument = markersDocumentSchema.parse(readJsonFile(files, markersFile));
   const settingsDocument = settingsDocumentSchema.parse(

@@ -366,11 +366,15 @@ cancelled when superseded. Days with imagery show viewport-coverage-weighted clo
 at or below the slider are highlighted orange and days above it neutral, while the
 slider also filters cards client-side. Clicking a day selects and applies its
 highest-coverage scene. Sentinel-2 satellites share a ground track that repeats every 10
-days, so once the loaded acquisitions span one full cycle and reach within a cycle of
-today, every acquisition day from the last three cycles is projected forward: upcoming
-days without imagery get a dashed, non-selectable outline. Calendar controls include a
-current-month shortcut and a non-modal month-year picker; months outside the archive are
-disabled.
+days, but each satellite keeps its own cadence (Sentinel-2A often acquires only every
+second cycle). Once the loaded acquisitions span one full cycle and reach within a cycle
+of today, each satellite's acquisitions from the last 60 days are projected forward with
+their shortest observed gap: upcoming days without imagery get a dashed, non-selectable
+outline. Predictions are deterministic for the loaded acquisitions and may miss changes
+to a satellite's acquisition plan or the polar-season start and end. In both the scene
+and Mosaic calendars, today's UTC day number sits on a small translucent circle,
+independent of the day frames. Calendar controls include a current-month shortcut and a
+non-modal month-year picker; months outside the archive are disabled.
 
 Results open in an adjacent pane grouped by month, newest first, with acquisition time
 in the search point's local time zone, product level, cloud, and viewport coverage. A

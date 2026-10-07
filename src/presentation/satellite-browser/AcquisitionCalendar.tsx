@@ -16,6 +16,7 @@ import {
   Stack,
   Tooltip,
   Typography,
+  alpha,
 } from '@mui/material';
 import { useMemo, useState } from 'react';
 
@@ -25,6 +26,21 @@ import { predictSentinelAcquisitionDates } from '@/domain/satellite/predictSenti
 import { appColors } from '@/presentation/theme/appColors';
 
 const sentinelArchiveFirstMonth = '2015-06';
+
+/* eslint-disable lingui/no-unlocalized-strings -- CSS tokens. */
+/**
+ * Today's number gets its own translucent circle, so it stays distinct inside the
+ * orange, neutral, and dashed day frames while keeping their text color.
+ */
+const todayNumberSx = {
+  width: 22,
+  height: 22,
+  lineHeight: '22px',
+  borderRadius: '50%',
+  textAlign: 'center',
+  bgcolor: alpha(appColors.brand.deepSpace, 0.14),
+} as const;
+/* eslint-enable lingui/no-unlocalized-strings */
 
 /* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
 /** Display-only calendar labels in `locale`; calendar dates are formatted in UTC. */
@@ -131,7 +147,12 @@ export function AcquisitionCalendar({
     () =>
       mode.kind === 'scene'
         ? predictSentinelAcquisitionDates(
-            (mode.result?.groups ?? []).map((group) => group.date),
+            (mode.result?.groups ?? []).flatMap((group) =>
+              group.scenes.map((match) => ({
+                date: group.date,
+                platform: match.scene.platform,
+              })),
+            ),
             todayDate,
           )
         : new Set<string>(),
@@ -381,6 +402,10 @@ export function AcquisitionCalendar({
                 // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
                 new Date(`${date}T00:00:00.000Z`),
               );
+              const isToday = date === todayDate;
+              const dayNumberSx = isToday ? todayNumberSx : { lineHeight: 1.1 };
+              // eslint-disable-next-line lingui/no-unlocalized-strings -- ARIA token.
+              const todayToken = isToday ? 'date' : undefined;
               if (mode.kind === 'mosaic') {
                 const disabled = date < mode.archiveStartDate || date > todayDate;
                 const selected = date === mode.selectedDate;
@@ -394,6 +419,7 @@ export function AcquisitionCalendar({
                     role="gridcell"
                     disabled={disabled}
                     aria-selected={selected}
+                    aria-current={todayToken}
                     aria-label={
                       selected
                         ? t`${formattedDate}, included in Mosaic range, selected upper bound`
@@ -427,7 +453,7 @@ export function AcquisitionCalendar({
                       '&.Mui-disabled': { color: 'text.disabled' },
                     }}
                   >
-                    <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                    <Typography variant="caption" sx={dayNumberSx}>
                       {day}
                     </Typography>
                   </ButtonBase>
@@ -448,6 +474,7 @@ export function AcquisitionCalendar({
                   key={date}
                   role="gridcell"
                   disabled={cloud === undefined}
+                  aria-current={todayToken}
                   onClick={() => {
                     mode.onSelectDate(date);
                   }}
@@ -489,7 +516,7 @@ export function AcquisitionCalendar({
                     '&.Mui-disabled': { color: 'text.primary' },
                   }}
                 >
-                  <Typography variant="caption" sx={{ lineHeight: 1.1 }}>
+                  <Typography variant="caption" sx={dayNumberSx}>
                     {day}
                   </Typography>
                   {cloud === undefined ? null : (

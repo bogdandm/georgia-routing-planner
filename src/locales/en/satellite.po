@@ -30,32 +30,32 @@ msgid "{coveragePercent} coverage"
 msgstr "{coveragePercent} coverage"
 
 #. js-lingui-id: HmvK6l
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:457
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:484
 msgid "{formattedDate}, expected Sentinel-2 pass"
 msgstr "{formattedDate}, expected Sentinel-2 pass"
 
 #. js-lingui-id: xMxKQ2
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:461
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:488
 msgid "{formattedDate}, imagery available, {cloudLabel} weighted cloud, exceeds the current cloud limit"
 msgstr "{formattedDate}, imagery available, {cloudLabel} weighted cloud, exceeds the current cloud limit"
 
 #. js-lingui-id: wByCg7
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:460
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:487
 msgid "{formattedDate}, imagery available, {cloudLabel} weighted cloud, matches the current cloud limit"
 msgstr "{formattedDate}, imagery available, {cloudLabel} weighted cloud, matches the current cloud limit"
 
 #. js-lingui-id: g01-Km
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:401
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:427
 msgid "{formattedDate}, included in Mosaic range"
 msgstr "{formattedDate}, included in Mosaic range"
 
 #. js-lingui-id: 2lkvQP
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:399
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:425
 msgid "{formattedDate}, included in Mosaic range, selected upper bound"
 msgstr "{formattedDate}, included in Mosaic range, selected upper bound"
 
 #. js-lingui-id: -vCWKz
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:458
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:485
 msgid "{formattedDate}, no loaded imagery"
 msgstr "{formattedDate}, no loaded imagery"
 
@@ -106,7 +106,7 @@ msgid "Acquisition calendar"
 msgstr "Acquisition calendar"
 
 #. js-lingui-id: heDRXb
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:292
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:313
 msgid "Acquisition year"
 msgstr "Acquisition year"
 
@@ -151,7 +151,7 @@ msgid "Cancel search"
 msgstr "Cancel search"
 
 #. js-lingui-id: PhApqn
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:318
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:339
 msgid "Choose {monthName} {yearLabel}"
 msgstr "Choose {monthName} {yearLabel}"
 
@@ -161,17 +161,17 @@ msgid "Choose a date within the Sentinel archive."
 msgstr "Choose a date within the Sentinel archive."
 
 #. js-lingui-id: Ezw1hy
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:285
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:306
 msgid "Choose acquisition month and year"
 msgstr "Choose acquisition month and year"
 
 #. js-lingui-id: uXhYg1
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:225
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:246
 msgid "Choose acquisition month and year, {displayMonthLabel}"
 msgstr "Choose acquisition month and year, {displayMonthLabel}"
 
 #. js-lingui-id: fkY84N
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:223
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:244
 msgid "Choose month and year"
 msgstr "Choose month and year"
 
@@ -283,7 +283,7 @@ msgid "Load more images"
 msgstr "Load more images"
 
 #. js-lingui-id: JWi5n3
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:216
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:237
 msgid "Loading {displayMonthLabel} imagery"
 msgstr "Loading {displayMonthLabel} imagery"
 
@@ -313,12 +313,12 @@ msgid "Maximum cloud"
 msgstr "Maximum cloud"
 
 #. js-lingui-id: P18O_B
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:244
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:265
 msgid "Next acquisition month"
 msgstr "Next acquisition month"
 
 #. js-lingui-id: g8JmSC
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:240
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:261
 msgid "Next month"
 msgstr "Next month"
 
@@ -344,12 +344,12 @@ msgid "Point"
 msgstr "Point"
 
 #. js-lingui-id: HTrYLh
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:196
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:217
 msgid "Previous acquisition month"
 msgstr "Previous acquisition month"
 
 #. js-lingui-id: 1xwZj_
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:192
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:213
 msgid "Previous month"
 msgstr "Previous month"
 
@@ -389,12 +389,12 @@ msgid "Reset stretch"
 msgstr "Reset stretch"
 
 #. js-lingui-id: OE-IAD
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:258
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:279
 msgid "Return to current acquisition month"
 msgstr "Return to current acquisition month"
 
 #. js-lingui-id: -q9LjZ
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:254
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:275
 msgid "Return to current month"
 msgstr "Return to current month"
 
@@ -446,7 +446,7 @@ msgid "Selected for imagery"
 msgstr "Selected for imagery"
 
 #. js-lingui-id: 9h6gGh
-#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:183
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx:204
 msgid "Sentinel acquisition calendar"
 msgstr "Sentinel acquisition calendar"
 

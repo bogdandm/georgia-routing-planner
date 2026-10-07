@@ -794,7 +794,7 @@ describe('WorkspaceShell', () => {
     expect(search).toHaveBeenCalledOnce();
   });
 
-  it('marks predicted Sentinel-2 passes as non-selectable calendar days', async () => {
+  it('marks today and non-selectable predicted Sentinel-2 passes in the calendar', async () => {
     const acquisitionDays = ['02', '04', '05', '07', '10', '12', '14', '15', '17'];
     services.database.close();
     await services.database.delete();
@@ -824,6 +824,9 @@ describe('WorkspaceShell', () => {
     expect(
       screen.getByRole('gridcell', { name: 'Jul 21, 2026, no loaded imagery' }),
     ).toBeDisabled();
+    expect(screen.getByRole('gridcell', { current: 'date' })).toHaveAccessibleName(
+      'Jul 18, 2026, no loaded imagery',
+    );
   });
 
   it('shows the safe provider error without removing the search controls', async () => {

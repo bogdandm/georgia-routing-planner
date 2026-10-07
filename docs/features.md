@@ -116,6 +116,16 @@ or needs a decision, red after failure, and green after success. After three HTT
 responses the page stops sending synchronization requests until reload. See
 [runtime flows](./runtime-flows.md#explicit-cross-device-synchronization).
 
+Below the account controls, in every account state, the **Data** section offers **Export
+data as gzip** and **Import data from gzip**. Export downloads
+`trail-planner-data-<date>.tar.gz` with every saved track as a GPX file plus track
+metadata, markers, and settings as JSON; calculated elevation and synchronization state
+are not included. Import asks for confirmation, validates the whole archive, and then
+restores it in one step: tracks, folders, and markers from the archive replace local
+items with the same ID, other local items stay, and archived settings replace the local
+ones. The page then reloads. A rejected archive changes nothing. See
+[data archive](./data-model.md#data-archive).
+
 ## Feature surfaces
 
 ### Tracks

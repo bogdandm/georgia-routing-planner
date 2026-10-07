@@ -22,7 +22,10 @@ function gpxWaypoint(marker: LocalTrackContent['markers'][number]): string {
   return `<wpt lat="${String(latitude)}" lon="${String(longitude)}"><name>${escapeXml(marker.name)}</name></wpt>`;
 }
 
-function uniqueGpxFilename(name: string, usedNames: ReadonlySet<string>): string {
+export function uniqueGpxFilename(
+  name: string,
+  usedNames: ReadonlySet<string>,
+): string {
   const filename = safeTrackFilename(name, 'gpx');
   if (!usedNames.has(filename)) return filename;
 

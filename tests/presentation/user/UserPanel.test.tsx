@@ -1,16 +1,22 @@
 import { ThemeProvider } from '@mui/material';
-import { act, render, screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
   UserDataService,
   UserDataSnapshot,
 } from '@/application/user/UserDataService';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { UserPanel } from '@/presentation/user/UserPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
+
+beforeEach(() => {
+  activateAppLocale('en');
+});
 
 function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
   return {
@@ -73,7 +79,7 @@ function createService(initial: UserDataSnapshot) {
 }
 
 function renderPanel(userData: UserDataService) {
-  return render(
+  return renderWithI18n(
     <RuntimeServicesProvider services={createTestServices({ userData })}>
       <ThemeProvider theme={createAppTheme()}>
         <UserPanel />
@@ -297,5 +303,22 @@ describe('UserPanel', () => {
     renderPanel(createService(snapshot('unconfigured')).service);
     expect(screen.getByText(/Account features are not configured/)).toBeVisible();
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
+
+  it('asks before importing and reports a file that is not a data archive', async () => {
+    const user = userEvent.setup();
+    renderPanel(createService(snapshot('unconfigured')).service);
+
+    await user.upload(
+      screen.getByLabelText('Data archive'),
+      new File(['not an archive'], 'backup.tar.gz', { type: 'application/gzip' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(
+      await screen.findByText(
+        'Data could not be imported from this file. Nothing was changed.',
+      ),
+    ).toBeVisible();
   });
 });

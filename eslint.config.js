@@ -166,6 +166,7 @@ export default tseslint.config(
       'src/presentation/satellite-browser/SatelliteRenderingControls.tsx',
       'src/presentation/satellite-browser/satelliteProblemMessages.ts',
       'src/presentation/layers/LayersPanel.tsx',
+      'src/presentation/user/UserDataBackupSection.tsx',
     ],
     plugins: { lingui },
     rules: {

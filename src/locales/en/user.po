@@ -12,3 +12,58 @@ msgstr ""
 "Last-Translator: \n"
 "Language-Team: \n"
 "Plural-Forms: \n"
+
+#. js-lingui-id: dEgA5A
+#: src/presentation/user/UserDataBackupSection.tsx:146
+msgid "Cancel"
+msgstr "Cancel"
+
+#. js-lingui-id: HKH-W-
+#: src/presentation/user/UserDataBackupSection.tsx:76
+msgid "Data"
+msgstr "Data"
+
+#. js-lingui-id: Eg3Qrc
+#: src/presentation/user/UserDataBackupSection.tsx:107
+msgid "Data archive"
+msgstr "Data archive"
+
+#. js-lingui-id: ZCgrx6
+#: src/presentation/user/UserDataBackupSection.tsx:48
+msgid "Data could not be exported."
+msgstr "Data could not be exported."
+
+#. js-lingui-id: Jkmjwk
+#: src/presentation/user/UserDataBackupSection.tsx:65
+msgid "Data could not be imported from this file. Nothing was changed."
+msgstr "Data could not be imported from this file. Nothing was changed."
+
+#. js-lingui-id: BB2-PH
+#: src/presentation/user/UserDataBackupSection.tsx:92
+msgid "Export data as gzip"
+msgstr "Export data as gzip"
+
+#. js-lingui-id: l3s5ri
+#: src/presentation/user/UserDataBackupSection.tsx:154
+msgid "Import"
+msgstr "Import"
+
+#. js-lingui-id: 4zGHqT
+#: src/presentation/user/UserDataBackupSection.tsx:100
+msgid "Import data from gzip"
+msgstr "Import data from gzip"
+
+#. js-lingui-id: YZTjDW
+#: src/presentation/user/UserDataBackupSection.tsx:129
+msgid "Import data?"
+msgstr "Import data?"
+
+#. js-lingui-id: FH9Hxp
+#: src/presentation/user/UserDataBackupSection.tsx:83
+msgid "Tracks as GPX files, with track metadata, markers, and settings."
+msgstr "Tracks as GPX files, with track metadata, markers, and settings."
+
+#. js-lingui-id: -x_CUs
+#: src/presentation/user/UserDataBackupSection.tsx:133
+msgid "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."
+msgstr "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."

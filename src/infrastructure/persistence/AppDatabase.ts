@@ -344,6 +344,24 @@ export interface LocalTrackSyncPair {
   readonly content: LocalTrackContent;
 }
 
+/** User-owned records a data archive carries; synchronization bookkeeping stays local. */
+export interface UserDataBackup {
+  readonly tracks: readonly LocalTrackSyncPair[];
+  readonly folders: readonly TrackFolder[];
+  readonly markers: readonly SavedMarker[];
+  /** Archived preference values by settings key. */
+  readonly settings: Readonly<Record<string, unknown>>;
+}
+
+/** Records read from an untrusted archive; restoring validates each one before writing. */
+export interface UserDataBackupCandidate {
+  /** `{ summary, content }` pairs shaped like `LocalTrackSyncPair`. */
+  readonly tracks: readonly unknown[];
+  readonly folders: readonly unknown[];
+  readonly markers: readonly unknown[];
+  readonly settings: Readonly<Record<string, unknown>>;
+}
+
 export interface RemoteTrackMergeBatch {
   readonly put: readonly LocalTrackSyncPair[];
   readonly deleteTrackIds: readonly string[];
@@ -588,6 +606,53 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
 };
+
+// Preferences that travel in a data archive, with the check each archived value must
+// pass. `sync.*` keys bind this browser to an account and never leave it.
+const archivedSettingValidators = new Map<string, (value: unknown) => boolean>([
+  ['ui.preferences', (value) => uiPreferencesSchema.safeParse(value).success],
+  [mapCameraKey, (value) => readPersistedView(value) !== null],
+  [
+    'map.layers',
+    (value) =>
+      mapLayerPreferencesSchema.safeParse(withoutLegacyAppliedScene(value)).success,
+  ],
+  [
+    'satellite.maximum-cloud-cover',
+    (value) => maximumCloudCoverPercentSchema.safeParse(value).success,
+  ],
+  [
+    'weather.interval-preferences',
+    (value) => markerWeatherPreferencesSchema.safeParse(value).success,
+  ],
+  [
+    'weather.track-preferences',
+    (value) => trackWeatherPreferencesSchema.safeParse(value).success,
+  ],
+  [
+    'markers.recent-icons',
+    (value) => recentMarkerIconKeysSchema.safeParse(value).success,
+  ],
+  [
+    'local-tracks.latest-opened',
+    (value) => typeof value === 'string' && value.length > 0 && value.length <= 200,
+  ],
+  [
+    collapsedTrackFoldersKey,
+    (value) => collapsedTrackFolderIdsSchema.safeParse(value).success,
+  ],
+]);
+
+/** Both records come from the same schema parse, so their key order matches. */
+function sameRecord(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function requireUniqueIds(ids: readonly string[]): void {
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('The data archive contains duplicate record identifiers.');
+  }
+}
 
 const coordinateSchema = z.tuple([
   z.number().min(-180).max(180),
@@ -3459,6 +3524,209 @@ export class AppDatabase
         }
         for (const { state } of markerRestores.values()) {
           await this.markerSyncStates.put(state);
+        }
+      },
+    );
+  }
+
+  public async readUserDataBackup(): Promise<UserDataBackup> {
+    return this.transaction(
+      'r',
+      [
+        this.settings,
+        this.localTracks,
+        this.localTrackContents,
+        this.trackFolders,
+        this.savedMarkers,
+      ],
+      async () => {
+        const tracks: LocalTrackSyncPair[] = [];
+        for (const summary of await this.listLocalTracks()) {
+          const content = parseLocalTrackContent(
+            await this.localTrackContents.get(summary.id),
+          );
+          if (content?.trackId === summary.id) tracks.push({ summary, content });
+        }
+        const settings: Record<string, unknown> = {};
+        for (const [key, isValid] of archivedSettingValidators) {
+          const record = await this.settings.get(key);
+          if (record !== undefined && isValid(record.value)) {
+            settings[key] = record.value;
+          }
+        }
+        return {
+          tracks,
+          folders: await this.listTrackFolders(),
+          markers: await this.listSavedMarkers(),
+          settings,
+        };
+      },
+    );
+  }
+
+  /**
+   * Atomically writes archived tracks, folders, and markers over local records with the
+   * same ID and replaces every archived preference; local records absent from the
+   * archive stay. Changed records queue for upload like local edits, and identical
+   * records keep their synchronization state. Archived folders come first in the order.
+   */
+  public async restoreUserDataBackup(backup: UserDataBackupCandidate): Promise<void> {
+    const tracks = backup.tracks.map(validateLocalTrackSyncPair);
+    const folders = backup.folders.map(validateTrackFolderRecord);
+    const markers = backup.markers.map(validateSavedMarkerRecord);
+    requireUniqueIds(tracks.map((pair) => pair.summary.id));
+    requireUniqueIds(folders.map((folder) => folder.id));
+    requireUniqueIds(markers.map((marker) => marker.id));
+    const settings = new Map<string, unknown>();
+    for (const [key, value] of Object.entries(backup.settings)) {
+      const isValid = archivedSettingValidators.get(key);
+      // Keys this version does not archive are ignored rather than stored unvalidated.
+      if (isValid === undefined) continue;
+      if (!isValid(value)) {
+        throw new Error('The data archive contains an invalid setting.');
+      }
+      settings.set(key, value);
+    }
+
+    await this.transaction(
+      'rw',
+      [
+        this.settings,
+        this.localTracks,
+        this.localTrackContents,
+        this.trackSyncStates,
+        this.savedMarkers,
+        this.markerSyncStates,
+        this.trackFolders,
+        this.folderSyncStates,
+      ],
+      async () => {
+        const byPosition = (left: TrackFolder, right: TrackFolder) =>
+          left.position - right.position || left.id.localeCompare(right.id, 'en');
+        const localFolders = (await this.trackFolders.toArray())
+          .map(parseTrackFolder)
+          .filter((folder): folder is TrackFolder => folder !== null)
+          .sort(byPosition);
+        const localFoldersById = new Map(
+          localFolders.map((folder) => [folder.id, folder]),
+        );
+        const archivedFolderIds = new Set(folders.map((folder) => folder.id));
+        const orderedFolders = [
+          ...folders.toSorted(byPosition),
+          ...localFolders.filter((folder) => !archivedFolderIds.has(folder.id)),
+        ];
+        for (const [position, folder] of orderedFolders.entries()) {
+          const restored: TrackFolder = { ...folder, position };
+          const existing = localFoldersById.get(folder.id);
+          if (existing !== undefined && sameRecord(existing, restored)) continue;
+          await this.trackFolders.put(restored);
+          // Order synchronizes as one list below, so a moved folder is not an edit.
+          if (
+            existing !== undefined &&
+            sameRecord({ ...existing, position }, restored)
+          ) {
+            continue;
+          }
+          const state = parseFolderSyncState(
+            await this.folderSyncStates.get(folder.id),
+          );
+          await this.folderSyncStates.put({
+            folderId: folder.id,
+            remoteRevision: state?.remoteRevision ?? null,
+            pendingKind: 'upsert',
+            localVersion: nextFolderLocalVersion(state),
+          });
+        }
+        if (
+          orderedFolders.length !== localFolders.length ||
+          orderedFolders.some((folder, index) => localFolders[index]?.id !== folder.id)
+        ) {
+          const pending = await this.settings.get(folderOrderVersionKey);
+          await this.settings.put({
+            key: folderOrderVersionKey,
+            value: typeof pending?.value === 'number' ? pending.value + 1 : 1,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        const folderIds = new Set(orderedFolders.map((folder) => folder.id));
+        for (const pair of tracks) {
+          const trackId = pair.summary.id;
+          const summary: LocalTrackSummaryBuilder = { ...pair.summary };
+          const content: LocalTrackContentBuilder = { ...pair.content };
+          if (summary.folderId !== null && !folderIds.has(summary.folderId)) {
+            summary.folderId = null;
+          }
+          const existingSummary = parseLocalTrackSummary(
+            await this.localTracks.get(trackId),
+          );
+          const existingContent = parseLocalTrackContent(
+            await this.localTrackContents.get(trackId),
+          );
+          // Archives carry source geometry only; calculated elevation for unchanged
+          // geometry stays valid and is kept.
+          if (
+            existingSummary !== null &&
+            existingSummary.contentHash === summary.contentHash &&
+            existingSummary.calculatedMetrics !== undefined &&
+            existingContent?.calculatedTrackPoints !== undefined
+          ) {
+            summary.calculatedMetrics = existingSummary.calculatedMetrics;
+            content.calculatedTrackPoints = existingContent.calculatedTrackPoints;
+          }
+          if (
+            sameRecord(existingSummary, summary) &&
+            sameRecord(existingContent, content)
+          ) {
+            continue;
+          }
+          await this.localTracks.put(summary);
+          await this.localTrackContents.put(content);
+          const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
+          // validateLocalTrackSyncPair already rejected pairs without a content hash.
+          const contentHash = pair.summary.contentHash ?? '';
+          await this.trackSyncStates.put(
+            state !== null &&
+              state.contentHash === contentHash &&
+              state.remoteRevision !== null
+              ? {
+                  ...state,
+                  pendingKind: state.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+                }
+              : {
+                  trackId,
+                  contentHash,
+                  lineageHash: contentHash,
+                  geometryVersion: 2,
+                  remoteRevision: null,
+                  pendingKind: 'upsert',
+                },
+          );
+        }
+
+        for (const marker of markers) {
+          const existing = parseSavedMarker(await this.savedMarkers.get(marker.id));
+          if (existing !== null && sameRecord(existing, marker)) continue;
+          const parsedState = markerSyncStateSchema.safeParse(
+            await this.markerSyncStates.get(marker.id),
+          );
+          const state = parsedState.success ? parsedState.data : null;
+          await this.savedMarkers.put(marker);
+          await this.markerSyncStates.put({
+            markerId: marker.id,
+            remoteRevision: state?.remoteRevision ?? null,
+            pendingKind: 'upsert',
+            localVersion: nextMarkerLocalVersion(state),
+          });
+        }
+
+        const updatedAt = new Date().toISOString();
+        for (const key of archivedSettingValidators.keys()) {
+          if (settings.has(key)) {
+            await this.settings.put({ key, value: settings.get(key), updatedAt });
+          } else {
+            await this.settings.delete(key);
+          }
         }
       },
     );

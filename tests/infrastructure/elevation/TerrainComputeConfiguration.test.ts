@@ -28,19 +28,13 @@ describe('TerrainComputeConfiguration', () => {
     expect(terrainComputeConfigurationSchema.parse(configuration)).toEqual(
       configuration,
     );
-    expect(configuration).toMatchObject({
-      schemaVersion: 1,
+    expect(configuration).toEqual({
+      schemaVersion: 2,
+      tileUrl: 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp',
       encoding: 'terrarium',
-      maximumSourceZoom: 15,
+      maximumSourceZoom: 12,
+      contourCacheSize: 32,
       requestTimeoutMs: 10_000,
-      filter: {
-        spikeThresholdMeters: 500,
-        negativeSpikeThresholdMeters: 300,
-      },
     });
-    expect(configuration).not.toHaveProperty('id');
-    expect(configuration).not.toHaveProperty('label');
-    expect(configuration).not.toHaveProperty('presentationNote');
-    expect(configuration).not.toHaveProperty('overlays');
   });
 });

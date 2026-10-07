@@ -49,8 +49,8 @@ describe('WorkspaceShell', () => {
     vi.spyOn(provider, 'sampleMany').mockImplementation(
       (_coordinates, _signal, onProgress) => {
         onProgress?.({
-          completedTiles: 1,
-          totalTiles: 3,
+          completedSamples: 1,
+          totalSamples: 3,
           indices: [0],
           samples: [{ status: 'available', meters: 1_000 }],
         });
@@ -82,7 +82,7 @@ describe('WorkspaceShell', () => {
         name: 'Recalculate elevation',
       }),
     );
-    expect(await screen.findByText('Loading elevation tiles: 1 of 3')).toBeVisible();
+    expect(await screen.findByText('Loading elevation: 33%')).toBeVisible();
     const toggle = screen.getByRole('button', {
       name: 'Select multiple tracks',
     });

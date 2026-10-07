@@ -8,23 +8,18 @@ import { mapSourceIds, terrainOverlayLayerIds } from '@/presentation/map/mapIds'
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 
 describe('terrain overlay style contracts', () => {
-  it('creates a bounded raster DEM source from validated provider configuration', () => {
+  it('loads the provider raster DEM directly from validated configuration', () => {
     const configuration = parseMapProviderConfiguration(
       defaultMapProviderConfigurationInput,
       'https://example.test/app/',
     );
 
-    expect(
-      createTerrainDemSource(
-        configuration.terrain,
-        'georgia-terrain-shared://{z}/{x}/{y}',
-      ),
-    ).toEqual({
+    expect(createTerrainDemSource(configuration.terrain)).toEqual({
       type: 'raster-dem',
-      tiles: ['georgia-terrain-shared://{z}/{x}/{y}'],
-      tileSize: 256,
+      tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
+      tileSize: 512,
       minzoom: 0,
-      maxzoom: 15,
+      maxzoom: 12,
       encoding: 'terrarium',
       attribution: configuration.terrain.attribution,
     });

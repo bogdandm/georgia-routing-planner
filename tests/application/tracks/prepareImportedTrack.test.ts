@@ -75,7 +75,7 @@ describe('prepareImportedTrack', () => {
     ).toBe(true);
     expect(prepared.calculatedMetrics?.ascentMeters).toBe(0);
     expect(prepared.calculatedMetrics?.descentMeters).toBe(0);
-    expect(prepared.calculatedMetrics?.elevationAlgorithmVersion).toBe(4);
+    expect(prepared.calculatedMetrics?.elevationAlgorithmVersion).toBe(5);
   });
 
   it('interpolates missing DEM samples only from neighboring DEM values', async () => {
@@ -160,7 +160,7 @@ describe('prepareImportedTrack', () => {
     expect(prepared.sourceMetrics.ascentMeters).toBeUndefined();
     expect(prepared.sourceMetrics.descentMeters).toBeUndefined();
     expect(prepared.calculatedProfile).not.toBeNull();
-    expect(prepared.calculatedMetrics?.elevationAlgorithmVersion).toBe(4);
+    expect(prepared.calculatedMetrics?.elevationAlgorithmVersion).toBe(5);
   });
 
   it('throws elevation-unavailable only when neither projection has a usable run', async () => {
@@ -283,18 +283,20 @@ describe('prepareImportedTrack', () => {
     expect(Math.abs(descentMeters - 800) / 800).toBeLessThanOrEqual(0.01);
   });
 
-  it('keeps captured Svaneti Terrarium totals within the measured terrain range', async () => {
+  it('keeps captured Mapterhorn station totals within the measured terrain range', async () => {
+    // Bilinear Mapterhorn elevations at 10 m stations along the July OsmAnd fixture
+    // track. Its recorded GPX totals are about 1_707 m up and 321 m down.
     const samplesJson = await readFile(
       join(
         process.cwd(),
         'tests',
         'fixtures',
         'elevation',
-        'svaneti-loop-4-terrarium.json',
+        'osmand-july-track-mapterhorn-stations.json',
       ),
       'utf8',
     );
-    const samples = JSON.parse(samplesJson) as readonly (number | null)[];
+    const samples = JSON.parse(samplesJson) as readonly number[];
     const syntheticSource: readonly TrackSegment[] = [
       {
         points: [
@@ -316,36 +318,37 @@ describe('prepareImportedTrack', () => {
         0,
       ),
     ).toBe(samples.length);
-    expect(prepared.calculatedMetrics?.ascentMeters).toBeGreaterThanOrEqual(1_800);
-    expect(prepared.calculatedMetrics?.ascentMeters).toBeLessThanOrEqual(2_200);
-    expect(prepared.calculatedMetrics?.descentMeters).toBeGreaterThanOrEqual(3_000);
-    expect(prepared.calculatedMetrics?.descentMeters).toBeLessThanOrEqual(3_400);
-    expect(prepared.calculatedMetrics?.elevationAlgorithmVersion).toBe(4);
+    expect(prepared.calculatedMetrics?.ascentMeters).toBeGreaterThanOrEqual(1_600);
+    expect(prepared.calculatedMetrics?.ascentMeters).toBeLessThanOrEqual(1_640);
+    expect(prepared.calculatedMetrics?.descentMeters).toBeGreaterThanOrEqual(200);
+    expect(prepared.calculatedMetrics?.descentMeters).toBeLessThanOrEqual(240);
+    expect(prepared.calculatedMetrics?.elevationAlgorithmVersion).toBe(5);
     expect(prepared.sourceMetrics.ascentMeters).toBeUndefined();
     expect(prepared.sourceMetrics.descentMeters).toBeUndefined();
-  }, 30_000);
+  });
 
   it('publishes progress from arriving DEM samples without source fallback', async () => {
     const progress: (readonly (number | null)[])[] = [];
+    const counts: (readonly [number, number])[] = [];
 
     const provider: ElevationProvider = {
       sample: () => Promise.resolve({ status: 'available', meters: 200 }),
       sampleMany: (coordinates, _signal, onProgress) => {
         onProgress?.({
-          completedTiles: 0,
-          totalTiles: 2,
+          completedSamples: 0,
+          totalSamples: 3,
           indices: [],
           samples: [],
         });
         onProgress?.({
-          completedTiles: 1,
-          totalTiles: 2,
+          completedSamples: 1,
+          totalSamples: 3,
           indices: [1],
           samples: [{ status: 'available', meters: 250 }],
         });
         onProgress?.({
-          completedTiles: 2,
-          totalTiles: 2,
+          completedSamples: 3,
+          totalSamples: 3,
           indices: [0, 2],
           samples: [
             { status: 'available', meters: 200 },
@@ -375,6 +378,7 @@ describe('prepareImportedTrack', () => {
       {
         onProgress: (event) => {
           progress.push(event.points.map((point) => point.elevationMeters));
+          counts.push([event.completedSamples, event.totalSamples]);
         },
       },
     );
@@ -383,6 +387,11 @@ describe('prepareImportedTrack', () => {
       [null, null, null],
       [null, 250, null],
       [200, 250, 300],
+    ]);
+    expect(counts).toEqual([
+      [0, 3],
+      [1, 3],
+      [3, 3],
     ]);
   });
 
@@ -393,8 +402,8 @@ describe('prepareImportedTrack', () => {
       sample: () => Promise.resolve({ status: 'available', meters: 200 }),
       sampleMany: (coordinates, _signal, onProgress) => {
         onProgress?.({
-          completedTiles: 1,
-          totalTiles: 1,
+          completedSamples: 2,
+          totalSamples: coordinates.length,
           indices: [6, coordinates.length - 1],
           samples: [
             { status: 'available', meters: 100 },

@@ -42,10 +42,6 @@
     "src/infrastructure/routing/trailGraph.ts",
     "src/infrastructure/runtime/WorkerRpc.ts",
     "src/bootstrap/configuration/MapProviderConfiguration.ts",
-    "src/infrastructure/elevation/TerrariumDemFilter.ts",
-    "src/domain/elevation/robustElevationStatistics.ts",
-    "tests/helpers/referenceTerrariumDemFilter.ts",
-    "tests/helpers/terrariumDemFilterFixtures.ts",
     "src/diagnostics/export/diagnosticBundleSchema.ts",
     "e2e/**/*.ts"
   ]

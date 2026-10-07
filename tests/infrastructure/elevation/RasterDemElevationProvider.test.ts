@@ -1,36 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { KyInstance } from 'ky';
 
+import type {
+  ElevationCoordinate,
+  ElevationSamplingProgress,
+} from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
-import {
-  defaultMapProviderConfigurationInput,
-  parseMapProviderConfiguration,
-} from '@/bootstrap/configuration/MapProviderConfiguration';
-import type { TerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
+import type {
+  DecodedDemTile,
+  DemImageDecoder,
+} from '@/infrastructure/elevation/BrowserDemImageDecoder';
 import {
   decodeDemElevation,
-  locateDemPixel,
   RasterDemElevationProvider,
 } from '@/infrastructure/elevation/RasterDemElevationProvider';
-import type { DecodedTerrariumTile } from '@/infrastructure/elevation/TerrariumDemFilter';
-
-describe('RasterDemElevationProvider helpers', () => {
-  it('locates a deterministic pixel in a slippy-map tile', () => {
-    expect(locateDemPixel({ longitude: 0, latitude: 0 }, 1, 256)).toEqual({
-      z: 1,
-      x: 1,
-      y: 1,
-      pixelX: 0,
-      pixelY: 0,
-    });
-    expect(locateDemPixel({ longitude: 44.8, latitude: 90 }, 15, 256)).toBeNull();
-  });
-
-  it('decodes the supported Terrarium and Mapbox formulas', () => {
-    expect(decodeDemElevation({ red: 128, green: 4, blue: 0 }, 'terrarium')).toBe(4);
-    expect(decodeDemElevation({ red: 1, green: 134, blue: 160 }, 'mapbox')).toBe(0);
-  });
-});
 
 interface Deferred<T> {
   readonly promise: Promise<T>;
@@ -48,77 +31,197 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve: resolvePromise };
 }
 
+// A zoom-1 world of 2 px tiles is 4 x 4 pixels, small enough to reason about corners.
+const zoom = 1;
+const tileSize = 2;
+const worldPixels = 2 ** zoom * tileSize;
+
 function terrain() {
-  return parseMapProviderConfiguration(
-    defaultMapProviderConfigurationInput,
-    'https://example.test/',
-  ).terrain;
+  return {
+    tileUrl: 'https://dem.test/{z}/{x}/{y}.webp',
+    encoding: 'terrarium' as const,
+    tileSize,
+    maxZoom: zoom,
+  };
 }
 
-function decodedTile(tileSize: number): DecodedTerrariumTile {
+/** Returns the coordinate whose bilinear position is the given world pixel-centre offset. */
+function coordinateAtPixel(column: number, row: number): ElevationCoordinate {
+  return {
+    longitude: ((column + 0.5) / worldPixels) * 360 - 180,
+    latitude:
+      (Math.atan(Math.sinh(Math.PI * (1 - (2 * (row + 0.5)) / worldPixels))) * 180) /
+      Math.PI,
+  };
+}
+
+/** Builds a tile from row-major elevations; `null` marks a transparent pixel. */
+function tile(elevations: readonly (number | null)[]): DecodedDemTile {
   const data = new Uint8ClampedArray(tileSize * tileSize * 4);
-  for (let offset = 0; offset < data.length; offset += 4) {
-    data[offset] = 1;
-    data[offset + 1] = 173;
-    data[offset + 2] = 176;
-    data[offset + 3] = 255;
-  }
+  elevations.forEach((meters, index) => {
+    if (meters === null) return;
+    const encoded = meters + 32_768;
+    data[index * 4] = Math.floor(encoded / 256);
+    data[index * 4 + 1] = encoded % 256;
+    data[index * 4 + 2] = 0;
+    data[index * 4 + 3] = 255;
+  });
   return { width: tileSize, height: tileSize, data };
 }
 
 const idGenerator: IdGenerator = { generate: () => 'test-operation' };
 
-describe('RasterDemElevationProvider sampling progress', () => {
-  it('reports each completed DEM tile with aligned result entries', async () => {
-    const configuredTerrain = terrain();
-    const firstTile = deferred<Blob>();
-    const secondTile = deferred<Blob>();
-    const tiles = [firstTile, secondTile];
-    let requestedTiles = 0;
-    const httpClient = {
-      get: vi.fn(() => {
-        const tile = tiles[requestedTiles];
-        requestedTiles += 1;
-        if (tile === undefined) throw new Error('Unexpected DEM tile request.');
-        return { blob: () => tile.promise };
-      }),
-    } as unknown as KyInstance;
-    const pngCodec: TerrariumPngCodec = {
-      decode: () => Promise.resolve(decodedTile(configuredTerrain.tileSize)),
-      encode: () => Promise.resolve(new Blob()),
-    };
+/** Serves decoded tiles by URL; each response stays pending until released. */
+function tileServer(tiles: Readonly<Record<string, DecodedDemTile>>) {
+  const decodedByBlob = new Map<Blob, DecodedDemTile>();
+  const pending = new Map<string, () => void>();
+  const get = vi.fn((url: string) => {
+    const decoded = tiles[url];
+    if (decoded === undefined) throw new Error(`Unexpected DEM tile ${url}.`);
+    const blob = new Blob([url]);
+    decodedByBlob.set(blob, decoded);
+    const response = deferred<Blob>();
+    pending.set(url, () => {
+      response.resolve(blob);
+    });
+    return { blob: () => response.promise };
+  });
+  const decoder: DemImageDecoder = {
+    decode: (blob) => {
+      const decoded = decodedByBlob.get(blob);
+      if (decoded === undefined) throw new Error('Unknown DEM blob.');
+      return Promise.resolve(decoded);
+    },
+  };
+  const release = (url: string): void => {
+    const resolve = pending.get(url);
+    if (resolve === undefined) throw new Error(`DEM tile ${url} was not requested.`);
+    resolve();
+  };
+  const releaseAll = (): void => {
+    for (const resolve of pending.values()) resolve();
+  };
+  return {
+    get,
+    decoder,
+    release,
+    releaseAll,
+    httpClient: { get } as unknown as KyInstance,
+  };
+}
+
+const westTileUrl = 'https://dem.test/1/0/1.webp';
+const eastTileUrl = 'https://dem.test/1/1/1.webp';
+
+describe('decodeDemElevation', () => {
+  it('decodes the supported Terrarium and Mapbox formulas', () => {
+    expect(decodeDemElevation({ red: 128, green: 4, blue: 0 }, 'terrarium')).toBe(4);
+    expect(decodeDemElevation({ red: 1, green: 134, blue: 160 }, 'mapbox')).toBe(0);
+  });
+});
+
+describe('RasterDemElevationProvider bilinear sampling', () => {
+  it('interpolates between the four pixel centres inside one tile', async () => {
+    const server = tileServer({ [eastTileUrl]: tile([100, 200, 300, 400]) });
     const provider = new RasterDemElevationProvider(
-      httpClient,
-      { ...configuredTerrain, encoding: 'mapbox' },
+      server.httpClient,
+      terrain(),
       idGenerator,
-      null,
-      pngCodec,
+      server.decoder,
     );
-    const coordinates = [
-      { longitude: 0, latitude: 0 },
-      { longitude: 0.001, latitude: 0 },
-      { longitude: 30, latitude: 0 },
-    ] as const;
-    const firstLocation = locateDemPixel(
-      coordinates[0],
-      configuredTerrain.maxZoom,
-      configuredTerrain.tileSize,
-    );
-    const lastLocation = locateDemPixel(
-      coordinates[2],
-      configuredTerrain.maxZoom,
-      configuredTerrain.tileSize,
-    );
-    expect(firstLocation?.x).not.toBe(lastLocation?.x);
-    const progress: {
-      readonly completedTiles: number;
-      readonly totalTiles: number;
-      readonly indices: readonly number[];
-      readonly samples: readonly unknown[];
-    }[] = [];
 
     const pending = provider.sampleMany(
-      coordinates,
+      [coordinateAtPixel(2.25, 2.5)],
+      new AbortController().signal,
+    );
+    server.releaseAll();
+    const [sample] = await pending;
+
+    expect(server.get).toHaveBeenCalledOnce();
+    expect(server.get).toHaveBeenCalledWith(eastTileUrl, expect.anything());
+    expect(sample?.status).toBe('available');
+    // Top row 100..200 and bottom row 300..400, a quarter across and halfway down.
+    expect(sample?.status === 'available' ? sample.meters : null).toBeCloseTo(225, 6);
+  });
+
+  it('uses the neighbouring tile across tile edges and the antimeridian', async () => {
+    const server = tileServer({
+      [westTileUrl]: tile([100, 100, 100, 100]),
+      [eastTileUrl]: tile([300, 300, 300, 300]),
+    });
+    const provider = new RasterDemElevationProvider(
+      server.httpClient,
+      terrain(),
+      idGenerator,
+      server.decoder,
+    );
+
+    const pending = provider.sampleMany(
+      [
+        coordinateAtPixel(1.5, 2.5),
+        coordinateAtPixel(1.25, 2.5),
+        coordinateAtPixel(-0.25, 2.5),
+      ],
+      new AbortController().signal,
+    );
+    server.releaseAll();
+    const samples = await pending;
+
+    expect(server.get).toHaveBeenCalledTimes(2);
+    const meters = samples.map((sample) =>
+      sample.status === 'available' ? sample.meters : null,
+    );
+    expect(meters[0]).toBeCloseTo(200, 6);
+    expect(meters[1]).toBeCloseTo(150, 6);
+    // The westernmost column interpolates with the easternmost column of the world.
+    expect(meters[2]).toBeCloseTo(150, 6);
+  });
+
+  it('renormalises over valid corners and reports samples without any as unavailable', async () => {
+    const server = tileServer({
+      [westTileUrl]: tile([null, null, null, null]),
+      [eastTileUrl]: tile([100, 200, 300, null]),
+    });
+    const provider = new RasterDemElevationProvider(
+      server.httpClient,
+      terrain(),
+      idGenerator,
+      server.decoder,
+    );
+
+    const pending = provider.sampleMany(
+      [coordinateAtPixel(2.5, 2.5), coordinateAtPixel(0.5, 2.5)],
+      new AbortController().signal,
+    );
+    server.releaseAll();
+    const [partial, missing] = await pending;
+
+    expect(partial?.status === 'available' ? partial.meters : null).toBeCloseTo(200, 6);
+    expect(missing).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('RasterDemElevationProvider sampling progress', () => {
+  it('reports each sample once all of its tiles have loaded', async () => {
+    const server = tileServer({
+      [westTileUrl]: tile([100, 100, 100, 100]),
+      [eastTileUrl]: tile([300, 300, 300, 300]),
+    });
+    const provider = new RasterDemElevationProvider(
+      server.httpClient,
+      terrain(),
+      idGenerator,
+      server.decoder,
+    );
+    const progress: ElevationSamplingProgress[] = [];
+
+    const pending = provider.sampleMany(
+      [
+        coordinateAtPixel(0.5, 2.5),
+        coordinateAtPixel(1.5, 2.5),
+        coordinateAtPixel(2.5, 2.5),
+        { longitude: 44, latitude: 89 },
+      ],
       new AbortController().signal,
       (event) => {
         progress.push(event);
@@ -126,68 +229,47 @@ describe('RasterDemElevationProvider sampling progress', () => {
     );
 
     expect(progress).toEqual([
-      { completedTiles: 0, totalTiles: 2, indices: [], samples: [] },
+      { completedSamples: 0, totalSamples: 3, indices: [], samples: [] },
     ]);
-    firstTile.resolve(new Blob(['first']));
+    server.release(westTileUrl);
     await vi.waitFor(() => {
       expect(progress).toHaveLength(2);
     });
-    secondTile.resolve(new Blob(['second']));
+    expect(progress[1]).toMatchObject({
+      completedSamples: 1,
+      totalSamples: 3,
+      indices: [0],
+    });
+    server.release(eastTileUrl);
     const samples = await pending;
 
-    expect(progress).toEqual([
-      { completedTiles: 0, totalTiles: 2, indices: [], samples: [] },
-      {
-        completedTiles: 1,
-        totalTiles: 2,
-        indices: [0, 1],
-        samples: [
-          { status: 'available', meters: 1_000 },
-          { status: 'available', meters: 1_000 },
-        ],
-      },
-      {
-        completedTiles: 2,
-        totalTiles: 2,
-        indices: [2],
-        samples: [{ status: 'available', meters: 1_000 }],
-      },
-    ]);
-    expect(samples).toEqual([
-      { status: 'available', meters: 1_000 },
-      { status: 'available', meters: 1_000 },
-      { status: 'available', meters: 1_000 },
-    ]);
+    expect(progress.map((event) => event.completedSamples)).toEqual([0, 1, 3]);
+    expect(progress[2]).toMatchObject({ totalSamples: 3, indices: [1, 2] });
+    expect(progress[2]?.samples).toEqual([samples[1], samples[2]]);
+    expect(samples[3]).toEqual({ status: 'unavailable' });
   });
 
   it('does not emit completion after sampling is aborted', async () => {
-    const configuredTerrain = terrain();
-    const tile = deferred<Blob>();
+    const server = tileServer({ [eastTileUrl]: tile([100, 100, 100, 100]) });
     const provider = new RasterDemElevationProvider(
-      {
-        get: () => ({ blob: () => tile.promise }),
-      } as unknown as KyInstance,
-      { ...configuredTerrain, encoding: 'mapbox' },
+      server.httpClient,
+      terrain(),
       idGenerator,
-      null,
-      {
-        decode: () => Promise.resolve(decodedTile(configuredTerrain.tileSize)),
-        encode: () => Promise.resolve(new Blob()),
-      },
+      server.decoder,
     );
     const controller = new AbortController();
     const progress: number[] = [];
     const pending = provider.sampleMany(
-      [{ longitude: 0, latitude: 0 }],
+      [coordinateAtPixel(2.5, 2.5)],
       controller.signal,
       (event) => {
-        progress.push(event.completedTiles);
+        progress.push(event.completedSamples);
       },
     );
     const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
 
     controller.abort(new DOMException('Canceled', 'AbortError'));
-    tile.resolve(new Blob(['tile']));
+    server.releaseAll();
 
     await rejection;
     expect(progress).toEqual([0]);

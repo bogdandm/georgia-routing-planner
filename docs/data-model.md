@@ -107,9 +107,10 @@ versions are migrated on read.
 antimeridian-aware bounds, center, optional recorded start/end and elapsed seconds, and
 optional ascent/descent/min/max elevation with `elevationSource` (`gpx | dem-assisted`)
 and a matching `elevationAlgorithmVersion`. `calculatedMetrics` must be DEM-assisted
-version 4. Recorded duration is absent unless every rendered point has an ordered valid
-timestamp. Without it, metrics with ascent and descent carry `estimatedSeconds`, the DIN
-33466 walking time from `estimateHikingSeconds` in
+version 5 (Mapterhorn bilinear sampling) or a stored version 4 (repaired Terrarium, kept
+readable until the user recalculates). Recorded duration is absent unless every rendered
+point has an ordered valid timestamp. Without it, metrics with ascent and descent carry
+`estimatedSeconds`, the DIN 33466 walking time from `estimateHikingSeconds` in
 `src/domain/tracks/trackCalculations.ts`. Database version 11 fills the estimate into
 summaries saved earlier; like other calculated values it is browser-local and never
 synchronized.

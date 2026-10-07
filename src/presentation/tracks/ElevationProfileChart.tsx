@@ -347,21 +347,22 @@ export function ElevationPreparationChart({
 }): ReactElement {
   const { i18n, t } = useLingui();
   const theme = useTheme();
-  const completedTiles = progress?.completedTiles ?? 0;
-  const totalTiles = progress?.totalTiles ?? 0;
-  const hasTileTotal = totalTiles > 0;
-  const countFormatter = new Intl.NumberFormat(i18n.locale);
-  const completedTileCount = countFormatter.format(completedTiles);
-  const totalTileCount = countFormatter.format(totalTiles);
-  const label = hasTileTotal
-    ? t`Loading elevation tiles: ${completedTileCount} of ${totalTileCount}`
-    : t`Preparing terrain and elevation…`;
-  const accessibilityLabel = hasTileTotal
-    ? t`${plural(totalTiles, {
-        one: `Elevation profile loading: ${completedTileCount} of # tile`,
-        other: `Elevation profile loading: ${completedTileCount} of # tiles`,
-      })}`
-    : t`Elevation profile loading`;
+  const totalSamples = progress?.totalSamples ?? 0;
+  const completedFraction =
+    totalSamples > 0 ? (progress?.completedSamples ?? 0) / totalSamples : null;
+  const percent =
+    completedFraction === null
+      ? null
+      : new Intl.NumberFormat(i18n.locale, {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
+          style: 'percent',
+        }).format(Math.floor(completedFraction * 100) / 100);
+  const label =
+    percent === null ? t`Preparing elevation…` : t`Loading elevation: ${percent}`;
+  const accessibilityLabel =
+    percent === null
+      ? t`Elevation profile loading`
+      : t`Elevation profile loading: ${percent}`;
 
   return (
     <Stack spacing={1.5}>
@@ -371,8 +372,8 @@ export function ElevationPreparationChart({
       {showProgressStatus ? (
         <Stack spacing={0.75}>
           <LinearProgress
-            variant={hasTileTotal ? 'determinate' : 'indeterminate'}
-            value={hasTileTotal ? (completedTiles / totalTiles) * 100 : undefined}
+            variant={completedFraction === null ? 'indeterminate' : 'determinate'}
+            value={completedFraction === null ? undefined : completedFraction * 100}
           />
           <Typography variant="body2" color="text.secondary">
             {label}

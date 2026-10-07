@@ -249,19 +249,6 @@ const mapProviderConfigurationInputSchema = z
         maxZoom: z.number().int().min(0).max(22),
         attribution: safeAttributionSchema,
         exaggeration: z.number().min(1).max(2),
-        filter: z
-          .object({
-            minimumElevationMeters: z.number().min(-12_000).max(0),
-            maximumElevationMeters: z.number().min(1_000).max(12_000),
-            sentinelElevationsMeters: z.array(z.number()).max(8),
-            spikeThresholdMeters: z.number().positive().max(5_000),
-            negativeSpikeThresholdMeters: z.number().positive().max(5_000).default(300),
-            maximumNeighborMadMeters: z.number().positive().max(1_000),
-            minimumConsensusNeighbors: z.number().int().min(3).max(8),
-            maximumSpikeSupportNeighbors: z.number().int().min(0).max(3),
-            cacheSize: z.number().int().min(8).max(128),
-          })
-          .strict(),
         overlays: z
           .object({
             contourMinZoom: z.number().int().min(0).max(22),
@@ -291,26 +278,6 @@ const mapProviderConfigurationInputSchema = z
             code: 'custom',
             message: 'Contour maxZoom must not exceed the terrain provider maxZoom.',
             path: ['overlays', 'contourMaxZoom'],
-          });
-        }
-        if (
-          terrain.filter.minimumElevationMeters >= terrain.filter.maximumElevationMeters
-        ) {
-          context.addIssue({
-            code: 'custom',
-            message: 'Terrain filter minimum elevation must be below its maximum.',
-            path: ['filter', 'maximumElevationMeters'],
-          });
-        }
-        if (
-          terrain.filter.minimumConsensusNeighbors +
-            terrain.filter.maximumSpikeSupportNeighbors >
-          8
-        ) {
-          context.addIssue({
-            code: 'custom',
-            message: 'Terrain filter neighbor thresholds must fit an 8-pixel window.',
-            path: ['filter', 'minimumConsensusNeighbors'],
           });
         }
       }),
@@ -447,20 +414,6 @@ interface MapProviderConfigurationInput {
     readonly maxZoom: number;
     readonly attribution: string;
     readonly exaggeration: number;
-    /** Conservative Terrarium repair policy, expressed in decoded elevation metres. */
-    readonly filter: {
-      readonly minimumElevationMeters: number;
-      readonly maximumElevationMeters: number;
-      readonly sentinelElevationsMeters: readonly number[];
-      /** Minimum upward residual from the local median that may be rejected. */
-      readonly spikeThresholdMeters: number;
-      /** Minimum downward residual from the local median that may be rejected. */
-      readonly negativeSpikeThresholdMeters: number;
-      readonly maximumNeighborMadMeters: number;
-      readonly minimumConsensusNeighbors: number;
-      readonly maximumSpikeSupportNeighbors: number;
-      readonly cacheSize: number;
-    };
     readonly overlays: {
       readonly contourMinZoom: number;
       readonly contourMaxZoom: number;
@@ -573,30 +526,19 @@ export const defaultMapProviderConfigurationInput = {
     },
   },
   terrain: {
-    id: 'aws-mapzen-terrarium',
-    label: 'AWS Open Data Terrain Tiles',
-    tileUrl: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+    id: 'mapterhorn',
+    label: 'Mapterhorn',
+    tileUrl: 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp',
     encoding: 'terrarium',
-    tileSize: 256,
+    tileSize: 512,
     minZoom: 0,
-    maxZoom: 15,
+    maxZoom: 12,
     attribution:
-      'Terrain data: <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank">Mapzen/AWS Open Data providers</a>',
+      '<a href="https://mapterhorn.com/attribution" target="_blank">© Mapterhorn</a>, <a href="https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM" target="_blank">Copernicus GLO-30 DEM</a>: DLR e.V. 2010-2014, Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA',
     exaggeration: 1.15,
-    filter: {
-      minimumElevationMeters: -500,
-      maximumElevationMeters: 9_000,
-      sentinelElevationsMeters: [-32_768],
-      spikeThresholdMeters: 500,
-      negativeSpikeThresholdMeters: 300,
-      maximumNeighborMadMeters: 80,
-      minimumConsensusNeighbors: 5,
-      maximumSpikeSupportNeighbors: 1,
-      cacheSize: 48,
-    },
     overlays: {
       contourMinZoom: 11,
-      contourMaxZoom: 15,
+      contourMaxZoom: 12,
       contourCacheSize: 32,
     },
   },

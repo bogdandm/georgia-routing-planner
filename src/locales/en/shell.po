@@ -15,7 +15,7 @@ msgstr ""
 
 #. js-lingui-id: fPa3dU
 #. placeholder {0}: integerFormatter.format(elapsedSeconds)
-#: src/presentation/shell/OperationalStatus.tsx:302
+#: src/presentation/shell/OperationalStatus.tsx:309
 msgid "{0} s"
 msgstr "{0} s"
 
@@ -59,10 +59,10 @@ msgstr "{renderedSceneCount, number} of {totalSceneCount, number} Mosaic images 
 msgid "{sidebarTitle} tools"
 msgstr "{sidebarTitle} tools"
 
-#. js-lingui-id: sjM4AG
+#. js-lingui-id: KpoP4l
 #: src/presentation/shell/AboutDialog.tsx:231
-msgid "{terrainCredits}. Includes Copernicus, USGS, NOAA, and regional elevation data."
-msgstr "{terrainCredits}. Includes Copernicus, USGS, NOAA, and regional elevation data."
+msgid "{terrainCredits}. Georgia is covered by the Copernicus GLO-30 elevation model; Mapterhorn's attribution page lists every source."
+msgstr "{terrainCredits}. Georgia is covered by the Copernicus GLO-30 elevation model; Mapterhorn's attribution page lists every source."
 
 #. js-lingui-id: oHZYtP
 #: src/presentation/shell/AboutDialog.tsx:279
@@ -227,7 +227,7 @@ msgid "Clear map search"
 msgstr "Clear map search"
 
 #. js-lingui-id: G1X31l
-#: src/presentation/shell/WorkspaceShell.tsx:652
+#: src/presentation/shell/WorkspaceShell.tsx:672
 msgid "Click the map to choose the route start and destination."
 msgstr "Click the map to choose the route start and destination."
 
@@ -240,6 +240,31 @@ msgstr "Close"
 #: src/presentation/shell/AboutDialog.tsx:306
 msgid "Close site information"
 msgstr "Close site information"
+
+#. js-lingui-id: 3kh6EI
+#: src/presentation/shell/OperationalStatus.tsx:416
+msgid "Contour generation state"
+msgstr "Contour generation state"
+
+#. js-lingui-id: 5T7FZE
+#: src/presentation/shell/OperationalStatus.tsx:44
+msgid "Contours · {activeCount, plural, one {# task active} other {# tasks active}}"
+msgstr "Contours · {activeCount, plural, one {# task active} other {# tasks active}}"
+
+#. js-lingui-id: PyTTiZ
+#: src/presentation/shell/OperationalStatus.tsx:40
+msgid "Contours · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} other { · # active}}"
+msgstr "Contours · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} other { · # active}}"
+
+#. js-lingui-id: 6MnI2U
+#: src/presentation/shell/OperationalStatus.tsx:290
+msgid "Contours · compatibility mode"
+msgstr "Contours · compatibility mode"
+
+#. js-lingui-id: DPxFvu
+#: src/presentation/shell/OperationalStatus.tsx:292
+msgid "Contours · worker restarting"
+msgstr "Contours · worker restarting"
 
 #. js-lingui-id: wPRVJD
 #: src/presentation/shell/MapSearchPlaceholder.tsx:219
@@ -262,7 +287,7 @@ msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
 msgstr "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
 
 #. js-lingui-id: 2SuOUC
-#: src/presentation/shell/OperationalStatus.tsx:425
+#: src/presentation/shell/OperationalStatus.tsx:432
 msgid "Current map error"
 msgstr "Current map error"
 
@@ -339,17 +364,17 @@ msgid "Exit multi-track selection"
 msgstr "Exit multi-track selection"
 
 #. js-lingui-id: O6Fpju
-#: src/presentation/shell/WorkspaceShell.tsx:584
+#: src/presentation/shell/WorkspaceShell.tsx:599
 msgid "Expand multiple track details"
 msgstr "Expand multiple track details"
 
 #. js-lingui-id: NiF6zY
-#: src/presentation/shell/WorkspaceShell.tsx:587
+#: src/presentation/shell/WorkspaceShell.tsx:602
 msgid "Expand track details"
 msgstr "Expand track details"
 
 #. js-lingui-id: SNJ-Dv
-#: src/presentation/shell/WorkspaceShell.tsx:586
+#: src/presentation/shell/WorkspaceShell.tsx:601
 msgid "Expand unsaved track details"
 msgstr "Expand unsaved track details"
 
@@ -399,8 +424,8 @@ msgid "Heap limit"
 msgstr "Heap limit"
 
 #. js-lingui-id: T7ZWsE
-#: src/presentation/shell/WorkspaceShell.tsx:895
-#: src/presentation/shell/WorkspaceShell.tsx:897
+#: src/presentation/shell/WorkspaceShell.tsx:915
+#: src/presentation/shell/WorkspaceShell.tsx:917
 msgid "Hide navigation"
 msgstr "Hide navigation"
 
@@ -478,6 +503,11 @@ msgstr "Layers"
 msgid "Loading ECMWF weather map…"
 msgstr "Loading ECMWF weather map…"
 
+#. js-lingui-id: 995Lb9
+#: src/presentation/shell/WorkspaceShell.tsx:221
+msgid "Loading elevation: {preparationPercent}"
+msgstr "Loading elevation: {preparationPercent}"
+
 #. js-lingui-id: jYxHIA
 #: src/presentation/shell/WorkspaceSidebar.tsx:250
 #: src/presentation/shell/WorkspaceSidebar.tsx:502
@@ -488,6 +518,11 @@ msgstr "Loading marker weather settings"
 #: src/presentation/shell/OperationalStatus.tsx:111
 msgid "Loading Sentinel imagery for {loadingMonthLabel}"
 msgstr "Loading Sentinel imagery for {loadingMonthLabel}"
+
+#. js-lingui-id: zs-Myh
+#: src/presentation/shell/OperationalStatus.tsx:260
+msgid "Loading terrain…"
+msgstr "Loading terrain…"
 
 #. js-lingui-id: V4WUj8
 #: src/presentation/shell/WorkspaceSidebar.tsx:352
@@ -668,7 +703,7 @@ msgid "Open windy.com"
 msgstr "Open windy.com"
 
 #. js-lingui-id: Gc_l1s
-#: src/presentation/shell/WorkspaceShell.tsx:503
+#: src/presentation/shell/WorkspaceShell.tsx:518
 msgid "Open workspace"
 msgstr "Open workspace"
 
@@ -778,10 +813,10 @@ msgstr "Point weather forecast."
 msgid "Pond"
 msgstr "Pond"
 
-#. js-lingui-id: fwASbQ
-#: src/presentation/shell/WorkspaceShell.tsx:612
-msgid "Preparing terrain and elevation…"
-msgstr "Preparing terrain and elevation…"
+#. js-lingui-id: DsZhgY
+#: src/presentation/shell/WorkspaceShell.tsx:220
+msgid "Preparing elevation…"
+msgstr "Preparing elevation…"
 
 #. js-lingui-id: 4OgQ0q
 #: src/presentation/shell/OperationalStatus.tsx:176
@@ -896,7 +931,7 @@ msgid "Satellite search is unavailable because its provider configuration is inv
 msgstr "Satellite search is unavailable because its provider configuration is invalid."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/shell/WorkspaceShell.tsx:567
+#: src/presentation/shell/WorkspaceShell.tsx:582
 msgid "Save"
 msgstr "Save"
 
@@ -1019,7 +1054,7 @@ msgid "Share this map view"
 msgstr "Share this map view"
 
 #. js-lingui-id: aa47vg
-#: src/presentation/shell/OperationalStatus.tsx:346
+#: src/presentation/shell/OperationalStatus.tsx:353
 msgid "Show current error details"
 msgstr "Show current error details"
 
@@ -1111,31 +1146,6 @@ msgstr "Stream"
 msgid "Switch to Sentinel Mosaic"
 msgstr "Switch to Sentinel Mosaic"
 
-#. js-lingui-id: NCW88u
-#: src/presentation/shell/OperationalStatus.tsx:283
-msgid "Terrain compute · compatibility mode"
-msgstr "Terrain compute · compatibility mode"
-
-#. js-lingui-id: lIoxO5
-#: src/presentation/shell/OperationalStatus.tsx:409
-msgid "Terrain compute queue state"
-msgstr "Terrain compute queue state"
-
-#. js-lingui-id: 3yWNOI
-#: src/presentation/shell/OperationalStatus.tsx:44
-msgid "Terrain worker · {activeCount, plural, one {# task active} other {# tasks active}}"
-msgstr "Terrain worker · {activeCount, plural, one {# task active} other {# tasks active}}"
-
-#. js-lingui-id: Nb6UdF
-#: src/presentation/shell/OperationalStatus.tsx:40
-msgid "Terrain worker · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} one { · # task active} other { · # tasks active}}"
-msgstr "Terrain worker · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} one { · # task active} other { · # tasks active}}"
-
-#. js-lingui-id: 9tybQ4
-#: src/presentation/shell/OperationalStatus.tsx:285
-msgid "Terrain worker · restarting"
-msgstr "Terrain worker · restarting"
-
 #. js-lingui-id: 6GkJH5
 #: src/presentation/shell/ShareMapDialog.tsx:99
 msgid "The 2D link always shares center and zoom. A selected satellite image can be included without storing the scene locally."
@@ -1202,7 +1212,7 @@ msgid "Track details"
 msgstr "Track details"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/shell/WorkspaceShell.tsx:549
+#: src/presentation/shell/WorkspaceShell.tsx:564
 msgid "Track name"
 msgstr "Track name"
 

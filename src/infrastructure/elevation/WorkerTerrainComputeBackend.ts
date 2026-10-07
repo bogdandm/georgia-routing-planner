@@ -1,7 +1,4 @@
-import type {
-  DiagnosticInput,
-  DiagnosticLogger,
-} from '@/application/ports/DiagnosticLogger';
+import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type {
   TerrainComputeBackend,
@@ -10,7 +7,6 @@ import type {
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
-  TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 import {
@@ -20,12 +16,9 @@ import {
 import { InlineTerrainComputeBackend } from '@/infrastructure/elevation/InlineTerrainComputeBackend';
 import {
   isTerrainWorkerContourResult,
-  isTerrainWorkerDemResult,
   terrainWorkerEventNames,
   type TerrainWorkerContourRequest,
   type TerrainWorkerInitializeRequest,
-  type TerrainWorkerSetFilterRequest,
-  type TerrainWorkerTileRequest,
 } from '@/infrastructure/elevation/TerrainComputeProtocol';
 import {
   type WorkerRpcEndpoint,
@@ -43,26 +36,12 @@ function defaultWorkerFactory(): WorkerRpcEndpoint {
   });
 }
 
-function isDiagnosticInput(value: unknown): value is DiagnosticInput {
-  if (typeof value !== 'object' || value === null) return false;
-  if (!('level' in value) || !('name' in value)) return false;
-  return (
-    (value.level === 'debug' ||
-      value.level === 'info' ||
-      value.level === 'warn' ||
-      value.level === 'error') &&
-    typeof value.name === 'string'
-  );
-}
-
 function isMetrics(value: unknown): value is TerrainComputeMetrics {
   return (
     typeof value === 'object' &&
     value !== null &&
     'executionMode' in value &&
     value.executionMode === 'worker' &&
-    'operation' in value &&
-    (value.operation === 'dem' || value.operation === 'contour') &&
     'queueDurationMs' in value &&
     typeof value.queueDurationMs === 'number' &&
     'computeDurationMs' in value &&
@@ -98,8 +77,8 @@ function isQueueState(value: unknown): value is TerrainComputeQueueState {
   );
 }
 
-function staleRequestError(): DOMException {
-  return new DOMException('Terrain request revision is obsolete.', 'AbortError');
+function canceledRequestError(): DOMException {
+  return new DOMException('Terrain contour request canceled.', 'AbortError');
 }
 
 function disposedBackendError(): DOMException {
@@ -107,7 +86,7 @@ function disposedBackendError(): DOMException {
 }
 
 /**
- * Runs terrain work in one recoverable module worker and permanently selects the shared
+ * Runs contour work in one recoverable module worker and permanently selects the shared
  * inline engine for the page session only after the single restart also fails.
  */
 export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
@@ -129,8 +108,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   #restartAttempted = false;
   #recovery: Promise<void> | null = null;
   #control: Promise<void> = Promise.resolve();
-  #filterEnabled = true;
-  #revision = 0;
   #interactionActive = false;
   #disposed = false;
 
@@ -143,8 +120,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   ) {
     this.#configuration = toTerrainComputeConfiguration(terrain, requestTimeoutMs);
     this.#inlineFactory =
-      inlineFactory ??
-      (() => new InlineTerrainComputeBackend(this.#configuration, logger));
+      inlineFactory ?? (() => new InlineTerrainComputeBackend(this.#configuration));
     try {
       this.#rpc = this.createChannel();
       this.loaded = this.initializeInitialChannel();
@@ -154,62 +130,15 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     }
   }
 
-  public async fetchTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDemResponse> {
-    const revision = this.#revision;
-    const request: TerrainWorkerTileRequest = {
-      zoom,
-      x,
-      y,
-      revision,
-    };
-    const response = await this.executeWithRecovery<TerrainDemResponse>(
-      async (rpc) => {
-        const result = await rpc.request<unknown>(
-          'dem',
-          request,
-          abortController.signal,
-        );
-        if (!isTerrainWorkerDemResult(result)) {
-          throw new WorkerRpcTransportError(
-            'The terrain worker returned an invalid DEM result.',
-          );
-        }
-        return {
-          data: new Blob([result.data], { type: 'image/png' }),
-          ...(result.cacheControl === undefined
-            ? {}
-            : { cacheControl: result.cacheControl }),
-          ...(result.expires === undefined ? {} : { expires: result.expires }),
-        };
-      },
-      (inline) => inline.fetchTile(zoom, x, y, abortController),
-      abortController.signal,
-    );
-    if (revision !== this.#revision) throw staleRequestError();
-    return response;
-  }
-
-  public async fetchContourTile(
+  public fetchContourTile(
     zoom: number,
     x: number,
     y: number,
     options: TerrainContourOptions,
     abortController: AbortController,
   ): Promise<TerrainContourTile> {
-    const revision = this.#revision;
-    const request: TerrainWorkerContourRequest = {
-      zoom,
-      x,
-      y,
-      options,
-      revision,
-    };
-    const response = await this.executeWithRecovery<TerrainContourTile>(
+    const request: TerrainWorkerContourRequest = { zoom, x, y, options };
+    return this.executeWithRecovery<TerrainContourTile>(
       async (rpc) => {
         const result = await rpc.request<unknown>(
           'contour',
@@ -225,24 +154,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
       },
       (inline) => inline.fetchContourTile(zoom, x, y, options, abortController),
       abortController.signal,
-    );
-    if (revision !== this.#revision) throw staleRequestError();
-    return response;
-  }
-
-  public setFilterEnabled(enabled: boolean): void {
-    if (this.#filterEnabled === enabled || this.#disposed) return;
-    this.#filterEnabled = enabled;
-    this.#revision += 1;
-    const request: TerrainWorkerSetFilterRequest = {
-      enabled,
-      revision: this.#revision,
-    };
-    this.queueControl(
-      (rpc) => rpc.request('set-filter', request),
-      (inline) => {
-        inline.setFilterEnabled(enabled);
-      },
     );
   }
 
@@ -312,10 +223,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
 
   private createChannel(): WorkerRpcClient {
     const rpc = new WorkerRpcClient(this.workerFactory());
-    rpc.subscribeEvent(terrainWorkerEventNames.diagnostic, (payload) => {
-      if (!isDiagnosticInput(payload)) return;
-      this.logger.log(payload);
-    });
     rpc.subscribeEvent(terrainWorkerEventNames.metrics, (payload) => {
       if (!isMetrics(payload)) return;
       for (const listener of this.#metricsListeners) listener(payload);
@@ -333,8 +240,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
   private initializeChannel(rpc: WorkerRpcClient): Promise<unknown> {
     const request: TerrainWorkerInitializeRequest = {
       configuration: this.#configuration,
-      filterEnabled: this.#filterEnabled,
-      revision: this.#revision,
       interactionActive: this.#interactionActive,
     };
     return rpc.request('initialize', request);
@@ -351,7 +256,7 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     this.throwIfDisposed();
     for (;;) {
       this.throwIfDisposed();
-      if (signal.aborted) throw staleRequestError();
+      if (signal.aborted) throw canceledRequestError();
       const inline = this.#inline;
       if (inline !== null) return inlineOperation(inline);
       try {
@@ -433,7 +338,6 @@ export class WorkerTerrainComputeBackend implements TerrainComputeBackend {
     this.#rpc?.dispose();
     this.#rpc = null;
     const inline = this.#inlineFactory();
-    if (!this.#filterEnabled) inline.setFilterEnabled(false);
     inline.setInteractionActive(this.#interactionActive);
     this.#inline = inline;
     this.setQueueState(inline.getQueueState());

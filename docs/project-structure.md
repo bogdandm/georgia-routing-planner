@@ -61,8 +61,8 @@ src/
 supabase/                  migrations, Edge Functions, and database/function tests
 e2e/                       built-app Chromium workflows and provider fixtures
 tests/                     unit, component, and integration tests mirroring `src/`
-tools/                     Node-only audit, benchmark, diagnostics, E2E, localization,
-                           and Supabase test runners
+tools/                     Node-only audit, diagnostics, E2E, localization, and Supabase
+                           test runners
 ```
 
 Vite runs Lingui macros and then the React Compiler over presentation code, so
@@ -75,13 +75,13 @@ stores).
 place that constructs runtime adapters. It validates the map, geocoding, and Supabase
 configuration, then creates the clock, ID generator, bounded logger, `AppDatabase`,
 shared HTTP client, snapshot stores, layer controller with its contour and COG
-protocols, trail router, filtered Terrarium and DEM elevation provider, weather use
-case, place search, satellite search use cases, and health/diagnostics services. When
-Supabase is configured it creates the official client with a persistent session plus
-`SupabaseUserDataService` and `SupabaseTrackShareService`; otherwise it supplies an
-unconfigured local-only user service and no share service. Invalid map configuration
-leaves every map-dependent service `null`. `dispose()` releases the router, layer
-controller, user service, and database.
+protocols, trail router, DEM elevation provider, weather use case, place search,
+satellite search use cases, and health/diagnostics services. When Supabase is configured
+it creates the official client with a persistent session plus `SupabaseUserDataService`
+and `SupabaseTrackShareService`; otherwise it supplies an unconfigured local-only user
+service and no share service. Invalid map configuration leaves every map-dependent
+service `null`. `dispose()` releases the router, layer controller, user service, and
+database.
 
 [`main.tsx`](../src/main.tsx) runs inside `runApplicationBootstrap`, which mounts a
 pre-React fallback if service construction fails. It restores UI preferences, resolves
@@ -119,7 +119,7 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 | Map navigation, placement, Satellite anchor, Weather point  | `mapInteractionStore`                                           |
 | Settled viewport for search controls                        | `MapViewportSnapshotStore`                                      |
 | Direct visual-COG scene registry and raster worker          | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
-| DEM fetch, repair, parse, contour caches, worker fallback   | `TerrainComputeEngine` / `TerrainComputeBackend`                |
+| Contour DEM fetch, parse, contour caches, worker fallback   | `TerrainComputeEngine` / `TerrainComputeBackend`                |
 | Tracks, folders, markers, camera, layer and UI preferences  | `AppDatabase` behind the application ports                      |
 | Loaded folders, previews, route plan, selection, multi-view | `TracksWorkspaceProvider` React state                           |
 | Marker collection, editor draft, per-marker forecasts       | `MarkersWorkspaceProvider` React state                          |
@@ -152,7 +152,7 @@ Four Vite module workers share the request-correlated `WorkerRpc` transport
 - `infrastructure/routing` — `BrowserTrailRouter` implements `TrailRouter`; the worker
   builds a request-local graph from the detail-vector `streets` layer and runs A*.
 - `infrastructure/elevation` — `WorkerTerrainComputeBackend` runs `TerrainComputeEngine`
-  (Terrarium repair, parsed DEM, `maplibre-contour`); `InlineTerrainComputeBackend` runs
+  (contour DEM fetch and parse, `maplibre-contour`); `InlineTerrainComputeBackend` runs
   the same engine on the window thread after repeated worker failure.
   `TerrainComputeConfiguration` is the strict, versioned worker DTO.
 - `infrastructure/satellite` — direct visual-COG range reads with `geotiff` and UTM to
@@ -177,13 +177,13 @@ semantic map colors and vector/satellite contrast paints.
 
 `MapLibreLayerController` attaches to the same native map through the facade. It owns
 the basemap preset (`vector-osm`, Google, Bing, Esri, NAPR, or Sentinel-2), Sentinel
-scene and Mosaic rasters, DEM relief and generated contours, the Open-Meteo weather
-layers and `om://` protocol, track, route-plan, and marker overlays, and allowlisted
-logical visibility commands. It validates and persists layer preferences and projects
-its state into `mapLayerStore`. `ContourTileGenerator` registers the contour protocol
-and adapts the terrain backend to `maplibre-contour`; `SatelliteCogTileProvider`
-registers the `georgia-satellite-cog` protocol. Runtime behavior is described in
-[runtime-flows.md](runtime-flows.md).
+scene and Mosaic rasters, DEM relief, its loading state, and generated contours, the
+Open-Meteo weather layers and `om://` protocol, track, route-plan, and marker overlays,
+and allowlisted logical visibility commands. It validates and persists layer preferences
+and projects its state into `mapLayerStore`. `ContourTileGenerator` registers the
+contour protocol and adapts the terrain backend to `maplibre-contour`;
+`SatelliteCogTileProvider` registers the `georgia-satellite-cog` protocol. Runtime
+behavior is described in [runtime-flows.md](runtime-flows.md).
 
 `BrowserStorageUsageReader` implements `StorageUsageReader` for Settings; missing
 browser capabilities produce unavailable values rather than failing the dialog.

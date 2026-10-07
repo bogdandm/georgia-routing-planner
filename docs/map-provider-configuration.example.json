@@ -33,29 +33,18 @@
     }
   },
   "terrain": {
-    "id": "aws-mapzen-terrarium",
-    "label": "AWS Open Data Terrain Tiles",
-    "tileUrl": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+    "id": "mapterhorn",
+    "label": "Mapterhorn",
+    "tileUrl": "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
     "encoding": "terrarium",
-    "tileSize": 256,
+    "tileSize": 512,
     "minZoom": 0,
-    "maxZoom": 15,
-    "attribution": "Terrain data: <a href=\"https://github.com/tilezen/joerd/blob/master/docs/attribution.md\" target=\"_blank\">Mapzen/AWS Open Data providers</a>",
+    "maxZoom": 12,
+    "attribution": "<a href=\"https://mapterhorn.com/attribution\" target=\"_blank\">© Mapterhorn</a>, <a href=\"https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM\" target=\"_blank\">Copernicus GLO-30 DEM</a>: DLR e.V. 2010-2014, Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA",
     "exaggeration": 1.15,
-    "filter": {
-      "minimumElevationMeters": -500,
-      "maximumElevationMeters": 9000,
-      "sentinelElevationsMeters": [-32768],
-      "spikeThresholdMeters": 500,
-      "negativeSpikeThresholdMeters": 300,
-      "maximumNeighborMadMeters": 80,
-      "minimumConsensusNeighbors": 5,
-      "maximumSpikeSupportNeighbors": 1,
-      "cacheSize": 48
-    },
     "overlays": {
       "contourMinZoom": 11,
-      "contourMaxZoom": 15,
+      "contourMaxZoom": 12,
       "contourCacheSize": 32
     }
   },

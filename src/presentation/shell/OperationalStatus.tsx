@@ -37,13 +37,13 @@ const weatherMapRenderProgressMessage = msg({
   message:
     '{loadedSourceCount, number} of {totalSourceCount, number} weather map sources rendered',
 });
-const queuedTerrainWorkMessage = msg({
+const queuedContourWorkMessage = msg({
   message:
-    'Terrain worker · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} one { · # task active} other { · # tasks active}}',
+    'Contours · {queuedCount, number}/{capacity, number} queued{activeCount, plural, =0 {} other { · # active}}',
 });
-const activeTerrainWorkMessage = msg({
+const activeContourWorkMessage = msg({
   message:
-    'Terrain worker · {activeCount, plural, one {# task active} other {# tasks active}}',
+    'Contours · {activeCount, plural, one {# task active} other {# tasks active}}',
 });
 
 interface DisplayStatus {
@@ -67,6 +67,7 @@ export function OperationalStatus() {
   );
   const layerProblem = useStore(mapLayerStore, (state) => state.layerProblem);
   const terrainQueue = useStore(mapLayerStore, (state) => state.terrainComputeQueue);
+  const terrainDemLoading = useStore(mapLayerStore, (state) => state.terrainDemLoading);
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const requestStatus = useStore(satelliteRequestStatusStore);
   const subscribeToMap = useCallback(
@@ -254,6 +255,13 @@ export function OperationalStatus() {
       startedAt: null,
       announcement: 'polite',
     };
+  } else if (terrainDemLoading) {
+    display = {
+      kind: 'pending',
+      message: t`Loading terrain…`,
+      startedAt: null,
+      announcement: 'polite',
+    };
   } else {
     display = {
       kind: 'ready',
@@ -278,14 +286,14 @@ export function OperationalStatus() {
       ? null
       : Math.max(0, Math.floor((now - display.startedAt) / 1_000));
 
-  const terrainActivityLabel =
+  const contourActivityLabel =
     terrainQueue.executionMode === 'inline'
-      ? t`Terrain compute · compatibility mode`
+      ? t`Contours · compatibility mode`
       : terrainQueue.executionMode === 'restarting'
-        ? t`Terrain worker · restarting`
+        ? t`Contours · worker restarting`
         : terrainQueue.queuedContourCount > 0
           ? i18n._({
-              ...queuedTerrainWorkMessage,
+              ...queuedContourWorkMessage,
               values: {
                 queuedCount: terrainQueue.queuedContourCount,
                 capacity: terrainQueue.queueCapacity,
@@ -294,7 +302,7 @@ export function OperationalStatus() {
             })
           : terrainQueue.activeCount > 0
             ? i18n._({
-                ...activeTerrainWorkMessage,
+                ...activeContourWorkMessage,
                 values: { activeCount: terrainQueue.activeCount },
               })
             : null;
@@ -402,14 +410,14 @@ export function OperationalStatus() {
           sx={{ mt: 0.25, height: 2, borderRadius: 1 }}
         />
       ) : null}
-      {display.kind === 'ready' && terrainActivityLabel !== null ? (
+      {display.kind === 'ready' && contourActivityLabel !== null ? (
         <Typography
           variant="caption"
           color="text.secondary"
-          aria-label={t`Terrain compute queue state`}
+          aria-label={t`Contour generation state`}
           sx={{ display: 'block', pl: 2.875, lineHeight: 1.25 }}
         >
-          {terrainActivityLabel}
+          {contourActivityLabel}
         </Typography>
       ) : null}
       <Popover

@@ -429,7 +429,6 @@ describe('AppDatabase', () => {
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
         contourIntervalMeters: 25,
-        filterInvalidDemPixels: false,
         shadeAboveSatellite: true,
       },
     } as const;
@@ -437,6 +436,29 @@ describe('AppDatabase', () => {
     await database.saveMapLayerPreferences(preferences);
 
     await expect(database.loadMapLayerPreferences()).resolves.toEqual(preferences);
+  });
+
+  it('loads stored layer preferences that still carry the removed DEM repair flag', async () => {
+    const preferences = await database.loadMapLayerPreferences();
+    await database.settings.put({
+      key: 'map.layers',
+      value: {
+        ...preferences,
+        terrainOverlays: {
+          contourIntervalMeters: 25,
+          filterInvalidDemPixels: false,
+          shadeAboveSatellite: true,
+        },
+      },
+      updatedAt: '2026-09-01T00:00:00.000Z',
+    });
+
+    const loaded = await database.loadMapLayerPreferences();
+
+    expect(loaded.terrainOverlays).toEqual({
+      contourIntervalMeters: 25,
+      shadeAboveSatellite: true,
+    });
   });
 
   it('adds safe imagery stretch defaults to older layer preference records', async () => {
@@ -473,7 +495,6 @@ describe('AppDatabase', () => {
       renderingTuning: { reflectanceMax: 11_000, gamma: 2.25, saturation: 2.5 },
       terrainOverlays: {
         contourIntervalMeters: 50,
-        filterInvalidDemPixels: true,
         shadeAboveSatellite: false,
       },
     });
@@ -534,7 +555,6 @@ describe('AppDatabase', () => {
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       terrainOverlays: {
         contourIntervalMeters: 50,
-        filterInvalidDemPixels: true,
         shadeAboveSatellite: false,
       },
     });

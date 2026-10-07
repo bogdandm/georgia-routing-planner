@@ -221,19 +221,21 @@ export function RoutePlanStatus({
       </Stack>
     );
   } else if (draft.status === 'elevation-enriching') {
+    const completedFraction =
+      elevationProgress !== null && elevationProgress.totalSamples > 0
+        ? elevationProgress.completedSamples / elevationProgress.totalSamples
+        : null;
     let label: string;
-    if (elevationProgress !== null && elevationProgress.totalTiles > 0) {
-      const countFormatter = new Intl.NumberFormat(i18n.locale);
-      const completedTiles = countFormatter.format(elevationProgress.completedTiles);
-      const totalTiles = countFormatter.format(elevationProgress.totalTiles);
-      label = t`Loading elevation tiles: ${completedTiles} of ${totalTiles}`;
+    if (completedFraction === null) {
+      label = t`Preparing elevation…`;
     } else {
-      label = t`Preparing terrain and elevation…`;
+      const percent = new Intl.NumberFormat(i18n.locale, {
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
+        style: 'percent',
+      }).format(Math.floor(completedFraction * 100) / 100);
+      label = t`Loading elevation: ${percent}`;
     }
-    const value =
-      elevationProgress !== null && elevationProgress.totalTiles > 0
-        ? (elevationProgress.completedTiles / elevationProgress.totalTiles) * 100
-        : undefined;
+    const value = completedFraction === null ? undefined : completedFraction * 100;
     content = (
       <Stack spacing={0.75}>
         <Typography variant="body2">{label}</Typography>

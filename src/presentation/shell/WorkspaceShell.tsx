@@ -204,6 +204,21 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     !multiTrackMode &&
     (activeTrack?.kind === 'preview' || activeTrack?.kind === 'shared') &&
     activeTrack.preparationStatus === 'preparing';
+  const preparationFraction =
+    elevationProgress !== null && elevationProgress.totalSamples > 0
+      ? elevationProgress.completedSamples / elevationProgress.totalSamples
+      : null;
+  const preparationPercent =
+    preparationFraction === null
+      ? null
+      : new Intl.NumberFormat(i18n.locale, {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
+          style: 'percent',
+        }).format(Math.floor(preparationFraction * 100) / 100);
+  const preparationLabel =
+    preparationPercent === null
+      ? t`Preparing elevation…`
+      : t`Loading elevation: ${preparationPercent}`;
   const activeTrackMetrics = multiTrackMode
     ? multiTrackStatsMetrics
     : activeStatsMetrics;
@@ -607,10 +622,17 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                 spacing={1}
                 sx={{ alignItems: 'center' }}
               >
-                <CircularProgress size={18} />
-                <Typography variant="body2">
-                  <Trans>Preparing terrain and elevation…</Trans>
-                </Typography>
+                <CircularProgress
+                  size={18}
+                  aria-label={preparationLabel}
+                  variant={
+                    preparationFraction === null ? 'indeterminate' : 'determinate'
+                  }
+                  value={
+                    preparationFraction === null ? undefined : preparationFraction * 100
+                  }
+                />
+                <Typography variant="body2">{preparationLabel}</Typography>
               </Stack>
             ) : activeTrack?.kind === 'route-plan' &&
               (activeTrack.status === 'calculating' ||

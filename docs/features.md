@@ -159,9 +159,8 @@ Latin name are romanized: Georgian as on road signs, without apostrophes and wit
 marks. Passes gain a `Pass` suffix and peaks an `Mt.` prefix when missing. A failed
 lookup is skipped, and a warning names the failed lookup and its reason, including
 HTTP 429. When source elevation is usable, Save keeps the source points as canonical and
-stores the calculated Terrarium projection separately; otherwise the Terrarium
-projection becomes the canonical elevation. The original file bytes are discarded after
-parsing.
+stores the calculated DEM projection separately; otherwise the DEM projection becomes
+the canonical elevation. The original file bytes are discarded after parsing.
 
 GPX import also reads bounded root `<wpt>` elements as track markers. Blank names become
 `Marker N`; invalid or excess waypoints are skipped with warnings and never count as
@@ -217,15 +216,14 @@ actions, provenance, and an elevation profile. In 3D the fit also turns the came
 45° pitch with the start at the bottom of the screen: a one-way track faces its finish,
 while a loop faces its point farthest from the start, so its finish stays at the bottom
 too. The stats grid shows duration, distance, average speed, and **Elevation
-gain**/**Elevation loss**; tracks with source elevation also list the calculated
-Terrarium gain and loss. Without recorded time, duration is an **Estimated time** (`≈`)
-from DIN 33466 hiking rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent,
-with the larger of the horizontal and vertical times counted fully and the smaller by
-half. Breaks are not included. Missing measurements are omitted. Source file,
-point/segment counts, and the saved timestamp follow. Closing the track removes its
-geometry without moving the camera. From 900 through 1899 CSS pixels, **Back to tracks**
-restores the prior list state; at 1900 and above the pane stays adjacent and uses
-**Close track**.
+gain**/**Elevation loss**; tracks with source elevation also list the calculated DEM
+gain and loss. Without recorded time, duration is an **Estimated time** (`≈`) from DIN
+33466 hiking rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent, with the
+larger of the horizontal and vertical times counted fully and the smaller by half.
+Breaks are not included. Missing measurements are omitted. Source file, point/segment
+counts, and the saved timestamp follow. Closing the track removes its geometry without
+moving the camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the
+prior list state; at 1900 and above the pane stays adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
 **Download KML**, sharing, **Rename** (an inline name editor), and **Delete track**.
@@ -239,8 +237,8 @@ map. Selecting a row fits the map to the segment; in 3D the camera also turns to
 from its start toward its finish at a 45° pitch, so the start sits at the bottom of the
 screen and the finish at the top. The interactive distance profile has axes, tooltip,
 and a map marker at the highlighted point. Source elevation drives the profile, grades,
-and climbs unless it has no complete run, in which case the Terrarium profile is used.
-On desktop and tablet, a lower-right grade legend explains the colors; its dismissal
+and climbs unless it has no complete run, in which case the DEM profile is used. On
+desktop and tablet, a lower-right grade legend explains the colors; its dismissal
 persists and the profile chart offers **Show track grade legend** to restore it.
 
 Editable single tracks show a collapsed **Markers** section with an add action, map
@@ -334,8 +332,7 @@ MapLibre layer IDs; native IDs never reach the UI.
   exclusive and may all be off. NAPR renders the newest available aerial pixels from
   2025, then 2020, then 2016–2017. Hiding Sentinel imagery keeps the scene, footprint,
   and results.
-- **Terrain:** relief shading, elevation isolines, contour spacing, and invalid-DEM
-  repair.
+- **Terrain:** relief shading, elevation isolines, and contour spacing.
 - **OpenStreetMap:** **OSM detail**, Hiking paths, Roads, Places and POIs, Natural
   features, Restricted areas, and one opacity that applies to OSM layers and isolines
   while a raster is active.
@@ -464,9 +461,11 @@ observations.
   Settlements, boundaries, mountains, and water features show by default; other results
   sit behind **Show other results**. Map movement does not dismiss or cancel a search.
   Up to two matching saved tracks are listed as well.
-- **Status line:** below search, reports readiness, pending work, terrain workload, and
-  safe failures; selecting an error opens its safe detail. It is the only surface for
-  map and imagery errors.
+- **Status line:** below search, reports readiness, pending work, and safe failures;
+  selecting an error opens its safe detail. It is the only surface for map and imagery
+  errors. While visible relief or 3D terrain waits for DEM tiles for more than a moment
+  it shows **Loading terrain…** with an indeterminate bar, then returns to Ready. Under
+  Ready, a **Contours · …** line reports contour generation workload.
 - **Point inspection:** a map click or place-search result opens an anchored popup with
   coordinates, terrain elevation, and the nearest map feature with its distance; named
   features link to English Wikipedia and Google Search. While the popup is visible, the
@@ -505,13 +504,14 @@ areas show a red perimeter; the map does not claim to identify all private land.
 configuration prevents the map from mounting with a safe fatal message; a single
 vector-source failure is recoverable.
 
-Relief shading and client-generated contours (labeled 200 m index lines, minor spacing
-20–100 m, default 50 m) use the shared DEM with conservative repair. Contour work runs
-in a terrain worker and falls back to inline work with a Layers warning if the worker
-cannot recover. The 2D/3D control reuses the same map and DEM source; failed 3D
-activation returns to 2D and reports in the status line. Reloads restore the last
-settled mode: 2D keeps center and zoom, 3D also keeps bearing and pitch and re-enters
-terrain once the map is ready. Details are in [runtime flows](./runtime-flows.md).
+Relief shading, 3D terrain, and client-generated contours (labeled 200 m index lines,
+minor spacing 20–100 m, default 50 m) use the Mapterhorn DEM as published, without
+client-side repair. Contour work runs in a terrain worker and falls back to inline work
+with a Layers warning if the worker cannot recover. The 2D/3D control reuses the same
+map and DEM source; failed 3D activation returns to 2D and reports in the status line.
+Reloads restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing
+and pitch and re-enters terrain once the map is ready. Details are in
+[runtime flows](./runtime-flows.md).
 
 Map errors are classified and shown in the status line; offline messaging promises only
 that already rendered areas may stay visible. Retry and recovery rules are in

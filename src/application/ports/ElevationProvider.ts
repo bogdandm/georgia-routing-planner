@@ -7,9 +7,13 @@ export type ElevationSample =
   | { readonly status: 'available'; readonly meters: number }
   | { readonly status: 'unavailable' };
 
+/**
+ * Reports newly resolved samples. A sample resolves once all source data it depends
+ * on has loaded; the first event reports zero completed samples.
+ */
 export interface ElevationSamplingProgress {
-  readonly completedTiles: number;
-  readonly totalTiles: number;
+  readonly completedSamples: number;
+  readonly totalSamples: number;
   readonly indices: readonly number[];
   readonly samples: readonly ElevationSample[];
 }

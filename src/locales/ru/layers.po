@@ -29,11 +29,6 @@ msgstr "{contourIntervalMeters, plural, one {# метр} few {# метра} many
 msgid "All weather fields use the same metadata-selected forecast frame."
 msgstr "Все погодные поля используют один кадр прогноза, выбранный по метаданным."
 
-#. js-lingui-id: zoAxO1
-#: src/presentation/layers/LayersPanel.tsx:713
-msgid "Applies the same conservative repair to relief, 3D terrain, and contours without smoothing valid terrain."
-msgstr "Одинаково осторожно исправляет отмывку, 3D-рельеф и изолинии, не сглаживая корректный рельеф."
-
 #. js-lingui-id: SrvjBt
 #: src/presentation/layers/LayersPanel.tsx:205
 msgid "Apply a Sentinel scene before changing it."
@@ -262,11 +257,6 @@ msgstr "Красные границы военных территорий по �
 #: src/presentation/layers/LayersPanel.tsx:135
 msgid "Relief shading"
 msgstr "Отмывка рельефа"
-
-#. js-lingui-id: YEQE5r
-#: src/presentation/layers/LayersPanel.tsx:706
-msgid "Repair invalid DEM elevation pixels"
-msgstr "Исправлять недопустимые пиксели высот DEM"
 
 #. js-lingui-id: qFDnlT
 #: src/presentation/layers/LayersPanel.tsx:97

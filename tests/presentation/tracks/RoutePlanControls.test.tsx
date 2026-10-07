@@ -72,11 +72,11 @@ describe('RoutePlanControls', () => {
     renderWithI18n(
       <RoutePlanControls
         draft={beginRoutePlanElevation(lineDraft('route-plan:elevation'))}
-        elevationProgress={{ completedTiles: 1, totalTiles: 2, points: [] }}
+        elevationProgress={{ completedSamples: 1, totalSamples: 2, points: [] }}
         {...callbacks()}
       />,
     );
-    expect(screen.getByText('Loading elevation tiles: 1 of 2')).toBeVisible();
+    expect(screen.getByText('Loading elevation: 50%')).toBeVisible();
   });
 
   it('shows determinate progress while building the route graph', () => {

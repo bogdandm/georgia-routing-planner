@@ -979,7 +979,7 @@ describe('WorkspaceShell', () => {
       name: 'Expand unsaved track details',
     });
     const status = within(disclosure).getByRole('status');
-    expect(within(status).getByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(within(status).getByText('Preparing elevation…')).toBeVisible();
     expect(within(status).getByRole('progressbar')).toBeVisible();
 
     act(() => {
@@ -1141,14 +1141,14 @@ describe('WorkspaceShell', () => {
       throw new Error('Expected elevation progress.');
     act(() => {
       elevationProgressReporter({
-        completedTiles: 1,
-        totalTiles: 2,
+        completedSamples: 1,
+        totalSamples: 2,
         indices: [],
         samples: [],
       });
     });
     const elevationProgress = await within(disclosure).findByRole('progressbar', {
-      name: 'Loading elevation tiles: 1 of 2',
+      name: 'Loading elevation: 50%',
     });
     expect(elevationProgress).toHaveAttribute('aria-valuenow', '50');
     expect(within(disclosure).queryByLabelText(firstDistance)).not.toBeInTheDocument();
@@ -1355,14 +1355,14 @@ describe('WorkspaceShell', () => {
       (_coordinates, signal, onProgress) => {
         signals.push(signal);
         onProgress?.({
-          completedTiles: 0,
-          totalTiles: 3,
+          completedSamples: 0,
+          totalSamples: 3,
           indices: [],
           samples: [],
         });
         onProgress?.({
-          completedTiles: 1,
-          totalTiles: 3,
+          completedSamples: 1,
+          totalSamples: 3,
           indices: [0],
           samples: [{ status: 'available', meters: 1_000 }],
         });
@@ -1381,12 +1381,12 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
       within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
-        'Loading elevation tiles: 1 of 3',
+        'Loading elevation: 33%',
       ),
     ).toBeVisible();
     expect(
       screen.getByRole('img', {
-        name: 'Elevation profile loading: 1 of 3 tiles',
+        name: 'Elevation profile loading: 33%',
       }),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -1400,7 +1400,7 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
       within(screen.getByRole('complementary', { name: 'Track details' })).getByText(
-        'Preparing terrain and elevation…',
+        'Preparing elevation…',
       ),
     ).toBeVisible();
     rendered.unmount();
@@ -1689,7 +1689,7 @@ describe('WorkspaceShell', () => {
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
     expect(
       within(screen.getByRole('complementary', { name: 'Track details' })).getAllByText(
-        'Preparing terrain and elevation…',
+        'Preparing elevation…',
       ),
     ).not.toHaveLength(0);
     await user.upload(input, gpxFile('Second.gpx'));
@@ -1761,14 +1761,14 @@ describe('WorkspaceShell', () => {
           );
         }
         onProgress?.({
-          completedTiles: 0,
-          totalTiles: 3,
+          completedSamples: 0,
+          totalSamples: 3,
           indices: [],
           samples: [],
         });
         onProgress?.({
-          completedTiles: 1,
-          totalTiles: 3,
+          completedSamples: 1,
+          totalSamples: 3,
           indices: [0],
           samples: [{ status: 'available', meters: 1_000 }],
         });
@@ -1810,7 +1810,7 @@ describe('WorkspaceShell', () => {
     expect(previewRecalculate).toContainElement(
       within(previewRecalculate).getByRole('progressbar'),
     );
-    expect(await screen.findByText('Loading elevation tiles: 1 of 3')).toBeVisible();
+    expect(await screen.findByText('Loading elevation: 33%')).toBeVisible();
     expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     const previewPending = pendingRecalculations[0];
     expect(previewPending).toBeDefined();
@@ -1845,7 +1845,7 @@ describe('WorkspaceShell', () => {
     expect(savedDisclosure).toHaveAttribute('aria-expanded', 'true');
 
     await user.click(savedRecalculate);
-    expect(await screen.findByText('Loading elevation tiles: 1 of 3')).toBeVisible();
+    expect(await screen.findByText('Loading elevation: 33%')).toBeVisible();
     const savedPending = pendingRecalculations[1];
     expect(savedPending).toBeDefined();
     act(() => {

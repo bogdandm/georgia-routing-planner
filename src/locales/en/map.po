@@ -39,7 +39,7 @@ msgid "3D terrain is unavailable while Sentinel Mosaic is active."
 msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/map/MapWorkspace.tsx:1585
+#: src/presentation/map/MapWorkspace.tsx:1584
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -55,12 +55,12 @@ msgid "Choose map layer preset"
 msgstr "Choose map layer preset"
 
 #. js-lingui-id: dLNd3k
-#: src/presentation/map/MapWorkspace.tsx:1582
+#: src/presentation/map/MapWorkspace.tsx:1581
 msgid "Click the map to place the marker"
 msgstr "Click the map to place the marker"
 
 #. js-lingui-id: jysdB3
-#: src/presentation/map/MapWorkspace.tsx:1595
+#: src/presentation/map/MapWorkspace.tsx:1594
 msgid "Clipboard access failed. Try again or use the Share dialog."
 msgstr "Clipboard access failed. Try again or use the Share dialog."
 
@@ -80,7 +80,7 @@ msgid "Coordinates"
 msgstr "Coordinates"
 
 #. js-lingui-id: 1-81oq
-#: src/presentation/map/MapWorkspace.tsx:1272
+#: src/presentation/map/MapWorkspace.tsx:1271
 msgid "Coordinates copied"
 msgstr "Coordinates copied"
 
@@ -110,7 +110,7 @@ msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
 
 #. js-lingui-id: 5zBbQV
-#: src/presentation/map/MapLibreFacade.ts:1579
+#: src/presentation/map/MapLibreFacade.ts:1576
 msgid "Elevation {elevationChange}"
 msgstr "Elevation {elevationChange}"
 
@@ -166,7 +166,7 @@ msgid "Map point actions"
 msgstr "Map point actions"
 
 #. js-lingui-id: iDuQuY
-#: src/presentation/map/MapWorkspace.tsx:1281
+#: src/presentation/map/MapWorkspace.tsx:1280
 msgid "Map workspace"
 msgstr "Map workspace"
 
@@ -211,7 +211,7 @@ msgid "OSM overlay"
 msgstr "OSM overlay"
 
 #. js-lingui-id: _HLYHh
-#: src/presentation/map/MapWorkspace.tsx:1274
+#: src/presentation/map/MapWorkspace.tsx:1273
 msgid "Point link copied"
 msgstr "Point link copied"
 
@@ -241,27 +241,27 @@ msgid "Terrain elevation"
 msgstr "Terrain elevation"
 
 #. js-lingui-id: 9xVYMD
-#: src/presentation/map/MapWorkspace.tsx:1264
+#: src/presentation/map/MapWorkspace.tsx:1263
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "The current camera could not be saved. Map interaction is still available."
 
 #. js-lingui-id: IxTd0L
-#: src/presentation/map/MapWorkspace.tsx:1602
+#: src/presentation/map/MapWorkspace.tsx:1601
 msgid "The map layer could not be changed. Try again."
 msgstr "The map layer could not be changed. Try again."
 
 #. js-lingui-id: U5Trc5
-#: src/presentation/map/MapWorkspace.tsx:1292
+#: src/presentation/map/MapWorkspace.tsx:1291
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 
 #. js-lingui-id: FlHLo_
-#: src/presentation/map/MapWorkspace.tsx:1266
+#: src/presentation/map/MapWorkspace.tsx:1265
 msgid "The saved camera could not be restored. The Georgia overview is shown instead."
 msgstr "The saved camera could not be restored. The Georgia overview is shown instead."
 
 #. js-lingui-id: IDB1Ps
-#: src/presentation/map/MapWorkspace.tsx:1268
+#: src/presentation/map/MapWorkspace.tsx:1267
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
 
@@ -286,11 +286,11 @@ msgid "Weather"
 msgstr "Weather"
 
 #. js-lingui-id: OrcMj6
-#: src/presentation/map/MapWorkspace.tsx:1276
+#: src/presentation/map/MapWorkspace.tsx:1275
 msgid "Weather map link copied"
 msgstr "Weather map link copied"
 
 #. js-lingui-id: ElM6On
-#: src/presentation/map/MapWorkspace.tsx:1483
+#: src/presentation/map/MapWorkspace.tsx:1482
 msgid "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."
 msgstr "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."

@@ -1,4 +1,3 @@
-import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type {
   TerrainComputeBackend,
   TerrainComputeMetrics,
@@ -6,13 +5,9 @@ import type {
   TerrainComputeStatus,
   TerrainContourOptions,
   TerrainContourTile,
-  TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import type { TerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
-import {
-  TerrainComputeEngine,
-  type TerrainComputeEngineOptions,
-} from '@/infrastructure/elevation/TerrainComputeEngine';
+import { TerrainComputeEngine } from '@/infrastructure/elevation/TerrainComputeEngine';
 
 /** Executes the shared engine on the window thread only as a compatibility fallback. */
 export class InlineTerrainComputeBackend implements TerrainComputeBackend {
@@ -21,25 +16,11 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
 
   public constructor(
     configuration: TerrainComputeConfiguration,
-    logger: DiagnosticLogger,
-    options: TerrainComputeEngineOptions = {},
-    engineFactory: InlineTerrainComputeEngineFactory = (
-      engineConfiguration,
-      engineLogger,
-      engineOptions,
-    ) => new TerrainComputeEngine(engineConfiguration, engineLogger, engineOptions),
+    engineFactory: InlineTerrainComputeEngineFactory = (engineConfiguration) =>
+      new TerrainComputeEngine(engineConfiguration),
   ) {
-    this.#engine = engineFactory(configuration, logger, options);
+    this.#engine = engineFactory(configuration);
     this.loaded = this.#engine.loaded;
-  }
-
-  public fetchTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDemResponse> {
-    return this.#engine.fetchTile(zoom, x, y, abortController);
   }
 
   public async fetchContourTile(
@@ -58,10 +39,6 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
     );
     // MapLibre transfers delivered buffers. Keep the engine's cached copy owned here.
     return { arrayBuffer: response.arrayBuffer.slice(0) };
-  }
-
-  public setFilterEnabled(enabled: boolean): void {
-    this.#engine.setFilterEnabled(enabled);
   }
 
   public setInteractionActive(active: boolean): void {
@@ -106,12 +83,6 @@ export class InlineTerrainComputeBackend implements TerrainComputeBackend {
 
 interface InlineTerrainComputeEngine {
   readonly loaded: Promise<void>;
-  fetchTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDemResponse>;
   fetchContourTile(
     zoom: number,
     x: number,
@@ -119,12 +90,9 @@ interface InlineTerrainComputeEngine {
     options: TerrainContourOptions,
     abortController: AbortController,
   ): Promise<TerrainContourTile>;
-  setFilterEnabled(enabled: boolean): void;
   dispose(): void;
 }
 
 type InlineTerrainComputeEngineFactory = (
   configuration: TerrainComputeConfiguration,
-  logger: DiagnosticLogger,
-  options: TerrainComputeEngineOptions,
 ) => InlineTerrainComputeEngine;

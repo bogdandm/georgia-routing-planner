@@ -39,9 +39,6 @@ import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnost
 import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
-import { BrowserTerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
-import { FilteredTerrariumTileProvider } from '@/infrastructure/elevation/FilteredTerrariumTileProvider';
-import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { BrowserTrailRouter } from '@/infrastructure/routing/BrowserTrailRouter';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
@@ -221,25 +218,12 @@ export function createRuntimeServices(): RuntimeServices {
           requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
         })
       : null;
-  const filteredTerrariumTiles =
-    mapProviderConfiguration.status === 'valid' &&
-    mapProviderConfiguration.value.terrain.encoding === 'terrarium'
-      ? new FilteredTerrariumTileProvider(
-          toTerrainComputeConfiguration(
-            mapProviderConfiguration.value.terrain,
-            mapProviderConfiguration.value.policy.requestTimeoutMs,
-          ),
-          logger,
-          new BrowserTerrariumPngCodec(),
-        )
-      : null;
   const elevationProvider =
     mapProviderConfiguration.status === 'valid'
       ? new RasterDemElevationProvider(
           httpClient,
           mapProviderConfiguration.value.terrain,
           idGenerator,
-          filteredTerrariumTiles,
         )
       : null;
   const pointWeatherForecast = new GetPointWeatherForecast(

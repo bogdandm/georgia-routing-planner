@@ -1,96 +1,78 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
-import type { TerrariumPngCodec } from '@/infrastructure/elevation/BrowserTerrariumPngCodec';
 import { toTerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 import { TerrainComputeEngine } from '@/infrastructure/elevation/TerrainComputeEngine';
-import {
-  encodeTerrariumElevation,
-  type DecodedTerrariumTile,
-} from '@/infrastructure/elevation/TerrariumDemFilter';
 
-const logger: DiagnosticLogger = {
-  log: vi.fn(),
-  getEvents: () => [],
-  subscribe: () => () => undefined,
-};
-
-function terrain() {
-  return parseMapProviderConfiguration(
+function configuration() {
+  const terrain = parseMapProviderConfiguration(
     defaultMapProviderConfigurationInput,
     'https://example.test/',
   ).terrain;
+  return toTerrainComputeConfiguration(terrain, 10_000);
 }
 
-function configuration() {
-  return toTerrainComputeConfiguration(terrain(), 10_000);
+function pendingFetch() {
+  return vi.fn(
+    (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => {
+            reject(new DOMException('Canceled', 'AbortError'));
+          },
+          { once: true },
+        );
+      }),
+  );
 }
 
-function decodedTile(): DecodedTerrariumTile {
-  const [red, green, blue] = encodeTerrariumElevation(1_000);
-  const pixel = [red, green, blue, 255];
-  return {
-    width: 2,
-    height: 2,
-    data: new Uint8ClampedArray([...pixel, ...pixel, ...pixel, ...pixel]),
-  };
-}
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('TerrainComputeEngine', () => {
-  it('shares filtered source work and invalidates results when the filter changes', async () => {
-    const codec: TerrariumPngCodec = {
-      decode: vi.fn(() => Promise.resolve(decodedTile())),
-      encode: vi.fn(() => Promise.resolve(new Blob(['filtered']))),
-    };
-    const fetchImplementation = vi.fn(() =>
-      Promise.resolve(new Response(new Blob(['tile']), { status: 200 })),
+  it('fetches the raw provider DEM neighbourhood for a contour tile', async () => {
+    const fetchImplementation = pendingFetch();
+    vi.stubGlobal('fetch', fetchImplementation);
+    const engine = new TerrainComputeEngine(configuration());
+    const controller = new AbortController();
+
+    const pending = engine.fetchContourTile(
+      12,
+      2_600,
+      1_500,
+      { levels: [50, 200] },
+      controller,
     );
-    const engine = new TerrainComputeEngine(configuration(), logger, {
-      codec,
-      fetchImplementation,
+
+    await vi.waitFor(() => {
+      expect(fetchImplementation).toHaveBeenCalledTimes(9);
     });
-
-    await Promise.all([
-      engine.fetchTile(5, 8, 9, new AbortController()),
-      engine.fetchTile(5, 9, 9, new AbortController()),
-    ]);
-    expect(fetchImplementation).toHaveBeenCalledTimes(12);
-
-    engine.setFilterEnabled(false);
-    await engine.fetchTile(5, 8, 9, new AbortController());
-    expect(fetchImplementation).toHaveBeenCalledTimes(13);
+    expect(fetchImplementation).toHaveBeenCalledWith(
+      'https://tiles.mapterhorn.com/12/2600/1500.webp',
+      expect.anything(),
+    );
+    controller.abort();
+    await expect(pending).rejects.toThrow();
   });
 
-  it('cancels pending work and rejects future requests after deterministic disposal', async () => {
-    const codec: TerrariumPngCodec = {
-      decode: () => Promise.resolve(decodedTile()),
-      encode: () => Promise.resolve(new Blob(['filtered'])),
-    };
-    const fetchImplementation = vi.fn(
-      (_input: RequestInfo | URL, init?: RequestInit) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener(
-            'abort',
-            () => {
-              reject(new DOMException('Canceled', 'AbortError'));
-            },
-            { once: true },
-          );
-        }),
-    );
-    const engine = new TerrainComputeEngine(configuration(), logger, {
-      codec,
-      fetchImplementation,
-    });
-    const pending = engine.fetchTile(5, 8, 9, new AbortController());
+  it('rejects requests after deterministic disposal', () => {
+    const engine = new TerrainComputeEngine(configuration());
 
     engine.dispose();
 
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    expect(() => engine.fetchTile(5, 8, 9, new AbortController())).toThrow(/disposed/u);
+    expect(() =>
+      engine.fetchContourTile(
+        12,
+        2_600,
+        1_500,
+        { levels: [50] },
+        new AbortController(),
+      ),
+    ).toThrow(/disposed/u);
   });
 });

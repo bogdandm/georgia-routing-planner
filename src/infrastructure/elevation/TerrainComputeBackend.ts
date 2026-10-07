@@ -1,12 +1,6 @@
 export type TerrainComputeStatus = 'worker' | 'restarting' | 'inline';
 export const defaultTerrainContourQueueCapacity = 32;
 
-export interface TerrainDemResponse {
-  readonly data: Blob;
-  readonly cacheControl?: string;
-  readonly expires?: string;
-}
-
 export interface TerrainContourTile {
   readonly arrayBuffer: ArrayBuffer;
 }
@@ -28,11 +22,10 @@ export interface TerrainComputeMetrics {
   readonly queueDurationMs: number;
   readonly computeDurationMs: number;
   readonly pendingCount: number;
-  readonly operation: 'dem' | 'contour';
   readonly status: 'success' | 'failed' | 'canceled';
 }
 
-/** Serializable live workload state; it intentionally excludes tile identity and data. */
+/** Serializable live contour workload state; it intentionally excludes tile identity and data. */
 export interface TerrainComputeQueueState {
   readonly executionMode: TerrainComputeStatus;
   readonly activeCount: number;
@@ -40,15 +33,9 @@ export interface TerrainComputeQueueState {
   readonly queueCapacity: number;
 }
 
-/** Capability boundary used by MapLibre protocols without exposing Worker or engine objects. */
+/** Capability boundary used by the MapLibre contour protocol without exposing Worker or engine objects. */
 export interface TerrainComputeBackend {
   readonly loaded: Promise<void>;
-  fetchTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDemResponse>;
   fetchContourTile(
     zoom: number,
     x: number,
@@ -56,7 +43,6 @@ export interface TerrainComputeBackend {
     options: TerrainContourOptions,
     abortController: AbortController,
   ): Promise<TerrainContourTile>;
-  setFilterEnabled(enabled: boolean): void;
   setInteractionActive(active: boolean): void;
   getStatus(): TerrainComputeStatus;
   getQueueState(): TerrainComputeQueueState;

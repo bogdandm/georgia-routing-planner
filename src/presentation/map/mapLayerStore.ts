@@ -168,6 +168,8 @@ interface MapLayerState {
   readonly layerProblem: MapLayerProblem | null;
   readonly terrainComputeStatus: TerrainComputeStatus;
   readonly terrainComputeQueue: TerrainComputeQueueState;
+  /** Relief or 3D terrain has waited for provider DEM tiles longer than a short delay. */
+  readonly terrainDemLoading: boolean;
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly openStreetMapOpacity: number;
   readonly importedTrackOpacity: number;
@@ -190,6 +192,7 @@ const initialMapLayerState: MapLayerState = {
     queuedContourCount: 0,
     queueCapacity: defaultTerrainContourQueueCapacity,
   },
+  terrainDemLoading: false,
   visibility: {
     'google-satellite': false,
     'bing-satellite': false,

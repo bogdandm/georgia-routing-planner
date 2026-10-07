@@ -25,7 +25,6 @@ describe('TerrainComputeDiagnostics', () => {
 
     diagnostics.record({
       executionMode: 'worker',
-      operation: 'dem',
       queueDurationMs: 2,
       computeDurationMs: 4,
       pendingCount: 1,
@@ -33,7 +32,6 @@ describe('TerrainComputeDiagnostics', () => {
     });
     diagnostics.record({
       executionMode: 'worker',
-      operation: 'contour',
       queueDurationMs: 3,
       computeDurationMs: 5,
       pendingCount: 3,
@@ -41,7 +39,6 @@ describe('TerrainComputeDiagnostics', () => {
     });
     diagnostics.record({
       executionMode: 'worker',
-      operation: 'contour',
       queueDurationMs: 7,
       computeDurationMs: 11,
       pendingCount: 2,
@@ -49,7 +46,6 @@ describe('TerrainComputeDiagnostics', () => {
     });
     diagnostics.record({
       executionMode: 'worker',
-      operation: 'dem',
       queueDurationMs: 13,
       computeDurationMs: 17,
       pendingCount: 1,
@@ -65,7 +61,6 @@ describe('TerrainComputeDiagnostics', () => {
         computeDurationMs: 20,
         pendingCount: 3,
         executionMode: 'worker',
-        operation: 'mixed',
         status: 'failed',
       },
     });
@@ -82,7 +77,6 @@ describe('TerrainComputeDiagnostics', () => {
     );
     const metrics = {
       executionMode: 'worker' as const,
-      operation: 'dem' as const,
       queueDurationMs: 2,
       computeDurationMs: 4,
       pendingCount: 1,

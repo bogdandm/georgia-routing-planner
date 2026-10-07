@@ -179,22 +179,13 @@ export function createTestServices(
       logger,
       clock,
     );
-  let demFilterEnabled = true;
-  let demFilterRevision = 0;
   const registeredSatelliteScenes = new Set<string>();
   const mapLayers = new MapLibreLayerController(
     parsedMapProviderConfiguration.satellite.renderer,
     parsedMapProviderConfiguration.terrain,
     {
-      createDemTileUrl: () =>
-        `test-dem://tiles/{z}/{x}/{y}?filter=${demFilterEnabled ? 'on' : 'off'}&revision=${String(demFilterRevision)}`,
       createTileUrl: (intervalMeters) =>
-        `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200&filter=${demFilterEnabled ? 'on' : 'off'}&revision=${String(demFilterRevision)}`,
-      setFilterEnabled: (enabled) => {
-        if (demFilterEnabled === enabled) return;
-        demFilterEnabled = enabled;
-        demFilterRevision += 1;
-      },
+        `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
       setInteractionActive: () => undefined,
       getStatus: () => 'worker',
       getQueueState: () => ({

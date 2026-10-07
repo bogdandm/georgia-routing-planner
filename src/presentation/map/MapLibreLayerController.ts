@@ -243,6 +243,11 @@ const rasterSourceStabilityMs = 2_000;
 type RasterSourceReadiness = 'stable' | 'loaded';
 const canceledDirectSourceErrorWindowMs = 5_000;
 const terrainQueuePublishIntervalMs = 250;
+// Quick pans load a few DEM tiles from cache; only sustained loading reaches the status.
+const terrainDemLoadingIndicatorDelayMs = 300;
+// Contour vector tiles stop at the DEM's z12 and are overzoomed; line widths keep growing
+// to this display zoom so close-up contours stay as legible as before.
+const contourLineFullWidthZoom = 15;
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
@@ -676,7 +681,6 @@ export class MapLibreLayerController {
   #terrainOverlayPreferences: TerrainOverlayPreferences =
     defaultTerrainOverlayPreferences;
   #contourFailureReported = false;
-  #appliedDemTileUrl: string | null = null;
   #appliedContourTileUrl: string | null = null;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
@@ -692,6 +696,7 @@ export class MapLibreLayerController {
   readonly #releaseTerrainComputeStatus: () => void;
   readonly #releaseTerrainComputeQueue: () => void;
   #terrainQueuePublishTimer: ReturnType<typeof setTimeout> | null = null;
+  #terrainDemLoadingTimer: ReturnType<typeof setTimeout> | null = null;
   #pendingTerrainQueue: TerrainComputeQueueState | null = null;
   #appliedOpenStreetMapOpacity: number | null = null;
   #importedTrackGeometry: MultiLineString = {
@@ -761,7 +766,7 @@ export class MapLibreLayerController {
     this.#releaseTerrainComputeStatus = contourTiles.subscribeStatus((status) => {
       mapLayerStore.setState({ terrainComputeStatus: status });
     });
-    // Queue state is UI-only and changes per DEM/contour tile; publishing it at most once
+    // Queue state is UI-only and changes per contour tile; publishing it at most once
     // per interval keeps store subscribers from re-rendering on every tile during a drag.
     this.#releaseTerrainComputeQueue = contourTiles.subscribeQueueState((state) => {
       if (this.#terrainQueuePublishTimer !== null) {
@@ -803,6 +808,7 @@ export class MapLibreLayerController {
       this.reconcileSavedMarkers();
       return;
     }
+    if (this.#map !== null) this.removeTerrainDemLoadingListeners(this.#map);
     this.#map?.off('styledata', this.handleStyleData);
     this.#map?.off('sourcedata', this.handleSourceData);
     this.#map?.off('dataloading', this.handleWeatherMapDataLoading);
@@ -811,6 +817,11 @@ export class MapLibreLayerController {
     map.on('error', this.handleTerrainOverlayError);
     map.on('sourcedata', this.handleSourceData);
     map.on('dataloading', this.handleWeatherMapDataLoading);
+    map.on('sourcedataloading', this.handleTerrainDemSourceEvent);
+    map.on('sourcedata', this.handleTerrainDemSourceEvent);
+    map.on('sourcedataabort', this.handleTerrainDemSourceEvent);
+    map.on('terrain', this.handleTerrainDemStateChange);
+    map.on('idle', this.handleTerrainDemStateChange);
     this.reconcileSatelliteBasemapSource();
     this.reconcileMosaicEntries();
     this.reconcileTerrainOverlays();
@@ -824,10 +835,6 @@ export class MapLibreLayerController {
     this.reconcileSavedMarkers();
   }
 
-  public createDemTileUrl(): string {
-    return this.contourTiles.createDemTileUrl();
-  }
-
   public setTerrainInteractionActive(active: boolean): void {
     this.contourTiles.setInteractionActive(active);
   }
@@ -839,6 +846,8 @@ export class MapLibreLayerController {
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);
+    this.removeTerrainDemLoadingListeners(map);
+    this.clearTerrainDemLoading();
     if (this.#importedTrackFocusFrame !== null) {
       cancelAnimationFrame(this.#importedTrackFocusFrame);
       this.#importedTrackFocusFrame = null;
@@ -1104,6 +1113,7 @@ export class MapLibreLayerController {
       appliedImagery = this.withRasterVisibility(state.appliedImagery, visible);
     }
     mapLayerStore.setState({ visibility, appliedImagery, layerProblem: null });
+    if (layerId === 'terrain-relief') this.updateTerrainDemLoading();
     let terrainResult: TerrainOverlayCommandResult | null = null;
     if (staticBasemapSelected || layerId === 'satellite-imagery') {
       this.applyBaseLayerVisibility();
@@ -1780,9 +1790,6 @@ export class MapLibreLayerController {
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
-      this.contourTiles.setFilterEnabled(
-        persisted.terrainOverlays.filterInvalidDemPixels,
-      );
       mapLayerStore.setState({
         visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
@@ -1879,7 +1886,6 @@ export class MapLibreLayerController {
     }
     const previous = this.#terrainOverlayPreferences;
     this.#terrainOverlayPreferences = { ...value };
-    this.contourTiles.setFilterEnabled(value.filterInvalidDemPixels);
     this.#contourFailureReported = false;
     if (this.#map === null) {
       mapLayerStore.setState({
@@ -1895,16 +1901,8 @@ export class MapLibreLayerController {
     const result = this.reconcileTerrainOverlays();
     if (result.status === 'success') {
       this.persistStableState();
-      if (previous.filterInvalidDemPixels !== value.filterInvalidDemPixels) {
-        this.logger.log({
-          level: 'info',
-          name: 'map.dem.filter-changed',
-          data: { status: value.filterInvalidDemPixels ? 'enabled' : 'disabled' },
-        });
-      }
     } else {
       this.#terrainOverlayPreferences = previous;
-      this.contourTiles.setFilterEnabled(previous.filterInvalidDemPixels);
       this.reconcileTerrainOverlays();
     }
     return result;
@@ -2713,6 +2711,66 @@ export class MapLibreLayerController {
     this.reconcileSavedMarkers();
   };
 
+  private readonly handleTerrainDemSourceEvent = (event: MapSourceDataEvent): void => {
+    if (event.sourceId === mapSourceIds.terrainDem) this.updateTerrainDemLoading();
+  };
+
+  private readonly handleTerrainDemStateChange = (): void => {
+    this.updateTerrainDemLoading();
+  };
+
+  private removeTerrainDemLoadingListeners(map: MapLibreMap): void {
+    map.off('sourcedataloading', this.handleTerrainDemSourceEvent);
+    map.off('sourcedata', this.handleTerrainDemSourceEvent);
+    map.off('sourcedataabort', this.handleTerrainDemSourceEvent);
+    map.off('terrain', this.handleTerrainDemStateChange);
+    map.off('idle', this.handleTerrainDemStateChange);
+  }
+
+  /** True while the visible relief layer or 3D terrain still waits for provider DEM tiles. */
+  private isTerrainDemLoading(): boolean {
+    const map = this.#map;
+    if (map?.getSource(mapSourceIds.terrainDem) === undefined) return false;
+    const reliefVisible =
+      mapLayerStore.getState().visibility['terrain-relief'] &&
+      map.getLayer(terrainOverlayLayerIds.reliefShade) !== undefined;
+    const inUse = reliefVisible || map.getTerrain() !== null;
+    return inUse && !map.isSourceLoaded(mapSourceIds.terrainDem);
+  }
+
+  /**
+   * Publishes `terrainDemLoading` only after loading persists for a short delay, so cached
+   * pans do not flicker the status, and clears it as soon as the DEM is loaded or unused.
+   */
+  private updateTerrainDemLoading(): void {
+    if (!this.isTerrainDemLoading()) {
+      this.clearTerrainDemLoading();
+      return;
+    }
+    if (
+      this.#terrainDemLoadingTimer !== null ||
+      mapLayerStore.getState().terrainDemLoading
+    ) {
+      return;
+    }
+    this.#terrainDemLoadingTimer = setTimeout(() => {
+      this.#terrainDemLoadingTimer = null;
+      if (this.isTerrainDemLoading()) {
+        mapLayerStore.setState({ terrainDemLoading: true });
+      }
+    }, terrainDemLoadingIndicatorDelayMs);
+  }
+
+  private clearTerrainDemLoading(): void {
+    if (this.#terrainDemLoadingTimer !== null) {
+      clearTimeout(this.#terrainDemLoadingTimer);
+      this.#terrainDemLoadingTimer = null;
+    }
+    if (mapLayerStore.getState().terrainDemLoading) {
+      mapLayerStore.setState({ terrainDemLoading: false });
+    }
+  }
+
   private readonly handleSourceData = (event: MapSourceDataEvent): void => {
     if (isSatelliteBasemapSourceId(event.sourceId)) {
       if (event.sourceDataType !== 'content') return;
@@ -2795,21 +2853,8 @@ export class MapLibreLayerController {
       return { status: 'success' };
     }
     try {
-      const demTileUrl = this.contourTiles.createDemTileUrl();
-      const existingDemSource = map.getSource(mapSourceIds.terrainDem);
-      if (existingDemSource === undefined) {
-        map.addSource(
-          mapSourceIds.terrainDem,
-          createTerrainDemSource(this.terrain, demTileUrl),
-        );
-        this.#appliedDemTileUrl = demTileUrl;
-      } else if (this.#appliedDemTileUrl !== demTileUrl) {
-        const source = existingDemSource as { setTiles?: (tiles: string[]) => void };
-        if (source.setTiles === undefined) {
-          throw new Error('The terrain source cannot update its tiles.');
-        }
-        source.setTiles([demTileUrl]);
-        this.#appliedDemTileUrl = demTileUrl;
+      if (map.getSource(mapSourceIds.terrainDem) === undefined) {
+        map.addSource(mapSourceIds.terrainDem, createTerrainDemSource(this.terrain));
       }
       if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
         map.addLayer(
@@ -2938,7 +2983,7 @@ export class MapLibreLayerController {
               ['zoom'],
               minzoom,
               0.42,
-              this.terrain.overlays.contourMaxZoom,
+              contourLineFullWidthZoom,
               0.72,
             ],
           },
@@ -2969,7 +3014,7 @@ export class MapLibreLayerController {
               ['zoom'],
               minzoom,
               0.72,
-              this.terrain.overlays.contourMaxZoom,
+              contourLineFullWidthZoom,
               1.15,
             ],
           },

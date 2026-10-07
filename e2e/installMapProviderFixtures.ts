@@ -1,32 +1,58 @@
+import { crc32, deflateSync } from 'node:zlib';
+
 import type { Page } from '@playwright/test';
 import { writeArrayBuffer } from 'geotiff';
 import searchResponse from '../tests/fixtures/satellite/search-response.json' with { type: 'json' };
 
 const openFreeMapOrigin = 'https://tiles.openfreemap.org';
 const shortbreadOrigin = 'https://vector.openstreetmap.org';
-const terrainOrigin = 'https://s3.amazonaws.com';
+const terrainOrigin = 'https://tiles.mapterhorn.com';
 const earthSearchOrigin = 'https://earth-search.aws.element84.com';
 const satelliteRendererOrigin = 'https://titiler.xyz';
 const sentinelCogFixtureOrigin = 'https://sentinel-cogs.example.test';
 const nominatimOrigin = 'https://nominatim.openstreetmap.org';
 const overpassOrigin = 'https://overpass-api.de';
-const terrainDemFixture = Buffer.from(
-  [
-    'iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAADGklEQVR4nO3OQQ0AMBAEoZVe6ZUxjyNBAHsbnNUPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQPINQP',
-    'INQPIPQBcakHgcA1wzQAAAAASUVORK5CYII=',
-  ].join(''),
-  'base64',
-);
+// Terrarium RGB (128, 0, 0) decodes to 0 m. Mapterhorn serves 512 px DEM tiles; the
+// imagery renderer fixture keeps the 256 px raster tile size.
+const terrainDemFixture = createUniformPng(512, [128, 0, 0]);
+const rasterTileFixture = createUniformPng(256, [128, 0, 0]);
+
+/** Encodes a deterministic uniform 8-bit RGB PNG without a binary checked-in fixture. */
+function createUniformPng(
+  size: number,
+  [red, green, blue]: readonly [number, number, number],
+): Buffer {
+  const rowLength = 1 + size * 3;
+  const pixels = Buffer.alloc(rowLength * size);
+  for (let row = 0; row < size; row += 1) {
+    for (let column = 0; column < size; column += 1) {
+      const offset = row * rowLength + 1 + column * 3;
+      pixels[offset] = red;
+      pixels[offset + 1] = green;
+      pixels[offset + 2] = blue;
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8;
+  header[9] = 2;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(pixels)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, checksum]);
+}
 
 function createSentinelCogFixture(): Buffer {
   const width = 256;
@@ -418,7 +444,7 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
       route.fulfill({
         status: 200,
         contentType: 'image/png',
-        body: terrainDemFixture,
+        body: rasterTileFixture,
       }),
   );
   await page.route(
@@ -453,8 +479,12 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
     },
   );
   await page.route(
-    new RegExp(`^${terrainOrigin.replaceAll('.', '\\.')}/elevation-tiles-prod/`),
+    new RegExp(
+      `^${terrainOrigin.replaceAll('.', '\\.')}/\\d+/\\d+/\\d+\\.webp(?:\\?|$)`,
+    ),
     (route) =>
+      // MapLibre and maplibre-contour decode through createImageBitmap, which sniffs
+      // the bytes; a PNG body under the WebP URL exercises the same decode path.
       route.fulfill({
         status: 200,
         contentType: 'image/png',
@@ -475,7 +505,7 @@ export async function installMapProviderFixtures(page: Page): Promise<void> {
 
 export function isConfiguredProviderRequest(url: URL): boolean {
   if (url.origin === terrainOrigin)
-    return url.pathname.startsWith('/elevation-tiles-prod/');
+    return /^\/\d+\/\d+\/\d+\.webp$/u.test(url.pathname);
   if (url.origin === nominatimOrigin) return url.pathname === '/reverse';
   if (url.origin === overpassOrigin) return url.pathname === '/api/interpreter';
   return (

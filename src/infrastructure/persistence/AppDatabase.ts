@@ -542,7 +542,8 @@ const mapLayerPreferencesSchema = z
           z.literal(50),
           z.literal(100),
         ]),
-        filterInvalidDemPixels: z.boolean().default(true),
+        // Records saved before the provider switch may still carry the removed DEM
+        // repair flag; this non-strict object strips it on load.
         shadeAboveSatellite: z.boolean(),
       })
       .default(defaultTerrainOverlayPreferences),
@@ -650,7 +651,7 @@ const trackMetricsSchema = z
     maximumElevationMeters: z.number().optional(),
     elevationSource: z.enum(['gpx', 'dem-assisted']).optional(),
     elevationAlgorithmVersion: z
-      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)])
+      .union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)])
       .optional(),
   })
   .strict()
@@ -664,7 +665,8 @@ const trackMetricsSchema = z
       ((value.elevationSource === 'gpx' || value.elevationSource === 'dem-assisted') &&
         value.elevationAlgorithmVersion === 3) ||
       (value.elevationSource === 'dem-assisted' &&
-        value.elevationAlgorithmVersion === 4);
+        (value.elevationAlgorithmVersion === 4 ||
+          value.elevationAlgorithmVersion === 5));
     if (!provenanceIsValid) {
       context.addIssue({
         code: 'custom',
@@ -709,8 +711,9 @@ const trackMetricsSchema = z
 
 const calculatedTrackMetricsSchema = trackMetricsSchema.refine(
   (value) =>
-    value.elevationSource === 'dem-assisted' && value.elevationAlgorithmVersion === 4,
-  { message: 'Calculated elevation metrics require algorithm version 4.' },
+    value.elevationSource === 'dem-assisted' &&
+    (value.elevationAlgorithmVersion === 4 || value.elevationAlgorithmVersion === 5),
+  { message: 'Calculated elevation metrics require algorithm version 4 or 5.' },
 );
 
 type GpxWarningBuilder = {

@@ -297,26 +297,38 @@ describe('user data archive', () => {
     await expect(database.loadTrackSyncState(summary.id)).resolves.toEqual(cleanState);
   });
 
-  it('lays out GPX files by folder, including folder paths beyond 100 bytes', async () => {
+  it('lays out GPX files by folder without path collisions', async () => {
     const longName = `Caucasus ${'ridge '.repeat(22)}`.trim();
-    await database.createTrackFolder({
-      schemaVersion: TRACK_FOLDER_SCHEMA_VERSION,
-      id: 'folder:long',
-      ...normalizeTrackFolderName(longName),
-      iconKey: 'folder',
-      createdAt: '2026-08-01T09:00:00.000Z',
-      updatedAt: '2026-08-01T09:00:00.000Z',
-    });
-    const filedContent = trackContent('local:filed');
-    await database.saveLocalTrack(
-      await trackSummary(filedContent, 'Filed', 'folder:long'),
-      filedContent,
-    );
-    const unfiledContent = trackContent('local:unfiled');
-    await database.saveLocalTrack(
-      await trackSummary(unfiledContent, 'Unfiled', null),
-      unfiledContent,
-    );
+    const folders = [
+      ['folder:long', longName],
+      ['folder:upper', 'Trips'],
+      ['folder:lower', 'trips'],
+      ['folder:gpx', 'Alps.gpx'],
+    ] as const;
+    for (const [id, name] of folders) {
+      await database.createTrackFolder({
+        schemaVersion: TRACK_FOLDER_SCHEMA_VERSION,
+        id,
+        ...normalizeTrackFolderName(name),
+        iconKey: 'folder',
+        createdAt: '2026-08-01T09:00:00.000Z',
+        updatedAt: '2026-08-01T09:00:00.000Z',
+      });
+    }
+    const placements = [
+      ['local:long', 'Filed', 'folder:long'],
+      ['local:upper', 'Same', 'folder:upper'],
+      ['local:lower', 'Same', 'folder:lower'],
+      ['local:gpx', 'Filed', 'folder:gpx'],
+      ['local:alps', 'Alps', null],
+    ] as const;
+    for (const [id, name, folderId] of placements) {
+      const content = trackContent(id);
+      await database.saveLocalTrack(
+        await trackSummary(content, name, folderId),
+        content,
+      );
+    }
     const tracks = await database.listLocalTracks();
 
     const archive = await createUserDataArchive(database, exportedAt);
@@ -324,8 +336,17 @@ describe('user data archive', () => {
     const restored = await freshDatabase();
     await restoreUserDataArchive(restored, hasher, new Blob([archive]));
 
-    expect(tarText).toContain(`"file": "tracks/${longName.slice(0, 120)}/Filed.gpx"`);
-    expect(tarText).toContain('"file": "tracks/Unfiled.gpx"');
+    const files = Array.from(
+      tarText.matchAll(/"file": "([^"]+)"/gu),
+      (match) => match[1],
+    );
+    expect(files.toSorted()).toEqual([
+      'tracks/Alps (2).gpx',
+      'tracks/Alps.gpx/Filed.gpx',
+      `tracks/${longName.slice(0, 120)}/Filed.gpx`,
+      'tracks/Trips/Same.gpx',
+      'tracks/trips (2)/Same.gpx',
+    ]);
     await expect(restored.listLocalTracks()).resolves.toEqual(tracks);
   });
 

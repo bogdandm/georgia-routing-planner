@@ -289,10 +289,11 @@ The archive is a gzip-compressed POSIX ustar file, version 1:
 | `tracks/*.gpx`          | Source geometry of each unfiled track                                                         |
 
 GPX files and folder directories are named after the track or folder, made
-filesystem-safe, shortened to fit ustar paths, and numbered when names repeat. Paths
-longer than 100 bytes use the ustar directory prefix. Settings cover every key in the
-settings table above except `sync.*`. Calculated elevation and all synchronization
-queues stay in the browser.
+filesystem-safe, shortened to fit ustar paths, and numbered when a file or directory
+name in the same directory repeats in any letter case, so the archive extracts on
+case-insensitive filesystems. Paths longer than 100 bytes use the ustar directory
+prefix. Settings cover every key in the settings table above except `sync.*`. Calculated
+elevation and all synchronization queues stay in the browser.
 
 Import accepts files and inflated content of at most 512 MiB each and rejects the
 archive unless `hash.json` lists every other entry with a matching SHA-256 digest. It

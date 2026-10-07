@@ -7,11 +7,7 @@ import {
   LOCAL_TRACK_SCHEMA_VERSION,
   type LocalTrackContent,
 } from '@/domain/tracks/localTrack';
-import {
-  exportTrackAsGpx,
-  safeFilenameStem,
-  uniqueGpxFilename,
-} from '@/domain/tracks/trackExport';
+import { exportTrackAsGpx, safeFilenameStem } from '@/domain/tracks/trackExport';
 import type { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
 
 /*
@@ -81,36 +77,31 @@ export async function createUserDataArchive(
   exportedAt: Date,
 ): Promise<Uint8Array<ArrayBuffer>> {
   const backup = await database.readUserDataBackup();
-  const folderDirectories = new Map<string, string>();
-  const usedDirectories = new Set<string>();
+  // Each directory's files and subdirectories share one case-insensitive namespace,
+  // so the archive extracts without collisions on case-insensitive filesystems too.
+  const unfiled = { path: 'tracks', usedNames: new Set<string>() };
+  const folderDirectories = new Map<string, typeof unfiled>();
   for (const folder of backup.folders) {
     // Sanitizing after truncation also strips a trailing space or dot it exposes.
     const stem = safeFilenameStem(truncateUtf8(folder.name, maximumFolderStemBytes));
-    const base = stem.length === 0 ? 'folder' : stem;
-    let directory = base;
-    for (let suffix = 2; usedDirectories.has(directory); suffix += 1) {
-      directory = `${base} (${String(suffix)})`;
-    }
-    usedDirectories.add(directory);
-    folderDirectories.set(folder.id, directory);
+    const name = claimName(stem.length === 0 ? 'folder' : stem, '', unfiled.usedNames);
+    folderDirectories.set(folder.id, { path: `tracks/${name}`, usedNames: new Set() });
   }
   const gpxFiles: [string, Uint8Array][] = [];
-  const usedNamesByDirectory = new Map<string, Set<string>>();
   const tracks: { readonly file: string; readonly summary: unknown }[] = [];
   const trackMarkers: { readonly trackId: string; readonly markers: unknown }[] = [];
   for (const { summary, content } of backup.tracks) {
-    const folderDirectory =
-      summary.folderId === null ? undefined : folderDirectories.get(summary.folderId);
     const directory =
-      folderDirectory === undefined ? 'tracks' : `tracks/${folderDirectory}`;
-    const usedNames = usedNamesByDirectory.get(directory) ?? new Set<string>();
-    usedNamesByDirectory.set(directory, usedNames);
-    const filename = uniqueGpxFilename(
-      truncateUtf8(summary.name, maximumTrackStemBytes),
-      usedNames,
+      (summary.folderId === null
+        ? undefined
+        : folderDirectories.get(summary.folderId)) ?? unfiled;
+    const stem = safeFilenameStem(truncateUtf8(summary.name, maximumTrackStemBytes));
+    const filename = claimName(
+      stem.length === 0 ? 'track' : stem,
+      '.gpx',
+      directory.usedNames,
     );
-    usedNames.add(filename);
-    const file = `${directory}/${filename}`;
+    const file = `${directory.path}/${filename}`;
     gpxFiles.push([file, strToU8(exportTrackAsGpx(summary, content))]);
     // Calculated elevation is browser-local derived data and stays out of the archive.
     const { calculatedMetrics: _calculatedMetrics, ...archivedSummary } = summary;
@@ -166,6 +157,16 @@ async function sha256Hex(data: Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
+}
+
+/** Claims `base` + `extension`, numbering it when the name is taken in any letter case. */
+function claimName(base: string, extension: string, usedNames: Set<string>): string {
+  let name = `${base}${extension}`;
+  for (let suffix = 2; usedNames.has(name.toLocaleLowerCase('en')); suffix += 1) {
+    name = `${base} (${String(suffix)})${extension}`;
+  }
+  usedNames.add(name.toLocaleLowerCase('en'));
+  return name;
 }
 
 function truncateUtf8(text: string, maximumBytes: number): string {

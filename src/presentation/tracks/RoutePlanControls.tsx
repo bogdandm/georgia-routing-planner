@@ -103,7 +103,12 @@ export function RoutePlanQuickControls({
     >
       <Tooltip title={t`Undo`}>
         <span>
-          <IconButton aria-label={t`Undo`} disabled={undoDisabled} onClick={onUndo}>
+          <IconButton
+            color="inherit"
+            aria-label={t`Undo`}
+            disabled={undoDisabled}
+            onClick={onUndo}
+          >
             <UndoOutlinedIcon />
           </IconButton>
         </span>

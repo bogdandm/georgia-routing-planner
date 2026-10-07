@@ -227,7 +227,7 @@ msgid "Browse track file"
 msgstr "Выбрать файл трека"
 
 #. js-lingui-id: 9j5JW2
-#: src/presentation/tracks/RoutePlanControls.tsx:187
+#: src/presentation/tracks/RoutePlanControls.tsx:192
 msgid "Building route graph… {graphProgress}"
 msgstr "Построение графа маршрутов… {graphProgress}"
 
@@ -258,17 +258,17 @@ msgid "Choose folder icon"
 msgstr "Выбрать значок папки"
 
 #. js-lingui-id: xCJdfg
-#: src/presentation/tracks/RoutePlanControls.tsx:323
+#: src/presentation/tracks/RoutePlanControls.tsx:328
 msgid "Clear"
 msgstr "Очистить"
 
 #. js-lingui-id: XWJtTP
-#: src/presentation/tracks/RoutePlanControls.tsx:257
+#: src/presentation/tracks/RoutePlanControls.tsx:262
 msgid "Click the map to choose the next point."
 msgstr "Нажмите на карту, чтобы выбрать следующую точку."
 
 #. js-lingui-id: -7TJ06
-#: src/presentation/tracks/RoutePlanControls.tsx:255
+#: src/presentation/tracks/RoutePlanControls.tsx:260
 msgid "Click the map to choose the route start."
 msgstr "Нажмите на карту, чтобы выбрать начало маршрута."
 
@@ -396,7 +396,7 @@ msgid "Detailed track geometry was used instead of companion route geometry."
 msgstr "Вместо геометрии сопутствующего маршрута использована подробная геометрия трека."
 
 #. js-lingui-id: bzSI52
-#: src/presentation/tracks/RoutePlanControls.tsx:333
+#: src/presentation/tracks/RoutePlanControls.tsx:338
 #: src/presentation/tracks/TracksWorkspace.tsx:5577
 msgid "Discard"
 msgstr "Сбросить"
@@ -511,7 +511,7 @@ msgid "Elevation gain (calculated): {calculatedAscent}"
 msgstr "Набор высоты (расчётный): {calculatedAscent}"
 
 #. js-lingui-id: y7ubGa
-#: src/presentation/tracks/RoutePlanControls.tsx:247
+#: src/presentation/tracks/RoutePlanControls.tsx:252
 msgid "Elevation is unavailable. The route geometry is ready and can still be saved."
 msgstr "Данные о высоте недоступны. Геометрия маршрута готова, и его можно сохранить."
 
@@ -657,7 +657,7 @@ msgid "Loading elevation tiles: {completedTileCount} of {totalTileCount}"
 msgstr "Загрузка тайлов высот: {completedTileCount} из {totalTileCount}"
 
 #. js-lingui-id: 92JZwP
-#: src/presentation/tracks/RoutePlanControls.tsx:224
+#: src/presentation/tracks/RoutePlanControls.tsx:229
 msgid "Loading elevation tiles: {completedTiles} of {totalTiles}"
 msgstr "Загрузка тайлов высот: {completedTiles} из {totalTiles}"
 
@@ -667,12 +667,12 @@ msgid "Loading elevation…"
 msgstr "Загрузка высоты…"
 
 #. js-lingui-id: FuF595
-#: src/presentation/tracks/RoutePlanControls.tsx:191
+#: src/presentation/tracks/RoutePlanControls.tsx:196
 msgid "Loading route tiles…"
 msgstr "Загрузка тайлов маршрутов…"
 
 #. js-lingui-id: 32uZSY
-#: src/presentation/tracks/RoutePlanControls.tsx:181
+#: src/presentation/tracks/RoutePlanControls.tsx:186
 msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Загрузка тайлов маршрутов… {loadedTiles}/{totalTiles}"
 
@@ -795,12 +795,12 @@ msgstr "Сначала новые"
 
 #. js-lingui-id: BxDJ4A
 #: src/presentation/tracks/RoutePlanControls.tsx:63
-#: src/presentation/tracks/RoutePlanControls.tsx:298
+#: src/presentation/tracks/RoutePlanControls.tsx:303
 msgid "Next segment"
 msgstr "Следующий участок"
 
 #. js-lingui-id: 6X7FFe
-#: src/presentation/tracks/RoutePlanControls.tsx:146
+#: src/presentation/tracks/RoutePlanControls.tsx:151
 msgid "No connected route was found. Add a closer point or use Line for the next segment."
 msgstr "Связный маршрут не найден. Добавьте точку ближе или постройте следующий участок в режиме «Прямая»."
 
@@ -828,22 +828,22 @@ msgid "No markers for this track."
 msgstr "У этого трека нет меток."
 
 #. js-lingui-id: j_87cK
-#: src/presentation/tracks/RoutePlanControls.tsx:137
+#: src/presentation/tracks/RoutePlanControls.tsx:142
 msgid "No routable trail or road was found within 200 m of the destination point."
 msgstr "В радиусе 200 м от конечной точки не найдено троп или дорог, пригодных для маршрута."
 
 #. js-lingui-id: Y06z93
-#: src/presentation/tracks/RoutePlanControls.tsx:141
+#: src/presentation/tracks/RoutePlanControls.tsx:146
 msgid "No routable trail or road was found within 200 m of the selected point."
 msgstr "В радиусе 200 м от выбранной точки не найдено троп или дорог, пригодных для маршрута."
 
 #. js-lingui-id: IDMNkm
-#: src/presentation/tracks/RoutePlanControls.tsx:127
+#: src/presentation/tracks/RoutePlanControls.tsx:132
 msgid "No routable trail or road was found within 200 m of the start and destination points."
 msgstr "В радиусе 200 м от начальной и конечной точек не найдено троп или дорог, пригодных для маршрута."
 
 #. js-lingui-id: D-Ws8T
-#: src/presentation/tracks/RoutePlanControls.tsx:132
+#: src/presentation/tracks/RoutePlanControls.tsx:137
 msgid "No routable trail or road was found within 200 m of the start point."
 msgstr "В радиусе 200 м от начальной точки не найдено троп или дорог, пригодных для маршрута."
 
@@ -902,7 +902,7 @@ msgstr "Подготовка рельефа и высот"
 
 #. js-lingui-id: fwASbQ
 #: src/presentation/tracks/ElevationProfileChart.tsx:358
-#: src/presentation/tracks/RoutePlanControls.tsx:226
+#: src/presentation/tracks/RoutePlanControls.tsx:231
 #: src/presentation/tracks/TracksWorkspace.tsx:5502
 msgid "Preparing terrain and elevation…"
 msgstr "Подготовка рельефа и высот…"
@@ -954,7 +954,7 @@ msgid "Retry sharing status"
 msgstr "Повторить загрузку статуса общего доступа"
 
 #. js-lingui-id: ar-Wm2
-#: src/presentation/tracks/RoutePlanControls.tsx:159
+#: src/presentation/tracks/RoutePlanControls.tsx:164
 msgid "Route calculation exceeded one minute. Add a closer point or try again."
 msgstr "Расчёт маршрута занял больше минуты. Добавьте точку ближе или повторите попытку."
 
@@ -969,7 +969,7 @@ msgid "Route planning"
 msgstr "Построение маршрута"
 
 #. js-lingui-id: e_FNZf
-#: src/presentation/tracks/RoutePlanControls.tsx:258
+#: src/presentation/tracks/RoutePlanControls.tsx:263
 msgid "Route ready. Click the map to add another point."
 msgstr "Маршрут готов. Нажмите на карту, чтобы добавить ещё одну точку."
 
@@ -979,17 +979,17 @@ msgid "Routes"
 msgstr "По дорогам"
 
 #. js-lingui-id: YCOaso
-#: src/presentation/tracks/RoutePlanControls.tsx:162
+#: src/presentation/tracks/RoutePlanControls.tsx:167
 msgid "Routing data could not be decoded."
 msgstr "Не удалось декодировать данные маршрутизации."
 
 #. js-lingui-id: 82qgjI
-#: src/presentation/tracks/RoutePlanControls.tsx:155
+#: src/presentation/tracks/RoutePlanControls.tsx:160
 msgid "Routing data is unavailable. Try again when you are online."
 msgstr "Данные маршрутизации недоступны. Повторите попытку, когда появится подключение к интернету."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/tracks/RoutePlanControls.tsx:341
+#: src/presentation/tracks/RoutePlanControls.tsx:346
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:165
 #: src/presentation/tracks/TrackMarkersSection.tsx:250
 #: src/presentation/tracks/TracksWorkspace.tsx:5591
@@ -1017,8 +1017,8 @@ msgid "Saved tracks and folders could not be loaded from this browser."
 msgstr "Не удалось загрузить сохранённые треки и папки из этого браузера."
 
 #. js-lingui-id: F0N_Cz
-#: src/presentation/tracks/RoutePlanControls.tsx:213
-#: src/presentation/tracks/RoutePlanControls.tsx:215
+#: src/presentation/tracks/RoutePlanControls.tsx:218
+#: src/presentation/tracks/RoutePlanControls.tsx:220
 msgid "Saving route…"
 msgstr "Сохранение маршрута…"
 
@@ -1028,7 +1028,7 @@ msgid "Search saved tracks"
 msgstr "Поиск по сохранённым трекам"
 
 #. js-lingui-id: IT3aLD
-#: src/presentation/tracks/RoutePlanControls.tsx:189
+#: src/presentation/tracks/RoutePlanControls.tsx:194
 msgid "Searching for a route…"
 msgstr "Поиск маршрута…"
 
@@ -1286,7 +1286,7 @@ msgid "The track marker could not be renamed."
 msgstr "Не удалось переименовать метку трека."
 
 #. js-lingui-id: Q-1q4e
-#: src/presentation/tracks/RoutePlanControls.tsx:151
+#: src/presentation/tracks/RoutePlanControls.tsx:156
 msgid "This segment covers too large an area. Add an intermediate point."
 msgstr "Этот участок охватывает слишком большую область. Добавьте промежуточную точку."
 
@@ -1333,7 +1333,7 @@ msgid "Track markers"
 msgstr "Метки трека"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/tracks/RoutePlanControls.tsx:288
+#: src/presentation/tracks/RoutePlanControls.tsx:293
 #: src/presentation/tracks/TracksWorkspace.tsx:5189
 #: src/presentation/tracks/TracksWorkspace.tsx:5488
 msgid "Track name"
@@ -1351,8 +1351,8 @@ msgstr "Название трека должно быть не длиннее 20
 
 #. js-lingui-id: 9uI_rE
 #: src/presentation/tracks/RoutePlanControls.tsx:104
-#: src/presentation/tracks/RoutePlanControls.tsx:106
-#: src/presentation/tracks/RoutePlanControls.tsx:315
+#: src/presentation/tracks/RoutePlanControls.tsx:108
+#: src/presentation/tracks/RoutePlanControls.tsx:320
 msgid "Undo"
 msgstr "Отменить"
 

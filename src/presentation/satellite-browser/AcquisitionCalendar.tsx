@@ -21,6 +21,7 @@ import { useMemo, useState } from 'react';
 
 import type { SatelliteSearchResult } from '@/domain/satellite/SatelliteSearchResult';
 import { calculateWeightedCloudCover } from '@/domain/satellite/calculateWeightedCloudCover';
+import { predictSentinelAcquisitionDates } from '@/domain/satellite/predictSentinelAcquisitionDates';
 import { appColors } from '@/presentation/theme/appColors';
 
 const sentinelArchiveFirstMonth = '2015-06';
@@ -126,6 +127,16 @@ export function AcquisitionCalendar({
     }
     return byDate;
   }, [mode]);
+  const predictedDates = useMemo(
+    () =>
+      mode.kind === 'scene'
+        ? predictSentinelAcquisitionDates(
+            (mode.result?.groups ?? []).map((group) => group.date),
+            todayDate,
+          )
+        : new Set<string>(),
+    [mode, todayDate],
+  );
   const year = displayMonthDate.getUTCFullYear();
   const month = displayMonthDate.getUTCMonth();
   const minimumYear = minimumMonthDate.getUTCFullYear();
@@ -424,6 +435,7 @@ export function AcquisitionCalendar({
               }
 
               const cloud = availability.get(date);
+              const predicted = cloud === undefined && predictedDates.has(date);
               const isLatest = date === latestDate && cloud !== undefined;
               const matchesCloudFilter =
                 cloud !== undefined && cloud <= mode.maxCloudCoverPercent;
@@ -441,7 +453,9 @@ export function AcquisitionCalendar({
                   }}
                   aria-label={
                     cloud === undefined
-                      ? t`${formattedDate}, no loaded imagery`
+                      ? predicted
+                        ? t`${formattedDate}, expected Sentinel-2 pass`
+                        : t`${formattedDate}, no loaded imagery`
                       : matchesCloudFilter
                         ? t`${formattedDate}, imagery available, ${cloudLabel} weighted cloud, matches the current cloud limit`
                         : t`${formattedDate}, imagery available, ${cloudLabel} weighted cloud, exceeds the current cloud limit`
@@ -454,18 +468,20 @@ export function AcquisitionCalendar({
                     justifyContent: 'center',
                     borderRadius: 1.25,
                     border: 1,
-                    borderColor:
-                      cloud === undefined
+                    borderStyle: predicted ? 'dashed' : 'solid',
+                    borderColor: predicted
+                      ? appColors.border.strong
+                      : cloud === undefined
                         ? 'transparent'
                         : matchesCloudFilter
                           ? appColors.brand.tigerOrange
-                          : 'transparent',
+                          : appColors.border.default,
                     bgcolor:
                       cloud === undefined
                         ? 'transparent'
                         : matchesCloudFilter
                           ? appColors.tag.orange.background
-                          : 'transparent',
+                          : appColors.surface.subtle,
                     color: matchesCloudFilter
                       ? appColors.tag.orange.foreground
                       : 'text.primary',

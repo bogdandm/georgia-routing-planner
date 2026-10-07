@@ -362,9 +362,13 @@ intersects the point, and the submitted viewport is kept for coverage.
 The sidebar has an acquisition calendar, a **Maximum cloud** slider (default 50%,
 persisted), **Search images**, and rendering settings. The calendar month is the search
 month; months are fetched on demand with a short debounce, cached per search, and
-cancelled when superseded. Days show viewport-coverage-weighted cloud and are
-highlighted when at or below the slider, which filters cards client-side. Clicking a day
-selects and applies its highest-coverage scene. Calendar controls include a
+cancelled when superseded. Days with imagery show viewport-coverage-weighted cloud; days
+at or below the slider are highlighted orange and days above it neutral, while the
+slider also filters cards client-side. Clicking a day selects and applies its
+highest-coverage scene. Sentinel-2 satellites share a ground track that repeats every 10
+days, so once the loaded acquisitions span one full cycle and reach within a cycle of
+today, every acquisition day from the last three cycles is projected forward: upcoming
+days without imagery get a dashed, non-selectable outline. Calendar controls include a
 current-month shortcut and a non-modal month-year picker; months outside the archive are
 disabled.
 

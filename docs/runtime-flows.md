@@ -474,10 +474,36 @@ waypoints.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the
-lower-right grade legend appears with it. Chart and climb hovers change panel emphasis
-only; the chart point drives a separate transient trace-point source. Import and track
-selection issue one fit command padded for the Tracks panes; closing clears the source
-without touching storage or the camera.
+lower-right grade legend appears with it. Chart hover changes panel emphasis only; the
+chart point drives a separate transient trace-point source. Hovering or focusing a
+Climbs & Descents row sends that segment's grade subsegments to `setImportedTrackFocus`.
+The focus overlay has two slots, each a source with its own casing, line, and grade
+layers above the highlight. Rows only claim the hover and the list releases it, so
+crossing the gaps between rows keeps the focus. The profile publishes the current focus
+without an effect cleanup, so moving between rows never sends an intermediate `null`. A
+new segment loads into the less visible slot. Each slot's visibility moves toward its
+target over 300 ms, and the controller writes the resulting opacities every animation
+frame with paint transitions disabled. A MapLibre transition would not animate in 3D:
+terrain draws line layers into cached textures that only a paint change redraws. The
+base casing, line, and highlight dim with the slots' combined eased visibility, down to
+15% of the track opacity, so a cross-fade keeps the track dimmed while one segment
+replaces the other, and release fades everything back together. Selecting a row issues a
+fit command with the segment's antimeridian-aware bounds and a travel path: its points
+with elevation, facing start to finish. Import and track selection issue one fit command
+padded for the Tracks panes whose path faces `trackOutboundDirection`: start to finish,
+or start to the farthest point for an `isLoop` track. Tracks without source elevation
+add their DEM samples to the drawn points and fit again once those samples arrive;
+drawing another track clears any focus at once. Flat mode fits the bounds in the current
+orientation. In terrain mode the facade instead flies to the result of
+`directedCameraFit`: MapLibre fits as if unpitched and ignores relief, so at 45° the far
+half compresses and points above the terrain under the center rise toward the horizon.
+The solver projects the path through MapLibre's pinhole camera at the target pitch. It
+uses rendered terrain heights from `queryTerrainElevation` inside the current view and
+track elevations elsewhere, and keeps about 500 points: the per-window extremes across,
+along, and in elevation. It re-solves until the camera sits on the terrain under its own
+center, at that latitude's relief scale. It balances the points against the padded edges
+and keeps the highest zoom that fits. Closing clears the sources without touching
+storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
 authoritative; calculated Terrarium elevation is the profile fallback only when no

@@ -30,6 +30,7 @@ class FakeNativeMap {
   public readonly terrainValues: unknown[] = [];
   public readonly easeCalls: Record<string, unknown>[] = [];
   public readonly fitBoundsCalls: Record<string, unknown>[] = [];
+  public readonly flyCalls: Record<string, unknown>[] = [];
   public readonly jumpCalls: Record<string, unknown>[] = [];
   public readonly queriedSourceLayers: string[] = [];
   public readonly sourceFeatures = new Map<string, readonly GeoJSONFeature[]>();
@@ -64,6 +65,10 @@ class FakeNativeMap {
     return this.#canvas;
   }
 
+  public getVerticalFieldOfView(): number {
+    return 36.87;
+  }
+
   public loaded(): boolean {
     return false;
   }
@@ -91,6 +96,7 @@ class FakeNativeMap {
       getSouth: () => 41.4,
       getEast: () => 45.4,
       getNorth: () => 42.2,
+      contains: () => true,
     };
   }
 
@@ -166,6 +172,10 @@ class FakeNativeMap {
 
   public fitBounds(_bounds: unknown, options: Record<string, unknown>): void {
     this.fitBoundsCalls.push(options);
+  }
+
+  public flyTo(options: Record<string, unknown>): void {
+    this.flyCalls.push(options);
   }
 
   public jumpTo(options: Record<string, unknown>): void {
@@ -367,6 +377,46 @@ describe('MapLibreFacade', () => {
       center: [44.8, 41.7],
       zoom: 15,
     });
+  });
+
+  it('faces a 3D track fit from start to finish at 45 degrees', () => {
+    const services = createTestServices();
+    const bounds = { west: 44, south: 42, east: 44.1, north: 42.001 };
+    const westward = {
+      from: { longitude: 44.1, latitude: 42 },
+      to: { longitude: 44, latitude: 42 },
+      points: [
+        { longitude: 44.1, latitude: 42, elevationMeters: 2_000 },
+        { longitude: 44, latitude: 42.001, elevationMeters: 2_300 },
+      ],
+    };
+    const flatMap = new FakeNativeMap();
+    const flatFacade = new MapLibreFacade(services.logger);
+    flatFacade.attach(flatMap as unknown as MapLibreMap);
+    flatFacade.fitBounds(bounds, 16, undefined, westward);
+    expect(flatMap.flyCalls).toEqual([]);
+    expect(flatMap.fitBoundsCalls.at(-1)).toMatchObject({
+      maxZoom: 16,
+      padding: 56,
+      bearing: flatMap.getBearing(),
+      pitch: flatMap.getPitch(),
+    });
+
+    const terrainMap = new FakeNativeMap();
+    terrainMap.initialTerrain = { source: 'terrain-dem' };
+    Object.defineProperty(terrainMap.getCanvas(), 'clientWidth', { value: 1600 });
+    Object.defineProperty(terrainMap.getCanvas(), 'clientHeight', { value: 1000 });
+    const terrainFacade = new MapLibreFacade(services.logger);
+    terrainFacade.attach(terrainMap as unknown as MapLibreMap);
+    terrainMap.fire('style.load');
+    terrainFacade.fitBounds(bounds, 16, undefined, westward);
+    expect(terrainMap.fitBoundsCalls).toEqual([]);
+    expect(terrainMap.flyCalls.at(-1)).toMatchObject({
+      bearing: -90,
+      pitch: 45,
+      padding: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
+    expect(terrainMap.flyCalls.at(-1)?.zoom).toBeLessThanOrEqual(16);
   });
 
   it('preserves subscribers while the native ref detaches and reattaches', () => {

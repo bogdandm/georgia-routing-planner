@@ -9,6 +9,7 @@ import {
   estimateHikingSeconds,
   findDominantSummit,
   isLoop,
+  trackOutboundDirection,
 } from '@/domain/tracks/trackCalculations';
 
 function point(
@@ -411,5 +412,32 @@ describe('track calculations', () => {
     ).toBe(true);
     expect(loop([[44, 42]])).toBe(false);
     expect(loop()).toBe(false);
+  });
+
+  it('leads one-way tracks to the finish and loops to their farthest point', () => {
+    expect(
+      trackOutboundDirection([
+        [
+          [44, 42],
+          [44.03, 42.01],
+        ],
+        [
+          [44.03, 42.02],
+          [44.05, 42.03],
+        ],
+      ]),
+    ).toEqual({ from: [44, 42], to: [44.05, 42.03] });
+    expect(
+      trackOutboundDirection([
+        [
+          [44, 42],
+          [44.01, 42],
+          [44.012, 42.02],
+          [43.99, 42.01],
+          [44.001, 42],
+        ],
+      ]),
+    ).toEqual({ from: [44, 42], to: [44.012, 42.02] });
+    expect(trackOutboundDirection([])).toBeNull();
   });
 });

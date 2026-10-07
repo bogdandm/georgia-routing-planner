@@ -31,6 +31,21 @@ export interface MapFitPadding {
   readonly left: number;
 }
 
+/**
+ * Track geometry for a 3D fit: the camera turns so `from` sits at the bottom of the
+ * screen and `to` toward the top, then keeps every point in view at their elevations.
+ * Flat maps ignore it and fit the bounds in their current orientation.
+ */
+export interface MapTravelPath {
+  readonly from: MapCoordinate;
+  readonly to: MapCoordinate;
+  readonly points: readonly MapPathPoint[];
+}
+
+export interface MapPathPoint extends MapCoordinate {
+  readonly elevationMeters?: number;
+}
+
 export interface MapViewportSnapshot {
   readonly bounds: MapViewportBounds;
   readonly center: MapCoordinate;

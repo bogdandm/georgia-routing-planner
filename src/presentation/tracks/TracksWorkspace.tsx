@@ -132,6 +132,8 @@ import {
 } from '@/domain/tracks/trackFolder';
 import {
   calculateTrackMetrics,
+  trackOutboundDirection,
+  type TrackBounds,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 import type {
@@ -211,7 +213,11 @@ import {
   requestMapNavigation,
   requestMarkerPlacement,
 } from '@/presentation/map/mapInteractionStore';
-import type { MapCoordinate } from '@/presentation/map/mapTypes';
+import type {
+  MapCoordinate,
+  MapTravelPath,
+  MapViewportBounds,
+} from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { TrackThumbnailImage } from '@/presentation/tracks/TrackThumbnailImage';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -1282,17 +1288,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           selection.content.trackPoints.map((points) => ({ points })),
         ),
       );
-      requestMapFitBounds(
-        {
-          west: metrics.bounds.west,
-          south: metrics.bounds.south,
-          east: metrics.bounds.crossesAntimeridian
-            ? metrics.bounds.east + 360
-            : metrics.bounds.east,
-          north: metrics.bounds.north,
-        },
-        15,
-      );
+      requestMapFitBounds(mapFitBoundsForTrack(metrics.bounds), 15);
       return;
     }
     if (active === null) {
@@ -1312,9 +1308,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       return;
     }
     mapLayers?.clearPlannedLineGeometry('route-plan');
+    // Tracks without source elevation fit again once their DEM samples arrive, so the
+    // 3D fit can see their relief.
+    const awaitsDemRelief =
+      active.kind !== 'saved' &&
+      active.preparationStatus === 'ready' &&
+      active.sourceProfile === null;
+    const demRelief = awaitsDemRelief && active.calculatedSegments !== null;
     const trackId =
       active.kind === 'preview' || active.kind === 'shared'
-        ? `${active.id}:${active.preparationStatus}`
+        ? // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
+          `${active.id}:${active.preparationStatus}${demRelief ? ':dem' : ''}`
         : active.summary.id;
     if (renderedTrackId.current === trackId) return;
     const segments =
@@ -1324,6 +1328,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             ? active.sourceSegments
             : active.parsed.segments
           ).map((segment) => segment.points.map((point) => point.coordinate));
+    // The 3D fit needs relief. Saving promotes DEM samples to the primary points; before
+    // that, DEM samples join the drawn source points, which keep any span the DEM missed.
+    const elevatedPoints =
+      active.kind === 'saved'
+        ? active.content.trackPoints.flat()
+        : [
+            ...(active.preparationStatus === 'ready'
+              ? active.sourceSegments
+              : active.parsed.segments
+            ).flatMap((segment) => segment.points),
+            ...(awaitsDemRelief && active.calculatedSegments !== null
+              ? active.calculatedSegments.flatMap((segment) => segment.points)
+              : []),
+          ];
     const metrics =
       active.kind === 'saved'
         ? active.summary.metrics
@@ -1334,16 +1352,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
     if (initiallyRestoredTrackId.current !== trackId) {
+      // In 3D the camera faces along the track so its start sits at the bottom.
+      const direction = trackOutboundDirection(segments);
       requestMapFitBounds(
-        {
-          west: metrics.bounds.west,
-          south: metrics.bounds.south,
-          east: metrics.bounds.crossesAntimeridian
-            ? metrics.bounds.east + 360
-            : metrics.bounds.east,
-          north: metrics.bounds.north,
-        },
+        mapFitBoundsForTrack(metrics.bounds),
         15,
+        direction === null
+          ? {}
+          : { path: mapTravelPath(direction.from, direction.to, elevatedPoints) },
       );
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
@@ -4280,6 +4296,33 @@ function downloadFile(
   URL.revokeObjectURL(url);
 }
 
+/** A 3D fit path facing from `from` toward `to` that keeps `points` in view. */
+function mapTravelPath(
+  from: TrackCoordinate,
+  to: TrackCoordinate,
+  points: readonly TrackPoint[],
+): MapTravelPath {
+  return {
+    from: { longitude: from[0], latitude: from[1] },
+    to: { longitude: to[0], latitude: to[1] },
+    points: points.map(({ coordinate: [longitude, latitude], elevationMeters }) =>
+      elevationMeters === undefined
+        ? { longitude, latitude }
+        : { longitude, latitude, elevationMeters },
+    ),
+  };
+}
+
+/** Unwraps antimeridian-crossing track bounds so MapLibre fits the short way around. */
+function mapFitBoundsForTrack(bounds: TrackBounds): MapViewportBounds {
+  return {
+    west: bounds.west,
+    south: bounds.south,
+    east: bounds.crossesAntimeridian ? bounds.east + 360 : bounds.east,
+    north: bounds.north,
+  };
+}
+
 function elevationProfileInputSegments(
   segments: readonly (readonly TrackPoint[])[],
 ): readonly (readonly ElevationProfileInputPoint[])[] | null {
@@ -4342,6 +4385,12 @@ function InteractiveElevationProfile({
     readonly profile: ElevationProfile;
     readonly index: number;
   } | null>(null);
+  // Only Climbs & Descents rows focus a segment on the map; chart hover stays panel-only
+  // and must not cancel a row that still has pointer or keyboard focus.
+  const [listHoveredSegment, setListHoveredSegment] = useState<{
+    readonly profile: ElevationProfile;
+    readonly index: number;
+  } | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<{
     readonly profile: ElevationProfile;
     readonly index: number;
@@ -4349,6 +4398,7 @@ function InteractiveElevationProfile({
   useEffect(
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
+      mapLayers?.setImportedTrackFocus(null);
     },
     [mapLayers],
   );
@@ -4360,9 +4410,27 @@ function InteractiveElevationProfile({
   }, [mapLayers, profile]);
   const hoveredSegmentIndex =
     hoveredSegment?.profile === profile ? hoveredSegment.index : null;
+  const mapFocusSegmentIndex =
+    listHoveredSegment?.profile === profile ? listHoveredSegment.index : null;
   const selectedSegmentIndex =
     selectedSegment?.profile === profile ? selectedSegment.index : null;
   const activeSegmentIndex = hoveredSegmentIndex ?? selectedSegmentIndex;
+  // Publishes the current focus directly: a cleanup would send `null` between two rows
+  // and turn the map's cross-fade into a fade out and in.
+  useEffect(() => {
+    const segment =
+      mapFocusSegmentIndex === null
+        ? undefined
+        : profile.segments[mapFocusSegmentIndex];
+    mapLayers?.setImportedTrackFocus(
+      segment?.gradeSubsegments.map((gradeSubsegment) => ({
+        coordinates: profile.points
+          .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
+          .map((point) => point.coordinate),
+        color: appColors.elevationGrade[gradeSubsegment.band],
+      })) ?? null,
+    );
+  }, [mapFocusSegmentIndex, mapLayers, profile]);
   const onSegmentHoverChange = (nextSegmentIndex: number | null) => {
     if (nextSegmentIndex === null) {
       setHoveredSegment(null);
@@ -4372,6 +4440,23 @@ function InteractiveElevationProfile({
       current?.profile === profile && current.index === nextSegmentIndex
         ? current
         : { profile, index: nextSegmentIndex },
+    );
+  };
+  /** Fits the segment; in 3D the camera faces from its start toward its finish. */
+  const fitSegmentOnMap = (segmentIndex: number) => {
+    const segment = profile.segments[segmentIndex];
+    if (segment === undefined) return;
+    const points = profile.points.slice(
+      segment.startSampleIndex,
+      segment.endSampleIndex + 1,
+    );
+    const start = points[0]?.coordinate;
+    const finish = points.at(-1)?.coordinate;
+    if (start === undefined || finish === undefined) return;
+    requestMapFitBounds(
+      mapFitBoundsForTrack(calculateTrackMetrics([{ points }]).bounds),
+      16,
+      { path: mapTravelPath(start, finish, points) },
     );
   };
   const onSegmentSelectionChange = (nextSegmentIndex: number | null) => {
@@ -4431,8 +4516,14 @@ function InteractiveElevationProfile({
           segments={profile.segments}
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
-          onSegmentHoverChange={onSegmentHoverChange}
-          onSegmentSelectionChange={onSegmentSelectionChange}
+          onSegmentHoverChange={(index) => {
+            onSegmentHoverChange(index);
+            setListHoveredSegment(index === null ? null : { profile, index });
+          }}
+          onSegmentSelectionChange={(index) => {
+            onSegmentSelectionChange(index);
+            if (index !== null) fitSegmentOnMap(index);
+          }}
         />
       ) : null}
     </Stack>

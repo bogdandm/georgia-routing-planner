@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/user/UserDataBackupSection.tsx:142
+#: src/presentation/user/UserDataBackupSection.tsx:145
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -24,7 +24,7 @@ msgid "Data"
 msgstr "Data"
 
 #. js-lingui-id: Eg3Qrc
-#: src/presentation/user/UserDataBackupSection.tsx:103
+#: src/presentation/user/UserDataBackupSection.tsx:106
 msgid "Data archive"
 msgstr "Data archive"
 
@@ -39,31 +39,31 @@ msgid "Data could not be imported from this file. Nothing was changed."
 msgstr "Data could not be imported from this file. Nothing was changed."
 
 #. js-lingui-id: BB2-PH
-#: src/presentation/user/UserDataBackupSection.tsx:88
+#: src/presentation/user/UserDataBackupSection.tsx:91
 msgid "Export data as gzip"
 msgstr "Export data as gzip"
 
 #. js-lingui-id: l3s5ri
-#: src/presentation/user/UserDataBackupSection.tsx:150
+#: src/presentation/user/UserDataBackupSection.tsx:153
 msgid "Import"
 msgstr "Import"
 
 #. js-lingui-id: 4zGHqT
-#: src/presentation/user/UserDataBackupSection.tsx:96
+#: src/presentation/user/UserDataBackupSection.tsx:99
 msgid "Import data from gzip"
 msgstr "Import data from gzip"
 
 #. js-lingui-id: YZTjDW
-#: src/presentation/user/UserDataBackupSection.tsx:125
+#: src/presentation/user/UserDataBackupSection.tsx:128
 msgid "Import data?"
 msgstr "Import data?"
 
-#. js-lingui-id: FH9Hxp
+#. js-lingui-id: 2N7bbU
 #: src/presentation/user/UserDataBackupSection.tsx:79
-msgid "Tracks as GPX files, with track metadata, markers, and settings."
-msgstr "Tracks as GPX files, with track metadata, markers, and settings."
+msgid "Tracks as GPX files by folder, with track metadata, markers, settings, and checksums."
+msgstr "Tracks as GPX files by folder, with track metadata, markers, settings, and checksums."
 
 #. js-lingui-id: -x_CUs
-#: src/presentation/user/UserDataBackupSection.tsx:129
+#: src/presentation/user/UserDataBackupSection.tsx:132
 msgid "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."
 msgstr "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."

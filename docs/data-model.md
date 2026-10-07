@@ -279,24 +279,31 @@ Code: `src/infrastructure/persistence/userDataArchive.ts`,
 
 The archive is a gzip-compressed POSIX ustar file, version 1:
 
-| Entry           | Content                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------- |
-| `tracks.json`   | `{ version, exportedAt, folders, tracks: [{ file, summary }] }` with `LocalTrackSummary` rows |
-| `markers.json`  | `{ version, markers, trackMarkers: [{ trackId, markers }] }` with saved and track markers     |
-| `settings.json` | `{ version, settings }` keyed by setting key                                                  |
-| `tracks/*.gpx`  | Source geometry of each track, named after the track                                          |
+| Entry                   | Content                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| `hash.json`             | `{ version, algorithm: "SHA-256", files }` mapping every other entry path to its hex digest   |
+| `tracks.json`           | `{ version, exportedAt, folders, tracks: [{ file, summary }] }` with `LocalTrackSummary` rows |
+| `markers.json`          | `{ version, markers, trackMarkers: [{ trackId, markers }] }` with saved and track markers     |
+| `settings.json`         | `{ version, settings }` keyed by setting key                                                  |
+| `tracks/<folder>/*.gpx` | Source geometry of each track in a directory named after its folder                           |
+| `tracks/*.gpx`          | Source geometry of each unfiled track                                                         |
 
-Settings cover every key in the settings table above except `sync.*`. Calculated
-elevation and all synchronization queues stay in the browser.
+GPX files and folder directories are named after the track or folder, made
+filesystem-safe, shortened to fit ustar paths, and numbered when names repeat. Paths
+longer than 100 bytes use the ustar directory prefix. Settings cover every key in the
+settings table above except `sync.*`. Calculated elevation and all synchronization
+queues stay in the browser.
 
-Import accepts files and inflated content of at most 512 MiB each, reads geometry from
-each GPX file through the GPX parser, recomputes the content hash and point counts, and
-validates every record with the storage schemas before one IndexedDB transaction writes
-anything. Records with an existing ID are replaced; identical records keep their
-synchronization state, and changed ones queue for upload like local edits. Calculated
-elevation of a track with unchanged geometry is kept. Archived folders come first in the
-folder order, a track in an unknown folder becomes unfiled, and archived settings
-replace local ones, removing keys the archive lacks. Unknown setting keys are ignored.
+Import accepts files and inflated content of at most 512 MiB each and rejects the
+archive unless `hash.json` lists every other entry with a matching SHA-256 digest. It
+then reads geometry from each GPX file through the GPX parser, recomputes the content
+hash and point counts, and validates every record with the storage schemas before one
+IndexedDB transaction writes anything. Records with an existing ID are replaced;
+identical records keep their synchronization state, and changed ones queue for upload
+like local edits. Calculated elevation of a track with unchanged geometry is kept.
+Archived folders come first in the folder order, a track in an unknown folder becomes
+unfiled, and archived settings replace local ones, removing keys the archive lacks.
+Unknown setting keys are ignored.
 
 ## Transient map and satellite state
 

@@ -178,9 +178,9 @@ describe('user data archive', () => {
     const restored = await freshDatabase();
     await restoreUserDataArchive(restored, hasher, new Blob([archive]));
 
-    expect(new TextDecoder().decode(gunzipSync(archive))).not.toContain(
-      'calculatedMetrics',
-    );
+    const tarText = new TextDecoder().decode(gunzipSync(archive));
+    expect(tarText).toContain('"file": "tracks/Trips/Kazbegi — Гергети.gpx"');
+    expect(tarText).not.toContain('calculatedMetrics');
 
     await expect(restored.listLocalTracks()).resolves.toEqual([expectedSummary]);
     await expect(restored.loadLocalTrackContent(summary.id)).resolves.toEqual(content);
@@ -297,17 +297,49 @@ describe('user data archive', () => {
     await expect(database.loadTrackSyncState(summary.id)).resolves.toEqual(cleanState);
   });
 
-  it('rejects an archive with an invalid record without changing local data', async () => {
+  it('lays out GPX files by folder, including folder paths beyond 100 bytes', async () => {
+    const longName = `Caucasus ${'ridge '.repeat(22)}`.trim();
+    await database.createTrackFolder({
+      schemaVersion: TRACK_FOLDER_SCHEMA_VERSION,
+      id: 'folder:long',
+      ...normalizeTrackFolderName(longName),
+      iconKey: 'folder',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      updatedAt: '2026-08-01T09:00:00.000Z',
+    });
+    const filedContent = trackContent('local:filed');
+    await database.saveLocalTrack(
+      await trackSummary(filedContent, 'Filed', 'folder:long'),
+      filedContent,
+    );
+    const unfiledContent = trackContent('local:unfiled');
+    await database.saveLocalTrack(
+      await trackSummary(unfiledContent, 'Unfiled', null),
+      unfiledContent,
+    );
+    const tracks = await database.listLocalTracks();
+
+    const archive = await createUserDataArchive(database, exportedAt);
+    const tarText = new TextDecoder().decode(gunzipSync(archive));
+    const restored = await freshDatabase();
+    await restoreUserDataArchive(restored, hasher, new Blob([archive]));
+
+    expect(tarText).toContain(`"file": "tracks/${longName.slice(0, 120)}/Filed.gpx"`);
+    expect(tarText).toContain('"file": "tracks/Unfiled.gpx"');
+    await expect(restored.listLocalTracks()).resolves.toEqual(tracks);
+  });
+
+  it('rejects an archive whose files do not match hash.json without changing data', async () => {
     const content = trackContent('local:kazbegi');
     const summary = await trackSummary(content, 'Kazbegi', null);
     await database.saveLocalTrack(summary, content);
     await database.saveSavedMarker(savedMarker('marker:view', 'Tbilisi view'));
     const archive = await createUserDataArchive(database, exportedAt);
-    // Same-length edit keeps every tar header valid while breaking the marker record.
+    // A valid same-length edit keeps the tar and the record valid; only checksums fail.
     const tarText = new TextDecoder().decode(gunzipSync(archive));
     const tampered = gzipSync(
       new TextEncoder().encode(
-        tarText.replace('"colorKey": "blue"', '"colorKey": "bluX"'),
+        tarText.replace('"elevationMeters": 520', '"elevationMeters": 521'),
       ),
     );
     const restored = await freshDatabase();
@@ -317,12 +349,28 @@ describe('user data archive', () => {
 
     await expect(
       restoreUserDataArchive(restored, hasher, new Blob([tampered])),
-    ).rejects.toThrow();
+    ).rejects.toThrow('checksums');
     await expect(
       restoreUserDataArchive(restored, hasher, new Blob(['not gzip'])),
     ).rejects.toThrow();
 
     await expect(restored.listLocalTracks()).resolves.toEqual([localSummary]);
     await expect(restored.listSavedMarkers()).resolves.toEqual([]);
+  });
+
+  it('writes nothing when any archived record is invalid', async () => {
+    const content = trackContent('local:kazbegi');
+    const summary = await trackSummary(content, 'Kazbegi', null);
+
+    await expect(
+      database.restoreUserDataBackup({
+        tracks: [{ summary, content }],
+        folders: [],
+        markers: [{ ...savedMarker('marker:view', 'Tbilisi view'), colorKey: 'bluX' }],
+        settings: {},
+      }),
+    ).rejects.toThrow();
+
+    await expect(database.listLocalTracks()).resolves.toEqual([]);
   });
 });

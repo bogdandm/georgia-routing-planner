@@ -76,7 +76,10 @@ export function UserDataBackupSection() {
         color="text.secondary"
         sx={{ display: 'block', mt: 0.5 }}
       >
-        <Trans>Tracks as GPX files, with track metadata, markers, and settings.</Trans>
+        <Trans>
+          Tracks as GPX files by folder, with track metadata, markers, settings, and
+          checksums.
+        </Trans>
       </Typography>
       <Stack spacing={1} sx={{ mt: 1 }}>
         <Button

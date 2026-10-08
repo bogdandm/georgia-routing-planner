@@ -104,7 +104,8 @@ via Open-Meteo. They are model predictions, not weather-station measurements.
 ## Local-first data
 
 Tracks, folders, markers, and preferences are saved in your browser. They remain
-available without an account.
+available without an account. **User → Data** exports everything to a `.tar.gz` archive
+with tracks as GPX files and imports such an archive into another browser.
 
 Synchronization across devices is optional and off by default. It starts only after you
 sign in and turn on **Sync across devices**. Local work continues when sync is off or

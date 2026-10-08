@@ -105,8 +105,8 @@ describe('SupabaseUserDataService', () => {
       expect(service.getSnapshot()).toMatchObject({
         busy: false,
         email: 'restored@example.test',
-        errorMessage: null,
-        noticeMessage: null,
+        problem: null,
+        notice: null,
         userId: 'user-id',
         status: 'signed-in',
       });
@@ -148,9 +148,9 @@ describe('SupabaseUserDataService', () => {
     expect(service.getSnapshot()).toMatchObject({
       busy: false,
       email: null,
-      errorMessage: 'Unable to sign in. Check your email and password.',
+      problem: 'sign-in-failed',
       status: 'error',
-      noticeMessage: null,
+      notice: null,
     });
   });
 
@@ -167,8 +167,8 @@ describe('SupabaseUserDataService', () => {
     expect(service.getSnapshot()).toMatchObject({
       busy: false,
       email: null,
-      errorMessage: null,
-      noticeMessage: 'Check your email to confirm your account, then sign in.',
+      problem: null,
+      notice: 'registration-confirmation-sent',
       status: 'signed-out',
     });
   });
@@ -197,10 +197,8 @@ describe('SupabaseUserDataService', () => {
 
     await service.signUp('existing@example.test', 'password');
 
-    expect(service.getSnapshot().noticeMessage).toBe(
-      'Check your email to confirm your account, then sign in.',
-    );
-    expect(service.getSnapshot().errorMessage).toBeNull();
+    expect(service.getSnapshot().notice).toBe('registration-confirmation-sent');
+    expect(service.getSnapshot().problem).toBeNull();
   });
 
   it('disposes the auth client and subscription exactly once', () => {
@@ -423,13 +421,12 @@ describe('SupabaseUserDataService', () => {
 
     expect(service.getSnapshot()).toMatchObject({
       syncStatus: 'error',
-      errorMessage:
-        'Cloud track storage is full. Delete a synchronized track and try again.',
+      problem: 'sync-quota-exceeded',
     });
     service.dispose();
   });
 
-  it('surfaces the bounded worker reason for a server failure', async () => {
+  it('normalizes a bounded worker reason to a generic synchronization problem', async () => {
     const fake = createClient({ restoredSession: session('server@example.test') });
     const synchronize = vi
       .fn()
@@ -456,7 +453,7 @@ describe('SupabaseUserDataService', () => {
 
     expect(service.getSnapshot()).toMatchObject({
       syncStatus: 'error',
-      errorMessage: 'Cloud synchronization request failed (500/internal_error).',
+      problem: 'sync-failed',
     });
     service.dispose();
   });
@@ -545,8 +542,7 @@ describe('SupabaseUserDataService', () => {
     expect(service.getSnapshot()).toMatchObject({
       busy: false,
       syncStatus: 'error',
-      errorMessage:
-        'Synchronization could not finish. Your local tracks, folders, and markers remain available.',
+      problem: 'sync-failed',
     });
     service.dispose();
   });
@@ -652,8 +648,7 @@ describe('SupabaseUserDataService', () => {
       busy: false,
       syncStatus: 'needs-action',
       remoteTrackDeletions: [{ trackId: 'local:keep', name: 'Keep' }],
-      errorMessage:
-        'Unable to apply the deletion decision. Your local data remains available.',
+      problem: 'deletion-decision-failed',
     });
     service.dispose();
   });

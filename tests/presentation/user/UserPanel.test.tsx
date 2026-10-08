@@ -14,17 +14,13 @@ import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
-beforeEach(() => {
-  activateAppLocale('en');
-});
-
 function snapshot(status: UserDataSnapshot['status']): UserDataSnapshot {
   return {
     busy: false,
     email: null,
     userId: null,
-    errorMessage: null,
-    noticeMessage: null,
+    problem: null,
+    notice: null,
     status,
     syncEnabled: false,
     syncStatus: 'idle',
@@ -94,6 +90,10 @@ function accountButton(name: 'Create account' | 'Sign in', index: number) {
   return button;
 }
 
+beforeEach(() => {
+  activateAppLocale('en');
+});
+
 describe('UserPanel', () => {
   it('submits sign-in credentials and clears the password', async () => {
     const userData = createService(snapshot('signed-out'));
@@ -138,7 +138,7 @@ describe('UserPanel', () => {
     act(() => {
       userData.set({
         ...snapshot('signed-out'),
-        noticeMessage: 'Check your email to confirm your account, then sign in.',
+        notice: 'registration-confirmation-sent',
       });
     });
     expect(screen.getByRole('status')).toHaveTextContent('Check your email');
@@ -186,7 +186,7 @@ describe('UserPanel', () => {
       createService({
         ...snapshot('error'),
         busy: true,
-        errorMessage: 'Unable to create an account. Try again.',
+        problem: 'sign-up-failed',
       }).service,
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Unable to create an account');
@@ -197,7 +197,7 @@ describe('UserPanel', () => {
     const userData = createService({
       ...snapshot('signed-in'),
       email: 'user@example.test',
-      errorMessage: 'Cloud track storage is full.',
+      problem: 'sync-quota-exceeded',
       syncEnabled: true,
       syncStatus: 'error',
       syncUsage: {
@@ -210,7 +210,7 @@ describe('UserPanel', () => {
     renderPanel(userData.service);
 
     expect(screen.getByLabelText('Sync across devices')).toBeChecked();
-    expect(screen.getByText('2.00 MiB / 8 MiB (1.00 MiB reserved)')).toBeVisible();
+    expect(screen.getByText('2.00 MiB / 8.00 MiB (1.00 MiB reserved)')).toBeVisible();
     expect(
       screen.getByRole('progressbar', { name: 'Cloud track quota' }),
     ).toHaveAttribute('aria-valuenow', '37.5');

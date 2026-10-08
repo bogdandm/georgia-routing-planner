@@ -13,10 +13,66 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
+#. js-lingui-id: TA0kCQ
+#: src/presentation/user/UserPanel.tsx:308
+msgid "({reservedMiB} MiB reserved)"
+msgstr "({reservedMiB} MiB reserved)"
+
+#. js-lingui-id: 2vd1bD
+#: src/presentation/user/UserPanel.tsx:302
+msgid "{usedMiB} MiB / {limitMiB} MiB"
+msgstr "{usedMiB} MiB / {limitMiB} MiB"
+
+#. js-lingui-id: 1ZAF9w
+#: src/presentation/user/UserPanel.tsx:210
+msgid "Account features are not configured. Your tracks remain stored locally in this browser."
+msgstr "Account features are not configured. Your tracks remain stored locally in this browser."
+
+#. js-lingui-id: W4_cQH
+#: src/presentation/user/UserPanel.tsx:77
+msgid "Account mode"
+msgstr "Account mode"
+
 #. js-lingui-id: dEgA5A
 #: src/presentation/user/UserDataBackupSection.tsx:145
 msgid "Cancel"
 msgstr "Cancel"
+
+#. js-lingui-id: 1Snvcx
+#: src/presentation/user/userDataMessages.ts:32
+msgid "Check your email to confirm your account, then sign in."
+msgstr "Check your email to confirm your account, then sign in."
+
+#. js-lingui-id: Xcgi7n
+#: src/presentation/user/UserPanel.tsx:313
+msgid "Cloud track quota"
+msgstr "Cloud track quota"
+
+#. js-lingui-id: mCx31Q
+#: src/presentation/user/userDataMessages.ts:27
+msgid "Cloud track storage is full. Delete a synchronized track and try again."
+msgstr "Cloud track storage is full. Delete a synchronized track and try again."
+
+#. js-lingui-id: QHcLEN
+#: src/presentation/user/UserPanel.tsx:251
+msgid "Connected"
+msgstr "Connected"
+
+#. js-lingui-id: 1hMWR6
+#: src/presentation/user/UserPanel.tsx:96
+#: src/presentation/user/UserPanel.tsx:171
+msgid "Create account"
+msgstr "Create account"
+
+#. js-lingui-id: xgnl4l
+#: src/presentation/user/UserPanel.tsx:101
+msgid "Create an account to confirm your email address."
+msgstr "Create an account to confirm your email address."
+
+#. js-lingui-id: C7onlH
+#: src/presentation/user/UserPanel.tsx:168
+msgid "Creating account…"
+msgstr "Creating account…"
 
 #. js-lingui-id: HKH-W-
 #: src/presentation/user/UserDataBackupSection.tsx:72
@@ -38,10 +94,35 @@ msgstr "Data could not be exported."
 msgid "Data could not be imported from this file. Nothing was changed."
 msgstr "Data could not be imported from this file. Nothing was changed."
 
+#. js-lingui-id: cnGeoo
+#: src/presentation/user/RemoteDeletionDialog.tsx:43
+msgid "Delete"
+msgstr "Delete"
+
+#. js-lingui-id: 9GSV7H
+#: src/presentation/user/RemoteDeletionDialog.tsx:45
+msgid "Delete selected, upload the rest again"
+msgstr "Delete selected, upload the rest again"
+
+#. js-lingui-id: O3oNi5
+#: src/presentation/user/UserPanel.tsx:120
+msgid "Email"
+msgstr "Email"
+
+#. js-lingui-id: aJDBqw
+#: src/presentation/user/UserPanel.tsx:258
+msgid "Email unavailable"
+msgstr "Email unavailable"
+
 #. js-lingui-id: BB2-PH
 #: src/presentation/user/UserDataBackupSection.tsx:91
 msgid "Export data as gzip"
 msgstr "Export data as gzip"
+
+#. js-lingui-id: Pw01g0
+#: src/presentation/user/UserPanel.tsx:142
+msgid "Hide password"
+msgstr "Hide password"
 
 #. js-lingui-id: l3s5ri
 #: src/presentation/user/UserDataBackupSection.tsx:153
@@ -58,6 +139,116 @@ msgstr "Import data from gzip"
 msgid "Import data?"
 msgstr "Import data?"
 
+#. js-lingui-id: iA06_8
+#: src/presentation/user/RemoteDeletionDialog.tsx:189
+msgid "Items deleted from cloud"
+msgstr "Items deleted from cloud"
+
+#. js-lingui-id: Rcw29-
+#: src/presentation/user/RemoteDeletionDialog.tsx:128
+#: src/presentation/user/RemoteDeletionDialog.tsx:130
+msgid "Markers"
+msgstr "Markers"
+
+#. js-lingui-id: 8ZsakT
+#: src/presentation/user/UserPanel.tsx:132
+msgid "Password"
+msgstr "Password"
+
+#. js-lingui-id: yKu_3Y
+#: src/presentation/user/RemoteDeletionDialog.tsx:44
+msgid "Restore"
+msgstr "Restore"
+
+#. js-lingui-id: 1f599Z
+#: src/presentation/user/UserPanel.tsx:223
+msgid "Restoring account session…"
+msgstr "Restoring account session…"
+
+#. js-lingui-id: 7C-Jn5
+#: src/presentation/user/UserPanel.tsx:142
+msgid "Show password"
+msgstr "Show password"
+
+#. js-lingui-id: 5lWFkC
+#: src/presentation/user/UserPanel.tsx:86
+#: src/presentation/user/UserPanel.tsx:172
+msgid "Sign in"
+msgstr "Sign in"
+
+#. js-lingui-id: u4Jg_2
+#: src/presentation/user/UserPanel.tsx:103
+msgid "Sign in to your account."
+msgstr "Sign in to your account."
+
+#. js-lingui-id: fcWrnU
+#: src/presentation/user/UserPanel.tsx:347
+msgid "Sign out"
+msgstr "Sign out"
+
+#. js-lingui-id: zU-Ro7
+#: src/presentation/user/UserPanel.tsx:256
+msgid "Signed in as"
+msgstr "Signed in as"
+
+#. js-lingui-id: mRv0ca
+#: src/presentation/user/UserPanel.tsx:169
+msgid "Signing in…"
+msgstr "Signing in…"
+
+#. js-lingui-id: tFI3Lp
+#: src/presentation/user/UserPanel.tsx:346
+msgid "Signing out…"
+msgstr "Signing out…"
+
+#. js-lingui-id: Cz1Pp9
+#: src/presentation/user/UserPanel.tsx:285
+msgid "Sync across devices"
+msgstr "Sync across devices"
+
+#. js-lingui-id: lb_UU4
+#: src/presentation/user/UserPanel.tsx:331
+msgid "Sync now"
+msgstr "Sync now"
+
+#. js-lingui-id: Sy8_iI
+#: src/presentation/user/userDataMessages.ts:23
+msgid "Synchronization could not finish. Your local tracks, folders, and markers remain available."
+msgstr "Synchronization could not finish. Your local tracks, folders, and markers remain available."
+
+#. js-lingui-id: KIdp4G
+#: src/presentation/user/UserPanel.tsx:247
+msgid "Synchronization needs attention"
+msgstr "Synchronization needs attention"
+
+#. js-lingui-id: oSMAmM
+#: src/presentation/user/UserPanel.tsx:249
+msgid "Synchronization needs your decision"
+msgstr "Synchronization needs your decision"
+
+#. js-lingui-id: FLZtaU
+#: src/presentation/user/UserPanel.tsx:245
+msgid "Synchronizing…"
+msgstr "Synchronizing…"
+
+#. js-lingui-id: d-ppML
+#. placeholder {0}: countFormatter.format(snapshot.syncProgress.completedItems)
+#. placeholder {1}: countFormatter.format(snapshot.syncProgress.totalItems)
+#: src/presentation/user/UserPanel.tsx:244
+msgid "Synchronizing… {0}/{1}"
+msgstr "Synchronizing… {0}/{1}"
+
+#. js-lingui-id: XhImrb
+#: src/presentation/user/RemoteDeletionDialog.tsx:94
+msgid "These items were deleted from your account. Select the items to delete from this browser. Unselected items will be uploaded again."
+msgstr "These items were deleted from your account. Select the items to delete from this browser. Unselected items will be uploaded again."
+
+#. js-lingui-id: 2eFlmt
+#: src/presentation/user/RemoteDeletionDialog.tsx:100
+#: src/presentation/user/RemoteDeletionDialog.tsx:102
+msgid "Tracks"
+msgstr "Tracks"
+
 #. js-lingui-id: 2N7bbU
 #: src/presentation/user/UserDataBackupSection.tsx:79
 msgid "Tracks as GPX files by folder, with track metadata, markers, settings, and checksums."
@@ -67,3 +258,38 @@ msgstr "Tracks as GPX files by folder, with track metadata, markers, settings, a
 #: src/presentation/user/UserDataBackupSection.tsx:132
 msgid "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."
 msgstr "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."
+
+#. js-lingui-id: H5vJRH
+#: src/presentation/user/userDataMessages.ts:13
+msgid "Unable to apply the deletion decision. Your local data remains available."
+msgstr "Unable to apply the deletion decision. Your local data remains available."
+
+#. js-lingui-id: fsl7HS
+#: src/presentation/user/userDataMessages.ts:21
+msgid "Unable to create an account. Try again."
+msgstr "Unable to create an account. Try again."
+
+#. js-lingui-id: Ezy2bo
+#: src/presentation/user/userDataMessages.ts:15
+msgid "Unable to restore your account session."
+msgstr "Unable to restore your account session."
+
+#. js-lingui-id: 9vg_NY
+#: src/presentation/user/userDataMessages.ts:17
+msgid "Unable to sign in. Check your email and password."
+msgstr "Unable to sign in. Check your email and password."
+
+#. js-lingui-id: cBcyO7
+#: src/presentation/user/userDataMessages.ts:19
+msgid "Unable to sign out. Try again."
+msgstr "Unable to sign out. Try again."
+
+#. js-lingui-id: XsmhGu
+#: src/presentation/user/userDataMessages.ts:25
+msgid "Unable to update synchronization. Your previous setting is unchanged."
+msgstr "Unable to update synchronization. Your previous setting is unchanged."
+
+#. js-lingui-id: GjhOGB
+#: src/presentation/user/UserPanel.tsx:262
+msgid "User ID"
+msgstr "User ID"

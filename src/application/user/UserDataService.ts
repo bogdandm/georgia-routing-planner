@@ -3,6 +3,18 @@ export type UserDataStatus =
 
 export type UserDataSyncStatus =
   'idle' | 'syncing' | 'success' | 'error' | 'needs-action';
+
+export type UserDataProblem =
+  | 'deletion-decision-failed'
+  | 'session-restore-failed'
+  | 'sign-in-failed'
+  | 'sign-out-failed'
+  | 'sign-up-failed'
+  | 'sync-failed'
+  | 'sync-preference-failed'
+  | 'sync-quota-exceeded';
+
+export type UserDataNotice = 'registration-confirmation-sent';
 export interface UserDataSyncProgress {
   readonly completedItems: number;
   readonly totalItems: number;
@@ -22,8 +34,8 @@ export interface UserDataSnapshot {
   readonly busy: boolean;
   readonly email: string | null;
   readonly userId: string | null;
-  readonly errorMessage: string | null;
-  readonly noticeMessage: string | null;
+  readonly problem: UserDataProblem | null;
+  readonly notice: UserDataNotice | null;
   readonly status: UserDataStatus;
   readonly syncEnabled: boolean;
   readonly syncStatus: UserDataSyncStatus;
@@ -66,8 +78,8 @@ export const unconfiguredUserDataSnapshot: UserDataSnapshot = {
   busy: false,
   email: null,
   userId: null,
-  errorMessage: null,
-  noticeMessage: null,
+  problem: null,
+  notice: null,
   status: 'unconfigured',
   syncEnabled: false,
   syncStatus: 'idle',

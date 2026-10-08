@@ -86,8 +86,9 @@ export function exportTrackAsKml(
   return `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>${escapeXml(summary.name)}</name><Placemark><name>${escapeXml(summary.name)}</name><MultiGeometry>${geometries}</MultiGeometry></Placemark></Document></kml>`;
 }
 
-export function safeTrackFilename(name: string, extension: 'gpx' | 'kml'): string {
-  const stem = Array.from(name)
+/** Filesystem-safe base name without an extension; empty when nothing usable remains. */
+export function safeFilenameStem(name: string): string {
+  return Array.from(name)
     .map((character) =>
       character.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(character)
         ? '-'
@@ -96,5 +97,9 @@ export function safeTrackFilename(name: string, extension: 'gpx' | 'kml'): strin
     .join('')
     .replace(/[. ]+$/gu, '')
     .slice(0, 120);
+}
+
+export function safeTrackFilename(name: string, extension: 'gpx' | 'kml'): string {
+  const stem = safeFilenameStem(name);
   return `${stem.length === 0 ? 'track' : stem}.${extension}`;
 }

@@ -7,6 +7,7 @@ import {
   Button,
   ButtonGroup,
   CircularProgress,
+  Divider,
   FormControlLabel,
   IconButton,
   InputAdornment,
@@ -30,6 +31,7 @@ import type {
 } from '@/application/user/UserDataService';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { appColors } from '@/presentation/theme/appColors';
+import { UserDataBackupSection } from '@/presentation/user/UserDataBackupSection';
 import {
   userDataNoticeMessage,
   userDataProblemMessage,
@@ -175,6 +177,16 @@ function AccountForm({
 }
 
 export function UserPanel() {
+  return (
+    <>
+      <AccountSection />
+      <Divider />
+      <UserDataBackupSection />
+    </>
+  );
+}
+
+function AccountSection() {
   const { i18n, t } = useLingui();
   const { userData } = useRuntimeServices();
   const snapshot = useUserDataSnapshot(userData);

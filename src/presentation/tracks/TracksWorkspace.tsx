@@ -159,6 +159,7 @@ import {
   type ElevationProfileInputPoint,
   type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
+import { downloadFile } from '@/presentation/downloadFile';
 import { SelectableIconGlyph } from '@/presentation/markers/MarkerIconPicker';
 import { TrackFolderEditorDialog } from '@/presentation/tracks/TrackFolderEditorDialog';
 import { formatDateTime } from '@/presentation/formatDateTime';
@@ -4280,20 +4281,6 @@ export function TracksPanel({
       />
     </Box>
   );
-}
-
-function downloadFile(
-  filename: string,
-  type: string,
-  content: string | Uint8Array,
-): void {
-  const blobContent = typeof content === 'string' ? content : Uint8Array.from(content);
-  const url = URL.createObjectURL(new Blob([blobContent], { type }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 /** A 3D fit path facing from `from` toward `to` that keeps `points` in view. */

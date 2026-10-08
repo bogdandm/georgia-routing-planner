@@ -304,4 +304,21 @@ describe('UserPanel', () => {
     expect(screen.getByText(/Account features are not configured/)).toBeVisible();
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
   });
+
+  it('asks before importing and reports a file that is not a data archive', async () => {
+    const user = userEvent.setup();
+    renderPanel(createService(snapshot('unconfigured')).service);
+
+    await user.upload(
+      screen.getByLabelText('Data archive'),
+      new File(['not an archive'], 'backup.tar.gz', { type: 'application/gzip' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Import' }));
+
+    expect(
+      await screen.findByText(
+        'Data could not be imported from this file. Nothing was changed.',
+      ),
+    ).toBeVisible();
+  });
 });

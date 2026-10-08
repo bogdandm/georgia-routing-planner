@@ -122,6 +122,33 @@ async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
   );
 }
 
+/**
+ * A dropped track is framed when it is parsed and again when elevation preparation is
+ * ready; a fast preparation interrupts the first 650 ms fit animation. Reads one second
+ * apart therefore agree only after the final fit has settled and been stored.
+ */
+async function readSettledStoredCamera(page: Page): Promise<StoredCamera> {
+  const reads: { previous: string | null; settled: StoredCamera | null } = {
+    previous: null,
+    settled: null,
+  };
+  await expect
+    .poll(
+      async () => {
+        const camera = await readStoredCamera(page);
+        const key = camera === null ? null : JSON.stringify(camera);
+        const stable = key !== null && key === reads.previous;
+        reads.previous = key;
+        if (stable) reads.settled = camera;
+        return stable;
+      },
+      { intervals: [1_000] },
+    )
+    .toBe(true);
+  if (reads.settled === null) throw new Error('The stored camera did not settle.');
+  return reads.settled;
+}
+
 async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
   readonly relief: boolean;
   readonly isolines: boolean;
@@ -330,12 +357,9 @@ test('imports and frames a global drop after expanding collapsed navigation', as
   ).toBeVisible();
   await expect(mapWorkspace).toBeVisible();
   await dropTrack();
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.zoom ?? null)
-    .toBeGreaterThan(10);
-  const expandedFitCamera = await readStoredCamera(page);
-  expect(expandedFitCamera).not.toBeNull();
-  if (expandedFitCamera === null) return;
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+  const expandedFitCamera = await readSettledStoredCamera(page);
+  expect(expandedFitCamera.zoom).toBeGreaterThan(10);
 
   page.once('dialog', (dialog) => {
     expect(dialog.message()).toBe('Discard this unsaved track?');

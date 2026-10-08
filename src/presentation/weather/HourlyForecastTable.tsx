@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import CloseFullscreenOutlinedIcon from '@mui/icons-material/CloseFullscreenOutlined';
 import AcUnitOutlinedIcon from '@mui/icons-material/AcUnitOutlined';
@@ -40,7 +41,6 @@ const tableWidth = labelColumnWidth + dataWidth;
 const floatingPanelHeight = 378;
 const floatingViewportMargin = 12;
 const expandedPanelWidth = tableWidth + 2;
-const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const hourlyChartBottom = 56;
 const temperatureChartTop = 26;
 const precipitationChartTop = 32;
@@ -124,14 +124,14 @@ interface HourlyRowProps {
   readonly renderCell: (hour: HourlyWeatherForecast, index: number) => ReactNode;
 }
 
-function localWeekday(timestamp: string): string {
-  const date = timestamp.slice(0, 10);
-  const year = Number(date.slice(0, 4));
-  const month = Number(date.slice(5, 7));
-  const day = Number(date.slice(8, 10));
-  const weekday = weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-  if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
-  return weekday;
+function localWeekday(
+  timestamp: string,
+  weekdayFormatter: Intl.DateTimeFormat,
+): string {
+  const year = Number(timestamp.slice(0, 4));
+  const month = Number(timestamp.slice(5, 7));
+  const day = Number(timestamp.slice(8, 10));
+  return weekdayFormatter.format(Date.UTC(year, month - 1, day));
 }
 function startsLocalDay(
   hours: readonly HourlyWeatherForecast[],
@@ -182,13 +182,16 @@ const cloudLightGrayRgb = { red: 225, green: 231, blue: 234 } as const;
 const cloudDarkGrayRgb = { red: 138, green: 154, blue: 161 } as const;
 const mapRgb = { red: 216, green: 216, blue: 211 } as const;
 const skyRgb = { red: 142, green: 202, blue: 230 } as const;
+/* eslint-disable lingui/no-unlocalized-strings -- CSS color tokens. */
 const cloudLightGray = '#E1E7EA';
 const cloudDarkGray = '#8A9AA1';
+/* eslint-enable lingui/no-unlocalized-strings */
 
 function interpolateColor(start: RgbColor, end: RgbColor, progress: number): string {
   const red = Math.round(start.red + (end.red - start.red) * progress);
   const green = Math.round(start.green + (end.green - start.green) * progress);
   const blue = Math.round(start.blue + (end.blue - start.blue) * progress);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS color token.
   return `rgb(${red.toString()}, ${green.toString()}, ${blue.toString()})`;
 }
 function windGradientColor(metresPerSecond: number): string {
@@ -312,6 +315,7 @@ function TemperatureChart({
   readonly hours: readonly HourlyWeatherForecast[];
   readonly domain: readonly [number, number];
 }): ReactElement {
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `hourly-temperature-${useId().replaceAll(':', '')}`;
   const coordinates: string[] = [];
   let firstY = hourlyChartBottom;
@@ -417,6 +421,7 @@ function HourlyGradient({
   readonly metric: HourlyGradientMetric;
   readonly height: number;
 }): ReactElement {
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `hourly-${metric}-${useId().replaceAll(':', '')}`;
   const first = hours[0];
   const last = hours[hours.length - 1];
@@ -476,6 +481,7 @@ function HourlyRow({
   height,
   chart,
   cellStyle,
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- ARIA role token.
   cellRole = 'cell',
   cellLabel,
   renderCell,
@@ -569,6 +575,7 @@ export function HourlyForecastTable({
   readonly showHeader?: boolean;
   readonly startTime?: string;
 }): ReactElement {
+  const { t, i18n } = useLingui();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollBackward, setCanScrollBackward] = useState(false);
@@ -579,6 +586,7 @@ export function HourlyForecastTable({
   const mouseDragRef = useRef<MouseDragState | null>(null);
   const [isMouseDragging, setIsMouseDragging] = useState(false);
   const [expandedLayout, setExpandedLayout] = useState<ExpandedLayout | null>(null);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
   const [expansionPhase, setExpansionPhase] = useState<ExpansionPhase>('compact');
   const isExpanded = expandedLayout !== null;
   const windowStartTime = startTime ?? forecast.current.time;
@@ -594,7 +602,18 @@ export function HourlyForecastTable({
   }, [hourlyForecast, windowStartTime]);
   const temperatureRange = useMemo(() => temperatureDomain(hours), [hours]);
   const precipitationMaximumMm = useMemo(() => precipitationMaximum(hours), [hours]);
+  const numberFormatter = useMemo(
+    () => new Intl.NumberFormat(i18n.locale),
+    [i18n.locale],
+  );
+  const weekdayFormatter = useMemo(
+    () =>
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option tokens.
+      new Intl.DateTimeFormat(i18n.locale, { weekday: 'short', timeZone: 'UTC' }),
+    [i18n.locale],
+  );
   const collapseExpanded = useCallback(() => {
+    /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
     if (expandedLayout === null || expansionPhase === 'closing') return;
     if (expansionPhase === 'opening') {
       setExpandedLayout(null);
@@ -602,6 +621,7 @@ export function HourlyForecastTable({
       return;
     }
     setExpansionPhase('closing');
+    /* eslint-enable lingui/no-unlocalized-strings */
   }, [expandedLayout, expansionPhase]);
   // Scroll and resize listeners stay attached across the opening -> open commit. An
   // Effect Event reads that committed phase even before passive effects re-run.
@@ -623,6 +643,7 @@ export function HourlyForecastTable({
     updateScrollState();
     const ResizeObserverConstructor: unknown = Reflect.get(
       globalThis,
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Global constructor name.
       'ResizeObserver',
     );
     if (!isResizeObserverConstructor(ResizeObserverConstructor)) return undefined;
@@ -635,12 +656,14 @@ export function HourlyForecastTable({
   useEffect(() => {
     if (expansionPhase !== 'opening') return undefined;
     const frame = requestAnimationFrame(() => {
+      /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
       if (sidebarCollapsed) {
         setExpandedLayout(null);
         setExpansionPhase('compact');
         return;
       }
       setExpansionPhase('open');
+      /* eslint-enable lingui/no-unlocalized-strings */
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -648,6 +671,7 @@ export function HourlyForecastTable({
   }, [expansionPhase, sidebarCollapsed]);
   useEffect(() => {
     if (!isExpanded) return undefined;
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM selector.
     const scrollRegion = containerRef.current?.closest('[data-weather-scroll-region]');
     if (!(scrollRegion instanceof HTMLElement)) return undefined;
     scrollRegion.addEventListener('scroll', collapseFromEnvironment, { passive: true });
@@ -716,6 +740,7 @@ export function HourlyForecastTable({
       height: bounds.height,
       compactWidth: bounds.width,
     });
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     setExpansionPhase('opening');
   };
   const finishWidthTransition = (event: ReactTransitionEvent<HTMLDivElement>) => {
@@ -726,16 +751,17 @@ export function HourlyForecastTable({
       return;
     }
     setExpandedLayout(null);
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     setExpansionPhase('compact');
   };
   const header = (
     <Stack direction="row" sx={{ alignItems: 'center' }}>
       <Typography component="h2" variant="subtitle2" sx={{ flex: 1 }}>
-        Next 24 hours
+        <Trans>Next 24 hours</Trans>
       </Typography>
       <IconButton
         size="small"
-        aria-label="Scroll hourly forecast backward"
+        aria-label={t`Scroll hourly forecast backward`}
         disabled={isExpanded || !canScrollBackward}
         onClick={() => {
           scroll(-1);
@@ -745,7 +771,7 @@ export function HourlyForecastTable({
       </IconButton>
       <IconButton
         size="small"
-        aria-label="Scroll hourly forecast forward"
+        aria-label={t`Scroll hourly forecast forward`}
         disabled={isExpanded || !canScrollForward}
         onClick={() => {
           scroll(1);
@@ -757,7 +783,7 @@ export function HourlyForecastTable({
         <IconButton
           size="small"
           aria-label={
-            isExpanded ? 'Collapse hourly forecast' : 'Expand hourly forecast'
+            isExpanded ? t`Collapse hourly forecast` : t`Expand hourly forecast`
           }
           aria-expanded={isExpanded}
           onClick={toggleExpanded}
@@ -776,7 +802,7 @@ export function HourlyForecastTable({
       ref={scrollRef}
       variant="outlined"
       role="table"
-      aria-label="Hourly forecast"
+      aria-label={t`Hourly forecast`}
       onScroll={updateScrollState}
       onTransitionEnd={finishWidthTransition}
       sx={{
@@ -818,11 +844,11 @@ export function HourlyForecastTable({
       }}
     >
       <HourlyRow
-        label="Time"
+        label={t`Time`}
         hours={hours}
         height={32}
         cellRole="columnheader"
-        cellLabel={(hour) => `${hour.time} local time`}
+        cellLabel={({ time }) => t`${time} local time`}
         renderCell={(hour, index) => {
           const startsDay = startsLocalDay(hours, index);
           return (
@@ -830,30 +856,34 @@ export function HourlyForecastTable({
               variant="caption"
               sx={{ lineHeight: 1.25, fontWeight: startsDay ? 700 : 400 }}
             >
-              {startsDay ? localWeekday(hour.time) : hour.time.slice(11, 16)}
+              {startsDay
+                ? localWeekday(hour.time, weekdayFormatter)
+                : hour.time.slice(11, 16)}
             </Typography>
           );
         }}
       />
       <HourlyRow
-        label="Weather"
+        label={t`Weather`}
         hours={hours}
         height={44}
-        cellLabel={(hour) =>
-          `${hour.time} weather ${describeWmoWeatherCode(hour.weatherCode)}`
-        }
+        cellLabel={({ time, weatherCode }) => {
+          const condition = t(describeWmoWeatherCode(weatherCode));
+          return t`${time} weather ${condition}`;
+        }}
         renderCell={(hour) => (
           <WeatherConditionIcon code={hour.weatherCode} isDay={hour.isDay} size={32} />
         )}
       />
       <HourlyRow
-        label="Temp (°C)"
+        label={t`Temp (°C)`}
         hours={hours}
         height={56}
         chart={<TemperatureChart hours={hours} domain={temperatureRange} />}
-        cellLabel={(hour) =>
-          `${hour.time} temperature ${hour.temperatureCelsius.toString()} degrees Celsius`
-        }
+        cellLabel={({ time, temperatureCelsius }) => {
+          const temperature = numberFormatter.format(temperatureCelsius);
+          return t`${time} temperature ${temperature} degrees Celsius`;
+        }}
         renderCell={(hour) => {
           const labelTop = Math.max(
             0,
@@ -876,13 +906,14 @@ export function HourlyForecastTable({
         }}
       />
       <HourlyRow
-        label="Precip (mm)"
+        label={t`Precip (mm)`}
         hours={hours}
         height={56}
         chart={<PrecipitationChart hours={hours} maximum={precipitationMaximumMm} />}
-        cellLabel={(hour) =>
-          `${hour.time} precipitation ${hour.precipitationMm.toString()} millimetres`
-        }
+        cellLabel={({ time, precipitationMm }) => {
+          const precipitation = formatWeatherMillimetresValue(precipitationMm, i18n);
+          return t`${time} precipitation ${precipitation} millimetres`;
+        }}
         renderCell={(hour) => {
           const barY = precipitationBarY(hour.precipitationMm, precipitationMaximumMm);
           const labelTop = Math.max(0, barY - (hour.snowfallCm > 0 ? 32 : 18));
@@ -896,70 +927,94 @@ export function HourlyForecastTable({
                 transform: 'translateX(-50%)',
               }}
             >
-              {formatWeatherMillimetresValue(hour.precipitationMm)}
+              {formatWeatherMillimetresValue(hour.precipitationMm, i18n)}
             </Typography>
           );
         }}
       />
       <HourlyRow
-        label="Wind (m/s)"
+        label={t`Wind (m/s)`}
         hours={hours}
         height={36}
         chart={<HourlyGradient hours={hours} metric="wind" height={36} />}
         cellLabel={(hour) => {
+          const { time } = hour;
           const metresPerSecond = windMetricMetresPerSecond(hour, 'wind');
-          const severity = windSeverity(metresPerSecond);
-          return `${hour.time} wind ${formatWeatherWindMetresPerSecond(metresPerSecond)} metres per second${severity === 'neutral' ? '' : `, ${severity}`}`;
+          const speed = formatWeatherWindMetresPerSecond(metresPerSecond, i18n);
+          switch (windSeverity(metresPerSecond)) {
+            case 'critical':
+              return t`${time} wind ${speed} metres per second, critical`;
+            case 'strong':
+              return t`${time} wind ${speed} metres per second, strong`;
+            case 'neutral':
+              return t`${time} wind ${speed} metres per second`;
+          }
         }}
         cellStyle={(hour) => windCellStyle(windMetricMetresPerSecond(hour, 'wind'))}
         renderCell={(hour) => (
           <Typography variant="caption">
-            {formatWeatherWindMetresPerSecond(windMetricMetresPerSecond(hour, 'wind'))}
+            {formatWeatherWindMetresPerSecond(
+              windMetricMetresPerSecond(hour, 'wind'),
+              i18n,
+            )}
           </Typography>
         )}
       />
       <HourlyRow
-        label="Gusts (m/s)"
+        label={t`Gusts (m/s)`}
         hours={hours}
         height={36}
         chart={<HourlyGradient hours={hours} metric="gusts" height={36} />}
         cellLabel={(hour) => {
+          const { time } = hour;
           const metresPerSecond = windMetricMetresPerSecond(hour, 'gusts');
-          const severity = windSeverity(metresPerSecond);
-          return `${hour.time} gusts ${formatWeatherWindMetresPerSecond(metresPerSecond)} metres per second${severity === 'neutral' ? '' : `, ${severity}`}`;
+          const speed = formatWeatherWindMetresPerSecond(metresPerSecond, i18n);
+          switch (windSeverity(metresPerSecond)) {
+            case 'critical':
+              return t`${time} gusts ${speed} metres per second, critical`;
+            case 'strong':
+              return t`${time} gusts ${speed} metres per second, strong`;
+            case 'neutral':
+              return t`${time} gusts ${speed} metres per second`;
+          }
         }}
         cellStyle={(hour) => windCellStyle(windMetricMetresPerSecond(hour, 'gusts'))}
         renderCell={(hour) => (
           <Typography variant="caption">
-            {formatWeatherWindMetresPerSecond(windMetricMetresPerSecond(hour, 'gusts'))}
+            {formatWeatherWindMetresPerSecond(
+              windMetricMetresPerSecond(hour, 'gusts'),
+              i18n,
+            )}
           </Typography>
         )}
       />
       <HourlyRow
-        label="Cloud (%)"
+        label={t`Cloud (%)`}
         hours={hours}
         height={36}
         chart={<HourlyGradient hours={hours} metric="cloud" height={36} />}
-        cellLabel={(hour) =>
-          `${hour.time} cloud cover ${Math.round(hour.cloudCoverPercent).toString()} percent`
-        }
+        cellLabel={({ time, cloudCoverPercent }) => {
+          const cloudCover = numberFormatter.format(Math.round(cloudCoverPercent) + 0);
+          return t`${time} cloud cover ${cloudCover} percent`;
+        }}
         renderCell={(hour) => (
           <Typography variant="caption">
-            {Math.round(hour.cloudCoverPercent).toString()}
+            {numberFormatter.format(Math.round(hour.cloudCoverPercent) + 0)}
           </Typography>
         )}
       />
       <HourlyRow
-        label="Visibility (km)"
+        label={t`Visibility (km)`}
         hours={hours}
         height={36}
         chart={<HourlyGradient hours={hours} metric="visibility" height={36} />}
-        cellLabel={(hour) =>
-          `${hour.time} visibility ${formatWeatherVisibilityKilometres(hour.visibilityMeters)} kilometres`
-        }
+        cellLabel={({ time, visibilityMeters }) => {
+          const visibility = formatWeatherVisibilityKilometres(visibilityMeters, i18n);
+          return t`${time} visibility ${visibility} kilometres`;
+        }}
         renderCell={(hour) => (
           <Typography variant="caption">
-            {formatWeatherVisibilityKilometres(hour.visibilityMeters)}
+            {formatWeatherVisibilityKilometres(hour.visibilityMeters, i18n)}
           </Typography>
         )}
       />
@@ -1002,10 +1057,13 @@ export function FloatingHourlyForecastPanel({
   title,
   triggerElement,
 }: FloatingHourlyForecastPanelProps): ReactElement {
+  const { t } = useLingui();
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const titleId = `floating-hourly-forecast-${useId().replaceAll(':', '')}`;
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState(() => floatingPanelLayout(anchorElement));
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
   const [phase, setPhase] = useState<'opening' | 'open' | 'closing'>('opening');
   const completeClose = useCallback(() => {
     onClose();
@@ -1019,12 +1077,14 @@ export function FloatingHourlyForecastPanel({
       completeClose();
       return;
     }
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
     setPhase('closing');
   }, [completeClose, phase]);
 
   useEffect(() => {
     closeButtonRef.current?.focus();
     const frame = window.requestAnimationFrame(() => {
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setPhase('open');
     });
     return () => {
@@ -1044,6 +1104,7 @@ export function FloatingHourlyForecastPanel({
     const updateLayout = () => {
       setLayout(floatingPanelLayout(anchorElement));
     };
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM selector.
     const scrollRegion = anchorElement.closest('[data-weather-scroll-region]');
     window.addEventListener('resize', updateLayout);
     scrollRegion?.addEventListener('scroll', handleClose, { passive: true });
@@ -1069,6 +1130,7 @@ export function FloatingHourlyForecastPanel({
     <Paper
       ref={panelRef}
       role="dialog"
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- ARIA token.
       aria-modal="false"
       aria-labelledby={titleId}
       elevation={8}
@@ -1132,13 +1194,13 @@ export function FloatingHourlyForecastPanel({
             onClick={onOpenWeather}
             sx={{ flexShrink: 0 }}
           >
-            Open in Weather
+            <Trans>Open in Weather</Trans>
           </Button>
         )}
         <IconButton
           ref={closeButtonRef}
           size="small"
-          aria-label="Close hourly forecast"
+          aria-label={t`Close hourly forecast`}
           onClick={handleClose}
         >
           <CloseOutlinedIcon fontSize="small" />

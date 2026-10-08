@@ -1,3 +1,6 @@
+import type { I18n, MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import AirOutlinedIcon from '@mui/icons-material/AirOutlined';
 
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
@@ -14,7 +17,14 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useStore } from 'zustand';
 
 import {
@@ -46,35 +56,47 @@ import {
   HourlyForecastTable,
 } from '@/presentation/weather/HourlyForecastTable';
 import {
+  describeWeatherPeriodCondition,
+  describeWeatherVisibility,
+} from '@/presentation/weather/weatherConditionLabels';
+import {
   formatWeatherMillimetres,
   formatWeatherTemperatureRange,
   formatWeatherWindMetresPerSecond,
 } from '@/presentation/weather/weatherFormatters';
 
-const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
-const fullWeekdays = [
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-] as const;
-const months = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
+interface ForecastDateLabels {
+  readonly weekday: Intl.DateTimeFormat;
+  readonly dayMonth: Intl.DateTimeFormat;
+  readonly weekdayDayMonth: Intl.DateTimeFormat;
+  readonly longWeekdayDayMonth: Intl.DateTimeFormat;
+}
+
+/* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+/** Display labels for local forecast dates in `locale`; dates are formatted in UTC. */
+function createForecastDateLabels(locale: string): ForecastDateLabels {
+  return {
+    weekday: new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }),
+    dayMonth: new Intl.DateTimeFormat(locale, {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }),
+    weekdayDayMonth: new Intl.DateTimeFormat(locale, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }),
+    longWeekdayDayMonth: new Intl.DateTimeFormat(locale, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }),
+  };
+}
+/* eslint-enable lingui/no-unlocalized-strings */
 
 export interface WeatherHeaderPoint {
   readonly coordinate: MapCoordinate;
@@ -124,6 +146,7 @@ function floatingForecastRequest(
   forecast: PointWeatherForecast,
   day: PointWeatherForecastDay,
   isDay: boolean,
+  title: string,
   triggerElement: HTMLElement,
 ): FloatingHourlyForecastRequest {
   let periodStartIndex = forecast.hourly.findIndex(
@@ -148,69 +171,50 @@ function floatingForecastRequest(
     throw new RangeError(`Forecast period ${day.date} has no hourly boundary.`);
   }
   const startHour = forecast.hourly[periodStartIndex];
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM selector.
   const anchorElement = triggerElement.closest('[data-weather-day-card]');
   if (startHour === undefined || !(anchorElement instanceof HTMLElement)) {
     throw new RangeError(`Forecast period ${day.date} has no hourly context.`);
   }
-  const periodLabel = isDay ? 'Day' : 'Night';
   return {
     anchorElement,
     startTime: startHour.time,
-    title: `24-hour forecast · ${periodLabel} · ${localWeekday(day.date)}, ${localDateLabel(day.date)}`,
+    title,
     triggerElement,
   };
 }
 
-function parseLocalDate(value: string): {
-  readonly year: number;
-  readonly month: number;
-  readonly day: number;
-} {
-  const year = Number(value.slice(0, 4));
-  const month = Number(value.slice(5, 7));
-  const day = Number(value.slice(8, 10));
-  return { year, month, day };
-}
-
-function localWeekday(date: string): string {
-  const { year, month, day } = parseLocalDate(date);
-  const weekday = weekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-  if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
-  return weekday;
-}
-
-function localDateLabel(date: string): string {
-  const { month, day } = parseLocalDate(date);
-  const monthLabel = months[month - 1];
-  if (monthLabel === undefined) throw new RangeError('Invalid local forecast month.');
-  return `${day.toString()} ${monthLabel}`;
-}
-
-function currentPeriodDateTime(timestamp: string): string {
-  const date = timestamp.slice(0, 10);
-  const { year, month, day } = parseLocalDate(date);
-  const weekday = fullWeekdays[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-  if (weekday === undefined) throw new RangeError('Invalid local forecast date.');
-  return `${weekday}, ${localDateLabel(date)} · ${timestamp.slice(11, 16)}`;
+function forecastDate(date: string): Date {
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO time suffix.
+  return new Date(`${date}T00:00:00.000Z`);
 }
 
 function formatWindRange(
   minimumKilometresPerHour: number,
   maximumKilometresPerHour: number,
+  i18n: I18n,
 ): string {
-  const minimum = formatWeatherWindMetresPerSecond(minimumKilometresPerHour / 3.6);
-  const maximum = formatWeatherWindMetresPerSecond(maximumKilometresPerHour / 3.6);
-  return minimum === maximum ? `${minimum} m/s` : `${minimum}…${maximum} m/s`;
+  const minimum = formatWeatherWindMetresPerSecond(
+    minimumKilometresPerHour / 3.6,
+    i18n,
+  );
+  const maximum = formatWeatherWindMetresPerSecond(
+    maximumKilometresPerHour / 3.6,
+    i18n,
+  );
+  return minimum === maximum
+    ? i18n._(msg`${minimum} m/s`)
+    : i18n._(msg`${minimum}…${maximum} m/s`);
 }
 
-function errorMessage(code: PointWeatherForecastErrorCode): string {
+function errorMessage(code: PointWeatherForecastErrorCode): MessageDescriptor {
   if (code === 'provider-rate-limited') {
-    return 'Weather service is temporarily rate-limited. Try again shortly.';
+    return msg`Weather service is temporarily rate-limited. Try again shortly.`;
   }
   if (code === 'provider-timeout' || code === 'provider-unavailable') {
-    return 'Weather forecast could not be loaded. Check your connection and try again.';
+    return msg`Weather forecast could not be loaded. Check your connection and try again.`;
   }
-  return 'Weather data could not be read. Try another point or try again later.';
+  return msg`Weather data could not be read. Try another point or try again later.`;
 }
 
 function LoadingSummaryPeriod() {
@@ -348,10 +352,11 @@ function LoadingSummaryPeriod() {
 }
 
 function LoadingSummary() {
+  const { t } = useLingui();
   return (
     <Paper
       variant="outlined"
-      aria-label="Loading current, day, and night summary"
+      aria-label={t`Loading current, day, and night summary`}
       sx={{
         minHeight: 176,
         display: 'grid',
@@ -490,6 +495,7 @@ function LoadingDayForecastRow() {
 }
 
 function LoadingForecast() {
+  const { t } = useLingui();
   return (
     <Stack spacing={2}>
       <LoadingSummary />
@@ -499,12 +505,12 @@ function LoadingForecast() {
           variant="rounded"
           width="100%"
           height={344}
-          aria-label="Loading hourly forecast"
+          aria-label={t`Loading hourly forecast`}
         />
       </Stack>
       <Stack spacing={1}>
         <Skeleton variant="text" width={112} height={24} />
-        <Stack spacing={1} aria-label="Loading seven-day forecast">
+        <Stack spacing={1} aria-label={t`Loading seven-day forecast`}>
           {Array.from({ length: 7 }, (_, index) => (
             <LoadingDayForecastRow key={index} />
           ))}
@@ -518,32 +524,61 @@ type WeatherMetricKind = 'wind' | 'gusts' | 'precipitation';
 
 interface PeriodDisplayValues {
   readonly temperature: string;
-  readonly temperatureMinimum: string;
-  readonly temperatureMaximum: string;
+  readonly temperatureLabel: string;
   readonly wind: string;
-  readonly windMinimum: string;
-  readonly windMaximum: string;
+  readonly windLabel: string;
   readonly gusts: string;
-  readonly gustMinimum: string;
-  readonly gustMaximum: string;
+  readonly gustsLabel: string;
   readonly precipitation: string;
+  readonly precipitationLabel: string;
+  readonly condition: string;
 }
 
-function periodDisplayValues(period: PointWeatherForecastPeriod): PeriodDisplayValues {
+/** Visible period values and their spoken labels, prefixed with the period `label`. */
+function periodDisplayValues(
+  period: PointWeatherForecastPeriod,
+  label: string,
+  i18n: I18n,
+): PeriodDisplayValues {
+  const minimumTemperature = Math.round(period.temperatureMinCelsius).toString();
+  const maximumTemperature = Math.round(period.temperatureMaxCelsius).toString();
+  const minimumWind = formatWeatherWindMetresPerSecond(
+    period.windSpeedMinKmh / 3.6,
+    i18n,
+  );
+  const maximumWind = formatWeatherWindMetresPerSecond(
+    period.windSpeedMaxKmh / 3.6,
+    i18n,
+  );
+  const minimumGusts = formatWeatherWindMetresPerSecond(
+    period.windGustsMinKmh / 3.6,
+    i18n,
+  );
+  const maximumGusts = formatWeatherWindMetresPerSecond(
+    period.windGustsMaxKmh / 3.6,
+    i18n,
+  );
+  const millimetres = new Intl.NumberFormat(i18n.locale).format(period.precipitationMm);
   return {
     temperature: formatWeatherTemperatureRange(
       period.temperatureMinCelsius,
       period.temperatureMaxCelsius,
+      i18n,
     ),
-    temperatureMinimum: Math.round(period.temperatureMinCelsius).toString(),
-    temperatureMaximum: Math.round(period.temperatureMaxCelsius).toString(),
-    wind: formatWindRange(period.windSpeedMinKmh, period.windSpeedMaxKmh),
-    windMinimum: formatWeatherWindMetresPerSecond(period.windSpeedMinKmh / 3.6),
-    windMaximum: formatWeatherWindMetresPerSecond(period.windSpeedMaxKmh / 3.6),
-    gusts: formatWindRange(period.windGustsMinKmh, period.windGustsMaxKmh),
-    gustMinimum: formatWeatherWindMetresPerSecond(period.windGustsMinKmh / 3.6),
-    gustMaximum: formatWeatherWindMetresPerSecond(period.windGustsMaxKmh / 3.6),
-    precipitation: formatWeatherMillimetres(period.precipitationMm),
+    temperatureLabel: i18n._(
+      msg`${label} temperature ${minimumTemperature} to ${maximumTemperature} degrees Celsius`,
+    ),
+    wind: formatWindRange(period.windSpeedMinKmh, period.windSpeedMaxKmh, i18n),
+    windLabel: i18n._(
+      msg`${label} wind ${minimumWind} to ${maximumWind} metres per second`,
+    ),
+    gusts: formatWindRange(period.windGustsMinKmh, period.windGustsMaxKmh, i18n),
+    gustsLabel: i18n._(
+      msg`${label} gusts ${minimumGusts} to ${maximumGusts} metres per second`,
+    ),
+    precipitation: formatWeatherMillimetres(period.precipitationMm, i18n),
+    precipitationLabel: i18n._(msg`${label} precipitation ${millimetres} millimetres`),
+    condition: i18n._(describeWeatherPeriodCondition(period.status.primary)),
   };
 }
 
@@ -673,30 +708,42 @@ function PeriodGraphic({
   readonly period: PointWeatherForecastPeriod;
   readonly size: number;
 }) {
+  const { i18n } = useLingui();
+  const visibility = describeWeatherVisibility(period.status);
+  const condition = i18n._(describeWeatherPeriodCondition(period.status.primary));
   return (
     <WeatherPeriodIcon
       icon={period.status.primary.icon}
       visibility={period.status.visibility}
       isDay={isDay}
       label={
-        period.status.primary.icon.phenomenon === null &&
-        period.status.visibility.label !== null
-          ? period.status.visibility.label
-          : `${label}: ${period.status.primary.label}`
+        period.status.primary.icon.phenomenon === null && visibility !== null
+          ? i18n._(visibility)
+          : `${label}: ${condition}`
       }
       size={size}
     />
   );
 }
 
-function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast }) {
-  const label = 'Now · next 3 h';
+function CurrentSummary({
+  dateLabels,
+  forecast,
+}: {
+  readonly dateLabels: ForecastDateLabels;
+  readonly forecast: PointWeatherForecast;
+}) {
+  const { i18n, t } = useLingui();
+  const label = t`Now · next 3 h`;
   const period = forecast.currentThreeHours;
-  const values = periodDisplayValues(period);
+  const values = periodDisplayValues(period, label, i18n);
+  const currentDate = dateLabels.longWeekdayDayMonth.format(
+    forecastDate(forecast.current.time.slice(0, 10)),
+  );
   return (
     <Box
       component="article"
-      aria-label={`${label} forecast`}
+      aria-label={t`${label} forecast`}
       sx={{
         height: '100%',
         px: 1.5,
@@ -709,7 +756,7 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
     >
       <Typography variant="subtitle2">{label}</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-        {currentPeriodDateTime(forecast.current.time)}
+        {`${currentDate} · ${forecast.current.time.slice(11, 16)}`}
       </Typography>
       <Stack
         direction="row"
@@ -744,7 +791,7 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
           }}
         >
           <Typography
-            aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+            aria-label={values.temperatureLabel}
             sx={{
               fontSize: '1.5rem',
               fontWeight: 750,
@@ -759,28 +806,28 @@ function CurrentSummary({ forecast }: { readonly forecast: PointWeatherForecast 
             {values.temperature}
           </Typography>
           <Typography variant="body2" sx={{ minWidth: 0, lineHeight: 1.25 }}>
-            {period.status.primary.label}
+            {values.condition}
           </Typography>
         </Stack>
       </Stack>
       <Stack spacing={0} sx={{ mt: 1 }}>
         <CurrentMetricRow
           kind="wind"
-          label="Wind"
+          label={t`Wind`}
           value={values.wind}
-          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          ariaLabel={values.windLabel}
         />
         <CurrentMetricRow
           kind="gusts"
-          label="Gusts"
+          label={t`Gusts`}
           value={values.gusts}
-          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          ariaLabel={values.gustsLabel}
         />
         <CurrentMetricRow
           kind="precipitation"
-          label="Precipitation"
+          label={t`Precipitation`}
           value={values.precipitation}
-          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          ariaLabel={values.precipitationLabel}
         />
       </Stack>
     </Box>
@@ -796,11 +843,12 @@ function SummaryPeriod({
   readonly label: string;
   readonly period: PointWeatherForecastPeriod;
 }) {
-  const values = periodDisplayValues(period);
+  const { i18n, t } = useLingui();
+  const values = periodDisplayValues(period, label, i18n);
   return (
     <Box
       component="article"
-      aria-label={`${label} forecast`}
+      aria-label={t`${label} forecast`}
       sx={{
         minWidth: 0,
         flex: 1,
@@ -880,7 +928,7 @@ function SummaryPeriod({
         >
           <Typography
             variant="body2"
-            aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+            aria-label={values.temperatureLabel}
             sx={{
               gridArea: 'temperature',
               fontWeight: 700,
@@ -911,7 +959,7 @@ function SummaryPeriod({
               },
             }}
           >
-            {period.status.primary.label}
+            {values.condition}
           </Typography>
           <Box
             sx={{
@@ -948,15 +996,15 @@ function SummaryPeriod({
             >
               <CompactMetricValue
                 kind="wind"
-                label={`${label} wind`}
+                label={t`${label} wind`}
                 value={values.wind}
-                ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+                ariaLabel={values.windLabel}
               />
               <CompactMetricValue
                 kind="gusts"
-                label={`${label} gusts`}
+                label={t`${label} gusts`}
                 value={values.gusts}
-                ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+                ariaLabel={values.gustsLabel}
               />
             </Stack>
             <Box
@@ -969,9 +1017,9 @@ function SummaryPeriod({
             >
               <CompactMetricValue
                 kind="precipitation"
-                label={`${label} precipitation`}
+                label={t`${label} precipitation`}
                 value={values.precipitation}
-                ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+                ariaLabel={values.precipitationLabel}
               />
             </Box>
           </Box>
@@ -1003,7 +1051,9 @@ export function DailyPeriodRow({
   readonly period: PointWeatherForecastPeriod;
   readonly stacked?: boolean;
 }) {
-  const values = periodDisplayValues(period);
+  const { i18n, t } = useLingui();
+  const values = periodDisplayValues(period, label, i18n);
+  /* eslint-disable lingui/no-unlocalized-strings -- CSS tokens. */
   const stackedGrid = {
     gridTemplateColumns: '36px minmax(0, 1fr) 52px 76px',
     gridTemplateAreas:
@@ -1026,6 +1076,7 @@ export function DailyPeriodRow({
     ...(stacked ? stackedGrid : {}),
     '@media (max-width: 479px)': stackedGrid,
   } as const;
+  /* eslint-enable lingui/no-unlocalized-strings */
   const content = (
     <>
       <Box sx={{ gridArea: 'icon', display: 'grid', placeItems: 'center' }}>
@@ -1033,7 +1084,7 @@ export function DailyPeriodRow({
       </Box>
       <Typography
         variant="caption"
-        aria-label={`${label} temperature ${values.temperatureMinimum} to ${values.temperatureMaximum} degrees Celsius`}
+        aria-label={values.temperatureLabel}
         sx={{
           gridArea: 'temperature',
           fontSize: '0.75rem',
@@ -1056,43 +1107,43 @@ export function DailyPeriodRow({
           lineHeight: 1.2,
         }}
       >
-        {period.status.primary.label}
+        {values.condition}
       </Typography>
       <Box sx={{ gridArea: 'precipitation', minWidth: 0 }}>
         <CompactMetricValue
           kind="precipitation"
-          label={`${label} precipitation`}
+          label={t`${label} precipitation`}
           value={values.precipitation}
-          ariaLabel={`${label} precipitation ${period.precipitationMm.toString()} millimetres`}
+          ariaLabel={values.precipitationLabel}
           compact
         />
       </Box>
       <Stack spacing={0} sx={{ gridArea: 'metrics', minWidth: 0 }}>
         <CompactMetricValue
           kind="wind"
-          label={`${label} wind`}
+          label={t`${label} wind`}
           value={values.wind}
-          ariaLabel={`${label} wind ${values.windMinimum} to ${values.windMaximum} metres per second`}
+          ariaLabel={values.windLabel}
           compact
         />
         <CompactMetricValue
           kind="gusts"
-          label={`${label} gusts`}
+          label={t`${label} gusts`}
           value={values.gusts}
-          ariaLabel={`${label} gusts ${values.gustMinimum} to ${values.gustMaximum} metres per second`}
+          ariaLabel={values.gustsLabel}
           compact
         />
       </Stack>
     </>
   );
   return (
-    <Box component="article" aria-label={`${label} forecast`}>
+    <Box component="article" aria-label={t`${label} forecast`}>
       {onOpen === undefined ? (
         <Box sx={rowSx}>{content}</Box>
       ) : (
         <ButtonBase
           type="button"
-          aria-label={openLabel ?? `Open 24-hour forecast for ${label}, ${dateLabel}`}
+          aria-label={openLabel ?? t`Open 24-hour forecast for ${label}, ${dateLabel}`}
           onClick={(event) => {
             onOpen(event.currentTarget);
           }}
@@ -1111,7 +1162,14 @@ export function DailyPeriodRow({
   );
 }
 
-function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast }) {
+function ForecastSummary({
+  dateLabels,
+  forecast,
+}: {
+  readonly dateLabels: ForecastDateLabels;
+  readonly forecast: PointWeatherForecast;
+}) {
+  const { t } = useLingui();
   const firstDay = forecast.days[0];
   if (firstDay === undefined) {
     throw new RangeError('Forecast summary requires the current local day.');
@@ -1120,7 +1178,7 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
     <Paper
       variant="outlined"
       role="region"
-      aria-label="Current, day, and night summary"
+      aria-label={t`Current, day, and night summary`}
       sx={{
         minHeight: 176,
         display: 'grid',
@@ -1132,7 +1190,7 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
         },
       }}
     >
-      <CurrentSummary forecast={forecast} />
+      <CurrentSummary dateLabels={dateLabels} forecast={forecast} />
       <Stack
         sx={{
           minWidth: 0,
@@ -1145,9 +1203,9 @@ function ForecastSummary({ forecast }: { readonly forecast: PointWeatherForecast
           },
         }}
       >
-        <SummaryPeriod label="Day" period={firstDay.day} isDay />
+        <SummaryPeriod label={t`Day`} period={firstDay.day} isDay />
         <Divider sx={{ mx: 1 }} />
-        <SummaryPeriod label="Night" period={firstDay.night} isDay={false} />
+        <SummaryPeriod label={t`Night`} period={firstDay.night} isDay={false} />
       </Stack>
     </Paper>
   );
@@ -1215,24 +1273,28 @@ export function WeatherForecastCard({
 }
 
 function DayForecastRow({
+  dateLabels,
   day,
   onOpenHourly,
 }: {
+  readonly dateLabels: ForecastDateLabels;
   readonly day: PointWeatherForecastDay;
   readonly onOpenHourly: OpenDailyHourlyForecast;
 }) {
-  const weekday = localWeekday(day.date);
-  const dateLabel = `${weekday} ${localDateLabel(day.date)}`;
+  const { t } = useLingui();
+  const date = forecastDate(day.date);
+  const weekdayIndex = date.getUTCDay();
+  const dateLabel = dateLabels.weekdayDayMonth.format(date);
   return (
     <WeatherForecastCard
       label={dateLabel}
-      title={weekday}
-      subtitle={localDateLabel(day.date)}
-      highlighted={weekday === 'Sat' || weekday === 'Sun'}
+      title={dateLabels.weekday.format(date)}
+      subtitle={dateLabels.dayMonth.format(date)}
+      highlighted={weekdayIndex === 0 || weekdayIndex === 6}
     >
       <DailyPeriodRow
         dateLabel={dateLabel}
-        label="Day"
+        label={t`Day`}
         period={day.day}
         isDay
         onOpen={(triggerElement) => {
@@ -1242,7 +1304,7 @@ function DayForecastRow({
       <Divider sx={{ mx: 0.75 }} />
       <DailyPeriodRow
         dateLabel={dateLabel}
-        label="Night"
+        label={t`Night`}
         period={day.night}
         isDay={false}
         onOpen={(triggerElement) => {
@@ -1254,21 +1316,28 @@ function DayForecastRow({
 }
 
 function SevenDayForecast({
+  dateLabels,
   forecast,
   onOpenHourly,
 }: {
+  readonly dateLabels: ForecastDateLabels;
   readonly forecast: PointWeatherForecast;
   readonly onOpenHourly: OpenDailyHourlyForecast;
 }) {
+  const { t } = useLingui();
   return (
     <Stack spacing={1}>
       <Typography component="h2" variant="subtitle2">
-        7-day forecast
+        <Trans>7-day forecast</Trans>
       </Typography>
-      <Stack role="list" aria-label="Seven-day forecast" spacing={1}>
+      <Stack role="list" aria-label={t`Seven-day forecast`} spacing={1}>
         {forecast.days.map((day) => (
           <Box key={day.date} role="listitem">
-            <DayForecastRow day={day} onOpenHourly={onOpenHourly} />
+            <DayForecastRow
+              dateLabels={dateLabels}
+              day={day}
+              onOpenHourly={onOpenHourly}
+            />
           </Box>
         ))}
       </Stack>
@@ -1281,18 +1350,22 @@ function ForecastFooter({
 }: {
   readonly forecast: PointWeatherForecast | null;
 }) {
+  const { i18n, t } = useLingui();
   const model = forecast?.model ?? DEFAULT_WEATHER_MODEL;
   const modelName = weatherProviderConfiguration.models[model].displayName;
-  let updateText = 'Update time unavailable';
+  let updateText = t`Update time unavailable`;
   if (forecast?.modelRunAt !== null && forecast?.modelRunAt !== undefined) {
-    updateText = `Updated ${new Intl.DateTimeFormat('en-GB', {
+    /* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+    const updatedAt = new Intl.DateTimeFormat(i18n.locale, {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit',
       hourCycle: 'h23',
       timeZone: forecast.timezone,
-    }).format(new Date(forecast.modelRunAt))}`;
+    }).format(new Date(forecast.modelRunAt));
+    /* eslint-enable lingui/no-unlocalized-strings */
+    updateText = t`Updated ${updatedAt}`;
   }
   return (
     <Box
@@ -1319,7 +1392,7 @@ function ForecastFooter({
         rel="noreferrer"
         sx={{ whiteSpace: 'nowrap' }}
       >
-        Weather data by Open-Meteo
+        <Trans>Weather data by Open-Meteo</Trans>
       </Link>
     </Box>
   );
@@ -1329,7 +1402,12 @@ export function WeatherPanel({
   onSelectedPointChange,
   sidebarCollapsed,
 }: WeatherPanelProps) {
+  const { i18n, t } = useLingui();
   const { pointWeatherForecast } = useRuntimeServices();
+  const dateLabels = useMemo(
+    () => createForecastDateLabels(i18n.locale),
+    [i18n.locale],
+  );
   const request = useStore(
     mapInteractionStore,
     (state) => state.weatherForecastRequest,
@@ -1407,7 +1485,8 @@ export function WeatherPanel({
           const code =
             error instanceof PointWeatherForecastError
               ? error.code
-              : 'provider-unavailable';
+              : // eslint-disable-next-line lingui/no-unlocalized-strings -- Error code.
+                'provider-unavailable';
           setState({
             status: 'error',
             coordinate: { ...coordinate },
@@ -1451,17 +1530,24 @@ export function WeatherPanel({
         }}
       >
         <Stack spacing={1.5} sx={{ alignItems: 'center', maxWidth: 280 }}>
-          <WeatherIconTooltip label="Weather forecast">
+          <WeatherIconTooltip label={t`Weather forecast`}>
             <WbCloudyOutlinedIcon
               aria-hidden="true"
               sx={{ fontSize: 48, color: 'text.secondary' }}
             />
           </WeatherIconTooltip>
-          <Typography variant="subtitle1">Select a forecast point</Typography>
+          <Typography variant="subtitle1">
+            <Trans>Select a forecast point</Trans>
+          </Typography>
           <Typography variant="body2" color="text.secondary">
-            {weatherMapEnabled
-              ? 'Click the map to load its ECMWF IFS forecast.'
-              : 'Use the header action, then click the map to load its ECMWF IFS forecast.'}
+            {weatherMapEnabled ? (
+              <Trans>Click the map to load its ECMWF IFS forecast.</Trans>
+            ) : (
+              <Trans>
+                Use the header action, then click the map to load its ECMWF IFS
+                forecast.
+              </Trans>
+            )}
           </Typography>
         </Stack>
       </Box>
@@ -1496,7 +1582,9 @@ export function WeatherPanel({
           ) : state.status === 'error' ? (
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 1.25 }}>
               <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
-                <Typography variant="body2">{errorMessage(state.code)}</Typography>
+                <Typography variant="body2">
+                  {i18n._(errorMessage(state.code))}
+                </Typography>
                 <Button
                   variant="outlined"
                   onClick={() => {
@@ -1507,22 +1595,35 @@ export function WeatherPanel({
                     );
                   }}
                 >
-                  Retry
+                  <Trans>Retry</Trans>
                 </Button>
               </Stack>
             </Paper>
           ) : (
             <Stack spacing={2}>
-              <ForecastSummary forecast={state.forecast} />
+              <ForecastSummary dateLabels={dateLabels} forecast={state.forecast} />
               <HourlyForecastTable
                 forecast={state.forecast}
                 sidebarCollapsed={sidebarCollapsed}
               />
               <SevenDayForecast
+                dateLabels={dateLabels}
                 forecast={state.forecast}
                 onOpenHourly={(day, isDay, triggerElement) => {
+                  const date = dateLabels.weekdayDayMonth.format(
+                    forecastDate(day.date),
+                  );
+                  const title = isDay
+                    ? t`24-hour forecast · Day · ${date}`
+                    : t`24-hour forecast · Night · ${date}`;
                   setHourlyPanelRequest(
-                    floatingForecastRequest(state.forecast, day, isDay, triggerElement),
+                    floatingForecastRequest(
+                      state.forecast,
+                      day,
+                      isDay,
+                      title,
+                      triggerElement,
+                    ),
                   );
                 }}
               />

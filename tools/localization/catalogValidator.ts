@@ -11,6 +11,7 @@ export const LOCALIZATION_CATALOGS = [
   'markers',
   'layers',
   'user',
+  'weather',
 ] as const;
 
 export type LocalizationCatalog = (typeof LOCALIZATION_CATALOGS)[number];

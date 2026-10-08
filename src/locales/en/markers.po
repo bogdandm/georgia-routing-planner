@@ -34,7 +34,7 @@ msgid "Activities"
 msgstr "Activities"
 
 #. js-lingui-id: Zdun41
-#: src/presentation/markers/markerCatalog.tsx:285
+#: src/presentation/markers/markerCatalog.tsx:290
 msgid "Alert"
 msgstr "Alert"
 
@@ -44,17 +44,17 @@ msgid "Apartment"
 msgstr "Apartment"
 
 #. js-lingui-id: 6cU-Bw
-#: src/presentation/markers/markerCatalog.tsx:261
+#: src/presentation/markers/markerCatalog.tsx:266
 msgid "Attraction"
 msgstr "Attraction"
 
 #. js-lingui-id: tA1nmf
-#: src/presentation/markers/markerCatalog.tsx:237
+#: src/presentation/markers/markerCatalog.tsx:242
 msgid "Bakery"
 msgstr "Bakery"
 
 #. js-lingui-id: GoBp8L
-#: src/presentation/markers/markerCatalog.tsx:243
+#: src/presentation/markers/markerCatalog.tsx:248
 msgid "Bar"
 msgstr "Bar"
 
@@ -64,52 +64,52 @@ msgid "Beach"
 msgstr "Beach"
 
 #. js-lingui-id: nxZBQI
-#: src/presentation/markers/markerCatalog.tsx:210
+#: src/presentation/markers/markerCatalog.tsx:215
 msgid "Bear"
 msgstr "Bear"
 
 #. js-lingui-id: 05AfaT
-#: src/presentation/markers/markerCatalog.tsx:309
+#: src/presentation/markers/markerCatalog.tsx:314
 msgid "Bike"
 msgstr "Bike"
 
 #. js-lingui-id: ILUH3x
-#: src/presentation/markers/markerCatalog.tsx:212
+#: src/presentation/markers/markerCatalog.tsx:217
 msgid "Bird"
 msgstr "Bird"
 
 #. js-lingui-id: 32TndD
-#: src/presentation/markers/markerCatalog.tsx:283
+#: src/presentation/markers/markerCatalog.tsx:288
 msgid "Blocked"
 msgstr "Blocked"
 
 #. js-lingui-id: Zn5crm
-#: src/presentation/markers/markerCatalog.tsx:327
+#: src/presentation/markers/markerCatalog.tsx:332
 msgid "Blue"
 msgstr "Blue"
 
 #. js-lingui-id: 3hRi9N
-#: src/presentation/markers/markerCatalog.tsx:336
+#: src/presentation/markers/markerCatalog.tsx:341
 msgid "Blue-green"
 msgstr "Blue-green"
 
 #. js-lingui-id: FEmb-0
-#: src/presentation/markers/markerCatalog.tsx:217
+#: src/presentation/markers/markerCatalog.tsx:222
 msgid "Boating"
 msgstr "Boating"
 
 #. js-lingui-id: DUvGjB
-#: src/presentation/markers/markerCatalog.tsx:238
+#: src/presentation/markers/markerCatalog.tsx:243
 msgid "Brunch"
 msgstr "Brunch"
 
 #. js-lingui-id: jemsB5
-#: src/presentation/markers/markerCatalog.tsx:270
+#: src/presentation/markers/markerCatalog.tsx:275
 msgid "Buddhist temple"
 msgstr "Buddhist temple"
 
 #. js-lingui-id: UEOZgY
-#: src/presentation/markers/markerCatalog.tsx:303
+#: src/presentation/markers/markerCatalog.tsx:308
 msgid "Bus"
 msgstr "Bus"
 
@@ -124,54 +124,54 @@ msgid "Cabin"
 msgstr "Cabin"
 
 #. js-lingui-id: vPKmgm
-#: src/presentation/markers/markerCatalog.tsx:234
+#: src/presentation/markers/markerCatalog.tsx:239
 msgid "Cafe"
 msgstr "Cafe"
 
 #. js-lingui-id: rT2cV-
-#: src/presentation/markers/markerCatalog.tsx:256
+#: src/presentation/markers/markerCatalog.tsx:261
 msgid "Camera"
 msgstr "Camera"
 
 #. js-lingui-id: Ev3HEi
-#: src/presentation/markers/markerCatalog.tsx:239
+#: src/presentation/markers/markerCatalog.tsx:244
 msgid "Camping"
 msgstr "Camping"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/markers/MarkerEditorDialog.tsx:249
-#: src/presentation/markers/MarkersWorkspace.tsx:1266
+#: src/presentation/markers/MarkersWorkspace.tsx:1267
 #: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:260
 msgid "Cancel"
 msgstr "Cancel"
 
 #. js-lingui-id: ehaZ-s
-#: src/presentation/markers/markerCatalog.tsx:304
+#: src/presentation/markers/markerCatalog.tsx:309
 msgid "Car"
 msgstr "Car"
 
 #. js-lingui-id: INcnHP
-#: src/presentation/markers/markerCatalog.tsx:284
+#: src/presentation/markers/markerCatalog.tsx:289
 msgid "Car crash"
 msgstr "Car crash"
 
 #. js-lingui-id: HNAJHQ
-#: src/presentation/markers/markerCatalog.tsx:257
+#: src/presentation/markers/markerCatalog.tsx:262
 msgid "Castle"
 msgstr "Castle"
 
 #. js-lingui-id: -dKWeV
-#: src/presentation/markers/markerCatalog.tsx:206
+#: src/presentation/markers/markerCatalog.tsx:211
 msgid "Cave"
 msgstr "Cave"
 
 #. js-lingui-id: grlA0m
-#: src/presentation/markers/markerCatalog.tsx:262
+#: src/presentation/markers/markerCatalog.tsx:267
 msgid "Celebration"
 msgstr "Celebration"
 
 #. js-lingui-id: wopO4r
-#: src/presentation/markers/MarkersWorkspace.tsx:1617
+#: src/presentation/markers/MarkersWorkspace.tsx:1618
 msgid "Change icon and color"
 msgstr "Change icon and color"
 
@@ -206,7 +206,7 @@ msgid "Choose one or two weekdays. Clear all days to disable marker forecasts."
 msgstr "Choose one or two weekdays. Clear all days to disable marker forecasts."
 
 #. js-lingui-id: 1CfVUC
-#: src/presentation/markers/markerCatalog.tsx:258
+#: src/presentation/markers/markerCatalog.tsx:263
 msgid "Church"
 msgstr "Church"
 
@@ -221,29 +221,29 @@ msgid "Clear forecast"
 msgstr "Clear forecast"
 
 #. js-lingui-id: 60FykE
-#: src/presentation/markers/markerCatalog.tsx:207
+#: src/presentation/markers/markerCatalog.tsx:212
 msgid "Cliff"
 msgstr "Cliff"
 
 #. js-lingui-id: XLMJ7O
-#: src/presentation/markers/markerCatalog.tsx:198
+#: src/presentation/markers/markerCatalog.tsx:203
 msgid "Cloud"
 msgstr "Cloud"
 
 #. js-lingui-id: FFdvhW
-#: src/presentation/markers/markerCatalog.tsx:302
+#: src/presentation/markers/markerCatalog.tsx:307
 msgid "Commute"
 msgstr "Commute"
 
 #. js-lingui-id: jPpVoJ
-#: src/presentation/markers/MarkersWorkspace.tsx:1543
-#: src/presentation/markers/MarkersWorkspace.tsx:1641
+#: src/presentation/markers/MarkersWorkspace.tsx:1544
+#: src/presentation/markers/MarkersWorkspace.tsx:1642
 msgid "Confirm deletion"
 msgstr "Confirm deletion"
 
 #. js-lingui-id: oXVNQJ
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1550
+#: src/presentation/markers/MarkersWorkspace.tsx:1551
 msgid "Confirm deletion of {0}"
 msgstr "Confirm deletion of {0}"
 
@@ -273,12 +273,12 @@ msgid "Custom"
 msgstr "Custom"
 
 #. js-lingui-id: jV9IBb
-#: src/presentation/markers/markerCatalog.tsx:216
+#: src/presentation/markers/markerCatalog.tsx:221
 msgid "Cycling"
 msgstr "Cycling"
 
 #. js-lingui-id: TNZKpI
-#: src/presentation/markers/markerCatalog.tsx:286
+#: src/presentation/markers/markerCatalog.tsx:291
 msgid "Danger"
 msgstr "Danger"
 
@@ -288,29 +288,29 @@ msgid "Day"
 msgstr "Day"
 
 #. js-lingui-id: 3AAg85
-#: src/presentation/markers/markerCatalog.tsx:263
+#: src/presentation/markers/markerCatalog.tsx:268
 msgid "Deck"
 msgstr "Deck"
 
 #. js-lingui-id: PjayOd
-#: src/presentation/markers/markerCatalog.tsx:211
+#: src/presentation/markers/markerCatalog.tsx:216
 msgid "Deer"
 msgstr "Deer"
 
 #. js-lingui-id: Y2tU6I
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1551
+#: src/presentation/markers/MarkersWorkspace.tsx:1552
 msgid "Delete {0}"
 msgstr "Delete {0}"
 
 #. js-lingui-id: 2sxwVB
-#: src/presentation/markers/MarkersWorkspace.tsx:1543
-#: src/presentation/markers/MarkersWorkspace.tsx:1643
+#: src/presentation/markers/MarkersWorkspace.tsx:1544
+#: src/presentation/markers/MarkersWorkspace.tsx:1644
 msgid "Delete marker"
 msgstr "Delete marker"
 
 #. js-lingui-id: LiVofz
-#: src/presentation/markers/markerCatalog.tsx:244
+#: src/presentation/markers/markerCatalog.tsx:249
 msgid "Dining"
 msgstr "Dining"
 
@@ -325,12 +325,12 @@ msgid "Distance unavailable"
 msgstr "Distance unavailable"
 
 #. js-lingui-id: wi6pR1
-#: src/presentation/markers/markerCatalog.tsx:225
+#: src/presentation/markers/markerCatalog.tsx:230
 msgid "Diving"
 msgstr "Diving"
 
 #. js-lingui-id: XzAuUz
-#: src/presentation/markers/markerCatalog.tsx:247
+#: src/presentation/markers/markerCatalog.tsx:252
 msgid "Drinking water"
 msgstr "Drinking water"
 
@@ -340,17 +340,17 @@ msgid "Eco"
 msgstr "Eco"
 
 #. js-lingui-id: e_nl8W
-#: src/presentation/markers/markerCatalog.tsx:306
+#: src/presentation/markers/markerCatalog.tsx:311
 msgid "Electric bike"
 msgstr "Electric bike"
 
 #. js-lingui-id: mjWorc
-#: src/presentation/markers/markerCatalog.tsx:287
+#: src/presentation/markers/markerCatalog.tsx:292
 msgid "Emergency"
 msgstr "Emergency"
 
 #. js-lingui-id: SUXBxp
-#: src/presentation/markers/markerCatalog.tsx:288
+#: src/presentation/markers/markerCatalog.tsx:293
 msgid "Engineering"
 msgstr "Engineering"
 
@@ -365,22 +365,22 @@ msgid "Explore"
 msgstr "Explore"
 
 #. js-lingui-id: _tlnwv
-#: src/presentation/markers/markerCatalog.tsx:240
+#: src/presentation/markers/markerCatalog.tsx:245
 msgid "Fast food"
 msgstr "Fast food"
 
 #. js-lingui-id: cf35MA
-#: src/presentation/markers/markerCatalog.tsx:264
+#: src/presentation/markers/markerCatalog.tsx:269
 msgid "Festival"
 msgstr "Festival"
 
 #. js-lingui-id: cADkbl
-#: src/presentation/markers/markerCatalog.tsx:291
+#: src/presentation/markers/markerCatalog.tsx:296
 msgid "Fire extinguisher"
 msgstr "Fire extinguisher"
 
 #. js-lingui-id: DC4-ua
-#: src/presentation/markers/markerCatalog.tsx:296
+#: src/presentation/markers/markerCatalog.tsx:301
 msgid "Fire station"
 msgstr "Fire station"
 
@@ -390,7 +390,7 @@ msgid "Flag"
 msgstr "Flag"
 
 #. js-lingui-id: OdM_lr
-#: src/presentation/markers/markerCatalog.tsx:307
+#: src/presentation/markers/markerCatalog.tsx:312
 msgid "Flight"
 msgstr "Flight"
 
@@ -406,7 +406,7 @@ msgid "Food & stay"
 msgstr "Food & stay"
 
 #. js-lingui-id: DDWQmc
-#: src/presentation/markers/markerCatalog.tsx:229
+#: src/presentation/markers/markerCatalog.tsx:234
 msgid "Football"
 msgstr "Football"
 
@@ -421,7 +421,7 @@ msgid "Forecast period"
 msgstr "Forecast period"
 
 #. js-lingui-id: LGGwdr
-#: src/presentation/markers/MarkersWorkspace.tsx:1451
+#: src/presentation/markers/MarkersWorkspace.tsx:1452
 msgid "Forecast unavailable"
 msgstr "Forecast unavailable"
 
@@ -436,7 +436,7 @@ msgid "Forest"
 msgstr "Forest"
 
 #. js-lingui-id: F0gbO2
-#: src/presentation/markers/markerCatalog.tsx:265
+#: src/presentation/markers/markerCatalog.tsx:270
 msgid "Fort"
 msgstr "Fort"
 
@@ -446,7 +446,7 @@ msgid "From"
 msgstr "From"
 
 #. js-lingui-id: PDAs5V
-#: src/presentation/markers/markerCatalog.tsx:308
+#: src/presentation/markers/markerCatalog.tsx:313
 msgid "Fuel"
 msgstr "Fuel"
 
@@ -456,22 +456,22 @@ msgid "Grass"
 msgstr "Grass"
 
 #. js-lingui-id: VmkjGB
-#: src/presentation/markers/markerCatalog.tsx:339
+#: src/presentation/markers/markerCatalog.tsx:344
 msgid "Green"
 msgstr "Green"
 
 #. js-lingui-id: qonUHH
-#: src/presentation/markers/markerCatalog.tsx:251
+#: src/presentation/markers/markerCatalog.tsx:256
 msgid "Grocery"
 msgstr "Grocery"
 
 #. js-lingui-id: TbFGoa
-#: src/presentation/markers/markerCatalog.tsx:215
+#: src/presentation/markers/markerCatalog.tsx:220
 msgid "Hiking"
 msgstr "Hiking"
 
 #. js-lingui-id: XoEM1-
-#: src/presentation/markers/markerCatalog.tsx:274
+#: src/presentation/markers/markerCatalog.tsx:279
 msgid "Hindu temple"
 msgstr "Hindu temple"
 
@@ -481,12 +481,12 @@ msgid "Home"
 msgstr "Home"
 
 #. js-lingui-id: lnjmoG
-#: src/presentation/markers/markerCatalog.tsx:278
+#: src/presentation/markers/markerCatalog.tsx:283
 msgid "Hospital"
 msgstr "Hospital"
 
 #. js-lingui-id: vOZkAU
-#: src/presentation/markers/markerCatalog.tsx:235
+#: src/presentation/markers/markerCatalog.tsx:240
 msgid "Hotel"
 msgstr "Hotel"
 
@@ -496,7 +496,7 @@ msgid "Hours"
 msgstr "Hours"
 
 #. js-lingui-id: kCjjZw
-#: src/presentation/markers/markerCatalog.tsx:241
+#: src/presentation/markers/markerCatalog.tsx:246
 msgid "Ice cream"
 msgstr "Ice cream"
 
@@ -516,22 +516,22 @@ msgid "Icons"
 msgstr "Icons"
 
 #. js-lingui-id: CE-M2e
-#: src/presentation/markers/markerCatalog.tsx:280
+#: src/presentation/markers/markerCatalog.tsx:285
 msgid "Info"
 msgstr "Info"
 
 #. js-lingui-id: wefuvA
-#: src/presentation/markers/markerCatalog.tsx:220
+#: src/presentation/markers/markerCatalog.tsx:225
 msgid "Kayaking"
 msgstr "Kayaking"
 
 #. js-lingui-id: lpNA1F
-#: src/presentation/markers/markerCatalog.tsx:221
+#: src/presentation/markers/markerCatalog.tsx:226
 msgid "Kitesurfing"
 msgstr "Kitesurfing"
 
 #. js-lingui-id: a60eo8
-#: src/presentation/markers/markerCatalog.tsx:203
+#: src/presentation/markers/markerCatalog.tsx:208
 msgid "Lake"
 msgstr "Lake"
 
@@ -546,23 +546,23 @@ msgid "Landscape"
 msgstr "Landscape"
 
 #. js-lingui-id: svex5a
-#: src/presentation/markers/markerCatalog.tsx:242
+#: src/presentation/markers/markerCatalog.tsx:247
 msgid "Liquor"
 msgstr "Liquor"
 
 #. js-lingui-id: yQE2r9
-#: src/presentation/markers/MarkersWorkspace.tsx:1468
+#: src/presentation/markers/MarkersWorkspace.tsx:1469
 msgid "Loading"
 msgstr "Loading"
 
 #. js-lingui-id: rITQrW
-#: src/presentation/markers/MarkersWorkspace.tsx:1138
+#: src/presentation/markers/MarkersWorkspace.tsx:1139
 msgid "Loading saved markers"
 msgstr "Loading saved markers"
 
 #. js-lingui-id: Fr5Q2N
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1406
+#: src/presentation/markers/MarkersWorkspace.tsx:1407
 msgid "Loading weather for {0}"
 msgstr "Loading weather for {0}"
 
@@ -572,13 +572,13 @@ msgid "Map"
 msgstr "Map"
 
 #. js-lingui-id: tKY7TR
-#: src/presentation/markers/MarkersWorkspace.tsx:1514
+#: src/presentation/markers/MarkersWorkspace.tsx:1515
 msgid "Marker actions"
 msgstr "Marker actions"
 
 #. js-lingui-id: RlbMOu
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1519
+#: src/presentation/markers/MarkersWorkspace.tsx:1520
 msgid "Marker actions for {0}"
 msgstr "Marker actions for {0}"
 
@@ -593,7 +593,7 @@ msgid "Marker color"
 msgstr "Marker color"
 
 #. js-lingui-id: QxZIkl
-#: src/presentation/markers/MarkersWorkspace.tsx:1178
+#: src/presentation/markers/MarkersWorkspace.tsx:1179
 msgid "Marker forecast days"
 msgstr "Marker forecast days"
 
@@ -605,7 +605,7 @@ msgstr "Marker icon categories row {0}"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/markers/MarkerEditorDialog.tsx:160
-#: src/presentation/markers/MarkersWorkspace.tsx:1238
+#: src/presentation/markers/MarkersWorkspace.tsx:1239
 msgid "Marker name"
 msgstr "Marker name"
 
@@ -620,32 +620,32 @@ msgid "Marker weather"
 msgstr "Marker weather"
 
 #. js-lingui-id: Rk-ZP6
-#: src/presentation/markers/markerCatalog.tsx:279
+#: src/presentation/markers/markerCatalog.tsx:284
 msgid "Medical"
 msgstr "Medical"
 
 #. js-lingui-id: MFN0FN
-#: src/presentation/markers/markerCatalog.tsx:260
+#: src/presentation/markers/markerCatalog.tsx:265
 msgid "Monument"
 msgstr "Monument"
 
 #. js-lingui-id: iQ2nLC
-#: src/presentation/markers/markerCatalog.tsx:202
+#: src/presentation/markers/markerCatalog.tsx:207
 msgid "Moon"
 msgstr "Moon"
 
 #. js-lingui-id: yA6ZLP
-#: src/presentation/markers/markerCatalog.tsx:266
+#: src/presentation/markers/markerCatalog.tsx:271
 msgid "Mosque"
 msgstr "Mosque"
 
 #. js-lingui-id: DjTtBe
-#: src/presentation/markers/markerCatalog.tsx:313
+#: src/presentation/markers/markerCatalog.tsx:318
 msgid "Motorcycle"
 msgstr "Motorcycle"
 
 #. js-lingui-id: nGd86f
-#: src/presentation/markers/markerCatalog.tsx:259
+#: src/presentation/markers/markerCatalog.tsx:264
 msgid "Museum"
 msgstr "Museum"
 
@@ -670,7 +670,7 @@ msgid "Navigation"
 msgstr "Navigation"
 
 #. js-lingui-id: b7EeKy
-#: src/presentation/markers/markerCatalog.tsx:333
+#: src/presentation/markers/markerCatalog.tsx:338
 msgid "Navy"
 msgstr "Navy"
 
@@ -695,27 +695,27 @@ msgid "No recently used icons yet"
 msgstr "No recently used icons yet"
 
 #. js-lingui-id: Nfw5a0
-#: src/presentation/markers/MarkersWorkspace.tsx:1162
+#: src/presentation/markers/MarkersWorkspace.tsx:1163
 msgid "No saved markers yet. Use New marker, then choose a point on the map."
 msgstr "No saved markers yet. Use New marker, then choose a point on the map."
 
 #. js-lingui-id: uBD3lh
-#: src/presentation/markers/markerCatalog.tsx:330
+#: src/presentation/markers/markerCatalog.tsx:335
 msgid "Olive"
 msgstr "Olive"
 
 #. js-lingui-id: ak_oos
-#: src/presentation/markers/MarkersWorkspace.tsx:967
+#: src/presentation/markers/MarkersWorkspace.tsx:968
 msgid "Open {weekday} weather for {markerName}: {temperature}, {precipitation} precipitation"
 msgstr "Open {weekday} weather for {markerName}: {temperature}, {precipitation} precipitation"
 
 #. js-lingui-id: 4OE5Sf
-#: src/presentation/markers/markerCatalog.tsx:331
+#: src/presentation/markers/markerCatalog.tsx:336
 msgid "Orange"
 msgstr "Orange"
 
 #. js-lingui-id: 63G2X_
-#: src/presentation/markers/markerCatalog.tsx:222
+#: src/presentation/markers/markerCatalog.tsx:227
 msgid "Paragliding"
 msgstr "Paragliding"
 
@@ -730,7 +730,7 @@ msgid "Parking"
 msgstr "Parking"
 
 #. js-lingui-id: nkqs9W
-#: src/presentation/markers/markerCatalog.tsx:218
+#: src/presentation/markers/markerCatalog.tsx:223
 msgid "Pets"
 msgstr "Pets"
 
@@ -755,17 +755,17 @@ msgid "Public place"
 msgstr "Public place"
 
 #. js-lingui-id: mF9LxA
-#: src/presentation/markers/markerCatalog.tsx:329
+#: src/presentation/markers/markerCatalog.tsx:334
 msgid "Purple"
 msgstr "Purple"
 
 #. js-lingui-id: 0-G1UH
-#: src/presentation/markers/markerCatalog.tsx:305
+#: src/presentation/markers/markerCatalog.tsx:310
 msgid "Railway"
 msgstr "Railway"
 
 #. js-lingui-id: 1K3mjX
-#: src/presentation/markers/markerCatalog.tsx:253
+#: src/presentation/markers/markerCatalog.tsx:258
 msgid "Ramen"
 msgstr "Ramen"
 
@@ -775,80 +775,80 @@ msgid "Recently used"
 msgstr "Recently used"
 
 #. js-lingui-id: wRTiSD
-#: src/presentation/markers/markerCatalog.tsx:340
+#: src/presentation/markers/markerCatalog.tsx:345
 msgid "Red"
 msgstr "Red"
 
 #. js-lingui-id: 2wxgft
-#: src/presentation/markers/MarkersWorkspace.tsx:1607
+#: src/presentation/markers/MarkersWorkspace.tsx:1608
 msgid "Rename"
 msgstr "Rename"
 
 #. js-lingui-id: gjpdaf
-#: src/presentation/markers/markerCatalog.tsx:297
+#: src/presentation/markers/markerCatalog.tsx:302
 msgid "Report"
 msgstr "Report"
 
 #. js-lingui-id: P2sn7C
-#: src/presentation/markers/markerCatalog.tsx:233
+#: src/presentation/markers/markerCatalog.tsx:238
 msgid "Restaurant"
 msgstr "Restaurant"
 
 #. js-lingui-id: 6gRgw8
-#: src/presentation/markers/MarkersWorkspace.tsx:1147
+#: src/presentation/markers/MarkersWorkspace.tsx:1148
 msgid "Retry"
 msgstr "Retry"
 
 #. js-lingui-id: nKyPBN
-#: src/presentation/markers/markerCatalog.tsx:282
+#: src/presentation/markers/markerCatalog.tsx:287
 msgid "Roadwork"
 msgstr "Roadwork"
 
 #. js-lingui-id: g2eGl5
-#: src/presentation/markers/markerCatalog.tsx:209
+#: src/presentation/markers/markerCatalog.tsx:214
 msgid "Rock"
 msgstr "Rock"
 
 #. js-lingui-id: gkbhO7
-#: src/presentation/markers/markerCatalog.tsx:332
+#: src/presentation/markers/markerCatalog.tsx:337
 msgid "Rose"
 msgstr "Rose"
 
 #. js-lingui-id: EVfVou
-#: src/presentation/markers/markerCatalog.tsx:223
+#: src/presentation/markers/markerCatalog.tsx:228
 msgid "Rowing"
 msgstr "Rowing"
 
 #. js-lingui-id: RiQMUh
-#: src/presentation/markers/markerCatalog.tsx:232
+#: src/presentation/markers/markerCatalog.tsx:237
 msgid "Running"
 msgstr "Running"
 
 #. js-lingui-id: I_43p6
-#: src/presentation/markers/markerCatalog.tsx:295
+#: src/presentation/markers/markerCatalog.tsx:300
 #: src/presentation/markers/MarkerIconPicker.tsx:52
 msgid "Safety"
 msgstr "Safety"
 
 #. js-lingui-id: Z9WBnC
-#: src/presentation/markers/markerCatalog.tsx:224
+#: src/presentation/markers/markerCatalog.tsx:229
 msgid "Sailing"
 msgstr "Sailing"
 
 #. js-lingui-id: tfDRzk
 #: src/presentation/markers/MarkerEditorDialog.tsx:252
-#: src/presentation/markers/MarkersWorkspace.tsx:1258
+#: src/presentation/markers/MarkersWorkspace.tsx:1259
 #: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:273
 msgid "Save"
 msgstr "Save"
 
 #. js-lingui-id: FtknP-
-#: src/presentation/markers/MarkersWorkspace.tsx:1170
+#: src/presentation/markers/MarkersWorkspace.tsx:1171
 msgid "Saved markers"
 msgstr "Saved markers"
 
 #. js-lingui-id: L9KUud
-#: src/presentation/markers/MarkersWorkspace.tsx:1151
+#: src/presentation/markers/MarkersWorkspace.tsx:1152
 msgid "Saved markers could not be loaded."
 msgstr "Saved markers could not be loaded."
 
@@ -858,7 +858,7 @@ msgid "School"
 msgstr "School"
 
 #. js-lingui-id: k5oy33
-#: src/presentation/markers/markerCatalog.tsx:254
+#: src/presentation/markers/markerCatalog.tsx:259
 msgid "Seafood"
 msgstr "Seafood"
 
@@ -874,12 +874,12 @@ msgid "Search icons"
 msgstr "Search icons"
 
 #. js-lingui-id: a3LDKx
-#: src/presentation/markers/markerCatalog.tsx:298
+#: src/presentation/markers/markerCatalog.tsx:303
 msgid "Security"
 msgstr "Security"
 
 #. js-lingui-id: Gd8EbX
-#: src/presentation/markers/markerCatalog.tsx:252
+#: src/presentation/markers/markerCatalog.tsx:257
 msgid "Shelter"
 msgstr "Shelter"
 
@@ -889,17 +889,17 @@ msgid "Show forecasts on the map"
 msgstr "Show forecasts on the map"
 
 #. js-lingui-id: yc-YFi
-#: src/presentation/markers/markerCatalog.tsx:301
+#: src/presentation/markers/markerCatalog.tsx:306
 msgid "Shuttle"
 msgstr "Shuttle"
 
 #. js-lingui-id: AXIl-i
-#: src/presentation/markers/markerCatalog.tsx:226
+#: src/presentation/markers/markerCatalog.tsx:231
 msgid "Skateboarding"
 msgstr "Skateboarding"
 
 #. js-lingui-id: 7ypOno
-#: src/presentation/markers/markerCatalog.tsx:219
+#: src/presentation/markers/markerCatalog.tsx:224
 msgid "Skiing"
 msgstr "Skiing"
 
@@ -909,12 +909,12 @@ msgid "Snow"
 msgstr "Snow"
 
 #. js-lingui-id: j9CE_5
-#: src/presentation/markers/markerCatalog.tsx:227
+#: src/presentation/markers/markerCatalog.tsx:232
 msgid "Snowboarding"
 msgstr "Snowboarding"
 
 #. js-lingui-id: xg6v7h
-#: src/presentation/markers/markerCatalog.tsx:310
+#: src/presentation/markers/markerCatalog.tsx:315
 msgid "Snowmobile"
 msgstr "Snowmobile"
 
@@ -934,62 +934,63 @@ msgid "Sort: {markerSortLabel}"
 msgstr "Sort: {markerSortLabel}"
 
 #. js-lingui-id: SWS1FV
-#: src/presentation/markers/markerCatalog.tsx:299
+#: src/presentation/markers/markerCatalog.tsx:304
 msgid "SOS"
 msgstr "SOS"
 
 #. js-lingui-id: 7JFNej
-#: src/presentation/markers/markerCatalog.tsx:228
+#: src/presentation/markers/markerCatalog.tsx:233
 msgid "Sports"
 msgstr "Sports"
 
-#. js-lingui-id: og87nv
-#: src/presentation/markers/markerCatalog.tsx:194
+#. js-lingui-id: kvWUM8
+#: src/presentation/markers/markerCatalog.tsx:196
+msgctxt "marker icon"
 msgid "Spring"
 msgstr "Spring"
 
 #. js-lingui-id: mZhteu
-#: src/presentation/markers/markerCatalog.tsx:236
+#: src/presentation/markers/markerCatalog.tsx:241
 msgid "Store"
 msgstr "Store"
 
 #. js-lingui-id: _n6s2H
-#: src/presentation/markers/markerCatalog.tsx:199
+#: src/presentation/markers/markerCatalog.tsx:204
 msgid "Storm"
 msgstr "Storm"
 
 #. js-lingui-id: ByhGWF
-#: src/presentation/markers/markerCatalog.tsx:197
+#: src/presentation/markers/markerCatalog.tsx:202
 msgid "Sunny"
 msgstr "Sunny"
 
 #. js-lingui-id: 9BjGPQ
-#: src/presentation/markers/markerCatalog.tsx:230
+#: src/presentation/markers/markerCatalog.tsx:235
 msgid "Surfing"
 msgstr "Surfing"
 
 #. js-lingui-id: uHafbT
-#: src/presentation/markers/markerCatalog.tsx:231
+#: src/presentation/markers/markerCatalog.tsx:236
 msgid "Swimming"
 msgstr "Swimming"
 
 #. js-lingui-id: hWTYKo
-#: src/presentation/markers/markerCatalog.tsx:267
+#: src/presentation/markers/markerCatalog.tsx:272
 msgid "Synagogue"
 msgstr "Synagogue"
 
 #. js-lingui-id: F0Qs2u
-#: src/presentation/markers/markerCatalog.tsx:255
+#: src/presentation/markers/markerCatalog.tsx:260
 msgid "Tapas"
 msgstr "Tapas"
 
 #. js-lingui-id: WFIEi5
-#: src/presentation/markers/markerCatalog.tsx:328
+#: src/presentation/markers/markerCatalog.tsx:333
 msgid "Teal"
 msgstr "Teal"
 
 #. js-lingui-id: yUKXiQ
-#: src/presentation/markers/markerCatalog.tsx:201
+#: src/presentation/markers/markerCatalog.tsx:206
 msgid "Telescope"
 msgstr "Telescope"
 
@@ -999,12 +1000,12 @@ msgid "Terrain"
 msgstr "Terrain"
 
 #. js-lingui-id: kQUxI8
-#: src/presentation/markers/MarkersWorkspace.tsx:1156
+#: src/presentation/markers/MarkersWorkspace.tsx:1157
 msgid "The marker could not be deleted."
 msgstr "The marker could not be deleted."
 
 #. js-lingui-id: 0TvHJA
-#: src/presentation/markers/MarkersWorkspace.tsx:1100
+#: src/presentation/markers/MarkersWorkspace.tsx:1101
 msgid "The marker could not be renamed."
 msgstr "The marker could not be renamed."
 
@@ -1019,27 +1020,27 @@ msgid "The marker name contains unsupported characters."
 msgstr "The marker name contains unsupported characters."
 
 #. js-lingui-id: A4UmDy
-#: src/presentation/markers/markerCatalog.tsx:275
+#: src/presentation/markers/markerCatalog.tsx:280
 msgid "Theater"
 msgstr "Theater"
 
 #. js-lingui-id: wBnYxO
-#: src/presentation/markers/markerCatalog.tsx:276
+#: src/presentation/markers/markerCatalog.tsx:281
 msgid "Tour"
 msgstr "Tour"
 
 #. js-lingui-id: WeIu6W
-#: src/presentation/markers/markerCatalog.tsx:300
+#: src/presentation/markers/markerCatalog.tsx:305
 msgid "Traffic"
 msgstr "Traffic"
 
 #. js-lingui-id: -0cOZb
-#: src/presentation/markers/markerCatalog.tsx:311
+#: src/presentation/markers/markerCatalog.tsx:316
 msgid "Train"
 msgstr "Train"
 
 #. js-lingui-id: 6bmd7e
-#: src/presentation/markers/markerCatalog.tsx:312
+#: src/presentation/markers/markerCatalog.tsx:317
 msgid "Tram"
 msgstr "Tram"
 
@@ -1049,7 +1050,7 @@ msgid "Transport"
 msgstr "Transport"
 
 #. js-lingui-id: F7Nf76
-#: src/presentation/markers/markerCatalog.tsx:200
+#: src/presentation/markers/markerCatalog.tsx:205
 msgid "Tsunami"
 msgstr "Tsunami"
 
@@ -1059,27 +1060,27 @@ msgid "Until"
 msgstr "Until"
 
 #. js-lingui-id: eDhax8
-#: src/presentation/markers/markerCatalog.tsx:208
+#: src/presentation/markers/markerCatalog.tsx:213
 msgid "Valley"
 msgstr "Valley"
 
 #. js-lingui-id: 0o7JLj
-#: src/presentation/markers/markerCatalog.tsx:204
+#: src/presentation/markers/markerCatalog.tsx:209
 msgid "Viewpoint"
 msgstr "Viewpoint"
 
 #. js-lingui-id: sAAoh3
-#: src/presentation/markers/markerCatalog.tsx:277
+#: src/presentation/markers/markerCatalog.tsx:282
 msgid "Villa"
 msgstr "Villa"
 
 #. js-lingui-id: N5uU0a
-#: src/presentation/markers/markerCatalog.tsx:195
+#: src/presentation/markers/markerCatalog.tsx:200
 msgid "Volcano"
 msgstr "Volcano"
 
 #. js-lingui-id: r6y-jM
-#: src/presentation/markers/markerCatalog.tsx:281
+#: src/presentation/markers/markerCatalog.tsx:286
 msgid "Warning"
 msgstr "Warning"
 
@@ -1089,12 +1090,12 @@ msgid "Water"
 msgstr "Water"
 
 #. js-lingui-id: u-lTLZ
-#: src/presentation/markers/markerCatalog.tsx:205
+#: src/presentation/markers/markerCatalog.tsx:210
 msgid "Waterfall"
 msgstr "Waterfall"
 
 #. js-lingui-id: FItJTE
-#: src/presentation/markers/markerCatalog.tsx:196
+#: src/presentation/markers/markerCatalog.tsx:201
 msgid "Waves"
 msgstr "Waves"
 
@@ -1104,11 +1105,11 @@ msgid "Weather settings could not be saved."
 msgstr "Weather settings could not be saved."
 
 #. js-lingui-id: UMOjWL
-#: src/presentation/markers/markerCatalog.tsx:214
+#: src/presentation/markers/markerCatalog.tsx:219
 msgid "Wetland"
 msgstr "Wetland"
 
 #. js-lingui-id: kp3xIR
-#: src/presentation/markers/markerCatalog.tsx:213
+#: src/presentation/markers/markerCatalog.tsx:218
 msgid "Wildflowers"
 msgstr "Wildflowers"

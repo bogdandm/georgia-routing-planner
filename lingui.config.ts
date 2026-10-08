@@ -50,6 +50,11 @@ const config: LinguiConfig = {
       path: '<rootDir>/src/locales/{locale}/user',
       include: ['<rootDir>/src/presentation/user/**'],
     },
+    {
+      name: 'weather',
+      path: '<rootDir>/src/locales/{locale}/weather',
+      include: ['<rootDir>/src/presentation/weather/**'],
+    },
   ],
 };
 

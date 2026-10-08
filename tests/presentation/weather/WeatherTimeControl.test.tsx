@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import {
   requestWeatherForecast,
   resetMapInteractionStore,
@@ -9,9 +10,11 @@ import {
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { WeatherTimeControl } from '@/presentation/weather/WeatherTimeControl';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 describe('WeatherTimeControl', () => {
   beforeEach(() => {
+    activateAppLocale('en');
     resetMapInteractionStore();
     resetMapLayerStore();
   });
@@ -28,7 +31,7 @@ describe('WeatherTimeControl', () => {
       },
     });
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <WeatherTimeControl />
       </RuntimeServicesProvider>,
@@ -68,20 +71,20 @@ describe('WeatherTimeControl', () => {
       },
     });
 
-    render(
+    renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <WeatherTimeControl />
       </RuntimeServicesProvider>,
     );
 
     const timeZone = 'America/New_York';
-    const dayFormatter = new Intl.DateTimeFormat(undefined, {
+    const dayFormatter = new Intl.DateTimeFormat('en', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
       timeZone,
     });
-    const timeFormatter = new Intl.DateTimeFormat(undefined, {
+    const timeFormatter = new Intl.DateTimeFormat('en', {
       hour: '2-digit',
       minute: '2-digit',
       timeZone,

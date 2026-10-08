@@ -191,7 +191,12 @@ export const markerIconCatalog = [
   icon('eco', msg({ message: 'Eco' }), 'Nature', pinheadSvg22),
   icon('grass', msg({ message: 'Grass' }), 'Nature', pinheadSvg23),
   icon('park', msg({ message: 'Park' }), 'Nature', pinheadSvg24),
-  icon('spa', msg({ message: 'Spring' }), 'Nature', pinheadSvg25),
+  icon(
+    'spa',
+    msg({ message: 'Spring', context: 'marker icon' }),
+    'Nature',
+    pinheadSvg25,
+  ),
   icon('volcano', msg({ message: 'Volcano' }), 'Nature', pinheadSvg26),
   icon('waves', msg({ message: 'Waves' }), 'Nature', pinheadSvg27),
   icon('sunny', msg({ message: 'Sunny' }), 'Nature', pinheadSvg28),

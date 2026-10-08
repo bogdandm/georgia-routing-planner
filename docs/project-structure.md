@@ -93,11 +93,11 @@ boundary.
 ## Localization ownership
 
 English is the source and fallback locale; Russian is the target locale.
-[`lingui.config.ts`](../lingui.config.ts) defines eight catalog shards, each bound to
-one source path: `core` (`main.tsx`, `presentation/localization`), `shell`, `map`,
-`tracks`, `satellite` (`presentation/satellite-browser`), `markers`, `layers`, and
-`user`. Code outside those paths, including `presentation/weather`, Developer
-Diagnostics, and the pre-React bootstrap fallback, is not extracted.
+[`lingui.config.ts`](../lingui.config.ts) defines nine catalog shards, each bound to one
+source path: `core` (`main.tsx`, `presentation/localization`), `shell`, `map`, `tracks`,
+`satellite` (`presentation/satellite-browser`), `markers`, `layers`, `user`, and
+`weather`. Code outside those paths, including Developer Diagnostics and the pre-React
+bootstrap fallback, is not extracted.
 
 `presentation/localization/appI18n.ts` owns the single Lingui instance, statically loads
 every shard for both locales so switching works offline, and updates the document

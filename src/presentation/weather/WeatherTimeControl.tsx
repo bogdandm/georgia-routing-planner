@@ -1,3 +1,4 @@
+import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
   Link,
@@ -42,23 +43,32 @@ interface ForecastTimeFormatters {
 }
 
 function dateFormatter(
+  locale: string | undefined,
   options: Intl.DateTimeFormatOptions,
   timeZone: string | undefined,
 ): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat(
-    undefined,
+    locale,
     timeZone === undefined ? options : { ...options, timeZone },
   );
 }
 
+/* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+/** Display formatters use `locale`; `parts` stays locale-independent for day grouping. */
 function createForecastTimeFormatters(
+  locale: string,
   timeZone: string | undefined,
 ): ForecastTimeFormatters {
   return {
-    day: dateFormatter({ weekday: 'short', day: 'numeric', month: 'short' }, timeZone),
-    compactDay: dateFormatter({ weekday: 'short', day: 'numeric' }, timeZone),
-    time: dateFormatter({ hour: '2-digit', minute: '2-digit' }, timeZone),
+    day: dateFormatter(
+      locale,
+      { weekday: 'short', day: 'numeric', month: 'short' },
+      timeZone,
+    ),
+    compactDay: dateFormatter(locale, { weekday: 'short', day: 'numeric' }, timeZone),
+    time: dateFormatter(locale, { hour: '2-digit', minute: '2-digit' }, timeZone),
     parts: dateFormatter(
+      undefined,
       {
         year: 'numeric',
         month: '2-digit',
@@ -72,6 +82,7 @@ function createForecastTimeFormatters(
     ),
   };
 }
+/* eslint-enable lingui/no-unlocalized-strings */
 
 function forecastDateParts(
   date: Date,
@@ -110,21 +121,25 @@ const calendarRowCount = 2;
 const cloudGradient = weatherScaleGradient(weatherCloudCoverColorScale);
 const precipitationGradient = weatherScaleGradient(weatherPrecipitationColorScale);
 
+/** `formatValue` adds the unit to a stop value already formatted by `numberFormat`. */
 function WeatherScaleLegend({
   gradient,
   label,
   stops,
   unit,
+  numberFormat,
+  formatValue,
 }: {
   readonly gradient: string;
   readonly label: string;
   readonly stops: readonly { readonly color: string; readonly value: number }[];
   readonly unit: string;
+  readonly numberFormat: Intl.NumberFormat;
+  readonly formatValue: (value: string) => string;
 }) {
+  const values = stops.map(({ value }) => formatValue(numberFormat.format(value)));
   return (
-    <Box
-      aria-label={`${label}: ${stops.map(({ value }) => `${value.toString()} ${unit}`).join(', ')}`}
-    >
+    <Box aria-label={`${label}: ${values.join(', ')}`}>
       <Stack
         direction="row"
         sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}
@@ -170,7 +185,7 @@ function WeatherScaleLegend({
               borderTop: `2px solid ${stop.color}`,
             }}
           >
-            {stop.value}
+            {numberFormat.format(stop.value)}
           </Typography>
         ))}
       </Box>
@@ -179,6 +194,7 @@ function WeatherScaleLegend({
 }
 
 export function WeatherTimeControl() {
+  const { i18n, t } = useLingui();
   const { mapLayers } = useRuntimeServices();
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const selectedPoint = useStore(
@@ -194,7 +210,13 @@ export function WeatherTimeControl() {
         : lookupTimeZone(latitude, longitude),
     [latitude, longitude],
   );
-  const formatters = useMemo(() => createForecastTimeFormatters(timeZone), [timeZone]);
+  const formatters = useMemo(
+    () => createForecastTimeFormatters(i18n.locale, timeZone),
+    [i18n.locale, timeZone],
+  );
+  const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.locale), [i18n.locale]);
+  const formatCloudCover = (value: string) => `${value} %`;
+  const formatPrecipitation = (millimetres: string) => t`${millimetres} mm`;
   const days = useMemo<readonly ForecastDay[]>(() => {
     const groups = new Map<
       string,
@@ -262,7 +284,7 @@ export function WeatherTimeControl() {
   return (
     <Paper
       component="section"
-      aria-label="Weather forecast time"
+      aria-label={t`Weather forecast time`}
       elevation={4}
       sx={{
         position: 'absolute',
@@ -284,7 +306,7 @@ export function WeatherTimeControl() {
           size="small"
           value={selectedDayKey}
           onChange={selectDay}
-          aria-label="Forecast day"
+          aria-label={t`Forecast day`}
           sx={{
             display: 'grid',
             gridTemplateColumns: `repeat(${String(calendarColumnCount)}, minmax(0, 1fr))`,
@@ -322,7 +344,7 @@ export function WeatherTimeControl() {
             onChange={(_event, value: number | null) => {
               if (value !== null) selectFrame(value);
             }}
-            aria-label="Forecast time"
+            aria-label={t`Forecast time`}
             sx={{
               whiteSpace: 'nowrap',
               '& .MuiToggleButton-root': { px: 1.25, py: 0.35 },
@@ -343,7 +365,7 @@ export function WeatherTimeControl() {
           </ToggleButtonGroup>
         </Box>
         <Box
-          aria-label="Weather map legend"
+          aria-label={t`Weather map legend`}
           sx={{
             display: { xs: 'none', sm: 'grid' },
             gridTemplateColumns: '1fr 1.35fr',
@@ -353,15 +375,19 @@ export function WeatherTimeControl() {
         >
           <WeatherScaleLegend
             gradient={cloudGradient}
-            label="Cloud cover · ≤30 transparent"
+            label={t`Cloud cover · ≤30 transparent`}
             stops={weatherCloudLegendStops}
             unit="%"
+            numberFormat={numberFormat}
+            formatValue={formatCloudCover}
           />
           <WeatherScaleLegend
             gradient={precipitationGradient}
-            label="Precipitation · ≤0.5 transparent"
+            label={t`Precipitation · ≤0.5 transparent`}
             stops={weatherPrecipitationLegendStops}
-            unit="mm"
+            unit={t`mm`}
+            numberFormat={numberFormat}
+            formatValue={formatPrecipitation}
           />
           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
             <Box
@@ -386,7 +412,7 @@ export function WeatherTimeControl() {
               }}
             />
             <Typography variant="caption" color="text.secondary">
-              Wind direction and speed
+              <Trans>Wind direction and speed</Trans>
             </Typography>
           </Stack>
           <Typography
@@ -394,16 +420,18 @@ export function WeatherTimeControl() {
             color="text.secondary"
             sx={{ alignSelf: 'center', justifySelf: 'end', textAlign: 'right' }}
           >
-            Low-resolution data. Use{' '}
-            <Link
-              href="https://www.windy.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              underline="hover"
-            >
-              Windy
-            </Link>{' '}
-            for a precise forecast.
+            <Trans>
+              Low-resolution data. Use{' '}
+              <Link
+                href="https://www.windy.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                underline="hover"
+              >
+                Windy
+              </Link>{' '}
+              for a precise forecast.
+            </Trans>
           </Typography>
         </Box>
       </Stack>

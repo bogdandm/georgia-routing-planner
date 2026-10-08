@@ -956,8 +956,9 @@ export function MarkerWeatherSummaryButton({
   const temperature = formatWeatherTemperatureRange(
     selected.period.temperatureMinCelsius,
     selected.period.temperatureMaxCelsius,
+    i18n,
   );
-  const precipitation = formatWeatherMillimetres(selected.period.precipitationMm);
+  const precipitation = formatWeatherMillimetres(selected.period.precipitationMm, i18n);
   const { weekday } = useMemo(
     () => createMarkerWeatherDateLabels(i18n.locale).date(selected.date),
     [i18n.locale, selected.date],

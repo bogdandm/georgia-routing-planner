@@ -1,20 +1,23 @@
 import { ThemeProvider } from '@mui/material';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_WEATHER_MODEL,
   type PointWeatherForecast,
 } from '@/application/weather/GetPointWeatherForecast';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { appColors } from '@/presentation/theme/appColors';
 import { HourlyForecastTable } from '@/presentation/weather/HourlyForecastTable';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const theme = createAppTheme();
 const originalInnerWidth = window.innerWidth;
 
 beforeEach(() => {
+  activateAppLocale('en');
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1_440 });
 });
 
@@ -70,7 +73,7 @@ async function syntheticForecast(startIndex = 0): Promise<PointWeatherForecast> 
 
 async function renderTable(startIndex = 0) {
   const forecast = await syntheticForecast(startIndex);
-  const view = render(
+  const view = renderWithI18n(
     <ThemeProvider theme={theme}>
       <div data-weather-scroll-region data-testid="weather-scroll-region">
         <HourlyForecastTable forecast={forecast} sidebarCollapsed={false} />

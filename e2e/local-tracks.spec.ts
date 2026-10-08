@@ -149,6 +149,20 @@ async function readSettledStoredCamera(page: Page): Promise<StoredCamera> {
   return reads.settled;
 }
 
+/**
+ * Saves the open preview once elevation and place naming are both done. The place-name
+ * result renders above Save, so clicking during the lookup can land on the field that
+ * shifts into the button's previous position.
+ */
+async function savePreparedPreview(page: Page): Promise<void> {
+  const save = page.getByRole('button', { name: 'Save', exact: true });
+  await expect(save).toBeEnabled();
+  await expect(
+    page.getByRole('progressbar', { name: 'Looking up representative places' }),
+  ).toHaveCount(0);
+  await save.click();
+}
+
 async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
   readonly relief: boolean;
   readonly isolines: boolean;
@@ -520,7 +534,7 @@ test('uses a map-first smartphone track disclosure without crashing', async ({
   const savedChooser = await savedChooserPromise;
   await savedChooser.setFiles(trackFixturePath);
   await previewDisclosure.click();
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await savePreparedPreview(page);
   const savedDisclosure = page.getByRole('button', {
     name: 'Expand track details',
   });
@@ -580,9 +594,7 @@ test('clears saved-track hovers after favorite sorting', async ({ page }) => {
       .getByRole('complementary', { name: 'Track details' })
       .getByLabel('Track name')
       .fill(name);
-    const save = page.getByRole('button', { name: 'Save', exact: true });
-    await expect(save).toBeEnabled();
-    await save.click();
+    await savePreparedPreview(page);
     await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
 
     if (name === 'Pinned track') {
@@ -689,7 +701,7 @@ test('persists valid public GPX exports and rejects zero-length geometry', async
       await page.getByRole('button', { name: 'Discard' }).click();
       continue;
     }
-    await page.getByRole('button', { name: 'Save' }).click();
+    await savePreparedPreview(page);
     await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
     await page.getByRole('button', { name: 'Back to tracks' }).click();
   }

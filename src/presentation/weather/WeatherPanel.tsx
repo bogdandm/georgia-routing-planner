@@ -708,7 +708,7 @@ function PeriodGraphic({
   readonly period: PointWeatherForecastPeriod;
   readonly size: number;
 }) {
-  const { i18n } = useLingui();
+  const { i18n, t } = useLingui();
   const visibility = describeWeatherVisibility(period.status);
   const condition = i18n._(describeWeatherPeriodCondition(period.status.primary));
   return (
@@ -719,7 +719,7 @@ function PeriodGraphic({
       label={
         period.status.primary.icon.phenomenon === null && visibility !== null
           ? i18n._(visibility)
-          : `${label}: ${condition}`
+          : t`${label}: ${condition}`
       }
       size={size}
     />

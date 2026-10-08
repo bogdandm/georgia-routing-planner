@@ -30,4 +30,9 @@ export const translationAllowlist: readonly TranslationAllowlistEntry[] = [
     messageId: 'N-w3lW',
     reason: 'Only the localized numbers vary; the °C range format is invariant.',
   },
+  {
+    catalog: 'weather',
+    messageId: 'SeiNzs',
+    reason: 'Russian uses the same colon between two already localized arguments.',
+  },
 ];

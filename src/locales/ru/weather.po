@@ -58,6 +58,11 @@ msgstr "{label}: ветер"
 msgid "{label} wind {minimumWind} to {maximumWind} metres per second"
 msgstr "{label}: ветер от {minimumWind} до {maximumWind} м/с"
 
+#. js-lingui-id: SeiNzs
+#: src/presentation/weather/WeatherPanel.tsx:722
+msgid "{label}: {condition}"
+msgstr "{label}: {condition}"
+
 #. js-lingui-id: eG3c17
 #: src/presentation/weather/weatherConditionLabels.ts:145
 msgid "{level, select, poor {Brief poor visibility} other {Brief reduced visibility}}"

@@ -503,6 +503,8 @@ test('uses a map-first smartphone track disclosure without crashing', async ({
   expect(collapsedChevronBox?.width).toBe(expandedChevronBox?.width);
   expect(collapsedChevronBox?.height).toBe(expandedChevronBox?.height);
 
+  // The smartphone workspace fades in; axe blends text with any partial opacity.
+  await expect(page.locator('#mobile-workspace')).toHaveCSS('opacity', '1');
   const detailsAccessibility = await new AxeBuilder({ page })
     .include('[aria-label="Track details"]')
     .analyze();

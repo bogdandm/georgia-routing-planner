@@ -189,27 +189,27 @@ function renderElevationProfileChart({
 }
 
 describe('ElevationPreparationChart', () => {
-  it('renders an indeterminate terrain preparation state before tile totals are known', () => {
+  it('renders an indeterminate preparation state before sample totals are known', () => {
     renderWithI18n(
       <ThemeProvider theme={createAppTheme()}>
         <ElevationPreparationChart progress={null} />
       </ThemeProvider>,
     );
 
-    expect(screen.getByText('Preparing terrain and elevation…')).toBeVisible();
+    expect(screen.getByText('Preparing elevation…')).toBeVisible();
     expect(
       screen.getByRole('img', { name: 'Elevation profile loading' }),
     ).toBeVisible();
     expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   });
 
-  it('renders neutral, determinate tile progress without profile interactions', () => {
+  it('renders neutral, determinate sample progress without profile interactions', () => {
     const { container } = renderWithI18n(
       <ThemeProvider theme={createAppTheme()}>
         <ElevationPreparationChart
           progress={{
-            completedTiles: 1,
-            totalTiles: 3,
+            completedSamples: 1,
+            totalSamples: 3,
             points: [
               { distanceMeters: 0, elevationMeters: 1_000 },
               { distanceMeters: 100, elevationMeters: null },
@@ -220,10 +220,10 @@ describe('ElevationPreparationChart', () => {
       </ThemeProvider>,
     );
 
-    expect(screen.getByText('Loading elevation tiles: 1 of 3')).toBeVisible();
+    expect(screen.getByText('Loading elevation: 33%')).toBeVisible();
     expect(
       screen.getByRole('img', {
-        name: 'Elevation profile loading: 1 of 3 tiles',
+        name: 'Elevation profile loading: 33%',
       }),
     ).toBeVisible();
     expect(screen.getByRole('progressbar')).toHaveAttribute(
@@ -239,22 +239,6 @@ describe('ElevationPreparationChart', () => {
     ).toHaveLength(2);
     expect(container.querySelectorAll('stop')).toHaveLength(0);
     expect(container.querySelectorAll('.recharts-tooltip-wrapper')).toHaveLength(0);
-  });
-
-  it('announces tile progress with Russian plural forms', () => {
-    activateAppLocale('ru');
-    renderWithI18n(
-      <ThemeProvider theme={createAppTheme()}>
-        <ElevationPreparationChart
-          progress={{ completedTiles: 1, totalTiles: 21, points: [] }}
-        />
-      </ThemeProvider>,
-    );
-
-    expect(screen.getByText('Загрузка тайлов высот: 1 из 21')).toBeVisible();
-    expect(
-      screen.getByRole('img', { name: 'Загрузка профиля высот: 1 из 21 тайла' }),
-    ).toBeVisible();
   });
 });
 

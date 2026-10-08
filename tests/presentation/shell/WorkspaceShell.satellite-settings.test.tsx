@@ -1251,9 +1251,7 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Layers' }));
 
-    expect(
-      screen.getByRole('heading', { name: 'AWS Open Data Terrain Tiles' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Mapterhorn' })).toBeVisible();
     const isolines = screen.getByRole('checkbox', { name: 'Elevation isolines' });
     const contourDistance = screen.getByRole('slider', {
       name: 'Isolines distance',
@@ -1262,16 +1260,11 @@ describe('WorkspaceShell', () => {
     expect(
       screen.queryByText(/labeled index contours remain every 200 m/u),
     ).not.toBeInTheDocument();
-    const demFilter = screen.getByRole('checkbox', {
-      name: 'Repair invalid DEM elevation pixels',
-    });
-    expect(demFilter).toBeChecked();
+    expect(
+      screen.queryByRole('checkbox', { name: /Repair invalid DEM/u }),
+    ).not.toBeInTheDocument();
     expect(
       isolines.compareDocumentPosition(contourDistance) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      contourDistance.compareDocumentPosition(demFilter) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
 
@@ -1280,17 +1273,6 @@ describe('WorkspaceShell', () => {
       expect(
         services.mapLayers?.getTerrainOverlayPreferences().contourIntervalMeters,
       ).toBe(25);
-    });
-    await user.click(
-      screen.getByRole('checkbox', {
-        name: 'Repair invalid DEM elevation pixels',
-      }),
-    );
-    await waitFor(() => {
-      expect(services.mapLayers?.getTerrainOverlayPreferences()).toMatchObject({
-        contourIntervalMeters: 25,
-        filterInvalidDemPixels: false,
-      });
     });
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
@@ -1307,14 +1289,12 @@ describe('WorkspaceShell', () => {
 
     expect(services.mapLayers?.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
-      filterInvalidDemPixels: false,
       shadeAboveSatellite: true,
     });
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         terrainOverlays: {
           contourIntervalMeters: 25,
-          filterInvalidDemPixels: false,
           shadeAboveSatellite: true,
         },
       });
@@ -1433,7 +1413,7 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows the live bounded terrain queue beneath Ready', () => {
+  it('shows the live bounded contour queue beneath Ready', () => {
     services.mapDiagnostics.update({
       ...new FakeMapFacade().snapshot,
       lifecycle: 'ready',
@@ -1441,9 +1421,7 @@ describe('WorkspaceShell', () => {
     renderOperationalStatus();
 
     expect(screen.getByText('Ready')).toBeVisible();
-    expect(
-      screen.queryByLabelText('Terrain compute queue state'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Contour generation state')).not.toBeInTheDocument();
 
     act(() => {
       mapLayerStore.setState({
@@ -1455,9 +1433,66 @@ describe('WorkspaceShell', () => {
         },
       });
     });
-    expect(screen.getByLabelText('Terrain compute queue state')).toHaveTextContent(
-      'Terrain worker · 4/32 queued · 1 task active',
+    expect(screen.getByLabelText('Contour generation state')).toHaveTextContent(
+      'Contours · 4/32 queued · 1 active',
     );
+
+    act(() => {
+      mapLayerStore.setState({
+        terrainComputeQueue: {
+          executionMode: 'worker',
+          activeCount: 2,
+          queuedContourCount: 0,
+          queueCapacity: 32,
+        },
+      });
+    });
+    expect(screen.getByLabelText('Contour generation state')).toHaveTextContent(
+      'Contours · 2 tasks active',
+    );
+
+    act(() => {
+      mapLayerStore.setState({
+        terrainComputeQueue: {
+          executionMode: 'restarting',
+          activeCount: 0,
+          queuedContourCount: 0,
+          queueCapacity: 32,
+        },
+      });
+    });
+    expect(screen.getByLabelText('Contour generation state')).toHaveTextContent(
+      'Contours · worker restarting',
+    );
+  });
+
+  it('shows a pending terrain loading state with an indeterminate bar until the DEM loads', () => {
+    services.mapDiagnostics.update({
+      ...new FakeMapFacade().snapshot,
+      lifecycle: 'ready',
+    });
+    renderOperationalStatus();
+
+    act(() => {
+      mapLayerStore.setState({ terrainDemLoading: true });
+    });
+    const status = screen.getByRole('status');
+    expect(within(status).getByText('Loading terrain…')).toBeVisible();
+    expect(within(status).queryByText('Ready')).not.toBeInTheDocument();
+    // The spinner and the linear bar are both indeterminate: neither reports a value.
+    const progressIndicators = within(status).getAllByRole('progressbar', {
+      hidden: true,
+    });
+    expect(progressIndicators).toHaveLength(2);
+    for (const indicator of progressIndicators) {
+      expect(indicator).not.toHaveAttribute('aria-valuenow');
+    }
+
+    act(() => {
+      mapLayerStore.setState({ terrainDemLoading: false });
+    });
+    expect(within(status).getByText('Ready')).toBeVisible();
+    expect(within(status).queryByText('Loading terrain…')).not.toBeInTheDocument();
   });
 
   it('shows determinate Mosaic render progress in the map Ready area', () => {

@@ -48,6 +48,7 @@ class FakeLayerMap {
   readonly moves: { readonly id: string; readonly beforeId?: string }[] = [];
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
+  terrain: unknown = null;
   loadSourceOnNextSourceDataSubscription = false;
   styleLoaded = true;
   directRasterSourceAdds = 0;
@@ -230,6 +231,10 @@ class FakeLayerMap {
 
   public isSourceLoaded(id: string): boolean {
     return this.sourceLoaded && this.sources.has(id);
+  }
+
+  public getTerrain(): unknown {
+    return this.terrain;
   }
   public getBounds(): {
     readonly getWest: () => number;
@@ -644,12 +649,8 @@ describe('MapLibreLayerController', () => {
       configuration.value.satellite.renderer,
       configuration.value.terrain,
       {
-        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
         createTileUrl: (intervalMeters) =>
           `test-contour://tiles/{z}/{x}/{y}?minor=${String(intervalMeters)}&major=200`,
-        setFilterEnabled: (enabled) => {
-          void enabled;
-        },
         setInteractionActive: () => undefined,
         getStatus: () => 'inline',
         getQueueState: () => ({
@@ -742,9 +743,7 @@ describe('MapLibreLayerController', () => {
       configuration.value.satellite.renderer,
       configuration.value.terrain,
       {
-        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
         createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}',
-        setFilterEnabled: () => undefined,
         setInteractionActive: () => undefined,
         getStatus: () => 'worker',
         getQueueState: () => queueState(0),
@@ -1007,7 +1006,6 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
-        filterInvalidDemPixels: true,
         shadeAboveSatellite: true,
       }),
     ).toEqual({ status: 'success' });
@@ -1924,7 +1922,6 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
-        filterInvalidDemPixels: true,
         shadeAboveSatellite: true,
       }),
     ).toEqual({ status: 'success' });
@@ -1956,7 +1953,7 @@ describe('MapLibreLayerController', () => {
       readonly minzoom: number;
       readonly maxzoom: number;
     };
-    expect(contourSource).toMatchObject({ minzoom: 11, maxzoom: 15 });
+    expect(contourSource).toMatchObject({ minzoom: 11, maxzoom: 12 });
     expect(contourSource.tiles[0]).toContain('minor=50&major=200');
     expect(map.layers.get('terrain-contour-minor')).toMatchObject({
       minzoom: 11,
@@ -1985,7 +1982,6 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 25,
-        filterInvalidDemPixels: true,
         shadeAboveSatellite: false,
       }),
     ).toEqual({ status: 'success' });
@@ -1996,7 +1992,7 @@ describe('MapLibreLayerController', () => {
     expect(map.layers.has('terrain-contour-minor')).toBe(true);
   });
 
-  it('reloads the shared DEM and contour sources when filtering changes', () => {
+  it('loads relief and 3D terrain directly from the provider DEM URL', () => {
     const services = createTestServices();
     const controller = services.mapLayers;
     if (controller === null) return;
@@ -2004,29 +2000,70 @@ describe('MapLibreLayerController', () => {
     controller.attach(map as unknown as MapLibreMap);
 
     expect(map.sources.get('terrain-dem')).toMatchObject({
-      tiles: [expect.stringContaining('filter=on')],
+      type: 'raster-dem',
+      tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
+      tileSize: 512,
+      maxzoom: 12,
+      encoding: 'terrarium',
     });
-    expect(map.sources.get('terrain-contours')).toMatchObject({
-      tiles: [expect.stringContaining('filter=on')],
-    });
+  });
 
-    expect(
-      controller.setTerrainOverlayPreferences({
-        contourIntervalMeters: 50,
-        filterInvalidDemPixels: false,
-        shadeAboveSatellite: false,
-      }),
-    ).toEqual({ status: 'success' });
+  it('publishes terrain loading only after sustained DEM loading while relief is in use', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const demEvent = { sourceId: 'terrain-dem' };
 
-    expect(map.sources.get('terrain-dem')).toMatchObject({
-      tiles: [expect.stringContaining('filter=off')],
-    });
-    expect(map.sources.get('terrain-contours')).toMatchObject({
-      tiles: [expect.stringContaining('filter=off')],
-    });
-    expect(controller.getTerrainOverlayPreferences().filterInvalidDemPixels).toBe(
-      false,
-    );
+    map.sourceLoaded = false;
+    map.fire('sourcedataloading', demEvent);
+    vi.advanceTimersByTime(299);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(false);
+    map.sourceLoaded = true;
+    map.fire('sourcedata', demEvent);
+    vi.advanceTimersByTime(1_000);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(false);
+
+    map.sourceLoaded = false;
+    map.fire('sourcedataloading', demEvent);
+    vi.advanceTimersByTime(300);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(true);
+    map.sourceLoaded = true;
+    map.fire('sourcedata', demEvent);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(false);
+
+    map.sourceLoaded = false;
+    map.fire('sourcedataloading', demEvent);
+    vi.advanceTimersByTime(300);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(true);
+    controller.detach(map as unknown as MapLibreMap);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(false);
+  });
+
+  it('ignores DEM loading while neither relief nor 3D terrain uses the source', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setLayerVisibility('terrain-relief', false);
+    const demEvent = { sourceId: 'terrain-dem' };
+
+    map.sourceLoaded = false;
+    map.fire('sourcedataloading', demEvent);
+    vi.advanceTimersByTime(1_000);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(false);
+
+    map.terrain = { source: 'terrain-dem' };
+    map.fire('terrain', {});
+    vi.advanceTimersByTime(300);
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(true);
+    map.terrain = null;
+    map.fire('terrain', {});
+    expect(mapLayerStore.getState().terrainDemLoading).toBe(false);
   });
 
   it('applies a georeferenced tile source, footprint, visibility, and fit command', async () => {
@@ -2107,9 +2144,7 @@ describe('MapLibreLayerController', () => {
       },
       configuration.value.terrain,
       {
-        createDemTileUrl: () => 'test-dem://tiles/{z}/{x}/{y}',
         createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}',
-        setFilterEnabled: () => undefined,
         setInteractionActive: () => undefined,
         getStatus: () => 'worker',
         getQueueState: () => ({
@@ -2691,7 +2726,6 @@ describe('MapLibreLayerController', () => {
       renderingTuning: { reflectanceMax: 6_500, gamma: 1.6, saturation: 1.2 },
       terrainOverlays: {
         contourIntervalMeters: 25,
-        filterInvalidDemPixels: false,
         shadeAboveSatellite: true,
       },
     });
@@ -2723,7 +2757,6 @@ describe('MapLibreLayerController', () => {
     });
     expect(controller.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
-      filterInvalidDemPixels: false,
       shadeAboveSatellite: true,
     });
   });

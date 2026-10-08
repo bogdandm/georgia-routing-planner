@@ -36,7 +36,6 @@
     "supabase:database:test": "tsx tools/supabase/runDatabaseTests.ts",
     "supabase:db:stop": "supabase stop",
     "e2e": "tsx tools/e2e/runPlaywright.ts",
-    "benchmark:terrarium-dem": "tsx tools/benchmarks/terrariumDemFilterBenchmark.ts",
     "diagnostics:inspect": "tsx tools/diagnostics/inspectDiagnostics.ts",
     "diagnostics:routing-inspect": "tsx --tsconfig tsconfig.node.json tools/diagnostics/inspectRoutingTiles.ts",
     "repo:audit": "tsx tools/repository/auditRepository.ts",

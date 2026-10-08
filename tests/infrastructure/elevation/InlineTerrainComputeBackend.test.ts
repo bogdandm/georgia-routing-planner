@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
@@ -17,20 +16,11 @@ describe('InlineTerrainComputeBackend', () => {
     const cachedBuffer = new Uint8Array([1, 2, 3]).buffer;
     const engine = {
       loaded: Promise.resolve(),
-      fetchTile: vi.fn(),
       fetchContourTile: vi.fn(() => Promise.resolve({ arrayBuffer: cachedBuffer })),
-      setFilterEnabled: vi.fn(),
       dispose: vi.fn(),
-    };
-    const logger: DiagnosticLogger = {
-      log: vi.fn(),
-      getEvents: () => [],
-      subscribe: () => () => undefined,
     };
     const backend = new InlineTerrainComputeBackend(
       toTerrainComputeConfiguration(terrain, 10_000),
-      logger,
-      {},
       () => engine,
     );
 

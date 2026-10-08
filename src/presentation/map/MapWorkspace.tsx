@@ -510,7 +510,6 @@ export function MapWorkspace({
                 waterNames:
                   mapProviderConfiguration.value.vector.sourceLayers.waterNames,
               },
-              demTileUrl: mapLayers?.createDemTileUrl() ?? '',
               requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
               equivalentErrorWindowMs:
                 mapProviderConfiguration.value.policy.equivalentErrorWindowMs,

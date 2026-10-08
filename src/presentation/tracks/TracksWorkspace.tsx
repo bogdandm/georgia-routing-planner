@@ -5572,12 +5572,9 @@ export function TrackDetailsPane({
               />
               {active.preparationStatus === 'preparing' ? (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <CircularProgress
-                    aria-label={t`Preparing terrain and elevation`}
-                    size={18}
-                  />
+                  <CircularProgress aria-label={t`Preparing elevation`} size={18} />
                   <Typography variant="body2">
-                    <Trans>Preparing terrain and elevation…</Trans>
+                    <Trans>Preparing elevation…</Trans>
                   </Typography>
                 </Stack>
               ) : active.preparationStatus === 'failed' ? (

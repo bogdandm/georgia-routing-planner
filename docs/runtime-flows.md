@@ -85,17 +85,14 @@ sequenceDiagram
   participant UI as MapWorkspace
   participant Facade as MapLibreFacade
   participant Map as MapLibre
-  participant Filter as Filtered Terrarium protocol
   participant DEM as Terrain provider
 
   User->>UI: select 3D in MapViewControls
   UI->>Facade: setTerrainMode(terrain)
   Facade->>Map: reuse controller-owned raster-dem source
   Facade->>Map: level camera and set terrain
-  Map->>Filter: request revision-qualified raster-dem tile
-  Filter->>DEM: fetch center and optional neighboring context
-  Filter->>Filter: decode, reject, repair, re-encode, cache
-  Filter-->>Map: shared corrected Terrarium PNG
+  Map->>DEM: fetch provider WebP tiles directly
+  DEM-->>Map: Terrarium-encoded tiles, decoded on MapLibre workers
   alt source becomes ready
     Map-->>Facade: sourcedata loaded
     Facade->>Map: apply the terrain camera from the loaded DEM
@@ -127,31 +124,33 @@ then OSM boundaries, transport, and labels, so relief stays visible over opaque
 land-cover fills while water bodies mask isolines. Changing the contour interval updates
 the existing vector source's tiles without touching the camera.
 
-MapLibre abort signals flow through the DEM and contour protocols, the worker channel,
-and the filtered provider. The provider coalesces each revision-qualified processed tile
-across fetch, decode, filter, and encode; each consumer cancels independently and the
-producer aborts when the last one releases it. The center tile is required; a failed
-optional neighbor becomes a null halo cell. Relief, 3D terrain, and isolines read the
-same repaired bytes.
+The `terrain-dem` raster-dem source points at the provider URL, so MapLibre fetches,
+caches, and decodes relief and 3D terrain tiles on its own workers. Contours use a
+separate `maplibre-contour` protocol: MapLibre abort signals flow through it, the worker
+channel, and the library's shared fetch, parsed-DEM, and contour caches, where each
+consumer cancels independently and the producer aborts when the last one releases it.
 
-One module worker owns PNG decode/encode, repair, parsed DEM data, and contour
-generation. `movestart` marks the channel interactive: DEM requests continue while new
+One module worker owns provider DEM fetches for contours, `createImageBitmap` decoding,
+parsed DEM data, and contour generation. `movestart` marks the channel interactive: new
 contour requests enter a bounded queue (a full queue cancels its oldest request), and
 `moveend` drains contours one at a time. The worker publishes a coordinate-free queue
-snapshot that the controller stores in `mapLayerStore` for the operational status.
+snapshot that the controller stores in `mapLayerStore`; the operational status shows it
+under Ready as the `Contours · …` line.
 
 Provider, timeout, decode, and compute errors fail only their request. A worker `error`,
 `messageerror`, channel loss, or malformed result restarts one fresh worker and retries
-the still-current request. If the replacement also fails, terrain continues through
+the request. If the replacement also fails, contours continue through
 `InlineTerrainComputeBackend` on the window thread with a non-blocking compatibility
 warning; the next page session starts with a worker again. Cached contour buffers are
 sliced before transfer so MapLibre detachment cannot corrupt later cache hits. Timing
 aggregates exclude tile coordinates, URLs, pixels, and geometry.
 
-The persisted invalid-pixel repair preference defaults to enabled. Changing it clears
-every terrain cache and bumps a revision on both native tile templates, so relief, 3D
-terrain, and isolines reload together without remounting the map. Disabled mode fetches
-only the original center PNG and skips decoding and repair.
+The controller also watches the `terrain-dem` source. While visible relief or 3D terrain
+waits for DEM tiles for longer than 300 ms, it sets `terrainDemLoading` in
+`mapLayerStore`, and the operational status replaces Ready with a pending
+`Loading terrain…` line and an indeterminate bar. Shorter loads, such as cached pans, do
+not change the status; the flag clears as soon as the source is loaded or no longer in
+use.
 
 Applying, hiding, replacing, or clearing satellite imagery reapplies the shared visual
 mode on existing layers: opaque land-cover fills switch off over imagery while line
@@ -506,10 +505,11 @@ and keeps the highest zoom that fits. Closing clears the sources without touchin
 storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
-authoritative; calculated Terrarium elevation is the profile fallback only when no
-usable source run exists. The calculation resamples at 10 m, repairs DEM pixels through
-the shared Terrarium provider, median-filters single-point spikes, applies a 150 m
-distance-weighted trapezoidal average, and aggregates gain/loss with 10 m hysteresis.
+authoritative; calculated DEM elevation is the profile fallback only when no usable
+source run exists. The calculation resamples at 10 m, samples the provider's
+maximum-zoom DEM with bilinear interpolation between pixel centres (fetching each tile
+once and renormalizing over valid corners), and aggregates gain/loss with 5 m
+hysteresis. Preparation progress reports the share of resolved samples.
 
 `beforeunload` is registered only while an import preview is unsaved.
 

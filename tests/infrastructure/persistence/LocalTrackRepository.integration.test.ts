@@ -134,7 +134,7 @@ describe('local track persistence', () => {
       ascentMeters: 200,
       descentMeters: 50,
       elevationSource: 'dem-assisted' as const,
-      elevationAlgorithmVersion: 4 as const,
+      elevationAlgorithmVersion: 5 as const,
     };
 
     const updated = await database.replaceCalculatedTrackElevation(
@@ -172,6 +172,30 @@ describe('local track persistence', () => {
       sourceContent,
     );
   });
+
+  it('keeps stored version-4 calculated elevation readable', async () => {
+    const sourceSummary = summary('local:v4', 'Stored v4');
+    const storedSummary: LocalTrackSummary = {
+      ...sourceSummary,
+      calculatedMetrics: {
+        ...sourceSummary.metrics,
+        ascentMeters: 120,
+        descentMeters: 0,
+        elevationSource: 'dem-assisted',
+        elevationAlgorithmVersion: 4,
+      },
+    };
+    await database.localTracks.put(storedSummary);
+
+    const [loaded] = await database.listLocalTracks();
+
+    expect(loaded?.calculatedMetrics).toMatchObject({
+      ascentMeters: 120,
+      elevationSource: 'dem-assisted',
+      elevationAlgorithmVersion: 4,
+    });
+  });
+
   it('updates bounded track markers without changing geometry or sync identity', async () => {
     const firstMarker = {
       id: '00000000-0000-4000-8000-000000000001',

@@ -81,7 +81,7 @@ test('keeps production terrain and contours on the module worker through reload'
     });
   });
   page.on('request', (request) => {
-    if (request.url().includes('/elevation-tiles-prod/terrarium/')) {
+    if (request.url().startsWith('https://tiles.mapterhorn.com/')) {
       terrainRequestCount += 1;
     }
   });
@@ -124,18 +124,13 @@ test('keeps production terrain and contours on the module worker through reload'
   expect(computeEvents.some((event) => event.data?.executionMode === 'worker')).toBe(
     true,
   );
-  expect(
-    computeEvents.some((event) =>
-      ['contour', 'mixed'].includes(String(event.data?.operation)),
-    ),
-  ).toBe(true);
   await page.getByRole('button', { name: 'Close developer diagnostics' }).click();
 
   // Let the high-zoom contour proof finish, then return to the tested overview zoom
   // before exercising and persisting MapLibre's bounded 3D transition. CI's software
   // renderer cannot reliably initialize a fresh terrain map while a dense viewport is
   // still saturating its DEM/contour pipeline.
-  await expect(page.getByText(/Terrain worker ·/u)).toHaveCount(0);
+  await expect(page.getByText(/Contours ·/u)).toHaveCount(0);
   const canvas = page.locator('.maplibregl-canvas');
   // Wait for persistence after each input because CI can coalesce MapLibre keyboard
   // animations when several zoom commands arrive in the same render interval.
@@ -207,11 +202,6 @@ test('keeps production terrain and contours on the module worker through reload'
   const reloadedBundle = await downloadDiagnosticsBundle(page);
   const reloadedComputeEvents = successfulWorkerComputeEvents(reloadedBundle);
   expect(reloadedComputeEvents.length).toBeGreaterThan(0);
-  expect(
-    reloadedComputeEvents.some((event) =>
-      ['dem', 'contour', 'mixed'].includes(String(event.data?.operation)),
-    ),
-  ).toBe(true);
   // A successful event from the replacement worker proves this is no longer the
   // backend's optimistic initial status value.
   await expect(workspace).toHaveAttribute('data-terrain-compute-status', 'worker');

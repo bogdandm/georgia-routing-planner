@@ -69,19 +69,16 @@ describe('HealthCheckService', () => {
           return HttpResponse.json({ tilejson: '3.0.0', tiles: [] });
         },
       ),
-      http.get(
-        'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/0/0/0.png',
-        ({ request }) => {
-          requests.push({
-            url: request.url,
-            method: request.method,
-            range: request.headers.get('range'),
-          });
-          return new HttpResponse(new Uint8Array([137, 80, 78, 71]), {
-            status: 206,
-          });
-        },
-      ),
+      http.get('https://tiles.mapterhorn.com/0/0/0.webp', ({ request }) => {
+        requests.push({
+          url: request.url,
+          method: request.method,
+          range: request.headers.get('range'),
+        });
+        return new HttpResponse(new Uint8Array([82, 73, 70, 70]), {
+          status: 206,
+        });
+      }),
       http.post(
         'https://earth-search.aws.element84.com/v1/search',
         async ({ request }) => {
@@ -123,8 +120,6 @@ describe('HealthCheckService', () => {
     expect(requests).toHaveLength(4);
     expect(requests[2]?.range).toBe('bytes=0-1023');
     expect(requests[3]?.method).toBe('POST');
-    expect(JSON.stringify(services.logger.getEvents())).not.toContain(
-      'elevation-tiles-prod',
-    );
+    expect(JSON.stringify(services.logger.getEvents())).not.toContain('0/0/0.webp');
   });
 });

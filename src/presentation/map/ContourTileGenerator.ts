@@ -17,7 +17,13 @@ import {
 
 type TerrainManagerContract = InstanceType<typeof maplibreContour.DemSource>['manager'];
 
-/** Keeps the third-party manager shape private while the application backend stays truthful. */
+/**
+ * Keeps the third-party manager shape private while the application backend stays truthful.
+ * Only the contour protocol is registered with MapLibre: relief and 3D terrain load the
+ * provider tiles directly, so the library's shared-DEM protocol and parsed-tile accessor
+ * have no caller. Their methods exist only because the library type requires them and
+ * reject instead of pretending to serve DEM data.
+ */
 class TerrainComputeManagerAdapter implements TerrainManagerContract {
   public readonly loaded: Promise<void>;
 
@@ -26,13 +32,10 @@ class TerrainComputeManagerAdapter implements TerrainManagerContract {
   }
 
   public fetchTile(
-    ...parameters: Parameters<TerrainManagerContract['fetchTile']>
+    ..._parameters: Parameters<TerrainManagerContract['fetchTile']>
   ): ReturnType<TerrainManagerContract['fetchTile']> {
-    return this.backend.fetchTile(
-      parameters[0],
-      parameters[1],
-      parameters[2],
-      parameters[3],
+    return Promise.reject(
+      new Error('Raw DEM access is internal to terrain contour computation.'),
     );
   }
 
@@ -58,9 +61,7 @@ class TerrainComputeManagerAdapter implements TerrainManagerContract {
 }
 
 export interface ContourTileGenerator {
-  createDemTileUrl(): string;
   createTileUrl(intervalMeters: ContourIntervalMeters): string;
-  setFilterEnabled(enabled: boolean): void;
   setInteractionActive(active: boolean): void;
   getStatus(): TerrainComputeStatus;
   getQueueState(): TerrainComputeQueueState;
@@ -74,8 +75,6 @@ export interface ContourTileGenerator {
 export class MapLibreContourTileGenerator implements ContourTileGenerator {
   readonly #source: InstanceType<typeof maplibreContour.DemSource>;
   readonly #backend: WorkerTerrainComputeBackend;
-  #filterEnabled = true;
-  #revision = 0;
   #disposed = false;
   readonly #releaseMetrics: () => void;
   readonly #timingDiagnostics: ContourTimingDiagnostics;
@@ -99,7 +98,7 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
       worker: false,
     });
     this.#source.manager = new TerrainComputeManagerAdapter(this.#backend);
-    this.#source.setupMaplibre({ addProtocol });
+    addProtocol(this.#source.contourProtocolId, this.#source.contourProtocolV4);
     this.#timingDiagnostics = new ContourTimingDiagnostics(logger);
     this.#source.onTiming((timing) => {
       this.#timingDiagnostics.record({
@@ -114,25 +113,13 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
     });
   }
 
-  public createDemTileUrl(): string {
-    return `${this.#source.sharedDemProtocolUrl}?demFilterRevision=${String(this.#revision)}`;
-  }
-
   public createTileUrl(intervalMeters: ContourIntervalMeters): string {
-    const url = this.#source.contourProtocolUrl({
+    return this.#source.contourProtocolUrl({
       thresholds: { 11: [intervalMeters, 200] },
       elevationKey: 'ele',
       levelKey: 'level',
       contourLayer: 'contours',
     });
-    return `${url}&demFilterRevision=${String(this.#revision)}`;
-  }
-
-  public setFilterEnabled(enabled: boolean): void {
-    if (this.#filterEnabled === enabled) return;
-    this.#filterEnabled = enabled;
-    this.#backend.setFilterEnabled(enabled);
-    this.#revision += 1;
   }
 
   public setInteractionActive(active: boolean): void {
@@ -166,7 +153,6 @@ export class MapLibreContourTileGenerator implements ContourTileGenerator {
   public dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    removeProtocol(this.#source.sharedDemProtocolId);
     removeProtocol(this.#source.contourProtocolId);
     this.#releaseMetrics();
     this.#timingDiagnostics.dispose();

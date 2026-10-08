@@ -6,19 +6,8 @@ import {
   type TerrainComputeConfiguration,
 } from '@/infrastructure/elevation/TerrainComputeConfiguration';
 
-const coordinateSchema = z.strictObject({
-  zoom: z.number().int().nonnegative(),
-  x: z.number().int().nonnegative(),
-  y: z.number().int().nonnegative(),
-  revision: z.number().int().nonnegative(),
-});
-
 const contourOptionsSchema = z.strictObject({
   levels: z.array(z.number()),
-  // maplibre-contour decodes every query parameter into its options object. This
-  // source-reload cache-buster belongs to MapLibre, so validate it here and omit it
-  // from the compute engine options assembled below.
-  demFilterRevision: z.string().regex(/^\d+$/u).optional(),
   multiplier: z.number().optional(),
   overzoom: z.number().int().nonnegative().optional(),
   elevationKey: z.string().optional(),
@@ -29,38 +18,27 @@ const contourOptionsSchema = z.strictObject({
   subsampleBelow: z.number().int().positive().optional(),
 });
 
+const contourRequestSchema = z.strictObject({
+  zoom: z.number().int().nonnegative(),
+  x: z.number().int().nonnegative(),
+  y: z.number().int().nonnegative(),
+  options: contourOptionsSchema,
+});
+
 export interface TerrainWorkerInitializeRequest {
   readonly configuration: TerrainComputeConfiguration;
-  readonly filterEnabled: boolean;
-  readonly revision: number;
   readonly interactionActive: boolean;
 }
 
-export interface TerrainWorkerTileRequest {
+export interface TerrainWorkerContourRequest {
   readonly zoom: number;
   readonly x: number;
   readonly y: number;
-  readonly revision: number;
-}
-
-export interface TerrainWorkerContourRequest extends TerrainWorkerTileRequest {
   readonly options: TerrainContourOptions;
-}
-
-export interface TerrainWorkerSetFilterRequest {
-  readonly enabled: boolean;
-  readonly revision: number;
 }
 
 interface TerrainWorkerInteractionRequest {
   readonly active: boolean;
-}
-
-export interface TerrainWorkerDemResult {
-  readonly kind: 'dem';
-  readonly data: ArrayBuffer;
-  readonly cacheControl?: string;
-  readonly expires?: string;
 }
 
 export interface TerrainWorkerContourResult {
@@ -68,15 +46,7 @@ export interface TerrainWorkerContourResult {
   readonly data: ArrayBuffer;
 }
 
-const terrainWorkerDemResultSchema = z.strictObject({
-  kind: z.literal('dem'),
-  data: z.custom<ArrayBuffer>(isArrayBuffer),
-  cacheControl: z.string().optional(),
-  expires: z.string().optional(),
-});
-
 export const terrainWorkerEventNames = {
-  diagnostic: 'terrain-diagnostic',
   metrics: 'terrain-metrics',
   queueState: 'terrain-queue-state',
 } as const;
@@ -87,25 +57,15 @@ export function parseTerrainWorkerInitializeRequest(
   return z
     .strictObject({
       configuration: terrainComputeConfigurationSchema,
-      filterEnabled: z.boolean(),
-      revision: z.number().int().nonnegative(),
       interactionActive: z.boolean(),
     })
     .parse(value);
 }
 
-export function parseTerrainWorkerTileRequest(
-  value: unknown,
-): TerrainWorkerTileRequest {
-  return coordinateSchema.parse(value);
-}
-
 export function parseTerrainWorkerContourRequest(
   value: unknown,
 ): TerrainWorkerContourRequest {
-  const parsed = coordinateSchema
-    .extend({ options: contourOptionsSchema })
-    .parse(value);
+  const parsed = contourRequestSchema.parse(value);
   const options: TerrainContourOptions = {
     levels: parsed.options.levels,
     ...(parsed.options.multiplier === undefined
@@ -133,32 +93,14 @@ export function parseTerrainWorkerContourRequest(
     zoom: parsed.zoom,
     x: parsed.x,
     y: parsed.y,
-    revision: parsed.revision,
     options,
   };
-}
-
-export function parseTerrainWorkerSetFilterRequest(
-  value: unknown,
-): TerrainWorkerSetFilterRequest {
-  return z
-    .strictObject({
-      enabled: z.boolean(),
-      revision: z.number().int().nonnegative(),
-    })
-    .parse(value);
 }
 
 export function parseTerrainWorkerInteractionRequest(
   value: unknown,
 ): TerrainWorkerInteractionRequest {
   return z.strictObject({ active: z.boolean() }).parse(value);
-}
-
-export function isTerrainWorkerDemResult(
-  value: unknown,
-): value is TerrainWorkerDemResult {
-  return terrainWorkerDemResultSchema.safeParse(value).success;
 }
 
 export function isTerrainWorkerContourResult(

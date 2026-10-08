@@ -1,9 +1,7 @@
-import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type {
   TerrainComputeMetrics,
   TerrainContourOptions,
   TerrainContourTile,
-  TerrainDemResponse,
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 import type { TerrainComputeConfiguration } from '@/infrastructure/elevation/TerrainComputeConfiguration';
@@ -12,11 +10,8 @@ import {
   parseTerrainWorkerContourRequest,
   parseTerrainWorkerInitializeRequest,
   parseTerrainWorkerInteractionRequest,
-  parseTerrainWorkerSetFilterRequest,
-  parseTerrainWorkerTileRequest,
   terrainWorkerEventNames,
   type TerrainWorkerContourResult,
-  type TerrainWorkerDemResult,
 } from '@/infrastructure/elevation/TerrainComputeProtocol';
 import {
   type WorkerRpcEndpoint,
@@ -25,12 +20,6 @@ import {
 } from '@/infrastructure/runtime/WorkerRpc';
 
 interface TerrainWorkerEngine {
-  fetchTile(
-    zoom: number,
-    x: number,
-    y: number,
-    abortController: AbortController,
-  ): Promise<TerrainDemResponse>;
   fetchContourTile(
     zoom: number,
     x: number,
@@ -38,7 +27,6 @@ interface TerrainWorkerEngine {
     options: TerrainContourOptions,
     abortController: AbortController,
   ): Promise<TerrainContourTile>;
-  setFilterEnabled(enabled: boolean): void;
   dispose(): void;
 }
 
@@ -52,7 +40,6 @@ interface QueuedContour {
 
 export type TerrainWorkerEngineFactory = (
   configuration: TerrainComputeConfiguration,
-  logger: DiagnosticLogger,
 ) => TerrainWorkerEngine;
 
 function linkedAbortController(signal: AbortSignal): {
@@ -79,11 +66,10 @@ function operationStatus(error: unknown): TerrainComputeMetrics['status'] {
     : 'failed';
 }
 
-/** Executes validated terrain RPC requests inside one dedicated module worker. */
+/** Executes validated contour RPC requests inside one dedicated module worker. */
 export class TerrainComputeWorkerServer {
   readonly #rpc: WorkerRpcServer;
   #engine: TerrainWorkerEngine | null = null;
-  #revision = 0;
   #pendingCount = 0;
   #interactionActive = false;
   #contourRunning = false;
@@ -91,69 +77,32 @@ export class TerrainComputeWorkerServer {
 
   public constructor(
     endpoint: WorkerRpcEndpoint,
-    private readonly engineFactory: TerrainWorkerEngineFactory = (
-      configuration,
-      logger,
-    ) => new TerrainComputeEngine(configuration, logger),
+    private readonly engineFactory: TerrainWorkerEngineFactory = (configuration) =>
+      new TerrainComputeEngine(configuration),
     private readonly monotonicNow: () => number = () => performance.now(),
     private readonly maximumQueuedContours = defaultTerrainContourQueueCapacity,
   ) {
     if (maximumQueuedContours < 1) {
       throw new RangeError('The terrain contour queue must accept at least one job.');
     }
-    const logger: DiagnosticLogger = {
-      log: (input) => {
-        this.#rpc.publishEvent(terrainWorkerEventNames.diagnostic, input);
-      },
-      getEvents: () => [],
-      subscribe: () => () => undefined,
-    };
     this.#rpc = new WorkerRpcServer(
       endpoint,
       {
         initialize: (payload) => {
           const request = parseTerrainWorkerInitializeRequest(payload);
           this.#engine?.dispose();
-          this.#engine = this.engineFactory(request.configuration, logger);
-          this.#revision = request.revision;
+          this.#engine = this.engineFactory(request.configuration);
           this.#interactionActive = request.interactionActive;
-          this.#engine.setFilterEnabled(request.filterEnabled);
           this.publishQueueState();
           return { initialized: true };
         },
-        dem: async (payload, context) => {
-          const request = parseTerrainWorkerTileRequest(payload);
-          this.assertCurrentRevision(request.revision);
-          return this.execute('dem', context.signal, async (abortController) => {
-            const response = await this.requireEngine().fetchTile(
-              request.zoom,
-              request.x,
-              request.y,
-              abortController,
-            );
-            this.assertCurrentRevision(request.revision);
-            const data = await response.data.arrayBuffer();
-            const value: TerrainWorkerDemResult = {
-              kind: 'dem',
-              data,
-              ...(response.cacheControl === undefined
-                ? {}
-                : { cacheControl: response.cacheControl }),
-              ...(response.expires === undefined ? {} : { expires: response.expires }),
-            };
-            return { value, transfer: [data] } satisfies WorkerRpcTransferResult;
-          });
-        },
         contour: async (payload, context) => {
           const request = parseTerrainWorkerContourRequest(payload);
-          this.assertCurrentRevision(request.revision);
           const queuedAt = this.monotonicNow();
           return this.scheduleContour(context.signal, () =>
             this.execute(
-              'contour',
               context.signal,
               async (abortController) => {
-                this.assertCurrentRevision(request.revision);
                 const response = await this.requireEngine().fetchContourTile(
                   request.zoom,
                   request.x,
@@ -161,7 +110,6 @@ export class TerrainComputeWorkerServer {
                   request.options,
                   abortController,
                 );
-                this.assertCurrentRevision(request.revision);
                 // The engine cache retains its buffer; only the owned copy is transferred.
                 const data = response.arrayBuffer.slice(0);
                 const value: TerrainWorkerContourResult = { kind: 'contour', data };
@@ -173,16 +121,6 @@ export class TerrainComputeWorkerServer {
               queuedAt,
             ),
           );
-        },
-        'set-filter': (payload) => {
-          const request = parseTerrainWorkerSetFilterRequest(payload);
-          if (request.revision <= this.#revision) return { revision: this.#revision };
-          this.cancelQueuedContours(
-            new DOMException('Terrain request revision is obsolete.', 'AbortError'),
-          );
-          this.#revision = request.revision;
-          this.requireEngine().setFilterEnabled(request.enabled);
-          return { revision: this.#revision };
         },
         interaction: (payload) => {
           const request = parseTerrainWorkerInteractionRequest(payload);
@@ -207,7 +145,6 @@ export class TerrainComputeWorkerServer {
   }
 
   private async execute(
-    operation: TerrainComputeMetrics['operation'],
     signal: AbortSignal,
     execute: (abortController: AbortController) => Promise<WorkerRpcTransferResult>,
     queuedAt = this.monotonicNow(),
@@ -219,7 +156,6 @@ export class TerrainComputeWorkerServer {
     try {
       const result = await execute(controller);
       this.publishMetrics({
-        operation,
         status: 'success',
         queueDurationMs: startedAt - queuedAt,
         computeDurationMs: this.monotonicNow() - startedAt,
@@ -227,7 +163,6 @@ export class TerrainComputeWorkerServer {
       return result;
     } catch (error) {
       this.publishMetrics({
-        operation,
         status: operationStatus(error),
         queueDurationMs: startedAt - queuedAt,
         computeDurationMs: this.monotonicNow() - startedAt,
@@ -243,7 +178,7 @@ export class TerrainComputeWorkerServer {
   private publishMetrics(
     metrics: Pick<
       TerrainComputeMetrics,
-      'operation' | 'status' | 'queueDurationMs' | 'computeDurationMs'
+      'status' | 'queueDurationMs' | 'computeDurationMs'
     >,
   ): void {
     this.#rpc.publishEvent(terrainWorkerEventNames.metrics, {
@@ -351,11 +286,5 @@ export class TerrainComputeWorkerServer {
       item.reject(reason);
     }
     this.publishQueueState();
-  }
-
-  private assertCurrentRevision(revision: number): void {
-    if (revision !== this.#revision) {
-      throw new DOMException('Terrain request revision is obsolete.', 'AbortError');
-    }
   }
 }

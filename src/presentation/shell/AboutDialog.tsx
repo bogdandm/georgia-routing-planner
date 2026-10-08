@@ -227,8 +227,8 @@ export function AboutDialog({
       {
         description: t`Elevation data`,
         details:
-          mapProviders.terrain.id === 'aws-mapzen-terrarium'
-            ? t`${terrainCredits}. Includes Copernicus, USGS, NOAA, and regional elevation data.`
+          mapProviders.terrain.id === 'mapterhorn'
+            ? t`${terrainCredits}. Georgia is covered by the Copernicus GLO-30 elevation model; Mapterhorn's attribution page lists every source.`
             : (terrainAttribution ?? undefined),
         href: originFor(mapProviders.terrain.tileUrl),
         title: mapProviders.terrain.label,

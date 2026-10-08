@@ -497,7 +497,6 @@ describe('MapLibreFacade', () => {
     const nativeMap = new FakeNativeMap();
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
-      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
       requestTimeoutMs: 100,
       equivalentErrorWindowMs: 1_000,
     });
@@ -578,7 +577,6 @@ describe('MapLibreFacade', () => {
     const nativeMap = new FakeNativeMap();
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
-      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
       requestTimeoutMs: 100,
       equivalentErrorWindowMs: 10_000,
     });
@@ -712,7 +710,6 @@ describe('MapLibreFacade', () => {
     const onViewSettled = vi.fn();
     const facade = new MapLibreFacade(services.logger, onViewSettled, {
       terrain: provider.value.terrain,
-      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
       requestTimeoutMs: 100,
       equivalentErrorWindowMs: 10_000,
     });
@@ -744,7 +741,6 @@ describe('MapLibreFacade', () => {
     nativeMap.sourceLoaded = false;
     const facade = new MapLibreFacade(services.logger, undefined, {
       terrain: provider.value.terrain,
-      demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
       requestTimeoutMs: 1_000,
       equivalentErrorWindowMs: 10_000,
     });
@@ -766,7 +762,7 @@ describe('MapLibreFacade', () => {
     const retry = facade.setTerrainMode('terrain');
     expect(nativeMap.listenerCount()).toBe(12);
     expect(nativeMap.terrainTileUpdates).toEqual([
-      ['test-dem://tiles/{z}/{x}/{y}?terrainEnableRetry=1'],
+      ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp?terrainEnableRetry=1'],
     ]);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
@@ -1313,7 +1309,6 @@ describe('MapLibreFacade', () => {
       undefined,
       {
         terrain: provider.value.terrain,
-        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
         sourceLayers: {
           pois: 'poi',
           peaks: 'mountain_peak',
@@ -1401,7 +1396,6 @@ describe('MapLibreFacade', () => {
       undefined,
       {
         terrain: provider.value.terrain,
-        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
         sourceLayers: {
           pois: 'poi',
           peaks: 'mountain_peak',
@@ -1481,7 +1475,6 @@ describe('MapLibreFacade', () => {
       undefined,
       {
         terrain: provider.value.terrain,
-        demTileUrl: 'test-dem://tiles/{z}/{x}/{y}',
         sourceLayers: {
           pois: provider.value.vector.sourceLayers.pois,
           peaks: provider.value.vector.sourceLayers.peaks,

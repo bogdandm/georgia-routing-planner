@@ -122,6 +122,47 @@ async function readStoredCamera(page: Page): Promise<StoredCamera | null> {
   );
 }
 
+/**
+ * A dropped track is framed when it is parsed and again when elevation preparation is
+ * ready; a fast preparation interrupts the first 650 ms fit animation. Reads one second
+ * apart therefore agree only after the final fit has settled and been stored.
+ */
+async function readSettledStoredCamera(page: Page): Promise<StoredCamera> {
+  const reads: { previous: string | null; settled: StoredCamera | null } = {
+    previous: null,
+    settled: null,
+  };
+  await expect
+    .poll(
+      async () => {
+        const camera = await readStoredCamera(page);
+        const key = camera === null ? null : JSON.stringify(camera);
+        const stable = key !== null && key === reads.previous;
+        reads.previous = key;
+        if (stable) reads.settled = camera;
+        return stable;
+      },
+      { intervals: [1_000] },
+    )
+    .toBe(true);
+  if (reads.settled === null) throw new Error('The stored camera did not settle.');
+  return reads.settled;
+}
+
+/**
+ * Saves the open preview once elevation and place naming are both done. The place-name
+ * result renders above Save, so clicking during the lookup can land on the field that
+ * shifts into the button's previous position.
+ */
+async function savePreparedPreview(page: Page): Promise<void> {
+  const save = page.getByRole('button', { name: 'Save', exact: true });
+  await expect(save).toBeEnabled();
+  await expect(
+    page.getByRole('progressbar', { name: 'Looking up representative places' }),
+  ).toHaveCount(0);
+  await save.click();
+}
+
 async function readStoredTerrainOverlayVisibility(page: Page): Promise<{
   readonly relief: boolean;
   readonly isolines: boolean;
@@ -330,12 +371,9 @@ test('imports and frames a global drop after expanding collapsed navigation', as
   ).toBeVisible();
   await expect(mapWorkspace).toBeVisible();
   await dropTrack();
-  await expect
-    .poll(async () => (await readStoredCamera(page))?.zoom ?? null)
-    .toBeGreaterThan(10);
-  const expandedFitCamera = await readStoredCamera(page);
-  expect(expandedFitCamera).not.toBeNull();
-  if (expandedFitCamera === null) return;
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
+  const expandedFitCamera = await readSettledStoredCamera(page);
+  expect(expandedFitCamera.zoom).toBeGreaterThan(10);
 
   page.once('dialog', (dialog) => {
     expect(dialog.message()).toBe('Discard this unsaved track?');
@@ -496,7 +534,7 @@ test('uses a map-first smartphone track disclosure without crashing', async ({
   const savedChooser = await savedChooserPromise;
   await savedChooser.setFiles(trackFixturePath);
   await previewDisclosure.click();
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await savePreparedPreview(page);
   const savedDisclosure = page.getByRole('button', {
     name: 'Expand track details',
   });
@@ -556,9 +594,7 @@ test('clears saved-track hovers after favorite sorting', async ({ page }) => {
       .getByRole('complementary', { name: 'Track details' })
       .getByLabel('Track name')
       .fill(name);
-    const save = page.getByRole('button', { name: 'Save', exact: true });
-    await expect(save).toBeEnabled();
-    await save.click();
+    await savePreparedPreview(page);
     await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
 
     if (name === 'Pinned track') {
@@ -665,7 +701,7 @@ test('persists valid public GPX exports and rejects zero-length geometry', async
       await page.getByRole('button', { name: 'Discard' }).click();
       continue;
     }
-    await page.getByRole('button', { name: 'Save' }).click();
+    await savePreparedPreview(page);
     await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
     await page.getByRole('button', { name: 'Back to tracks' }).click();
   }

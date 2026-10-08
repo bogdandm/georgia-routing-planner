@@ -91,7 +91,6 @@ interface MapProviderOptions {
     MapProviderConfiguration['vector']['sourceLayers'],
     'peaks' | 'places' | 'pois' | 'waterNames'
   >;
-  readonly demTileUrl: string;
   readonly requestTimeoutMs: number;
   readonly equivalentErrorWindowMs: number;
 }
@@ -1339,7 +1338,7 @@ export class MapLibreFacade implements MapFacade {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(provider.terrain, provider.demTileUrl),
+          createTerrainDemSource(provider.terrain),
         );
       }
       if (this.#terrainSourceRefreshRequired) {
@@ -1350,9 +1349,10 @@ export class MapLibreFacade implements MapFacade {
           throw new Error('The terrain source cannot refresh its tiles.');
         }
         this.#terrainRetryRevision += 1;
-        const separator = provider.demTileUrl.includes('?') ? '&' : '?';
+        const tileUrl = provider.terrain.tileUrl;
+        const separator = tileUrl.includes('?') ? '&' : '?';
         terrainSource.setTiles([
-          `${provider.demTileUrl}${separator}terrainEnableRetry=${String(this.#terrainRetryRevision)}`,
+          `${tileUrl}${separator}terrainEnableRetry=${String(this.#terrainRetryRevision)}`,
         ]);
         this.#terrainSourceRefreshRequired = false;
         this.logger.log({ level: 'info', name: 'map.terrain.retry-started' });

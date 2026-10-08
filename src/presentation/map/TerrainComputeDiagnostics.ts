@@ -54,15 +54,12 @@ class DiagnosticBatchWindow {
   }
 }
 
-type AggregateOperation = TerrainComputeMetrics['operation'] | 'mixed';
-
 /** Batches worker queue and compute timings before they cross the diagnostics port. */
 export class TerrainComputeDiagnostics {
   #count = 0;
   #queueDurationMs = 0;
   #computeDurationMs = 0;
   #pendingCount = 0;
-  #operation: AggregateOperation | null = null;
   #status: TerrainComputeMetrics['status'] = 'success';
   #executionMode: TerrainComputeMetrics['executionMode'] = 'worker';
   readonly #window: DiagnosticBatchWindow;
@@ -87,10 +84,6 @@ export class TerrainComputeDiagnostics {
     this.#queueDurationMs += metrics.queueDurationMs;
     this.#computeDurationMs += metrics.computeDurationMs;
     this.#pendingCount = Math.max(this.#pendingCount, metrics.pendingCount);
-    this.#operation =
-      this.#operation === null || this.#operation === metrics.operation
-        ? metrics.operation
-        : 'mixed';
     this.#executionMode = metrics.executionMode;
     if (metrics.status === 'failed' || this.#status === 'failed') {
       this.#status = 'failed';
@@ -118,7 +111,6 @@ export class TerrainComputeDiagnostics {
         computeDurationMs: Math.round(this.#computeDurationMs),
         pendingCount: this.#pendingCount,
         executionMode: this.#executionMode,
-        operation: this.#operation ?? 'mixed',
         status: this.#status,
       },
     } as const;
@@ -126,7 +118,6 @@ export class TerrainComputeDiagnostics {
     this.#queueDurationMs = 0;
     this.#computeDurationMs = 0;
     this.#pendingCount = 0;
-    this.#operation = null;
     this.#status = 'success';
     this.logger.log(input);
   }

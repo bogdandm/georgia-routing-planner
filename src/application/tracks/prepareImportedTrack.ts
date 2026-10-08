@@ -5,7 +5,6 @@ import type {
 } from '@/application/ports/ElevationProvider';
 import {
   calculateElevationProfile,
-  filterDemElevationSamples,
   medianFilterElevationSamples,
   type ElevationProfile,
   type ElevationProfileInputPoint,
@@ -33,8 +32,8 @@ export interface TrackElevationProgressPoint {
 }
 
 export interface TrackElevationPreparationProgress {
-  readonly completedTiles: number;
-  readonly totalTiles: number;
+  readonly completedSamples: number;
+  readonly totalSamples: number;
   readonly points: readonly TrackElevationProgressPoint[];
 }
 
@@ -491,8 +490,8 @@ export async function prepareImportedTrack(
             );
           }
           onProgress({
-            completedTiles: progress.completedTiles,
-            totalTiles: progress.totalTiles,
+            completedSamples: progress.completedSamples,
+            totalSamples: progress.totalSamples,
             points: previewIndices.map((stationIndex, slot) => ({
               distanceMeters: requiredValue(stationDistanceMeters, stationIndex),
               elevationMeters: previewDemElevations[slot] ?? null,
@@ -510,7 +509,7 @@ export async function prepareImportedTrack(
   signal.throwIfAborted();
 
   let sampleOffset = 0;
-  const assembled: ElevationSampleInput[][] = [];
+  const assembled: ElevationProfileInputPoint[][] = [];
   const assembledSources: TrackSegment[] = [];
   const assembledDistances: (readonly number[])[] = [];
   for (const [segmentIndex, stationSegment] of resampled.entries()) {
@@ -526,21 +525,26 @@ export async function prepareImportedTrack(
     const distances = requiredValue(distancesBySegment, segmentIndex);
     fillMissingElevations(values, distances);
     assembled.push(
-      stationSegment.map((station, index) => ({
-        coordinate: station.coordinate,
-        ...(station.recordedAt === undefined ? {} : { recordedAt: station.recordedAt }),
-        elevationMeters: requiredValue(values, index),
-        sourceSegmentIndex: station.sourceSegmentIndex,
-      })),
+      stationSegment.map((station, index) => {
+        const elevationMeters = requiredValue(values, index);
+        return {
+          coordinate: station.coordinate,
+          ...(station.recordedAt === undefined
+            ? {}
+            : { recordedAt: station.recordedAt }),
+          rawElevationMeters: elevationMeters,
+          elevationMeters,
+          sourceSegmentIndex: station.sourceSegmentIndex,
+        };
+      }),
     );
     const source = requiredValue(routableSegments, segmentIndex).segment;
     assembledSources.push(source);
     assembledDistances.push(distances);
   }
 
-  const filtered = filterDemElevationSamples(assembled);
   const calculatedSegments = options.preserveGeometry
-    ? filtered.map((segment, index) => {
+    ? assembled.map((segment, index) => {
         const source = requiredValue(assembledSources, index);
         return preserveSegmentGeometry(
           source,
@@ -548,7 +552,7 @@ export async function prepareImportedTrack(
           requiredValue(assembledDistances, index),
         );
       })
-    : filtered.map((segment) => ({
+    : assembled.map((segment) => ({
         points: segment.map((point) => ({
           coordinate: point.coordinate,
           ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
@@ -556,7 +560,7 @@ export async function prepareImportedTrack(
         })),
       }));
   const calculatedProfile = calculateElevationProfile(
-    options.preserveGeometry ? calculatedProfileInputs(calculatedSegments) : filtered,
+    options.preserveGeometry ? calculatedProfileInputs(calculatedSegments) : assembled,
   );
   if (calculatedProfile === null) {
     if (sourceProfile === null) {

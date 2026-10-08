@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  medianInPlace,
-  repairMedianInPlace,
-} from '@/domain/elevation/robustElevationStatistics';
+import { medianInPlace } from '@/domain/elevation/robustElevationStatistics';
 
 describe('robustElevationStatistics', () => {
   it('calculates odd and even medians while sorting only the populated prefix', () => {
@@ -25,13 +22,5 @@ describe('robustElevationStatistics', () => {
     expect(() => medianInPlace(values, 3)).toThrow(
       'Median count must select populated values.',
     );
-  });
-
-  it('uses a unique dense cluster but keeps the overall median for ambiguous clusters', () => {
-    expect(repairMedianInPlace(new Float64Array([1, 100, 101, 102, 103]), 5, 2)).toBe(
-      101.5,
-    );
-    expect(repairMedianInPlace(new Float64Array([1, 2, 100, 101]), 4, 1)).toBe(51);
-    expect(repairMedianInPlace(new Float64Array([1, 50]), 2, 1)).toBe(25.5);
   });
 });

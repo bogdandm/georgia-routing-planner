@@ -232,7 +232,7 @@ test('selects shared 3D mode immediately and mounts its terrain state directly',
 }) => {
   const terrainRequests: string[] = [];
   page.on('request', (request) => {
-    if (request.url().includes('/elevation-tiles-prod/terrarium/')) {
+    if (request.url().startsWith('https://tiles.mapterhorn.com/')) {
       terrainRequests.push(request.url());
     }
   });
@@ -299,7 +299,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   test.setTimeout(45_000);
   const terrainRequests: string[] = [];
   page.on('request', (request) => {
-    if (request.url().includes('/elevation-tiles-prod/terrarium/')) {
+    if (request.url().startsWith('https://tiles.mapterhorn.com/')) {
       terrainRequests.push(request.url());
     }
   });
@@ -325,9 +325,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
   await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
-  await expect(
-    page.getByRole('link', { name: 'Mapzen/AWS Open Data providers' }).first(),
-  ).toBeVisible();
+  await expect(page.getByRole('link', { name: '© Mapterhorn' }).first()).toBeVisible();
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');
   await expect
@@ -610,9 +608,8 @@ test('rotates and pitches 3D terrain with Shift+arrow keys', async ({ page }) =>
 test('keeps DEM failure feedback in the shared status without a map banner', async ({
   page,
 }) => {
-  await page.route(
-    /https:\/\/s3\.amazonaws\.com\/elevation-tiles-prod\/terrarium\/.*\.png/u,
-    (route) => route.abort('failed'),
+  await page.route(/https:\/\/tiles\.mapterhorn\.com\/\d+\/\d+\/\d+\.webp/u, (route) =>
+    route.abort('failed'),
   );
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');

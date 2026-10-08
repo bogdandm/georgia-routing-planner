@@ -148,56 +148,51 @@ The defaults are the public OpenStreetMap Nominatim search and reverse endpoints
 Queries, coordinates, and returned names are not written to diagnostics. UI attribution
 links to the OpenStreetMap copyright page.
 
-## Terrain: AWS Open Data Mapzen Terrain Tiles
+## Terrain: Mapterhorn
 
-The DEM is `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`:
-Terrarium encoding, 256-pixel tiles, z0–15 (overzoomed above), anonymous HTTPS with
-browser CORS and byte ranges. The
-[AWS Open Data entry](https://registry.opendata.aws/terrain-tiles/) and
-[service documentation](https://github.com/tilezen/joerd/blob/master/docs/use-service.md)
-describe the dataset and limits. One filtered protocol feeds hillshade relief, 3D
-terrain (exaggeration 1.15), browser-generated contours (z11–15), and DEM elevation
-sampling for tracks, point inspection, and forecast downscaling
-(`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
+The DEM is `https://tiles.mapterhorn.com/{z}/{x}/{y}.webp` from
+[Mapterhorn](https://mapterhorn.com/): Terrarium encoding, 512-pixel WebP tiles,
+anonymous HTTPS behind Cloudflare with `access-control-allow-origin: *` and
+`cache-control: max-age=604800`. The planet layer covers z0–12; higher zooms exist only
+for regions with finer sources and Georgia is not one of them, so the configuration caps
+the source at z12 and MapLibre overzooms above it. Georgia is built from Copernicus
+GLO-30 (about 30 m source spacing); one z12 pixel is about 14 m there.
 
-### Terrarium repair
+MapLibre loads this URL directly as the `terrain-dem` raster-dem source for hillshade
+relief and 3D terrain (exaggeration 1.15) and decodes it on its own workers. DEM
+elevation sampling for tracks, point inspection, and forecast downscaling uses the same
+tiles (`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
 
-The provider publishes corrupted pixels, for example a complete −700 m scanline near
-Stepantsminda and compact downward spikes of −315 m to −1,826 m at Lisi Lake.
-`TerrariumDemFilter.ts` repairs them in one stencil pass over the tile plus a one-pixel
-halo from its eight neighbors. It rejects transparent pixels, sentinel values
-(`-32768`), elevations outside −500 m to 9,000 m, and isolated extremes whose residual
-from a consistent neighborhood (at least five neighbors, MAD ≤ 80 m, at most one
-supporting neighbor) is at least 500 m upward or 300 m downward. Rejected pixels take
-the neighbor median; accepted pixels are never resampled, and an unrepaired tile returns
-its original bytes. All thresholds and the 48-entry caches are validated configuration.
-
-Layers exposes `Repair invalid DEM elevation pixels`, enabled by default and persisted
-locally. Changing it reloads relief, 3D terrain, and contours together so they cannot
-disagree. Diagnostics export only durations and aggregate repair counts, never tile
-URLs, indices, coordinates, or pixels.
+Mapterhorn was checked over Georgia before it replaced the AWS Open Data Mapzen
+Terrarium tiles: no out-of-range or isolated spike pixels were found, including the
+Stepantsminda and Lisi Lake areas where Mapzen published corrupted pixels. The
+application therefore applies no client-side DEM repair.
 
 ### Contours and compute worker
 
 `maplibre-contour` 0.0.5 (BSD-3-Clause) generates contour vector tiles for visible DEM
 tiles only, with a user-selected minor interval (default 50 m), 200 m index lines, and a
-32-tile cache. One application-owned module worker runs DEM decode, repair, encode, and
-contour generation; contour requests wait until the camera settles. A broken worker is
-restarted once, then the identical inline engine takes over for the session. Relief and
-3D rendering stay on MapLibre's own workers and the GPU.
+32-tile cache. Contour vector tiles are generated for z11–12 and overzoomed by MapLibre
+above that, matching the DEM's native resolution. One application-owned module worker
+fetches the provider tiles, decodes them with `createImageBitmap`, and generates
+contours; contour requests wait until the camera settles. A broken worker is restarted
+once, then the identical inline engine takes over for the session. Only the contour
+protocol is registered with MapLibre; relief and 3D rendering stay on MapLibre's own
+workers and the GPU.
 
 ### Attribution, limits, and failure policy
 
-Desktop attribution reads `Terrain data: Mapzen/AWS Open Data providers` and links to
-the authoritative
-[attribution list](https://github.com/tilezen/joerd/blob/master/docs/attribution.md);
-for Georgia, Copernicus/EU and USGS/NOAA inputs are the relevant ones.
+Attribution reads `© Mapterhorn` linking to the
+[Mapterhorn attribution page](https://mapterhorn.com/attribution), followed by the
+Copernicus GLO-30 producer credit: “DLR e.V. 2010-2014, Airbus Defence and Space GmbH
+2014-2018, provided under COPERNICUS by the European Union and ESA”.
 
-The S3 endpoint has no CDN or SLA and is the main production risk. A missing tile or
-network failure may omit an overlay or return 3D to flat mode but never blocks the
-vector basemap. There is no terrain failover because a replacement could differ in
-licensing and elevation semantics; it needs HTTPS/CORS tiles, Terrarium or Mapbox
-encoding, updated attribution, and a contour density review.
+Mapterhorn publishes no SLA, so the endpoint is a production risk; the week-long cache
+lifetime keeps repeat views off the network. A missing tile or network failure may omit
+an overlay or return 3D to flat mode but never blocks the vector basemap. There is no
+terrain failover because a replacement could differ in licensing and elevation
+semantics; it needs HTTPS/CORS tiles, Terrarium or Mapbox encoding, updated attribution,
+and a contour density review.
 
 ## Imagery basemaps
 
@@ -264,6 +259,9 @@ attribution credits the National Agency of Public Registry (NAPR) orthophotos 20
 - MapTiler Cloud: suitable, but its public key and account/plan policy add an avoidable
   provider account dependency.
 - MapLibre demo vector/terrain endpoints: demo infrastructure without a product SLA.
+- AWS Open Data Mapzen Terrarium tiles: published corrupted pixels in Georgia (a −700 m
+  scanline near Stepantsminda and −315 m to −1,826 m spikes at Lisi Lake) that required
+  client-side repair, and the S3 endpoint has no CDN or SLA.
 
 ## Sentinel-2: Earth Search and TiTiler
 

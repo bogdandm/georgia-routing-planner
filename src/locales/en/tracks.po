@@ -26,7 +26,7 @@ msgid "{0} tracks"
 msgstr "{0} tracks"
 
 #. js-lingui-id: 3Mpfhk
-#: src/presentation/tracks/ElevationProfileChart.tsx:563
+#: src/presentation/tracks/ElevationProfileChart.tsx:564
 #: src/presentation/tracks/trackFormatters.ts:11
 msgid "{distance} km"
 msgstr "{distance} km"
@@ -68,7 +68,7 @@ msgid "{label}: {value}"
 msgstr "{label}: {value}"
 
 #. js-lingui-id: zpwS9F
-#: src/presentation/tracks/ElevationProfileChart.tsx:457
+#: src/presentation/tracks/ElevationProfileChart.tsx:458
 msgid "{maximumElevationMeters, plural, one {Elevation profile from {minimumElevation} to # metre} other {Elevation profile from {minimumElevation} to # metres}}"
 msgstr "{maximumElevationMeters, plural, one {Elevation profile from {minimumElevation} to # metre} other {Elevation profile from {minimumElevation} to # metres}}"
 
@@ -102,23 +102,18 @@ msgstr "{pointCount, plural, one {# point} other {# points}} · {segmentCount, p
 msgid "{speed} km/h"
 msgstr "{speed} km/h"
 
-#. js-lingui-id: OrxuAu
-#: src/presentation/tracks/ElevationProfileChart.tsx:360
-msgid "{totalTiles, plural, one {Elevation profile loading: {completedTileCount} of # tile} other {Elevation profile loading: {completedTileCount} of # tiles}}"
-msgstr "{totalTiles, plural, one {Elevation profile loading: {completedTileCount} of # tile} other {Elevation profile loading: {completedTileCount} of # tiles}}"
-
 #. js-lingui-id: rh2wFH
 #: src/presentation/tracks/TracksWorkspace.tsx:4125
 msgid "{trackCount, plural, one {Search # saved track} other {Search # saved tracks}}"
 msgstr "{trackCount, plural, one {Search # saved track} other {Search # saved tracks}}"
 
 #. js-lingui-id: pXTSNf
-#: src/presentation/tracks/TracksWorkspace.tsx:5735
+#: src/presentation/tracks/TracksWorkspace.tsx:5732
 msgid "{warningCount, plural, one {Imported with # validation warning} other {Imported with # validation warnings}}"
 msgstr "{warningCount, plural, one {Imported with # validation warning} other {Imported with # validation warnings}}"
 
 #. js-lingui-id: BEi0CZ
-#: src/presentation/tracks/TracksWorkspace.tsx:5615
+#: src/presentation/tracks/TracksWorkspace.tsx:5612
 msgid "↑ Apply place name ↑"
 msgstr "↑ Apply place name ↑"
 
@@ -153,7 +148,7 @@ msgid "Add at least two route points to see the elevation profile."
 msgstr "Add at least two route points to see the elevation profile."
 
 #. js-lingui-id: fMI_Yi
-#: src/presentation/tracks/TracksWorkspace.tsx:5682
+#: src/presentation/tracks/TracksWorkspace.tsx:5679
 msgid "Add at least two route points to see track details."
 msgstr "Add at least two route points to see track details."
 
@@ -191,7 +186,7 @@ msgid "Along the route"
 msgstr "Along the route"
 
 #. js-lingui-id: wmtKjA
-#: src/presentation/tracks/TracksWorkspace.tsx:5611
+#: src/presentation/tracks/TracksWorkspace.tsx:5608
 msgid "Apply place name"
 msgstr "Apply place name"
 
@@ -258,17 +253,17 @@ msgid "Choose folder icon"
 msgstr "Choose folder icon"
 
 #. js-lingui-id: xCJdfg
-#: src/presentation/tracks/RoutePlanControls.tsx:328
+#: src/presentation/tracks/RoutePlanControls.tsx:330
 msgid "Clear"
 msgstr "Clear"
 
 #. js-lingui-id: XWJtTP
-#: src/presentation/tracks/RoutePlanControls.tsx:262
+#: src/presentation/tracks/RoutePlanControls.tsx:264
 msgid "Click the map to choose the next point."
 msgstr "Click the map to choose the next point."
 
 #. js-lingui-id: -7TJ06
-#: src/presentation/tracks/RoutePlanControls.tsx:260
+#: src/presentation/tracks/RoutePlanControls.tsx:262
 msgid "Click the map to choose the route start."
 msgstr "Click the map to choose the route start."
 
@@ -396,8 +391,8 @@ msgid "Detailed track geometry was used instead of companion route geometry."
 msgstr "Detailed track geometry was used instead of companion route geometry."
 
 #. js-lingui-id: bzSI52
-#: src/presentation/tracks/RoutePlanControls.tsx:338
-#: src/presentation/tracks/TracksWorkspace.tsx:5655
+#: src/presentation/tracks/RoutePlanControls.tsx:340
+#: src/presentation/tracks/TracksWorkspace.tsx:5652
 msgid "Discard"
 msgstr "Discard"
 
@@ -482,7 +477,7 @@ msgstr "Edit folder"
 
 #. js-lingui-id: fkcYqc
 #: src/presentation/tracks/ElevationProfileChart.tsx:326
-#: src/presentation/tracks/ElevationProfileChart.tsx:412
+#: src/presentation/tracks/ElevationProfileChart.tsx:413
 msgid "Elevation"
 msgstr "Elevation"
 
@@ -511,7 +506,7 @@ msgid "Elevation gain (calculated): {calculatedAscent}"
 msgstr "Elevation gain (calculated): {calculatedAscent}"
 
 #. js-lingui-id: y7ubGa
-#: src/presentation/tracks/RoutePlanControls.tsx:252
+#: src/presentation/tracks/RoutePlanControls.tsx:254
 msgid "Elevation is unavailable. The route geometry is ready and can still be saved."
 msgstr "Elevation is unavailable. The route geometry is ready and can still be saved."
 
@@ -534,8 +529,8 @@ msgid "Elevation preparation failed."
 msgstr "Elevation preparation failed."
 
 #. js-lingui-id: fGXQ-P
-#: src/presentation/tracks/ElevationProfileChart.tsx:369
-#: src/presentation/tracks/ElevationProfileChart.tsx:496
+#: src/presentation/tracks/ElevationProfileChart.tsx:370
+#: src/presentation/tracks/ElevationProfileChart.tsx:497
 #: src/presentation/tracks/TracksWorkspace.tsx:4543
 msgid "Elevation profile"
 msgstr "Elevation profile"
@@ -545,13 +540,18 @@ msgstr "Elevation profile"
 msgid "Elevation profile loading"
 msgstr "Elevation profile loading"
 
+#. js-lingui-id: T75oDH
+#: src/presentation/tracks/ElevationProfileChart.tsx:365
+msgid "Elevation profile loading: {percent}"
+msgstr "Elevation profile loading: {percent}"
+
 #. js-lingui-id: oX4-C9
 #: src/presentation/tracks/TrackMarkersSection.tsx:273
 msgid "Elevation unavailable"
 msgstr "Elevation unavailable"
 
 #. js-lingui-id: 7HgnzO
-#: src/presentation/tracks/TracksWorkspace.tsx:5619
+#: src/presentation/tracks/TracksWorkspace.tsx:5616
 msgid "English place name"
 msgstr "English place name"
 
@@ -637,7 +637,7 @@ msgid "Import track file"
 msgstr "Import track file"
 
 #. js-lingui-id: ZwUT0o
-#: src/presentation/tracks/TracksWorkspace.tsx:5729
+#: src/presentation/tracks/TracksWorkspace.tsx:5726
 msgid "Independent segments are not joined; totals exclude gaps."
 msgstr "Independent segments are not joined; totals exclude gaps."
 
@@ -651,15 +651,11 @@ msgstr "Item dropped."
 msgid "Line"
 msgstr "Line"
 
-#. js-lingui-id: PSogG8
-#: src/presentation/tracks/ElevationProfileChart.tsx:357
-msgid "Loading elevation tiles: {completedTileCount} of {totalTileCount}"
-msgstr "Loading elevation tiles: {completedTileCount} of {totalTileCount}"
-
-#. js-lingui-id: 92JZwP
-#: src/presentation/tracks/RoutePlanControls.tsx:229
-msgid "Loading elevation tiles: {completedTiles} of {totalTiles}"
-msgstr "Loading elevation tiles: {completedTiles} of {totalTiles}"
+#. js-lingui-id: D1UiKJ
+#: src/presentation/tracks/ElevationProfileChart.tsx:361
+#: src/presentation/tracks/RoutePlanControls.tsx:236
+msgid "Loading elevation: {percent}"
+msgstr "Loading elevation: {percent}"
 
 #. js-lingui-id: o4EgvC
 #: src/presentation/tracks/TrackMarkersSection.tsx:274
@@ -687,12 +683,12 @@ msgid "Loading track…"
 msgstr "Loading track…"
 
 #. js-lingui-id: NJHTJk
-#: src/presentation/tracks/TracksWorkspace.tsx:5588
+#: src/presentation/tracks/TracksWorkspace.tsx:5585
 msgid "Looking up representative places"
 msgstr "Looking up representative places"
 
 #. js-lingui-id: 3uOeA5
-#: src/presentation/tracks/TracksWorkspace.tsx:5592
+#: src/presentation/tracks/TracksWorkspace.tsx:5589
 msgid "Looking up representative places…"
 msgstr "Looking up representative places…"
 
@@ -795,7 +791,7 @@ msgstr "Newest"
 
 #. js-lingui-id: BxDJ4A
 #: src/presentation/tracks/RoutePlanControls.tsx:63
-#: src/presentation/tracks/RoutePlanControls.tsx:303
+#: src/presentation/tracks/RoutePlanControls.tsx:305
 msgid "Next segment"
 msgstr "Next segment"
 
@@ -817,8 +813,8 @@ msgid "No forecast for this date."
 msgstr "No forecast for this date."
 
 #. js-lingui-id: xKg-Bl
-#: src/presentation/tracks/TracksWorkspace.tsx:5598
-#: src/presentation/tracks/TracksWorkspace.tsx:5602
+#: src/presentation/tracks/TracksWorkspace.tsx:5595
+#: src/presentation/tracks/TracksWorkspace.tsx:5599
 msgid "No generated name is available. Saving is unaffected."
 msgstr "No generated name is available. Saving is unaffected."
 
@@ -895,17 +891,17 @@ msgstr "Picked up item."
 msgid "Picked up track {0}."
 msgstr "Picked up track {0}."
 
-#. js-lingui-id: gKPwKn
-#: src/presentation/tracks/TracksWorkspace.tsx:5576
-msgid "Preparing terrain and elevation"
-msgstr "Preparing terrain and elevation"
+#. js-lingui-id: RefI49
+#: src/presentation/tracks/TracksWorkspace.tsx:5575
+msgid "Preparing elevation"
+msgstr "Preparing elevation"
 
-#. js-lingui-id: fwASbQ
-#: src/presentation/tracks/ElevationProfileChart.tsx:358
-#: src/presentation/tracks/RoutePlanControls.tsx:231
-#: src/presentation/tracks/TracksWorkspace.tsx:5580
-msgid "Preparing terrain and elevation…"
-msgstr "Preparing terrain and elevation…"
+#. js-lingui-id: DsZhgY
+#: src/presentation/tracks/ElevationProfileChart.tsx:361
+#: src/presentation/tracks/RoutePlanControls.tsx:230
+#: src/presentation/tracks/TracksWorkspace.tsx:5577
+msgid "Preparing elevation…"
+msgstr "Preparing elevation…"
 
 #. js-lingui-id: KQYkQd
 #: src/presentation/tracks/TracksWorkspace.tsx:4067
@@ -969,7 +965,7 @@ msgid "Route planning"
 msgstr "Route planning"
 
 #. js-lingui-id: e_FNZf
-#: src/presentation/tracks/RoutePlanControls.tsx:263
+#: src/presentation/tracks/RoutePlanControls.tsx:265
 msgid "Route ready. Click the map to add another point."
 msgstr "Route ready. Click the map to add another point."
 
@@ -989,15 +985,15 @@ msgid "Routing data is unavailable. Try again when you are online."
 msgstr "Routing data is unavailable. Try again when you are online."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/tracks/RoutePlanControls.tsx:346
+#: src/presentation/tracks/RoutePlanControls.tsx:348
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:165
 #: src/presentation/tracks/TrackMarkersSection.tsx:250
-#: src/presentation/tracks/TracksWorkspace.tsx:5669
+#: src/presentation/tracks/TracksWorkspace.tsx:5666
 msgid "Save"
 msgstr "Save"
 
 #. js-lingui-id: FuBQJT
-#: src/presentation/tracks/TracksWorkspace.tsx:5667
+#: src/presentation/tracks/TracksWorkspace.tsx:5664
 msgid "Save a copy"
 msgstr "Save a copy"
 
@@ -1083,7 +1079,7 @@ msgid "Share track publicly"
 msgstr "Share track publicly"
 
 #. js-lingui-id: xVsHr4
-#: src/presentation/tracks/TracksWorkspace.tsx:5651
+#: src/presentation/tracks/TracksWorkspace.tsx:5648
 msgid "Shared track"
 msgstr "Shared track"
 
@@ -1113,8 +1109,8 @@ msgid "Sharing is enabled, but the link could not be copied."
 msgstr "Sharing is enabled, but the link could not be copied."
 
 #. js-lingui-id: qh04VC
-#: src/presentation/tracks/ElevationProfileChart.tsx:499
-#: src/presentation/tracks/ElevationProfileChart.tsx:501
+#: src/presentation/tracks/ElevationProfileChart.tsx:500
+#: src/presentation/tracks/ElevationProfileChart.tsx:502
 msgid "Show track grade legend"
 msgstr "Show track grade legend"
 
@@ -1225,7 +1221,7 @@ msgid "The marker name contains unsupported characters."
 msgstr "The marker name contains unsupported characters."
 
 #. js-lingui-id: njvys6
-#: src/presentation/tracks/TracksWorkspace.tsx:5625
+#: src/presentation/tracks/TracksWorkspace.tsx:5622
 msgid "The name may be incomplete."
 msgstr "The name may be incomplete."
 
@@ -1318,12 +1314,12 @@ msgstr "Track actions"
 
 #. js-lingui-id: aLQpKA
 #: src/presentation/tracks/TracksWorkspace.tsx:5214
-#: src/presentation/tracks/TracksWorkspace.tsx:5676
+#: src/presentation/tracks/TracksWorkspace.tsx:5673
 msgid "Track details"
 msgstr "Track details"
 
 #. js-lingui-id: FPwJAx
-#: src/presentation/tracks/TracksWorkspace.tsx:5684
+#: src/presentation/tracks/TracksWorkspace.tsx:5681
 msgid "Track details are being prepared…"
 msgstr "Track details are being prepared…"
 
@@ -1333,7 +1329,7 @@ msgid "Track markers"
 msgstr "Track markers"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/tracks/RoutePlanControls.tsx:293
+#: src/presentation/tracks/RoutePlanControls.tsx:295
 #: src/presentation/tracks/TracksWorkspace.tsx:5267
 #: src/presentation/tracks/TracksWorkspace.tsx:5566
 msgid "Track name"
@@ -1352,7 +1348,7 @@ msgstr "Track name must be 200 characters or fewer."
 #. js-lingui-id: 9uI_rE
 #: src/presentation/tracks/RoutePlanControls.tsx:104
 #: src/presentation/tracks/RoutePlanControls.tsx:108
-#: src/presentation/tracks/RoutePlanControls.tsx:320
+#: src/presentation/tracks/RoutePlanControls.tsx:322
 msgid "Undo"
 msgstr "Undo"
 

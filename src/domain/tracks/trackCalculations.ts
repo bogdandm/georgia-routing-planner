@@ -2,8 +2,8 @@ import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/
 
 export const DISTANCE_ALGORITHM_VERSION = 1;
 export const RECORDED_ELEVATION_ALGORITHM_VERSION = 3;
-export const CALCULATED_ELEVATION_ALGORITHM_VERSION = 4;
-export const CALCULATED_ELEVATION_HYSTERESIS_METERS = 10;
+export const CALCULATED_ELEVATION_ALGORITHM_VERSION = 5;
+export const CALCULATED_ELEVATION_HYSTERESIS_METERS = 5;
 export const ROUTE_SHAPE_ALGORITHM_VERSION = 1;
 export const DOMINANT_SUMMIT_ALGORITHM_VERSION = 1;
 
@@ -43,6 +43,7 @@ export interface TrackMetrics {
     | 1
     | 2
     | typeof RECORDED_ELEVATION_ALGORITHM_VERSION
+    | 4
     | typeof CALCULATED_ELEVATION_ALGORITHM_VERSION;
 }
 
@@ -192,9 +193,9 @@ function calculateRecordedSegmentChanges(segment: TrackSegment): SegmentChanges 
 }
 
 /**
- * Aggregates an already smoothed DEM projection with 10 m hysteresis. Each
- * completed elevation run appends its terminal residual so net ascent minus
- * descent remains identical to the run's endpoint elevation change.
+ * Aggregates bilinear DEM samples with 5 m hysteresis. Each completed elevation run
+ * appends its terminal residual so net ascent minus descent remains identical to the
+ * run's endpoint elevation change.
  */
 function calculateCalculatedSegmentChanges(segment: TrackSegment): SegmentChanges {
   let distanceMeters = 0;

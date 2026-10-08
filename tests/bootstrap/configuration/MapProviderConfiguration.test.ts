@@ -27,20 +27,23 @@ describe('MapProviderConfiguration', () => {
       sourceLayers: { land: 'land', buildings: 'buildings', streets: 'streets' },
     });
     expect(configuration.terrain).toMatchObject({
+      id: 'mapterhorn',
+      tileUrl: 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp',
       encoding: 'terrarium',
-      tileSize: 256,
+      tileSize: 512,
       minZoom: 0,
-      maxZoom: 15,
-      filter: {
-        spikeThresholdMeters: 500,
-        negativeSpikeThresholdMeters: 300,
-      },
+      maxZoom: 12,
       overlays: {
         contourMinZoom: 11,
-        contourMaxZoom: 15,
+        contourMaxZoom: 12,
         contourCacheSize: 32,
       },
     });
+    expect(configuration.terrain).not.toHaveProperty('filter');
+    expect(configuration.terrain.attribution).toContain('© Mapterhorn');
+    expect(configuration.terrain.attribution).toContain(
+      'provided under COPERNICUS by the European Union and ESA',
+    );
     expect(configuration.satellite).toMatchObject({
       id: 'earth-search-v1',
       collections: { L1C: 'sentinel-2-l1c', L2A: 'sentinel-2-l2a' },
@@ -143,8 +146,8 @@ describe('MapProviderConfiguration', () => {
       vectorOrigin: 'https://tiles.openfreemap.org',
       detailVectorId: 'osm-shortbread-v1',
       detailVectorOrigin: 'https://vector.openstreetmap.org',
-      terrainId: 'aws-mapzen-terrarium',
-      terrainOrigin: 'https://s3.amazonaws.com',
+      terrainId: 'mapterhorn',
+      terrainOrigin: 'https://tiles.mapterhorn.com',
       satelliteId: 'earth-search-v1',
       satelliteOrigin: 'https://earth-search.aws.element84.com',
       satelliteRendererId: 'titiler-demo-stac-rgb',
@@ -168,19 +171,6 @@ describe('MapProviderConfiguration', () => {
       naprOrthophotoId: 'napr-orthophoto',
       naprOrthophotoOrigins: ['https://nt0.napr.gov.ge', 'https://mp.napr.gov.ge'],
     });
-  });
-
-  it('defaults the downward spike threshold for existing external configuration', () => {
-    const input = structuredClone(
-      defaultMapProviderConfigurationInput,
-    ) as unknown as Record<string, unknown>;
-    const terrain = input.terrain as Record<string, unknown>;
-    const filter = terrain.filter as Record<string, unknown>;
-    delete filter.negativeSpikeThresholdMeters;
-
-    const configuration = parseMapProviderConfiguration(input, baseUrl);
-
-    expect(configuration.terrain.filter.negativeSpikeThresholdMeters).toBe(300);
   });
 
   it('defaults all static satellite basemaps for existing external configuration', () => {

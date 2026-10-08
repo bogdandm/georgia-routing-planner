@@ -682,41 +682,6 @@ export function LayersPanel() {
                   );
                 })}
               </FormGroup>
-              {group.id === 'terrain' ? (
-                <Box sx={{ mt: 1.5 }}>
-                  <FormControlLabel
-                    sx={{ m: 0 }}
-                    slotProps={{ typography: { variant: 'body2' } }}
-                    control={
-                      <Checkbox
-                        size="small"
-                        sx={{ p: 0, mr: 1 }}
-                        checked={
-                          state.terrainOverlays.preferences.filterInvalidDemPixels
-                        }
-                        disabled={mapLayers === null || state.weatherMapEnabled}
-                        onChange={(event) => {
-                          changeTerrainOverlayPreferences({
-                            ...state.terrainOverlays.preferences,
-                            filterInvalidDemPixels: event.target.checked,
-                          });
-                        }}
-                      />
-                    }
-                    label={t`Repair invalid DEM elevation pixels`}
-                  />
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
-                  >
-                    <Trans>
-                      Applies the same conservative repair to relief, 3D terrain, and
-                      contours without smoothing valid terrain.
-                    </Trans>
-                  </Typography>
-                </Box>
-              ) : null}
             </Box>
           </Box>
         ))}

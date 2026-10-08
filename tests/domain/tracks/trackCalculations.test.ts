@@ -147,11 +147,11 @@ describe('track calculations', () => {
   });
 
   describe('calculated elevation metrics', () => {
-    it('does not accumulate sub-10 metre oscillations', () => {
+    it('does not accumulate sub-5 metre oscillations', () => {
       const metrics = calculateTrackMetrics(
         [
           {
-            points: [100, 109, 101, 108, 100].map((elevationMeters, index) =>
+            points: [100, 104, 101, 104.5, 100].map((elevationMeters, index) =>
               point(equatorialLongitudePerMeter * index * 10, 0, elevationMeters),
             ),
           },
@@ -163,7 +163,7 @@ describe('track calculations', () => {
       expect(metrics.descentMeters).toBe(0);
     });
 
-    it('retains a monotonic climb and reports calculated algorithm version 4', () => {
+    it('retains a monotonic climb and reports calculated algorithm version 5', () => {
       const metrics = calculateTrackMetrics(
         [
           {
@@ -178,7 +178,7 @@ describe('track calculations', () => {
       expect(metrics.ascentMeters).toBe(25);
       expect(metrics.descentMeters).toBe(0);
       expect(metrics.elevationSource).toBe('dem-assisted');
-      expect(metrics.elevationAlgorithmVersion).toBe(4);
+      expect(metrics.elevationAlgorithmVersion).toBe(5);
     });
 
     it('appends the terminal residual to preserve each run net change', () => {
@@ -202,7 +202,7 @@ describe('track calculations', () => {
       const metrics = calculateTrackMetrics(
         [
           {
-            points: [100, 112, 119, 108].map((elevationMeters, index) =>
+            points: [100, 112, 116, 109].map((elevationMeters, index) =>
               point(equatorialLongitudePerMeter * index * 10, 0, elevationMeters),
             ),
           },
@@ -211,7 +211,7 @@ describe('track calculations', () => {
       );
 
       expect(metrics.ascentMeters).toBe(12);
-      expect(metrics.descentMeters).toBe(4);
+      expect(metrics.descentMeters).toBe(3);
     });
 
     it('does not bridge missing-elevation runs or source-segment gaps', () => {

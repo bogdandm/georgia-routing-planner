@@ -133,7 +133,7 @@ describe('FetchRemoteGateway', () => {
       minimumElevationMeters: 900,
       maximumElevationMeters: 1_025,
       elevationSource: 'dem-assisted' as const,
-      elevationAlgorithmVersion: 4 as const,
+      elevationAlgorithmVersion: 5 as const,
     };
     const pairWithCalculatedElevation: LocalTrackSyncPair = {
       summary: { ...pair.summary, calculatedMetrics },

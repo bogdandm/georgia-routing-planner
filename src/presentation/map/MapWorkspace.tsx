@@ -12,7 +12,11 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
-import type { MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
+import type {
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+  StyleSpecification,
+} from 'maplibre-gl';
 import {
   useCallback,
   useEffect,
@@ -822,8 +826,60 @@ export function MapWorkspace({
     return createHikingMapStyle(mapProviderConfiguration.value);
   }, [mapProviderConfiguration]);
 
+  // MapLibre takes its UI strings from the `locale` option when the map is created and
+  // writes them into the native controls once. A language switch patches the locale
+  // table (read again on later geolocation state changes) and relabels the existing
+  // controls in place, so they keep their state, such as the shown user location.
+  const nativeMap = useRef<MapLibreMap | null>(null);
+  const mapLibreLocale = useMemo(
+    () => ({
+      'AttributionControl.ToggleAttribution': t`Toggle attribution`,
+      'GeolocateControl.FindMyLocation': t`Find my location`,
+      'GeolocateControl.LocationNotAvailable': t`Location not available`,
+      'Map.Title': t`Map`,
+      'NavigationControl.ResetBearing': t`Drag to rotate map, click to reset north`,
+      'NavigationControl.ZoomIn': t`Zoom in`,
+      'NavigationControl.ZoomOut': t`Zoom out`,
+    }),
+    [t],
+  );
+  useEffect(() => {
+    const map = nativeMap.current;
+    if (map === null) return;
+    Object.assign(map._locale, mapLibreLocale);
+    /* eslint-disable lingui/no-unlocalized-strings -- DOM attribute names and MapLibre control selectors. */
+    map.getCanvas().setAttribute('aria-label', mapLibreLocale['Map.Title']);
+    const container = map.getContainer();
+    const relabel = (selector: string, label: string) => {
+      for (const button of container.querySelectorAll<HTMLElement>(selector)) {
+        button.title = label;
+        button.setAttribute('aria-label', label);
+      }
+    };
+    relabel('.maplibregl-ctrl-zoom-in', mapLibreLocale['NavigationControl.ZoomIn']);
+    relabel('.maplibregl-ctrl-zoom-out', mapLibreLocale['NavigationControl.ZoomOut']);
+    relabel(
+      '.maplibregl-ctrl-compass',
+      mapLibreLocale['NavigationControl.ResetBearing'],
+    );
+    relabel(
+      '.maplibregl-ctrl-attrib-button',
+      mapLibreLocale['AttributionControl.ToggleAttribution'],
+    );
+    relabel(
+      '.maplibregl-ctrl-geolocate:not(:disabled)',
+      mapLibreLocale['GeolocateControl.FindMyLocation'],
+    );
+    relabel(
+      '.maplibregl-ctrl-geolocate:disabled',
+      mapLibreLocale['GeolocateControl.LocationNotAvailable'],
+    );
+    /* eslint-enable lingui/no-unlocalized-strings */
+  }, [mapLibreLocale]);
+
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
+      nativeMap.current = mapRef?.getMap() ?? null;
       if (!(facade instanceof MapLibreFacade)) return;
       if (mapRef === null) {
         facade.detachMap();
@@ -1295,6 +1351,7 @@ export function MapWorkspace({
         (resolvedMapCanvas ?? (
           <Map
             ref={handleMapRef}
+            locale={mapLibreLocale}
             initialViewState={restoredView.camera}
             mapStyle={mapStyle}
             maxPitch={75}

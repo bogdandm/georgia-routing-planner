@@ -1,3 +1,5 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
@@ -42,19 +44,18 @@ interface MapViewControlsProps {
   readonly onMeasurementActiveChange: (active: boolean) => void;
 }
 
-/* eslint-disable lingui/no-unlocalized-strings -- Configured provider product names stay invariant. */
 const layerPresets: readonly {
-  readonly label: string;
+  readonly label: MessageDescriptor;
   readonly value: MapLayerPreset;
 }[] = [
-  { label: 'Vector OSM', value: 'vector-osm' },
-  { label: 'Google Satellite', value: 'google-satellite' },
-  { label: 'Bing Aerial', value: 'bing-satellite' },
-  { label: 'Esri World Imagery', value: 'esri-satellite' },
-  { label: 'NAPR Orthophoto', value: 'napr-orthophoto' },
+  { label: msg`Vector OSM`, value: 'vector-osm' },
+  { label: msg`Google Satellite`, value: 'google-satellite' },
+  { label: msg`Bing Aerial`, value: 'bing-satellite' },
+  { label: msg`Esri World Imagery`, value: 'esri-satellite' },
+  { label: msg`NAPR Orthophoto`, value: 'napr-orthophoto' },
 ];
+// eslint-disable-next-line lingui/no-unlocalized-strings -- Satellite mission name stays invariant.
 const sentinelPresetLabel = 'Sentinel-2';
-/* eslint-enable lingui/no-unlocalized-strings */
 
 class MapViewControlHost implements IControl {
   readonly element: HTMLDivElement = document.createElement('div');
@@ -242,7 +243,7 @@ export function MapViewControls({
             selected={activeLayerPreset === preset.value}
             sx={{ minHeight: 44, minWidth: 240, px: 2 }}
           >
-            <ListItemText primary={preset.label} />
+            <ListItemText primary={t(preset.label)} />
           </MenuItem>
         ))}
         <MenuItem

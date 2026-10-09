@@ -27,7 +27,7 @@ msgstr "{contourIntervalMeters, plural, one {# метр} few {# метра} many
 #. js-lingui-id: bXom1Q
 #: src/presentation/layers/LayersPanel.tsx:412
 msgid "All weather fields use the same metadata-selected forecast frame."
-msgstr "Все погодные поля используют один кадр прогноза, выбранный по метаданным."
+msgstr "Все погодные слои показаны на одно время прогноза."
 
 #. js-lingui-id: SrvjBt
 #: src/presentation/layers/LayersPanel.tsx:205
@@ -57,17 +57,17 @@ msgstr "Аэроснимки Bing"
 #. js-lingui-id: 370Iiz
 #: src/presentation/layers/LayersPanel.tsx:52
 msgid "Bing aerial tiles for the current map view."
-msgstr "Тайлы аэроснимков Bing для текущей области карты."
+msgstr "Аэроснимки Bing для видимой области карты."
 
 #. js-lingui-id: LMAtzm
 #: src/presentation/layers/LayersPanel.tsx:104
 msgid "Brownfield land and building footprints from OSM Shortbread."
-msgstr "Заброшенные промзоны и контуры зданий из OSM Shortbread."
+msgstr "Заброшенные территории и контуры зданий из OSM Shortbread."
 
 #. js-lingui-id: VvzNmc
 #: src/presentation/layers/LayersPanel.tsx:169
 msgid "Choose a supported contour distance that divides the 200 m index interval."
-msgstr "Выберите поддерживаемый шаг изолиний, на который делится интервал утолщённых горизонталей 200 м."
+msgstr "Выберите шаг горизонталей, на который делится интервал 200 м между утолщёнными линиями."
 
 #. js-lingui-id: O4EUuL
 #: src/presentation/layers/LayersPanel.tsx:192
@@ -83,7 +83,7 @@ msgstr "Выберите непрозрачность от 0 до 100 проце
 #. js-lingui-id: 4RvaOl
 #: src/presentation/layers/LayersPanel.tsx:157
 msgid "Climb and descent grade colors across the active track."
-msgstr "Цвета крутизны подъёмов и спусков на активном треке."
+msgstr "Раскраска активного трека по крутизне подъёмов и спусков."
 
 #. js-lingui-id: 8kF1MP
 #: src/presentation/layers/LayersPanel.tsx:591
@@ -98,32 +98,32 @@ msgstr "Отключите карту погоды, прежде чем вклю
 #. js-lingui-id: siFQoN
 #: src/presentation/layers/LayersPanel.tsx:379
 msgid "ECMWF IFS clouds, precipitation, and compact wind arrows from Open-Meteo."
-msgstr "Облачность, осадки и компактные стрелки ветра ECMWF IFS от Open-Meteo."
+msgstr "Облачность, осадки и стрелки ветра по модели ECMWF IFS от Open-Meteo."
 
 #. js-lingui-id: 4I0BQt
 #: src/presentation/layers/LayersPanel.tsx:156
 msgid "Elevation gradient"
-msgstr "Градиент крутизны"
+msgstr "Цвета крутизны"
 
 #. js-lingui-id: gZOskp
 #: src/presentation/layers/LayersPanel.tsx:141
 msgid "Elevation isolines"
-msgstr "Изолинии высот"
+msgstr "Горизонтали"
 
 #. js-lingui-id: e3hfCa
 #: src/presentation/layers/LayersPanel.tsx:173
 msgid "Elevation isolines could not be generated. Relief and the base map remain available."
-msgstr "Не удалось построить изолинии высот. Отмывка рельефа и базовая карта по-прежнему доступны."
+msgstr "Не удалось построить горизонтали. Отмывка рельефа и базовая карта по-прежнему доступны."
 
 #. js-lingui-id: ME-el8
 #: src/presentation/layers/LayersPanel.tsx:303
 msgid "Elevation tiles for relief, contours, and 3D terrain."
-msgstr "Тайлы высот для отмывки, изолиний и 3D-рельефа."
+msgstr "Данные высот для отмывки, горизонталей и 3D-рельефа."
 
 #. js-lingui-id: r3Wm_7
 #: src/presentation/layers/LayersPanel.tsx:413
 msgid "Enable the combined weather layer from the Weather tab."
-msgstr "Включите общий погодный слой на вкладке «Погода»."
+msgstr "Включается в разделе «Погода»."
 
 #. js-lingui-id: C50Coj
 #: src/presentation/layers/LayersPanel.tsx:190
@@ -133,17 +133,17 @@ msgstr "Включите карту погоды, прежде чем выбир
 #. js-lingui-id: TTvYEQ
 #: src/presentation/layers/LayersPanel.tsx:59
 msgid "Esri global satellite and aerial imagery."
-msgstr "Глобальные спутниковые снимки и аэроснимки Esri."
+msgstr "Мировые спутниковые снимки и аэроснимки Esri."
 
 #. js-lingui-id: bNOfxj
 #: src/presentation/layers/LayersPanel.tsx:58
 msgid "Esri World Imagery"
-msgstr "Снимки Esri World Imagery"
+msgstr "Esri World Imagery"
 
 #. js-lingui-id: 9ARWz1
 #: src/presentation/layers/LayersPanel.tsx:142
 msgid "Generated contour lines and labeled index elevations."
-msgstr "Построенные изолинии и подписанные утолщённые горизонтали."
+msgstr "Горизонтали с подписями высот на утолщённых линиях."
 
 #. js-lingui-id: 5jVB98
 #: src/presentation/layers/LayersPanel.tsx:44
@@ -153,7 +153,7 @@ msgstr "Спутниковые снимки Google"
 #. js-lingui-id: WDPc86
 #: src/presentation/layers/LayersPanel.tsx:45
 msgid "Google satellite tiles for the current map view."
-msgstr "Спутниковые тайлы Google для текущей области карты."
+msgstr "Снимки Google для видимой области карты."
 
 #. js-lingui-id: VL5S_6
 #: src/presentation/layers/LayersPanel.tsx:109
@@ -163,7 +163,7 @@ msgstr "Пешеходные тропы"
 #. js-lingui-id: Ck5Mnm
 #: src/presentation/layers/LayersPanel.tsx:136
 msgid "Hillshade derived from the configured elevation tiles."
-msgstr "Отмывка рельефа по настроенным тайлам высот."
+msgstr "Теневая отмывка по данным высот."
 
 #. js-lingui-id: DxCeHZ
 #: src/presentation/layers/LayersPanel.tsx:150
@@ -173,12 +173,12 @@ msgstr "Импортированные треки"
 #. js-lingui-id: m5EkIN
 #: src/presentation/layers/LayersPanel.tsx:636
 msgid "Isolines distance"
-msgstr "Шаг изолиний"
+msgstr "Шаг горизонталей"
 
 #. js-lingui-id: Cfr3AZ
 #: src/presentation/layers/LayersPanel.tsx:284
 msgid "Local GPX"
-msgstr "Локальные GPX"
+msgstr "Локальные треки"
 
 #. js-lingui-id: DYhGfX
 #: src/presentation/layers/LayersPanel.tsx:366
@@ -198,7 +198,7 @@ msgstr "Природные объекты"
 #. js-lingui-id: _-9hUf
 #: src/presentation/layers/LayersPanel.tsx:66
 msgid "Newest available NAPR orthophoto: 2025, then 2020, then 2016–2017."
-msgstr "Самый новый доступный ортофотоплан NAPR: 2025, затем 2020, затем 2016–2017."
+msgstr "Самый свежий доступный ортофотоплан NAPR: 2025, иначе 2020 или 2016–2017."
 
 #. js-lingui-id: aoLy25
 #: src/presentation/layers/LayersPanel.tsx:421
@@ -209,7 +209,7 @@ msgstr "Непрозрачность"
 #. js-lingui-id: vORMhI
 #: src/presentation/layers/LayersPanel.tsx:403
 msgid "Open Weather tab"
-msgstr "Открыть вкладку «Погода»"
+msgstr "Карта погоды"
 
 #. js-lingui-id: XPsWsV
 #: src/presentation/layers/LayersPanel.tsx:186
@@ -246,12 +246,12 @@ msgstr "Тропы, грунтовые дороги, пешеходные дор
 #. js-lingui-id: XnwFMA
 #: src/presentation/layers/LayersPanel.tsx:121
 msgid "Places and POIs"
-msgstr "Места и POI"
+msgstr "Места и объекты"
 
 #. js-lingui-id: QQ1vZI
 #: src/presentation/layers/LayersPanel.tsx:98
 msgid "Red perimeters for provider-identified military land."
-msgstr "Красные границы военных территорий по данным поставщика."
+msgstr "Военные территории по данным поставщика, обведённые красным."
 
 #. js-lingui-id: 5rAKFG
 #: src/presentation/layers/LayersPanel.tsx:135
@@ -266,7 +266,7 @@ msgstr "Закрытые зоны"
 #. js-lingui-id: NH06nf
 #: src/presentation/layers/LayersPanel.tsx:116
 msgid "Road lines, casings, and labels."
-msgstr "Линии дорог, обводки и подписи."
+msgstr "Дороги с обводкой и подписями."
 
 #. js-lingui-id: 2_vQ6h
 #: src/presentation/layers/LayersPanel.tsx:115
@@ -276,7 +276,7 @@ msgstr "Дороги"
 #. js-lingui-id: K7ecHl
 #: src/presentation/layers/LayersPanel.tsx:291
 msgid "Satellite basemaps and applied observation scenes."
-msgstr "Спутниковые базовые карты и применённые сцены съёмки."
+msgstr "Спутниковые подложки и применённые снимки."
 
 #. js-lingui-id: 5wgfjJ
 #: src/presentation/layers/LayersPanel.tsx:319
@@ -321,7 +321,7 @@ msgstr "Не удалось отрисовать отмывку рельефа. 
 #. js-lingui-id: XlRlgt
 #: src/presentation/layers/LayersPanel.tsx:151
 msgid "The active local GPX preview or saved track."
-msgstr "Активный предпросмотр локального GPX или сохранённый трек."
+msgstr "Открытый GPX-файл или выбранный трек."
 
 #. js-lingui-id: 4J-bX9
 #: src/presentation/layers/LayersPanel.tsx:80
@@ -383,12 +383,12 @@ msgstr "Непрозрачность треков"
 #. js-lingui-id: H3vxOc
 #: src/presentation/layers/LayersPanel.tsx:285
 msgid "Tracks retained only in this browser."
-msgstr "Треки, хранящиеся только в этом браузере."
+msgstr "Треки хранятся только в этом браузере."
 
 #. js-lingui-id: 5b2r4X
 #: src/presentation/layers/LayersPanel.tsx:312
 msgid "Vector basemap data styled for hiking and navigation."
-msgstr "Данные векторной базовой карты, оформленные для походов и навигации."
+msgstr "Векторная карта, оформленная для походов и навигации."
 
 #. js-lingui-id: mzDjSY
 #: src/presentation/layers/LayersPanel.tsx:89
@@ -403,7 +403,7 @@ msgstr "Погода"
 #. js-lingui-id: Izttjs
 #: src/presentation/layers/LayersPanel.tsx:403
 msgid "Weather map visible"
-msgstr "Карта погоды показана"
+msgstr "Карта погоды"
 
 #. js-lingui-id: NM2cJz
 #: src/presentation/layers/LayersPanel.tsx:618

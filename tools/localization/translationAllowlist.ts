@@ -16,6 +16,27 @@ export const translationAllowlist: readonly TranslationAllowlistEntry[] = [
     reason: 'Русский is the language self-name shown in the selector.',
   },
   {
+    catalog: 'shell',
+    messageId: 'lYGfRP',
+    reason: 'English is the language self-name shown in the selector.',
+  },
+  {
+    catalog: 'map',
+    messageId: 'bNOfxj',
+    reason: 'Esri World Imagery is the invariant provider product name.',
+  },
+  {
+    catalog: 'layers',
+    messageId: 'bNOfxj',
+    reason: 'Esri World Imagery is the invariant provider product name.',
+  },
+  {
+    catalog: 'markers',
+    messageId: 'SWS1FV',
+    reason:
+      'SOS is the international distress signal, written in Latin letters in Russian.',
+  },
+  {
     catalog: 'tracks',
     messageId: 'C6vDEv',
     reason: 'The approximation sign before an already localized duration is invariant.',

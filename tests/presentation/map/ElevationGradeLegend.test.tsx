@@ -43,7 +43,7 @@ describe('ElevationGradeLegend', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Track grade' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Track grade (%)' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Hide track grade legend' }));
     expect(onDismissedChange).toHaveBeenCalledWith(true);
 
@@ -57,7 +57,7 @@ describe('ElevationGradeLegend', () => {
     );
 
     expect(
-      screen.queryByRole('heading', { name: 'Track grade' }),
+      screen.queryByRole('heading', { name: 'Track grade (%)' }),
     ).not.toBeInTheDocument();
   });
 });

@@ -105,7 +105,7 @@ msgstr "{speed} км/ч"
 #. js-lingui-id: rh2wFH
 #: src/presentation/tracks/TracksWorkspace.tsx:4125
 msgid "{trackCount, plural, one {Search # saved track} other {Search # saved tracks}}"
-msgstr "{trackCount, plural, one {Поиск среди # сохранённого трека} few {Поиск среди # сохранённых треков} many {Поиск среди # сохранённых треков} other {Поиск среди # сохранённого трека}}"
+msgstr "{trackCount, plural, one {Искать среди # трека} few {Искать среди # треков} many {Искать среди # треков} other {Искать среди # трека}}"
 
 #. js-lingui-id: pXTSNf
 #: src/presentation/tracks/TracksWorkspace.tsx:5732
@@ -198,7 +198,7 @@ msgstr "На {distance}"
 #. js-lingui-id: 926sk4
 #: src/presentation/tracks/TrackWeatherSection.tsx:344
 msgid "Available for day hikes shorter than {maximumDistance} and 12 hours."
-msgstr "Доступно для однодневных походов короче {maximumDistance} и 12 часов."
+msgstr "Доступно для однодневных походов: до {maximumDistance} и до 12 часов."
 
 #. js-lingui-id: WBiJLk
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:321
@@ -338,7 +338,7 @@ msgstr "Подтвердить переименование"
 #. js-lingui-id: RGCCrg
 #: src/presentation/tracks/TracksWorkspace.tsx:5488
 msgid "Copy share link"
-msgstr "Скопировать ссылку"
+msgstr "Копировать ссылку"
 
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx:108
@@ -450,7 +450,7 @@ msgstr "Скачать выбранные треки"
 #: src/presentation/tracks/TracksWorkspace.tsx:3060
 #: src/presentation/tracks/TracksWorkspace.tsx:3148
 msgid "Drop GPX, FIT, or KML here"
-msgstr "Перетащите сюда файл GPX, FIT или KML"
+msgstr "Перетащите трек сюда"
 
 #. js-lingui-id: E2u3_n
 #: src/presentation/tracks/TracksWorkspace.tsx:3103
@@ -624,7 +624,7 @@ msgstr "Дата прогноза"
 #. js-lingui-id: _WH_9-
 #: src/presentation/tracks/TrackWeatherSection.tsx:421
 msgid "Highest"
-msgstr "Высшая точка"
+msgstr "Верх"
 
 #. js-lingui-id: LjMWQs
 #: src/presentation/tracks/TracksWorkspace.tsx:4162
@@ -695,7 +695,7 @@ msgstr "Поиск характерных мест…"
 #. js-lingui-id: 05qZg8
 #: src/presentation/tracks/TrackWeatherSection.tsx:423
 msgid "Lowest"
-msgstr "Низшая точка"
+msgstr "Низ"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/tracks/TrackMarkersSection.tsx:230
@@ -746,7 +746,7 @@ msgstr "По названию"
 #. js-lingui-id: geqCyR
 #: src/presentation/tracks/TracksWorkspace.tsx:460
 msgid "Nearby landmark lookup could not reach the provider."
-msgstr "Поиск ближайших ориентиров не смог связаться с сервисом."
+msgstr "Не удалось связаться с сервисом поиска ближайших ориентиров."
 
 #. js-lingui-id: 8wNUgZ
 #: src/presentation/tracks/TracksWorkspace.tsx:459
@@ -761,12 +761,12 @@ msgstr "Поиск ближайших ориентиров не удался."
 #. js-lingui-id: _7OG2V
 #: src/presentation/tracks/TracksWorkspace.tsx:461
 msgid "Nearby landmark lookup received an unsupported provider response."
-msgstr "Поиск ближайших ориентиров получил неподдерживаемый ответ сервиса."
+msgstr "Сервис поиска ближайших ориентиров вернул неподдерживаемый ответ."
 
 #. js-lingui-id: eNjrtb
 #: src/presentation/tracks/TracksWorkspace.tsx:458
 msgid "Nearby landmark lookup timed out."
-msgstr "Поиск ближайших ориентиров превысил время ожидания."
+msgstr "Сервис поиска ближайших ориентиров не ответил вовремя."
 
 #. js-lingui-id: e1g1dF
 #: src/presentation/tracks/TracksWorkspace.tsx:457
@@ -816,7 +816,7 @@ msgstr "Нет прогноза на эту дату."
 #: src/presentation/tracks/TracksWorkspace.tsx:5595
 #: src/presentation/tracks/TracksWorkspace.tsx:5599
 msgid "No generated name is available. Saving is unaffected."
-msgstr "Сгенерированное название недоступно. На сохранение это не влияет."
+msgstr "Не удалось подобрать название. На сохранение это не влияет."
 
 #. js-lingui-id: aAGs38
 #: src/presentation/tracks/TrackMarkersSection.tsx:209
@@ -867,7 +867,7 @@ msgstr "Поддерживаются только GPX 1.0 и 1.1."
 #: src/presentation/tracks/TrackWeatherSection.tsx:270
 #: src/presentation/tracks/TrackWeatherSection.tsx:325
 msgid "Open the forecast for {label} in Weather"
-msgstr "Открыть прогноз для {label} во вкладке «Погода»"
+msgstr "Открыть прогноз в разделе «Погода»: {label}"
 
 #. js-lingui-id: 9GH1hZ
 #: src/presentation/tracks/TracksWorkspace.tsx:4092
@@ -878,18 +878,18 @@ msgstr "Над {name}."
 #. placeholder {0}: (data.folder as TrackFolder).name
 #: src/presentation/tracks/TracksWorkspace.tsx:4073
 msgid "Picked up folder {0}."
-msgstr "Выбрана папка {0}."
+msgstr "Взята папка «{0}»."
 
 #. js-lingui-id: Y0Hloc
 #: src/presentation/tracks/TracksWorkspace.tsx:4078
 msgid "Picked up item."
-msgstr "Элемент выбран."
+msgstr "Элемент взят."
 
 #. js-lingui-id: cKK6tl
 #. placeholder {0}: (data.summary as LocalTrackSummary).name
 #: src/presentation/tracks/TracksWorkspace.tsx:4076
 msgid "Picked up track {0}."
-msgstr "Выбран трек {0}."
+msgstr "Взят трек «{0}»."
 
 #. js-lingui-id: RefI49
 #: src/presentation/tracks/TracksWorkspace.tsx:5575
@@ -906,7 +906,7 @@ msgstr "Подготовка высот…"
 #. js-lingui-id: KQYkQd
 #: src/presentation/tracks/TracksWorkspace.tsx:4067
 msgid "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
-msgstr "Нажмите пробел, чтобы выбрать элемент. Используйте клавиши со стрелками для перемещения. Нажмите пробел, чтобы отпустить, или Escape, чтобы отменить."
+msgstr "Нажмите пробел, чтобы взять элемент. Перемещайте его клавишами со стрелками. Нажмите пробел, чтобы отпустить, или Escape, чтобы отменить."
 
 #. js-lingui-id: LatydB
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:121
@@ -918,7 +918,7 @@ msgstr "Пересчитать высоты"
 #: src/presentation/tracks/TrackSummary.tsx:115
 #: src/presentation/tracks/TracksWorkspace.tsx:3440
 msgid "Recorded time"
-msgstr "Записанное время"
+msgstr "Время по записи"
 
 #. js-lingui-id: 5PjJFI
 #: src/presentation/tracks/TracksWorkspace.tsx:3151
@@ -947,7 +947,7 @@ msgstr "Изменить порядок: {0}"
 #. js-lingui-id: SZzo9N
 #: src/presentation/tracks/TracksWorkspace.tsx:5498
 msgid "Retry sharing status"
-msgstr "Повторить загрузку статуса общего доступа"
+msgstr "Обновить статус доступа"
 
 #. js-lingui-id: ar-Wm2
 #: src/presentation/tracks/RoutePlanControls.tsx:164
@@ -1036,7 +1036,7 @@ msgstr "Выбранные треки"
 #. js-lingui-id: qu-1YC
 #: src/presentation/tracks/TracksWorkspace.tsx:468
 msgid "Settlement lookup could not reach the provider."
-msgstr "Поиск населённого пункта не смог связаться с сервисом."
+msgstr "Не удалось связаться с сервисом поиска населённых пунктов."
 
 #. js-lingui-id: hOevdc
 #: src/presentation/tracks/TracksWorkspace.tsx:467
@@ -1051,12 +1051,12 @@ msgstr "Поиск населённого пункта не удался."
 #. js-lingui-id: fAOru8
 #: src/presentation/tracks/TracksWorkspace.tsx:469
 msgid "Settlement lookup received an unsupported provider response."
-msgstr "Поиск населённого пункта получил неподдерживаемый ответ сервиса."
+msgstr "Сервис поиска населённых пунктов вернул неподдерживаемый ответ."
 
 #. js-lingui-id: oBpZur
 #: src/presentation/tracks/TracksWorkspace.tsx:466
 msgid "Settlement lookup timed out."
-msgstr "Поиск населённого пункта превысил время ожидания."
+msgstr "Сервис поиска населённых пунктов не ответил вовремя."
 
 #. js-lingui-id: KqB3pI
 #: src/presentation/tracks/TracksWorkspace.tsx:465

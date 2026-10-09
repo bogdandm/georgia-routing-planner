@@ -45,6 +45,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import SortIcon from '@mui/icons-material/Sort';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
+import UTurnLeftOutlinedIcon from '@mui/icons-material/UTurnLeftOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import {
   Alert,
@@ -124,6 +125,7 @@ import {
   type TrackMarker,
   type TrackSort,
 } from '@/domain/tracks/localTrack';
+import { reverseTrack } from '@/domain/tracks/reverseTrack';
 import {
   IMPORTS_FOLDER_ID,
   normalizeTrackFolderName,
@@ -362,6 +364,8 @@ interface TracksWorkspaceValue {
   readonly setQuery: (query: string) => void;
   readonly undoLastRoutePlanPoint: () => void;
   readonly renameActive: () => Promise<boolean>;
+  /** Saves the active saved track walked the other way as a new track and opens it. */
+  readonly createReversedTrack: () => Promise<void>;
   readonly toggleFavorite: (summary: LocalTrackSummary) => Promise<void>;
 }
 
@@ -677,6 +681,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const routePlanElevationOwner = useRef<string | null>(null);
   const previewSaveInProgress = useRef(false);
   const routePlanSaveInProgress = useRef(false);
+  const reversedTrackSaveInProgress = useRef(false);
   const importGeneration = useRef(0);
   const multiTrackRequestId = useRef(0);
   const multiTrackSelectionRequests = useRef(new Map<string, number>());
@@ -2445,6 +2450,102 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, database, reloadSummaries, userData]);
 
+  const createReversedTrack = useCallback(async () => {
+    if (
+      active?.kind !== 'saved' ||
+      recalculationState === 'recalculating' ||
+      reversedTrackSaveInProgress.current
+    ) {
+      return;
+    }
+    reversedTrackSaveInProgress.current = true;
+    const source = active.summary;
+    const generation = importGeneration.current;
+    const saveReversedTrack = async () => {
+      const name = source.name;
+      const normalizedName = normalizeLocalTrackName(t`${name} (reversed)`);
+      const reversed = reverseTrack(source, active.content);
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Track ID prefix.
+      const trackId = `local:${idGenerator.generate()}`;
+      const savedAt = clock.now().toISOString();
+      const content: LocalTrackContentBuilder = {
+        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+        trackId,
+        trackPoints: reversed.trackPoints,
+        markers: active.content.markers.map((marker) => ({
+          ...marker,
+          id: idGenerator.generate(),
+        })),
+      };
+      if (reversed.calculatedTrackPoints !== undefined) {
+        content.calculatedTrackPoints = reversed.calculatedTrackPoints;
+      }
+      const summary: LocalTrackSummaryBuilder = {
+        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+        id: trackId,
+        ...normalizedName,
+        savedAt,
+        updatedAt: savedAt,
+        contentHash: await trackContentHasher.hash(content),
+        sourceFilename: source.sourceFilename,
+        sourceFormat: source.sourceFormat,
+        favorite: false,
+        geometryKind: source.geometryKind,
+        folderId: source.folderId,
+        pointCount: source.pointCount,
+        segmentCount: source.segmentCount,
+        metrics: reversed.metrics,
+        metadata: source.metadata,
+        warnings: source.warnings,
+      };
+      if (reversed.calculatedMetrics !== undefined) {
+        summary.calculatedMetrics = reversed.calculatedMetrics;
+      }
+      // The generated name describes the original direction, so only the landmarks carry over.
+      if (source.endPoi !== undefined) summary.startPoi = source.endPoi;
+      if (source.middlePoi !== undefined) summary.middlePoi = source.middlePoi;
+      if (source.middleAnchorKind !== undefined) {
+        summary.middleAnchorKind = source.middleAnchorKind;
+      }
+      if (source.startPoi !== undefined) summary.endPoi = source.startPoi;
+      await database.saveLocalTrack(summary, content);
+      void userData.trackSaved(summary.id);
+      await reloadSummaries();
+      if (generation !== importGeneration.current) return;
+      await saveLatestOpenedTrackId(summary.id);
+      if (generation !== importGeneration.current) return;
+      setActive((current) =>
+        current?.kind === 'saved' &&
+        current.summary.id === source.id &&
+        generation === importGeneration.current
+          ? { kind: 'saved', summary, content, draftName: summary.name }
+          : current,
+      );
+      setError(null);
+    };
+    await saveReversedTrack()
+      .catch((error: unknown) => {
+        if (generation !== importGeneration.current) return;
+        setError(
+          trackNameFailureMessage(error, msg`The reversed track could not be created.`),
+        );
+      })
+      .finally(() => {
+        reversedTrackSaveInProgress.current = false;
+      });
+  }, [
+    active,
+    clock,
+    database,
+    idGenerator,
+    recalculationState,
+    reloadSummaries,
+    saveLatestOpenedTrackId,
+    t,
+    trackContentHasher,
+    userData,
+  ]);
+
   const updateTrackMarkers = useCallback(
     async (trackId: string, markers: readonly TrackMarker[]) => {
       if (active?.kind === 'preview' && active.id === trackId) {
@@ -2765,6 +2866,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       summaries,
       applyGeneratedName,
       closeActive,
+      createReversedTrack,
       deleteSaved,
       discardPreview,
       discardRoutePlan,
@@ -2797,6 +2899,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       closeActive,
       clearRoutePlan,
       createFolder,
+      createReversedTrack,
       deleteSaved,
       deleteFolder,
       discardPreview,
@@ -4772,6 +4875,7 @@ export function TrackDetailsPane({
     applyGeneratedName,
     closeActive,
     clearRoutePlan,
+    createReversedTrack,
     deleteSaved,
     discardPreview,
     discardRoutePlan,
@@ -5509,6 +5613,16 @@ export function TrackDetailsPane({
                 >
                   <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
                   <Trans>Rename</Trans>
+                </MenuItem>
+                <MenuItem
+                  disabled={recalculationState === 'recalculating'}
+                  onClick={() => {
+                    setActionMenuAnchor(null);
+                    void createReversedTrack();
+                  }}
+                >
+                  <UTurnLeftOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                  <Trans>Create reversed track</Trans>
                 </MenuItem>
                 <Divider />
                 <MenuItem

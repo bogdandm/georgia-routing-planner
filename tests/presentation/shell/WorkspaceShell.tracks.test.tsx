@@ -1957,6 +1957,54 @@ describe('WorkspaceShell', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('creates and opens a reversed copy of the saved track from Track actions', async () => {
+    const source = savedTrackSummary('local:ridge', 'Ridge trail');
+    const markerId = '6f1c2a3b-4d5e-4f60-8a71-92b3c4d5e6f7';
+    const sourceContent = {
+      ...savedTrackContent(source.id),
+      markers: [
+        { id: markerId, name: 'Spring', coordinate: [44.005, 42.005] as const },
+      ],
+    };
+    await services.database.saveLocalTrack(source, sourceContent);
+    await services.database.saveLatestOpenedTrackId(source.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('heading', { name: 'Ridge trail' });
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Create reversed track' }));
+
+    expect(
+      await within(details).findByRole('heading', { name: 'Ridge trail (reversed)' }),
+    ).toBeVisible();
+    expect(saveLocalTrack).toHaveBeenCalledOnce();
+    const [summary, content] = saveLocalTrack.mock.calls[0] ?? [];
+    expect(summary?.id).not.toBe(source.id);
+    expect(summary?.folderId).toBe(source.folderId);
+    expect(summary?.metrics.ascentMeters).toBe(0);
+    expect(summary?.metrics.descentMeters).toBe(120);
+    expect(summary?.metrics.estimatedSeconds).toBeGreaterThan(0);
+    expect(content?.trackPoints).toEqual([sourceContent.trackPoints[0]?.toReversed()]);
+    expect(content?.markers).toHaveLength(1);
+    expect(content?.markers[0]?.id).not.toBe(markerId);
+    expect(content?.markers[0]).toMatchObject({
+      name: 'Spring',
+      coordinate: [44.005, 42.005],
+    });
+    expect(await services.database.loadLatestOpenedTrackId()).toBe(summary?.id);
+    const savedTracks = within(screen.getByRole('list', { name: 'Saved tracks' }));
+    expect(
+      savedTracks.getByRole('button', { name: /^Ridge trail \(reversed\)/u }),
+    ).toBeVisible();
+    expect(
+      savedTracks.getByRole('button', { name: /^Ridge trail\b(?! \()/u }),
+    ).toBeVisible();
+  });
+
   it('publishes whole-track grade colors for flat macro ranges', async () => {
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();

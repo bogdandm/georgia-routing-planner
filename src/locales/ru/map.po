@@ -44,7 +44,7 @@ msgid "Bing Aerial"
 msgstr "Аэроснимки Bing"
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/map/MapWorkspace.tsx:1618
+#: src/presentation/map/MapWorkspace.tsx:1642
 msgid "Cancel"
 msgstr "Отмена"
 
@@ -60,12 +60,12 @@ msgid "Choose map layer preset"
 msgstr "Выбрать набор слоёв карты"
 
 #. js-lingui-id: dLNd3k
-#: src/presentation/map/MapWorkspace.tsx:1615
+#: src/presentation/map/MapWorkspace.tsx:1639
 msgid "Click the map to place the marker"
 msgstr "Нажмите на карту, чтобы поставить метку"
 
 #. js-lingui-id: jysdB3
-#: src/presentation/map/MapWorkspace.tsx:1628
+#: src/presentation/map/MapWorkspace.tsx:1652
 msgid "Clipboard access failed. Try again or use the Share dialog."
 msgstr "Не удалось получить доступ к буферу обмена. Повторите попытку или воспользуйтесь окном «Поделиться»."
 
@@ -85,7 +85,7 @@ msgid "Coordinates"
 msgstr "Координаты"
 
 #. js-lingui-id: 1-81oq
-#: src/presentation/map/MapWorkspace.tsx:1300
+#: src/presentation/map/MapWorkspace.tsx:1328
 msgid "Coordinates copied"
 msgstr "Координаты скопированы"
 
@@ -110,12 +110,12 @@ msgid "Create marker here"
 msgstr "Поставить метку"
 
 #. js-lingui-id: _j3RtS
-#: src/presentation/map/MapWorkspace.tsx:144
+#: src/presentation/map/MapWorkspace.tsx:143
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Текущая погода: {temperature}, осадки {precipitation}"
 
 #. js-lingui-id: Doe-8p
-#: src/presentation/map/MapWorkspace.tsx:841
+#: src/presentation/map/MapWorkspace.tsx:840
 msgid "Drag to rotate map, click to reset north"
 msgstr "Перетащите, чтобы повернуть карту; нажмите, чтобы вернуть север наверх"
 
@@ -145,7 +145,7 @@ msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
 
 #. js-lingui-id: 2RZDBQ
-#: src/presentation/map/MapWorkspace.tsx:838
+#: src/presentation/map/MapWorkspace.tsx:837
 msgid "Find my location"
 msgstr "Показать моё местоположение"
 
@@ -176,12 +176,12 @@ msgid "Loading elevation…"
 msgstr "Загрузка высоты…"
 
 #. js-lingui-id: G1of_V
-#: src/presentation/map/MapWorkspace.tsx:839
+#: src/presentation/map/MapWorkspace.tsx:838
 msgid "Location not available"
 msgstr "Местоположение недоступно"
 
 #. js-lingui-id: 4HBFYh
-#: src/presentation/map/MapWorkspace.tsx:840
+#: src/presentation/map/MapWorkspace.tsx:839
 msgid "Map"
 msgstr "Карта"
 
@@ -201,7 +201,7 @@ msgid "Map point actions"
 msgstr "Действия с точкой карты"
 
 #. js-lingui-id: iDuQuY
-#: src/presentation/map/MapWorkspace.tsx:1309
+#: src/presentation/map/MapWorkspace.tsx:1337
 msgid "Map workspace"
 msgstr "Рабочая область карты"
 
@@ -251,7 +251,7 @@ msgid "OSM overlay"
 msgstr "OSM поверх снимков"
 
 #. js-lingui-id: _HLYHh
-#: src/presentation/map/MapWorkspace.tsx:1302
+#: src/presentation/map/MapWorkspace.tsx:1330
 msgid "Point link copied"
 msgstr "Ссылка на точку скопирована"
 
@@ -281,32 +281,32 @@ msgid "Terrain elevation"
 msgstr "Высота рельефа"
 
 #. js-lingui-id: 9xVYMD
-#: src/presentation/map/MapWorkspace.tsx:1292
+#: src/presentation/map/MapWorkspace.tsx:1320
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "Не удалось сохранить текущий вид карты. Работа с картой по-прежнему доступна."
 
 #. js-lingui-id: IxTd0L
-#: src/presentation/map/MapWorkspace.tsx:1635
+#: src/presentation/map/MapWorkspace.tsx:1659
 msgid "The map layer could not be changed. Try again."
 msgstr "Не удалось сменить слой карты. Повторите попытку."
 
 #. js-lingui-id: U5Trc5
-#: src/presentation/map/MapWorkspace.tsx:1320
+#: src/presentation/map/MapWorkspace.tsx:1348
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "Конфигурация поставщика карты недействительна. Базовая карта не запущена. Проверьте конфигурацию развёртывания или откройте диагностику разработчика."
 
 #. js-lingui-id: FlHLo_
-#: src/presentation/map/MapWorkspace.tsx:1294
+#: src/presentation/map/MapWorkspace.tsx:1322
 msgid "The saved camera could not be restored. The Georgia overview is shown instead."
 msgstr "Не удалось восстановить сохранённый вид карты. Вместо него показан обзор Грузии."
 
 #. js-lingui-id: IDB1Ps
-#: src/presentation/map/MapWorkspace.tsx:1296
+#: src/presentation/map/MapWorkspace.tsx:1324
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "Не удалось восстановить общий спутниковый снимок. Общее местоположение на карте по-прежнему доступно."
 
 #. js-lingui-id: Tm0RL6
-#: src/presentation/map/MapWorkspace.tsx:837
+#: src/presentation/map/MapWorkspace.tsx:836
 msgid "Toggle attribution"
 msgstr "Показать или скрыть атрибуцию"
 
@@ -336,21 +336,21 @@ msgid "Weather"
 msgstr "Погода"
 
 #. js-lingui-id: OrcMj6
-#: src/presentation/map/MapWorkspace.tsx:1304
+#: src/presentation/map/MapWorkspace.tsx:1332
 msgid "Weather map link copied"
 msgstr "Ссылка на карту погоды скопирована"
 
 #. js-lingui-id: ElM6On
-#: src/presentation/map/MapWorkspace.tsx:1516
+#: src/presentation/map/MapWorkspace.tsx:1540
 msgid "You are offline. Areas already rendered may remain visible, but new map data is unavailable until the connection returns."
 msgstr "Вы офлайн. Уже отрисованные области могут остаться видимыми, но новые данные карты недоступны до восстановления соединения."
 
 #. js-lingui-id: AWOSPo
-#: src/presentation/map/MapWorkspace.tsx:842
+#: src/presentation/map/MapWorkspace.tsx:841
 msgid "Zoom in"
 msgstr "Приблизить"
 
 #. js-lingui-id: FjkaiT
-#: src/presentation/map/MapWorkspace.tsx:843
+#: src/presentation/map/MapWorkspace.tsx:842
 msgid "Zoom out"
 msgstr "Отдалить"

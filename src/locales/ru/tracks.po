@@ -720,7 +720,7 @@ msgstr "Метки ({markerCount})"
 #. js-lingui-id: jbPrMa
 #: src/presentation/tracks/TrackWeatherSection.tsx:422
 msgid "Median"
-msgstr "Средняя"
+msgstr "Медиана"
 
 #. js-lingui-id: Z9u6zw
 #. placeholder {0}: summary.name

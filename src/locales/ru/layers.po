@@ -62,7 +62,7 @@ msgstr "Аэроснимки Bing для видимой области карт�
 #. js-lingui-id: LMAtzm
 #: src/presentation/layers/LayersPanel.tsx:104
 msgid "Brownfield land and building footprints from OSM Shortbread."
-msgstr "Пустыри под застройку и контуры зданий из OSM Shortbread."
+msgstr "Заброшенные территории и контуры зданий из OSM Shortbread."
 
 #. js-lingui-id: VvzNmc
 #: src/presentation/layers/LayersPanel.tsx:169

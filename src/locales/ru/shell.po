@@ -665,7 +665,7 @@ msgstr "Далее"
 #. js-lingui-id: 19XTPe
 #: src/presentation/shell/MapSearchPlaceholder.tsx:445
 msgid "No geographic matches found."
-msgstr "Ничего не найдено."
+msgstr "Подходящих мест не найдено."
 
 #. js-lingui-id: MyjSw9
 #: src/presentation/shell/MapSearchPlaceholder.tsx:437

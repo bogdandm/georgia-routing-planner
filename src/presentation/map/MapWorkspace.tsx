@@ -20,7 +20,6 @@ import type {
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -283,7 +282,7 @@ export function MapWorkspace({
   getNavigationPadding,
   onElevationGradeLegendDismissedChange,
 }: MapWorkspaceProps) {
-  const { i18n, t } = useLingui();
+  const { t } = useLingui();
   const {
     logger,
     elevationProvider,
@@ -827,10 +826,10 @@ export function MapWorkspace({
     return createHikingMapStyle(mapProviderConfiguration.value);
   }, [mapProviderConfiguration]);
 
-  // MapLibre reads control tooltips from its locale table only when a control is added.
-  // The table is patched before the passive effects of the locale-keyed controls below
-  // re-add them, so a language switch reaches the native zoom, compass, and location
-  // buttons. The canvas title and attribution toggle follow on the next map mount.
+  // MapLibre takes its UI strings from the `locale` option when the map is created and
+  // writes them into the native controls once. A language switch patches the locale
+  // table (read again on later geolocation state changes) and relabels the existing
+  // controls in place, so they keep their state, such as the shown user location.
   const nativeMap = useRef<MapLibreMap | null>(null);
   const mapLibreLocale = useMemo(
     () => ({
@@ -844,9 +843,38 @@ export function MapWorkspace({
     }),
     [t],
   );
-  useLayoutEffect(() => {
-    if (nativeMap.current !== null)
-      Object.assign(nativeMap.current._locale, mapLibreLocale);
+  useEffect(() => {
+    const map = nativeMap.current;
+    if (map === null) return;
+    Object.assign(map._locale, mapLibreLocale);
+    /* eslint-disable lingui/no-unlocalized-strings -- DOM attribute names and MapLibre control selectors. */
+    map.getCanvas().setAttribute('aria-label', mapLibreLocale['Map.Title']);
+    const container = map.getContainer();
+    const relabel = (selector: string, label: string) => {
+      for (const button of container.querySelectorAll<HTMLElement>(selector)) {
+        button.title = label;
+        button.setAttribute('aria-label', label);
+      }
+    };
+    relabel('.maplibregl-ctrl-zoom-in', mapLibreLocale['NavigationControl.ZoomIn']);
+    relabel('.maplibregl-ctrl-zoom-out', mapLibreLocale['NavigationControl.ZoomOut']);
+    relabel(
+      '.maplibregl-ctrl-compass',
+      mapLibreLocale['NavigationControl.ResetBearing'],
+    );
+    relabel(
+      '.maplibregl-ctrl-attrib-button',
+      mapLibreLocale['AttributionControl.ToggleAttribution'],
+    );
+    relabel(
+      '.maplibregl-ctrl-geolocate:not(:disabled)',
+      mapLibreLocale['GeolocateControl.FindMyLocation'],
+    );
+    relabel(
+      '.maplibregl-ctrl-geolocate:disabled',
+      mapLibreLocale['GeolocateControl.LocationNotAvailable'],
+    );
+    /* eslint-enable lingui/no-unlocalized-strings */
   }, [mapLibreLocale]);
 
   const handleMapRef = useCallback(
@@ -1342,14 +1370,12 @@ export function MapWorkspace({
             touchZoomRotate
           >
             <NavigationControl
-              key={`navigation:${i18n.locale}`}
               position="top-right"
               showCompass
               showZoom
               visualizePitch
             />
             <GeolocateControl
-              key={`geolocate:${i18n.locale}`}
               position="top-right"
               fitBoundsOptions={{ duration: 650, linear: true, maxZoom: 15 }}
               positionOptions={{ enableHighAccuracy: true }}
@@ -1357,9 +1383,7 @@ export function MapWorkspace({
               showUserLocation
               trackUserLocation={false}
             />
-            {/* Keyed with the controls above so a re-add keeps the top-right order. */}
             <MapViewControlsControl
-              key={`view-controls:${i18n.locale}`}
               activeLayerPreset={activeLayerPreset}
               hybridOverlayDisabled={
                 activeLayerPreset === null || activeLayerPreset === 'vector-osm'

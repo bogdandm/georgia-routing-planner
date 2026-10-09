@@ -67,6 +67,29 @@ describe('reverseTrack', () => {
     );
   });
 
+  it('swaps the source gain and loss although station sampling depends on direction', () => {
+    const sevenMetersOfLongitude = (7 * 180) / Math.PI / 6_371_008.8;
+    const { summary, content } = savedTrack([
+      [100, 100, 108, 100, 100, 130, 100].map((elevation, index) =>
+        point(index * sevenMetersOfLongitude, elevation),
+      ),
+    ]);
+    const sourceGain = summary.metrics.ascentMeters ?? 0;
+    expect(sourceGain).toBeGreaterThan(0);
+
+    const reversed = reverseTrack(summary, content);
+
+    expect(reversed.metrics.ascentMeters).toBe(summary.metrics.descentMeters);
+    expect(reversed.metrics.descentMeters).toBe(sourceGain);
+    expect(reversed.metrics.estimatedSeconds).toBe(
+      estimateHikingSeconds(
+        reversed.metrics.distanceMeters,
+        summary.metrics.descentMeters ?? 0,
+        sourceGain,
+      ),
+    );
+  });
+
   it('keeps the recorded duration and pauses of a completely flat track', () => {
     const { summary, content } = savedTrack([
       [

@@ -117,6 +117,7 @@ import {
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   MAXIMUM_TRACK_MARKERS,
+  MAXIMUM_TRACK_NAME_LENGTH,
   localTrackSegments,
   normalizeLocalTrackName,
   TrackNameError,
@@ -2462,7 +2463,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const source = active.summary;
     const generation = importGeneration.current;
     const saveReversedTrack = async () => {
-      const name = source.name;
+      // Shorten the source name so the localized suffix fits the name length limit.
+      let name = source.name;
+      const overflow = t`${name} (reversed)`.length - MAXIMUM_TRACK_NAME_LENGTH;
+      if (overflow > 0) name = name.slice(0, -overflow).trimEnd();
       const normalizedName = normalizeLocalTrackName(t`${name} (reversed)`);
       const reversed = reverseTrack(source, active.content);
       // eslint-disable-next-line lingui/no-unlocalized-strings -- Track ID prefix.

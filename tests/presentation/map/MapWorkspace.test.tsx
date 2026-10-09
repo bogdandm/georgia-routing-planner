@@ -1305,7 +1305,7 @@ describe('MapWorkspace', () => {
       );
     });
     const thresholdX = (threshold: number): number => {
-      const label = `${threshold < 0 ? '−' : ''}${String(Math.abs(threshold))}%`;
+      const label = `${threshold < 0 ? '−' : ''}${String(Math.abs(threshold))}`;
       const x = within(legend).getByText(label).getAttribute('x');
       expect(x).not.toBeNull();
       return Number(x);
@@ -1314,7 +1314,7 @@ describe('MapWorkspace', () => {
     for (const threshold of visibleThresholds) {
       expect(thresholdX(threshold)).toBeGreaterThan(0);
     }
-    expect(within(legend).queryByText('30%')).not.toBeInTheDocument();
+    expect(within(legend).queryByText('30')).not.toBeInTheDocument();
     const zeroGradeX = (thresholdX(-3) + thresholdX(3)) / 2;
     expect(thresholdX(-3) + thresholdX(3)).toBeCloseTo(
       thresholdX(-10) + thresholdX(10),

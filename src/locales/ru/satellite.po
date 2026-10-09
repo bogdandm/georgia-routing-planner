@@ -77,12 +77,12 @@ msgstr "Запрос мозаики уже выполняется."
 #. js-lingui-id: Nt_yFd
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:35
 msgid "A returned scene has geometry that cannot be measured."
-msgstr "У найденной сцены геометрия, которую невозможно измерить."
+msgstr "Геометрию найденной сцены невозможно измерить."
 
 #. js-lingui-id: Gneek7
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:49
 msgid "A returned scene has geometry that cannot be rendered."
-msgstr "У найденной сцены геометрия, которую невозможно отрисовать."
+msgstr "Геометрию найденной сцены невозможно отрисовать."
 
 #. js-lingui-id: 5piGyI
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:59
@@ -564,7 +564,7 @@ msgstr "Не удалось загрузить тайл снимка из-за �
 #. js-lingui-id: CSQKW0
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:76
 msgid "The imagery tile request received no HTTP response (network, CORS, or provider connection failure). The current map remains usable; retry the scene."
-msgstr "Запрос тайла снимка не получил HTTP-ответа (сбой сети, CORS или подключения к поставщику). Карта по-прежнему работает; повторите загрузку сцены."
+msgstr "На запрос тайла снимка не пришёл HTTP-ответ (сбой сети, CORS или подключения к поставщику). Карта по-прежнему работает; повторите загрузку сцены."
 
 #. js-lingui-id: bf7D7L
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:45
@@ -574,7 +574,7 @@ msgstr "Карта ещё не готова."
 #. js-lingui-id: SzNloy
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:23
 msgid "The satellite catalog could not complete this search."
-msgstr "Каталогу спутниковых снимков не удалось выполнить этот поиск."
+msgstr "Не удалось выполнить поиск в каталоге спутниковых снимков."
 
 #. js-lingui-id: LGQ4dQ
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts:57
@@ -650,4 +650,4 @@ msgstr "Дождитесь завершения смены способа отр
 #. js-lingui-id: H7wWdy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx:1497
 msgid "Waiting for the map viewport to become ready."
-msgstr "Ожидание готовности области просмотра карты."
+msgstr "Ожидание готовности карты."

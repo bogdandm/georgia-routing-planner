@@ -16,7 +16,7 @@ msgstr ""
 #. js-lingui-id: omWnpu
 #: src/presentation/markers/MarkersWorkspace.tsx:941
 msgid "{distance} km away"
-msgstr "В {distance} км"
+msgstr "{distance} км от центра карты"
 
 #. js-lingui-id: JsuAUm
 #: src/presentation/markers/MarkerIconPicker.tsx:148
@@ -31,7 +31,7 @@ msgstr "Прогноз на 24 часа · {periodKind, select, day {День} n
 #. js-lingui-id: 39ohdf
 #: src/presentation/markers/MarkerIconPicker.tsx:49
 msgid "Activities"
-msgstr "Активности"
+msgstr "Занятия"
 
 #. js-lingui-id: Zdun41
 #: src/presentation/markers/markerCatalog.tsx:290
@@ -41,7 +41,7 @@ msgstr "Тревога"
 #. js-lingui-id: hwpQaF
 #: src/presentation/markers/markerCatalog.tsx:173
 msgid "Apartment"
-msgstr "Апартаменты"
+msgstr "Квартира"
 
 #. js-lingui-id: 6cU-Bw
 #: src/presentation/markers/markerCatalog.tsx:266
@@ -601,7 +601,7 @@ msgstr "Дни прогноза для меток"
 #. placeholder {0}: rowIndex + 1
 #: src/presentation/markers/MarkerIconPicker.tsx:205
 msgid "Marker icon categories row {0}"
-msgstr "Строка {0} категорий значков маркеров"
+msgstr "Категории значков меток, строка {0}"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/markers/MarkerEditorDialog.tsx:160
@@ -772,7 +772,7 @@ msgstr "Рамен"
 #. js-lingui-id: uabU9X
 #: src/presentation/markers/MarkerIconPicker.tsx:46
 msgid "Recently used"
-msgstr "Недавно использованные"
+msgstr "Недавние"
 
 #. js-lingui-id: wRTiSD
 #: src/presentation/markers/markerCatalog.tsx:345
@@ -866,7 +866,7 @@ msgstr "Морепродукты"
 #. placeholder {0}: markerIconCatalog.length + Number(allowFolder)
 #: src/presentation/markers/MarkerIconPicker.tsx:180
 msgid "Search {0} icons"
-msgstr "Поиск среди {0} значков"
+msgstr "Поиск значков ({0})"
 
 #. js-lingui-id: k8pi2I
 #: src/presentation/markers/MarkerIconPicker.tsx:186
@@ -936,7 +936,7 @@ msgstr "Сортировка: {markerSortLabel}"
 #. js-lingui-id: SWS1FV
 #: src/presentation/markers/markerCatalog.tsx:304
 msgid "SOS"
-msgstr "СОС"
+msgstr "SOS"
 
 #. js-lingui-id: 7JFNej
 #: src/presentation/markers/markerCatalog.tsx:233
@@ -947,7 +947,7 @@ msgstr "Спорт"
 #: src/presentation/markers/markerCatalog.tsx:196
 msgctxt "marker icon"
 msgid "Spring"
-msgstr "Источник"
+msgstr "Родник"
 
 #. js-lingui-id: mZhteu
 #: src/presentation/markers/markerCatalog.tsx:241

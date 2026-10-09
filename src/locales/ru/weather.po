@@ -132,12 +132,12 @@ msgstr "{periodKind, select, current {Ухудшение видимости бо
 #. js-lingui-id: kHCM7U
 #: src/presentation/weather/weatherConditionLabels.ts:49
 msgid "{sky, select, clear {Clear with isolated showers} mostly_clear {Mostly clear with isolated showers} partly_cloudy {Partly cloudy with isolated showers} mostly_cloudy {Mostly cloudy with isolated showers} other {Overcast with isolated showers}}"
-msgstr "{sky, select, clear {Ясно, изредка кратковременный дождь} mostly_clear {Малооблачно, изредка кратковременный дождь} partly_cloudy {Переменная облачность, изредка кратковременный дождь} mostly_cloudy {Облачно с прояснениями, изредка кратковременный дождь} other {Пасмурно, изредка кратковременный дождь}}"
+msgstr "{sky, select, clear {Ясно, местами ливни} mostly_clear {Малооблачно, местами ливни} partly_cloudy {Переменная облачность, местами ливни} mostly_cloudy {Облачно с прояснениями, местами ливни} other {Пасмурно, местами ливни}}"
 
 #. js-lingui-id: XGs8pr
 #: src/presentation/weather/weatherConditionLabels.ts:57
 msgid "{sky, select, clear {Clear with showers} mostly_clear {Mostly clear with showers} partly_cloudy {Partly cloudy with showers} mostly_cloudy {Mostly cloudy with showers} other {Overcast with showers}}"
-msgstr "{sky, select, clear {Ясно, кратковременные дожди} mostly_clear {Малооблачно, кратковременные дожди} partly_cloudy {Переменная облачность, кратковременные дожди} mostly_cloudy {Облачно с прояснениями, кратковременные дожди} other {Пасмурно, кратковременные дожди}}"
+msgstr "{sky, select, clear {Ясно, ливни} mostly_clear {Малооблачно, ливни} partly_cloudy {Переменная облачность, ливни} mostly_cloudy {Облачно с прояснениями, ливни} other {Пасмурно, ливни}}"
 
 #. js-lingui-id: Imy55c
 #: src/presentation/weather/weatherConditionLabels.ts:83
@@ -252,7 +252,7 @@ msgstr "Закрыть почасовой прогноз"
 #. js-lingui-id: zPQCNP
 #: src/presentation/weather/HourlyForecastTable.tsx:992
 msgid "Cloud (%)"
-msgstr "Облачность (%)"
+msgstr "Облака (%)"
 
 #. js-lingui-id: yemKbA
 #: src/presentation/weather/WeatherTimeControl.tsx:378
@@ -455,7 +455,7 @@ msgstr "Ночь"
 #. js-lingui-id: V5eHC4
 #: src/presentation/weather/WeatherPanel.tsx:737
 msgid "Now · next 3 h"
-msgstr "Сейчас · ближайшие 3 ч"
+msgstr "Сейчас · 3 ч"
 
 #. js-lingui-id: wzXPss
 #: src/presentation/weather/weatherConditionLabels.ts:103
@@ -470,7 +470,7 @@ msgstr "Открыть прогноз на 24 часа: {label}, {dateLabel}"
 #. js-lingui-id: hopzvZ
 #: src/presentation/weather/HourlyForecastTable.tsx:1197
 msgid "Open in Weather"
-msgstr "Открыть во вкладке «Погода»"
+msgstr "Открыть в разделе «Погода»"
 
 #. js-lingui-id: M9VW44
 #: src/presentation/weather/weatherConditionLabels.ts:14
@@ -575,7 +575,7 @@ msgstr "Ливневый снег"
 #. js-lingui-id: U42huV
 #: src/presentation/weather/HourlyForecastTable.tsx:879
 msgid "Temp (°C)"
-msgstr "Темп. (°C)"
+msgstr "t (°C)"
 
 #. js-lingui-id: OyW0XY
 #: src/presentation/weather/weatherConditionLabels.ts:36
@@ -595,7 +595,7 @@ msgstr "Время"
 #. js-lingui-id: y-eB5_
 #: src/presentation/weather/weatherConditionLabels.ts:38
 msgid "Unknown weather"
-msgstr "Неизвестная погода"
+msgstr "Погода неизвестна"
 
 #. js-lingui-id: UX4Eez
 #: src/presentation/weather/WeatherPanel.tsx:1356
@@ -610,7 +610,7 @@ msgstr "Обновлено {updatedAt}"
 #. js-lingui-id: ADzgNz
 #: src/presentation/weather/WeatherPanel.tsx:1546
 msgid "Use the header action, then click the map to load its ECMWF IFS forecast."
-msgstr "Выберите действие в заголовке, затем нажмите на карту, чтобы загрузить прогноз ECMWF IFS для этой точки."
+msgstr "Нажмите кнопку выбора точки в заголовке, затем точку на карте, чтобы загрузить прогноз ECMWF IFS."
 
 #. js-lingui-id: ph9OHp
 #: src/presentation/weather/weatherConditionLabels.ts:33
@@ -620,7 +620,7 @@ msgstr "Очень сильный ливень"
 #. js-lingui-id: aOKAXp
 #: src/presentation/weather/HourlyForecastTable.tsx:1007
 msgid "Visibility (km)"
-msgstr "Видимость (км)"
+msgstr "Видим. (км)"
 
 #. js-lingui-id: mJZLtT
 #: src/presentation/weather/HourlyForecastTable.tsx:867

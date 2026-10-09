@@ -312,8 +312,6 @@ describe('MapSearchPlaceholder', () => {
     expect(
       await screen.findByRole('button', { name: 'Показать ещё 1 результат' }),
     ).toBeVisible();
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Географические совпадения не найдены.',
-    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Ничего не найдено.');
   });
 });

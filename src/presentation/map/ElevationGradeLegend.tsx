@@ -73,11 +73,13 @@ function legendPlotX(gradePct: number): number {
   );
 }
 
+// Ticks carry bare numbers; the heading names the percent unit. Russian percent
+// formatting adds a space before `%`, which made the ±3 % ticks overlap.
 function formatGradeThreshold(
   threshold: number,
-  percentFormatter: Intl.NumberFormat,
+  numberFormatter: Intl.NumberFormat,
 ): string {
-  return `${threshold < 0 ? '−' : ''}${percentFormatter.format(Math.abs(threshold) / 100)}`;
+  return `${threshold < 0 ? '−' : ''}${numberFormatter.format(Math.abs(threshold))}`;
 }
 
 /** Explains the colors of the active track's grade overlay without duplicating its state. */
@@ -90,9 +92,8 @@ export function ElevationGradeLegend({
   const { i18n, t } = useLingui();
   // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `elevation-grade-legend-${useId().replaceAll(':', '')}`;
-  const percentFormatter = useMemo(
-    // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
-    () => new Intl.NumberFormat(i18n.locale, { style: 'percent' }),
+  const numberFormatter = useMemo(
+    () => new Intl.NumberFormat(i18n.locale),
     [i18n.locale],
   );
 
@@ -120,7 +121,7 @@ export function ElevationGradeLegend({
         sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
         <Typography component="h2" variant="caption" sx={{ fontWeight: 700 }}>
-          {t`Track grade`}
+          {t`Track grade (%)`}
         </Typography>
         <Tooltip title={t`Hide track grade legend`}>
           <IconButton
@@ -184,7 +185,7 @@ export function ElevationGradeLegend({
                 y2={44}
               />
               <text fontSize={10} textAnchor="middle" x={x} y={57}>
-                {formatGradeThreshold(threshold, percentFormatter)}
+                {formatGradeThreshold(threshold, numberFormatter)}
               </text>
             </g>
           );

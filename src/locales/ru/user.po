@@ -102,7 +102,7 @@ msgstr "Удалить"
 #. js-lingui-id: 9GSV7H
 #: src/presentation/user/RemoteDeletionDialog.tsx:45
 msgid "Delete selected, upload the rest again"
-msgstr "Удалить выбранное, остальные загрузить снова"
+msgstr "Удалить выбранные, остальные загрузить снова"
 
 #. js-lingui-id: O3oNi5
 #: src/presentation/user/UserPanel.tsx:120
@@ -189,7 +189,7 @@ msgstr "Выйти"
 #. js-lingui-id: zU-Ro7
 #: src/presentation/user/UserPanel.tsx:256
 msgid "Signed in as"
-msgstr "Выполнен вход:"
+msgstr "Вы вошли как"
 
 #. js-lingui-id: mRv0ca
 #: src/presentation/user/UserPanel.tsx:169

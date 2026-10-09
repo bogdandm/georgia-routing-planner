@@ -12,10 +12,15 @@ import {
   Typography,
   useMediaQuery,
 } from '@mui/material';
-import type { MapLayerMouseEvent, StyleSpecification } from 'maplibre-gl';
+import type {
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+  StyleSpecification,
+} from 'maplibre-gl';
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -278,7 +283,7 @@ export function MapWorkspace({
   getNavigationPadding,
   onElevationGradeLegendDismissedChange,
 }: MapWorkspaceProps) {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const {
     logger,
     elevationProvider,
@@ -822,8 +827,31 @@ export function MapWorkspace({
     return createHikingMapStyle(mapProviderConfiguration.value);
   }, [mapProviderConfiguration]);
 
+  // MapLibre reads control tooltips from its locale table only when a control is added.
+  // The table is patched before the passive effects of the locale-keyed controls below
+  // re-add them, so a language switch reaches the native zoom, compass, and location
+  // buttons. The canvas title and attribution toggle follow on the next map mount.
+  const nativeMap = useRef<MapLibreMap | null>(null);
+  const mapLibreLocale = useMemo(
+    () => ({
+      'AttributionControl.ToggleAttribution': t`Toggle attribution`,
+      'GeolocateControl.FindMyLocation': t`Find my location`,
+      'GeolocateControl.LocationNotAvailable': t`Location not available`,
+      'Map.Title': t`Map`,
+      'NavigationControl.ResetBearing': t`Drag to rotate map, click to reset north`,
+      'NavigationControl.ZoomIn': t`Zoom in`,
+      'NavigationControl.ZoomOut': t`Zoom out`,
+    }),
+    [t],
+  );
+  useLayoutEffect(() => {
+    if (nativeMap.current !== null)
+      Object.assign(nativeMap.current._locale, mapLibreLocale);
+  }, [mapLibreLocale]);
+
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
+      nativeMap.current = mapRef?.getMap() ?? null;
       if (!(facade instanceof MapLibreFacade)) return;
       if (mapRef === null) {
         facade.detachMap();
@@ -1295,6 +1323,7 @@ export function MapWorkspace({
         (resolvedMapCanvas ?? (
           <Map
             ref={handleMapRef}
+            locale={mapLibreLocale}
             initialViewState={restoredView.camera}
             mapStyle={mapStyle}
             maxPitch={75}
@@ -1313,12 +1342,14 @@ export function MapWorkspace({
             touchZoomRotate
           >
             <NavigationControl
+              key={`navigation:${i18n.locale}`}
               position="top-right"
               showCompass
               showZoom
               visualizePitch
             />
             <GeolocateControl
+              key={`geolocate:${i18n.locale}`}
               position="top-right"
               fitBoundsOptions={{ duration: 650, linear: true, maxZoom: 15 }}
               positionOptions={{ enableHighAccuracy: true }}
@@ -1326,7 +1357,9 @@ export function MapWorkspace({
               showUserLocation
               trackUserLocation={false}
             />
+            {/* Keyed with the controls above so a re-add keeps the top-right order. */}
             <MapViewControlsControl
+              key={`view-controls:${i18n.locale}`}
               activeLayerPreset={activeLayerPreset}
               hybridOverlayDisabled={
                 activeLayerPreset === null || activeLayerPreset === 'vector-osm'

@@ -78,7 +78,7 @@ describe('WorkspaceErrorBoundary', () => {
     renderFailure(services.diagnostics, services.logger);
 
     expect(
-      screen.getByRole('heading', { name: 'Приложение столкнулось с ошибкой' }),
+      screen.getByRole('heading', { name: 'В приложении произошла ошибка' }),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Скачать диагностику' })).toBeVisible();
   });

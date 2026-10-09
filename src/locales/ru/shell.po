@@ -62,7 +62,7 @@ msgstr "Инструменты раздела «{sidebarTitle}»"
 #. js-lingui-id: KpoP4l
 #: src/presentation/shell/AboutDialog.tsx:231
 msgid "{terrainCredits}. Georgia is covered by the Copernicus GLO-30 elevation model; Mapterhorn's attribution page lists every source."
-msgstr "{terrainCredits}. Грузия покрыта цифровой моделью рельефа Copernicus GLO-30; полный список источников приведён на странице атрибуции Mapterhorn."
+msgstr "{terrainCredits}. Для Грузии используется цифровая модель рельефа Copernicus GLO-30; полный список источников приведён на странице атрибуции Mapterhorn."
 
 #. js-lingui-id: oHZYtP
 #: src/presentation/shell/AboutDialog.tsx:279
@@ -148,12 +148,12 @@ msgstr "Все слои карты по источникам данных. На�
 #. js-lingui-id: mJdOG7
 #: src/presentation/shell/StorageUsagePanel.tsx:182
 msgid "Allocated heap"
-msgstr "Выделенная память кучи"
+msgstr "Выделенная куча"
 
 #. js-lingui-id: 77CFp1
 #: src/presentation/shell/OnboardingTour.tsx:404
 msgid "An account is optional. Turn on sync to keep tracks, folders, and markers on all your devices."
-msgstr "Аккаунт не обязателен. Включите синхронизацию, чтобы треки, папки и метки были на всех ваших устройствах."
+msgstr "Учётная запись не обязательна. Включите синхронизацию, чтобы треки, папки и метки были на всех ваших устройствах."
 
 #. js-lingui-id: JR6nY7
 #: src/presentation/shell/AboutDialog.tsx:341
@@ -274,17 +274,17 @@ msgstr "Координаты выходят за допустимые грани
 #. js-lingui-id: r8UHl8
 #: src/presentation/shell/ShareMapDialog.tsx:179
 msgid "Copy 2D link"
-msgstr "Копировать ссылку на 2D-карту"
+msgstr "Копировать 2D-ссылку"
 
 #. js-lingui-id: AKBU-N
 #: src/presentation/shell/ShareMapDialog.tsx:170
 msgid "Copy 3D link"
-msgstr "Копировать ссылку на 3D-карту"
+msgstr "Копировать 3D-ссылку"
 
 #. js-lingui-id: kaKzkK
 #: src/presentation/shell/AboutDialog.tsx:319
 msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
-msgstr "Создатель — <0>Bogdan Kalashnikov</0> (bogdandm)."
+msgstr "Автор — <0>Bogdan Kalashnikov</0> (bogdandm)."
 
 #. js-lingui-id: 2SuOUC
 #: src/presentation/shell/OperationalStatus.tsx:433
@@ -341,7 +341,7 @@ msgstr "Включите 3D-карту рельефа, чтобы передат
 #. js-lingui-id: lYGfRP
 #: src/presentation/shell/SettingsDialog.tsx:165
 msgid "English"
-msgstr "Английский"
+msgstr "English"
 
 #. js-lingui-id: OSJlm5
 #: src/presentation/shell/MapSearchPlaceholder.tsx:225
@@ -351,7 +351,7 @@ msgstr "Введите не менее двух символов или пару
 #. js-lingui-id: Y-ZU13
 #: src/presentation/shell/MapSearchPlaceholder.tsx:223
 msgid "Enter two finite coordinate values."
-msgstr "Введите два конечных значения координат."
+msgstr "Введите две координаты числами."
 
 #. js-lingui-id: V2ujQe
 #: src/presentation/shell/OnboardingTour.tsx:271
@@ -361,7 +361,7 @@ msgstr "Все подъёмы и спуски с длиной и крутизн�
 #. js-lingui-id: 2s4gux
 #: src/presentation/shell/WorkspaceSidebar.tsx:552
 msgid "Exit multi-track selection"
-msgstr "Выйти из выбора нескольких треков"
+msgstr "Завершить выбор треков"
 
 #. js-lingui-id: O6Fpju
 #: src/presentation/shell/WorkspaceShell.tsx:599
@@ -421,7 +421,7 @@ msgstr "Посёлок"
 #. js-lingui-id: W9Eiqx
 #: src/presentation/shell/StorageUsagePanel.tsx:185
 msgid "Heap limit"
-msgstr "Предельный размер кучи"
+msgstr "Лимит кучи"
 
 #. js-lingui-id: T7ZWsE
 #: src/presentation/shell/WorkspaceShell.tsx:917
@@ -432,7 +432,7 @@ msgstr "Скрыть навигацию"
 #. js-lingui-id: 2zEnx6
 #: src/presentation/shell/WorkspaceRail.tsx:328
 msgid "Hide navigation from Trail Planner logo"
-msgstr "Скрыть навигацию через логотип Trail Planner"
+msgstr "Логотип Trail Planner: скрыть навигацию"
 
 #. js-lingui-id: WFECNq
 #: src/presentation/shell/MapSearchPlaceholder.tsx:213
@@ -442,7 +442,7 @@ msgstr "Скрыть остальные результаты"
 #. js-lingui-id: lSBn1P
 #: src/presentation/shell/OnboardingTour.tsx:160
 msgid "Hide the panel to see more map."
-msgstr "Скройте панель, чтобы видеть больше карты."
+msgstr "Скройте панель, чтобы освободить место для карты."
 
 #. js-lingui-id: JBca1o
 #: src/presentation/shell/WorkspaceSidebar.tsx:354
@@ -458,7 +458,7 @@ msgstr "В выделенные дни есть снимки с облачнос
 #. js-lingui-id: nWpAGx
 #: src/presentation/shell/OnboardingTour.tsx:359
 msgid "Images are searched at the map center. Right-click the map to search at another point."
-msgstr "Снимки ищутся в центре карты. Чтобы искать в другой точке, нажмите на карту правой кнопкой мыши."
+msgstr "Снимки подбираются для центра карты. Чтобы искать в другой точке, нажмите на карту правой кнопкой мыши."
 
 #. js-lingui-id: B0vUJW
 #: src/presentation/shell/ShareMapDialog.tsx:143
@@ -468,7 +468,7 @@ msgstr "Добавить выбранный спутниковый снимок"
 #. js-lingui-id: NH98te
 #: src/presentation/shell/formatPlaceSearchCategory.ts:18
 msgid "Isolated dwelling"
-msgstr "Отдельное жилище"
+msgstr "Отдельный дом"
 
 #. js-lingui-id: g9-BQD
 #: src/presentation/shell/formatPlaceSearchCategory.ts:22
@@ -557,7 +557,7 @@ msgstr "Карта недоступна"
 #. js-lingui-id: Eu8uJP
 #: src/presentation/shell/OperationalStatus.tsx:135
 msgid "Map provider configuration is invalid."
-msgstr "Недопустимая конфигурация провайдера карты."
+msgstr "Недопустимая конфигурация поставщика карты."
 
 #. js-lingui-id: uIWtLA
 #: src/presentation/shell/MapSearchPlaceholder.tsx:321
@@ -567,7 +567,7 @@ msgstr "Поиск по карте"
 #. js-lingui-id: mEbr3q
 #: src/presentation/shell/AboutDialog.tsx:372
 msgid "Map, elevation, and imagery sources are unavailable because their provider configuration is invalid."
-msgstr "Источники карт, рельефа и снимков недоступны из-за недопустимой конфигурации провайдеров."
+msgstr "Источники карт, рельефа и снимков недоступны из-за недопустимой конфигурации поставщиков."
 
 #. js-lingui-id: UDMwAB
 #: src/presentation/shell/WorkspaceSidebar.tsx:504
@@ -665,7 +665,7 @@ msgstr "Далее"
 #. js-lingui-id: 19XTPe
 #: src/presentation/shell/MapSearchPlaceholder.tsx:445
 msgid "No geographic matches found."
-msgstr "Географические совпадения не найдены."
+msgstr "Ничего не найдено."
 
 #. js-lingui-id: MyjSw9
 #: src/presentation/shell/MapSearchPlaceholder.tsx:437
@@ -745,17 +745,17 @@ msgstr "Поиск мест"
 #. js-lingui-id: ci-l7K
 #: src/presentation/shell/MapSearchPlaceholder.tsx:238
 msgid "Place search could not contact the provider. Check the connection and try again."
-msgstr "Не удалось связаться с провайдером поиска мест. Проверьте подключение и повторите попытку."
+msgstr "Не удалось связаться с сервисом поиска мест. Проверьте подключение и повторите попытку."
 
 #. js-lingui-id: ji8RBU
 #: src/presentation/shell/MapSearchPlaceholder.tsx:232
 msgid "Place search is temporarily rate-limited. Try again shortly."
-msgstr "Поиск мест временно ограничен по частоте запросов. Повторите попытку чуть позже."
+msgstr "Сервис поиска мест временно ограничил число запросов. Повторите попытку чуть позже."
 
 #. js-lingui-id: bdB3Af
 #: src/presentation/shell/AboutDialog.tsx:345
 msgid "Place search is unavailable because its provider configuration is invalid."
-msgstr "Поиск мест недоступен из-за недопустимой конфигурации провайдера."
+msgstr "Поиск мест недоступен из-за недопустимой конфигурации поставщика."
 
 #. js-lingui-id: UhRZwt
 #: src/presentation/shell/MapSearchPlaceholder.tsx:242
@@ -766,7 +766,7 @@ msgstr "Поиск мест недоступен. Повторите попыт�
 #. js-lingui-id: 7wmsS7
 #: src/presentation/shell/MapSearchPlaceholder.tsx:402
 msgid "Place search provider configuration is unavailable. Coordinate entry still works."
-msgstr "Конфигурация провайдера поиска мест недоступна. Ввод координат по-прежнему работает."
+msgstr "Конфигурация поставщика поиска мест недоступна. Ввод координат по-прежнему работает."
 
 #. js-lingui-id: 1IjCTZ
 #: src/presentation/shell/MapSearchPlaceholder.tsx:451
@@ -776,7 +776,7 @@ msgstr "Результаты поиска мест"
 #. js-lingui-id: tqAN-8
 #: src/presentation/shell/MapSearchPlaceholder.tsx:235
 msgid "Place search timed out. Try again."
-msgstr "Время ожидания поиска мест истекло. Повторите попытку."
+msgstr "Сервис поиска мест не ответил вовремя. Повторите попытку."
 
 #. js-lingui-id: jiQuHZ
 #: src/presentation/shell/WorkspaceSidebar.tsx:573
@@ -796,12 +796,12 @@ msgstr "Построить маршрут"
 #. js-lingui-id: 6RC3VK
 #: src/presentation/shell/OnboardingTour.tsx:223
 msgid "Point at a track to add it to favorites or delete it."
-msgstr "Наведите на трек, чтобы добавить его в избранное или удалить."
+msgstr "Наведите курсор на трек, чтобы добавить его в избранное или удалить."
 
 #. js-lingui-id: hvqhEV
 #: src/presentation/shell/OnboardingTour.tsx:256
 msgid "Point at the profile to see the place on the map. Colors show the slope."
-msgstr "Наведите на профиль, чтобы увидеть это место на карте. Цвет показывает крутизну."
+msgstr "Наведите курсор на профиль, чтобы увидеть это место на карте. Цвет показывает крутизну."
 
 #. js-lingui-id: vzUDqT
 #: src/presentation/shell/AboutDialog.tsx:194
@@ -928,7 +928,7 @@ msgstr "Поиск спутниковых сцен"
 #. js-lingui-id: rkYl1y
 #: src/presentation/shell/AboutDialog.tsx:353
 msgid "Satellite search is unavailable because its provider configuration is invalid."
-msgstr "Поиск спутниковых сцен недоступен из-за недопустимой конфигурации провайдера."
+msgstr "Поиск спутниковых сцен недоступен из-за недопустимой конфигурации поставщика."
 
 #. js-lingui-id: tfDRzk
 #: src/presentation/shell/WorkspaceShell.tsx:582
@@ -1025,7 +1025,7 @@ msgstr "Не удалось найти снимки Sentinel. Повторите
 #. js-lingui-id: 4gZK_l
 #: src/presentation/shell/OperationalStatus.tsx:118
 msgid "Sentinel search cancelled"
-msgstr "Поиск Sentinel отменён"
+msgstr "Поиск снимков Sentinel отменён"
 
 #. js-lingui-id: Tz0i8g
 #: src/presentation/shell/SettingsDialog.tsx:75
@@ -1072,7 +1072,7 @@ msgstr "Показать навигацию"
 #. js-lingui-id: rvH1WP
 #: src/presentation/shell/WorkspaceRail.tsx:245
 msgid "Show navigation from Trail Planner logo"
-msgstr "Показать навигацию через логотип Trail Planner"
+msgstr "Логотип Trail Planner: показать навигацию"
 
 #. js-lingui-id: hnt53v
 #: src/presentation/shell/OnboardingTour.tsx:173
@@ -1154,12 +1154,12 @@ msgstr "Ссылка на 2D-карту всегда передаёт центр
 #. js-lingui-id: WMkqRc
 #: src/presentation/shell/WorkspaceErrorBoundary.tsx:57
 msgid "The application encountered an error"
-msgstr "Приложение столкнулось с ошибкой"
+msgstr "В приложении произошла ошибка"
 
 #. js-lingui-id: CNWmZe
 #: src/presentation/shell/WorkspaceErrorBoundary.tsx:60
 msgid "The failure was captured locally. Download a privacy-safe bundle to help investigate it."
-msgstr "Сбой зафиксирован локально. Скачайте пакет без конфиденциальных данных, чтобы помочь с расследованием."
+msgstr "Сбой записан локально. Скачайте диагностику без личных данных, чтобы помочь найти причину."
 
 #. js-lingui-id: CHpm1i
 #: src/presentation/shell/ShareMapDialog.tsx:148
@@ -1199,7 +1199,7 @@ msgstr "TiTiler недоступен. Переключение на готовы
 #. js-lingui-id: 5M4BZY
 #: src/presentation/shell/StorageUsagePanel.tsx:151
 msgid "Total app storage"
-msgstr "Общее хранилище приложения"
+msgstr "Всего занято приложением"
 
 #. js-lingui-id: uCgBlc
 #: src/presentation/shell/formatPlaceSearchCategory.ts:19
@@ -1226,12 +1226,12 @@ msgstr "Треки"
 #. js-lingui-id: 5f0wUC
 #: src/presentation/shell/MapSearchPlaceholder.tsx:221
 msgid "Use one latitude and one longitude label."
-msgstr "Используйте по одной метке широты и долготы."
+msgstr "Укажите одну широту и одну долготу."
 
 #. js-lingui-id: IZKDoG
 #: src/presentation/shell/StorageUsagePanel.tsx:180
 msgid "Used heap"
-msgstr "Используемая память кучи"
+msgstr "Занятая куча"
 
 #. js-lingui-id: 7PzzBU
 #: src/presentation/shell/WorkspaceRail.tsx:139
@@ -1247,7 +1247,7 @@ msgstr "Синхронизация профиля не удалась"
 #. js-lingui-id: HIxhHX
 #: src/presentation/shell/WorkspaceRail.tsx:144
 msgid "User synchronization in progress"
-msgstr "Синхронизация профиля выполняется"
+msgstr "Идёт синхронизация профиля"
 
 #. js-lingui-id: HtyM5h
 #: src/presentation/shell/WorkspaceRail.tsx:152
@@ -1277,7 +1277,7 @@ msgstr "Вулкан"
 #. js-lingui-id: ILGa7G
 #: src/presentation/shell/MapSearchPlaceholder.tsx:226
 msgid "Wait for the map viewport to become ready, then search again."
-msgstr "Дождитесь готовности области просмотра карты и повторите поиск."
+msgstr "Дождитесь готовности карты и повторите поиск."
 
 #. js-lingui-id: L6z1-b
 #: src/presentation/shell/formatPlaceSearchCategory.ts:15

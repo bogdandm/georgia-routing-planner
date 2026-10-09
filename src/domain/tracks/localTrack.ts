@@ -12,6 +12,7 @@ import type {
 
 export const LOCAL_TRACK_SCHEMA_VERSION = 6;
 export const MAXIMUM_TRACK_MARKERS = 32;
+export const MAXIMUM_TRACK_NAME_LENGTH = 200;
 
 export const trackSorts = ['created', 'name', 'oldest', 'distance'] as const;
 
@@ -84,7 +85,7 @@ export function normalizeLocalTrackName(name: string): {
 } {
   const trimmed = name.trim();
   if (trimmed.length === 0) throw new TrackNameError('required');
-  if (trimmed.length > 200) throw new TrackNameError('too-long');
+  if (trimmed.length > MAXIMUM_TRACK_NAME_LENGTH) throw new TrackNameError('too-long');
   return {
     name: trimmed,
     normalizedName: trimmed.toLocaleLowerCase('en'),

@@ -237,9 +237,18 @@ moving the camera. From 900 through 1899 CSS pixels, **Back to tracks** restores
 prior list state; at 1900 and above the pane stays adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
-**Download KML**, sharing, **Rename** (an inline name editor), and **Delete track**.
-Downloads preserve segments, name, canonical elevation, and aligned timestamps. GPX also
-writes track markers as root `<wpt>` elements before `<trk>`; KML is geometry-only.
+**Download KML**, sharing, **Rename** (an inline name editor), **Create reversed
+track**, and **Delete track**. Downloads preserve segments, name, canonical elevation,
+and aligned timestamps. GPX also writes track markers as root `<wpt>` elements before
+`<trk>`; KML is geometry-only.
+
+**Create reversed track** saves the track walked the other way as a new track named
+"_name_ (reversed)" in the same folder, then opens it. Segment and point order flip,
+track markers are copied, and start and end landmarks swap. Gain and loss swap exactly,
+and the estimated time is recalculated for the new direction. Recorded time carries over
+only when the track is completely flat (known source and DEM gain and loss are all
+zero): timestamps mirror around the recording window, keeping duration and pauses.
+Otherwise timestamps are dropped and the duration becomes an **Estimated time**.
 
 With usable elevation, the map colors every non-flat climb/descent grade subsegment of
 the active track, leaving flat spans blue; chart hover stays panel-only. Hovering or

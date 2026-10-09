@@ -1,20 +1,21 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import type {
   VisibilityStatus,
   WeatherIcon,
 } from '@/domain/weather/aggregateWeatherPeriodStatus';
+import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import {
   WeatherConditionIcon,
   WeatherPeriodIcon,
 } from '@/presentation/weather/WeatherConditionIcon';
 import { describeWmoWeatherCode } from '@/presentation/weather/weatherConditionLabels';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const normalVisibility: VisibilityStatus = {
   level: 'normal',
   period: 'none',
-  label: null,
   icon: null,
 };
 
@@ -62,14 +63,19 @@ function expectMeteoconArtwork(artwork: HTMLElement, name: string) {
   expect(artwork.querySelectorAll('svg')).toHaveLength(0);
 }
 
+beforeEach(() => {
+  activateAppLocale('en');
+});
+
 describe('WeatherConditionIcon', () => {
   it.each(conditionCases)('describes WMO codes %j as %s', (codes, expected) => {
-    for (const code of codes) expect(describeWmoWeatherCode(code)).toBe(expected);
+    for (const code of codes)
+      expect(appI18n._(describeWmoWeatherCode(code))).toBe(expected);
   });
 
   it('uses a stable neutral description for unsupported WMO codes', () => {
-    expect(describeWmoWeatherCode(-1)).toBe('Unknown weather');
-    expect(describeWmoWeatherCode(100)).toBe('Unknown weather');
+    expect(appI18n._(describeWmoWeatherCode(-1))).toBe('Unknown weather');
+    expect(appI18n._(describeWmoWeatherCode(100))).toBe('Unknown weather');
   });
 
   it.each([
@@ -97,9 +103,11 @@ describe('WeatherConditionIcon', () => {
     'selects monochrome $name artwork for WMO codes $codes',
     ({ codes, isDay, name }) => {
       for (const code of codes) {
-        const { unmount } = render(<WeatherConditionIcon code={code} isDay={isDay} />);
+        const { unmount } = renderWithI18n(
+          <WeatherConditionIcon code={code} isDay={isDay} />,
+        );
         expectMeteoconArtwork(
-          screen.getByLabelText(describeWmoWeatherCode(code)),
+          screen.getByLabelText(appI18n._(describeWmoWeatherCode(code))),
           name,
         );
         unmount();
@@ -174,7 +182,7 @@ describe('WeatherConditionIcon', () => {
     readonly label: string;
     readonly name: string;
   }[])('selects $name for $label', ({ icon, isDay, label, name }) => {
-    render(
+    renderWithI18n(
       <WeatherPeriodIcon
         icon={icon}
         visibility={normalVisibility}
@@ -187,7 +195,7 @@ describe('WeatherConditionIcon', () => {
   });
 
   it('shows condition details on mouse hover', async () => {
-    render(<WeatherConditionIcon code={63} isDay />);
+    renderWithI18n(<WeatherConditionIcon code={63} isDay />);
     const icon = screen.getByLabelText('Moderate rain');
 
     fireEvent.mouseOver(icon);
@@ -200,7 +208,7 @@ describe('WeatherConditionIcon', () => {
   });
 
   it('toggles daily details when tapped on a touch screen', async () => {
-    render(
+    renderWithI18n(
       <WeatherPeriodIcon
         icon={{ sky: 'overcast', phenomenon: 'rain' }}
         visibility={normalVisibility}
@@ -228,7 +236,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'fog',
         period: 'morning',
-        label: 'Morning fog',
         icon: 'fog',
       },
       isDay: true,
@@ -240,7 +247,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'haze',
         period: 'overnight',
-        label: 'Reduced visibility overnight',
         icon: 'haze',
       },
       isDay: false,
@@ -252,7 +258,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'fog',
         period: 'evening',
-        label: 'Evening fog',
         icon: 'fog',
       },
       isDay: false,
@@ -264,7 +269,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'haze',
         period: 'afternoon',
-        label: 'Reduced visibility in the afternoon',
         icon: 'haze',
       },
       isDay: true,
@@ -276,7 +280,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'poor',
         period: 'most_of_period',
-        label: 'Poor visibility for most of the day',
         icon: 'poor',
       },
       isDay: true,
@@ -292,7 +295,7 @@ describe('WeatherConditionIcon', () => {
   }[])(
     'selects one monochrome $name for $label instead of layering status icons',
     ({ icon, visibility, isDay, label, name }) => {
-      render(
+      renderWithI18n(
         <WeatherPeriodIcon
           icon={icon}
           visibility={visibility}
@@ -311,7 +314,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'fog',
         period: 'morning',
-        label: 'Morning fog',
         icon: 'fog',
       },
       isDay: true,
@@ -323,7 +325,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'haze',
         period: 'overnight',
-        label: 'Reduced visibility overnight',
         icon: 'haze',
       },
       isDay: false,
@@ -335,7 +336,6 @@ describe('WeatherConditionIcon', () => {
       visibility: {
         level: 'poor',
         period: 'afternoon',
-        label: 'Poor visibility in the afternoon',
         icon: 'poor',
       },
       isDay: true,
@@ -351,7 +351,7 @@ describe('WeatherConditionIcon', () => {
   }[])(
     'keeps precipitation $name ahead of concurrent visibility status',
     ({ icon, visibility, isDay, label, name }) => {
-      render(
+      renderWithI18n(
         <WeatherPeriodIcon
           icon={icon}
           visibility={visibility}

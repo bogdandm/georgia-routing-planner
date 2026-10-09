@@ -36,7 +36,6 @@ export interface WeatherIcon {
 export interface VisibilityStatus {
   readonly level: Visibility;
   readonly period: VisibilityPeriod;
-  readonly label: string | null;
   readonly icon: Exclude<Visibility, 'normal'> | null;
 }
 
@@ -93,9 +92,9 @@ export interface WeatherPeriodStatus {
   readonly primary: {
     readonly sky: Sky;
     readonly precipitation: Precipitation;
-    readonly label: string;
     readonly icon: WeatherIcon;
   };
+  readonly periodKind: WeatherPeriodKind;
   readonly visibility: VisibilityStatus;
   readonly debug: WeatherPeriodStatusDebug;
 }
@@ -231,43 +230,6 @@ function classifySky(hours: readonly WeatherPeriodHour[]): {
       clearishFraction,
     },
   };
-}
-
-const skyLabels: Readonly<Record<Sky, string>> = {
-  clear: 'Clear',
-  mostly_clear: 'Mostly clear',
-  partly_cloudy: 'Partly cloudy',
-  mostly_cloudy: 'Mostly cloudy',
-  overcast: 'Overcast',
-};
-
-function precipitationLabel(precipitation: Precipitation, sky: Sky): string {
-  switch (precipitation) {
-    case 'none':
-      return skyLabels[sky];
-    case 'isolated_showers':
-      return `${skyLabels[sky]} with isolated showers`;
-    case 'showers':
-      return `${skyLabels[sky]} with showers`;
-    case 'occasional_rain':
-      return `${sky === 'clear' ? skyLabels.mostly_clear : skyLabels[sky]} with occasional rain`;
-    case 'rain':
-      return sky === 'clear' || sky === 'mostly_clear' || sky === 'partly_cloudy'
-        ? 'Rain with sunny intervals'
-        : 'Rain';
-    case 'heavy_rain':
-      return 'Heavy rain';
-    case 'snow_showers':
-      return 'Snow showers';
-    case 'occasional_snow':
-      return 'Occasional snow';
-    case 'snow':
-      return 'Snow';
-    case 'mixed':
-      return 'Rain and snow';
-    case 'freezing':
-      return 'Freezing precipitation';
-  }
 }
 
 function classifyPrecipitation(input: {
@@ -462,49 +424,6 @@ function classifyVisibilityPeriod(
   return 'evening';
 }
 
-function visibilityLabel(
-  level: Exclude<Visibility, 'normal'>,
-  period: Exclude<VisibilityPeriod, 'none'>,
-  periodKind: WeatherPeriodKind,
-): string {
-  if (level === 'fog') {
-    switch (period) {
-      case 'brief':
-        return 'Brief fog';
-      case 'morning':
-        return 'Morning fog';
-      case 'afternoon':
-        return 'Afternoon fog';
-      case 'evening':
-        return 'Evening fog';
-      case 'overnight':
-        return 'Fog overnight';
-      case 'intermittent':
-        return 'Intermittent fog';
-      case 'most_of_period':
-        return `Fog for most of ${periodKind === 'current' ? 'the interval' : `the ${periodKind}`}`;
-    }
-  }
-
-  const description = level === 'poor' ? 'Poor visibility' : 'Reduced visibility';
-  switch (period) {
-    case 'brief':
-      return `Brief ${description.toLocaleLowerCase('en')}`;
-    case 'morning':
-      return `${description} in the morning`;
-    case 'afternoon':
-      return `${description} in the afternoon`;
-    case 'evening':
-      return `${description} in the evening`;
-    case 'overnight':
-      return `${description} overnight`;
-    case 'intermittent':
-      return 'Intermittent reduced visibility';
-    case 'most_of_period':
-      return `${description} for most of ${periodKind === 'current' ? 'the interval' : `the ${periodKind}`}`;
-  }
-}
-
 function classifyVisibility(
   hours: readonly WeatherPeriodHour[],
   periodKind: WeatherPeriodKind,
@@ -527,7 +446,6 @@ function classifyVisibility(
   let status: VisibilityStatus = {
     level: 'normal',
     period: 'none',
-    label: null,
     icon: null,
   };
   if (level !== undefined) {
@@ -535,7 +453,6 @@ function classifyVisibility(
     status = {
       level,
       period,
-      label: visibilityLabel(level, period, periodKind),
       icon: level,
     };
   }
@@ -613,18 +530,17 @@ export function aggregateWeatherPeriodStatus(
     freezingHours,
   });
   const visibility = classifyVisibility(orderedPeriodHours, periodKind);
-  const label = precipitationLabel(precipitation, skyResult.sky);
 
   return {
     primary: {
       sky: skyResult.sky,
       precipitation,
-      label,
       icon: {
         sky: skyResult.sky,
         phenomenon: precipitation === 'none' ? null : precipitation,
       },
     },
+    periodKind,
     visibility: visibility.status,
     debug: {
       periodHours,

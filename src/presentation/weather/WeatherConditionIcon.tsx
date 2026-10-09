@@ -1,3 +1,4 @@
+import { useLingui } from '@lingui/react/macro';
 import { Box, ClickAwayListener, Tooltip } from '@mui/material';
 import { useRef, useState, type ReactElement } from 'react';
 
@@ -206,6 +207,7 @@ type PrecipitationSuffix = 'rain' | 'sleet' | 'snow';
 type ConditionPrefix =
   `mostly-clear-${DayNight}` | `overcast-${DayNight}` | `partly-cloudy-${DayNight}`;
 
+/* eslint-disable lingui/no-unlocalized-strings -- Meteocon asset name tokens. */
 function iconForWmoCode(code: number, isDay: boolean): MeteoconName {
   const dayNight = isDay ? 'day' : 'night';
   switch (code) {
@@ -307,6 +309,7 @@ function iconForPeriod(
         : 'sleet';
   return `${periodConditionPrefix(icon, dayNight)}-${suffix}`;
 }
+/* eslint-enable lingui/no-unlocalized-strings */
 
 function StaticMeteocon({
   name,
@@ -335,8 +338,9 @@ export function WeatherConditionIcon({
   isDay,
   size = 28,
 }: WeatherConditionIconProps) {
+  const { t } = useLingui();
   return (
-    <WeatherIconTooltip label={describeWmoWeatherCode(code)}>
+    <WeatherIconTooltip label={t(describeWmoWeatherCode(code))}>
       <StaticMeteocon name={iconForWmoCode(code, isDay)} size={size} />
     </WeatherIconTooltip>
   );

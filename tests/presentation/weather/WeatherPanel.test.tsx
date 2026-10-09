@@ -1,12 +1,5 @@
 import { ThemeProvider } from '@mui/material/styles';
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,6 +9,7 @@ import {
 } from '@/application/weather/GetPointWeatherForecast';
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
+import { activateAppLocale } from '@/presentation/localization/appI18n';
 import {
   mapInteractionStore,
   requestWeatherForecast,
@@ -25,6 +19,7 @@ import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { appColors } from '@/presentation/theme/appColors';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 function renderPanel(
   services = createTestServices(),
@@ -34,7 +29,7 @@ function renderPanel(
 ) {
   return {
     services,
-    ...render(
+    ...renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <ThemeProvider theme={createAppTheme()}>
           <WeatherPanel
@@ -79,6 +74,7 @@ function deferred<T>(): Deferred<T> {
 
 describe('WeatherPanel', () => {
   beforeEach(() => {
+    activateAppLocale('en');
     resetMapInteractionStore();
   });
 
@@ -134,8 +130,8 @@ describe('WeatherPanel', () => {
                   ...day.day.status,
                   primary: {
                     ...day.day.status.primary,
+                    sky: 'overcast',
                     precipitation: 'rain',
-                    label: 'Rain',
                     icon: {
                       ...day.day.status.primary.icon,
                       phenomenon: 'rain',
@@ -144,7 +140,6 @@ describe('WeatherPanel', () => {
                   visibility: {
                     level: 'fog',
                     period: 'morning',
-                    label: 'Morning fog',
                     icon: 'fog',
                   },
                 },
@@ -163,7 +158,6 @@ describe('WeatherPanel', () => {
                   visibility: {
                     level: 'fog',
                     period: 'overnight',
-                    label: 'Fog overnight',
                     icon: 'fog',
                   },
                 },
@@ -207,7 +201,7 @@ describe('WeatherPanel', () => {
     expect(
       within(currentSummary).getByLabelText('Now · next 3 h: Clear'),
     ).toBeInTheDocument();
-    expect(within(currentSummary).getByText('Saturday, 18 Jul · 18:00')).toBeVisible();
+    expect(within(currentSummary).getByText('Saturday, Jul 18 · 18:00')).toBeVisible();
     expect(within(currentSummary).getByText('Clear')).toBeVisible();
     const currentArtwork = within(currentSummary).getByLabelText(
       'Now · next 3 h: Clear',
@@ -316,10 +310,10 @@ describe('WeatherPanel', () => {
     const secondDailyRow = dailyRows[1];
     if (secondDailyRow === undefined) throw new Error('Expected the second daily row.');
     const saturdayDate = within(
-      within(firstDailyRow).getByRole('group', { name: 'Sat 18 Jul' }),
+      within(firstDailyRow).getByRole('group', { name: 'Sat, Jul 18' }),
     ).getByText('Sat').parentElement;
     const sundayDate = within(
-      within(secondDailyRow).getByRole('group', { name: 'Sun 19 Jul' }),
+      within(secondDailyRow).getByRole('group', { name: 'Sun, Jul 19' }),
     ).getByText('Sun').parentElement;
     expect(saturdayDate).toHaveStyle({
       backgroundColor: appColors.tag.orange.background,
@@ -381,7 +375,7 @@ describe('WeatherPanel', () => {
     ).toHaveTextContent('2.5 mm');
     expect(within(dayForecast).getByText('Rain')).toBeVisible();
 
-    expect(screen.getByText('ECMWF IFS · Updated 18 Jul, 04:00')).toBeInTheDocument();
+    expect(screen.getByText('ECMWF IFS · Updated Jul 18, 04:00')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Weather data by Open-Meteo' }),
     ).toHaveAttribute('href', 'https://open-meteo.com/');
@@ -404,15 +398,15 @@ describe('WeatherPanel', () => {
     const firstDailyRow = within(dailyList).getAllByRole('listitem')[0];
     if (firstDailyRow === undefined) throw new Error('Expected the first daily row.');
     const dayTrigger = within(firstDailyRow).getByRole('button', {
-      name: 'Open 24-hour forecast for Day, Sat 18 Jul',
+      name: 'Open 24-hour forecast for Day, Sat, Jul 18',
     });
     const nightTrigger = within(firstDailyRow).getByRole('button', {
-      name: 'Open 24-hour forecast for Night, Sat 18 Jul',
+      name: 'Open 24-hour forecast for Night, Sat, Jul 18',
     });
 
     await user.click(dayTrigger);
     const dayPanel = screen.getByRole('dialog', {
-      name: '24-hour forecast · Day · Sat, 18 Jul',
+      name: '24-hour forecast · Day · Sat, Jul 18',
     });
     const dayHours = within(
       within(dayPanel).getByRole('table', { name: 'Hourly forecast' }),
@@ -439,7 +433,7 @@ describe('WeatherPanel', () => {
     fireEvent.transitionEnd(dayPanel, { propertyName: 'height' });
     expect(
       screen.queryByRole('dialog', {
-        name: '24-hour forecast · Day · Sat, 18 Jul',
+        name: '24-hour forecast · Day · Sat, Jul 18',
       }),
     ).not.toBeInTheDocument();
     await waitFor(() => {
@@ -448,7 +442,7 @@ describe('WeatherPanel', () => {
 
     await user.click(nightTrigger);
     const nightPanel = screen.getByRole('dialog', {
-      name: '24-hour forecast · Night · Sat, 18 Jul',
+      name: '24-hour forecast · Night · Sat, Jul 18',
     });
     const nightHours = within(
       within(nightPanel).getByRole('table', { name: 'Hourly forecast' }),
@@ -466,7 +460,7 @@ describe('WeatherPanel', () => {
     fireEvent.transitionEnd(nightPanel, { propertyName: 'height' });
     expect(
       screen.queryByRole('dialog', {
-        name: '24-hour forecast · Night · Sat, 18 Jul',
+        name: '24-hour forecast · Night · Sat, Jul 18',
       }),
     ).not.toBeInTheDocument();
     await waitFor(() => {
@@ -491,15 +485,15 @@ describe('WeatherPanel', () => {
     const firstDailyRow = within(dailyList).getAllByRole('listitem')[0];
     if (firstDailyRow === undefined) throw new Error('Expected the first daily row.');
     const dayTrigger = within(firstDailyRow).getByRole('button', {
-      name: 'Open 24-hour forecast for Day, Sat 18 Jul',
+      name: 'Open 24-hour forecast for Day, Sat, Jul 18',
     });
     const nightTrigger = within(firstDailyRow).getByRole('button', {
-      name: 'Open 24-hour forecast for Night, Sat 18 Jul',
+      name: 'Open 24-hour forecast for Night, Sat, Jul 18',
     });
 
     await user.click(dayTrigger);
     const dayPanel = screen.getByRole('dialog', {
-      name: '24-hour forecast · Day · Sat, 18 Jul',
+      name: '24-hour forecast · Day · Sat, Jul 18',
     });
     await waitFor(() => {
       expect(dayPanel).toHaveStyle({
@@ -510,7 +504,7 @@ describe('WeatherPanel', () => {
     await user.click(nightTrigger);
     expect(dayPanel).not.toBeInTheDocument();
     const nightPanel = screen.getByRole('dialog', {
-      name: '24-hour forecast · Night · Sat, 18 Jul',
+      name: '24-hour forecast · Night · Sat, Jul 18',
     });
     fireEvent.transitionEnd(nightPanel, { propertyName: 'height' });
     expect(nightPanel).toBeInTheDocument();
@@ -534,7 +528,7 @@ describe('WeatherPanel', () => {
     });
     const lastDailyRow = within(dailyList).getAllByRole('listitem').at(-1);
     if (lastDailyRow === undefined) throw new Error('Expected the last daily row.');
-    const dayCard = within(lastDailyRow).getByRole('group', { name: 'Fri 24 Jul' });
+    const dayCard = within(lastDailyRow).getByRole('group', { name: 'Fri, Jul 24' });
     const anchorLeft = window.innerWidth - 10;
     const anchorTop = window.innerHeight - 20;
     vi.spyOn(dayCard, 'getBoundingClientRect').mockReturnValue({
@@ -551,12 +545,12 @@ describe('WeatherPanel', () => {
 
     fireEvent.click(
       within(lastDailyRow).getByRole('button', {
-        name: 'Open 24-hour forecast for Day, Fri 24 Jul',
+        name: 'Open 24-hour forecast for Day, Fri, Jul 24',
       }),
     );
 
     const panel = screen.getByRole('dialog', {
-      name: '24-hour forecast · Day · Fri, 24 Jul',
+      name: '24-hour forecast · Day · Fri, Jul 24',
     });
     const expandedWidth = Math.min(1_026, Math.max(1, window.innerWidth - 24));
     const expandedHeight = Math.min(378, Math.max(1, window.innerHeight - 24));
@@ -610,7 +604,7 @@ describe('WeatherPanel', () => {
       requestWeatherForecast({ longitude: -74.006, latitude: 40.7128 });
     });
     expect(
-      await screen.findByText('ECMWF IFS · Updated 17 Jul, 20:00'),
+      await screen.findByText('ECMWF IFS · Updated Jul 17, 20:00'),
     ).toBeInTheDocument();
 
     act(() => {

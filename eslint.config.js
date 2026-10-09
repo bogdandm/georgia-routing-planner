@@ -170,6 +170,12 @@ export default tseslint.config(
       'src/presentation/user/UserPanel.tsx',
       'src/presentation/user/RemoteDeletionDialog.tsx',
       'src/presentation/user/userDataMessages.ts',
+      'src/presentation/weather/HourlyForecastTable.tsx',
+      'src/presentation/weather/WeatherConditionIcon.tsx',
+      'src/presentation/weather/WeatherPanel.tsx',
+      'src/presentation/weather/WeatherTimeControl.tsx',
+      'src/presentation/weather/weatherConditionLabels.ts',
+      'src/presentation/weather/weatherFormatters.ts',
     ],
     plugins: { lingui },
     rules: {

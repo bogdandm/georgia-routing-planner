@@ -1,0 +1,678 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-08 20:39+0400\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Plural-Forms: \n"
+
+#. js-lingui-id: dEjxW2
+#: src/presentation/weather/WeatherPanel.tsx:746
+#: src/presentation/weather/WeatherPanel.tsx:851
+#: src/presentation/weather/WeatherPanel.tsx:1140
+msgid "{label} forecast"
+msgstr "{label} forecast"
+
+#. js-lingui-id: M5q3wg
+#: src/presentation/weather/WeatherPanel.tsx:1005
+#: src/presentation/weather/WeatherPanel.tsx:1131
+msgid "{label} gusts"
+msgstr "{label} gusts"
+
+#. js-lingui-id: NpoidF
+#: src/presentation/weather/WeatherPanel.tsx:577
+msgid "{label} gusts {minimumGusts} to {maximumGusts} metres per second"
+msgstr "{label} gusts {minimumGusts} to {maximumGusts} metres per second"
+
+#. js-lingui-id: xE-FG6
+#: src/presentation/weather/WeatherPanel.tsx:1020
+#: src/presentation/weather/WeatherPanel.tsx:1115
+msgid "{label} precipitation"
+msgstr "{label} precipitation"
+
+#. js-lingui-id: oAEGp8
+#: src/presentation/weather/WeatherPanel.tsx:580
+msgid "{label} precipitation {millimetres} millimetres"
+msgstr "{label} precipitation {millimetres} millimetres"
+
+#. js-lingui-id: jxOazA
+#: src/presentation/weather/WeatherPanel.tsx:569
+msgid "{label} temperature {minimumTemperature} to {maximumTemperature} degrees Celsius"
+msgstr "{label} temperature {minimumTemperature} to {maximumTemperature} degrees Celsius"
+
+#. js-lingui-id: ipkl_X
+#: src/presentation/weather/WeatherPanel.tsx:999
+#: src/presentation/weather/WeatherPanel.tsx:1124
+msgid "{label} wind"
+msgstr "{label} wind"
+
+#. js-lingui-id: ibhafe
+#: src/presentation/weather/WeatherPanel.tsx:573
+msgid "{label} wind {minimumWind} to {maximumWind} metres per second"
+msgstr "{label} wind {minimumWind} to {maximumWind} metres per second"
+
+#. js-lingui-id: SeiNzs
+#: src/presentation/weather/WeatherPanel.tsx:722
+msgid "{label}: {condition}"
+msgstr "{label}: {condition}"
+
+#. js-lingui-id: eG3c17
+#: src/presentation/weather/weatherConditionLabels.ts:145
+msgid "{level, select, poor {Brief poor visibility} other {Brief reduced visibility}}"
+msgstr "{level, select, poor {Brief poor visibility} other {Brief reduced visibility}}"
+
+#. js-lingui-id: iFvswI
+#: src/presentation/weather/weatherConditionLabels.ts:155
+msgid "{level, select, poor {Poor visibility in the afternoon} other {Reduced visibility in the afternoon}}"
+msgstr "{level, select, poor {Poor visibility in the afternoon} other {Reduced visibility in the afternoon}}"
+
+#. js-lingui-id: JYh5Js
+#: src/presentation/weather/weatherConditionLabels.ts:160
+msgid "{level, select, poor {Poor visibility in the evening} other {Reduced visibility in the evening}}"
+msgstr "{level, select, poor {Poor visibility in the evening} other {Reduced visibility in the evening}}"
+
+#. js-lingui-id: RTy0Om
+#: src/presentation/weather/weatherConditionLabels.ts:150
+msgid "{level, select, poor {Poor visibility in the morning} other {Reduced visibility in the morning}}"
+msgstr "{level, select, poor {Poor visibility in the morning} other {Reduced visibility in the morning}}"
+
+#. js-lingui-id: X6mOj7
+#: src/presentation/weather/weatherConditionLabels.ts:165
+msgid "{level, select, poor {Poor visibility overnight} other {Reduced visibility overnight}}"
+msgstr "{level, select, poor {Poor visibility overnight} other {Reduced visibility overnight}}"
+
+#. js-lingui-id: 4OXXLI
+#: src/presentation/weather/weatherFormatters.ts:40
+#: src/presentation/weather/WeatherTimeControl.tsx:219
+msgid "{millimetres} mm"
+msgstr "{millimetres} mm"
+
+#. js-lingui-id: WOxIJW
+#: src/presentation/weather/weatherFormatters.ts:51
+msgid "{minimum} °C"
+msgstr "{minimum} °C"
+
+#. js-lingui-id: KpLYqG
+#: src/presentation/weather/WeatherPanel.tsx:206
+msgid "{minimum} m/s"
+msgstr "{minimum} m/s"
+
+#. js-lingui-id: N-w3lW
+#: src/presentation/weather/weatherFormatters.ts:52
+msgid "{minimum}…{maximum} °C"
+msgstr "{minimum}…{maximum} °C"
+
+#. js-lingui-id: kJt8-Q
+#: src/presentation/weather/WeatherPanel.tsx:207
+msgid "{minimum}…{maximum} m/s"
+msgstr "{minimum}…{maximum} m/s"
+
+#. js-lingui-id: 88Vhf9
+#: src/presentation/weather/weatherConditionLabels.ts:135
+msgid "{periodKind, select, current {Fog for most of the interval} day {Fog for most of the day} other {Fog for most of the night}}"
+msgstr "{periodKind, select, current {Fog for most of the interval} day {Fog for most of the day} other {Fog for most of the night}}"
+
+#. js-lingui-id: yeN_xw
+#: src/presentation/weather/weatherConditionLabels.ts:173
+msgid "{periodKind, select, current {Poor visibility for most of the interval} day {Poor visibility for most of the day} other {Poor visibility for most of the night}}"
+msgstr "{periodKind, select, current {Poor visibility for most of the interval} day {Poor visibility for most of the day} other {Poor visibility for most of the night}}"
+
+#. js-lingui-id: jSmK-_
+#: src/presentation/weather/weatherConditionLabels.ts:178
+msgid "{periodKind, select, current {Reduced visibility for most of the interval} day {Reduced visibility for most of the day} other {Reduced visibility for most of the night}}"
+msgstr "{periodKind, select, current {Reduced visibility for most of the interval} day {Reduced visibility for most of the day} other {Reduced visibility for most of the night}}"
+
+#. js-lingui-id: kHCM7U
+#: src/presentation/weather/weatherConditionLabels.ts:49
+msgid "{sky, select, clear {Clear with isolated showers} mostly_clear {Mostly clear with isolated showers} partly_cloudy {Partly cloudy with isolated showers} mostly_cloudy {Mostly cloudy with isolated showers} other {Overcast with isolated showers}}"
+msgstr "{sky, select, clear {Clear with isolated showers} mostly_clear {Mostly clear with isolated showers} partly_cloudy {Partly cloudy with isolated showers} mostly_cloudy {Mostly cloudy with isolated showers} other {Overcast with isolated showers}}"
+
+#. js-lingui-id: XGs8pr
+#: src/presentation/weather/weatherConditionLabels.ts:57
+msgid "{sky, select, clear {Clear with showers} mostly_clear {Mostly clear with showers} partly_cloudy {Partly cloudy with showers} mostly_cloudy {Mostly cloudy with showers} other {Overcast with showers}}"
+msgstr "{sky, select, clear {Clear with showers} mostly_clear {Mostly clear with showers} partly_cloudy {Partly cloudy with showers} mostly_cloudy {Mostly cloudy with showers} other {Overcast with showers}}"
+
+#. js-lingui-id: Imy55c
+#: src/presentation/weather/weatherConditionLabels.ts:83
+msgid "{sky, select, clear {Clear} mostly_clear {Mostly clear} partly_cloudy {Partly cloudy} mostly_cloudy {Mostly cloudy} other {Overcast}}"
+msgstr "{sky, select, clear {Clear} mostly_clear {Mostly clear} partly_cloudy {Partly cloudy} mostly_cloudy {Mostly cloudy} other {Overcast}}"
+
+#. js-lingui-id: TRqicX
+#: src/presentation/weather/weatherConditionLabels.ts:66
+msgid "{sky, select, clear {Mostly clear with occasional rain} mostly_clear {Mostly clear with occasional rain} partly_cloudy {Partly cloudy with occasional rain} mostly_cloudy {Mostly cloudy with occasional rain} other {Overcast with occasional rain}}"
+msgstr "{sky, select, clear {Mostly clear with occasional rain} mostly_clear {Mostly clear with occasional rain} partly_cloudy {Partly cloudy with occasional rain} mostly_cloudy {Mostly cloudy with occasional rain} other {Overcast with occasional rain}}"
+
+#. js-lingui-id: XdCytn
+#: src/presentation/weather/HourlyForecastTable.tsx:998
+msgid "{time} cloud cover {cloudCover} percent"
+msgstr "{time} cloud cover {cloudCover} percent"
+
+#. js-lingui-id: 7QXcMF
+#: src/presentation/weather/HourlyForecastTable.tsx:978
+msgid "{time} gusts {speed} metres per second"
+msgstr "{time} gusts {speed} metres per second"
+
+#. js-lingui-id: v9hJTz
+#: src/presentation/weather/HourlyForecastTable.tsx:974
+msgid "{time} gusts {speed} metres per second, critical"
+msgstr "{time} gusts {speed} metres per second, critical"
+
+#. js-lingui-id: zxVbWk
+#: src/presentation/weather/HourlyForecastTable.tsx:976
+msgid "{time} gusts {speed} metres per second, strong"
+msgstr "{time} gusts {speed} metres per second, strong"
+
+#. js-lingui-id: W1Jf7l
+#: src/presentation/weather/HourlyForecastTable.tsx:851
+msgid "{time} local time"
+msgstr "{time} local time"
+
+#. js-lingui-id: E7pBmc
+#: src/presentation/weather/HourlyForecastTable.tsx:915
+msgid "{time} precipitation {precipitation} millimetres"
+msgstr "{time} precipitation {precipitation} millimetres"
+
+#. js-lingui-id: Skr4yC
+#: src/presentation/weather/HourlyForecastTable.tsx:885
+msgid "{time} temperature {temperature} degrees Celsius"
+msgstr "{time} temperature {temperature} degrees Celsius"
+
+#. js-lingui-id: QCPq68
+#: src/presentation/weather/HourlyForecastTable.tsx:1013
+msgid "{time} visibility {visibility} kilometres"
+msgstr "{time} visibility {visibility} kilometres"
+
+#. js-lingui-id: NBqEB9
+#: src/presentation/weather/HourlyForecastTable.tsx:872
+msgid "{time} weather {condition}"
+msgstr "{time} weather {condition}"
+
+#. js-lingui-id: 9lmBm5
+#: src/presentation/weather/HourlyForecastTable.tsx:950
+msgid "{time} wind {speed} metres per second"
+msgstr "{time} wind {speed} metres per second"
+
+#. js-lingui-id: OOlmtX
+#: src/presentation/weather/HourlyForecastTable.tsx:946
+msgid "{time} wind {speed} metres per second, critical"
+msgstr "{time} wind {speed} metres per second, critical"
+
+#. js-lingui-id: r2D1QK
+#: src/presentation/weather/HourlyForecastTable.tsx:948
+msgid "{time} wind {speed} metres per second, strong"
+msgstr "{time} wind {speed} metres per second, strong"
+
+#. js-lingui-id: USukLP
+#: src/presentation/weather/WeatherPanel.tsx:1617
+msgid "24-hour forecast · Day · {date}"
+msgstr "24-hour forecast · Day · {date}"
+
+#. js-lingui-id: 4iKz7k
+#: src/presentation/weather/WeatherPanel.tsx:1618
+msgid "24-hour forecast · Night · {date}"
+msgstr "24-hour forecast · Night · {date}"
+
+#. js-lingui-id: YS-lui
+#: src/presentation/weather/WeatherPanel.tsx:1331
+msgid "7-day forecast"
+msgstr "7-day forecast"
+
+#. js-lingui-id: PqoHqp
+#: src/presentation/weather/weatherConditionLabels.ts:127
+msgid "Afternoon fog"
+msgstr "Afternoon fog"
+
+#. js-lingui-id: iTV55G
+#: src/presentation/weather/weatherConditionLabels.ts:123
+msgid "Brief fog"
+msgstr "Brief fog"
+
+#. js-lingui-id: -TnMtY
+#: src/presentation/weather/weatherConditionLabels.ts:11
+msgid "Clear sky"
+msgstr "Clear sky"
+
+#. js-lingui-id: nPcvCq
+#: src/presentation/weather/WeatherPanel.tsx:1544
+msgid "Click the map to load its ECMWF IFS forecast."
+msgstr "Click the map to load its ECMWF IFS forecast."
+
+#. js-lingui-id: i4L-Zv
+#: src/presentation/weather/HourlyForecastTable.tsx:1203
+msgid "Close hourly forecast"
+msgstr "Close hourly forecast"
+
+#. js-lingui-id: zPQCNP
+#: src/presentation/weather/HourlyForecastTable.tsx:992
+msgid "Cloud (%)"
+msgstr "Cloud (%)"
+
+#. js-lingui-id: yemKbA
+#: src/presentation/weather/WeatherTimeControl.tsx:378
+msgid "Cloud cover · ≤30 transparent"
+msgstr "Cloud cover · ≤30 transparent"
+
+#. js-lingui-id: iZDNcm
+#: src/presentation/weather/HourlyForecastTable.tsx:786
+msgid "Collapse hourly forecast"
+msgstr "Collapse hourly forecast"
+
+#. js-lingui-id: k6zIi6
+#: src/presentation/weather/WeatherPanel.tsx:1181
+msgid "Current, day, and night summary"
+msgstr "Current, day, and night summary"
+
+#. js-lingui-id: H7OUPr
+#: src/presentation/weather/WeatherPanel.tsx:1206
+#: src/presentation/weather/WeatherPanel.tsx:1297
+msgid "Day"
+msgstr "Day"
+
+#. js-lingui-id: E0Y7iX
+#: src/presentation/weather/weatherConditionLabels.ts:19
+msgid "Dense drizzle"
+msgstr "Dense drizzle"
+
+#. js-lingui-id: YvJO21
+#: src/presentation/weather/weatherConditionLabels.ts:21
+msgid "Dense freezing drizzle"
+msgstr "Dense freezing drizzle"
+
+#. js-lingui-id: TGPSD2
+#: src/presentation/weather/weatherConditionLabels.ts:16
+msgid "Depositing rime fog"
+msgstr "Depositing rime fog"
+
+#. js-lingui-id: yA4z6u
+#: src/presentation/weather/weatherConditionLabels.ts:129
+msgid "Evening fog"
+msgstr "Evening fog"
+
+#. js-lingui-id: 9LgejW
+#: src/presentation/weather/HourlyForecastTable.tsx:786
+msgid "Expand hourly forecast"
+msgstr "Expand hourly forecast"
+
+#. js-lingui-id: 8v4JhY
+#: src/presentation/weather/weatherConditionLabels.ts:15
+msgid "Fog"
+msgstr "Fog"
+
+#. js-lingui-id: t_T61G
+#: src/presentation/weather/weatherConditionLabels.ts:131
+msgid "Fog overnight"
+msgstr "Fog overnight"
+
+#. js-lingui-id: zVEcxv
+#: src/presentation/weather/WeatherTimeControl.tsx:309
+msgid "Forecast day"
+msgstr "Forecast day"
+
+#. js-lingui-id: MKJBRa
+#: src/presentation/weather/WeatherTimeControl.tsx:347
+msgid "Forecast time"
+msgstr "Forecast time"
+
+#. js-lingui-id: TgZ99D
+#: src/presentation/weather/weatherConditionLabels.ts:109
+msgid "Freezing precipitation"
+msgstr "Freezing precipitation"
+
+#. js-lingui-id: tQu0TY
+#: src/presentation/weather/WeatherPanel.tsx:822
+msgid "Gusts"
+msgstr "Gusts"
+
+#. js-lingui-id: jy8MVL
+#: src/presentation/weather/HourlyForecastTable.tsx:964
+msgid "Gusts (m/s)"
+msgstr "Gusts (m/s)"
+
+#. js-lingui-id: tIV67z
+#: src/presentation/weather/weatherConditionLabels.ts:26
+msgid "Heavy freezing rain"
+msgstr "Heavy freezing rain"
+
+#. js-lingui-id: VKmOt_
+#: src/presentation/weather/weatherConditionLabels.ts:24
+#: src/presentation/weather/weatherConditionLabels.ts:99
+msgid "Heavy rain"
+msgstr "Heavy rain"
+
+#. js-lingui-id: Q69V8F
+#: src/presentation/weather/weatherConditionLabels.ts:29
+msgid "Heavy snow"
+msgstr "Heavy snow"
+
+#. js-lingui-id: ROsLXv
+#: src/presentation/weather/weatherConditionLabels.ts:35
+msgid "Heavy snow showers"
+msgstr "Heavy snow showers"
+
+#. js-lingui-id: WKBw3T
+#: src/presentation/weather/HourlyForecastTable.tsx:805
+msgid "Hourly forecast"
+msgstr "Hourly forecast"
+
+#. js-lingui-id: saHs6K
+#: src/presentation/weather/weatherConditionLabels.ts:133
+msgid "Intermittent fog"
+msgstr "Intermittent fog"
+
+#. js-lingui-id: 1ie4P6
+#: src/presentation/weather/weatherConditionLabels.ts:170
+msgid "Intermittent reduced visibility"
+msgstr "Intermittent reduced visibility"
+
+#. js-lingui-id: na3eOk
+#: src/presentation/weather/weatherConditionLabels.ts:17
+msgid "Light drizzle"
+msgstr "Light drizzle"
+
+#. js-lingui-id: 8XRSLd
+#: src/presentation/weather/weatherConditionLabels.ts:20
+msgid "Light freezing drizzle"
+msgstr "Light freezing drizzle"
+
+#. js-lingui-id: R59lAq
+#: src/presentation/weather/weatherConditionLabels.ts:25
+msgid "Light freezing rain"
+msgstr "Light freezing rain"
+
+#. js-lingui-id: 1LwCYE
+#: src/presentation/weather/WeatherPanel.tsx:359
+msgid "Loading current, day, and night summary"
+msgstr "Loading current, day, and night summary"
+
+#. js-lingui-id: u8phJQ
+#: src/presentation/weather/WeatherPanel.tsx:508
+msgid "Loading hourly forecast"
+msgstr "Loading hourly forecast"
+
+#. js-lingui-id: VhOOOR
+#: src/presentation/weather/WeatherPanel.tsx:513
+msgid "Loading seven-day forecast"
+msgstr "Loading seven-day forecast"
+
+#. js-lingui-id: SaTtUH
+#: src/presentation/weather/WeatherTimeControl.tsx:423
+msgid "Low-resolution data. Use <0>Windy</0> for a precise forecast."
+msgstr "Low-resolution data. Use <0>Windy</0> for a precise forecast."
+
+#. js-lingui-id: eD-p3l
+#: src/presentation/weather/weatherConditionLabels.ts:12
+msgid "Mainly clear"
+msgstr "Mainly clear"
+
+#. js-lingui-id: L6kiFD
+#: src/presentation/weather/WeatherTimeControl.tsx:388
+msgid "mm"
+msgstr "mm"
+
+#. js-lingui-id: QfriLd
+#: src/presentation/weather/weatherConditionLabels.ts:18
+msgid "Moderate drizzle"
+msgstr "Moderate drizzle"
+
+#. js-lingui-id: Ap1xpV
+#: src/presentation/weather/weatherConditionLabels.ts:23
+msgid "Moderate rain"
+msgstr "Moderate rain"
+
+#. js-lingui-id: N2IIAv
+#: src/presentation/weather/weatherConditionLabels.ts:32
+msgid "Moderate rain showers"
+msgstr "Moderate rain showers"
+
+#. js-lingui-id: oco2IP
+#: src/presentation/weather/weatherConditionLabels.ts:28
+msgid "Moderate snow"
+msgstr "Moderate snow"
+
+#. js-lingui-id: RAnNND
+#: src/presentation/weather/weatherConditionLabels.ts:125
+msgid "Morning fog"
+msgstr "Morning fog"
+
+#. js-lingui-id: QMFocf
+#: src/presentation/weather/HourlyForecastTable.tsx:760
+msgid "Next 24 hours"
+msgstr "Next 24 hours"
+
+#. js-lingui-id: jnd7HN
+#: src/presentation/weather/WeatherPanel.tsx:1208
+#: src/presentation/weather/WeatherPanel.tsx:1307
+msgid "Night"
+msgstr "Night"
+
+#. js-lingui-id: V5eHC4
+#: src/presentation/weather/WeatherPanel.tsx:737
+msgid "Now · next 3 h"
+msgstr "Now · next 3 h"
+
+#. js-lingui-id: wzXPss
+#: src/presentation/weather/weatherConditionLabels.ts:103
+msgid "Occasional snow"
+msgstr "Occasional snow"
+
+#. js-lingui-id: 27TKdk
+#: src/presentation/weather/WeatherPanel.tsx:1146
+msgid "Open 24-hour forecast for {label}, {dateLabel}"
+msgstr "Open 24-hour forecast for {label}, {dateLabel}"
+
+#. js-lingui-id: hopzvZ
+#: src/presentation/weather/HourlyForecastTable.tsx:1197
+msgid "Open in Weather"
+msgstr "Open in Weather"
+
+#. js-lingui-id: M9VW44
+#: src/presentation/weather/weatherConditionLabels.ts:14
+msgid "Overcast"
+msgstr "Overcast"
+
+#. js-lingui-id: 96In6f
+#: src/presentation/weather/weatherConditionLabels.ts:13
+msgid "Partly cloudy"
+msgstr "Partly cloudy"
+
+#. js-lingui-id: 2teukk
+#: src/presentation/weather/HourlyForecastTable.tsx:909
+msgid "Precip (mm)"
+msgstr "Precip (mm)"
+
+#. js-lingui-id: bXiQOh
+#: src/presentation/weather/WeatherPanel.tsx:828
+msgid "Precipitation"
+msgstr "Precipitation"
+
+#. js-lingui-id: fPsUrA
+#: src/presentation/weather/WeatherTimeControl.tsx:386
+msgid "Precipitation · ≤0.5 transparent"
+msgstr "Precipitation · ≤0.5 transparent"
+
+#. js-lingui-id: W22y-a
+#: src/presentation/weather/weatherConditionLabels.ts:97
+msgid "Rain"
+msgstr "Rain"
+
+#. js-lingui-id: Nh8yBV
+#: src/presentation/weather/weatherConditionLabels.ts:107
+msgid "Rain and snow"
+msgstr "Rain and snow"
+
+#. js-lingui-id: -7dgaQ
+#: src/presentation/weather/weatherConditionLabels.ts:96
+msgid "Rain with sunny intervals"
+msgstr "Rain with sunny intervals"
+
+#. js-lingui-id: 6gRgw8
+#: src/presentation/weather/WeatherPanel.tsx:1598
+msgid "Retry"
+msgstr "Retry"
+
+#. js-lingui-id: OOKV1j
+#: src/presentation/weather/HourlyForecastTable.tsx:764
+msgid "Scroll hourly forecast backward"
+msgstr "Scroll hourly forecast backward"
+
+#. js-lingui-id: kF9bTz
+#: src/presentation/weather/HourlyForecastTable.tsx:774
+msgid "Scroll hourly forecast forward"
+msgstr "Scroll hourly forecast forward"
+
+#. js-lingui-id: sTc5Ls
+#: src/presentation/weather/WeatherPanel.tsx:1540
+msgid "Select a forecast point"
+msgstr "Select a forecast point"
+
+#. js-lingui-id: Wj8HS4
+#: src/presentation/weather/WeatherPanel.tsx:1333
+msgid "Seven-day forecast"
+msgstr "Seven-day forecast"
+
+#. js-lingui-id: oNLMs8
+#: src/presentation/weather/weatherConditionLabels.ts:22
+msgid "Slight rain"
+msgstr "Slight rain"
+
+#. js-lingui-id: YW7xjy
+#: src/presentation/weather/weatherConditionLabels.ts:31
+msgid "Slight rain showers"
+msgstr "Slight rain showers"
+
+#. js-lingui-id: 1ehV4l
+#: src/presentation/weather/weatherConditionLabels.ts:27
+msgid "Slight snow"
+msgstr "Slight snow"
+
+#. js-lingui-id: Q_XfIn
+#: src/presentation/weather/weatherConditionLabels.ts:34
+msgid "Slight snow showers"
+msgstr "Slight snow showers"
+
+#. js-lingui-id: JiA8JY
+#: src/presentation/weather/weatherConditionLabels.ts:105
+msgid "Snow"
+msgstr "Snow"
+
+#. js-lingui-id: FRgKig
+#: src/presentation/weather/weatherConditionLabels.ts:30
+msgid "Snow grains"
+msgstr "Snow grains"
+
+#. js-lingui-id: 7O993A
+#: src/presentation/weather/weatherConditionLabels.ts:101
+msgid "Snow showers"
+msgstr "Snow showers"
+
+#. js-lingui-id: U42huV
+#: src/presentation/weather/HourlyForecastTable.tsx:879
+msgid "Temp (°C)"
+msgstr "Temp (°C)"
+
+#. js-lingui-id: OyW0XY
+#: src/presentation/weather/weatherConditionLabels.ts:36
+msgid "Thunderstorm"
+msgstr "Thunderstorm"
+
+#. js-lingui-id: sBa3aZ
+#: src/presentation/weather/weatherConditionLabels.ts:37
+msgid "Thunderstorm with hail"
+msgstr "Thunderstorm with hail"
+
+#. js-lingui-id: LhMjLm
+#: src/presentation/weather/HourlyForecastTable.tsx:847
+msgid "Time"
+msgstr "Time"
+
+#. js-lingui-id: y-eB5_
+#: src/presentation/weather/weatherConditionLabels.ts:38
+msgid "Unknown weather"
+msgstr "Unknown weather"
+
+#. js-lingui-id: UX4Eez
+#: src/presentation/weather/WeatherPanel.tsx:1356
+msgid "Update time unavailable"
+msgstr "Update time unavailable"
+
+#. js-lingui-id: 3GCtgk
+#: src/presentation/weather/WeatherPanel.tsx:1368
+msgid "Updated {updatedAt}"
+msgstr "Updated {updatedAt}"
+
+#. js-lingui-id: ADzgNz
+#: src/presentation/weather/WeatherPanel.tsx:1546
+msgid "Use the header action, then click the map to load its ECMWF IFS forecast."
+msgstr "Use the header action, then click the map to load its ECMWF IFS forecast."
+
+#. js-lingui-id: ph9OHp
+#: src/presentation/weather/weatherConditionLabels.ts:33
+msgid "Violent rain showers"
+msgstr "Violent rain showers"
+
+#. js-lingui-id: aOKAXp
+#: src/presentation/weather/HourlyForecastTable.tsx:1007
+msgid "Visibility (km)"
+msgstr "Visibility (km)"
+
+#. js-lingui-id: mJZLtT
+#: src/presentation/weather/HourlyForecastTable.tsx:867
+msgid "Weather"
+msgstr "Weather"
+
+#. js-lingui-id: oUZ9_u
+#: src/presentation/weather/WeatherPanel.tsx:1395
+msgid "Weather data by Open-Meteo"
+msgstr "Weather data by Open-Meteo"
+
+#. js-lingui-id: yoBADg
+#: src/presentation/weather/WeatherPanel.tsx:217
+msgid "Weather data could not be read. Try another point or try again later."
+msgstr "Weather data could not be read. Try another point or try again later."
+
+#. js-lingui-id: xxls-e
+#: src/presentation/weather/WeatherPanel.tsx:1533
+msgid "Weather forecast"
+msgstr "Weather forecast"
+
+#. js-lingui-id: iAG3S2
+#: src/presentation/weather/WeatherPanel.tsx:215
+msgid "Weather forecast could not be loaded. Check your connection and try again."
+msgstr "Weather forecast could not be loaded. Check your connection and try again."
+
+#. js-lingui-id: 1I9PVB
+#: src/presentation/weather/WeatherTimeControl.tsx:287
+msgid "Weather forecast time"
+msgstr "Weather forecast time"
+
+#. js-lingui-id: d0PRYF
+#: src/presentation/weather/WeatherTimeControl.tsx:368
+msgid "Weather map legend"
+msgstr "Weather map legend"
+
+#. js-lingui-id: Tv9JdX
+#: src/presentation/weather/WeatherPanel.tsx:212
+msgid "Weather service is temporarily rate-limited. Try again shortly."
+msgstr "Weather service is temporarily rate-limited. Try again shortly."
+
+#. js-lingui-id: 018Wpc
+#: src/presentation/weather/WeatherPanel.tsx:816
+msgid "Wind"
+msgstr "Wind"
+
+#. js-lingui-id: clnqMm
+#: src/presentation/weather/HourlyForecastTable.tsx:936
+msgid "Wind (m/s)"
+msgstr "Wind (m/s)"
+
+#. js-lingui-id: QCyhsP
+#: src/presentation/weather/WeatherTimeControl.tsx:415
+msgid "Wind direction and speed"
+msgstr "Wind direction and speed"

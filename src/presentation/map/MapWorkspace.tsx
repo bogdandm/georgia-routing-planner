@@ -129,12 +129,13 @@ function WeatherForecastMapMarker({
 }: {
   readonly marker: WeatherMapForecastMarker;
 }) {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const temperature = formatWeatherTemperatureRange(
     marker.period.temperatureMinCelsius,
     marker.period.temperatureMaxCelsius,
+    i18n,
   );
-  const precipitation = formatWeatherMillimetres(marker.period.precipitationMm);
+  const precipitation = formatWeatherMillimetres(marker.period.precipitationMm, i18n);
   const label = t`Current weather: ${temperature}, ${precipitation} precipitation`;
   return (
     <Marker

@@ -250,7 +250,7 @@ describe('GetPointWeatherForecast', () => {
         precipitationMm: 20,
         status: {
           primary: { precipitation: 'occasional_rain' },
-          visibility: { level: 'fog', period: 'overnight', label: 'Fog overnight' },
+          visibility: { level: 'fog', period: 'overnight' },
           debug: { periodHours: 10, precipTotal: 20 },
         },
       },
@@ -263,7 +263,6 @@ describe('GetPointWeatherForecast', () => {
       windGustsMaxKmh: 180,
       status: { primary: { precipitation: 'heavy_rain' } },
     });
-    expect(result.days[0]?.night.status.primary.label).not.toContain('fog');
   });
 
   it('preserves the selected location time-zone metadata for independent points', async () => {

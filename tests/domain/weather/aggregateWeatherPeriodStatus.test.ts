@@ -52,7 +52,6 @@ function expectPrimary(
   expected: {
     readonly sky: Sky;
     readonly precipitation: Precipitation;
-    readonly label: string;
   },
 ) {
   expect(aggregateWeatherPeriodStatus(hours).primary).toMatchObject(expected);
@@ -73,9 +72,8 @@ describe('aggregateWeatherPeriodStatus', () => {
       primary: {
         sky: 'partly_cloudy',
         precipitation: 'occasional_rain',
-        label: 'Partly cloudy with occasional rain',
       },
-      visibility: { level: 'normal', period: 'none', label: null, icon: null },
+      visibility: { level: 'normal', period: 'none', icon: null },
       debug: {
         periodHours: 6,
         wetHours: 1,
@@ -142,7 +140,6 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(status.primary).toEqual({
       sky: 'mostly_clear',
       precipitation: 'none',
-      label: 'Mostly clear',
       icon: { sky: 'mostly_clear', phenomenon: null },
     });
   });
@@ -153,7 +150,6 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(status.primary).toMatchObject({
       sky: 'clear',
       precipitation: 'isolated_showers',
-      label: 'Clear with isolated showers',
     });
     expect(status.debug).toMatchObject({
       clearFraction: 1,
@@ -171,7 +167,7 @@ describe('aggregateWeatherPeriodStatus', () => {
         precipitationType: 1,
         cloudCoverPercent: 100,
       }),
-      { sky: 'overcast', precipitation: 'rain', label: 'Rain' },
+      { sky: 'overcast', precipitation: 'rain' },
     );
   });
 
@@ -179,61 +175,51 @@ describe('aggregateWeatherPeriodStatus', () => {
     name: string;
     hours: readonly WeatherPeriodHour[];
     precipitation: Precipitation;
-    label: string;
   }>([
     {
       name: 'an insignificant one-hour trace stays dry',
       hours: [rain(0.1), ...repeat(11)],
       precipitation: 'none',
-      label: 'Clear',
     },
     {
       name: 'one shower is isolated',
       hours: [shower(), ...repeat(11)],
       precipitation: 'isolated_showers',
-      label: 'Clear with isolated showers',
     },
     {
       name: 'three intermittent showers are showers',
       hours: [shower(), hour(), shower(), hour(), shower(), ...repeat(7)],
       precipitation: 'showers',
-      label: 'Clear with showers',
     },
     {
       name: 'two short stratiform rain hours are occasional rain',
       hours: [rain(1), rain(1), ...repeat(10)],
       precipitation: 'occasional_rain',
-      label: 'Mostly clear with occasional rain',
     },
     {
       name: 'persistent rain remains rain',
       hours: [...Array.from({ length: 8 }, () => rain(1)), ...repeat(4)],
       precipitation: 'rain',
-      label: 'Rain with sunny intervals',
     },
     {
       name: 'persistent heavy rain remains heavy rain',
       hours: [...Array.from({ length: 8 }, () => rain(2)), ...repeat(4)],
       precipitation: 'heavy_rain',
-      label: 'Heavy rain',
     },
     {
       name: 'one snow hour is a snow shower',
       hours: [snow(), ...repeat(11)],
       precipitation: 'snow_showers',
-      label: 'Snow showers',
     },
     {
       name: 'two short snow hours are occasional snow',
       hours: [snow(), snow(), ...repeat(6)],
       precipitation: 'occasional_snow',
-      label: 'Occasional snow',
     },
     {
       name: 'persistent snow remains snow',
       hours: [snow(), snow(), snow(), snow(), ...repeat(8)],
       precipitation: 'snow',
-      label: 'Snow',
     },
     {
       name: 'mixed rain and snow is explicit',
@@ -244,7 +230,6 @@ describe('aggregateWeatherPeriodStatus', () => {
         hour({ precipitationMm: 1, precipitationType: 7 }),
       ],
       precipitation: 'mixed',
-      label: 'Rain and snow',
     },
     {
       name: 'freezing precipitation retains priority',
@@ -255,38 +240,35 @@ describe('aggregateWeatherPeriodStatus', () => {
         hour(),
       ],
       precipitation: 'freezing',
-      label: 'Freezing precipitation',
     },
-  ])('$name', ({ hours, precipitation, label }) => {
-    expect(aggregateWeatherPeriodStatus(hours).primary).toMatchObject({
+  ])('$name', ({ hours, precipitation }) => {
+    expect(aggregateWeatherPeriodStatus(hours).primary.precipitation).toBe(
       precipitation,
-      label,
-    });
+    );
   });
 
   it.each([
     {
       sky: 'clear' as const,
       hours: [rain(1), rain(1), ...repeat(10, { cloudCoverPercent: 10 })],
-      label: 'Mostly clear with occasional rain',
     },
     {
       sky: 'partly_cloudy' as const,
       hours: [rain(1), rain(1), ...repeat(10, { cloudCoverPercent: 55 })],
-      label: 'Partly cloudy with occasional rain',
     },
     {
       sky: 'mostly_cloudy' as const,
       hours: [rain(1), rain(1), ...repeat(10, { cloudCoverPercent: 75 })],
-      label: 'Mostly cloudy with occasional rain',
     },
     {
       sky: 'overcast' as const,
       hours: [rain(1), rain(1), ...repeat(10, { cloudCoverPercent: 95 })],
-      label: 'Overcast with occasional rain',
     },
-  ])('composes occasional rain with $sky background', ({ hours, label }) => {
-    expect(aggregateWeatherPeriodStatus(hours).primary.label).toBe(label);
+  ])('classifies occasional rain over a $sky background', ({ hours, sky }) => {
+    expect(aggregateWeatherPeriodStatus(hours).primary).toMatchObject({
+      sky,
+      precipitation: 'occasional_rain',
+    });
   });
 
   it('keeps two early foggy hours secondary to the dominant sky', () => {
@@ -307,13 +289,11 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(status.primary).toEqual({
       sky: 'mostly_clear',
       precipitation: 'none',
-      label: 'Mostly clear',
       icon: { sky: 'mostly_clear', phenomenon: null },
     });
     expect(status.visibility).toEqual({
       level: 'fog',
       period: 'morning',
-      label: 'Morning fog',
       icon: 'fog',
     });
     expect(status.debug.visibility.fog).toEqual({
@@ -335,10 +315,9 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(status.visibility).toEqual({
       level: 'normal',
       period: 'none',
-      label: null,
       icon: null,
     });
-    expect(status.primary.label).toBe('Clear');
+    expect(status.primary.sky).toBe('clear');
   });
 
   it.each([
@@ -348,7 +327,6 @@ describe('aggregateWeatherPeriodStatus', () => {
       expected: {
         level: 'poor',
         period: 'afternoon',
-        label: 'Poor visibility in the afternoon',
         icon: 'poor',
       },
     },
@@ -364,7 +342,6 @@ describe('aggregateWeatherPeriodStatus', () => {
       expected: {
         level: 'fog',
         period: 'intermittent',
-        label: 'Intermittent fog',
         icon: 'fog',
       },
     },
@@ -374,7 +351,6 @@ describe('aggregateWeatherPeriodStatus', () => {
       expected: {
         level: 'haze',
         period: 'most_of_period',
-        label: 'Reduced visibility for most of the day',
         icon: 'haze',
       },
     },
@@ -384,7 +360,6 @@ describe('aggregateWeatherPeriodStatus', () => {
       expected: {
         level: 'haze',
         period: 'evening',
-        label: 'Reduced visibility in the evening',
         icon: 'haze',
       },
     },
@@ -395,7 +370,6 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(status.primary).toMatchObject({
       sky: 'clear',
       precipitation: 'none',
-      label: 'Clear',
     });
   });
 
@@ -408,12 +382,10 @@ describe('aggregateWeatherPeriodStatus', () => {
     expect(status.primary).toMatchObject({
       sky: 'clear',
       precipitation: 'none',
-      label: 'Clear',
     });
     expect(status.visibility).toEqual({
       level: 'fog',
       period: 'overnight',
-      label: 'Fog overnight',
       icon: 'fog',
     });
   });
@@ -425,7 +397,7 @@ describe('aggregateWeatherPeriodStatus', () => {
       ...repeat(4),
     ]);
 
-    expect(status.visibility).toMatchObject({ level: 'fog', label: 'Morning fog' });
+    expect(status.visibility).toMatchObject({ level: 'fog', period: 'morning' });
     expect(status.debug.visibility).toMatchObject({
       fog: { affectedHours: 2, longestAffectedRun: 2 },
       poor: { affectedHours: 6, longestAffectedRun: 6 },
@@ -441,7 +413,7 @@ describe('aggregateWeatherPeriodStatus', () => {
       ...repeat(6),
     ]);
 
-    expect(status.primary.label).toBe('Clear');
+    expect(status.primary.sky).toBe('clear');
     expect(status.debug.visibility).toMatchObject({
       fog: { affectedHours: 0 },
       poor: { affectedHours: 2 },

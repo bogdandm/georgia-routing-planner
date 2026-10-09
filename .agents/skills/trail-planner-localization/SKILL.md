@@ -8,7 +8,7 @@ description:
 # Trail Planner localization
 
 Use this skill for one feature catalog at a time: `shell`, `map`, `tracks`, `satellite`,
-`markers`, `layers`, or `user`.
+`markers`, `layers`, `user`, or `weather`.
 
 ## Establish the boundary
 

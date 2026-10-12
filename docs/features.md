@@ -510,9 +510,9 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 - **Point actions:** right-click opens copy coordinates, **Copy link**, **Share…**,
   create a marker, search satellite scenes here, show the weather forecast, copy a
   weather-map link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap
-  or search instead opens a bottom sheet with the details and the same actions; when the
-  sheet would cover the point's marker, the map pans it into the visible area above the
-  sheet after any running camera move.
+  or search instead opens a bottom sheet with the details and the same actions. A search
+  move lands with the point above the sheet; after a tap, the map pans only when the
+  sheet would cover the point's marker.
 - **Sharing:** one **Share map view** dialog builds a link to the current map. The rail
   **Share** action opens it on the map center; **Share…** in the point actions opens it
   on the clicked point with the current zoom. The link always carries the center and

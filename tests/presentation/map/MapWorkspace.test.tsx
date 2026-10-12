@@ -712,6 +712,48 @@ describe('MapWorkspace', () => {
     expect(facade.pointInspectionOptions).toEqual([{ refreshNearbyPoiOnIdle: true }]);
   });
 
+  it('on touch, moves the camera for a search only after the sheet opens and pads it by the sheet height', async () => {
+    mockMatchingMediaQueries('(pointer: coarse)');
+    const sheetHeight = vi
+      .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockReturnValue(500);
+    const facade = new FakeMapFacade();
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Touch search canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Touch search canvas');
+    act(() => {
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 });
+    });
+    // The inspection waits for a ready map, and the camera waits for the inspection.
+    expect(facade.navigationRequests).toEqual([]);
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await screen.findByRole('dialog', { name: 'Map point' });
+    await waitFor(() => {
+      expect(facade.navigationPaddingRequests).toEqual([
+        { top: 0, right: 0, bottom: 500, left: 0 },
+      ]);
+    });
+
+    act(() => {
+      requestMapFitBounds({ west: 42, south: 41, east: 43, north: 42 }, 13);
+      requestMapPointInspection({ latitude: 41.5, longitude: 42.5 });
+    });
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests.map((request) => request.padding)).toEqual([
+        { top: 56, right: 56, bottom: 556, left: 56 },
+      ]);
+    });
+    expect(facade.pointInspectionRequests).toHaveLength(2);
+    sheetHeight.mockRestore();
+  });
+
   it('holds point-inspection commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
     renderWithI18n(

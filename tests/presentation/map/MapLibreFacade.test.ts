@@ -1442,7 +1442,7 @@ describe('MapLibreFacade', () => {
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
   });
 
-  it('pans a covered inspection point above the touch sheet once the camera settles', () => {
+  it('pans a settled camera only when the touch sheet would cover the inspection point', () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();
     Object.defineProperty(nativeMap.getCanvas(), 'clientHeight', { value: 800 });
@@ -1469,21 +1469,14 @@ describe('MapLibreFacade', () => {
 
     nativeMap.projectedPoint = { x: 200, y: 150 };
     facade.revealPointInspection(400);
-    expect(nativeMap.panByCalls).toEqual([]);
+    nativeMap.projectedPoint = { x: 200, y: 600 };
+    facade.revealPointInspection(400);
+    expect(nativeMap.panByCalls).toEqual([[0, 400]]);
 
-    nativeMap.projectedPoint = { x: 200, y: 400 };
+    // Moving cameras are search moves that already include the sheet, or gestures.
+    nativeMap.projectedPoint = { x: 200, y: 700 };
     nativeMap.moving = true;
     facade.revealPointInspection(400);
-    expect(nativeMap.panByCalls).toEqual([]);
-    nativeMap.fire('moveend');
-    expect(nativeMap.panByCalls).toEqual([[0, 200]]);
-    nativeMap.fire('moveend');
-    expect(nativeMap.panByCalls).toHaveLength(1);
-
-    nativeMap.moving = true;
-    facade.revealPointInspection(400);
-    facade.closePointInspection();
-    nativeMap.fire('moveend');
     expect(nativeMap.panByCalls).toHaveLength(1);
   });
 

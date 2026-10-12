@@ -12,11 +12,12 @@ import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
 import { appI18n } from '@/presentation/localization/appI18n';
-import type {
-  MapFacade,
-  MapInteractionMode,
-  MapViewportMovement,
-  PlanningPreview,
+import {
+  defaultFitPaddingPx,
+  type MapFacade,
+  type MapInteractionMode,
+  type MapViewportMovement,
+  type PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import {
   mapLayerIds,
@@ -262,7 +263,6 @@ export class MapLibreFacade implements MapFacade {
     readonly startedAt: number;
   } | null = null;
   #completedPointInspectionSequence = 0;
-  #pendingPointInspectionReveal: (() => void) | null = null;
   readonly #pointInspector: PointInspectorPopup;
   readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
@@ -406,19 +406,11 @@ export class MapLibreFacade implements MapFacade {
   }
 
   public revealPointInspection(bottomInsetPx: number): void {
-    this.cancelPointInspectionReveal();
     const map = this.#map;
     const inspection = this.#pointInspection;
-    if (map === null || inspection.status === 'closed') return;
-    // A search navigation is still animating when the sheet opens; pan from its end view.
-    if (map.isMoving()) {
-      const reveal = () => {
-        this.revealPointInspection(bottomInsetPx);
-      };
-      this.#pendingPointInspectionReveal = reveal;
-      map.on('moveend', reveal);
-      return;
-    }
+    // A moving camera is either a search move that already accounts for the sheet or a
+    // gesture the user owns.
+    if (map === null || inspection.status === 'closed' || map.isMoving()) return;
     const visibleHeight = map.getCanvas().clientHeight - bottomInsetPx;
     if (visibleHeight < 2 * pointRevealMarginPx) return;
     const { y } = map.project([
@@ -427,13 +419,6 @@ export class MapLibreFacade implements MapFacade {
     ]);
     if (y >= pointRevealMarginPx && y <= visibleHeight - pointRevealMarginPx) return;
     map.panBy([0, y - visibleHeight / 2], { duration: 300 });
-  }
-
-  private cancelPointInspectionReveal(): void {
-    const reveal = this.#pendingPointInspectionReveal;
-    if (reveal === null) return;
-    this.#pendingPointInspectionReveal = null;
-    this.#map?.off('moveend', reveal);
   }
 
   public setCursorPreviewEnabled(enabled: boolean): void {
@@ -477,7 +462,6 @@ export class MapLibreFacade implements MapFacade {
     this.#pendingNearbyPoiRefresh = refreshNearbyPoiOnIdle
       ? { sequence, startedAt }
       : null;
-    this.cancelPointInspectionReveal();
     this.#pointInspectionAbort?.abort();
     const abortController = new AbortController();
     this.#pointInspectionAbort = abortController;
@@ -499,7 +483,6 @@ export class MapLibreFacade implements MapFacade {
   }
 
   public closePointInspection(): void {
-    this.cancelPointInspectionReveal();
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;
@@ -569,7 +552,12 @@ export class MapLibreFacade implements MapFacade {
         : directedCameraFit({
             path,
             viewport: { width: canvas.clientWidth, height: canvas.clientHeight },
-            padding: padding ?? { top: 56, right: 56, bottom: 56, left: 56 },
+            padding: padding ?? {
+              top: defaultFitPaddingPx,
+              right: defaultFitPaddingPx,
+              bottom: defaultFitPaddingPx,
+              left: defaultFitPaddingPx,
+            },
             pitchDegrees: directedFitPitchDegrees,
             fieldOfViewDegrees: map.getVerticalFieldOfView(),
             terrainExaggeration: this.provider?.terrain.exaggeration ?? 1,
@@ -586,7 +574,7 @@ export class MapLibreFacade implements MapFacade {
           [bounds.east, bounds.north],
         ],
         {
-          padding: padding ?? 56,
+          padding: padding ?? defaultFitPaddingPx,
           maxZoom,
           duration: 650,
           bearing: map.getBearing(),
@@ -1660,7 +1648,6 @@ export class MapLibreFacade implements MapFacade {
     map.getCanvas().style.cursor = '';
     this.#pointerGestures.detach();
     this.layerController?.detach(map);
-    this.cancelPointInspectionReveal();
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;

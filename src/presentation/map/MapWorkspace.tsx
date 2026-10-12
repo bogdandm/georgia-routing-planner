@@ -41,11 +41,12 @@ import {
   type MapSharePreferences,
 } from '@/application/map/MapSharePreferences';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
-import type {
-  MapFacade,
-  MapInteractionMode,
-  MapViewportMovement,
-  PlanningPreview,
+import {
+  defaultFitPaddingPx,
+  type MapFacade,
+  type MapInteractionMode,
+  type MapViewportMovement,
+  type PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
@@ -275,6 +276,22 @@ function runThenConsume(run: () => void, consume: () => void): void {
   } finally {
     consume();
   }
+}
+
+/** Adds a bottom overlay's height to camera padding; `fallback` is the implicit padding. */
+function withBottomInset(
+  padding: MapFitPadding | undefined,
+  fallback: number,
+  inset: number,
+): MapFitPadding | undefined {
+  if (inset === 0) return padding;
+  const base = padding ?? {
+    top: fallback,
+    right: fallback,
+    bottom: fallback,
+    left: fallback,
+  };
+  return { ...base, bottom: base.bottom + inset };
 }
 
 /**
@@ -702,25 +719,44 @@ export function MapWorkspace({
     };
   }, [facade, mapViewport]);
 
+  // On touch, a search's camera move waits until its inspection sheet has rendered, so
+  // one move can land with the point above the sheet instead of panning afterwards.
+  const cameraWaitsForSheet = touchPointer && pointInspectionCommand !== null;
   useEffect(() => {
-    if (navigationCommand === null) return;
+    if (navigationCommand === null || cameraWaitsForSheet) return;
+    // offsetHeight ignores the Slide transform, so the entering sheet reports its full height.
+    const sheetInset = sheetOpen ? (sheetRef.current?.offsetHeight ?? 0) : 0;
     runThenConsume(
       () => {
-        facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
+        facade.navigateTo(
+          navigationCommand.target,
+          withBottomInset(getNavigationPadding?.(), 0, sheetInset),
+        );
       },
       () => {
         consumeMapNavigationCommand(navigationCommand.id);
       },
     );
-  }, [facade, getNavigationPadding, navigationCommand]);
+  }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand, sheetOpen]);
   useEffect(() => {
-    if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
+    if (
+      fitBoundsCommand === null ||
+      snapshot.lifecycle === 'loading' ||
+      cameraWaitsForSheet
+    ) {
+      return;
+    }
+    const sheetInset = sheetOpen ? (sheetRef.current?.offsetHeight ?? 0) : 0;
     runThenConsume(
       () => {
         facade.fitBounds(
           fitBoundsCommand.bounds,
           fitBoundsCommand.maxZoom,
-          fitBoundsCommand.padding ?? getNavigationPadding?.(),
+          withBottomInset(
+            fitBoundsCommand.padding ?? getNavigationPadding?.(),
+            defaultFitPaddingPx,
+            sheetInset,
+          ),
           fitBoundsCommand.path,
         );
       },
@@ -728,7 +764,14 @@ export function MapWorkspace({
         consumeMapFitBoundsCommand(fitBoundsCommand.id);
       },
     );
-  }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
+  }, [
+    cameraWaitsForSheet,
+    facade,
+    fitBoundsCommand,
+    getNavigationPadding,
+    sheetOpen,
+    snapshot.lifecycle,
+  ]);
 
   useEffect(() => {
     if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
@@ -757,7 +800,7 @@ export function MapWorkspace({
   useEffect(() => {
     const sheet = sheetRef.current;
     if (sheetCoordinate === null || sheet === null) return;
-    // offsetHeight ignores the Slide transform, so the entering sheet reports its full height.
+    // Taps open the sheet over a settled camera; search moves already include the sheet.
     facade.revealPointInspection(sheet.offsetHeight);
   }, [facade, sheetCoordinate]);
 

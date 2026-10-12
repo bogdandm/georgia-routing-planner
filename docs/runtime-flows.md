@@ -413,11 +413,15 @@ The popup exposes an empty host through `MapFacade.getPointInspectionContent()`,
 `MapWorkspace` portals `MapPointInspectorContent` into it so it follows the app theme
 and locale. On a coarse pointer `MapWorkspace` calls
 `MapFacade.setPointInspectionPopupEnabled(false)`; the facade keeps only the point
-marker and the same content renders in a bottom sheet. `MapPointActionList` defines the
-point actions for both the context menu and the touch sheet, and
-`MapWorkspace.runPointAction` executes them: copy coordinates or point link, create a
-marker (named from the nearest POI), search satellite images, show or link the weather
-forecast, and open external forecast sites.
+marker and the same content renders in a bottom sheet. A search sends navigation (or
+fit-bounds) and inspection commands together; on a coarse pointer `MapWorkspace` holds
+the camera command until the inspection has opened the sheet, then adds the sheet's
+height to the bottom camera padding so one move lands with the point above it. After a
+tap the camera is settled, and `MapFacade.revealPointInspection` pans only when the
+sheet would cover the point. `MapPointActionList` defines the point actions for both the
+context menu and the touch sheet, and `MapWorkspace.runPointAction` executes them: copy
+coordinates or point link, create a marker (named from the nearest POI), search
+satellite images, show or link the weather forecast, and open external forecast sites.
 
 ## Place search expansion
 

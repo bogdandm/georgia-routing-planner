@@ -257,6 +257,9 @@ export function MapSearchPlaceholder() {
     if (coordinateResult.status === 'valid') {
       setValidationCode(null);
       requestMapNavigation({ ...coordinateResult.coordinate, zoom: 13 });
+      requestMapPointInspection(coordinateResult.coordinate, {
+        refreshNearbyPoiOnIdle: true,
+      });
       return;
     }
     if (coordinateResult.status === 'invalid') {

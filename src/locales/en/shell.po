@@ -20,7 +20,7 @@ msgid "{0} s"
 msgstr "{0} s"
 
 #. js-lingui-id: XSrJ15
-#: src/presentation/shell/MapSearchPlaceholder.tsx:481
+#: src/presentation/shell/MapSearchPlaceholder.tsx:484
 msgid "{category} · {distance}"
 msgstr "{category} · {distance}"
 
@@ -30,7 +30,7 @@ msgid "{count, plural, one {# Sentinel image is available} other {# Sentinel ima
 msgstr "{count, plural, one {# Sentinel image is available} other {# Sentinel images are available}}"
 
 #. js-lingui-id: rPwTt_
-#: src/presentation/shell/MapSearchPlaceholder.tsx:426
+#: src/presentation/shell/MapSearchPlaceholder.tsx:429
 msgid "{expandedRadius} of {maximumRadius} kilometres"
 msgstr "{expandedRadius} of {maximumRadius} kilometres"
 
@@ -202,7 +202,7 @@ msgid "City"
 msgstr "City"
 
 #. js-lingui-id: jK_Ldm
-#: src/presentation/shell/MapSearchPlaceholder.tsx:373
+#: src/presentation/shell/MapSearchPlaceholder.tsx:376
 msgid "Clear map search"
 msgstr "Clear map search"
 
@@ -339,7 +339,7 @@ msgid "Expand unsaved track details"
 msgstr "Expand unsaved track details"
 
 #. js-lingui-id: pkYRAm
-#: src/presentation/shell/MapSearchPlaceholder.tsx:422
+#: src/presentation/shell/MapSearchPlaceholder.tsx:425
 msgid "Expanding place search area"
 msgstr "Expanding place search area"
 
@@ -490,7 +490,7 @@ msgid "Local database (IndexedDB)"
 msgstr "Local database (IndexedDB)"
 
 #. js-lingui-id: GJPmhf
-#: src/presentation/shell/MapSearchPlaceholder.tsx:490
+#: src/presentation/shell/MapSearchPlaceholder.tsx:493
 msgid "Local track search results"
 msgstr "Local track search results"
 
@@ -515,7 +515,7 @@ msgid "Map provider configuration is invalid."
 msgstr "Map provider configuration is invalid."
 
 #. js-lingui-id: uIWtLA
-#: src/presentation/shell/MapSearchPlaceholder.tsx:321
+#: src/presentation/shell/MapSearchPlaceholder.tsx:324
 msgid "Map search"
 msgstr "Map search"
 
@@ -618,17 +618,17 @@ msgid "Next"
 msgstr "Next"
 
 #. js-lingui-id: 19XTPe
-#: src/presentation/shell/MapSearchPlaceholder.tsx:445
+#: src/presentation/shell/MapSearchPlaceholder.tsx:448
 msgid "No geographic matches found."
 msgstr "No geographic matches found."
 
 #. js-lingui-id: MyjSw9
-#: src/presentation/shell/MapSearchPlaceholder.tsx:437
+#: src/presentation/shell/MapSearchPlaceholder.tsx:440
 msgid "No matching places were found within approximately {exhaustedDistance}."
 msgstr "No matching places were found within approximately {exhaustedDistance}."
 
 #. js-lingui-id: -vOJyC
-#: src/presentation/shell/MapSearchPlaceholder.tsx:436
+#: src/presentation/shell/MapSearchPlaceholder.tsx:439
 msgid "No matching places were found."
 msgstr "No matching places were found."
 
@@ -719,12 +719,12 @@ msgid "Place search is unavailable. Try again."
 msgstr "Place search is unavailable. Try again."
 
 #. js-lingui-id: 7wmsS7
-#: src/presentation/shell/MapSearchPlaceholder.tsx:402
+#: src/presentation/shell/MapSearchPlaceholder.tsx:405
 msgid "Place search provider configuration is unavailable. Coordinate entry still works."
 msgstr "Place search provider configuration is unavailable. Coordinate entry still works."
 
 #. js-lingui-id: 1IjCTZ
-#: src/presentation/shell/MapSearchPlaceholder.tsx:451
+#: src/presentation/shell/MapSearchPlaceholder.tsx:454
 msgid "Place search results"
 msgstr "Place search results"
 
@@ -903,7 +903,7 @@ msgid "Save"
 msgstr "Save"
 
 #. js-lingui-id: Ht8qdB
-#: src/presentation/shell/MapSearchPlaceholder.tsx:499
+#: src/presentation/shell/MapSearchPlaceholder.tsx:502
 msgid "Saved local track"
 msgstr "Saved local track"
 
@@ -918,23 +918,23 @@ msgid "Saved markers are unavailable"
 msgstr "Saved markers are unavailable"
 
 #. js-lingui-id: srhkS0
-#: src/presentation/shell/MapSearchPlaceholder.tsx:511
+#: src/presentation/shell/MapSearchPlaceholder.tsx:514
 msgid "Search all saved tracks"
 msgstr "Search all saved tracks"
 
 #. js-lingui-id: 0rRKr8
-#: src/presentation/shell/MapSearchPlaceholder.tsx:528
+#: src/presentation/shell/MapSearchPlaceholder.tsx:531
 msgid "Search data © <0>OpenStreetMap contributors</0>"
 msgstr "Search data © <0>OpenStreetMap contributors</0>"
 
 #. js-lingui-id: YRxZsk
-#: src/presentation/shell/MapSearchPlaceholder.tsx:357
+#: src/presentation/shell/MapSearchPlaceholder.tsx:360
 msgid "Search map"
 msgstr "Search map"
 
 #. js-lingui-id: xtVjUm
-#: src/presentation/shell/MapSearchPlaceholder.tsx:341
-#: src/presentation/shell/MapSearchPlaceholder.tsx:347
+#: src/presentation/shell/MapSearchPlaceholder.tsx:344
+#: src/presentation/shell/MapSearchPlaceholder.tsx:350
 msgid "Search places or coordinates"
 msgstr "Search places or coordinates"
 
@@ -944,7 +944,7 @@ msgid "Search places, coordinates, and your saved tracks."
 msgstr "Search places, coordinates, and your saved tracks."
 
 #. js-lingui-id: kaDhS6
-#: src/presentation/shell/MapSearchPlaceholder.tsx:368
+#: src/presentation/shell/MapSearchPlaceholder.tsx:371
 msgid "Searching places"
 msgstr "Searching places"
 

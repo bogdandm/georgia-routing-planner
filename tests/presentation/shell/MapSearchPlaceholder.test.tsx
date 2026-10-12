@@ -33,7 +33,7 @@ describe('MapSearchPlaceholder', () => {
       </I18nProvider>,
     );
 
-  it('navigates locally for unlabeled latitude/longitude coordinates without contacting a provider', async () => {
+  it('navigates locally to unlabeled latitude/longitude coordinates and inspects the point without contacting a provider', async () => {
     const services = createTestServices();
     if (services.searchPlaces === null) return;
     const execute = vi.spyOn(services.searchPlaces, 'execute');
@@ -51,7 +51,13 @@ describe('MapSearchPlaceholder', () => {
       longitude: 44.8,
       zoom: 13,
     });
-    expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
+    expect(mapInteractionStore.getState().pointInspectionCommand?.coordinate).toEqual({
+      latitude: 41.7,
+      longitude: 44.8,
+    });
+    expect(
+      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+    ).toBe(true);
   });
 
   it('submits text only on request and navigates to the selected result', async () => {

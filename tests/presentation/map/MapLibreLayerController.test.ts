@@ -2799,6 +2799,34 @@ describe('MapLibreLayerController', () => {
     expect(savePreferences).toHaveBeenCalledTimes(1);
   });
 
+  it('restores stored layers once so a later layer choice survives another restore call', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    await services.database.saveMapLayerPreferences({
+      visibility: { ...mapLayerStore.getState().visibility, 'google-satellite': true },
+      openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
+      importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
+      weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
+      satelliteRenderingMode: controller.getRenderingMode(),
+      renderingTuning: controller.getRenderingTuning(),
+      terrainOverlays: controller.getTerrainOverlayPreferences(),
+    });
+    // Keep the stored Google choice so a repeated load would visibly revert Esri.
+    vi.spyOn(services.database, 'saveMapLayerPreferences').mockResolvedValue(undefined);
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    await controller.restorePersistedState();
+    expect(controller.setMapLayerPreset('esri-satellite').status).toBe('success');
+    await controller.restorePersistedState();
+
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'google-satellite': false,
+      'esri-satellite': true,
+    });
+  });
+
   it('does not restore legacy persisted imagery after the map style becomes ready', async () => {
     const services = createTestServices();
     const controller = services.mapLayers;

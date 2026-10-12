@@ -507,13 +507,22 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   on the last tapped point once there are two points and shows the measured total and
   the elevation difference from the first point. Route planning uses the same cursor
   label with the distance of the pending segment only.
-- **Point actions:** right-click opens copy coordinates, copy a 2D point link, create a
-  marker, search satellite scenes here, show the weather forecast, copy a weather-map
-  link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap instead
-  opens a bottom sheet with the details and the same actions.
-- **Sharing:** the map share dialog copies a 2D center-and-zoom link, optionally with
-  the selected satellite scene (included by default), and a 3D link with bearing and
-  pitch while terrain is active.
+- **Point actions:** right-click opens copy coordinates, **Copy link**, **Share…**,
+  create a marker, search satellite scenes here, show the weather forecast, copy a
+  weather-map link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap
+  instead opens a bottom sheet with the details and the same actions.
+- **Sharing:** one **Share map view** dialog builds a link to the current map. The rail
+  **Share** action opens it on the map center; **Share…** in the point actions opens it
+  on the clicked point with the current zoom. The link always carries the center and
+  zoom, and can also carry the visible static satellite layer (Google, Bing, Esri, or
+  NAPR), the visible Sentinel-2 scene, and in 3D terrain the 3D mode with bearing and
+  pitch. Each part has an **Include in link** checkbox, unavailable while the map does
+  not show it; turning all three off shares coordinates only. The choices persist in
+  this browser, and **Copy link** in the point actions copies a link to the clicked
+  point with them without opening the dialog. Links keep the page's other query
+  parameters and its workspace-tab hash; a shared Sentinel-2 scene opens Satellite. A
+  recipient's map switches to the shared satellite layer, scene, and 3D view, and the
+  shared satellite layer replaces their own layer choice.
 - **Camera:** left drag pans; middle drag or Shift+left drag rotates and pitches in 3D
   around the terrain point under the press, marked by a small pivot ring; keyboard pans,
   zooms, and orbits once the canvas has focus. Box zoom and right drag are off; pitch is

@@ -2,6 +2,10 @@ import Dexie, { type EntityTable } from 'dexie';
 import { z } from 'zod';
 
 import {
+  defaultMapSharePreferences,
+  type MapSharePreferences,
+} from '@/application/map/MapSharePreferences';
+import {
   defaultWeatherIntervalPreferences,
   type WeatherIntervalPreferences,
   type MarkerWeatherWeekday,
@@ -482,6 +486,15 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
   .object({ expanded: z.boolean(), weekday: markerWeatherWeekdaySchema })
   .strict();
 
+const mapSharePreferencesKey = 'map.share-preferences';
+const mapSharePreferencesSchema: z.ZodType<MapSharePreferences> = z
+  .object({
+    includeSatelliteLayer: z.boolean(),
+    includeSentinelImage: z.boolean(),
+    include3dCamera: z.boolean(),
+  })
+  .strict();
+
 const mapCameraKey = 'map.camera';
 
 interface PersistedMapView {
@@ -633,6 +646,10 @@ const archivedSettingValidators = new Map<string, (value: unknown) => boolean>([
   [
     'markers.recent-icons',
     (value) => recentMarkerIconKeysSchema.safeParse(value).success,
+  ],
+  [
+    mapSharePreferencesKey,
+    (value) => mapSharePreferencesSchema.safeParse(value).success,
   ],
   [
     'local-tracks.latest-opened',
@@ -3901,6 +3918,30 @@ export class AppDatabase
     await this.settings.put({
       key: 'weather.track-preferences',
       value: trackWeatherPreferencesSchema.parse(value),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async loadMapSharePreferences(): Promise<MapSharePreferences> {
+    const record = await this.settings.get(mapSharePreferencesKey);
+    if (record === undefined) return defaultMapSharePreferences;
+
+    const parsed = mapSharePreferencesSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete(mapSharePreferencesKey);
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.settings.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultMapSharePreferences;
+  }
+
+  public async saveMapSharePreferences(value: MapSharePreferences): Promise<void> {
+    await this.settings.put({
+      key: mapSharePreferencesKey,
+      value: mapSharePreferencesSchema.parse(value),
       updatedAt: new Date().toISOString(),
     });
   }

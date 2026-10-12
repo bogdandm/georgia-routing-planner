@@ -71,7 +71,7 @@ describe('WorkspaceShell', () => {
 
     await user.click(share);
     expect(
-      screen.getByRole('dialog', { name: 'Поделиться этим видом карты' }),
+      screen.getByRole('dialog', { name: 'Поделиться видом карты' }),
     ).toBeVisible();
   });
 
@@ -108,7 +108,7 @@ describe('WorkspaceShell', () => {
     );
   });
 
-  it('creates a share link only after the explicit rail action', async () => {
+  it('opens the share dialog on the map center from the rail and copies its link', async () => {
     const user = userEvent.setup();
     const writeText = vi
       .spyOn(navigator.clipboard, 'writeText')
@@ -127,19 +127,24 @@ describe('WorkspaceShell', () => {
 
     expect(window.location.search).toBe('');
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
-    expect(screen.getByRole('dialog', { name: 'Share this map view' })).toBeVisible();
-    const link = screen.getByRole<HTMLTextAreaElement>('textbox', {
-      name: '2D share link',
+    const dialog = screen.getByRole('dialog', { name: 'Share map view' });
+    expect(
+      await within(dialog).findByText('41.71234, 44.80123, zoom 12.35'),
+    ).toBeVisible();
+    for (const option of ['Satellite layer', 'Sentinel-2 image', '3D camera']) {
+      expect(within(dialog).getByRole('checkbox', { name: option })).toBeDisabled();
+    }
+    const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
+      name: 'Link',
     });
-    expect(link.value).toContain('map=2');
-    expect(link.value).toContain('lat=41.71234');
-    expect(link.value).toContain('view=2d');
-    expect(link.value).not.toContain('bearing=');
-    expect(screen.getByRole('button', { name: 'Copy 3D link' })).toBeDisabled();
+    const url = new URL(link.value);
+    expect(url.searchParams.get('view')).toBe('2d');
+    expect(url.searchParams.get('bearing')).toBeNull();
     expect(window.location.search).toBe('');
-    await user.click(screen.getByRole('button', { name: 'Copy 2D link' }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('z=12.35'));
-    expect(await screen.findByText('2D share link copied')).toBeVisible();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Copy link' }));
+    expect(writeText).toHaveBeenCalledWith(link.value);
+    expect(await screen.findByText('Link copied')).toBeVisible();
   });
 
   it('builds share links from the page URL current when the dialog opens', async () => {
@@ -151,21 +156,24 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    await screen.findByText('41.70000, 44.80000, zoom 12');
     expect(
-      screen.getByRole<HTMLTextAreaElement>('textbox', { name: '2D share link' }).value,
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'Link' }).value,
     ).not.toContain('probe=first');
     await user.keyboard('{Escape}');
     await waitFor(() => {
       expect(
-        screen.queryByRole('dialog', { name: 'Share this map view' }),
+        screen.queryByRole('dialog', { name: 'Share map view' }),
       ).not.toBeInTheDocument();
     });
 
-    window.history.replaceState(null, '', '/?probe=first');
+    window.history.replaceState(null, '', '/?probe=first#markers');
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
-    expect(
-      screen.getByRole<HTMLTextAreaElement>('textbox', { name: '2D share link' }).value,
-    ).toContain('probe=first');
+    const url = new URL(
+      screen.getByRole<HTMLInputElement>('textbox', { name: 'Link' }).value,
+    );
+    expect(url.searchParams.get('probe')).toBe('first');
+    expect(url.hash).toBe('#markers');
   });
 
   it('opens public site information from the rail action below Settings', async () => {
@@ -305,21 +313,13 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
-  it('enables 3D sharing only in terrain mode and uses the selected scene', async () => {
+  it('shares the visible Sentinel image and 3D camera until excluded and remembers the choice', async () => {
     const user = userEvent.setup();
-    const selectedScene = syntheticSatelliteScene(
-      'selected-while-rendering',
-      '2026-07-20T10:12:00.000Z',
-    );
     mapLayerStore.setState({
-      selectedScene,
-      appliedImagery: {
-        status: 'loading',
-        sceneKey: 'sentinel-2-l2a:selected-while-rendering',
-        previousSceneKey: 'sentinel-2-l2a:previously-rendered',
-        stage: 'rendering',
-        startedAt: 1,
-      },
+      selectedScene: syntheticSatelliteScene(
+        'selected-while-rendering',
+        '2026-07-20T10:12:00.000Z',
+      ),
     });
     services.mapDiagnostics.update({
       ...new FakeMapFacade().snapshot,
@@ -335,30 +335,76 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
-
-    const link2d = screen.getByRole<HTMLTextAreaElement>('textbox', {
-      name: '2D share link',
+    const dialog = screen.getByRole('dialog', { name: 'Share map view' });
+    const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
+      name: 'Link',
     });
-    const link3d = screen.getByRole<HTMLTextAreaElement>('textbox', {
-      name: '3D share link',
+    const sentinel = within(dialog).getByRole('checkbox', { name: 'Sentinel-2 image' });
+    const camera = within(dialog).getByRole('checkbox', { name: '3D camera' });
+    await waitFor(() => {
+      expect(sentinel).toBeChecked();
     });
-    const includeSatellite = screen.getByRole('checkbox', {
-      name: 'Include selected satellite image',
-    });
+    expect(camera).toBeChecked();
+    expect(camera).toHaveAccessibleDescription(
+      '3D terrain with bearing 18° and pitch 36°.',
+    );
     expect(
-      link3d.compareDocumentPosition(includeSatellite) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(includeSatellite).toBeChecked();
-    expect(link2d.value).toContain('scene=sentinel-2-l2a%3Aselected-while-rendering');
-    expect(link2d.value).not.toContain('bearing=');
-    expect(link3d.value).toContain('bearing=18.12');
-    expect(link3d.value).toContain('pitch=35.56');
-    expect(screen.getByRole('button', { name: 'Copy 3D link' })).toBeEnabled();
+      within(dialog).getByRole('checkbox', { name: 'Satellite layer' }),
+    ).toBeDisabled();
+    let url = new URL(link.value);
+    expect(url.searchParams.get('scene')).toBe(
+      'sentinel-2-l2a:selected-while-rendering',
+    );
+    expect(url.searchParams.get('view')).toBe('3d');
+    expect(url.searchParams.get('bearing')).toBe('18.12');
+    expect(url.hash).toBe('#satellite');
 
-    await user.click(includeSatellite);
-    expect(link2d.value).not.toContain('scene=');
-    expect(link3d.value).not.toContain('scene=');
+    await user.click(sentinel);
+    await user.click(camera);
+    url = new URL(link.value);
+    expect(url.searchParams.get('scene')).toBeNull();
+    expect(url.searchParams.get('view')).toBe('2d');
+    expect(url.searchParams.get('bearing')).toBeNull();
+    await waitFor(async () => {
+      await expect(services.database.loadMapSharePreferences()).resolves.toEqual({
+        includeSatelliteLayer: true,
+        includeSentinelImage: false,
+        include3dCamera: false,
+      });
+    });
+  });
+
+  it('shares the visible satellite basemap by name once the stored exclusion is lifted', async () => {
+    const user = userEvent.setup();
+    // The shell restores stored layer preferences on mount, so store the basemap too.
+    const stored = await services.database.loadMapLayerPreferences();
+    const visibility = { ...stored.visibility, 'bing-satellite': true };
+    await services.database.saveMapLayerPreferences({ ...stored, visibility });
+    mapLayerStore.setState({ visibility });
+    await services.database.saveMapSharePreferences({
+      includeSatelliteLayer: false,
+      includeSentinelImage: true,
+      include3dCamera: true,
+    });
+    services.mapDiagnostics.update(new FakeMapFacade().snapshot);
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    const dialog = screen.getByRole('dialog', { name: 'Share map view' });
+    const basemap = within(dialog).getByRole('checkbox', { name: 'Satellite layer' });
+    const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
+      name: 'Link',
+    });
+    // The link waits for the stored exclusion instead of starting from defaults.
+    await waitFor(() => {
+      expect(basemap).toBeEnabled();
+    });
+    expect(basemap).not.toBeChecked();
+    expect(basemap).toHaveAccessibleDescription('Bing Aerial');
+    expect(new URL(link.value).searchParams.get('base')).toBeNull();
+
+    await user.click(basemap);
+    expect(new URL(link.value).searchParams.get('base')).toBe('bing-satellite');
   });
 
   it('shows a shared selected-scene card before the map viewport or raster is ready', async () => {

@@ -742,9 +742,18 @@ describe('WorkspaceShell', () => {
     if (input === null) return;
     await user.upload(input, gpxFile());
 
-    const nameInput = await screen.findByRole('textbox', { name: 'Track name' });
+    // Elevation preparation and name lookup re-render the preview; editing during them
+    // raced the typed text on slow CI runners, so edit the settled preview.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      expect(
+        screen.queryByLabelText('Looking up representative places'),
+      ).not.toBeInTheDocument();
+    });
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
     await user.clear(nameInput);
     await user.type(nameInput, 'Mobile trail');
+    expect(nameInput).toHaveValue('Mobile trail');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(async () => {

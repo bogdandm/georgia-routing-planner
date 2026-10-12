@@ -234,6 +234,33 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('shares the complete map view until saved otherwise and repairs invalid share preferences', async () => {
+    const everything = {
+      includeSatelliteLayer: true,
+      includeSentinelImage: true,
+      include3dCamera: true,
+    };
+    await expect(database.loadMapSharePreferences()).resolves.toEqual(everything);
+
+    const coordinatesOnly = {
+      includeSatelliteLayer: false,
+      includeSentinelImage: false,
+      include3dCamera: false,
+    };
+    await database.saveMapSharePreferences(coordinatesOnly);
+    await expect(database.loadMapSharePreferences()).resolves.toEqual(coordinatesOnly);
+
+    await database.settings.put({
+      key: 'map.share-preferences',
+      value: { includeSatelliteLayer: false },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadMapSharePreferences()).resolves.toEqual(everything);
+    await expect(
+      database.settings.get('map.share-preferences'),
+    ).resolves.toBeUndefined();
+  });
+
   it('persists at most 21 unique recently used marker icons and repairs invalid data', async () => {
     await expect(database.loadRecentMarkerIconKeys()).resolves.toEqual([]);
 

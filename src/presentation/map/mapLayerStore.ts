@@ -161,7 +161,7 @@ export interface WeatherMapSnapshot {
   readonly problem: WeatherMapProblem | null;
 }
 
-interface MapLayerState {
+export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly appliedMosaic: AppliedSatelliteMosaicSnapshot;
   readonly automaticAlternativeProviderState: 'inactive' | 'switching' | 'active';

@@ -35,6 +35,7 @@ type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 export type MapPointAction =
   | 'copy-coordinates'
   | 'copy-point-link'
+  | 'share-point'
   | 'create-marker'
   | 'search-satellite'
   | 'show-weather'
@@ -140,8 +141,13 @@ export function MapPointActionList({
     },
     {
       action: 'copy-point-link',
+      icon: <LinkOutlinedIcon />,
+      label: t`Copy link`,
+    },
+    {
+      action: 'share-point',
       icon: <ShareOutlinedIcon />,
-      label: t`Copy link to this point`,
+      label: t`Share…`,
     },
     {
       action: 'create-marker',

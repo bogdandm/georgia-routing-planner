@@ -74,26 +74,6 @@ msgstr "{weatherModelName} через Open-Meteo"
 msgid "2D or 3D terrain. In 3D, drag with Shift or the middle mouse button to rotate."
 msgstr "2D или 3D-рельеф. В 3D поворачивайте карту: тяните с Shift или средней кнопкой мыши."
 
-#. js-lingui-id: Km914x
-#: src/presentation/shell/ShareMapDialog.tsx:110
-msgid "2D share link"
-msgstr "Ссылка на 2D-карту"
-
-#. js-lingui-id: fSe0sp
-#: src/presentation/shell/ShareMapDialog.tsx:189
-msgid "2D share link copied"
-msgstr "Ссылка на 2D-карту скопирована"
-
-#. js-lingui-id: 38b06w
-#: src/presentation/shell/ShareMapDialog.tsx:120
-msgid "3D share link"
-msgstr "Ссылка на 3D-карту"
-
-#. js-lingui-id: La5uO7
-#: src/presentation/shell/ShareMapDialog.tsx:188
-msgid "3D share link copied"
-msgstr "Ссылка на 3D-карту скопирована"
-
 #. js-lingui-id: 2QU_vt
 #: src/presentation/shell/OperationalStatus.tsx:156
 msgid "A map layer update failed. Try again."
@@ -227,14 +207,9 @@ msgid "Clear map search"
 msgstr "Очистить поиск по карте"
 
 #. js-lingui-id: G1X31l
-#: src/presentation/shell/WorkspaceShell.tsx:674
+#: src/presentation/shell/WorkspaceShell.tsx:675
 msgid "Click the map to choose the route start and destination."
 msgstr "Нажмите на карту, чтобы выбрать начало и конец маршрута."
-
-#. js-lingui-id: yz7wBu
-#: src/presentation/shell/ShareMapDialog.tsx:162
-msgid "Close"
-msgstr "Закрыть"
 
 #. js-lingui-id: TjLF4m
 #: src/presentation/shell/AboutDialog.tsx:306
@@ -270,16 +245,6 @@ msgstr "Изолинии · перезапуск обработчика"
 #: src/presentation/shell/MapSearchPlaceholder.tsx:219
 msgid "Coordinates are outside valid map bounds."
 msgstr "Координаты выходят за допустимые границы карты."
-
-#. js-lingui-id: r8UHl8
-#: src/presentation/shell/ShareMapDialog.tsx:179
-msgid "Copy 2D link"
-msgstr "Копировать 2D-ссылку"
-
-#. js-lingui-id: AKBU-N
-#: src/presentation/shell/ShareMapDialog.tsx:170
-msgid "Copy 3D link"
-msgstr "Копировать 3D-ссылку"
 
 #. js-lingui-id: kaKzkK
 #: src/presentation/shell/AboutDialog.tsx:319
@@ -333,11 +298,6 @@ msgstr "Данные о рельефе"
 msgid "Enable developer diagnostics"
 msgstr "Включить диагностику для разработчиков"
 
-#. js-lingui-id: iJT81d
-#: src/presentation/shell/ShareMapDialog.tsx:124
-msgid "Enable the 3D terrain map to share bearing and pitch."
-msgstr "Включите 3D-карту рельефа, чтобы передать азимут и наклон."
-
 #. js-lingui-id: lYGfRP
 #: src/presentation/shell/SettingsDialog.tsx:165
 msgid "English"
@@ -364,17 +324,17 @@ msgid "Exit multi-track selection"
 msgstr "Завершить выбор треков"
 
 #. js-lingui-id: O6Fpju
-#: src/presentation/shell/WorkspaceShell.tsx:599
+#: src/presentation/shell/WorkspaceShell.tsx:600
 msgid "Expand multiple track details"
 msgstr "Развернуть сведения о нескольких треках"
 
 #. js-lingui-id: NiF6zY
-#: src/presentation/shell/WorkspaceShell.tsx:602
+#: src/presentation/shell/WorkspaceShell.tsx:603
 msgid "Expand track details"
 msgstr "Развернуть сведения о треке"
 
 #. js-lingui-id: SNJ-Dv
-#: src/presentation/shell/WorkspaceShell.tsx:601
+#: src/presentation/shell/WorkspaceShell.tsx:602
 msgid "Expand unsaved track details"
 msgstr "Развернуть сведения о несохранённом треке"
 
@@ -460,11 +420,6 @@ msgstr "В выделенные дни есть снимки с облачнос
 msgid "Images are searched at the map center. Right-click the map to search at another point."
 msgstr "Снимки подбираются для центра карты. Чтобы искать в другой точке, нажмите на карту правой кнопкой мыши."
 
-#. js-lingui-id: B0vUJW
-#: src/presentation/shell/ShareMapDialog.tsx:143
-msgid "Include selected satellite image"
-msgstr "Добавить выбранный спутниковый снимок"
-
 #. js-lingui-id: NH98te
 #: src/presentation/shell/formatPlaceSearchCategory.ts:18
 msgid "Isolated dwelling"
@@ -504,7 +459,7 @@ msgid "Loading ECMWF weather map…"
 msgstr "Загрузка карты погоды ECMWF…"
 
 #. js-lingui-id: 995Lb9
-#: src/presentation/shell/WorkspaceShell.tsx:221
+#: src/presentation/shell/WorkspaceShell.tsx:222
 msgid "Loading elevation: {preparationPercent}"
 msgstr "Загрузка высот: {preparationPercent}"
 
@@ -703,7 +658,7 @@ msgid "Open windy.com"
 msgstr "Открыть windy.com"
 
 #. js-lingui-id: Gc_l1s
-#: src/presentation/shell/WorkspaceShell.tsx:518
+#: src/presentation/shell/WorkspaceShell.tsx:519
 msgid "Open workspace"
 msgstr "Открыть рабочую область"
 
@@ -814,7 +769,7 @@ msgid "Pond"
 msgstr "Пруд"
 
 #. js-lingui-id: DsZhgY
-#: src/presentation/shell/WorkspaceShell.tsx:220
+#: src/presentation/shell/WorkspaceShell.tsx:221
 msgid "Preparing elevation…"
 msgstr "Подготовка высот…"
 
@@ -943,7 +898,7 @@ msgid "Satellite search is unavailable because its provider configuration is inv
 msgstr "Поиск спутниковых сцен недоступен из-за недопустимой конфигурации поставщика."
 
 #. js-lingui-id: tfDRzk
-#: src/presentation/shell/WorkspaceShell.tsx:582
+#: src/presentation/shell/WorkspaceShell.tsx:583
 msgid "Save"
 msgstr "Сохранить"
 
@@ -1060,11 +1015,6 @@ msgstr "Поделиться"
 msgid "Share map view"
 msgstr "Поделиться видом карты"
 
-#. js-lingui-id: yNR75y
-#: src/presentation/shell/ShareMapDialog.tsx:95
-msgid "Share this map view"
-msgstr "Поделиться этим видом карты"
-
 #. js-lingui-id: aa47vg
 #: src/presentation/shell/OperationalStatus.tsx:354
 msgid "Show current error details"
@@ -1158,11 +1108,6 @@ msgstr "Ручей"
 msgid "Switch to Sentinel Mosaic"
 msgstr "Переключиться на мозаику Sentinel"
 
-#. js-lingui-id: 6GkJH5
-#: src/presentation/shell/ShareMapDialog.tsx:99
-msgid "The 2D link always shares center and zoom. A selected satellite image can be included without storing the scene locally."
-msgstr "Ссылка на 2D-карту всегда передаёт центр и масштаб. Выбранный спутниковый снимок можно добавить без локального сохранения сцены."
-
 #. js-lingui-id: WMkqRc
 #: src/presentation/shell/WorkspaceErrorBoundary.tsx:57
 msgid "The application encountered an error"
@@ -1172,11 +1117,6 @@ msgstr "В приложении произошла ошибка"
 #: src/presentation/shell/WorkspaceErrorBoundary.tsx:60
 msgid "The failure was captured locally. Download a privacy-safe bundle to help investigate it."
 msgstr "Сбой записан локально. Скачайте диагностику без личных данных, чтобы помочь найти причину."
-
-#. js-lingui-id: CHpm1i
-#: src/presentation/shell/ShareMapDialog.tsx:148
-msgid "The link could not be copied. Select it and copy it manually."
-msgstr "Не удалось скопировать ссылку. Выделите её и скопируйте вручную."
 
 #. js-lingui-id: UvCiMz
 #: src/presentation/shell/OperationalStatus.tsx:142
@@ -1192,11 +1132,6 @@ msgstr "Карта работает с ограниченной функцион
 #: src/presentation/shell/OnboardingTour.tsx:241
 msgid "This is an example track. It is not saved and will be removed after the tour."
 msgstr "Это пример трека. Он не сохранён и будет удалён после тура."
-
-#. js-lingui-id: Pce71j
-#: src/presentation/shell/ShareMapDialog.tsx:125
-msgid "This link includes the current bearing and pitch."
-msgstr "Эта ссылка включает текущие азимут и наклон."
 
 #. js-lingui-id: m4CMLN
 #: src/presentation/shell/OperationalStatus.tsx:254
@@ -1224,7 +1159,7 @@ msgid "Track details"
 msgstr "Сведения о треке"
 
 #. js-lingui-id: tGFu7D
-#: src/presentation/shell/WorkspaceShell.tsx:564
+#: src/presentation/shell/WorkspaceShell.tsx:565
 msgid "Track name"
 msgstr "Название трека"
 

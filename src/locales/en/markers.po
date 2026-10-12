@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: omWnpu
-#: src/presentation/markers/MarkersWorkspace.tsx:941
+#: src/presentation/markers/MarkersWorkspace.tsx:981
 msgid "{distance} km away"
 msgstr "{distance} km away"
 
@@ -24,7 +24,7 @@ msgid "{label}. Current: {selectedLabel}"
 msgstr "{label}. Current: {selectedLabel}"
 
 #. js-lingui-id: __HSFS
-#: src/presentation/markers/MarkersWorkspace.tsx:747
+#: src/presentation/markers/MarkersWorkspace.tsx:783
 msgid "24-hour forecast · {periodKind, select, day {Day} night {Night} other {Custom}} · {weekday}, {dateLabel}"
 msgstr "24-hour forecast · {periodKind, select, day {Day} night {Night} other {Custom}} · {weekday}, {dateLabel}"
 
@@ -140,7 +140,7 @@ msgstr "Camping"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/markers/MarkerEditorDialog.tsx:249
-#: src/presentation/markers/MarkersWorkspace.tsx:1267
+#: src/presentation/markers/MarkersWorkspace.tsx:1308
 #: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:260
 msgid "Cancel"
 msgstr "Cancel"
@@ -171,7 +171,7 @@ msgid "Celebration"
 msgstr "Celebration"
 
 #. js-lingui-id: wopO4r
-#: src/presentation/markers/MarkersWorkspace.tsx:1618
+#: src/presentation/markers/MarkersWorkspace.tsx:1659
 msgid "Change icon and color"
 msgstr "Change icon and color"
 
@@ -236,14 +236,14 @@ msgid "Commute"
 msgstr "Commute"
 
 #. js-lingui-id: jPpVoJ
-#: src/presentation/markers/MarkersWorkspace.tsx:1544
-#: src/presentation/markers/MarkersWorkspace.tsx:1642
+#: src/presentation/markers/MarkersWorkspace.tsx:1585
+#: src/presentation/markers/MarkersWorkspace.tsx:1683
 msgid "Confirm deletion"
 msgstr "Confirm deletion"
 
 #. js-lingui-id: oXVNQJ
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1551
+#: src/presentation/markers/MarkersWorkspace.tsx:1592
 msgid "Confirm deletion of {0}"
 msgstr "Confirm deletion of {0}"
 
@@ -299,13 +299,13 @@ msgstr "Deer"
 
 #. js-lingui-id: Y2tU6I
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1552
+#: src/presentation/markers/MarkersWorkspace.tsx:1593
 msgid "Delete {0}"
 msgstr "Delete {0}"
 
 #. js-lingui-id: 2sxwVB
-#: src/presentation/markers/MarkersWorkspace.tsx:1544
-#: src/presentation/markers/MarkersWorkspace.tsx:1644
+#: src/presentation/markers/MarkersWorkspace.tsx:1585
+#: src/presentation/markers/MarkersWorkspace.tsx:1685
 msgid "Delete marker"
 msgstr "Delete marker"
 
@@ -315,12 +315,12 @@ msgid "Dining"
 msgstr "Dining"
 
 #. js-lingui-id: FhJza8
-#: src/presentation/markers/MarkersWorkspace.tsx:864
+#: src/presentation/markers/MarkersWorkspace.tsx:904
 msgid "Distance from map center"
 msgstr "Distance from map center"
 
 #. js-lingui-id: NHZprE
-#: src/presentation/markers/MarkersWorkspace.tsx:931
+#: src/presentation/markers/MarkersWorkspace.tsx:971
 msgid "Distance unavailable"
 msgstr "Distance unavailable"
 
@@ -421,7 +421,7 @@ msgid "Forecast period"
 msgstr "Forecast period"
 
 #. js-lingui-id: LGGwdr
-#: src/presentation/markers/MarkersWorkspace.tsx:1452
+#: src/presentation/markers/MarkersWorkspace.tsx:1493
 msgid "Forecast unavailable"
 msgstr "Forecast unavailable"
 
@@ -501,12 +501,12 @@ msgid "Ice cream"
 msgstr "Ice cream"
 
 #. js-lingui-id: qNniaA
-#: src/presentation/markers/MarkersWorkspace.tsx:863
+#: src/presentation/markers/MarkersWorkspace.tsx:903
 msgid "Icon and distance"
 msgstr "Icon and distance"
 
 #. js-lingui-id: ELJlha
-#: src/presentation/markers/MarkersWorkspace.tsx:862
+#: src/presentation/markers/MarkersWorkspace.tsx:902
 msgid "Icon color"
 msgstr "Icon color"
 
@@ -551,18 +551,18 @@ msgid "Liquor"
 msgstr "Liquor"
 
 #. js-lingui-id: yQE2r9
-#: src/presentation/markers/MarkersWorkspace.tsx:1469
+#: src/presentation/markers/MarkersWorkspace.tsx:1510
 msgid "Loading"
 msgstr "Loading"
 
 #. js-lingui-id: rITQrW
-#: src/presentation/markers/MarkersWorkspace.tsx:1139
+#: src/presentation/markers/MarkersWorkspace.tsx:1180
 msgid "Loading saved markers"
 msgstr "Loading saved markers"
 
 #. js-lingui-id: Fr5Q2N
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1407
+#: src/presentation/markers/MarkersWorkspace.tsx:1448
 msgid "Loading weather for {0}"
 msgstr "Loading weather for {0}"
 
@@ -572,13 +572,13 @@ msgid "Map"
 msgstr "Map"
 
 #. js-lingui-id: tKY7TR
-#: src/presentation/markers/MarkersWorkspace.tsx:1515
+#: src/presentation/markers/MarkersWorkspace.tsx:1556
 msgid "Marker actions"
 msgstr "Marker actions"
 
 #. js-lingui-id: RlbMOu
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1520
+#: src/presentation/markers/MarkersWorkspace.tsx:1561
 msgid "Marker actions for {0}"
 msgstr "Marker actions for {0}"
 
@@ -593,7 +593,7 @@ msgid "Marker color"
 msgstr "Marker color"
 
 #. js-lingui-id: QxZIkl
-#: src/presentation/markers/MarkersWorkspace.tsx:1179
+#: src/presentation/markers/MarkersWorkspace.tsx:1220
 msgid "Marker forecast days"
 msgstr "Marker forecast days"
 
@@ -605,7 +605,7 @@ msgstr "Marker icon categories row {0}"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/markers/MarkerEditorDialog.tsx:160
-#: src/presentation/markers/MarkersWorkspace.tsx:1239
+#: src/presentation/markers/MarkersWorkspace.tsx:1280
 msgid "Marker name"
 msgstr "Marker name"
 
@@ -655,7 +655,7 @@ msgid "My location"
 msgstr "My location"
 
 #. js-lingui-id: 6YtxFj
-#: src/presentation/markers/MarkersWorkspace.tsx:861
+#: src/presentation/markers/MarkersWorkspace.tsx:901
 msgid "Name"
 msgstr "Name"
 
@@ -675,7 +675,7 @@ msgid "Navy"
 msgstr "Navy"
 
 #. js-lingui-id: dUCJry
-#: src/presentation/markers/MarkersWorkspace.tsx:860
+#: src/presentation/markers/MarkersWorkspace.tsx:900
 msgid "Newest"
 msgstr "Newest"
 
@@ -695,7 +695,7 @@ msgid "No recently used icons yet"
 msgstr "No recently used icons yet"
 
 #. js-lingui-id: Nfw5a0
-#: src/presentation/markers/MarkersWorkspace.tsx:1163
+#: src/presentation/markers/MarkersWorkspace.tsx:1204
 msgid "No saved markers yet. Use New marker, then choose a point on the map."
 msgstr "No saved markers yet. Use New marker, then choose a point on the map."
 
@@ -705,7 +705,7 @@ msgid "Olive"
 msgstr "Olive"
 
 #. js-lingui-id: ak_oos
-#: src/presentation/markers/MarkersWorkspace.tsx:968
+#: src/presentation/markers/MarkersWorkspace.tsx:1008
 msgid "Open {weekday} weather for {markerName}: {temperature}, {precipitation} precipitation"
 msgstr "Open {weekday} weather for {markerName}: {temperature}, {precipitation} precipitation"
 
@@ -780,7 +780,7 @@ msgid "Red"
 msgstr "Red"
 
 #. js-lingui-id: 2wxgft
-#: src/presentation/markers/MarkersWorkspace.tsx:1608
+#: src/presentation/markers/MarkersWorkspace.tsx:1649
 msgid "Rename"
 msgstr "Rename"
 
@@ -795,7 +795,7 @@ msgid "Restaurant"
 msgstr "Restaurant"
 
 #. js-lingui-id: 6gRgw8
-#: src/presentation/markers/MarkersWorkspace.tsx:1148
+#: src/presentation/markers/MarkersWorkspace.tsx:1189
 msgid "Retry"
 msgstr "Retry"
 
@@ -837,18 +837,18 @@ msgstr "Sailing"
 
 #. js-lingui-id: tfDRzk
 #: src/presentation/markers/MarkerEditorDialog.tsx:252
-#: src/presentation/markers/MarkersWorkspace.tsx:1259
+#: src/presentation/markers/MarkersWorkspace.tsx:1300
 #: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:273
 msgid "Save"
 msgstr "Save"
 
 #. js-lingui-id: FtknP-
-#: src/presentation/markers/MarkersWorkspace.tsx:1171
+#: src/presentation/markers/MarkersWorkspace.tsx:1212
 msgid "Saved markers"
 msgstr "Saved markers"
 
 #. js-lingui-id: L9KUud
-#: src/presentation/markers/MarkersWorkspace.tsx:1152
+#: src/presentation/markers/MarkersWorkspace.tsx:1193
 msgid "Saved markers could not be loaded."
 msgstr "Saved markers could not be loaded."
 
@@ -919,17 +919,17 @@ msgid "Snowmobile"
 msgstr "Snowmobile"
 
 #. js-lingui-id: v2Acg1
-#: src/presentation/markers/MarkersWorkspace.tsx:885
+#: src/presentation/markers/MarkersWorkspace.tsx:925
 msgid "Sort markers. Current: {markerSortLabel}"
 msgstr "Sort markers. Current: {markerSortLabel}"
 
 #. js-lingui-id: oLk0R8
-#: src/presentation/markers/MarkersWorkspace.tsx:916
+#: src/presentation/markers/MarkersWorkspace.tsx:956
 msgid "Sort preference could not be saved"
 msgstr "Sort preference could not be saved"
 
 #. js-lingui-id: 1cWDsF
-#: src/presentation/markers/MarkersWorkspace.tsx:882
+#: src/presentation/markers/MarkersWorkspace.tsx:922
 msgid "Sort: {markerSortLabel}"
 msgstr "Sort: {markerSortLabel}"
 
@@ -1000,12 +1000,12 @@ msgid "Terrain"
 msgstr "Terrain"
 
 #. js-lingui-id: kQUxI8
-#: src/presentation/markers/MarkersWorkspace.tsx:1157
+#: src/presentation/markers/MarkersWorkspace.tsx:1198
 msgid "The marker could not be deleted."
 msgstr "The marker could not be deleted."
 
 #. js-lingui-id: 0TvHJA
-#: src/presentation/markers/MarkersWorkspace.tsx:1101
+#: src/presentation/markers/MarkersWorkspace.tsx:1142
 msgid "The marker could not be renamed."
 msgstr "The marker could not be renamed."
 

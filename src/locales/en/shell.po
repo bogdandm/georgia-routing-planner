@@ -55,7 +55,7 @@ msgid "{renderedSceneCount, number} of {totalSceneCount, number} Mosaic images r
 msgstr "{renderedSceneCount, number} of {totalSceneCount, number} Mosaic images rendered"
 
 #. js-lingui-id: 2nHTqF
-#: src/presentation/shell/WorkspaceSidebar.tsx:295
+#: src/presentation/shell/WorkspaceSidebar.tsx:307
 msgid "{sidebarTitle} tools"
 msgstr "{sidebarTitle} tools"
 
@@ -196,13 +196,13 @@ msgid "Canal"
 msgstr "Canal"
 
 #. js-lingui-id: i5FD0Y
-#: src/presentation/shell/WorkspaceSidebar.tsx:384
-#: src/presentation/shell/WorkspaceSidebar.tsx:395
+#: src/presentation/shell/WorkspaceSidebar.tsx:399
+#: src/presentation/shell/WorkspaceSidebar.tsx:410
 msgid "Cancel forecast point selection"
 msgstr "Cancel forecast point selection"
 
 #. js-lingui-id: oN7Tuf
-#: src/presentation/shell/WorkspaceSidebar.tsx:133
+#: src/presentation/shell/WorkspaceSidebar.tsx:135
 msgid "Center map on forecast location"
 msgstr "Center map on forecast location"
 
@@ -359,7 +359,7 @@ msgid "Every climb and descent with its length and grade."
 msgstr "Every climb and descent with its length and grade."
 
 #. js-lingui-id: 2s4gux
-#: src/presentation/shell/WorkspaceSidebar.tsx:552
+#: src/presentation/shell/WorkspaceSidebar.tsx:604
 msgid "Exit multi-track selection"
 msgstr "Exit multi-track selection"
 
@@ -445,8 +445,8 @@ msgid "Hide the panel to see more map."
 msgstr "Hide the panel to see more map."
 
 #. js-lingui-id: JBca1o
-#: src/presentation/shell/WorkspaceSidebar.tsx:354
-#: src/presentation/shell/WorkspaceSidebar.tsx:368
+#: src/presentation/shell/WorkspaceSidebar.tsx:369
+#: src/presentation/shell/WorkspaceSidebar.tsx:383
 msgid "Hide weather map"
 msgstr "Hide weather map"
 
@@ -494,7 +494,7 @@ msgstr "Language and storage."
 #. js-lingui-id: Dq6GG7
 #: src/presentation/shell/OnboardingTour.tsx:310
 #: src/presentation/shell/WorkspaceRail.tsx:452
-#: src/presentation/shell/WorkspaceSidebar.tsx:84
+#: src/presentation/shell/WorkspaceSidebar.tsx:86
 msgid "Layers"
 msgstr "Layers"
 
@@ -509,8 +509,8 @@ msgid "Loading elevation: {preparationPercent}"
 msgstr "Loading elevation: {preparationPercent}"
 
 #. js-lingui-id: jYxHIA
-#: src/presentation/shell/WorkspaceSidebar.tsx:250
-#: src/presentation/shell/WorkspaceSidebar.tsx:502
+#: src/presentation/shell/WorkspaceSidebar.tsx:258
+#: src/presentation/shell/WorkspaceSidebar.tsx:537
 msgid "Loading marker weather settings"
 msgstr "Loading marker weather settings"
 
@@ -525,7 +525,7 @@ msgid "Loading terrain…"
 msgstr "Loading terrain…"
 
 #. js-lingui-id: V4WUj8
-#: src/presentation/shell/WorkspaceSidebar.tsx:352
+#: src/presentation/shell/WorkspaceSidebar.tsx:367
 msgid "Loading weather map"
 msgstr "Loading weather map"
 
@@ -550,7 +550,7 @@ msgid "Map and controls"
 msgstr "Map and controls"
 
 #. js-lingui-id: NK17ah
-#: src/presentation/shell/WorkspaceSidebar.tsx:274
+#: src/presentation/shell/WorkspaceSidebar.tsx:286
 msgid "Map is unavailable"
 msgstr "Map is unavailable"
 
@@ -570,29 +570,29 @@ msgid "Map, elevation, and imagery sources are unavailable because their provide
 msgstr "Map, elevation, and imagery sources are unavailable because their provider configuration is invalid."
 
 #. js-lingui-id: UDMwAB
-#: src/presentation/shell/WorkspaceSidebar.tsx:504
+#: src/presentation/shell/WorkspaceSidebar.tsx:539
 msgid "Marker weather is disabled"
 msgstr "Marker weather is disabled"
 
 #. js-lingui-id: h-NdYC
-#: src/presentation/shell/WorkspaceSidebar.tsx:505
+#: src/presentation/shell/WorkspaceSidebar.tsx:540
 msgid "Marker weather settings"
 msgstr "Marker weather settings"
 
 #. js-lingui-id: zv4-g7
-#: src/presentation/shell/WorkspaceSidebar.tsx:253
+#: src/presentation/shell/WorkspaceSidebar.tsx:261
 msgid "Marker weather settings. Forecast days: {markerWeatherWeekdayLabel}"
 msgstr "Marker weather settings. Forecast days: {markerWeatherWeekdayLabel}"
 
 #. js-lingui-id: 6kv0Wh
-#: src/presentation/shell/WorkspaceSidebar.tsx:252
+#: src/presentation/shell/WorkspaceSidebar.tsx:260
 msgid "Marker weather settings. Forecast disabled"
 msgstr "Marker weather settings. Forecast disabled"
 
 #. js-lingui-id: Rcw29-
 #: src/presentation/shell/OnboardingTour.tsx:288
 #: src/presentation/shell/WorkspaceRail.tsx:444
-#: src/presentation/shell/WorkspaceSidebar.tsx:83
+#: src/presentation/shell/WorkspaceSidebar.tsx:85
 msgid "Markers"
 msgstr "Markers"
 
@@ -607,13 +607,13 @@ msgid "Measuring browser storage…"
 msgstr "Measuring browser storage…"
 
 #. js-lingui-id: PLOwNq
-#: src/presentation/shell/WorkspaceSidebar.tsx:410
+#: src/presentation/shell/WorkspaceSidebar.tsx:439
 msgid "More weather actions"
 msgstr "More weather actions"
 
 #. js-lingui-id: Qd15if
-#: src/presentation/shell/WorkspaceSidebar.tsx:471
-#: src/presentation/shell/WorkspaceSidebar.tsx:482
+#: src/presentation/shell/WorkspaceSidebar.tsx:500
+#: src/presentation/shell/WorkspaceSidebar.tsx:511
 msgid "Mosaic"
 msgstr "Mosaic"
 
@@ -653,7 +653,7 @@ msgid "New folder. Drag tracks to move them between folders."
 msgstr "New folder. Drag tracks to move them between folders."
 
 #. js-lingui-id: 5pep0p
-#: src/presentation/shell/WorkspaceSidebar.tsx:541
+#: src/presentation/shell/WorkspaceSidebar.tsx:593
 msgid "New marker"
 msgstr "New marker"
 
@@ -678,7 +678,7 @@ msgid "No matching places were found."
 msgstr "No matching places were found."
 
 #. js-lingui-id: 6plAyV
-#: src/presentation/shell/WorkspaceSidebar.tsx:438
+#: src/presentation/shell/WorkspaceSidebar.tsx:467
 msgid "Open meteoblue.com"
 msgstr "Open meteoblue.com"
 
@@ -698,7 +698,7 @@ msgid "Open tracks"
 msgstr "Open tracks"
 
 #. js-lingui-id: PXdouE
-#: src/presentation/shell/WorkspaceSidebar.tsx:450
+#: src/presentation/shell/WorkspaceSidebar.tsx:479
 msgid "Open windy.com"
 msgstr "Open windy.com"
 
@@ -733,7 +733,7 @@ msgid "Pick a point on the map to get its forecast."
 msgstr "Pick a point on the map to get its forecast."
 
 #. js-lingui-id: -sDbe3
-#: src/presentation/shell/WorkspaceSidebar.tsx:530
+#: src/presentation/shell/WorkspaceSidebar.tsx:582
 msgid "Place a marker on the map"
 msgstr "Place a marker on the map"
 
@@ -779,7 +779,7 @@ msgid "Place search timed out. Try again."
 msgstr "Place search timed out. Try again."
 
 #. js-lingui-id: jiQuHZ
-#: src/presentation/shell/WorkspaceSidebar.tsx:573
+#: src/presentation/shell/WorkspaceSidebar.tsx:625
 msgid "Plan a route on the map"
 msgstr "Plan a route on the map"
 
@@ -789,7 +789,7 @@ msgid "Plan a route: click points on the map, and the route follows paths."
 msgstr "Plan a route: click points on the map, and the route follows paths."
 
 #. js-lingui-id: P7wp80
-#: src/presentation/shell/WorkspaceSidebar.tsx:584
+#: src/presentation/shell/WorkspaceSidebar.tsx:636
 msgid "Plan route"
 msgstr "Plan route"
 
@@ -833,6 +833,18 @@ msgstr "Ready"
 msgid "Refresh"
 msgstr "Refresh"
 
+#. js-lingui-id: RkYFJa
+#: src/presentation/shell/WorkspaceSidebar.tsx:418
+#: src/presentation/shell/WorkspaceSidebar.tsx:422
+msgid "Refresh forecast"
+msgstr "Refresh forecast"
+
+#. js-lingui-id: PrgH3D
+#: src/presentation/shell/WorkspaceSidebar.tsx:565
+#: src/presentation/shell/WorkspaceSidebar.tsx:569
+msgid "Refresh marker weather"
+msgstr "Refresh marker weather"
+
 #. js-lingui-id: 4CSBKd
 #: src/presentation/shell/OperationalStatus.tsx:213
 msgid "Rendering Mosaic images"
@@ -864,7 +876,7 @@ msgid "Retry"
 msgstr "Retry"
 
 #. js-lingui-id: -KkrMV
-#: src/presentation/shell/WorkspaceSidebar.tsx:462
+#: src/presentation/shell/WorkspaceSidebar.tsx:491
 msgid "Return to individual Sentinel scenes"
 msgstr "Return to individual Sentinel scenes"
 
@@ -881,7 +893,7 @@ msgid "River"
 msgstr "River"
 
 #. js-lingui-id: dN_PDN
-#: src/presentation/shell/WorkspaceSidebar.tsx:572
+#: src/presentation/shell/WorkspaceSidebar.tsx:624
 msgid "Route planning is unavailable because map routing data is not configured"
 msgstr "Route planning is unavailable because map routing data is not configured"
 
@@ -901,7 +913,7 @@ msgid "Satellite basemap"
 msgstr "Satellite basemap"
 
 #. js-lingui-id: -dCnti
-#: src/presentation/shell/WorkspaceSidebar.tsx:81
+#: src/presentation/shell/WorkspaceSidebar.tsx:83
 msgid "Satellite imagery"
 msgstr "Satellite imagery"
 
@@ -941,12 +953,12 @@ msgid "Saved local track"
 msgstr "Saved local track"
 
 #. js-lingui-id: zHhW29
-#: src/presentation/shell/WorkspaceSidebar.tsx:277
+#: src/presentation/shell/WorkspaceSidebar.tsx:289
 msgid "Saved markers are loading"
 msgstr "Saved markers are loading"
 
 #. js-lingui-id: AwkEFV
-#: src/presentation/shell/WorkspaceSidebar.tsx:276
+#: src/presentation/shell/WorkspaceSidebar.tsx:288
 msgid "Saved markers are unavailable"
 msgstr "Saved markers are unavailable"
 
@@ -992,18 +1004,18 @@ msgid "Searching the Earth Search Sentinel catalog…"
 msgstr "Searching the Earth Search Sentinel catalog…"
 
 #. js-lingui-id: TdjB1H
-#: src/presentation/shell/WorkspaceSidebar.tsx:385
+#: src/presentation/shell/WorkspaceSidebar.tsx:400
 msgid "Select a forecast point on the map"
 msgstr "Select a forecast point on the map"
 
 #. js-lingui-id: gSrjec
-#: src/presentation/shell/WorkspaceSidebar.tsx:396
+#: src/presentation/shell/WorkspaceSidebar.tsx:411
 msgid "Select forecast point"
 msgstr "Select forecast point"
 
 #. js-lingui-id: BQh2wr
-#: src/presentation/shell/WorkspaceSidebar.tsx:553
-#: src/presentation/shell/WorkspaceSidebar.tsx:560
+#: src/presentation/shell/WorkspaceSidebar.tsx:605
+#: src/presentation/shell/WorkspaceSidebar.tsx:612
 msgid "Select multiple tracks"
 msgstr "Select multiple tracks"
 
@@ -1059,7 +1071,7 @@ msgid "Show current error details"
 msgstr "Show current error details"
 
 #. js-lingui-id: BE_aZF
-#: src/presentation/shell/WorkspaceSidebar.tsx:592
+#: src/presentation/shell/WorkspaceSidebar.tsx:644
 msgid "Show map"
 msgstr "Show map"
 
@@ -1086,8 +1098,8 @@ msgid "Show tour"
 msgstr "Show tour"
 
 #. js-lingui-id: 5HHzPM
-#: src/presentation/shell/WorkspaceSidebar.tsx:357
-#: src/presentation/shell/WorkspaceSidebar.tsx:368
+#: src/presentation/shell/WorkspaceSidebar.tsx:372
+#: src/presentation/shell/WorkspaceSidebar.tsx:383
 msgid "Show weather map"
 msgstr "Show weather map"
 
@@ -1142,7 +1154,7 @@ msgid "Stream"
 msgstr "Stream"
 
 #. js-lingui-id: lbWqJN
-#: src/presentation/shell/WorkspaceSidebar.tsx:463
+#: src/presentation/shell/WorkspaceSidebar.tsx:492
 msgid "Switch to Sentinel Mosaic"
 msgstr "Switch to Sentinel Mosaic"
 
@@ -1219,7 +1231,7 @@ msgstr "Track name"
 #. js-lingui-id: 2eFlmt
 #: src/presentation/shell/OnboardingTour.tsx:181
 #: src/presentation/shell/WorkspaceRail.tsx:436
-#: src/presentation/shell/WorkspaceSidebar.tsx:80
+#: src/presentation/shell/WorkspaceSidebar.tsx:82
 msgid "Tracks"
 msgstr "Tracks"
 
@@ -1235,7 +1247,7 @@ msgstr "Used heap"
 
 #. js-lingui-id: 7PzzBU
 #: src/presentation/shell/WorkspaceRail.tsx:139
-#: src/presentation/shell/WorkspaceSidebar.tsx:85
+#: src/presentation/shell/WorkspaceSidebar.tsx:87
 msgid "User"
 msgstr "User"
 
@@ -1292,7 +1304,7 @@ msgstr "Waterfall"
 #. js-lingui-id: mJZLtT
 #: src/presentation/shell/OnboardingTour.tsx:368
 #: src/presentation/shell/WorkspaceRail.tsx:468
-#: src/presentation/shell/WorkspaceSidebar.tsx:82
+#: src/presentation/shell/WorkspaceSidebar.tsx:84
 msgid "Weather"
 msgstr "Weather"
 
@@ -1307,7 +1319,7 @@ msgid "Weather forecast data"
 msgstr "Weather forecast data"
 
 #. js-lingui-id: sUKK7e
-#: src/presentation/shell/WorkspaceSidebar.tsx:356
+#: src/presentation/shell/WorkspaceSidebar.tsx:371
 msgid "Weather map is unavailable"
 msgstr "Weather map is unavailable"
 

@@ -10,6 +10,7 @@ import {
   vi,
   mapLayerStore,
   mapInteractionStore,
+  SAVED_MARKER_SCHEMA_VERSION,
   requestWeatherForecast,
   useUiStore,
   FakeMapFacade,
@@ -664,6 +665,77 @@ describe('WorkspaceShell', () => {
     expect(mapInteractionStore.getState().navigationCommand).toMatchObject({
       target: { longitude: 44.8073, latitude: 41.6918 },
     });
+  });
+  it('refreshes the selected Weather point from the header without leaving point selection', async () => {
+    const user = userEvent.setup();
+    const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
+    renderWorkspaceShell();
+
+    await user.click(screen.getByRole('tab', { name: 'Weather' }));
+    const refreshButton = screen.getByRole('button', { name: 'Refresh forecast' });
+    expect(refreshButton).toBeDisabled();
+    act(() => {
+      requestWeatherForecast(
+        { longitude: 44.8073, latitude: 41.6918 },
+        'Narikala Fortress',
+      );
+    });
+    await screen.findByRole('button', { name: 'Center map on forecast location' });
+    expect(execute).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole('button', { name: 'Select forecast point' }));
+    await user.click(refreshButton);
+
+    await waitFor(() => {
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+    expect(mapInteractionStore.getState().weatherPointSelectionActive).toBe(true);
+    expect(execute.mock.calls[1]?.[0]).toEqual(execute.mock.calls[0]?.[0]);
+    const location = await screen.findByRole('button', {
+      name: 'Center map on forecast location',
+    });
+    expect(within(location).getByText('Narikala Fortress')).toBeVisible();
+  });
+  it('lists marker weather days in forecast order and refreshes every marker', async () => {
+    await services.database.saveWeatherIntervalPreferences({
+      weekdays: [0, 6],
+      period: { kind: 'day' },
+      showOnMap: false,
+    });
+    await services.database.saveSavedMarker({
+      schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+      id: 'summit',
+      name: 'Summit',
+      normalizedName: 'summit',
+      coordinate: [44.8271, 41.7151],
+      elevationMeters: 1_234,
+      iconKey: 'place',
+      colorKey: 'blue',
+      createdAt: '2026-07-11T00:00:00.000Z',
+      updatedAt: '2026-07-11T00:00:00.000Z',
+    });
+    useUiStore.setState({ activeTab: 'markers' });
+    // The browser is already on Sunday while the forecast-local calendar starts Saturday.
+    vi.spyOn(services.clock, 'now').mockReturnValue(new Date(2026, 6, 19, 12));
+    const user = userEvent.setup();
+    const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
+    renderWorkspaceShell();
+
+    const forecastName = 'Open Sat weather for Summit: 20 °C, 0 mm precipitation';
+    await screen.findByRole('button', { name: forecastName });
+    expect(
+      screen.getByRole('button', {
+        name: 'Marker weather settings. Forecast days: Sat, Sun',
+      }),
+    ).toBeVisible();
+    expect(execute).toHaveBeenCalledOnce();
+
+    await user.click(screen.getByRole('button', { name: 'Refresh marker weather' }));
+
+    await waitFor(() => {
+      expect(execute).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByRole('button', { name: forecastName })).toBeVisible();
   });
   function setupMosaic() {
     const mapLayers = services.mapLayers;

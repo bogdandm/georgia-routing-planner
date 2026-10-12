@@ -11,6 +11,7 @@ import MapOutlinedIcon from '@mui/icons-material/MapOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import PlaylistAddCheckOutlinedIcon from '@mui/icons-material/PlaylistAddCheckOutlined';
+import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
 import {
   Box,
@@ -34,6 +35,7 @@ import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import {
   cancelWeatherPointSelection,
   mapInteractionStore,
+  refreshWeatherForecast,
   requestMapNavigation,
   requestMarkerPlacement,
   startWeatherPointSelection,
@@ -230,9 +232,15 @@ export function WorkspaceSidebar({
   const {
     loadState,
     openWeatherSettings,
+    refreshWeather,
+    weatherByMarkerId,
     weatherPreferences,
     weatherPreferencesReady,
+    weatherWeekdays,
   } = useMarkersWorkspace();
+  const markerWeatherLoading = [...weatherByMarkerId.values()].some(
+    (weather) => weather.status === 'loading',
+  );
   /* eslint-disable -- Intl options and punctuation are locale-independent tokens. */
   const markerWeatherWeekdayFormatter = useMemo(
     () =>
@@ -242,7 +250,7 @@ export function WorkspaceSidebar({
       }),
     [i18n.locale],
   );
-  const markerWeatherWeekdayLabel = weatherPreferences.weekdays
+  const markerWeatherWeekdayLabel = weatherWeekdays
     .map((weekday) => markerWeatherWeekdayFormatter.format(markerWeatherDates[weekday]))
     .join(', ');
   /* eslint-enable */
@@ -263,6 +271,10 @@ export function WorkspaceSidebar({
   const weatherPointSelectionActive = useStore(
     mapInteractionStore,
     (state) => state.weatherPointSelectionActive,
+  );
+  const weatherPointSelected = useStore(
+    mapInteractionStore,
+    (state) => state.selectedWeatherForecastPoint !== null,
   );
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   useEffect(() => {
@@ -325,6 +337,9 @@ export function WorkspaceSidebar({
           py: compactMarkersHeader ? 1 : 0,
           bgcolor: appColors.surface.subtle,
           borderBottom: `1px solid ${appColors.brand.sky}`,
+          // Header actions use the primary ink; MUI icon and toggle buttons default to grey.
+          '& .MuiIconButton-root:not(.Mui-disabled), & .MuiToggleButton-root:not(.Mui-disabled)':
+            { color: 'primary.main' },
         }}
       >
         <Box
@@ -399,6 +414,20 @@ export function WorkspaceSidebar({
               >
                 <AddLocationAltIcon sx={{ fontSize: 20 }} />
               </ToggleButton>
+            </Tooltip>
+            <Tooltip title={t`Refresh forecast`}>
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={t`Refresh forecast`}
+                  disabled={!weatherPointSelected}
+                  onClick={refreshWeatherForecast}
+                  // Matches the adjacent map and point-selection toggles.
+                  sx={{ p: '7px', border: 1, borderColor: 'divider', borderRadius: 1 }}
+                >
+                  <RefreshOutlinedIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
             </Tooltip>
             <IconButton
               size="small"
@@ -496,34 +525,57 @@ export function WorkspaceSidebar({
               ml: compactMarkersHeader ? '0 !important' : undefined,
             }}
           >
-            <Tooltip
-              title={
-                !weatherPreferencesReady
-                  ? t`Loading marker weather settings`
-                  : weatherPreferences.weekdays.length === 0
-                    ? t`Marker weather is disabled`
-                    : t`Marker weather settings`
-              }
+            {/* Refresh belongs to marker weather, so it hugs the weekday button and keeps
+                a wider gap before the marker actions. */}
+            <Stack
+              direction="row"
+              sx={{ alignItems: 'center', pr: compactMarkersHeader ? 0 : 1 }}
             >
-              <Button
-                size="small"
-                color={weatherPreferences.weekdays.length === 0 ? 'inherit' : 'primary'}
-                disabled={!weatherPreferencesReady}
-                aria-label={markerWeatherSettingsLabel}
-                startIcon={<WbCloudyOutlinedIcon sx={{ fontSize: 20 }} />}
-                sx={{
-                  minWidth: 0,
-                  px: compactMarkersHeader ? 0 : 1,
-                  whiteSpace: 'nowrap',
-                  '& .MuiButton-startIcon': compactMarkersHeader
-                    ? { ml: 0, mr: 0.75 }
-                    : undefined,
-                }}
-                onClick={openWeatherSettings}
+              <Tooltip
+                title={
+                  !weatherPreferencesReady
+                    ? t`Loading marker weather settings`
+                    : weatherPreferences.weekdays.length === 0
+                      ? t`Marker weather is disabled`
+                      : t`Marker weather settings`
+                }
               >
-                {weatherPreferencesReady ? markerWeatherWeekdayLabel : ''}
-              </Button>
-            </Tooltip>
+                <Button
+                  size="small"
+                  color={
+                    weatherPreferences.weekdays.length === 0 ? 'inherit' : 'primary'
+                  }
+                  disabled={!weatherPreferencesReady}
+                  aria-label={markerWeatherSettingsLabel}
+                  startIcon={<WbCloudyOutlinedIcon sx={{ fontSize: 20 }} />}
+                  sx={{
+                    minWidth: 0,
+                    px: compactMarkersHeader ? 0 : 1,
+                    whiteSpace: 'nowrap',
+                    '& .MuiButton-startIcon': compactMarkersHeader
+                      ? { ml: 0, mr: 0.75 }
+                      : undefined,
+                  }}
+                  onClick={openWeatherSettings}
+                >
+                  {weatherPreferencesReady ? markerWeatherWeekdayLabel : ''}
+                </Button>
+              </Tooltip>
+              {weatherPreferencesReady && weatherWeekdays.length > 0 ? (
+                <Tooltip title={t`Refresh marker weather`}>
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-label={t`Refresh marker weather`}
+                      disabled={loadState !== 'ready' || markerWeatherLoading}
+                      onClick={refreshWeather}
+                    >
+                      <RefreshOutlinedIcon sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              ) : null}
+            </Stack>
             {compactMarkersHeader ? <Box aria-hidden sx={{ flex: 1 }} /> : null}
             <Tooltip
               title={

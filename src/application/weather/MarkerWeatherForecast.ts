@@ -47,12 +47,25 @@ function nextLocalDate(date: string): string {
   return value.toISOString().slice(0, 10);
 }
 
-function weekdayForLocalDate(date: string): MarkerWeatherWeekday {
+/** Weekday (0 = Sunday) of a forecast-local `YYYY-MM-DD` date. */
+export function weekdayForLocalDate(date: string): MarkerWeatherWeekday {
   const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
   if (!markerWeatherWeekdays.includes(weekday as MarkerWeatherWeekday)) {
     throw new RangeError(`Invalid local forecast date: ${date}`);
   }
   return weekday as MarkerWeatherWeekday;
+}
+
+/**
+ * Orders `weekdays` by their next occurrence on or after `todayWeekday` (0 = Sunday, as
+ * `Date.getDay()`), the date order of the `selectMarkerWeatherForecast` periods.
+ */
+export function orderMarkerWeatherWeekdays(
+  weekdays: readonly MarkerWeatherWeekday[],
+  todayWeekday: number,
+): readonly MarkerWeatherWeekday[] {
+  const daysAhead = (weekday: MarkerWeatherWeekday) => (weekday - todayWeekday + 7) % 7;
+  return [...weekdays].sort((left, right) => daysAhead(left) - daysAhead(right));
 }
 
 function nightHours(

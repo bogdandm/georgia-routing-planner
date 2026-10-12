@@ -92,6 +92,22 @@ steps of the theme's 8 px unit when 4 px precision is necessary.
 - A different width requires a concrete workflow need and visual review against the
   neighboring panels.
 
+## Style panel header actions consistently
+
+Contextual panel headers (`WorkspaceSidebar.tsx`) use one action style:
+
+- Enabled icon, toggle, and text actions use the primary ink (`primary.main`), never the
+  default grey of MUI icon and toggle buttons. Grey is reserved for disabled actions.
+  The header applies this color once; do not override it per button.
+- The main creation action, such as **New marker** or **Plan route**, is the only
+  contained button.
+- Mode toggles use outlined 36 px `ToggleButton`s. A one-shot icon action placed in that
+  row, such as **Refresh forecast**, takes the same outline and size. Overflow menus
+  stay borderless.
+- Keep related actions together: an action that belongs to another control, such as
+  **Refresh marker weather** next to the weekday button, sits directly beside it, and a
+  16 px gap separates that group from the next action.
+
 ## Use disclosure for secondary controls
 
 - Put infrequent tuning controls behind a collapsed MUI disclosure when the primary

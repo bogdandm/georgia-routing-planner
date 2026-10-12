@@ -64,6 +64,7 @@ import {
   formatWeatherTemperatureRange,
   formatWeatherWindMetresPerSecond,
 } from '@/presentation/weather/weatherFormatters';
+import { useWeatherRetryOnResume } from '@/presentation/weather/useWeatherRetryOnResume';
 
 interface ForecastDateLabels {
   readonly weekday: Intl.DateTimeFormat;
@@ -1518,6 +1519,16 @@ export function WeatherPanel({
     [],
   );
 
+  const reloadCurrentPoint = () => {
+    if (state.status === 'idle') return;
+    loadForecast(
+      state.coordinate,
+      nearbyPlaceLabel ?? undefined,
+      state.elevationMeters,
+    );
+  };
+  useWeatherRetryOnResume(state.status === 'error', reloadCurrentPoint);
+
   if (state.status === 'idle') {
     return (
       <Box
@@ -1585,16 +1596,7 @@ export function WeatherPanel({
                 <Typography variant="body2">
                   {i18n._(errorMessage(state.code))}
                 </Typography>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    loadForecast(
-                      state.coordinate,
-                      nearbyPlaceLabel ?? undefined,
-                      state.elevationMeters,
-                    );
-                  }}
-                >
+                <Button variant="outlined" onClick={reloadCurrentPoint}>
                   <Trans>Retry</Trans>
                 </Button>
               </Stack>

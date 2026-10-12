@@ -511,8 +511,9 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   create a marker, search satellite scenes here, show the weather forecast, copy a
   weather-map link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap
   or search instead opens a bottom sheet with the details and the same actions. A search
-  move lands with the point above the sheet; after a tap, the map pans only when the
-  sheet would cover the point's marker.
+  move lands with the point above the sheet, in 2D and 3D; a tapped point under the
+  sheet moves above it. Closing a sheet that moved the map recenters it on the full
+  screen.
 - **Sharing:** one **Share map view** dialog builds a link to the current map. The rail
   **Share** action opens it on the map center; **Share…** in the point actions opens it
   on the clicked point with the current zoom. The link always carries the center and

@@ -34,9 +34,6 @@ export interface PlanningPreview {
   };
 }
 
-/** `fitBounds` padding on every side when the caller passes none. */
-export const defaultFitPaddingPx = 56;
-
 /**
  * Capability boundary between declarative React UI and MapLibre's imperative native
  * object. Consumers observe serializable snapshots and never receive the native map.
@@ -56,9 +53,9 @@ export interface MapFacade {
   /** Touch layouts disable the anchored popup and show the inspection in a sheet. */
   setPointInspectionPopupEnabled(enabled: boolean): void;
   /**
-   * Pans a settled camera so a bottom overlay (the touch sheet) of `bottomInsetPx` does
-   * not cover the open inspection's point. A moving camera is left alone: search moves
-   * already include the sheet in their padding, and gestures belong to the user.
+   * Reserves a bottom overlay (the touch sheet) of `bottomInsetPx` as camera padding
+   * until the inspection closes, without moving the view, so later camera moves land
+   * above it. A tapped point already on screen but under the overlay is panned above it.
    */
   revealPointInspection(bottomInsetPx: number): void;
   /**

@@ -41,12 +41,11 @@ import {
   type MapSharePreferences,
 } from '@/application/map/MapSharePreferences';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
-import {
-  defaultFitPaddingPx,
-  type MapFacade,
-  type MapInteractionMode,
-  type MapViewportMovement,
-  type PlanningPreview,
+import type {
+  MapFacade,
+  MapInteractionMode,
+  MapViewportMovement,
+  PlanningPreview,
 } from '@/presentation/map/MapFacade';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
@@ -276,22 +275,6 @@ function runThenConsume(run: () => void, consume: () => void): void {
   } finally {
     consume();
   }
-}
-
-/** Adds a bottom overlay's height to camera padding; `fallback` is the implicit padding. */
-function withBottomInset(
-  padding: MapFitPadding | undefined,
-  fallback: number,
-  inset: number,
-): MapFitPadding | undefined {
-  if (inset === 0) return padding;
-  const base = padding ?? {
-    top: fallback,
-    right: fallback,
-    bottom: fallback,
-    left: fallback,
-  };
-  return { ...base, bottom: base.bottom + inset };
 }
 
 /**
@@ -719,25 +702,29 @@ export function MapWorkspace({
     };
   }, [facade, mapViewport]);
 
+  // Declared before the camera effects: in the commit that mounts the sheet for a
+  // search, its height must become camera padding before the held move starts.
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (sheetCoordinate === null || sheet === null) return;
+    // offsetHeight ignores the Slide transform, so the entering sheet reports its full height.
+    facade.revealPointInspection(sheet.offsetHeight);
+  }, [facade, sheetCoordinate]);
+
   // On touch, a search's camera move waits until its inspection sheet has rendered, so
   // one move can land with the point above the sheet instead of panning afterwards.
   const cameraWaitsForSheet = touchPointer && pointInspectionCommand !== null;
   useEffect(() => {
     if (navigationCommand === null || cameraWaitsForSheet) return;
-    // offsetHeight ignores the Slide transform, so the entering sheet reports its full height.
-    const sheetInset = sheetOpen ? (sheetRef.current?.offsetHeight ?? 0) : 0;
     runThenConsume(
       () => {
-        facade.navigateTo(
-          navigationCommand.target,
-          withBottomInset(getNavigationPadding?.(), 0, sheetInset),
-        );
+        facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
       },
       () => {
         consumeMapNavigationCommand(navigationCommand.id);
       },
     );
-  }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand, sheetOpen]);
+  }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand]);
   useEffect(() => {
     if (
       fitBoundsCommand === null ||
@@ -746,17 +733,12 @@ export function MapWorkspace({
     ) {
       return;
     }
-    const sheetInset = sheetOpen ? (sheetRef.current?.offsetHeight ?? 0) : 0;
     runThenConsume(
       () => {
         facade.fitBounds(
           fitBoundsCommand.bounds,
           fitBoundsCommand.maxZoom,
-          withBottomInset(
-            fitBoundsCommand.padding ?? getNavigationPadding?.(),
-            defaultFitPaddingPx,
-            sheetInset,
-          ),
+          fitBoundsCommand.padding ?? getNavigationPadding?.(),
           fitBoundsCommand.path,
         );
       },
@@ -769,7 +751,6 @@ export function MapWorkspace({
     facade,
     fitBoundsCommand,
     getNavigationPadding,
-    sheetOpen,
     snapshot.lifecycle,
   ]);
 
@@ -796,13 +777,6 @@ export function MapWorkspace({
     facade.setPointInspectionPopupEnabled(!touchPointer);
     facade.setCursorPreviewEnabled(!touchPointer);
   }, [facade, touchPointer]);
-
-  useEffect(() => {
-    const sheet = sheetRef.current;
-    if (sheetCoordinate === null || sheet === null) return;
-    // Taps open the sheet over a settled camera; search moves already include the sheet.
-    facade.revealPointInspection(sheet.offsetHeight);
-  }, [facade, sheetCoordinate]);
 
   useEffect(() => {
     const mode: MapInteractionMode =

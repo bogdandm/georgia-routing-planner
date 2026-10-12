@@ -63,6 +63,13 @@ interface MarkerCreationCommand {
   readonly target: MarkerPlacementTarget;
 }
 
+/** An open map share dialog; links keep the query and tab hash of `pageUrl`. */
+interface MapShareRequest {
+  readonly pageUrl: string;
+  /** A right-clicked point that replaces the camera center, or `null` for the center. */
+  readonly center: MapCoordinate | null;
+}
+
 interface MapInteractionState {
   readonly navigationCommand: MapNavigationCommand | null;
   readonly fitBoundsCommand: MapFitBoundsCommand | null;
@@ -75,6 +82,7 @@ interface MapInteractionState {
   readonly weatherMapForecastMarker: WeatherMapForecastMarker | null;
   readonly markerPlacement: MarkerPlacement | null;
   readonly markerCreationCommand: MarkerCreationCommand | null;
+  readonly shareRequest: MapShareRequest | null;
 }
 
 export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
@@ -89,6 +97,7 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   weatherMapForecastMarker: null,
   markerPlacement: null,
   markerCreationCommand: null,
+  shareRequest: null,
 }));
 
 let nextCommandId = 0;
@@ -322,6 +331,16 @@ export function consumeMarkerCreationCommand(commandId: number): void {
   mapInteractionStore.setState({ markerCreationCommand: null });
 }
 
+export function openMapShare(pageUrl: string, center: MapCoordinate | null): void {
+  mapInteractionStore.setState({
+    shareRequest: { pageUrl, center: center === null ? null : { ...center } },
+  });
+}
+
+export function closeMapShare(): void {
+  mapInteractionStore.setState({ shareRequest: null });
+}
+
 export function resetMapInteractionStore(): void {
   nextCommandId = 0;
   nextSatelliteSearchRequestId = 0;
@@ -339,5 +358,6 @@ export function resetMapInteractionStore(): void {
     weatherMapForecastMarker: null,
     markerPlacement: null,
     markerCreationCommand: null,
+    shareRequest: null,
   });
 }

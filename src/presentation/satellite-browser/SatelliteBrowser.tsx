@@ -40,6 +40,10 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
 import {
+  defaultMapSharePreferences,
+  type MapSharePreferences,
+} from '@/application/map/MapSharePreferences';
+import {
   SatelliteSearchError,
   type SatelliteSearchErrorCode,
 } from '@/application/satellite/SatelliteSearchError';
@@ -62,7 +66,7 @@ import {
   mapLayerStore,
   type AppliedSatelliteImagerySnapshot,
 } from '@/presentation/map/mapLayerStore';
-import { createMapShareUrl } from '@/presentation/map/mapShareUrl';
+import { createMapShareUrl, selectMapShareView } from '@/presentation/map/mapShareUrl';
 import {
   consumeSatelliteSearchRequest,
   mapInteractionStore,
@@ -1342,15 +1346,32 @@ export function SatelliteBrowser({
   };
 
   const copySceneLink = async (sceneKey: string) => {
-    const camera = mapDiagnostics.getSnapshot()?.camera;
-    if (camera === undefined) {
+    const snapshot = mapDiagnostics.getSnapshot();
+    if (snapshot === null) {
       // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setCopyLinkStatus('failed');
       return;
     }
+    const preferences = await database
+      .loadMapSharePreferences()
+      .catch((): MapSharePreferences => {
+        logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+        return defaultMapSharePreferences;
+      });
+    // A card link always carries its own scene, which replaces any static basemap.
+    const view = selectMapShareView(
+      {
+        camera: snapshot.camera,
+        terrainMode: snapshot.terrainMode,
+        basemap: null,
+        sceneKey,
+      },
+      { ...preferences, includeSentinelImage: true },
+      null,
+    );
     try {
       await navigator.clipboard.writeText(
-        createMapShareUrl(window.location.href, camera, sceneKey),
+        createMapShareUrl(window.location.href, view),
       );
       // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
       setCopyLinkStatus('copied');

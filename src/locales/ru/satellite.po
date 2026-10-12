@@ -14,18 +14,18 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: kqc-Ql
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:521
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:525
 msgid "· {cloudPercent} cloud"
 msgstr "· облачность {cloudPercent}"
 
 #. js-lingui-id: DN98QJ
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:516
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:520
 msgid "{cloudPercent} cloud"
 msgstr "Облачность {cloudPercent}"
 
 #. js-lingui-id: o_H4Mk
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:530
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:539
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:534
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:543
 msgid "{coveragePercent} coverage"
 msgstr "Покрытие {coveragePercent}"
 
@@ -60,12 +60,12 @@ msgid "{formattedDate}, no loaded imagery"
 msgstr "{formattedDate}, снимки не загружены"
 
 #. js-lingui-id: 4zd3hw
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:127
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:131
 msgid "{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}"
 msgstr "{imageCount, plural, one {# снимок} few {# снимка} many {# снимков} other {# снимка}} · {dayCount, plural, one {# день съёмки} few {# дня съёмки} many {# дней съёмки} other {# дня съёмки}}"
 
 #. js-lingui-id: PkGcfQ
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1397
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1418
 msgid "{monthLabel} imagery could not be loaded. Try again."
 msgstr "Не удалось загрузить снимки за {monthLabel}. Повторите попытку."
 
@@ -95,12 +95,12 @@ msgid "A Sentinel mosaic image could not be restored after the map style changed
 msgstr "Не удалось восстановить снимок мозаики Sentinel после смены стиля карты."
 
 #. js-lingui-id: _DlUkp
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:568
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:572
 msgid "Acquired {title} · {acquisitionTime}"
 msgstr "Снято {title} · {acquisitionTime}"
 
 #. js-lingui-id: 7ysE3R
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1410
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1431
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx:84
 msgid "Acquisition calendar"
 msgstr "Календарь съёмки"
@@ -116,17 +116,17 @@ msgid "All dates before it will be selected."
 msgstr "Будут выбраны все даты до неё."
 
 #. js-lingui-id: bhLu79
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:558
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:562
 msgid "Applied imagery is hidden"
 msgstr "Применённый снимок скрыт"
 
 #. js-lingui-id: dCjt6C
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:450
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:454
 msgid "Apply {title} imagery"
 msgstr "Применить снимок за {title}"
 
 #. js-lingui-id: YcHHOJ
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:554
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:558
 msgid "Applying true-color imagery…"
 msgstr "Применение снимка в естественных цветах…"
 
@@ -141,12 +141,12 @@ msgid "Auto"
 msgstr "Авто"
 
 #. js-lingui-id: FddAt6
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:755
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:759
 msgid "Back to satellite search"
 msgstr "Назад к поиску снимков"
 
 #. js-lingui-id: 5TviPn
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1479
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1500
 msgid "Cancel search"
 msgstr "Отменить поиск"
 
@@ -181,12 +181,12 @@ msgid "Choose the last date to include in the Mosaic."
 msgstr "Выберите последнюю дату, которую нужно включить в мозаику."
 
 #. js-lingui-id: XlShQd
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1605
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1626
 msgid "Clipboard access failed. Try again."
 msgstr "Нет доступа к буферу обмена. Повторите попытку."
 
 #. js-lingui-id: _MLTZK
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:786
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:790
 msgid "Close imagery results"
 msgstr "Закрыть результаты поиска снимков"
 
@@ -201,8 +201,8 @@ msgid "Coverage: {coverage}"
 msgstr "Покрытие: {coverage}"
 
 #. js-lingui-id: WhB2Yo
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1530
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1545
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1551
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1566
 msgctxt "satellite search area"
 msgid "Custom"
 msgstr "Своя область"
@@ -238,7 +238,7 @@ msgid "Fill the settled map view with a Mosaic"
 msgstr "Заполнить мозаикой видимую область карты"
 
 #. js-lingui-id: XIRep_
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:618
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:622
 msgid "Fit footprint"
 msgstr "Показать границы снимка"
 
@@ -248,12 +248,12 @@ msgid "Gamma"
 msgstr "Гамма"
 
 #. js-lingui-id: di6QLI
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:515
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:519
 msgid "High cloud cover: {cloudPercent}"
 msgstr "Высокая облачность: {cloudPercent}"
 
 #. js-lingui-id: hHoLcB
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:556
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:560
 msgid "Image failed to apply"
 msgstr "Не удалось применить снимок"
 
@@ -268,17 +268,17 @@ msgid "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
 msgstr "Снимки: данные Copernicus Sentinel через Element 84 Earth Search."
 
 #. js-lingui-id: 2LlWfy
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:769
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:773
 msgid "Images near {coordinates}"
 msgstr "Снимки рядом с {coordinates}"
 
 #. js-lingui-id: cXonY8
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:773
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:777
 msgid "Latest Sentinel scenes"
 msgstr "Свежие сцены Sentinel"
 
 #. js-lingui-id: 7UhcOT
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:866
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:870
 msgid "Load more images"
 msgstr "Загрузить ещё снимки"
 
@@ -288,27 +288,27 @@ msgid "Loading {displayMonthLabel} imagery"
 msgstr "Загрузка снимков за {displayMonthLabel}"
 
 #. js-lingui-id: wXmnVV
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:798
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:802
 msgid "Loading latest images…"
 msgstr "Загрузка свежих снимков…"
 
 #. js-lingui-id: _UiOW8
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:866
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:870
 msgid "Loading older images…"
 msgstr "Загрузка более ранних снимков…"
 
 #. js-lingui-id: faSoF-
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:529
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:533
 msgid "Low viewport coverage: {coveragePercent}"
 msgstr "Низкое покрытие области просмотра: {coveragePercent}"
 
 #. js-lingui-id: FJqkwn
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1549
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1570
 msgid "Marker"
 msgstr "Метка"
 
 #. js-lingui-id: TBG9qk
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1437
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1458
 msgid "Maximum cloud"
 msgstr "Максимальная облачность"
 
@@ -328,7 +328,7 @@ msgid "No applied scene is available to fit."
 msgstr "Нет применённой сцены, к которой можно приблизить карту."
 
 #. js-lingui-id: L-0avQ
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:811
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:815
 msgid "No matching images. Increase the cloud limit or move the map."
 msgstr "Подходящих снимков нет. Увеличьте порог облачности или сдвиньте карту."
 
@@ -338,8 +338,8 @@ msgid "No Sentinel imagery found through the archive."
 msgstr "В архиве не найдено снимков Sentinel."
 
 #. js-lingui-id: NHlrjI
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1531
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1541
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1552
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1562
 msgid "Point"
 msgstr "Точка"
 
@@ -354,7 +354,7 @@ msgid "Previous month"
 msgstr "Предыдущий месяц"
 
 #. js-lingui-id: kwTqXK
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:594
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:598
 msgid "Product {productId}"
 msgstr "Продукт {productId}"
 
@@ -374,7 +374,7 @@ msgid "Relief shading could not be updated. Try again."
 msgstr "Не удалось обновить отмывку рельефа. Повторите попытку."
 
 #. js-lingui-id: WIbcl9
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:450
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:454
 msgid "Remove {title} imagery from map"
 msgstr "Убрать снимок за {title} с карты"
 
@@ -399,7 +399,7 @@ msgid "Return to current month"
 msgstr "Вернуться к текущему месяцу"
 
 #. js-lingui-id: Ets8ig
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1502
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1523
 msgid "Satellite provider configuration is unavailable."
 msgstr "Конфигурация поставщика спутниковых снимков недоступна."
 
@@ -415,33 +415,33 @@ msgid "Saturation"
 msgstr "Насыщенность"
 
 #. js-lingui-id: MjJtR5
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:547
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:551
 msgid "Scene border is only {edgeDistance} from the search anchor."
 msgstr "Граница сцены всего в {edgeDistance} от точки поиска."
 
 #. js-lingui-id: pv0_zw
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:601
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:605
 msgid "Scene edge {edgeDistance} from search point"
 msgstr "Граница сцены в {edgeDistance} от точки поиска"
 
 #. js-lingui-id: g6Rc6e
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1604
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1625
 msgid "Scene link copied"
 msgstr "Ссылка на сцену скопирована"
 
 #. js-lingui-id: YN_ioA
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1519
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1523
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1540
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1544
 msgid "Search area source"
 msgstr "Область поиска"
 
 #. js-lingui-id: qQG0gT
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1489
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1510
 msgid "Search images"
 msgstr "Найти снимки"
 
 #. js-lingui-id: NscJt0
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:561
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:565
 msgid "Selected for imagery"
 msgstr "Выбран для показа"
 
@@ -461,7 +461,7 @@ msgid "Sentinel imagery could not be loaded. Try again."
 msgstr "Не удалось загрузить снимки Sentinel. Повторите попытку."
 
 #. js-lingui-id: 3iZH3q
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:729
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:733
 msgid "Sentinel imagery results"
 msgstr "Результаты поиска снимков Sentinel"
 
@@ -491,12 +491,12 @@ msgid "Server"
 msgstr "Сервер"
 
 #. js-lingui-id: Tz0i8g
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1514
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1535
 msgid "Settings"
 msgstr "Настройки"
 
 #. js-lingui-id: uIZ2tg
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:630
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:634
 msgid "Share link"
 msgstr "Поделиться ссылкой"
 
@@ -552,7 +552,7 @@ msgid "The imagery renderer rejected these stretch values (HTTP {httpStatus}). R
 msgstr "Сервер отрисовки снимков отклонил эти параметры растяжки (HTTP {httpStatus}). Сбросьте растяжку снимка или выберите менее крайние значения."
 
 #. js-lingui-id: a9VCLs
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:805
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:809
 msgid "The imagery search could not be completed."
 msgstr "Не удалось выполнить поиск снимков."
 
@@ -598,17 +598,17 @@ msgid "This scene has no supported true-color asset."
 msgstr "У этой сцены нет поддерживаемого изображения в естественных цветах."
 
 #. js-lingui-id: MEUnNF
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:585
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:589
 msgid "Tile {tileId} · Orbit {orbit}"
 msgstr "Тайл {tileId} · Орбита {orbit}"
 
 #. js-lingui-id: 8m2Wwx
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:560
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:564
 msgid "True-color imagery applied"
 msgstr "Снимок в естественных цветах применён"
 
 #. js-lingui-id: jqzUyM
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:434
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:438
 msgid "Unavailable"
 msgstr "Нет данных"
 
@@ -618,7 +618,7 @@ msgid "Uses only TiTiler. Provider failures do not switch to direct imagery."
 msgstr "Использует только TiTiler. При сбоях поставщика переключения на прямые снимки не происходит."
 
 #. js-lingui-id: A5HYbB
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1553
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1574
 msgid "Uses the map center point or a custom area for imagery search."
 msgstr "Для поиска снимков используется центр карты или своя область."
 
@@ -648,6 +648,6 @@ msgid "Wait for the satellite renderer change to finish."
 msgstr "Дождитесь завершения смены способа отрисовки снимков."
 
 #. js-lingui-id: H7wWdy
-#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1497
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx:1518
 msgid "Waiting for the map viewport to become ready."
 msgstr "Ожидание готовности карты."

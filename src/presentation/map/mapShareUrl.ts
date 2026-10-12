@@ -1,4 +1,13 @@
-import type { MapCamera, MapCoordinate } from '@/presentation/map/mapTypes';
+import type { MapSharePreferences } from '@/application/map/MapSharePreferences';
+import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
+import type { MapLayerState } from '@/presentation/map/mapLayerStore';
+import type {
+  MapCamera,
+  MapCoordinate,
+  MapDiagnosticsSnapshot,
+  MapLayerPreset,
+  TerrainMode,
+} from '@/presentation/map/mapTypes';
 
 const mapShareSchemaVersion = 2;
 
@@ -7,17 +16,37 @@ const zoomPrecision = 2;
 const sceneKeyPattern = /^[a-z0-9._-]{1,100}:[a-z0-9._-]{1,300}$/iu;
 const weatherTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?Z$/u;
 
-interface SharedMapView {
-  readonly center: {
-    readonly longitude: number;
-    readonly latitude: number;
-  };
+/** Static satellite basemaps a link may select; Sentinel imagery travels as `scene`. */
+export const satelliteBasemaps = [
+  'google-satellite',
+  'bing-satellite',
+  'esri-satellite',
+  'napr-orthophoto',
+] as const satisfies readonly MapLayerPreset[];
+
+export type SatelliteBasemap = (typeof satelliteBasemaps)[number];
+
+export type MapShareOrientation =
+  | { readonly mode: '2d' }
+  | { readonly mode: '3d'; readonly bearing: number; readonly pitch: number };
+
+/** Everything a map link encodes; the page query and tab hash are kept as they are. */
+export interface MapShareView {
+  readonly center: MapCoordinate;
   readonly zoom: number;
+  readonly orientation: MapShareOrientation;
+  readonly basemap: SatelliteBasemap | null;
   readonly sceneKey: string | null;
-  readonly orientation:
-    | { readonly mode: '2d' }
-    | { readonly mode: '3d'; readonly bearing: number; readonly pitch: number };
 }
+
+/** What the map currently shows that a link can reproduce, before share preferences. */
+export interface ShareableMapState {
+  readonly camera: MapCamera;
+  readonly terrainMode: TerrainMode;
+  readonly basemap: SatelliteBasemap | null;
+  readonly sceneKey: string | null;
+}
+
 export interface WeatherMapUrlState {
   readonly coordinate: MapCoordinate | null;
   readonly validTime: string | null;
@@ -43,10 +72,10 @@ function validWeatherTime(value: string | null): string | null {
 }
 
 /**
- * Reads the current v2 contract plus v1 and the original unversioned shape.
- * shape. Unknown future versions fail closed so local camera persistence still wins.
+ * Reads the current v2 contract plus v1 and the original unversioned shape. Unknown
+ * future versions fail closed so local camera persistence still wins.
  */
-export function parseSharedMapView(search: string): SharedMapView | null {
+export function parseSharedMapView(search: string): MapShareView | null {
   const parameters = new URLSearchParams(search);
   const version = parameters.get('map');
   if (
@@ -67,6 +96,8 @@ export function parseSharedMapView(search: string): SharedMapView | null {
     candidateScene !== null && sceneKeyPattern.test(candidateScene)
       ? candidateScene
       : null;
+  const candidateBasemap = parameters.get('base');
+  const basemap = satelliteBasemaps.find((id) => id === candidateBasemap) ?? null;
   const mode =
     version === String(mapShareSchemaVersion) ? parameters.get('view') : null;
   const bearing = finiteInRange(parameters.get('bearing'), -180, 180);
@@ -75,12 +106,12 @@ export function parseSharedMapView(search: string): SharedMapView | null {
     mode === '3d' && bearing !== null && pitch !== null
       ? ({ mode: '3d', bearing, pitch } as const)
       : ({ mode: '2d' } as const);
-  return { center: { longitude, latitude }, zoom, sceneKey, orientation };
+  return { center: { longitude, latitude }, zoom, orientation, basemap, sceneKey };
 }
 
 export function applySharedMapView(
   camera: MapCamera,
-  shared: SharedMapView | null,
+  shared: MapShareView | null,
 ): MapCamera {
   if (shared === null) return camera;
   return {
@@ -91,6 +122,55 @@ export function applySharedMapView(
     pitch: shared.orientation.mode === '3d' ? shared.orientation.pitch : 0,
   };
 }
+
+/**
+ * Reads the shareable content of the current map. Static basemaps and Sentinel imagery
+ * are mutually exclusive on the map, and a selected scene hidden from view is not shared.
+ */
+export function readShareableMapState(
+  snapshot: Pick<MapDiagnosticsSnapshot, 'camera' | 'terrainMode'>,
+  layers: Pick<MapLayerState, 'visibility' | 'selectedScene'>,
+): ShareableMapState {
+  const basemap = satelliteBasemaps.find((id) => layers.visibility[id]) ?? null;
+  const sceneKey =
+    basemap === null &&
+    layers.visibility['satellite-imagery'] &&
+    layers.selectedScene !== null
+      ? satelliteSceneKey(layers.selectedScene)
+      : null;
+  return {
+    camera: snapshot.camera,
+    terrainMode: snapshot.terrainMode,
+    basemap,
+    sceneKey,
+  };
+}
+
+/**
+ * Applies the user's share preferences to the current map. A non-null `center` (a
+ * right-clicked point) replaces the camera center and keeps the zoom and orientation.
+ */
+export function selectMapShareView(
+  state: ShareableMapState,
+  preferences: MapSharePreferences,
+  center: MapCoordinate | null,
+): MapShareView {
+  const orientation: MapShareOrientation =
+    state.terrainMode === 'terrain' && preferences.include3dCamera
+      ? { mode: '3d', bearing: state.camera.bearing, pitch: state.camera.pitch }
+      : { mode: '2d' };
+  return {
+    center: center ?? {
+      longitude: state.camera.longitude,
+      latitude: state.camera.latitude,
+    },
+    zoom: state.camera.zoom,
+    orientation,
+    basemap: preferences.includeSatelliteLayer ? state.basemap : null,
+    sceneKey: preferences.includeSentinelImage ? state.sceneKey : null,
+  };
+}
+
 export function parseWeatherMapUrlState(search: string): WeatherMapUrlState | null {
   const parameters = new URLSearchParams(search);
   if (parameters.get('weather') !== '1') return null;
@@ -137,35 +217,32 @@ export function updateWeatherMapUrl(
   return url.toString();
 }
 
-/** Creates a share URL only when called from an explicit user action. */
-export function createMapShareUrl(
-  currentUrl: string,
-  camera: Pick<MapCamera, 'longitude' | 'latitude' | 'zoom'>,
-  sceneKey: string | null,
-  orientation:
-    | { readonly mode: '2d' }
-    | {
-        readonly mode: '3d';
-        readonly bearing: number;
-        readonly pitch: number;
-      } = { mode: '2d' },
-): string {
+/**
+ * Creates a share URL only when called from an explicit user action. Other query
+ * parameters and the workspace-tab hash are kept; a shared scene opens Satellite.
+ */
+export function createMapShareUrl(currentUrl: string, view: MapShareView): string {
   const url = new URL(currentUrl);
   url.searchParams.set('map', String(mapShareSchemaVersion));
-  url.searchParams.set('lat', camera.latitude.toFixed(coordinatePrecision));
-  url.searchParams.set('lon', camera.longitude.toFixed(coordinatePrecision));
-  url.searchParams.set('z', camera.zoom.toFixed(zoomPrecision));
+  url.searchParams.set('lat', view.center.latitude.toFixed(coordinatePrecision));
+  url.searchParams.set('lon', view.center.longitude.toFixed(coordinatePrecision));
+  url.searchParams.set('z', view.zoom.toFixed(zoomPrecision));
   url.searchParams.delete('zoom');
-  url.searchParams.set('view', orientation.mode);
-  if (orientation.mode === '3d') {
-    url.searchParams.set('bearing', orientation.bearing.toFixed(zoomPrecision));
-    url.searchParams.set('pitch', orientation.pitch.toFixed(zoomPrecision));
+  url.searchParams.set('view', view.orientation.mode);
+  if (view.orientation.mode === '3d') {
+    url.searchParams.set('bearing', view.orientation.bearing.toFixed(zoomPrecision));
+    url.searchParams.set('pitch', view.orientation.pitch.toFixed(zoomPrecision));
   } else {
     url.searchParams.delete('bearing');
     url.searchParams.delete('pitch');
   }
-  if (sceneKey !== null && sceneKeyPattern.test(sceneKey)) {
-    url.searchParams.set('scene', sceneKey);
+  if (view.basemap === null) {
+    url.searchParams.delete('base');
+  } else {
+    url.searchParams.set('base', view.basemap);
+  }
+  if (view.sceneKey !== null && sceneKeyPattern.test(view.sceneKey)) {
+    url.searchParams.set('scene', view.sceneKey);
     url.hash = '#satellite';
   } else {
     url.searchParams.delete('scene');

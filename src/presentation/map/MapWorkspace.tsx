@@ -36,6 +36,10 @@ import Map, {
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import {
+  defaultMapSharePreferences,
+  type MapSharePreferences,
+} from '@/application/map/MapSharePreferences';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type {
   MapFacade,
@@ -72,6 +76,7 @@ import {
   consumeMapNavigationCommand,
   consumeMapPointInspectionCommand,
   mapInteractionStore,
+  openMapShare,
   requestMarkerCreationAt,
   requestSatelliteSearch,
   requestWeatherForecast,
@@ -82,6 +87,8 @@ import {
   createMapShareUrl,
   parseSharedMapView,
   parseWeatherMapUrlState,
+  readShareableMapState,
+  selectMapShareView,
   updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
@@ -125,7 +132,7 @@ const terrainRetryDelaysMs = [1_000, 3_000] as const;
 
 type MapWorkspaceNotice =
   'camera-save-failed' | 'camera-restore-failed' | 'shared-scene-restore-failed';
-type CopyConfirmation = 'coordinates' | 'point-link' | 'weather-link';
+type CopyConfirmation = 'coordinates' | 'link' | 'weather-link';
 type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 
 function WeatherForecastMapMarker({
@@ -284,6 +291,7 @@ export function MapWorkspace({
 }: MapWorkspaceProps) {
   const { t } = useLingui();
   const {
+    database,
     logger,
     elevationProvider,
     mapCameraRepository,
@@ -312,6 +320,7 @@ export function MapWorkspace({
   const sharedSceneApplyController = useRef<AbortController | null>(null);
   const sharedSceneRestorationCancelled = useRef(false);
   const sharedWeatherMapRestoreRequested = useRef(false);
+  const sharedBasemapRestoreRequested = useRef(false);
   const [sharedWeatherMapRestoreComplete, setSharedWeatherMapRestoreComplete] =
     useState(() => sharedWeatherMap === null);
   const [cameraNotice, setCameraNotice] = useState<MapWorkspaceNotice | null>(null);
@@ -600,6 +609,22 @@ export function MapWorkspace({
     mapLayers === null ||
     snapshot.lifecycle === 'loading' ||
     snapshot.lifecycle === 'fatal';
+
+  useEffect(() => {
+    const basemap = sharedMapView?.basemap ?? null;
+    if (
+      basemap === null ||
+      sharedBasemapRestoreRequested.current ||
+      snapshot.lifecycle !== 'ready' ||
+      mapLayers === null
+    ) {
+      return;
+    }
+    // The shared basemap replaces the local choice like a quick layer-chooser click;
+    // the controller records a failure as the Layers panel problem.
+    sharedBasemapRestoreRequested.current = true;
+    mapLayers.setMapLayerPreset(basemap);
+  }, [mapLayers, sharedMapView, snapshot.lifecycle]);
 
   useEffect(() => {
     if (
@@ -1218,13 +1243,29 @@ export function MapWorkspace({
     setMobileWorkspaceOpen(true);
   };
 
+  /** Copies a link to the clicked point with the browser's map share preferences. */
+  const copyPointLink = async (coordinate: MapCoordinate) => {
+    const preferences = await database
+      .loadMapSharePreferences()
+      .catch((): MapSharePreferences => {
+        logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+        return defaultMapSharePreferences;
+      });
+    const state = readShareableMapState(
+      facade.getDiagnosticsSnapshot(),
+      mapLayerStore.getState(),
+    );
+    await copyText(
+      createMapShareUrl(
+        window.location.href,
+        selectMapShareView(state, preferences, coordinate),
+      ),
+      'link',
+    );
+  };
+
   /** Runs one action from the context menu or the touch popup; links navigate natively. */
   const runPointAction = (action: MapPointAction, coordinate: MapCoordinate) => {
-    const pointView = {
-      latitude: coordinate.latitude,
-      longitude: coordinate.longitude,
-      zoom: snapshot.camera.zoom,
-    };
     switch (action) {
       case 'copy-coordinates':
         void copyText(
@@ -1233,10 +1274,10 @@ export function MapWorkspace({
         );
         return;
       case 'copy-point-link':
-        void copyText(
-          createMapShareUrl(window.location.href, pointView, null),
-          'point-link',
-        );
+        void copyPointLink(coordinate);
+        return;
+      case 'share-point':
+        openMapShare(window.location.href, coordinate);
         return;
       case 'create-marker':
         requestMarkerCreationAt(
@@ -1260,7 +1301,13 @@ export function MapWorkspace({
             : null;
         const url = new URL(
           updateWeatherMapUrl(
-            createMapShareUrl(window.location.href, pointView, null),
+            createMapShareUrl(window.location.href, {
+              center: coordinate,
+              zoom: snapshot.camera.zoom,
+              orientation: { mode: '2d' },
+              basemap: null,
+              sceneKey: null,
+            }),
             {
               coordinate,
               validTime: selectedTime,
@@ -1326,8 +1373,8 @@ export function MapWorkspace({
   let copyConfirmationText: string | null = null;
   if (copyConfirmation === 'coordinates') {
     copyConfirmationText = t`Coordinates copied`;
-  } else if (copyConfirmation === 'point-link') {
-    copyConfirmationText = t`Point link copied`;
+  } else if (copyConfirmation === 'link') {
+    copyConfirmationText = t`Link copied`;
   } else if (copyConfirmation === 'weather-link') {
     copyConfirmationText = t`Weather map link copied`;
   }

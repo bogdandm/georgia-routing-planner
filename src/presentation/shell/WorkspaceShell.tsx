@@ -25,8 +25,12 @@ import { resolveAppLocale, type AppLocale } from '@/domain/localization/appLocal
 import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
+import { MapShareDialog } from '@/presentation/map/MapShareDialog';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
-import { cancelMarkerPlacement } from '@/presentation/map/mapInteractionStore';
+import {
+  cancelMarkerPlacement,
+  openMapShare,
+} from '@/presentation/map/mapInteractionStore';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
 import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
@@ -36,7 +40,6 @@ import {
   type OnboardingTourStepId,
 } from '@/presentation/shell/OnboardingTour';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
-import { ShareMapDialog } from '@/presentation/shell/ShareMapDialog';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
 import { SatelliteMosaicProvider } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
@@ -174,8 +177,6 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     if (left === 0) return undefined;
     return { top, right: mapCameraMargin, bottom: top, left };
   }, [contextualSidebarWidth, navigationCollapsed, smartphoneViewport]);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [sharePageUrl, setSharePageUrl] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
   const [mobileTrackDetailsExpanded, setMobileTrackDetailsExpanded] = useState(false);
@@ -781,8 +782,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   }
             }
             onShare={() => {
-              setSharePageUrl(window.location.href);
-              setShareOpen(true);
+              openMapShare(window.location.href, null);
             }}
             onToggleNavigation={() => {
               if (smartphoneViewport) {
@@ -1000,13 +1000,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         onLocaleChange={handleLocaleChange}
         storageUsage={storageUsage}
       />
-      <ShareMapDialog
-        open={shareOpen}
-        pageUrl={sharePageUrl}
-        onClose={() => {
-          setShareOpen(false);
-        }}
-      />
+      <MapShareDialog />
       <RemoteDeletionDialog />
       {tourStep === null ? null : (
         <OnboardingTour

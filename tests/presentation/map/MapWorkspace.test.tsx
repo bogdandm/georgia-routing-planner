@@ -13,6 +13,7 @@ import {
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
+import { MapShareDialog } from '@/presentation/map/MapShareDialog';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -497,6 +498,36 @@ describe('MapWorkspace', () => {
     await waitFor(() => {
       expect(applyScene).toHaveBeenCalledWith(sharedScene, expect.any(AbortSignal));
       expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+  });
+
+  it('switches to a shared satellite basemap once the map is ready', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=13.25&base=esri-satellite',
+    );
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) return;
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    const facade = new FakeMapFacade();
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shared basemap map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Shared basemap map');
+    expect(setMapLayerPreset).not.toHaveBeenCalled();
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await waitFor(() => {
+      expect(setMapLayerPreset).toHaveBeenCalledExactlyOnceWith('esri-satellite');
     });
   });
 
@@ -1448,46 +1479,86 @@ describe('MapWorkspace', () => {
     await expect(services.database.listSavedMarkers()).resolves.toEqual([]);
   });
 
-  it('copies canonical point links and reports clipboard failures from shared point actions', async () => {
+  it('copies point links with the stored share preferences and reports clipboard failures', async () => {
+    // The camera looks elsewhere; the link centers on the right-clicked 41.7, 44.8.
     const facade = new FakeMapFacade();
+    facade.setSnapshot({
+      terrainMode: 'terrain',
+      camera: { longitude: 43.5, latitude: 42.25, zoom: 11, bearing: 18, pitch: 35 },
+    });
+    mapLayerStore.setState({
+      visibility: { ...mapLayerStore.getState().visibility, 'google-satellite': true },
+    });
+    const services = createTestServices();
+    await services.database.saveMapSharePreferences({
+      includeSatelliteLayer: false,
+      includeSentinelImage: true,
+      include3dCamera: true,
+    });
+    const user = userEvent.setup();
     const writeText = vi
       .spyOn(navigator.clipboard, 'writeText')
       .mockResolvedValue(undefined);
-    const user = userEvent.setup();
     renderWithI18n(
-      <RuntimeServicesProvider services={createTestServices()}>
+      <RuntimeServicesProvider services={services}>
         <MapWorkspace facade={facade} />
       </RuntimeServicesProvider>,
     );
     const nativeMap = await screen.findByTestId('native-map');
 
     fireEvent.contextMenu(nativeMap);
-    await user.click(screen.getByRole('menuitem', { name: 'Copy link to this point' }));
-    await screen.findByText('Point link copied');
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link' }));
+    await screen.findByText('Link copied');
 
     expect(writeText).toHaveBeenCalledOnce();
     const copiedUrl = writeText.mock.calls[0]?.[0];
-    expect(copiedUrl).toBeDefined();
     if (copiedUrl === undefined) throw new Error('Expected a copied point URL.');
     const url = new URL(copiedUrl);
-    expect(url.searchParams.get('map')).toBe('2');
     expect(url.searchParams.get('lat')).toBe('41.70000');
     expect(url.searchParams.get('lon')).toBe('44.80000');
-    expect(url.searchParams.get('z')).toBe(facade.snapshot.camera.zoom.toFixed(2));
-    expect(url.searchParams.get('view')).toBe('2d');
-    expect(url.searchParams.get('scene')).toBeNull();
-    expect(url.searchParams.get('bearing')).toBeNull();
-    expect(url.searchParams.get('pitch')).toBeNull();
+    expect(url.searchParams.get('z')).toBe('11.00');
+    expect(url.searchParams.get('view')).toBe('3d');
+    expect(url.searchParams.get('bearing')).toBe('18.00');
+    expect(url.searchParams.get('pitch')).toBe('35.00');
+    expect(url.searchParams.get('base')).toBeNull();
 
     writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
     fireEvent.contextMenu(nativeMap);
-    await user.click(screen.getByRole('menuitem', { name: 'Copy link to this point' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy link' }));
 
     expect(
       await screen.findByText(
         'Clipboard access failed. Try again or use the Share dialog.',
       ),
     ).toBeVisible();
+  });
+
+  it('opens the share dialog on the right-clicked point', async () => {
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({
+      camera: { longitude: 43.5, latitude: 42.25, zoom: 11, bearing: 0, pitch: 0 },
+    });
+    const services = createTestServices();
+    services.mapDiagnostics.update(facade.snapshot);
+    const user = userEvent.setup();
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} />
+        <MapShareDialog />
+      </RuntimeServicesProvider>,
+    );
+    const nativeMap = await screen.findByTestId('native-map');
+
+    fireEvent.contextMenu(nativeMap);
+    await user.click(screen.getByRole('menuitem', { name: 'Share…' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Share map view' });
+    const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
+      name: 'Link',
+    });
+    expect(within(dialog).getByText('41.70000, 44.80000, zoom 11')).toBeVisible();
+    expect(new URL(link.value).searchParams.get('lat')).toBe('41.70000');
+    expect(new URL(link.value).searchParams.get('lon')).toBe('44.80000');
   });
 
   it('offers weather actions for the right-clicked point', async () => {

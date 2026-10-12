@@ -66,6 +66,9 @@ import {
 /** Navigator-style camera pitch for fits that face a travel path in 3D. */
 const directedFitPitchDegrees = 45;
 
+/** Space kept between a revealed inspection point and the visible map edges. */
+const pointRevealMarginPx = 24;
+
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
   camera: defaultGeorgiaCamera,
@@ -259,6 +262,7 @@ export class MapLibreFacade implements MapFacade {
     readonly startedAt: number;
   } | null = null;
   #completedPointInspectionSequence = 0;
+  #pendingPointInspectionReveal: (() => void) | null = null;
   readonly #pointInspector: PointInspectorPopup;
   readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
@@ -401,6 +405,37 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspector.setPopupEnabled(enabled);
   }
 
+  public revealPointInspection(bottomInsetPx: number): void {
+    this.cancelPointInspectionReveal();
+    const map = this.#map;
+    const inspection = this.#pointInspection;
+    if (map === null || inspection.status === 'closed') return;
+    // A search navigation is still animating when the sheet opens; pan from its end view.
+    if (map.isMoving()) {
+      const reveal = () => {
+        this.revealPointInspection(bottomInsetPx);
+      };
+      this.#pendingPointInspectionReveal = reveal;
+      map.on('moveend', reveal);
+      return;
+    }
+    const visibleHeight = map.getCanvas().clientHeight - bottomInsetPx;
+    if (visibleHeight < 2 * pointRevealMarginPx) return;
+    const { y } = map.project([
+      inspection.coordinate.longitude,
+      inspection.coordinate.latitude,
+    ]);
+    if (y >= pointRevealMarginPx && y <= visibleHeight - pointRevealMarginPx) return;
+    map.panBy([0, y - visibleHeight / 2], { duration: 300 });
+  }
+
+  private cancelPointInspectionReveal(): void {
+    const reveal = this.#pendingPointInspectionReveal;
+    if (reveal === null) return;
+    this.#pendingPointInspectionReveal = null;
+    this.#map?.off('moveend', reveal);
+  }
+
   public setCursorPreviewEnabled(enabled: boolean): void {
     if (this.#cursorPreviewEnabled === enabled) return;
     this.#cursorPreviewEnabled = enabled;
@@ -442,6 +477,7 @@ export class MapLibreFacade implements MapFacade {
     this.#pendingNearbyPoiRefresh = refreshNearbyPoiOnIdle
       ? { sequence, startedAt }
       : null;
+    this.cancelPointInspectionReveal();
     this.#pointInspectionAbort?.abort();
     const abortController = new AbortController();
     this.#pointInspectionAbort = abortController;
@@ -463,6 +499,7 @@ export class MapLibreFacade implements MapFacade {
   }
 
   public closePointInspection(): void {
+    this.cancelPointInspectionReveal();
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;
@@ -1623,6 +1660,7 @@ export class MapLibreFacade implements MapFacade {
     map.getCanvas().style.cursor = '';
     this.#pointerGestures.detach();
     this.layerController?.detach(map);
+    this.cancelPointInspectionReveal();
     this.#pointInspectionSequence += 1;
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;

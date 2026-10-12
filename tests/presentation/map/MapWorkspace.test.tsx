@@ -1635,7 +1635,7 @@ describe('MapWorkspace', () => {
     expect(window.location.hash).toBe('#weather');
   });
 
-  it('shows mouse inspections in the popup and touch inspections in an action sheet', async () => {
+  it('shows mouse inspections in the popup and touch inspections in an action sheet that reveals the point', async () => {
     const facade = new FakeMapFacade();
     document.body.append(facade.pointInspectionContent);
     const openInspection = () => {
@@ -1660,6 +1660,7 @@ describe('MapWorkspace', () => {
     expect(facade.pointInspectionPopupEnabled).toBe(true);
     expect(popup.getByText('Map point')).toBeVisible();
     expect(popup.queryByRole('menu')).toBeNull();
+    expect(facade.pointInspectionRevealInsets).toEqual([]);
     mouseView.unmount();
     act(() => {
       facade.closePointInspection();
@@ -1678,6 +1679,16 @@ describe('MapWorkspace', () => {
     openInspection();
     const sheet = await screen.findByRole('dialog', { name: 'Map point' });
     expect(facade.pointInspectionContent).toBeEmptyDOMElement();
+    expect(facade.pointInspectionRevealInsets).toHaveLength(1);
+    const loadingInspection = facade.pointInspection;
+    if (loadingInspection.status !== 'open') throw new Error('Inspection closed');
+    act(() => {
+      facade.setPointInspection({
+        ...loadingInspection,
+        elevation: { status: 'available', meters: 512 },
+      });
+    });
+    expect(facade.pointInspectionRevealInsets).toHaveLength(1);
     const actions = within(sheet).getByRole('menu', { name: 'Map point actions' });
     expect(
       within(actions).getByRole('menuitem', { name: 'Open windy.com' }),

@@ -563,6 +563,9 @@ export function MapWorkspace({
   if (sheetOpen && pointInspection !== sheetInspection) {
     setSheetInspection(pointInspection);
   }
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // A new coordinate object means a new inspection; loading updates keep the object.
+  const sheetCoordinate = sheetOpen ? pointInspection.coordinate : null;
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const startupTerrainRequested = restoredView?.terrainMode === 'terrain';
   const terrainState: TerrainControlState =
@@ -750,6 +753,13 @@ export function MapWorkspace({
     facade.setPointInspectionPopupEnabled(!touchPointer);
     facade.setCursorPreviewEnabled(!touchPointer);
   }, [facade, touchPointer]);
+
+  useEffect(() => {
+    const sheet = sheetRef.current;
+    if (sheetCoordinate === null || sheet === null) return;
+    // offsetHeight ignores the Slide transform, so the entering sheet reports its full height.
+    facade.revealPointInspection(sheet.offsetHeight);
+  }, [facade, sheetCoordinate]);
 
   useEffect(() => {
     const mode: MapInteractionMode =
@@ -1634,6 +1644,7 @@ export function MapWorkspace({
         }}
       >
         <Paper
+          ref={sheetRef}
           role="dialog"
           aria-labelledby="map-point-inspector-title"
           elevation={8}

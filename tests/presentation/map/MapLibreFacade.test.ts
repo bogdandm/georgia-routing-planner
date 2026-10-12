@@ -38,6 +38,8 @@ class FakeNativeMap {
   public terrainElevation: number | null = null;
   public initialTerrain: unknown = null;
   public moving = false;
+  public projectedPoint = { x: 0, y: 0 };
+  public readonly panByCalls: (readonly [number, number])[] = [];
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -114,6 +116,14 @@ class FakeNativeMap {
 
   public unproject(_point: { readonly x: number; readonly y: number }) {
     return { lng: 44.65, lat: 42.67 };
+  }
+
+  public project(_lngLat: readonly [number, number]) {
+    return this.projectedPoint;
+  }
+
+  public panBy(offset: readonly [number, number]): void {
+    this.panByCalls.push(offset);
   }
   public getSource(id: string): unknown {
     return this.#sources.get(id);
@@ -1430,6 +1440,51 @@ describe('MapLibreFacade', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('45.123456');
     facade.closePointInspection();
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
+  it('pans a covered inspection point above the touch sheet once the camera settles', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    Object.defineProperty(nativeMap.getCanvas(), 'clientHeight', { value: 800 });
+    const popup = {
+      content: document.createElement('div'),
+      attach: vi.fn(),
+      show: vi.fn(),
+      setPopupEnabled: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+
+    nativeMap.projectedPoint = { x: 200, y: 150 };
+    facade.revealPointInspection(400);
+    expect(nativeMap.panByCalls).toEqual([]);
+
+    nativeMap.projectedPoint = { x: 200, y: 400 };
+    nativeMap.moving = true;
+    facade.revealPointInspection(400);
+    expect(nativeMap.panByCalls).toEqual([]);
+    nativeMap.fire('moveend');
+    expect(nativeMap.panByCalls).toEqual([[0, 200]]);
+    nativeMap.fire('moveend');
+    expect(nativeMap.panByCalls).toHaveLength(1);
+
+    nativeMap.moving = true;
+    facade.revealPointInspection(400);
+    facade.closePointInspection();
+    nativeMap.fire('moveend');
+    expect(nativeMap.panByCalls).toHaveLength(1);
   });
 
   it('includes named lakes when inspecting nearby map features', () => {

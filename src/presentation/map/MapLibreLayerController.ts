@@ -665,6 +665,7 @@ export class MapLibreLayerController {
   #appliedScene: SatelliteScene | null = null;
   #selectedScene: SatelliteScene | null = null;
   #stagingScene: SatelliteScene | null = null;
+  #persistedStateRestore: Promise<void> | null = null;
   readonly #mosaicEntries = new Map<string, MosaicRasterEntry>();
   readonly #stagingMosaicEntries = new Map<string, MosaicRasterEntry>();
   readonly #pendingMosaicSourceIds = new Set<string>();
@@ -1783,7 +1784,16 @@ export class MapLibreLayerController {
       sourceId.startsWith(sentinelMosaicIdPrefixes.source)
     );
   }
-  public async restorePersistedState(): Promise<void> {
+  /**
+   * Loads stored layer preferences once per controller. Later callers, such as a shared
+   * basemap link that must override the stored choice, await the same restoration.
+   */
+  public restorePersistedState(): Promise<void> {
+    this.#persistedStateRestore ??= this.loadPersistedState();
+    return this.#persistedStateRestore;
+  }
+
+  private async loadPersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
       const visibility = this.normalizeImageryVisibility(persisted.visibility);

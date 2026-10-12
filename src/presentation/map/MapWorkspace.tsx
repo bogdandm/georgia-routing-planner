@@ -620,10 +620,13 @@ export function MapWorkspace({
     ) {
       return;
     }
-    // The shared basemap replaces the local choice like a quick layer-chooser click;
-    // the controller records a failure as the Layers panel problem.
+    // The shared basemap replaces the stored choice like a quick layer-chooser click, so
+    // it waits for stored layer preferences to load first. The controller records a
+    // failure as the Layers panel problem.
     sharedBasemapRestoreRequested.current = true;
-    mapLayers.setMapLayerPreset(basemap);
+    void mapLayers.restorePersistedState().then(() => {
+      mapLayers.setMapLayerPreset(basemap);
+    });
   }, [mapLayers, sharedMapView, snapshot.lifecycle]);
 
   useEffect(() => {

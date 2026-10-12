@@ -77,7 +77,9 @@ without waiting for map readiness. The controller publishes the selected scene t
 coverage before a viewport exists. Raster application and any shared 3D transition start
 when the base style is ready. Scene data never enters IndexedDB. A shared static
 satellite layer (`base=`) is applied once through `setMapLayerPreset` when the base
-style is ready, so it persists like a layer-chooser click.
+style is ready and the stored layer preferences have loaded; `restorePersistedState`
+loads them once per controller and returns the same promise to later callers, so the
+stored choice cannot overwrite the shared one. It persists like a layer-chooser click.
 
 Share links are built only on explicit actions by `presentation/map/mapShareUrl.ts`:
 `readShareableMapState` reads the camera, terrain mode, visible static basemap, and the
@@ -85,8 +87,10 @@ selected scene while Sentinel imagery is visible; `selectMapShareView` applies t
 `map.share-preferences` record and an optional clicked center; `createMapShareUrl`
 writes `map=2`, `lat`, `lon`, `z`, `view`, `bearing`/`pitch` in 3D, `base`, and `scene`.
 The rail and **Share…** open `MapShareDialog` through
-`mapInteractionStore.shareRequest`, which captures the page URL; point-action **Copy
-link** and the Satellite card's **Share link** read the stored preferences directly.
+`mapInteractionStore.shareRequest`, which captures the page URL. The dialog shows its
+link and options only after the stored preferences load, so a copy or change never
+starts from defaults. Point-action **Copy link** and the Satellite card's **Share link**
+read the stored preferences directly.
 
 ## Terrain transition
 

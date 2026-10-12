@@ -117,13 +117,14 @@ export function MapShareDialog() {
   const mapSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const visibility = useStore(mapLayerStore, (state) => state.visibility);
   const selectedScene = useStore(mapLayerStore, (state) => state.selectedScene);
-  const [storedPreferences, setStoredPreferences] =
-    useState<MapSharePreferences | null>(null);
+  // Null until the stored record loads; the link and options wait for it so a copy or
+  // change never starts from defaults that would overwrite the stored choices.
+  const [preferences, setPreferences] = useState<MapSharePreferences | null>(null);
   const [copyState, setCopyState] = useState(CopyState.Idle);
   const open = request !== null;
 
   useEffect(() => {
-    if (!open || storedPreferences !== null) return undefined;
+    if (!open || preferences !== null) return undefined;
     let current = true;
     void database
       .loadMapSharePreferences()
@@ -132,18 +133,17 @@ export function MapShareDialog() {
         return defaultMapSharePreferences;
       })
       .then((loaded) => {
-        // A choice made before the stored record arrived wins over it.
-        if (current) setStoredPreferences(loaded);
+        if (current) setPreferences(loaded);
       });
     return () => {
       current = false;
     };
-  }, [database, logger, open, storedPreferences]);
+  }, [database, logger, open, preferences]);
 
-  const preferences = storedPreferences ?? defaultMapSharePreferences;
   const changePreferences = (change: Partial<MapSharePreferences>) => {
+    if (preferences === null) return;
     const next = { ...preferences, ...change };
-    setStoredPreferences(next);
+    setPreferences(next);
     void database.saveMapSharePreferences(next).catch(() => {
       logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
     });
@@ -154,7 +154,7 @@ export function MapShareDialog() {
       ? null
       : readShareableMapState(mapSnapshot, { visibility, selectedScene });
   const view =
-    state === null || shownRequest === null
+    state === null || shownRequest === null || preferences === null
       ? null
       : selectMapShareView(state, preferences, shownRequest.center);
   const url =
@@ -225,8 +225,8 @@ export function MapShareDialog() {
                       ? t`No satellite layer is shown on the map.`
                       : i18n._(basemapLabel)
                   }
-                  available={basemapLabel !== null}
-                  included={preferences.includeSatelliteLayer}
+                  available={preferences !== null && basemapLabel !== null}
+                  included={preferences?.includeSatelliteLayer ?? false}
                   onChange={(includeSatelliteLayer) => {
                     changePreferences({ includeSatelliteLayer });
                   }}
@@ -234,8 +234,8 @@ export function MapShareDialog() {
                 <ShareOption
                   label={t`Sentinel-2 image`}
                   description={sceneText}
-                  available={sharedScene !== null}
-                  included={preferences.includeSentinelImage}
+                  available={preferences !== null && sharedScene !== null}
+                  included={preferences?.includeSentinelImage ?? false}
                   onChange={(includeSentinelImage) => {
                     changePreferences({ includeSentinelImage });
                   }}
@@ -243,8 +243,8 @@ export function MapShareDialog() {
                 <ShareOption
                   label={t`3D camera`}
                   description={cameraText}
-                  available={state?.terrainMode === 'terrain'}
-                  included={preferences.include3dCamera}
+                  available={preferences !== null && state?.terrainMode === 'terrain'}
+                  included={preferences?.include3dCamera ?? false}
                   onChange={(include3dCamera) => {
                     changePreferences({ include3dCamera });
                   }}

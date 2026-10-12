@@ -128,7 +128,9 @@ describe('WorkspaceShell', () => {
     expect(window.location.search).toBe('');
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
     const dialog = screen.getByRole('dialog', { name: 'Share map view' });
-    expect(within(dialog).getByText('41.71234, 44.80123, zoom 12.35')).toBeVisible();
+    expect(
+      await within(dialog).findByText('41.71234, 44.80123, zoom 12.35'),
+    ).toBeVisible();
     for (const option of ['Satellite layer', 'Sentinel-2 image', '3D camera']) {
       expect(within(dialog).getByRole('checkbox', { name: option })).toBeDisabled();
     }
@@ -154,6 +156,7 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    await screen.findByText('41.70000, 44.80000, zoom 12');
     expect(
       screen.getByRole<HTMLInputElement>('textbox', { name: 'Link' }).value,
     ).not.toContain('probe=first');
@@ -338,7 +341,9 @@ describe('WorkspaceShell', () => {
     });
     const sentinel = within(dialog).getByRole('checkbox', { name: 'Sentinel-2 image' });
     const camera = within(dialog).getByRole('checkbox', { name: '3D camera' });
-    expect(sentinel).toBeChecked();
+    await waitFor(() => {
+      expect(sentinel).toBeChecked();
+    });
     expect(camera).toBeChecked();
     expect(camera).toHaveAccessibleDescription(
       '3D terrain with bearing 18° and pitch 36°.',
@@ -369,28 +374,37 @@ describe('WorkspaceShell', () => {
     });
   });
 
-  it('shares the visible satellite basemap by name', async () => {
+  it('shares the visible satellite basemap by name once the stored exclusion is lifted', async () => {
     const user = userEvent.setup();
     // The shell restores stored layer preferences on mount, so store the basemap too.
     const stored = await services.database.loadMapLayerPreferences();
     const visibility = { ...stored.visibility, 'bing-satellite': true };
     await services.database.saveMapLayerPreferences({ ...stored, visibility });
     mapLayerStore.setState({ visibility });
+    await services.database.saveMapSharePreferences({
+      includeSatelliteLayer: false,
+      includeSentinelImage: true,
+      include3dCamera: true,
+    });
     services.mapDiagnostics.update(new FakeMapFacade().snapshot);
     renderWorkspaceShell();
 
     await user.click(screen.getByRole('button', { name: 'Share map view' }));
     const dialog = screen.getByRole('dialog', { name: 'Share map view' });
     const basemap = within(dialog).getByRole('checkbox', { name: 'Satellite layer' });
-    expect(basemap).toBeChecked();
-    expect(basemap).toHaveAccessibleDescription('Bing Aerial');
     const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
       name: 'Link',
     });
-    expect(new URL(link.value).searchParams.get('base')).toBe('bing-satellite');
+    // The link waits for the stored exclusion instead of starting from defaults.
+    await waitFor(() => {
+      expect(basemap).toBeEnabled();
+    });
+    expect(basemap).not.toBeChecked();
+    expect(basemap).toHaveAccessibleDescription('Bing Aerial');
+    expect(new URL(link.value).searchParams.get('base')).toBeNull();
 
     await user.click(basemap);
-    expect(new URL(link.value).searchParams.get('base')).toBeNull();
+    expect(new URL(link.value).searchParams.get('base')).toBe('bing-satellite');
   });
 
   it('shows a shared selected-scene card before the map viewport or raster is ready', async () => {

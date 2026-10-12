@@ -501,7 +501,7 @@ describe('MapWorkspace', () => {
     });
   });
 
-  it('switches to a shared satellite basemap once the map is ready', async () => {
+  it('switches to a shared satellite basemap after stored layers load on a ready map', async () => {
     window.history.replaceState(
       null,
       '',
@@ -510,6 +510,12 @@ describe('MapWorkspace', () => {
     const services = createTestServices();
     const mapLayers = services.mapLayers;
     if (mapLayers === null) return;
+    let finishRestore: () => void = () => undefined;
+    vi.spyOn(mapLayers, 'restorePersistedState').mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishRestore = resolve;
+      }),
+    );
     const setMapLayerPreset = vi
       .spyOn(mapLayers, 'setMapLayerPreset')
       .mockReturnValue({ status: 'success' });
@@ -521,14 +527,20 @@ describe('MapWorkspace', () => {
       </RuntimeServicesProvider>,
     );
     await screen.findByText('Shared basemap map');
-    expect(setMapLayerPreset).not.toHaveBeenCalled();
-
     act(() => {
       facade.setSnapshot({ lifecycle: 'ready' });
     });
-    await waitFor(() => {
-      expect(setMapLayerPreset).toHaveBeenCalledExactlyOnceWith('esri-satellite');
+    // Stored layer preferences must not overwrite the shared basemap afterwards.
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(setMapLayerPreset).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishRestore();
+      await Promise.resolve();
+    });
+    expect(setMapLayerPreset).toHaveBeenCalledExactlyOnceWith('esri-satellite');
   });
 
   it('ignores a shared scene that resolves after Mosaic entry', async () => {
@@ -1556,7 +1568,9 @@ describe('MapWorkspace', () => {
     const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
       name: 'Link',
     });
-    expect(within(dialog).getByText('41.70000, 44.80000, zoom 11')).toBeVisible();
+    expect(
+      await within(dialog).findByText('41.70000, 44.80000, zoom 11'),
+    ).toBeVisible();
     expect(new URL(link.value).searchParams.get('lat')).toBe('41.70000');
     expect(new URL(link.value).searchParams.get('lon')).toBe('44.80000');
   });

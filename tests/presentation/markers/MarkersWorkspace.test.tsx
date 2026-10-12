@@ -11,6 +11,7 @@ import {
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
@@ -32,6 +33,7 @@ import {
   useMarkersWorkspace,
 } from '@/presentation/markers/MarkersWorkspace';
 import { useUiStore } from '@/presentation/shell/uiStore';
+import { weatherResumeRetryDelayMs } from '@/presentation/weather/useWeatherRetryOnResume';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { createTestServices } from '@test/helpers/createTestServices';
 
@@ -105,10 +107,19 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  Reflect.deleteProperty(document, 'visibilityState');
   services.database.close();
   await services.database.delete();
   vi.restoreAllMocks();
 });
+
+function setPageVisibility(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
 
 describe('MarkersWorkspace', () => {
   it('creates a named marker only after confirmation with the bounded catalog', async () => {
@@ -857,5 +868,59 @@ describe('MarkersWorkspace', () => {
         name: 'Open Sat weather for Bravo: 20 °C, 0 mm precipitation',
       }),
     ).toBeVisible();
+  });
+
+  it('retries only failed marker forecasts once the resumed page stays visible', async () => {
+    await services.database.saveSavedMarker({
+      ...marker('alpha', 'Alpha', '2026-07-20T00:00:00.000Z', [44.8, 41.7]),
+      elevationMeters: 900,
+    });
+    await services.database.saveSavedMarker({
+      ...marker('bravo', 'Bravo', '2026-07-19T00:00:00.000Z', [44.9, 41.8]),
+      elevationMeters: 1_100,
+    });
+    useUiStore.setState({ activeTab: 'markers' });
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let bravoFailed = false;
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        if (input.coordinate.longitude === 44.9 && !bravoFailed) {
+          bravoFailed = true;
+          throw new PointWeatherForecastError('provider-timeout', 'network suspended');
+        }
+        return realExecute(input, signal);
+      });
+    renderMarkers();
+    expect(await screen.findByText('Forecast unavailable')).toBeVisible();
+    await screen.findByRole('button', { name: /^Open Sat weather for Alpha:/ });
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      act(() => {
+        setPageVisibility('hidden');
+        setPageVisibility('visible');
+        vi.advanceTimersByTime(weatherResumeRetryDelayMs - 1);
+      });
+      expect(execute).toHaveBeenCalledTimes(2);
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      // The retry restarts the forecast effect, which schedules its own start timer.
+      act(() => {
+        vi.runOnlyPendingTimers();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(
+      await screen.findByRole('button', { name: /^Open Sat weather for Bravo:/ }),
+    ).toBeVisible();
+    expect(
+      execute.mock.calls.map(([input]) => input.coordinate.longitude).sort(),
+    ).toEqual([44.8, 44.9, 44.9]);
   });
 });

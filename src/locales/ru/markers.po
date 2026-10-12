@@ -14,7 +14,7 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: omWnpu
-#: src/presentation/markers/MarkersWorkspace.tsx:941
+#: src/presentation/markers/MarkersWorkspace.tsx:981
 msgid "{distance} km away"
 msgstr "{distance} км от центра карты"
 
@@ -24,7 +24,7 @@ msgid "{label}. Current: {selectedLabel}"
 msgstr "{label}. Текущий значок: {selectedLabel}"
 
 #. js-lingui-id: __HSFS
-#: src/presentation/markers/MarkersWorkspace.tsx:747
+#: src/presentation/markers/MarkersWorkspace.tsx:783
 msgid "24-hour forecast · {periodKind, select, day {Day} night {Night} other {Custom}} · {weekday}, {dateLabel}"
 msgstr "Прогноз на 24 часа · {periodKind, select, day {День} night {Ночь} other {Свои часы}} · {weekday}, {dateLabel}"
 
@@ -140,7 +140,7 @@ msgstr "Кемпинг"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/markers/MarkerEditorDialog.tsx:249
-#: src/presentation/markers/MarkersWorkspace.tsx:1267
+#: src/presentation/markers/MarkersWorkspace.tsx:1308
 #: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:260
 msgid "Cancel"
 msgstr "Отмена"
@@ -171,7 +171,7 @@ msgid "Celebration"
 msgstr "Праздник"
 
 #. js-lingui-id: wopO4r
-#: src/presentation/markers/MarkersWorkspace.tsx:1618
+#: src/presentation/markers/MarkersWorkspace.tsx:1659
 msgid "Change icon and color"
 msgstr "Изменить значок и цвет"
 
@@ -236,14 +236,14 @@ msgid "Commute"
 msgstr "Поездки"
 
 #. js-lingui-id: jPpVoJ
-#: src/presentation/markers/MarkersWorkspace.tsx:1544
-#: src/presentation/markers/MarkersWorkspace.tsx:1642
+#: src/presentation/markers/MarkersWorkspace.tsx:1585
+#: src/presentation/markers/MarkersWorkspace.tsx:1683
 msgid "Confirm deletion"
 msgstr "Подтвердить удаление"
 
 #. js-lingui-id: oXVNQJ
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1551
+#: src/presentation/markers/MarkersWorkspace.tsx:1592
 msgid "Confirm deletion of {0}"
 msgstr "Подтвердить удаление: {0}"
 
@@ -299,13 +299,13 @@ msgstr "Олень"
 
 #. js-lingui-id: Y2tU6I
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1552
+#: src/presentation/markers/MarkersWorkspace.tsx:1593
 msgid "Delete {0}"
 msgstr "Удалить {0}"
 
 #. js-lingui-id: 2sxwVB
-#: src/presentation/markers/MarkersWorkspace.tsx:1544
-#: src/presentation/markers/MarkersWorkspace.tsx:1644
+#: src/presentation/markers/MarkersWorkspace.tsx:1585
+#: src/presentation/markers/MarkersWorkspace.tsx:1685
 msgid "Delete marker"
 msgstr "Удалить метку"
 
@@ -315,12 +315,12 @@ msgid "Dining"
 msgstr "Еда"
 
 #. js-lingui-id: FhJza8
-#: src/presentation/markers/MarkersWorkspace.tsx:864
+#: src/presentation/markers/MarkersWorkspace.tsx:904
 msgid "Distance from map center"
 msgstr "По расстоянию от центра карты"
 
 #. js-lingui-id: NHZprE
-#: src/presentation/markers/MarkersWorkspace.tsx:931
+#: src/presentation/markers/MarkersWorkspace.tsx:971
 msgid "Distance unavailable"
 msgstr "Расстояние неизвестно"
 
@@ -421,7 +421,7 @@ msgid "Forecast period"
 msgstr "Период прогноза"
 
 #. js-lingui-id: LGGwdr
-#: src/presentation/markers/MarkersWorkspace.tsx:1452
+#: src/presentation/markers/MarkersWorkspace.tsx:1493
 msgid "Forecast unavailable"
 msgstr "Прогноз недоступен"
 
@@ -501,12 +501,12 @@ msgid "Ice cream"
 msgstr "Мороженое"
 
 #. js-lingui-id: qNniaA
-#: src/presentation/markers/MarkersWorkspace.tsx:863
+#: src/presentation/markers/MarkersWorkspace.tsx:903
 msgid "Icon and distance"
 msgstr "По значку и расстоянию"
 
 #. js-lingui-id: ELJlha
-#: src/presentation/markers/MarkersWorkspace.tsx:862
+#: src/presentation/markers/MarkersWorkspace.tsx:902
 msgid "Icon color"
 msgstr "По цвету значка"
 
@@ -551,18 +551,18 @@ msgid "Liquor"
 msgstr "Алкоголь"
 
 #. js-lingui-id: yQE2r9
-#: src/presentation/markers/MarkersWorkspace.tsx:1469
+#: src/presentation/markers/MarkersWorkspace.tsx:1510
 msgid "Loading"
 msgstr "Загрузка"
 
 #. js-lingui-id: rITQrW
-#: src/presentation/markers/MarkersWorkspace.tsx:1139
+#: src/presentation/markers/MarkersWorkspace.tsx:1180
 msgid "Loading saved markers"
 msgstr "Загрузка сохранённых меток"
 
 #. js-lingui-id: Fr5Q2N
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1407
+#: src/presentation/markers/MarkersWorkspace.tsx:1448
 msgid "Loading weather for {0}"
 msgstr "Загрузка погоды для {0}"
 
@@ -572,13 +572,13 @@ msgid "Map"
 msgstr "Карта"
 
 #. js-lingui-id: tKY7TR
-#: src/presentation/markers/MarkersWorkspace.tsx:1515
+#: src/presentation/markers/MarkersWorkspace.tsx:1556
 msgid "Marker actions"
 msgstr "Действия с меткой"
 
 #. js-lingui-id: RlbMOu
 #. placeholder {0}: marker.name
-#: src/presentation/markers/MarkersWorkspace.tsx:1520
+#: src/presentation/markers/MarkersWorkspace.tsx:1561
 msgid "Marker actions for {0}"
 msgstr "Действия с меткой {0}"
 
@@ -593,7 +593,7 @@ msgid "Marker color"
 msgstr "Цвет метки"
 
 #. js-lingui-id: QxZIkl
-#: src/presentation/markers/MarkersWorkspace.tsx:1179
+#: src/presentation/markers/MarkersWorkspace.tsx:1220
 msgid "Marker forecast days"
 msgstr "Дни прогноза для меток"
 
@@ -605,7 +605,7 @@ msgstr "Категории значков меток, строка {0}"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/markers/MarkerEditorDialog.tsx:160
-#: src/presentation/markers/MarkersWorkspace.tsx:1239
+#: src/presentation/markers/MarkersWorkspace.tsx:1280
 msgid "Marker name"
 msgstr "Название метки"
 
@@ -655,7 +655,7 @@ msgid "My location"
 msgstr "Моё местоположение"
 
 #. js-lingui-id: 6YtxFj
-#: src/presentation/markers/MarkersWorkspace.tsx:861
+#: src/presentation/markers/MarkersWorkspace.tsx:901
 msgid "Name"
 msgstr "По названию"
 
@@ -675,7 +675,7 @@ msgid "Navy"
 msgstr "Тёмно-синий"
 
 #. js-lingui-id: dUCJry
-#: src/presentation/markers/MarkersWorkspace.tsx:860
+#: src/presentation/markers/MarkersWorkspace.tsx:900
 msgid "Newest"
 msgstr "Сначала новые"
 
@@ -695,7 +695,7 @@ msgid "No recently used icons yet"
 msgstr "Недавно использованных значков пока нет"
 
 #. js-lingui-id: Nfw5a0
-#: src/presentation/markers/MarkersWorkspace.tsx:1163
+#: src/presentation/markers/MarkersWorkspace.tsx:1204
 msgid "No saved markers yet. Use New marker, then choose a point on the map."
 msgstr "Сохранённых меток пока нет. Нажмите «Новая метка» и выберите точку на карте."
 
@@ -705,7 +705,7 @@ msgid "Olive"
 msgstr "Оливковый"
 
 #. js-lingui-id: ak_oos
-#: src/presentation/markers/MarkersWorkspace.tsx:968
+#: src/presentation/markers/MarkersWorkspace.tsx:1008
 msgid "Open {weekday} weather for {markerName}: {temperature}, {precipitation} precipitation"
 msgstr "Открыть погоду ({weekday}) для {markerName}: {temperature}, осадки {precipitation}"
 
@@ -780,7 +780,7 @@ msgid "Red"
 msgstr "Красный"
 
 #. js-lingui-id: 2wxgft
-#: src/presentation/markers/MarkersWorkspace.tsx:1608
+#: src/presentation/markers/MarkersWorkspace.tsx:1649
 msgid "Rename"
 msgstr "Переименовать"
 
@@ -795,7 +795,7 @@ msgid "Restaurant"
 msgstr "Ресторан"
 
 #. js-lingui-id: 6gRgw8
-#: src/presentation/markers/MarkersWorkspace.tsx:1148
+#: src/presentation/markers/MarkersWorkspace.tsx:1189
 msgid "Retry"
 msgstr "Повторить"
 
@@ -837,18 +837,18 @@ msgstr "Парусный спорт"
 
 #. js-lingui-id: tfDRzk
 #: src/presentation/markers/MarkerEditorDialog.tsx:252
-#: src/presentation/markers/MarkersWorkspace.tsx:1259
+#: src/presentation/markers/MarkersWorkspace.tsx:1300
 #: src/presentation/markers/MarkerWeatherSettingsDialog.tsx:273
 msgid "Save"
 msgstr "Сохранить"
 
 #. js-lingui-id: FtknP-
-#: src/presentation/markers/MarkersWorkspace.tsx:1171
+#: src/presentation/markers/MarkersWorkspace.tsx:1212
 msgid "Saved markers"
 msgstr "Сохранённые метки"
 
 #. js-lingui-id: L9KUud
-#: src/presentation/markers/MarkersWorkspace.tsx:1152
+#: src/presentation/markers/MarkersWorkspace.tsx:1193
 msgid "Saved markers could not be loaded."
 msgstr "Не удалось загрузить сохранённые метки."
 
@@ -919,17 +919,17 @@ msgid "Snowmobile"
 msgstr "Снегоход"
 
 #. js-lingui-id: v2Acg1
-#: src/presentation/markers/MarkersWorkspace.tsx:885
+#: src/presentation/markers/MarkersWorkspace.tsx:925
 msgid "Sort markers. Current: {markerSortLabel}"
 msgstr "Сортировать метки. Сейчас: {markerSortLabel}"
 
 #. js-lingui-id: oLk0R8
-#: src/presentation/markers/MarkersWorkspace.tsx:916
+#: src/presentation/markers/MarkersWorkspace.tsx:956
 msgid "Sort preference could not be saved"
 msgstr "Не удалось сохранить порядок сортировки"
 
 #. js-lingui-id: 1cWDsF
-#: src/presentation/markers/MarkersWorkspace.tsx:882
+#: src/presentation/markers/MarkersWorkspace.tsx:922
 msgid "Sort: {markerSortLabel}"
 msgstr "Сортировка: {markerSortLabel}"
 
@@ -1000,12 +1000,12 @@ msgid "Terrain"
 msgstr "Рельеф"
 
 #. js-lingui-id: kQUxI8
-#: src/presentation/markers/MarkersWorkspace.tsx:1157
+#: src/presentation/markers/MarkersWorkspace.tsx:1198
 msgid "The marker could not be deleted."
 msgstr "Не удалось удалить метку."
 
 #. js-lingui-id: 0TvHJA
-#: src/presentation/markers/MarkersWorkspace.tsx:1101
+#: src/presentation/markers/MarkersWorkspace.tsx:1142
 msgid "The marker could not be renamed."
 msgstr "Не удалось переименовать метку."
 

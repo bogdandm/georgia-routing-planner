@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
   defaultWeatherIntervalPreferences,
+  orderMarkerWeatherWeekdays,
   selectMarkerWeatherForecast,
   type WeatherIntervalPreferences,
 } from '@/application/weather/MarkerWeatherForecast';
@@ -139,5 +140,14 @@ describe('selectMarkerWeatherForecast', () => {
         weekdays: [],
       }),
     ).toBeNull();
+  });
+});
+
+describe('orderMarkerWeatherWeekdays', () => {
+  it('orders weekdays by their next occurrence, starting with today', () => {
+    // 0 = Sunday, 5 = Friday, 6 = Saturday.
+    expect(orderMarkerWeatherWeekdays([0, 6], 5)).toEqual([6, 0]);
+    expect(orderMarkerWeatherWeekdays([6, 0], 0)).toEqual([0, 6]);
+    expect(orderMarkerWeatherWeekdays([1, 6], 1)).toEqual([1, 6]);
   });
 });

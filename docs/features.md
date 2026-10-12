@@ -334,6 +334,10 @@ the name and the same cells replaces the marker symbol until Markers closes. A c
 opens the floating 24-hour table used by Weather, starting at the interval boundary; its
 **Open in Weather** loads the full forecast at the marker.
 
+The weather-settings action names the selected weekdays in the same date order as the
+list columns. **Refresh marker weather** beside it reloads every marker forecast. Failed
+marker forecasts retry automatically as in Weather when the app becomes visible again.
+
 ### Layers
 
 Layers groups controls under source headings: Weather, Local GPX, Satellites, the
@@ -468,10 +472,12 @@ the dominant sky, precipitation pattern, temperature, wind, and gust ranges in m
 the precipitation total. Activating a row opens a non-modal floating 24-hour table for
 that period that closes on Escape, outside click, or panel scroll.
 
-Only the latest point request updates the panel; Retry repeats the current point. The
-model update time and `Weather data by Open-Meteo` attribution stay at the panel bottom.
-Forecast responses are session-only. ECMWF IFS values are model forecasts, not station
-observations.
+Only the latest point request updates the panel; Retry and the header's **Refresh
+forecast** repeat the current point. A failed forecast is retried automatically once the
+app has been visible again for 3 seconds after returning from another browser tab, a
+minimized window, or the mobile background. The model update time and
+`Weather data by Open-Meteo` attribution stay at the panel bottom. Forecast responses
+are session-only. ECMWF IFS values are model forecasts, not station observations.
 
 ## Persistent map controls
 

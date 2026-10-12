@@ -208,6 +208,16 @@ export function requestWeatherForecast(
   });
 }
 
+/** Requests the selected point again without changing an active point selection. */
+export function refreshWeatherForecast(): void {
+  const selectedPoint = mapInteractionStore.getState().selectedWeatherForecastPoint;
+  if (selectedPoint === null) return;
+  nextWeatherForecastRequestId += 1;
+  mapInteractionStore.setState({
+    weatherForecastRequest: { id: nextWeatherForecastRequestId, ...selectedPoint },
+  });
+}
+
 export function consumeWeatherForecastRequest(requestId: number): void {
   if (mapInteractionStore.getState().weatherForecastRequest?.id !== requestId) return;
   mapInteractionStore.setState({ weatherForecastRequest: null });

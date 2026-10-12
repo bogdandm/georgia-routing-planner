@@ -1,7 +1,7 @@
 import { ThemeProvider } from '@mui/material/styles';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_WEATHER_MODEL,
@@ -16,6 +16,7 @@ import {
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
 import { WeatherPanel } from '@/presentation/weather/WeatherPanel';
+import { weatherResumeRetryDelayMs } from '@/presentation/weather/useWeatherRetryOnResume';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { appColors } from '@/presentation/theme/appColors';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -72,10 +73,22 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve: resolvePromise, reject: rejectPromise };
 }
 
+function setPageVisibility(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
 describe('WeatherPanel', () => {
   beforeEach(() => {
     activateAppLocale('en');
     resetMapInteractionStore();
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'visibilityState');
   });
 
   it('starts with map selection guidance and no attribution footer', () => {
@@ -721,6 +734,52 @@ describe('WeatherPanel', () => {
       coordinate: { longitude: 44.8271, latitude: 41.7151 },
       elevationMeters: 1_234,
       placeLabel: 'Narikala Fortress',
+    });
+  });
+
+  it('retries a failed forecast once the resumed page stays visible', async () => {
+    const baseline = await testForecast();
+    const services = createTestServices();
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockRejectedValueOnce(
+        new PointWeatherForecastError('provider-timeout', 'network suspended'),
+      )
+      .mockResolvedValueOnce(baseline);
+    renderPanel(services);
+    act(() => {
+      requestWeatherForecast(
+        { longitude: 44.8271, latitude: 41.7151 },
+        'Narikala Fortress',
+      );
+    });
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeVisible();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      act(() => {
+        setPageVisibility('hidden');
+        setPageVisibility('visible');
+        vi.advanceTimersByTime(weatherResumeRetryDelayMs - 1);
+        setPageVisibility('hidden');
+        vi.advanceTimersByTime(weatherResumeRetryDelayMs);
+      });
+      expect(execute).toHaveBeenCalledOnce();
+
+      act(() => {
+        setPageVisibility('visible');
+        vi.advanceTimersByTime(weatherResumeRetryDelayMs);
+      });
+      expect(execute).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      await screen.findByRole('region', { name: 'Current, day, and night summary' }),
+    ).toBeInTheDocument();
+    expect(execute.mock.calls[1]?.[0].coordinate).toEqual({
+      longitude: 44.8271,
+      latitude: 41.7151,
     });
   });
 

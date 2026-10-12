@@ -43,10 +43,13 @@ import { useStore } from 'zustand';
 import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
 import {
   defaultWeatherIntervalPreferences,
+  orderMarkerWeatherWeekdays,
   selectMarkerWeatherForecast,
+  weekdayForLocalDate,
   type MarkerWeatherForecast,
   type MarkerWeatherForecastPeriod,
   type MarkerWeatherPeriodSelection,
+  type MarkerWeatherWeekday,
   type WeatherIntervalPreferences,
 } from '@/application/weather/MarkerWeatherForecast';
 import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
@@ -86,6 +89,7 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { FloatingHourlyForecastPanel } from '@/presentation/weather/HourlyForecastTable';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
+import { useWeatherRetryOnResume } from '@/presentation/weather/useWeatherRetryOnResume';
 import {
   formatWeatherMillimetres,
   formatWeatherTemperatureRange,
@@ -139,12 +143,16 @@ interface MarkersWorkspaceValue {
   readonly weatherPreferences: WeatherIntervalPreferences;
   readonly weatherPreferencesReady: boolean;
   readonly weatherByMarkerId: ReadonlyMap<string, MarkerWeatherForecastState>;
+  /** Selected weekdays in the date order of the forecast columns. */
+  readonly weatherWeekdays: readonly MarkerWeatherWeekday[];
   readonly openWeatherSettings: () => void;
   readonly openWeatherPreview: (
     markerId: string,
     date: string,
     triggerElement: HTMLElement,
   ) => void;
+  /** Reloads every marker forecast. */
+  readonly refreshWeather: () => void;
 }
 
 const MarkersWorkspaceContext = createContext<MarkersWorkspaceValue | null>(null);
@@ -322,6 +330,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
   const [weatherPreview, setWeatherPreview] =
     useState<MarkerHourlyForecastRequest | null>(null);
   const weatherCache = useRef(new Map<string, MarkerWeatherForecastState>());
+  const [weatherReloadRevision, setWeatherReloadRevision] = useState(0);
 
   const loadMarkers = useCallback(async () => {
     // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
@@ -513,6 +522,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     userData,
     weatherPreferences,
     weatherPreferencesReady,
+    weatherReloadRevision,
   ]);
 
   useEffect(
@@ -682,6 +692,32 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     [database, markers],
   );
 
+  // Failed forecasts are never cached, so a new revision re-requests only them; refresh
+  // clears the cache first to re-request every marker.
+  const refreshWeather = useCallback(() => {
+    weatherCache.current.clear();
+    setWeatherReloadRevision((revision) => revision + 1);
+  }, []);
+  useWeatherRetryOnResume(
+    [...weatherByMarkerId.values()].some((weather) => weather.status === 'error'),
+    () => {
+      setWeatherReloadRevision((revision) => revision + 1);
+    },
+  );
+  const todayWeekday = clock.now().getDay();
+  const weatherWeekdays = useMemo(() => {
+    // Columns follow the forecast-local calendar, so a loaded forecast fixes the order;
+    // the browser's weekday orders the labels only until then.
+    for (const weather of weatherByMarkerId.values()) {
+      if (weather.status === 'ready') {
+        return weather.selection.periods.map((period) =>
+          weekdayForLocalDate(period.date),
+        );
+      }
+    }
+    return orderMarkerWeatherWeekdays(weatherPreferences.weekdays, todayWeekday);
+  }, [todayWeekday, weatherByMarkerId, weatherPreferences.weekdays]);
+
   const openWeatherPreview = useCallback(
     (markerId: string, date: string, triggerElement: HTMLElement) => {
       const weather = weatherByMarkerId.get(markerId);
@@ -773,10 +809,12 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       weatherPreferences,
       weatherPreferencesReady,
       weatherByMarkerId,
+      weatherWeekdays,
       openWeatherSettings: () => {
         setWeatherSettingsOpen(true);
       },
       openWeatherPreview,
+      refreshWeather,
     }),
     [
       deleteMarker,
@@ -784,12 +822,14 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       loadState,
       markers,
       openWeatherPreview,
+      refreshWeather,
       renameMarker,
       sortedMarkers,
       mapCenter,
       weatherByMarkerId,
       weatherPreferences,
       weatherPreferencesReady,
+      weatherWeekdays,
     ],
   );
 
@@ -1056,6 +1096,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
     sortedMarkers,
     weatherByMarkerId,
     weatherPreferences,
+    weatherWeekdays,
   } = useMarkersWorkspace();
   const dateLabels = useMemo(
     () => createMarkerWeatherDateLabels(i18n.locale),
@@ -1190,7 +1231,7 @@ export function MarkersPanel({ onMarkerSelected }: MarkersPanelProps) {
             >
               <Box aria-hidden />
               {weatherColumnPeriods === null
-                ? weatherPreferences.weekdays.map((weekday) => (
+                ? weatherWeekdays.map((weekday) => (
                     <Typography
                       key={weekday}
                       variant="caption"

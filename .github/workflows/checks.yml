@@ -167,6 +167,9 @@ jobs:
           path: .vitest-reports
           include-hidden-files: true
           if-no-files-found: error
+          # A rerun shard replaces its earlier report; coverage merges every
+          # vitest-results-* artifact, so a stale failing one would fail it again.
+          overwrite: true
           retention-days: 1
 
   coverage:

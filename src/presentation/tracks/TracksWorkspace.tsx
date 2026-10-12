@@ -4069,6 +4069,10 @@ export function TracksPanel({
 
   const restoreFocus = (focusKey: string) => {
     window.setTimeout(() => {
+      // Recover only focus that a drop's re-render dropped to the page. A move that
+      // settles after the user focused another control must not take focus back.
+      const focused = document.activeElement;
+      if (focused !== null && focused !== document.body) return;
       const element = document.querySelector<HTMLElement>(
         `[data-drag-focus="${focusKey}"]`,
       );

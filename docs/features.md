@@ -533,7 +533,9 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 - **Camera:** left drag pans; middle drag or Shift+left drag rotates and pitches in 3D
   around the terrain point under the press, marked by a small pivot ring; keyboard pans,
   zooms, and orbits once the canvas has focus. Box zoom and right drag are off; pitch is
-  capped at 75 degrees. The 2D command resets pitch and bearing.
+  capped at 75 degrees. The 2D command resets pitch and bearing. On touch, two fingers
+  pinch-zoom, twist to rotate, and drag vertically to pitch; once both fingers move
+  together before a twist starts rotating, rotation stays off until the fingers lift.
 - Attribution remains visible in every section and terrain mode.
 
 ## Map, terrain, and persistence

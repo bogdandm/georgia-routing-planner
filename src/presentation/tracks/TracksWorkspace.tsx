@@ -918,12 +918,22 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     },
     [database, logger],
   );
+  const activeUnsavedTrackId =
+    active?.kind === 'preview' || active?.kind === 'shared' ? active.id : null;
+  // Adjusting state during render, not in an effect: once its preview or shared track
+  // is closed, replaced, or saved, the in-memory settings are gone, so reopening the
+  // same shared link starts from the defaults.
+  if (
+    unsavedTrackTimeline !== null &&
+    unsavedTrackTimeline.trackId !== activeUnsavedTrackId
+  ) {
+    setUnsavedTrackTimeline(null);
+  }
   const activeTrackWeatherTimeline =
     active?.kind === 'saved'
       ? trackWeatherTimeline(trackWeatherPreferences, active.summary.id)
       : unsavedTrackTimeline !== null &&
-          (active?.kind === 'preview' || active?.kind === 'shared') &&
-          unsavedTrackTimeline.trackId === active.id
+          unsavedTrackTimeline.trackId === activeUnsavedTrackId
         ? unsavedTrackTimeline.settings
         : defaultTrackWeatherTimelineSettings;
   const updateActiveTrackWeatherTimeline = useCallback(

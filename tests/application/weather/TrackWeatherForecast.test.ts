@@ -374,6 +374,15 @@ describe('summarizeTrackWeatherCheckpoint', () => {
       isDay: false,
       period: { temperatureMinCelsius: 0, temperatureMaxCelsius: 23 },
     });
+    // On the forecast's last date the same start runs past its final hour.
+    expect(
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-25',
+        22.5,
+        checkpoint(0, 3 * hour),
+      ),
+    ).toBeNull();
     expect(
       summarizeTrackWeatherCheckpoint(
         forecast,

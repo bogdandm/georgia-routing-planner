@@ -327,7 +327,8 @@ export function trackWeatherLocalTime(
 /**
  * Summarizes the checkpoint location's forecast hours from its arrival hour until the
  * next checkpoint; the finish covers its arrival hour. Arrivals after midnight read the
- * next date's hours. Null when the forecast does not reach those hours.
+ * next date's hours. Null unless the forecast reaches the window's last hour, so a late
+ * start on the last date never summarizes a truncated window.
  */
 export function summarizeTrackWeatherCheckpoint(
   forecast: PointWeatherForecast,
@@ -341,7 +342,9 @@ export function summarizeTrackWeatherCheckpoint(
   const endHour = Math.max(firstHour + 1, Math.ceil(untilHours));
   const dayStart = parseLocalDate(date);
   const start = localDateTime(dayStart + firstHour * 3_600_000);
+  const lastHour = localDateTime(dayStart + (endHour - 1) * 3_600_000);
   const end = localDateTime(dayStart + endHour * 3_600_000);
+  if ((forecast.hourly.at(-1)?.time ?? '') < lastHour) return null;
   const hours = forecast.hourly.filter((hour) => hour.time >= start && hour.time < end);
   if (hours.length === 0) return null;
   const isDay = hours.filter((hour) => hour.isDay).length * 2 >= hours.length;

@@ -30,15 +30,18 @@ import {
   TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  defaultTrackWeatherTimelineSettings,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
   trackWeatherDates,
   trackWeatherLocalTime,
   trackWeatherWeekday,
+  withTrackWeatherTimeline,
   type TrackWeatherCheckpoint,
   type TrackWeatherLocation,
   type TrackWeatherPreferences,
+  type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
@@ -104,6 +107,8 @@ function formatStartHour(hour: number): string {
 interface TrackWeatherSectionProps {
   readonly profile: ElevationProfile;
   readonly metrics: TrackStatsMetrics;
+  /** Saved track whose start and pace are remembered; null keeps them for the session. */
+  readonly savedTrackId: string | null;
   /** Null while the stored preferences load; the section then stays collapsed. */
   readonly preferences: TrackWeatherPreferences | null;
   readonly onPreferencesChange: (preferences: TrackWeatherPreferences) => void;
@@ -116,6 +121,7 @@ interface TrackWeatherSectionProps {
 export function TrackWeatherSection({
   profile,
   metrics,
+  savedTrackId,
   preferences,
   onPreferencesChange,
 }: TrackWeatherSectionProps): ReactElement {
@@ -134,14 +140,26 @@ export function TrackWeatherSection({
     () => selectTrackElevationLocations(profile),
     [profile],
   );
-  // The slider shows `paceDraft` while dragging; only the released value replans the
-  // timeline, so intermediate positions do not start forecast requests.
-  const [paceFactor, setPaceFactor] = useState(1);
-  const [paceDraft, setPaceDraft] = useState(1);
+  const [sessionTimeline, setSessionTimeline] = useState(
+    defaultTrackWeatherTimelineSettings,
+  );
+  const timelineSettings =
+    savedTrackId === null
+      ? sessionTimeline
+      : (current.timelines[savedTrackId] ?? defaultTrackWeatherTimelineSettings);
+  const { paceFactor } = timelineSettings;
+  const changeTimeline = (next: TrackWeatherTimelineSettings) => {
+    if (savedTrackId === null) setSessionTimeline(next);
+    else onPreferencesChange(withTrackWeatherTimeline(current, savedTrackId, next));
+  };
+  // Drafts show slider positions while dragging; only released values are stored. The
+  // start draft already moves the checkpoint times, since it only reselects loaded
+  // hours, while the pace waits for release so it does not start forecast requests.
+  const [startDraft, setStartDraft] = useState<number | null>(null);
+  const [paceDraft, setPaceDraft] = useState<number | null>(null);
+  const startHour = startDraft ?? timelineSettings.startHour;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const paceLabelId = `${detailsId}-pace`;
-  // The start hour only reselects forecast hours, so it updates while dragging.
-  const [startHour, setStartHour] = useState(TRACK_WEATHER_DEFAULT_START_HOUR);
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const startLabelId = `${detailsId}-start`;
   const timeline = useMemo(
@@ -477,7 +495,11 @@ export function TrackWeatherSection({
                       valueLabelFormat={formatStartHour}
                       getAriaValueText={formatStartHour}
                       onChange={(_event, value) => {
-                        setStartHour(value);
+                        setStartDraft(value);
+                      }}
+                      onChangeCommitted={(_event, value) => {
+                        setStartDraft(null);
+                        changeTimeline({ ...timelineSettings, startHour: value });
                       }}
                     />
                     <Typography variant="caption" color="text.secondary">
@@ -504,7 +526,7 @@ export function TrackWeatherSection({
                       max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
                       step={0.05}
                       marks={[{ value: 1 }]}
-                      value={paceDraft}
+                      value={paceDraft ?? paceFactor}
                       valueLabelDisplay="auto"
                       valueLabelFormat={formatPace}
                       getAriaValueText={formatPace}
@@ -512,7 +534,13 @@ export function TrackWeatherSection({
                         setPaceDraft(value);
                       }}
                       onChangeCommitted={(_event, value) => {
-                        setPaceFactor(value);
+                        setPaceDraft(null);
+                        // Keyboard steps accumulate floating-point error (×0.5 plus ten
+                        // steps is 1.0000000000000004); hundredths keep ×1 the default.
+                        changeTimeline({
+                          ...timelineSettings,
+                          paceFactor: Math.round(value * 100) / 100,
+                        });
                       }}
                     />
                     <Typography variant="caption" color="text.secondary">

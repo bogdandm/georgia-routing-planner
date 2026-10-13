@@ -383,7 +383,10 @@ timestamps when the track has recorded time. Changing the date or the start time
 reselects hours from the loaded forecasts; collapsing or unmounting aborts pending
 requests. Results stay in component state, keyed by the section's track, and failed
 locations retry on the next expansion. `TracksWorkspaceProvider` loads
-`weather.track-preferences` once and saves every disclosure or weekday change.
+`weather.track-preferences` once and saves every disclosure or weekday change and every
+released start or pace slider of a saved track. The record's `timelines` map holds only
+tracks whose start or pace differs from the defaults; deleting a track in this browser
+removes its entry.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan

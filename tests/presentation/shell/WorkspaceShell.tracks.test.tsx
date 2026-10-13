@@ -2014,6 +2014,35 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
+  it('forgets the forecast start and pace of a deleted track', async () => {
+    const source = savedTrackSummary('local:ridge', 'Ridge trail');
+    await services.database.saveLocalTrack(source, savedTrackContent(source.id));
+    await services.database.saveLatestOpenedTrackId(source.id);
+    const other = { startHour: 6, paceFactor: 1.5 };
+    await services.database.saveTrackWeatherPreferences({
+      expanded: false,
+      weekday: 6,
+      timelines: { [source.id]: { startHour: 7, paceFactor: 1 }, 'local:other': other },
+    });
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('heading', { name: 'Ridge trail' });
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm delete' }));
+
+    await waitFor(async () => {
+      expect(await services.database.loadTrackWeatherPreferences()).toEqual({
+        expanded: false,
+        weekday: 6,
+        timelines: { 'local:other': other },
+      });
+    });
+  });
+
   it('publishes whole-track grade colors for flat macro ranges', async () => {
     const mapLayers = services.mapLayers;
     expect(mapLayers).not.toBeNull();

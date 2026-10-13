@@ -51,11 +51,18 @@ const dayHike: TrackStatsMetrics = {
   estimatedSeconds: 5.5 * 3_600,
 };
 
+const expandedPreferences: TrackWeatherPreferences = {
+  expanded: true,
+  weekday: 6,
+  timelines: {},
+};
+
 let services: ReturnType<typeof createTestServices>;
 
 function renderSection(
   initial: TrackWeatherPreferences | null,
   metrics: TrackStatsMetrics = dayHike,
+  savedTrackId: string | null = null,
 ) {
   const onPreferencesChange = vi.fn();
   function Harness() {
@@ -64,6 +71,7 @@ function renderSection(
       <TrackWeatherSection
         profile={ridge}
         metrics={metrics}
+        savedTrackId={savedTrackId}
         preferences={preferences}
         onPreferencesChange={(next) => {
           onPreferencesChange(next);
@@ -89,7 +97,8 @@ function expandedSection(metrics: TrackStatsMetrics) {
         <TrackWeatherSection
           profile={ridge}
           metrics={metrics}
-          preferences={{ expanded: true, weekday: 6 }}
+          savedTrackId={null}
+          preferences={expandedPreferences}
           onPreferencesChange={vi.fn()}
         />
       </ThemeProvider>
@@ -114,7 +123,7 @@ describe('TrackWeatherSection', () => {
 
     await user.click(disclosure);
 
-    expect(onPreferencesChange).toHaveBeenCalledWith({ expanded: true, weekday: 6 });
+    expect(onPreferencesChange).toHaveBeenCalledWith(expandedPreferences);
     expect(screen.getByRole('button', { name: /July 18/ })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -152,7 +161,7 @@ describe('TrackWeatherSection', () => {
   it('opens the full forecast at a clicked location in Weather', async () => {
     resetMapInteractionStore();
     const user = userEvent.setup();
-    renderSection({ expanded: true, weekday: 6 });
+    renderSection(expandedPreferences);
 
     await user.click(
       await screen.findByRole('button', {
@@ -170,12 +179,12 @@ describe('TrackWeatherSection', () => {
 
   it('remembers the weekday of a chosen forecast date', async () => {
     const user = userEvent.setup();
-    const { onPreferencesChange } = renderSection({ expanded: true, weekday: 6 });
+    const { onPreferencesChange } = renderSection(expandedPreferences);
 
     await user.click(screen.getByRole('button', { name: /July 20/ }));
 
     expect(onPreferencesChange).toHaveBeenLastCalledWith({
-      expanded: true,
+      ...expandedPreferences,
       weekday: 1,
     });
     expect(screen.getByRole('button', { name: /July 20/ })).toHaveAttribute(
@@ -185,7 +194,7 @@ describe('TrackWeatherSection', () => {
   });
 
   it('limits the route timeline and its start and pace adjustments to day hikes', () => {
-    renderSection({ expanded: true, weekday: 6 }, { distanceMeters: 31_000 });
+    renderSection(expandedPreferences, { distanceMeters: 31_000 });
 
     expect(
       screen.getByText('Available for day hikes shorter than 30 km and 12 hours.'),
@@ -198,7 +207,7 @@ describe('TrackWeatherSection', () => {
 
   it('moves the route forecast to a chosen start time above the pace control', async () => {
     const user = userEvent.setup();
-    renderSection({ expanded: true, weekday: 6 });
+    const { onPreferencesChange } = renderSection(expandedPreferences);
     const route = screen.getByRole('list', { name: 'Forecast along the route' });
     const labels = () =>
       within(route)
@@ -234,11 +243,59 @@ describe('TrackWeatherSection', () => {
     expect(start).toHaveAttribute('aria-valuetext', '23:30');
     // Arrivals after midnight fall on the next date; only the time of day is shown.
     expect(labels()[2]).toBe('05:00, Finish, 2,400 m');
+    // An unsaved track keeps its start time only in the open section.
+    expect(onPreferencesChange).not.toHaveBeenCalled();
+  });
+
+  it('restores and remembers the start time and pace of a saved track', async () => {
+    const user = userEvent.setup();
+    const other = { startHour: 6, paceFactor: 1.5 };
+    const { onPreferencesChange } = renderSection(
+      {
+        ...expandedPreferences,
+        timelines: {
+          'local:other': other,
+          'local:ridge': { startHour: 7, paceFactor: 2 },
+        },
+      },
+      dayHike,
+      'local:ridge',
+    );
+    const start = screen.getByRole('slider', { name: 'Route start' });
+    const pace = screen.getByRole('slider', { name: 'Adjust pace' });
+    expect(start).toHaveAttribute('aria-valuetext', '07:00');
+    expect(pace).toHaveAttribute('aria-valuetext', '×2');
+    expect(
+      screen.getByText(
+        'Starting at 07:00 at the adjusted pace, about 11h 0m in total.',
+      ),
+    ).toBeVisible();
+
+    start.focus();
+    await user.keyboard('{ArrowRight}');
+    expect(onPreferencesChange).toHaveBeenLastCalledWith({
+      ...expandedPreferences,
+      timelines: {
+        'local:other': other,
+        'local:ridge': { startHour: 7.5, paceFactor: 2 },
+      },
+    });
+
+    // Back at the defaults the track's entry is dropped; other tracks keep theirs.
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}');
+    pace.focus();
+    await user.keyboard('{Home}');
+    await user.keyboard(Array.from({ length: 10 }, () => '{ArrowRight}').join(''));
+    expect(pace).toHaveAttribute('aria-valuetext', '×1');
+    expect(onPreferencesChange).toHaveBeenLastCalledWith({
+      ...expandedPreferences,
+      timelines: { 'local:other': other },
+    });
   });
 
   it('replans the route forecast for an adjusted pace', async () => {
     const user = userEvent.setup();
-    renderSection({ expanded: true, weekday: 6 });
+    renderSection(expandedPreferences);
     const route = () => screen.getByRole('list', { name: 'Forecast along the route' });
     const times = () =>
       within(route())
@@ -275,7 +332,7 @@ describe('TrackWeatherSection', () => {
     vi.spyOn(services.pointWeatherForecast, 'execute').mockRejectedValue(
       new PointWeatherForecastError('provider-unavailable', 'Unavailable.'),
     );
-    renderSection({ expanded: true, weekday: 6 });
+    renderSection(expandedPreferences);
 
     const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
     expect(

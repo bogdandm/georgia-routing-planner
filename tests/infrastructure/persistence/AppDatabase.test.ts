@@ -212,26 +212,61 @@ describe('AppDatabase', () => {
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
       expanded: false,
       weekday: 6,
+      timelines: {},
     });
 
-    await database.saveTrackWeatherPreferences({ expanded: true, weekday: 3 });
-    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+    const saved = {
       expanded: true,
       weekday: 3,
-    });
+      timelines: { 'local:kazbegi': { startHour: 6.5, paceFactor: 1.25 } },
+    } as const;
+    await database.saveTrackWeatherPreferences(saved);
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual(saved);
 
+    // Records stored before per-track timelines existed keep their choices.
     await database.settings.put({
       key: 'weather.track-preferences',
-      value: { expanded: true, weekday: 7 },
+      value: { expanded: true, weekday: 2 },
       updatedAt: '2026-08-08T10:00:00.000Z',
     });
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
-      expanded: false,
-      weekday: 6,
+      expanded: true,
+      weekday: 2,
+      timelines: {},
     });
-    await expect(
-      database.settings.get('weather.track-preferences'),
-    ).resolves.toBeUndefined();
+
+    for (const value of [
+      { expanded: true, weekday: 7 },
+      {
+        expanded: true,
+        weekday: 3,
+        timelines: { 'local:kazbegi': { startHour: 6.25, paceFactor: 1 } },
+      },
+      {
+        expanded: true,
+        weekday: 3,
+        timelines: { 'local:kazbegi': { startHour: 24, paceFactor: 1 } },
+      },
+      {
+        expanded: true,
+        weekday: 3,
+        timelines: { 'local:kazbegi': { startHour: 9, paceFactor: 2.5 } },
+      },
+    ]) {
+      await database.settings.put({
+        key: 'weather.track-preferences',
+        value,
+        updatedAt: '2026-08-08T10:00:00.000Z',
+      });
+      await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+        expanded: false,
+        weekday: 6,
+        timelines: {},
+      });
+      await expect(
+        database.settings.get('weather.track-preferences'),
+      ).resolves.toBeUndefined();
+    }
   });
 
   it('shares the complete map view until saved otherwise and repairs invalid share preferences', async () => {

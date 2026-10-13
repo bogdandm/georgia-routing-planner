@@ -188,6 +188,7 @@ import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
   defaultTrackWeatherPreferences,
+  withTrackWeatherTimeline,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
 import {
@@ -317,7 +318,7 @@ interface TracksWorkspaceValue {
   /** Folders shown collapsed; remembered in this browser only. */
   readonly collapsedFolderIds: ReadonlySet<string>;
   readonly toggleFolderCollapsed: (folderId: string) => void;
-  /** Forecast disclosure and weekday shared by every track; null until loaded. */
+  /** Forecast preferences shared by every track plus per-track timelines; null until loaded. */
   readonly trackWeatherPreferences: TrackWeatherPreferences | null;
   readonly updateTrackWeatherPreferences: (
     preferences: TrackWeatherPreferences,
@@ -2726,6 +2727,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           );
         }
         await reloadSummaries();
+        if (trackWeatherPreferences?.timelines[summary.id] !== undefined) {
+          updateTrackWeatherPreferences(
+            withTrackWeatherTimeline(trackWeatherPreferences, summary.id, null),
+          );
+        }
         void userData.trackDeleted(summary.id);
         setError(null);
       };
@@ -2733,7 +2739,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setError(msg`The track could not be deleted.`);
       });
     },
-    [active, database, reloadSummaries, saveLatestOpenedTrackId, userData],
+    [
+      active,
+      database,
+      reloadSummaries,
+      saveLatestOpenedTrackId,
+      trackWeatherPreferences,
+      updateTrackWeatherPreferences,
+      userData,
+    ],
   );
 
   const applyGeneratedName = useCallback(() => {
@@ -5829,6 +5843,7 @@ export function TrackDetailsPane({
               key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
               profile={activeProfile}
               metrics={metrics}
+              savedTrackId={active.kind === 'saved' ? active.summary.id : null}
               preferences={trackWeatherPreferences}
               onPreferencesChange={updateTrackWeatherPreferences}
             />

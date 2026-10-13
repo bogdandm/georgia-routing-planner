@@ -17,16 +17,28 @@ import {
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 
-/** Browser-local track forecast view state shared by every track. */
+/** Route timeline adjustments for one track; they never change its recorded time. */
+export interface TrackWeatherTimelineSettings {
+  /** Fractional local hour of the day at which the hike starts. */
+  readonly startHour: number;
+  /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
+  readonly paceFactor: number;
+}
+
+/** Browser-local track forecast view state. */
 export interface TrackWeatherPreferences {
+  /** Shared by every track. */
   readonly expanded: boolean;
   /** Local weekday whose next occurrence the forecast date selector opens on. */
   readonly weekday: MarkerWeatherWeekday;
+  /** Adjusted saved tracks by ID; a track without an entry uses the defaults. */
+  readonly timelines: Readonly<Record<string, TrackWeatherTimelineSettings>>;
 }
 
 export const defaultTrackWeatherPreferences: TrackWeatherPreferences = {
   expanded: false,
   weekday: 6,
+  timelines: {},
 };
 
 /** Selectable forecast dates: the local day plus six days, all covered by the forecast. */
@@ -217,6 +229,33 @@ function locationAtElapsed(
 /** Bounds of the forecast-only pace adjustment, as a multiplier of hiking time. */
 export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
+
+export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
+  startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
+  paceFactor: 1,
+};
+
+/**
+ * Stores a saved track's timeline settings. Default settings and null remove its entry,
+ * so the record only holds adjusted tracks.
+ */
+export function withTrackWeatherTimeline(
+  preferences: TrackWeatherPreferences,
+  trackId: string,
+  settings: TrackWeatherTimelineSettings | null,
+): TrackWeatherPreferences {
+  const timelines = Object.fromEntries(
+    Object.entries(preferences.timelines).filter(([id]) => id !== trackId),
+  );
+  if (
+    settings !== null &&
+    (settings.startHour !== defaultTrackWeatherTimelineSettings.startHour ||
+      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor)
+  ) {
+    timelines[trackId] = settings;
+  }
+  return { ...preferences, timelines };
+}
 
 /**
  * Places the hiker on the route every three hours from the start and at the finish.

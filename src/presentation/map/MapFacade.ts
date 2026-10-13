@@ -53,6 +53,12 @@ export interface MapFacade {
   /** Touch layouts disable the anchored popup and show the inspection in a sheet. */
   setPointInspectionPopupEnabled(enabled: boolean): void;
   /**
+   * Reserves a bottom overlay (the touch sheet) of `bottomInsetPx` as camera padding
+   * until the inspection closes, without moving the view, so later camera moves land
+   * above it. A tapped point already on screen but under the overlay is panned above it.
+   */
+  revealPointInspection(bottomInsetPx: number): void;
+  /**
    * Touch layouts disable the cursor-following planning preview; the ruler then labels
    * its total at the last point.
    */

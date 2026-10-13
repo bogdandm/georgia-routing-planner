@@ -492,10 +492,10 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   errors. While visible relief or 3D terrain waits for DEM tiles for more than a moment
   it shows **Loading terrain…** with an indeterminate bar, then returns to Ready. Under
   Ready, a **Contours · …** line reports contour generation workload.
-- **Point inspection:** a map click or place-search result opens an anchored popup with
-  coordinates, terrain elevation, and the nearest map feature with its distance; named
-  features link to English Wikipedia and Google Search. While the popup is visible, the
-  next map click only closes it.
+- **Point inspection:** a map click, a place-search result, or a coordinate search opens
+  an anchored popup with coordinates, terrain elevation, and the nearest map feature
+  with its distance; named features link to English Wikipedia and Google Search. While
+  the popup is visible, the next map click only closes it.
 - **Ruler:** the ruler button below the map-layer chooser toggles a session-only
   measurement; pressing it again ends and discards the measurement. While it is on,
   primary map clicks add numbered blue points joined by straight lines; it takes clicks
@@ -510,7 +510,10 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 - **Point actions:** right-click opens copy coordinates, **Copy link**, **Share…**,
   create a marker, search satellite scenes here, show the weather forecast, copy a
   weather-map link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap
-  instead opens a bottom sheet with the details and the same actions.
+  or search instead opens a bottom sheet with the details and the same actions. A search
+  move lands with the point above the sheet, in 2D and 3D; a tapped point under the
+  sheet moves above it. Closing a sheet that moved the map recenters it on the full
+  screen.
 - **Sharing:** one **Share map view** dialog builds a link to the current map. The rail
   **Share** action opens it on the map center; **Share…** in the point actions opens it
   on the clicked point with the current zoom. The link always carries the center and

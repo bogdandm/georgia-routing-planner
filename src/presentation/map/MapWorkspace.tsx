@@ -563,6 +563,9 @@ export function MapWorkspace({
   if (sheetOpen && pointInspection !== sheetInspection) {
     setSheetInspection(pointInspection);
   }
+  const sheetRef = useRef<HTMLDivElement>(null);
+  // A new coordinate object means a new inspection; loading updates keep the object.
+  const sheetCoordinate = sheetOpen ? pointInspection.coordinate : null;
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const startupTerrainRequested = restoredView?.terrainMode === 'terrain';
   const terrainState: TerrainControlState =
@@ -699,8 +702,20 @@ export function MapWorkspace({
     };
   }, [facade, mapViewport]);
 
+  // Declared before the camera effects: in the commit that mounts the sheet for a
+  // search, its height must become camera padding before the held move starts.
   useEffect(() => {
-    if (navigationCommand === null) return;
+    const sheet = sheetRef.current;
+    if (sheetCoordinate === null || sheet === null) return;
+    // offsetHeight ignores the Slide transform, so the entering sheet reports its full height.
+    facade.revealPointInspection(sheet.offsetHeight);
+  }, [facade, sheetCoordinate]);
+
+  // On touch, a search's camera move waits until its inspection sheet has rendered, so
+  // one move can land with the point above the sheet instead of panning afterwards.
+  const cameraWaitsForSheet = touchPointer && pointInspectionCommand !== null;
+  useEffect(() => {
+    if (navigationCommand === null || cameraWaitsForSheet) return;
     runThenConsume(
       () => {
         facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
@@ -709,9 +724,15 @@ export function MapWorkspace({
         consumeMapNavigationCommand(navigationCommand.id);
       },
     );
-  }, [facade, getNavigationPadding, navigationCommand]);
+  }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand]);
   useEffect(() => {
-    if (fitBoundsCommand === null || snapshot.lifecycle === 'loading') return;
+    if (
+      fitBoundsCommand === null ||
+      snapshot.lifecycle === 'loading' ||
+      cameraWaitsForSheet
+    ) {
+      return;
+    }
     runThenConsume(
       () => {
         facade.fitBounds(
@@ -725,7 +746,13 @@ export function MapWorkspace({
         consumeMapFitBoundsCommand(fitBoundsCommand.id);
       },
     );
-  }, [facade, fitBoundsCommand, getNavigationPadding, snapshot.lifecycle]);
+  }, [
+    cameraWaitsForSheet,
+    facade,
+    fitBoundsCommand,
+    getNavigationPadding,
+    snapshot.lifecycle,
+  ]);
 
   useEffect(() => {
     if (pointInspectionCommand === null || snapshot.lifecycle === 'loading') return;
@@ -1634,6 +1661,7 @@ export function MapWorkspace({
         }}
       >
         <Paper
+          ref={sheetRef}
           role="dialog"
           aria-labelledby="map-point-inspector-title"
           elevation={8}

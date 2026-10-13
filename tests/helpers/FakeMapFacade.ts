@@ -49,6 +49,7 @@ export class FakeMapFacade implements MapFacade {
   public pointInspectionOptions: (
     { readonly refreshNearbyPoiOnIdle?: boolean } | undefined
   )[] = [];
+  public pointInspectionRevealInsets: number[] = [];
   public nearestPoi: NearbyPoi | null = null;
   public terrainTransition:
     ((mode: TerrainMode) => Promise<TerrainTransitionResult>) | null = null;
@@ -128,6 +129,10 @@ export class FakeMapFacade implements MapFacade {
 
   public setPointInspectionPopupEnabled(enabled: boolean): void {
     this.pointInspectionPopupEnabled = enabled;
+  }
+
+  public revealPointInspection(bottomInsetPx: number): void {
+    this.pointInspectionRevealInsets.push(bottomInsetPx);
   }
 
   public setCursorPreviewEnabled(enabled: boolean): void {

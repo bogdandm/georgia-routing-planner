@@ -1,9 +1,10 @@
 import { msg } from '@lingui/core/macro';
-import type {
-  ErrorEvent as MapLibreErrorEvent,
-  Map as MapLibreMap,
-  MapMouseEvent,
-  MapSourceDataEvent,
+import {
+  MercatorCoordinate,
+  type ErrorEvent as MapLibreErrorEvent,
+  type Map as MapLibreMap,
+  type MapMouseEvent,
+  type MapSourceDataEvent,
 } from 'maplibre-gl';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
@@ -65,6 +66,9 @@ import {
 
 /** Navigator-style camera pitch for fits that face a travel path in 3D. */
 const directedFitPitchDegrees = 45;
+
+/** Space kept between a revealed inspection point and the visible map edges. */
+const pointRevealMarginPx = 24;
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -259,6 +263,8 @@ export class MapLibreFacade implements MapFacade {
     readonly startedAt: number;
   } | null = null;
   #completedPointInspectionSequence = 0;
+  /** Touch sheet height currently applied as bottom camera padding. */
+  #bottomOverlayInsetPx = 0;
   readonly #pointInspector: PointInspectorPopup;
   readonly #pointerGestures = new MapPointerGestureControl();
   #interactionMode: MapInteractionMode = 'default';
@@ -399,7 +405,64 @@ export class MapLibreFacade implements MapFacade {
 
   public setPointInspectionPopupEnabled(enabled: boolean): void {
     this.#pointInspector.setPopupEnabled(enabled);
+    // The popup replaces the touch sheet, so the sheet's padding no longer applies.
+    if (enabled) {
+      this.#bottomOverlayInsetPx = 0;
+      this.resetOverlayPadding();
+    }
   }
+
+  public revealPointInspection(bottomInsetPx: number): void {
+    const map = this.#map;
+    const inspection = this.#pointInspection;
+    if (map === null || inspection.status === 'closed') return;
+    // navigateTo and fitBounds pad by it until the inspection closes, so a search move
+    // started after this call lands above the sheet.
+    this.#bottomOverlayInsetPx = bottomInsetPx;
+    if (map.isMoving()) return;
+    const canvasHeight = map.getCanvas().clientHeight;
+    if (canvasHeight - bottomInsetPx < 2 * pointRevealMarginPx) return;
+    const center: [number, number] = [
+      inspection.coordinate.longitude,
+      inspection.coordinate.latitude,
+    ];
+    const { y } = map.project(center);
+    // Only a tapped point that is on screen but under the sheet needs to move.
+    if (y <= canvasHeight - bottomInsetPx - pointRevealMarginPx || y > canvasHeight) {
+      return;
+    }
+    map.easeTo({ center, padding: this.overlayPadding(), duration: 300 });
+  }
+
+  /**
+   * Camera padding that keeps the touch sheet out of the visible area. Unlike a screen
+   * offset or a pan, MapLibre padding moves the vanishing point, so it stays exact over
+   * pitched 3D terrain.
+   */
+  private overlayPadding() {
+    return { top: 0, right: 0, bottom: this.#bottomOverlayInsetPx, left: 0 };
+  }
+
+  /**
+   * Eases the camera back to zero padding once the sheet is gone. A move still in flight,
+   * such as a search started with the sheet open, finishes first so it is not cut short.
+   */
+  private resetOverlayPadding(): void {
+    const map = this.#map;
+    if (map === null) return;
+    map.off('moveend', this.handleOverlayResetMoveEnd);
+    if (this.#bottomOverlayInsetPx !== 0) return;
+    if (map.isMoving()) {
+      map.on('moveend', this.handleOverlayResetMoveEnd);
+      return;
+    }
+    if ((map.getPadding().bottom ?? 0) === 0) return;
+    map.easeTo({ padding: this.overlayPadding(), duration: 300 });
+  }
+
+  private readonly handleOverlayResetMoveEnd = (): void => {
+    this.resetOverlayPadding();
+  };
 
   public setCursorPreviewEnabled(enabled: boolean): void {
     if (this.#cursorPreviewEnabled === enabled) return;
@@ -467,6 +530,8 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;
     this.#pendingNearbyPoiRefresh = null;
+    this.#bottomOverlayInsetPx = 0;
+    this.resetOverlayPadding();
     if (this.#pointInspection.status !== 'closed') {
       this.#pointInspector.close();
       this.updatePointInspection({ status: 'closed' });
@@ -485,7 +550,7 @@ export class MapLibreFacade implements MapFacade {
     const map = this.#map;
     if (map === null) return;
     const center: [number, number] = [target.longitude, target.latitude];
-    const padding = { top: 0, right: 0, bottom: 0, left: 0 };
+    const padding = this.overlayPadding();
     const options = {
       center,
       zoom:
@@ -542,20 +607,50 @@ export class MapLibreFacade implements MapFacade {
                 ? map.queryTerrainElevation([longitude, latitude])
                 : null,
           });
-    if (directedFit === null) {
-      map.fitBounds(
-        [
-          [bounds.west, bounds.south],
-          [bounds.east, bounds.north],
-        ],
-        {
-          padding: padding ?? 56,
-          maxZoom,
-          duration: 650,
-          bearing: map.getBearing(),
-          pitch: map.getPitch(),
+    const lngLatBounds: [[number, number], [number, number]] = [
+      [bounds.west, bounds.south],
+      [bounds.east, bounds.north],
+    ];
+    if (directedFit === null && this.#bottomOverlayInsetPx > 0) {
+      // Fit inside the area above the touch sheet: size the zoom for that area and let
+      // camera padding center the bounds in it, which a fit offset cannot do in 3D.
+      const fitPadding = padding ?? { top: 56, right: 56, bottom: 56, left: 56 };
+      const camera = map.cameraForBounds(lngLatBounds, {
+        // cameraForBounds also subtracts the padding already on the map.
+        padding: {
+          ...fitPadding,
+          bottom:
+            fitPadding.bottom +
+            this.#bottomOverlayInsetPx -
+            (map.getPadding().bottom ?? 0),
         },
-      );
+        maxZoom,
+        bearing: map.getBearing(),
+      });
+      map.easeTo({
+        // The Web Mercator midpoint, which the zoom above was sized around.
+        center: [
+          (bounds.west + bounds.east) / 2,
+          new MercatorCoordinate(
+            0,
+            (MercatorCoordinate.fromLngLat([0, bounds.north]).y +
+              MercatorCoordinate.fromLngLat([0, bounds.south]).y) /
+              2,
+          ).toLngLat().lat,
+        ],
+        zoom: camera?.zoom ?? map.getZoom(),
+        padding: this.overlayPadding(),
+        duration: 650,
+        essential: true,
+      });
+    } else if (directedFit === null) {
+      map.fitBounds(lngLatBounds, {
+        padding: padding ?? 56,
+        maxZoom,
+        duration: 650,
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      });
     } else {
       // The solver assumes the vanishing point at the canvas center, so clear padding.
       map.flyTo({
@@ -1609,6 +1704,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('idle', this.handleIdle);
     map.off('movestart', this.handleMoveStart);
     map.off('moveend', this.handleMoveEnd);
+    map.off('moveend', this.handleOverlayResetMoveEnd);
     map.off('mousemove', this.handleMapMouseMove);
     map.off('click', this.handleMapClick);
     map.off('sourcedata', this.handleSourceData);
@@ -1627,6 +1723,7 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionAbort?.abort();
     this.#pointInspectionAbort = null;
     this.#pendingNearbyPoiRefresh = null;
+    this.#bottomOverlayInsetPx = 0;
     this.#pointInspector.close();
     this.#map = null;
     // React renders the popup content from this state, so it must observe the close.

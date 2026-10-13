@@ -712,6 +712,54 @@ describe('MapWorkspace', () => {
     expect(facade.pointInspectionOptions).toEqual([{ refreshNearbyPoiOnIdle: true }]);
   });
 
+  it('on touch, reserves the sheet height before starting a search camera move', async () => {
+    mockMatchingMediaQueries('(pointer: coarse)');
+    const sheetHeight = vi
+      .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockReturnValue(500);
+    const facade = new FakeMapFacade();
+    const reveal = vi.spyOn(facade, 'revealPointInspection');
+    const navigate = vi.spyOn(facade, 'navigateTo');
+    const fit = vi.spyOn(facade, 'fitBounds');
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Touch search canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Touch search canvas');
+    act(() => {
+      requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
+      requestMapPointInspection({ latitude: 41.7, longitude: 44.8 });
+    });
+    // The inspection waits for a ready map, and the camera waits for the inspection.
+    expect(navigate).not.toHaveBeenCalled();
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    await screen.findByRole('dialog', { name: 'Map point' });
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledOnce();
+    });
+    expect(reveal).toHaveBeenNthCalledWith(1, 500);
+    expect(reveal.mock.invocationCallOrder[0]).toBeLessThan(
+      navigate.mock.invocationCallOrder[0] ?? 0,
+    );
+
+    act(() => {
+      requestMapFitBounds({ west: 42, south: 41, east: 43, north: 42 }, 13);
+      requestMapPointInspection({ latitude: 41.5, longitude: 42.5 });
+    });
+    await waitFor(() => {
+      expect(fit).toHaveBeenCalledOnce();
+    });
+    expect(reveal).toHaveBeenCalledTimes(2);
+    expect(reveal.mock.invocationCallOrder[1]).toBeLessThan(
+      fit.mock.invocationCallOrder[0] ?? 0,
+    );
+    sheetHeight.mockRestore();
+  });
+
   it('holds point-inspection commands until the map is ready', async () => {
     const facade = new FakeMapFacade();
     renderWithI18n(
@@ -1635,7 +1683,7 @@ describe('MapWorkspace', () => {
     expect(window.location.hash).toBe('#weather');
   });
 
-  it('shows mouse inspections in the popup and touch inspections in an action sheet', async () => {
+  it('shows mouse inspections in the popup and touch inspections in an action sheet that reveals the point', async () => {
     const facade = new FakeMapFacade();
     document.body.append(facade.pointInspectionContent);
     const openInspection = () => {
@@ -1660,6 +1708,7 @@ describe('MapWorkspace', () => {
     expect(facade.pointInspectionPopupEnabled).toBe(true);
     expect(popup.getByText('Map point')).toBeVisible();
     expect(popup.queryByRole('menu')).toBeNull();
+    expect(facade.pointInspectionRevealInsets).toEqual([]);
     mouseView.unmount();
     act(() => {
       facade.closePointInspection();
@@ -1678,6 +1727,16 @@ describe('MapWorkspace', () => {
     openInspection();
     const sheet = await screen.findByRole('dialog', { name: 'Map point' });
     expect(facade.pointInspectionContent).toBeEmptyDOMElement();
+    expect(facade.pointInspectionRevealInsets).toHaveLength(1);
+    const loadingInspection = facade.pointInspection;
+    if (loadingInspection.status !== 'open') throw new Error('Inspection closed');
+    act(() => {
+      facade.setPointInspection({
+        ...loadingInspection,
+        elevation: { status: 'available', meters: 512 },
+      });
+    });
+    expect(facade.pointInspectionRevealInsets).toHaveLength(1);
     const actions = within(sheet).getByRole('menu', { name: 'Map point actions' });
     expect(
       within(actions).getByRole('menuitem', { name: 'Open windy.com' }),

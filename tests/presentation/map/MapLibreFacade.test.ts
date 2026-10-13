@@ -38,6 +38,9 @@ class FakeNativeMap {
   public terrainElevation: number | null = null;
   public initialTerrain: unknown = null;
   public moving = false;
+  public projectedPoint = { x: 0, y: 0 };
+  public padding = { top: 0, right: 0, bottom: 0, left: 0 };
+  public cameraForBoundsPadding: FakeNativeMap['padding'] | null = null;
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;
@@ -115,6 +118,23 @@ class FakeNativeMap {
   public unproject(_point: { readonly x: number; readonly y: number }) {
     return { lng: 44.65, lat: 42.67 };
   }
+
+  public project(_lngLat: readonly [number, number]) {
+    return this.projectedPoint;
+  }
+
+  public getPadding() {
+    return this.padding;
+  }
+
+  public cameraForBounds(
+    _bounds: unknown,
+    options: { readonly padding: FakeNativeMap['padding'] },
+  ) {
+    this.cameraForBoundsPadding = options.padding;
+    return { center: { lng: 0, lat: 0 }, zoom: 11.5, bearing: 0 };
+  }
+
   public getSource(id: string): unknown {
     return this.#sources.get(id);
   }
@@ -168,6 +188,9 @@ class FakeNativeMap {
     if (typeof options.zoom === 'number') this.#zoom = options.zoom;
     if (typeof options.bearing === 'number') this.#bearing = options.bearing;
     if (typeof options.pitch === 'number') this.#pitch = options.pitch;
+    if (typeof options.padding === 'object') {
+      this.padding = options.padding as FakeNativeMap['padding'];
+    }
   }
 
   public fitBounds(_bounds: unknown, options: Record<string, unknown>): void {
@@ -1430,6 +1453,87 @@ describe('MapLibreFacade', () => {
     expect(JSON.stringify(services.logger.getEvents())).not.toContain('45.123456');
     facade.closePointInspection();
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+  });
+
+  it('keeps the touch sheet out of the camera through padding until the inspection closes', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    Object.defineProperty(nativeMap.getCanvas(), 'clientHeight', { value: 800 });
+    const popup = {
+      content: document.createElement('div'),
+      attach: vi.fn(),
+      show: vi.fn(),
+      setPopupEnabled: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.openPointInspection({ longitude: 44.8, latitude: 41.7 });
+    const sheetPadding = { top: 0, right: 0, bottom: 400, left: 0 };
+
+    // A visible point and an off-screen search target stay put.
+    nativeMap.projectedPoint = { x: 200, y: 150 };
+    facade.revealPointInspection(400);
+    nativeMap.projectedPoint = { x: 200, y: 2_000 };
+    facade.revealPointInspection(400);
+    expect(nativeMap.easeCalls).toEqual([]);
+
+    // The search move that follows lands inside the padded area.
+    facade.navigateTo({ longitude: 43.4, latitude: 42.6, zoom: 13 });
+    expect(nativeMap.easeCalls.at(-1)).toMatchObject({
+      center: [43.4, 42.6],
+      padding: sheetPadding,
+    });
+    // The map already carries the sheet padding, so only the fit padding is added.
+    facade.fitBounds({ west: 42, south: 41, east: 43, north: 42 }, 13);
+    expect(nativeMap.fitBoundsCalls).toEqual([]);
+    expect(nativeMap.cameraForBoundsPadding).toEqual({
+      top: 56,
+      right: 56,
+      bottom: 56,
+      left: 56,
+    });
+    expect(nativeMap.easeCalls.at(-1)).toMatchObject({
+      // Web Mercator midpoint of 41°N and 42°N, north of their arithmetic mean.
+      center: [42.5, expect.closeTo(41.50193, 4)],
+      zoom: 11.5,
+      padding: sheetPadding,
+    });
+
+    // A tapped point under the sheet moves into the padded area; a moving camera is left alone.
+    nativeMap.projectedPoint = { x: 200, y: 600 };
+    nativeMap.moving = true;
+    facade.revealPointInspection(400);
+    expect(nativeMap.easeCalls).toHaveLength(2);
+    nativeMap.moving = false;
+    facade.revealPointInspection(400);
+    expect(nativeMap.easeCalls.at(-1)).toEqual({
+      center: [44.8, 41.7],
+      padding: sheetPadding,
+      duration: 300,
+    });
+
+    // Closing mid-move lets the move finish before the padding returns to zero.
+    nativeMap.moving = true;
+    facade.closePointInspection();
+    expect(nativeMap.easeCalls).toHaveLength(3);
+    nativeMap.fire('moveend');
+    const unpadded = { top: 0, right: 0, bottom: 0, left: 0 };
+    expect(nativeMap.easeCalls.at(-1)).toEqual({ padding: unpadded, duration: 300 });
+    nativeMap.fire('moveend');
+    expect(nativeMap.easeCalls).toHaveLength(4);
+    facade.navigateTo({ longitude: 43.4, latitude: 42.6, zoom: 13 });
+    expect(nativeMap.easeCalls.at(-1)).toMatchObject({ padding: unpadded });
   });
 
   it('includes named lakes when inspecting nearby map features', () => {

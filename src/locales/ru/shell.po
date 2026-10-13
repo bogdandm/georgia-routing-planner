@@ -20,7 +20,7 @@ msgid "{0} s"
 msgstr "{0} с"
 
 #. js-lingui-id: XSrJ15
-#: src/presentation/shell/MapSearchPlaceholder.tsx:481
+#: src/presentation/shell/MapSearchPlaceholder.tsx:484
 msgid "{category} · {distance}"
 msgstr "{distance} · {category}"
 
@@ -30,7 +30,7 @@ msgid "{count, plural, one {# Sentinel image is available} other {# Sentinel ima
 msgstr "{count, plural, one {Доступно # изображение Sentinel} few {Доступно # изображения Sentinel} many {Доступно # изображений Sentinel} other {Доступно # изображения Sentinel}}"
 
 #. js-lingui-id: rPwTt_
-#: src/presentation/shell/MapSearchPlaceholder.tsx:426
+#: src/presentation/shell/MapSearchPlaceholder.tsx:429
 msgid "{expandedRadius} of {maximumRadius} kilometres"
 msgstr "{expandedRadius} из {maximumRadius} километров"
 
@@ -202,7 +202,7 @@ msgid "City"
 msgstr "Город"
 
 #. js-lingui-id: jK_Ldm
-#: src/presentation/shell/MapSearchPlaceholder.tsx:373
+#: src/presentation/shell/MapSearchPlaceholder.tsx:376
 msgid "Clear map search"
 msgstr "Очистить поиск по карте"
 
@@ -339,7 +339,7 @@ msgid "Expand unsaved track details"
 msgstr "Развернуть сведения о несохранённом треке"
 
 #. js-lingui-id: pkYRAm
-#: src/presentation/shell/MapSearchPlaceholder.tsx:422
+#: src/presentation/shell/MapSearchPlaceholder.tsx:425
 msgid "Expanding place search area"
 msgstr "Расширение области поиска мест"
 
@@ -490,7 +490,7 @@ msgid "Local database (IndexedDB)"
 msgstr "Локальная база данных (IndexedDB)"
 
 #. js-lingui-id: GJPmhf
-#: src/presentation/shell/MapSearchPlaceholder.tsx:490
+#: src/presentation/shell/MapSearchPlaceholder.tsx:493
 msgid "Local track search results"
 msgstr "Результаты поиска по локальным трекам"
 
@@ -515,7 +515,7 @@ msgid "Map provider configuration is invalid."
 msgstr "Недопустимая конфигурация поставщика карты."
 
 #. js-lingui-id: uIWtLA
-#: src/presentation/shell/MapSearchPlaceholder.tsx:321
+#: src/presentation/shell/MapSearchPlaceholder.tsx:324
 msgid "Map search"
 msgstr "Поиск по карте"
 
@@ -618,17 +618,17 @@ msgid "Next"
 msgstr "Далее"
 
 #. js-lingui-id: 19XTPe
-#: src/presentation/shell/MapSearchPlaceholder.tsx:445
+#: src/presentation/shell/MapSearchPlaceholder.tsx:448
 msgid "No geographic matches found."
 msgstr "Подходящих мест не найдено."
 
 #. js-lingui-id: MyjSw9
-#: src/presentation/shell/MapSearchPlaceholder.tsx:437
+#: src/presentation/shell/MapSearchPlaceholder.tsx:440
 msgid "No matching places were found within approximately {exhaustedDistance}."
 msgstr "В радиусе примерно {exhaustedDistance} подходящие места не найдены."
 
 #. js-lingui-id: -vOJyC
-#: src/presentation/shell/MapSearchPlaceholder.tsx:436
+#: src/presentation/shell/MapSearchPlaceholder.tsx:439
 msgid "No matching places were found."
 msgstr "Подходящие места не найдены."
 
@@ -719,12 +719,12 @@ msgid "Place search is unavailable. Try again."
 msgstr "Поиск мест недоступен. Повторите попытку."
 
 #. js-lingui-id: 7wmsS7
-#: src/presentation/shell/MapSearchPlaceholder.tsx:402
+#: src/presentation/shell/MapSearchPlaceholder.tsx:405
 msgid "Place search provider configuration is unavailable. Coordinate entry still works."
 msgstr "Конфигурация поставщика поиска мест недоступна. Ввод координат по-прежнему работает."
 
 #. js-lingui-id: 1IjCTZ
-#: src/presentation/shell/MapSearchPlaceholder.tsx:451
+#: src/presentation/shell/MapSearchPlaceholder.tsx:454
 msgid "Place search results"
 msgstr "Результаты поиска мест"
 
@@ -903,7 +903,7 @@ msgid "Save"
 msgstr "Сохранить"
 
 #. js-lingui-id: Ht8qdB
-#: src/presentation/shell/MapSearchPlaceholder.tsx:499
+#: src/presentation/shell/MapSearchPlaceholder.tsx:502
 msgid "Saved local track"
 msgstr "Сохранённый локальный трек"
 
@@ -918,23 +918,23 @@ msgid "Saved markers are unavailable"
 msgstr "Сохранённые метки недоступны"
 
 #. js-lingui-id: srhkS0
-#: src/presentation/shell/MapSearchPlaceholder.tsx:511
+#: src/presentation/shell/MapSearchPlaceholder.tsx:514
 msgid "Search all saved tracks"
 msgstr "Искать среди всех сохранённых треков"
 
 #. js-lingui-id: 0rRKr8
-#: src/presentation/shell/MapSearchPlaceholder.tsx:528
+#: src/presentation/shell/MapSearchPlaceholder.tsx:531
 msgid "Search data © <0>OpenStreetMap contributors</0>"
 msgstr "Данные поиска © <0>OpenStreetMap contributors</0>"
 
 #. js-lingui-id: YRxZsk
-#: src/presentation/shell/MapSearchPlaceholder.tsx:357
+#: src/presentation/shell/MapSearchPlaceholder.tsx:360
 msgid "Search map"
 msgstr "Искать на карте"
 
 #. js-lingui-id: xtVjUm
-#: src/presentation/shell/MapSearchPlaceholder.tsx:341
-#: src/presentation/shell/MapSearchPlaceholder.tsx:347
+#: src/presentation/shell/MapSearchPlaceholder.tsx:344
+#: src/presentation/shell/MapSearchPlaceholder.tsx:350
 msgid "Search places or coordinates"
 msgstr "Искать места или координаты"
 
@@ -944,7 +944,7 @@ msgid "Search places, coordinates, and your saved tracks."
 msgstr "Поиск мест, координат и ваших сохранённых треков."
 
 #. js-lingui-id: kaDhS6
-#: src/presentation/shell/MapSearchPlaceholder.tsx:368
+#: src/presentation/shell/MapSearchPlaceholder.tsx:371
 msgid "Searching places"
 msgstr "Поиск мест"
 

@@ -318,9 +318,12 @@ describe('track weather dates', () => {
     expect(() => trackWeatherDates('28.07.2026')).toThrow(RangeError);
   });
 
-  it('places arrivals after the 09:00 local start', () => {
-    expect(trackWeatherLocalTime('2026-07-18', 3.5 * hour)).toBe('2026-07-18T12:30');
-    expect(trackWeatherLocalTime('2026-07-18', 15 * hour)).toBe('2026-07-19T00:00');
+  it('places arrivals after the chosen local start, past midnight into the next date', () => {
+    expect(trackWeatherLocalTime('2026-07-18', 9, 3.5 * hour)).toBe('2026-07-18T12:30');
+    expect(trackWeatherLocalTime('2026-07-18', 9, 15 * hour)).toBe('2026-07-19T00:00');
+    expect(trackWeatherLocalTime('2026-07-18', 22.5, 2 * hour)).toBe(
+      '2026-07-19T00:30',
+    );
   });
 });
 
@@ -329,7 +332,12 @@ describe('summarizeTrackWeatherCheckpoint', () => {
     const forecast = await pointForecast();
 
     expect(
-      summarizeTrackWeatherCheckpoint(forecast, '2026-07-18', checkpoint(0, 3 * hour)),
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-18',
+        9,
+        checkpoint(0, 3 * hour),
+      ),
     ).toMatchObject({
       isDay: true,
       period: { temperatureMinCelsius: 9, temperatureMaxCelsius: 11 },
@@ -340,6 +348,7 @@ describe('summarizeTrackWeatherCheckpoint', () => {
       summarizeTrackWeatherCheckpoint(
         forecast,
         '2026-07-18',
+        9,
         checkpoint(arrival, arrival),
       ),
     ).toMatchObject({
@@ -349,11 +358,29 @@ describe('summarizeTrackWeatherCheckpoint', () => {
       summarizeTrackWeatherCheckpoint(
         forecast,
         '2026-07-18',
+        9,
         checkpoint(12 * hour, 13 * hour),
       ),
     ).toMatchObject({ isDay: false, period: { temperatureMinCelsius: 21 } });
+    // A 22:30 start covers 22:00–01:00, reading the next date's hours after midnight.
     expect(
-      summarizeTrackWeatherCheckpoint(forecast, '2026-07-30', checkpoint(0, 3 * hour)),
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-18',
+        22.5,
+        checkpoint(0, 3 * hour),
+      ),
+    ).toMatchObject({
+      isDay: false,
+      period: { temperatureMinCelsius: 0, temperatureMaxCelsius: 23 },
+    });
+    expect(
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-30',
+        9,
+        checkpoint(0, 3 * hour),
+      ),
     ).toBeNull();
   });
 });

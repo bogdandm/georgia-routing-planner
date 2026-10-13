@@ -184,7 +184,7 @@ describe('TrackWeatherSection', () => {
     );
   });
 
-  it('limits the route timeline and pace adjustment to day hikes', () => {
+  it('limits the route timeline and its start and pace adjustments to day hikes', () => {
     renderSection({ expanded: true, weekday: 6 }, { distanceMeters: 31_000 });
 
     expect(
@@ -193,9 +193,47 @@ describe('TrackWeatherSection', () => {
     expect(
       screen.queryByRole('list', { name: 'Forecast along the route' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('slider')).toEqual([]);
+  });
+
+  it('moves the route forecast to a chosen start time above the pace control', async () => {
+    const user = userEvent.setup();
+    renderSection({ expanded: true, weekday: 6 });
+    const route = screen.getByRole('list', { name: 'Forecast along the route' });
+    const labels = () =>
+      within(route)
+        .getAllByRole('group')
+        .map((card) => card.getAttribute('aria-label'));
+
+    const sliders = screen.getAllByRole('slider');
+    expect(sliders.map((slider) => slider.getAttribute('aria-labelledby'))).toEqual([
+      screen.getByText('Route start').id,
+      screen.getByText('Adjust pace').id,
+    ]);
+    const start = screen.getByRole('slider', { name: 'Route start' });
+    expect(start).toHaveAttribute('aria-valuetext', '09:00');
+
+    start.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}');
+
+    expect(start).toHaveAttribute('aria-valuetext', '10:30');
+    expect(labels()).toEqual([
+      '10:30, Start, 2,000 m',
+      '13:30, At 4.8 km, 2,720 m',
+      '16:00, Finish, 2,400 m',
+    ]);
     expect(
-      screen.queryByRole('slider', { name: 'Adjust pace' }),
-    ).not.toBeInTheDocument();
+      screen.getByText(
+        'Starting at 10:30 at the estimated pace, about 5h 30m in total.',
+      ),
+    ).toBeVisible();
+
+    await user.keyboard('{Home}');
+    expect(start).toHaveAttribute('aria-valuetext', '00:00');
+    await user.keyboard('{End}');
+    expect(start).toHaveAttribute('aria-valuetext', '23:30');
+    // Arrivals after midnight fall on the next date; only the time of day is shown.
+    expect(labels()[2]).toBe('05:00, Finish, 2,400 m');
   });
 
   it('replans the route forecast for an adjusted pace', async () => {

@@ -31,8 +31,11 @@ export const defaultTrackWeatherPreferences: TrackWeatherPreferences = {
 
 /** Selectable forecast dates: the local day plus six days, all covered by the forecast. */
 export const TRACK_WEATHER_DATE_COUNT = 7;
-/** Local hour at which the timeline assumes the hike starts. */
-export const TRACK_WEATHER_START_HOUR = 9;
+/** Local hour at which the timeline assumes the hike starts unless the user moves it. */
+export const TRACK_WEATHER_DEFAULT_START_HOUR = 9;
+/** The start hour selector covers the whole local day in half-hour steps. */
+export const TRACK_WEATHER_START_HOUR_STEP = 0.5;
+export const TRACK_WEATHER_LATEST_START_HOUR = 24 - TRACK_WEATHER_START_HOUR_STEP;
 export const TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS = 30_000;
 export const TRACK_WEATHER_TIMELINE_MAXIMUM_SECONDS = 12 * 3_600;
 export const TRACK_WEATHER_CHECKPOINT_INTERVAL_SECONDS = 3 * 3_600;
@@ -307,25 +310,33 @@ export function defaultTrackWeatherDate(
   return date;
 }
 
-/** Local `YYYY-MM-DDTHH:mm` at which the hiker reaches a point on the chosen date. */
-export function trackWeatherLocalTime(date: string, elapsedSeconds: number): string {
+/**
+ * Local `YYYY-MM-DDTHH:mm` at which the hiker reaches a point on the chosen date when
+ * starting at the fractional local `startHour`.
+ */
+export function trackWeatherLocalTime(
+  date: string,
+  startHour: number,
+  elapsedSeconds: number,
+): string {
   return localDateTime(
-    parseLocalDate(date) + (TRACK_WEATHER_START_HOUR * 3_600 + elapsedSeconds) * 1_000,
+    parseLocalDate(date) + (startHour * 3_600 + elapsedSeconds) * 1_000,
   );
 }
 
 /**
  * Summarizes the checkpoint location's forecast hours from its arrival hour until the
- * next checkpoint; the finish covers its arrival hour. Null when the forecast does not
- * reach the chosen date.
+ * next checkpoint; the finish covers its arrival hour. Arrivals after midnight read the
+ * next date's hours. Null when the forecast does not reach those hours.
  */
 export function summarizeTrackWeatherCheckpoint(
   forecast: PointWeatherForecast,
   date: string,
+  startHour: number,
   checkpoint: TrackWeatherCheckpoint,
 ): TrackWeatherCheckpointPeriod | null {
-  const startHours = TRACK_WEATHER_START_HOUR + checkpoint.elapsedSeconds / 3_600;
-  const untilHours = TRACK_WEATHER_START_HOUR + checkpoint.untilElapsedSeconds / 3_600;
+  const startHours = startHour + checkpoint.elapsedSeconds / 3_600;
+  const untilHours = startHour + checkpoint.untilElapsedSeconds / 3_600;
   const firstHour = Math.floor(startHours);
   const endHour = Math.max(firstHour + 1, Math.ceil(untilHours));
   const dayStart = parseLocalDate(date);

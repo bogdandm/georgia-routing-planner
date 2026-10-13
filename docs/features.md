@@ -271,19 +271,21 @@ starts collapsed; whether it is expanded is remembered in this browser for every
 and forecasts load only while it is open. It begins with seven forecast dates from
 today; choosing one remembers its weekday for all tracks, and the next Saturday is
 selected until then. **By elevation** shows the daytime forecast at the highest,
-median-elevation, and lowest profile points. **Along the route** assumes a 09:00 local
-start and shows where the hiker is every three hours and at the finish, each with the
-forecast at that location from its arrival hour until the next checkpoint; the finish
-covers its arrival hour. The pace follows recorded timestamps when the track has
+median-elevation, and lowest profile points. **Along the route** starts at a chosen
+local time and shows where the hiker is every three hours and at the finish, each with
+the forecast at that location from its arrival hour until the next checkpoint; the
+finish covers its arrival hour. The pace follows recorded timestamps when the track has
 recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
 flat walking. The timeline is offered only for day hikes shorter than 30 km and 12
-hours. For those tracks an **Adjust pace** slider scales the timeline from ×0.5 (faster)
-to ×2 (slower) and replans the checkpoints on release; it is session-only and never
-changes the track's recorded or estimated time. Slowing a track past 12 hours hides the
-timeline until the pace is reduced. Cards reuse the 7-day forecast rows from Weather and
-request each location with its profile elevation. Clicking a loaded forecast row opens
-Weather with the full forecast at that location and elevation, labelled with the card's
-point or time.
+hours. For those tracks a **Route start** slider above the pace sets the start from
+00:00 to 23:30 in half-hour steps, defaulting to 09:00; arrivals after midnight use the
+next date's forecast hours. An **Adjust pace** slider scales the timeline from ×0.5
+(faster) to ×2 (slower) and replans the checkpoints on release. Both are session-only
+and never change the track's recorded or estimated time. Slowing a track past 12 hours
+hides the timeline until the pace is reduced. Cards reuse the 7-day forecast rows from
+Weather and request each location with its profile elevation. Clicking a loaded forecast
+row opens Weather with the full forecast at that location and elevation, labelled with
+the card's point or time.
 
 #### Multi-track view
 

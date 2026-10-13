@@ -14,6 +14,7 @@ import {
   TRACK_WEATHER_LATEST_START_HOUR,
   TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
+  TRACK_WEATHER_PACE_FACTOR_STEP,
   TRACK_WEATHER_START_HOUR_STEP,
   defaultTrackWeatherPreferences,
   type TrackWeatherPreferences,
@@ -504,7 +505,8 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
             paceFactor: z
               .number()
               .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
-              .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR),
+              .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
+              .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
           })
           .strict(),
       )

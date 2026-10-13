@@ -5,7 +5,11 @@ import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
-import type { TrackWeatherPreferences } from '@/application/weather/TrackWeatherForecast';
+import {
+  defaultTrackWeatherTimelineSettings,
+  type TrackWeatherPreferences,
+  type TrackWeatherTimelineSettings,
+} from '@/application/weather/TrackWeatherForecast';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   ElevationProfile,
@@ -62,20 +66,26 @@ let services: ReturnType<typeof createTestServices>;
 function renderSection(
   initial: TrackWeatherPreferences | null,
   metrics: TrackStatsMetrics = dayHike,
-  savedTrackId: string | null = null,
+  initialTimeline: TrackWeatherTimelineSettings = defaultTrackWeatherTimelineSettings,
 ) {
   const onPreferencesChange = vi.fn();
+  const onTimelineSettingsChange = vi.fn();
   function Harness() {
     const [preferences, setPreferences] = useState(initial);
+    const [timelineSettings, setTimelineSettings] = useState(initialTimeline);
     return (
       <TrackWeatherSection
         profile={ridge}
         metrics={metrics}
-        savedTrackId={savedTrackId}
         preferences={preferences}
         onPreferencesChange={(next) => {
           onPreferencesChange(next);
           setPreferences(next);
+        }}
+        timelineSettings={timelineSettings}
+        onTimelineSettingsChange={(next) => {
+          onTimelineSettingsChange(next);
+          setTimelineSettings(next);
         }}
       />
     );
@@ -87,7 +97,7 @@ function renderSection(
       </ThemeProvider>
     </RuntimeServicesProvider>,
   );
-  return { onPreferencesChange };
+  return { onPreferencesChange, onTimelineSettingsChange };
 }
 
 function expandedSection(metrics: TrackStatsMetrics) {
@@ -97,9 +107,10 @@ function expandedSection(metrics: TrackStatsMetrics) {
         <TrackWeatherSection
           profile={ridge}
           metrics={metrics}
-          savedTrackId={null}
           preferences={expandedPreferences}
           onPreferencesChange={vi.fn()}
+          timelineSettings={defaultTrackWeatherTimelineSettings}
+          onTimelineSettingsChange={vi.fn()}
         />
       </ThemeProvider>
     </RuntimeServicesProvider>
@@ -207,7 +218,7 @@ describe('TrackWeatherSection', () => {
 
   it('moves the route forecast to a chosen start time above the pace control', async () => {
     const user = userEvent.setup();
-    const { onPreferencesChange } = renderSection(expandedPreferences);
+    const { onTimelineSettingsChange } = renderSection(expandedPreferences);
     const route = screen.getByRole('list', { name: 'Forecast along the route' });
     const labels = () =>
       within(route)
@@ -243,27 +254,23 @@ describe('TrackWeatherSection', () => {
     expect(start).toHaveAttribute('aria-valuetext', '23:30');
     // Arrivals after midnight fall on the next date; only the time of day is shown.
     expect(labels()[2]).toBe('05:00, Finish, 2,400 m');
-    // An unsaved track keeps its start time only in the open section.
-    expect(onPreferencesChange).not.toHaveBeenCalled();
+    expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      startHour: 23.5,
+      paceFactor: 1,
+    });
   });
 
-  it('restores and remembers the start time and pace of a saved track', async () => {
+  it('opens on the given start time and pace and reports released values on the step grid', async () => {
     const user = userEvent.setup();
-    const other = { startHour: 6, paceFactor: 1.5 };
-    const { onPreferencesChange } = renderSection(
-      {
-        ...expandedPreferences,
-        timelines: {
-          'local:other': other,
-          'local:ridge': { startHour: 7, paceFactor: 2 },
-        },
-      },
-      dayHike,
-      'local:ridge',
-    );
-    const start = screen.getByRole('slider', { name: 'Route start' });
+    const { onTimelineSettingsChange } = renderSection(expandedPreferences, dayHike, {
+      startHour: 7,
+      paceFactor: 2,
+    });
     const pace = screen.getByRole('slider', { name: 'Adjust pace' });
-    expect(start).toHaveAttribute('aria-valuetext', '07:00');
+    expect(screen.getByRole('slider', { name: 'Route start' })).toHaveAttribute(
+      'aria-valuetext',
+      '07:00',
+    );
     expect(pace).toHaveAttribute('aria-valuetext', '×2');
     expect(
       screen.getByText(
@@ -271,26 +278,19 @@ describe('TrackWeatherSection', () => {
       ),
     ).toBeVisible();
 
-    start.focus();
-    await user.keyboard('{ArrowRight}');
-    expect(onPreferencesChange).toHaveBeenLastCalledWith({
-      ...expandedPreferences,
-      timelines: {
-        'local:other': other,
-        'local:ridge': { startHour: 7.5, paceFactor: 2 },
-      },
-    });
-
-    // Back at the defaults the track's entry is dropped; other tracks keep theirs.
-    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}');
+    // Ten keyboard steps up from ×0.5 add up to 1.0000000000000004 in floating point.
     pace.focus();
     await user.keyboard('{Home}');
     await user.keyboard(Array.from({ length: 10 }, () => '{ArrowRight}').join(''));
-    expect(pace).toHaveAttribute('aria-valuetext', '×1');
-    expect(onPreferencesChange).toHaveBeenLastCalledWith({
-      ...expandedPreferences,
-      timelines: { 'local:other': other },
+    expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      startHour: 7,
+      paceFactor: 1,
     });
+    expect(
+      screen.getByText(
+        'Starting at 07:00 at the estimated pace, about 5h 30m in total.',
+      ),
+    ).toBeVisible();
   });
 
   it('replans the route forecast for an adjusted pace', async () => {

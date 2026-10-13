@@ -8,12 +8,15 @@ import type {
 import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
   defaultTrackWeatherDate,
+  defaultTrackWeatherPreferences,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
   trackWeatherDates,
   trackWeatherLocalTime,
+  trackWeatherTimeline,
   trackWeatherWeekday,
+  withTrackWeatherTimeline,
   type TrackWeatherCheckpoint,
 } from '@/application/weather/TrackWeatherForecast';
 import type {
@@ -296,6 +299,51 @@ describe('planTrackWeatherTimeline', () => {
     expect(planTrackWeatherTimeline(ridgeProfile(), metrics, 2.2)).toMatchObject({
       status: 'too-long',
     });
+  });
+});
+
+describe('per-track timeline settings', () => {
+  const other = { startHour: 6, paceFactor: 1.5 };
+
+  it('stores adjusted tracks only and keeps other tracks', () => {
+    const adjusted = withTrackWeatherTimeline(
+      { ...defaultTrackWeatherPreferences, timelines: { 'local:other': other } },
+      'local:ridge',
+      { startHour: 7, paceFactor: 1 },
+    );
+    expect(adjusted.timelines).toEqual({
+      'local:other': other,
+      'local:ridge': { startHour: 7, paceFactor: 1 },
+    });
+    expect(trackWeatherTimeline(adjusted, 'local:ridge')).toEqual({
+      startHour: 7,
+      paceFactor: 1,
+    });
+
+    const reset = { startHour: 9, paceFactor: 1 };
+    expect(withTrackWeatherTimeline(adjusted, 'local:ridge', reset).timelines).toEqual({
+      'local:other': other,
+    });
+    expect(withTrackWeatherTimeline(adjusted, 'local:ridge', null).timelines).toEqual({
+      'local:other': other,
+    });
+    expect(trackWeatherTimeline(null, 'local:ridge')).toEqual(reset);
+  });
+
+  it('treats prototype-named track IDs as ordinary entries', () => {
+    expect(trackWeatherTimeline(defaultTrackWeatherPreferences, 'constructor')).toEqual(
+      {
+        startHour: 9,
+        paceFactor: 1,
+      },
+    );
+    const stored = withTrackWeatherTimeline(
+      defaultTrackWeatherPreferences,
+      '__proto__',
+      other,
+    );
+    expect(Object.keys(stored.timelines)).toEqual(['__proto__']);
+    expect(trackWeatherTimeline(stored, '__proto__')).toEqual(other);
   });
 });
 

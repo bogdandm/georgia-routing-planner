@@ -188,8 +188,11 @@ import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
   defaultTrackWeatherPreferences,
+  defaultTrackWeatherTimelineSettings,
+  trackWeatherTimeline,
   withTrackWeatherTimeline,
   type TrackWeatherPreferences,
+  type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import {
   formatTrackDistance,
@@ -318,10 +321,18 @@ interface TracksWorkspaceValue {
   /** Folders shown collapsed; remembered in this browser only. */
   readonly collapsedFolderIds: ReadonlySet<string>;
   readonly toggleFolderCollapsed: (folderId: string) => void;
-  /** Forecast preferences shared by every track plus per-track timelines; null until loaded. */
+  /** Forecast disclosure and weekday shared by every track; null until loaded. */
   readonly trackWeatherPreferences: TrackWeatherPreferences | null;
   readonly updateTrackWeatherPreferences: (
     preferences: TrackWeatherPreferences,
+  ) => void;
+  /**
+   * Route start and pace of the active track: stored per saved track, kept in memory
+   * for a preview or shared track until it is saved.
+   */
+  readonly activeTrackWeatherTimeline: TrackWeatherTimelineSettings;
+  readonly updateActiveTrackWeatherTimeline: (
+    settings: TrackWeatherTimelineSettings,
   ) => void;
   readonly createFolder: (name: string, iconKey: TrackFolderIconKey) => Promise<void>;
   readonly updateFolder: (
@@ -587,6 +598,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const [trackWeatherPreferences, setTrackWeatherPreferences] =
     useState<TrackWeatherPreferences | null>(null);
+  // Mirrors the state for async callbacks. Choices made before the stored record loads
+  // are only kept in memory; the load merges them over it and saves the result.
+  const latestTrackWeatherPreferences = useRef<TrackWeatherPreferences | null>(null);
+  const trackWeatherPreferencesLoaded = useRef(false);
+  // Route start and pace of the open preview or shared track, moved into the
+  // preferences under the saved ID when that track is saved.
+  const [unsavedTrackTimeline, setUnsavedTrackTimeline] = useState<{
+    readonly trackId: string;
+    readonly settings: TrackWeatherTimelineSettings;
+  } | null>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
@@ -645,8 +666,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return defaultTrackWeatherPreferences;
       })
       .then((loaded) => {
-        // A choice made before the stored record arrived wins over it.
-        if (current) setTrackWeatherPreferences((existing) => existing ?? loaded);
+        if (!current) return;
+        trackWeatherPreferencesLoaded.current = true;
+        // A choice made before the stored record arrived wins over it, but the
+        // record's per-track timelines survive an early disclosure click.
+        const early = latestTrackWeatherPreferences.current;
+        const merged =
+          early === null
+            ? loaded
+            : { ...early, timelines: { ...loaded.timelines, ...early.timelines } };
+        latestTrackWeatherPreferences.current = merged;
+        setTrackWeatherPreferences(merged);
+        if (early === null) return;
+        void database.saveTrackWeatherPreferences(merged).catch(() => {
+          logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+        });
       });
     return () => {
       current = false;
@@ -875,12 +909,38 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const updateTrackWeatherPreferences = useCallback(
     (preferences: TrackWeatherPreferences) => {
+      latestTrackWeatherPreferences.current = preferences;
       setTrackWeatherPreferences(preferences);
+      if (!trackWeatherPreferencesLoaded.current) return;
       void database.saveTrackWeatherPreferences(preferences).catch(() => {
         logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
       });
     },
     [database, logger],
+  );
+  const activeTrackWeatherTimeline =
+    active?.kind === 'saved'
+      ? trackWeatherTimeline(trackWeatherPreferences, active.summary.id)
+      : unsavedTrackTimeline !== null &&
+          (active?.kind === 'preview' || active?.kind === 'shared') &&
+          unsavedTrackTimeline.trackId === active.id
+        ? unsavedTrackTimeline.settings
+        : defaultTrackWeatherTimelineSettings;
+  const updateActiveTrackWeatherTimeline = useCallback(
+    (settings: TrackWeatherTimelineSettings) => {
+      if (active?.kind === 'saved') {
+        updateTrackWeatherPreferences(
+          withTrackWeatherTimeline(
+            latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
+            active.summary.id,
+            settings,
+          ),
+        );
+      } else if (active?.kind === 'preview' || active?.kind === 'shared') {
+        setUnsavedTrackTimeline({ trackId: active.id, settings });
+      }
+    },
+    [active, updateTrackWeatherPreferences],
   );
 
   // The folder editor dialog reports these failures, so they are rethrown
@@ -2033,6 +2093,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           ? { kind: 'saved', summary, content, draftName: summary.name }
           : current,
       );
+      if (unsavedTrackTimeline?.trackId === previewId) {
+        updateTrackWeatherPreferences(
+          withTrackWeatherTimeline(
+            latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
+            summary.id,
+            unsavedTrackTimeline.settings,
+          ),
+        );
+      }
       /* eslint-disable lingui/no-unlocalized-strings -- Track ID prefix and URL hash. */
       if (previewId.startsWith('shared:')) {
         window.history.replaceState(null, '', '#tracks');
@@ -2058,6 +2127,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     reloadSummaries,
     saveLatestOpenedTrackId,
     trackContentHasher,
+    unsavedTrackTimeline,
+    updateTrackWeatherPreferences,
     userData,
   ]);
 
@@ -2727,9 +2798,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           );
         }
         await reloadSummaries();
-        if (trackWeatherPreferences?.timelines[summary.id] !== undefined) {
+        const preferences = latestTrackWeatherPreferences.current;
+        if (preferences !== null && Object.hasOwn(preferences.timelines, summary.id)) {
           updateTrackWeatherPreferences(
-            withTrackWeatherTimeline(trackWeatherPreferences, summary.id, null),
+            withTrackWeatherTimeline(preferences, summary.id, null),
           );
         }
         void userData.trackDeleted(summary.id);
@@ -2744,7 +2816,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       database,
       reloadSummaries,
       saveLatestOpenedTrackId,
-      trackWeatherPreferences,
       updateTrackWeatherPreferences,
       userData,
     ],
@@ -2869,6 +2940,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       toggleFolderCollapsed,
       trackWeatherPreferences,
       updateTrackWeatherPreferences,
+      activeTrackWeatherTimeline,
+      updateActiveTrackWeatherTimeline,
       createFolder,
       updateFolder,
       deleteFolder,
@@ -2932,6 +3005,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       toggleFolderCollapsed,
       trackWeatherPreferences,
       updateTrackWeatherPreferences,
+      activeTrackWeatherTimeline,
+      updateActiveTrackWeatherTimeline,
       importErrorMessage,
       importFiles,
       importState,
@@ -4894,6 +4969,7 @@ export function TrackDetailsPane({
     active,
     activeProfile,
     activeStatsMetrics,
+    activeTrackWeatherTimeline,
     applyGeneratedName,
     closeActive,
     clearRoutePlan,
@@ -4918,6 +4994,7 @@ export function TrackDetailsPane({
     toggleMultiTrackMode,
     trackWeatherPreferences,
     undoLastRoutePlanPoint,
+    updateActiveTrackWeatherTimeline,
     updateTrackWeatherPreferences,
   } = useTracksWorkspace();
   const { t, i18n } = useLingui();
@@ -5843,9 +5920,10 @@ export function TrackDetailsPane({
               key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
               profile={activeProfile}
               metrics={metrics}
-              savedTrackId={active.kind === 'saved' ? active.summary.id : null}
               preferences={trackWeatherPreferences}
               onPreferencesChange={updateTrackWeatherPreferences}
+              timelineSettings={activeTrackWeatherTimeline}
+              onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
             />
           )}
           {active.kind === 'route-plan' ? null : (

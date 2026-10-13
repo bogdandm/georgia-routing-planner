@@ -282,11 +282,12 @@ hours. For those tracks a **Route start** slider above the pace sets the start f
 next date's forecast hours. An **Adjust pace** slider scales the timeline from ×0.5
 (faster) to ×2 (slower) and replans the checkpoints on release. Both are remembered in
 this browser for each saved track, and reset to the defaults for a reversed copy; an
-unsaved track keeps them only while it is open. Neither changes the track's recorded or
-estimated time. Slowing a track past 12 hours hides the timeline until the pace is
-reduced. Cards reuse the 7-day forecast rows from Weather and request each location with
-its profile elevation. Clicking a loaded forecast row opens Weather with the full
-forecast at that location and elevation, labelled with the card's point or time.
+unsaved track keeps them while it is open and carries them over when it is saved. They
+are not synchronized to the account. Neither changes the track's recorded or estimated
+time. Slowing a track past 12 hours hides the timeline until the pace is reduced. Cards
+reuse the 7-day forecast rows from Weather and request each location with its profile
+elevation. Clicking a loaded forecast row opens Weather with the full forecast at that
+location and elevation, labelled with the card's point or time.
 
 #### Multi-track view
 

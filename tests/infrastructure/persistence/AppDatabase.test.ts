@@ -252,6 +252,11 @@ describe('AppDatabase', () => {
         weekday: 3,
         timelines: { 'local:kazbegi': { startHour: 9, paceFactor: 2.5 } },
       },
+      {
+        expanded: true,
+        weekday: 3,
+        timelines: { 'local:kazbegi': { startHour: 9, paceFactor: 1.23 } },
+      },
     ]) {
       await database.settings.put({
         key: 'weather.track-preferences',

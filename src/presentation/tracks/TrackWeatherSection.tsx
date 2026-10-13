@@ -26,18 +26,17 @@ import {
   TRACK_WEATHER_LATEST_START_HOUR,
   TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
+  TRACK_WEATHER_PACE_FACTOR_STEP,
   TRACK_WEATHER_START_HOUR_STEP,
   TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
-  defaultTrackWeatherTimelineSettings,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
   trackWeatherDates,
   trackWeatherLocalTime,
   trackWeatherWeekday,
-  withTrackWeatherTimeline,
   type TrackWeatherCheckpoint,
   type TrackWeatherLocation,
   type TrackWeatherPreferences,
@@ -107,11 +106,12 @@ function formatStartHour(hour: number): string {
 interface TrackWeatherSectionProps {
   readonly profile: ElevationProfile;
   readonly metrics: TrackStatsMetrics;
-  /** Saved track whose start and pace are remembered; null keeps them for the session. */
-  readonly savedTrackId: string | null;
   /** Null while the stored preferences load; the section then stays collapsed. */
   readonly preferences: TrackWeatherPreferences | null;
   readonly onPreferencesChange: (preferences: TrackWeatherPreferences) => void;
+  /** This track's route start and pace; the workspace decides where they are kept. */
+  readonly timelineSettings: TrackWeatherTimelineSettings;
+  readonly onTimelineSettingsChange: (settings: TrackWeatherTimelineSettings) => void;
 }
 
 /**
@@ -121,9 +121,10 @@ interface TrackWeatherSectionProps {
 export function TrackWeatherSection({
   profile,
   metrics,
-  savedTrackId,
   preferences,
   onPreferencesChange,
+  timelineSettings,
+  onTimelineSettingsChange,
 }: TrackWeatherSectionProps): ReactElement {
   const { i18n, t } = useLingui();
   const { clock, pointWeatherForecast } = useRuntimeServices();
@@ -140,18 +141,7 @@ export function TrackWeatherSection({
     () => selectTrackElevationLocations(profile),
     [profile],
   );
-  const [sessionTimeline, setSessionTimeline] = useState(
-    defaultTrackWeatherTimelineSettings,
-  );
-  const timelineSettings =
-    savedTrackId === null
-      ? sessionTimeline
-      : (current.timelines[savedTrackId] ?? defaultTrackWeatherTimelineSettings);
   const { paceFactor } = timelineSettings;
-  const changeTimeline = (next: TrackWeatherTimelineSettings) => {
-    if (savedTrackId === null) setSessionTimeline(next);
-    else onPreferencesChange(withTrackWeatherTimeline(current, savedTrackId, next));
-  };
   // Drafts show slider positions while dragging; only released values are stored. The
   // start draft already moves the checkpoint times, since it only reselects loaded
   // hours, while the pace waits for release so it does not start forecast requests.
@@ -499,7 +489,10 @@ export function TrackWeatherSection({
                       }}
                       onChangeCommitted={(_event, value) => {
                         setStartDraft(null);
-                        changeTimeline({ ...timelineSettings, startHour: value });
+                        onTimelineSettingsChange({
+                          ...timelineSettings,
+                          startHour: value,
+                        });
                       }}
                     />
                     <Typography variant="caption" color="text.secondary">
@@ -524,7 +517,7 @@ export function TrackWeatherSection({
                       aria-labelledby={paceLabelId}
                       min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
                       max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
-                      step={0.05}
+                      step={TRACK_WEATHER_PACE_FACTOR_STEP}
                       marks={[{ value: 1 }]}
                       value={paceDraft ?? paceFactor}
                       valueLabelDisplay="auto"
@@ -536,8 +529,8 @@ export function TrackWeatherSection({
                       onChangeCommitted={(_event, value) => {
                         setPaceDraft(null);
                         // Keyboard steps accumulate floating-point error (×0.5 plus ten
-                        // steps is 1.0000000000000004); hundredths keep ×1 the default.
-                        changeTimeline({
+                        // steps is 1.0000000000000004); hundredths keep exact steps.
+                        onTimelineSettingsChange({
                           ...timelineSettings,
                           paceFactor: Math.round(value * 100) / 100,
                         });

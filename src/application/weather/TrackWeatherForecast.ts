@@ -226,14 +226,28 @@ function locationAtElapsed(
   };
 }
 
-/** Bounds of the forecast-only pace adjustment, as a multiplier of hiking time. */
+/** Bounds and step of the forecast-only pace adjustment, a multiplier of hiking time. */
 export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
+export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
 
 export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
   startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
   paceFactor: 1,
 };
+
+/**
+ * The saved track's timeline settings, or the defaults. Only own entries count, so a
+ * track ID such as `constructor` never reads an `Object.prototype` member.
+ */
+export function trackWeatherTimeline(
+  preferences: TrackWeatherPreferences | null,
+  trackId: string,
+): TrackWeatherTimelineSettings {
+  return preferences !== null && Object.hasOwn(preferences.timelines, trackId)
+    ? (preferences.timelines[trackId] ?? defaultTrackWeatherTimelineSettings)
+    : defaultTrackWeatherTimelineSettings;
+}
 
 /**
  * Stores a saved track's timeline settings. Default settings and null remove its entry,
@@ -244,17 +258,18 @@ export function withTrackWeatherTimeline(
   trackId: string,
   settings: TrackWeatherTimelineSettings | null,
 ): TrackWeatherPreferences {
-  const timelines = Object.fromEntries(
-    Object.entries(preferences.timelines).filter(([id]) => id !== trackId),
-  );
-  if (
+  const others = Object.entries(preferences.timelines).filter(([id]) => id !== trackId);
+  const adjusted =
     settings !== null &&
     (settings.startHour !== defaultTrackWeatherTimelineSettings.startHour ||
-      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor)
-  ) {
-    timelines[trackId] = settings;
-  }
-  return { ...preferences, timelines };
+      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor);
+  // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
+  return {
+    ...preferences,
+    timelines: Object.fromEntries(
+      adjusted ? [...others, [trackId, settings] as const] : others,
+    ),
+  };
 }
 
 /**

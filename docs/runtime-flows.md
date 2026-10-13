@@ -384,9 +384,13 @@ reselects hours from the loaded forecasts; collapsing or unmounting aborts pendi
 requests. Results stay in component state, keyed by the section's track, and failed
 locations retry on the next expansion. `TracksWorkspaceProvider` loads
 `weather.track-preferences` once and saves every disclosure or weekday change and every
-released start or pace slider of a saved track. The record's `timelines` map holds only
-tracks whose start or pace differs from the defaults; deleting a track in this browser
-removes its entry.
+released start or pace slider of a saved track; changes made before the record loads are
+merged over it, keeping its per-track entries, and then saved. The record's `timelines`
+map holds only tracks whose start or pace differs from the defaults, keyed by saved
+track ID. The provider owns the active track's settings: a preview or shared track keeps
+them in memory and they move to the new saved ID on save. Deleting a track from the
+Tracks workspace removes its entry; tracks removed by synchronization leave an unused
+entry that reattaches if the same ID returns.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan

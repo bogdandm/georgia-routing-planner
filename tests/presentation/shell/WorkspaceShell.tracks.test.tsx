@@ -47,6 +47,7 @@ import {
   type LocalTrackSummary,
 } from '@test/helpers/workspaceShellTestSupport';
 import { PlaceSearchFailure } from '@/application/ports/PlaceSearchGateway';
+import type { TrackWeatherPreferences } from '@/application/weather/TrackWeatherForecast';
 
 async function createTrackFolder(
   id: string,
@@ -2040,6 +2041,73 @@ describe('WorkspaceShell', () => {
         weekday: 6,
         timelines: { 'local:other': other },
       });
+    });
+  });
+
+  it('keeps saved track timelines when the forecast opens before preferences load', async () => {
+    const source = savedTrackSummary('local:ridge', 'Ridge trail');
+    await services.database.saveLocalTrack(source, savedTrackContent(source.id));
+    await services.database.saveLatestOpenedTrackId(source.id);
+    const stored: TrackWeatherPreferences = {
+      expanded: false,
+      weekday: 6,
+      timelines: { [source.id]: { startHour: 7, paceFactor: 1 } },
+    };
+    const load = deferred<TrackWeatherPreferences>();
+    vi.spyOn(services.database, 'loadTrackWeatherPreferences').mockReturnValueOnce(
+      load.promise,
+    );
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('heading', { name: 'Ridge trail' });
+
+    await user.click(within(details).getByRole('button', { name: 'Weather forecast' }));
+    act(() => {
+      load.resolve(stored);
+    });
+
+    expect(
+      await within(details).findByRole('slider', { name: 'Route start' }),
+    ).toHaveAttribute('aria-valuetext', '07:00');
+    await waitFor(async () => {
+      expect(await services.database.loadTrackWeatherPreferences()).toEqual({
+        ...stored,
+        expanded: true,
+      });
+    });
+  });
+
+  it('keeps the forecast start chosen for a preview once it is saved', async () => {
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    if (input === null) return;
+    await user.upload(input, gpxFile('Morning ridge.gpx'));
+
+    await user.click(await screen.findByRole('button', { name: 'Weather forecast' }));
+    const start = await screen.findByRole('slider', { name: 'Route start' });
+    start.focus();
+    await user.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(start).toHaveAttribute('aria-valuetext', '08:00');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('slider', { name: 'Route start' })).toHaveAttribute(
+      'aria-valuetext',
+      '08:00',
+    );
+    const [saved] = await services.database.listLocalTracks();
+    expect(saved).toBeDefined();
+    await waitFor(async () => {
+      expect((await services.database.loadTrackWeatherPreferences()).timelines).toEqual(
+        { [saved?.id ?? '']: { startHour: 8, paceFactor: 1 } },
+      );
     });
   });
 

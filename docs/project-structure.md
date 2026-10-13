@@ -113,7 +113,7 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 | ----------------------------------------------------------- | --------------------------------------------------------------- |
 | Active rail section, dialogs, developer mode, list sorts    | Zustand `uiStore`                                               |
 | Native map, listeners, camera snapshot, terrain operation   | `MapLibreFacade`                                                |
-| Middle-drag pan and Shift+left terrain orbit                | `MapPointerGestureControl`                                      |
+| Middle-drag pan, Shift+left orbit, touch-pan rotation lock  | `MapPointerGestureControl`                                      |
 | Native sources/layers for imagery, terrain, weather, tracks | `MapLibreLayerController`                                       |
 | Serializable layer, imagery, weather-map, and worker status | `mapLayerStore`                                                 |
 | Map navigation, placement, Satellite anchor, Weather point  | `mapInteractionStore`                                           |

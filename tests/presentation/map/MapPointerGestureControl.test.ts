@@ -13,18 +13,44 @@ function createMapDouble() {
       camera.pitch = options.pitch;
     },
   );
+  const rotation = {
+    disableRotation: vi.fn(),
+    enableRotation: vi.fn(),
+  };
   return {
     unproject,
     panBy,
     easeTo,
+    rotation,
     map: {
       unproject,
       panBy,
       getBearing: () => camera.bearing,
       getPitch: () => camera.pitch,
       easeTo,
+      touchZoomRotate: {
+        disableRotation: rotation.disableRotation,
+        enableRotation: rotation.enableRotation,
+      },
     } as unknown as MapLibreMap,
   };
+}
+
+/** Dispatches a touch event whose `touches` hold the listed fingers by identifier. */
+function dispatchTouch(
+  container: HTMLElement,
+  type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel',
+  fingers: readonly (readonly [number, number])[],
+) {
+  const event = new Event(type, { bubbles: true });
+  Object.defineProperty(event, 'touches', {
+    value: fingers.map(([clientX, clientY], identifier) => ({
+      identifier,
+      clientX,
+      clientY,
+    })),
+  });
+  container.dispatchEvent(event);
 }
 
 function createPivotDouble() {
@@ -183,4 +209,167 @@ describe('MapPointerGestureControl', () => {
     expect(nativeListener).toHaveBeenCalledTimes(3);
     control.detach();
   });
+
+  it('keeps a two-finger touch pan from rotating until the fingers lift', () => {
+    const container = document.createElement('div');
+    const { map, rotation } = createMapDouble();
+    const control = new MapPointerGestureControl(createPivotDouble());
+    control.attach(container, map);
+
+    dispatchTouch(container, 'touchstart', [
+      [100, 300],
+      [250, 300],
+    ]);
+    dispatchTouch(container, 'touchmove', [
+      [106, 296],
+      [255, 297],
+    ]);
+    expect(rotation.disableRotation).not.toHaveBeenCalled();
+
+    // The fingers twist slightly while dragging together, as a real pan does.
+    dispatchTouch(container, 'touchmove', [
+      [130, 280],
+      [262, 302],
+    ]);
+    dispatchTouch(container, 'touchmove', [
+      [160, 260],
+      [290, 290],
+    ]);
+    expect(rotation.disableRotation).toHaveBeenCalledTimes(1);
+    expect(rotation.enableRotation).not.toHaveBeenCalled();
+
+    dispatchTouch(container, 'touchend', [[160, 260]]);
+    expect(rotation.enableRotation).toHaveBeenCalledTimes(1);
+
+    dispatchTouch(container, 'touchend', []);
+    expect(rotation.enableRotation).toHaveBeenCalledTimes(1);
+    control.detach();
+  });
+
+  it.each([
+    [
+      'a symmetric twist',
+      [
+        [100, 320],
+        [250, 280],
+      ],
+    ],
+    [
+      'a twist around one held finger',
+      [
+        [100, 300],
+        [240, 250],
+      ],
+    ],
+    [
+      'a pinch',
+      [
+        [70, 300],
+        [280, 300],
+      ],
+    ],
+    [
+      'a twist past the threshold within the same move as a pan',
+      [
+        [200, 330],
+        [350, 270],
+      ],
+    ],
+  ] as const)('keeps touch rotation for %s', (_name, moved) => {
+    const container = document.createElement('div');
+    const { map, rotation } = createMapDouble();
+    const control = new MapPointerGestureControl(createPivotDouble());
+    control.attach(container, map);
+
+    dispatchTouch(container, 'touchstart', [
+      [100, 300],
+      [250, 300],
+    ]);
+    dispatchTouch(container, 'touchmove', moved);
+
+    expect(rotation.disableRotation).not.toHaveBeenCalled();
+    control.detach();
+  });
+
+  it('lets a twist that already passed the rotation threshold keep rotating while panning', () => {
+    const container = document.createElement('div');
+    const { map, rotation } = createMapDouble();
+    const control = new MapPointerGestureControl(createPivotDouble());
+    control.attach(container, map);
+
+    dispatchTouch(container, 'touchstart', [
+      [100, 300],
+      [250, 300],
+    ]);
+    // About 22 degrees of twist, past MapLibre's roughly 19-degree threshold at this span.
+    dispatchTouch(container, 'touchmove', [
+      [100, 330],
+      [250, 270],
+    ]);
+    dispatchTouch(container, 'touchmove', [
+      [180, 340],
+      [330, 300],
+    ]);
+
+    expect(rotation.disableRotation).not.toHaveBeenCalled();
+    control.detach();
+  });
+
+  it('leaves three-finger touches to MapLibre', () => {
+    const container = document.createElement('div');
+    const { map, rotation } = createMapDouble();
+    const control = new MapPointerGestureControl(createPivotDouble());
+    control.attach(container, map);
+
+    dispatchTouch(container, 'touchstart', [
+      [100, 300],
+      [250, 300],
+    ]);
+    dispatchTouch(container, 'touchstart', [
+      [100, 300],
+      [250, 300],
+      [175, 400],
+    ]);
+    dispatchTouch(container, 'touchmove', [
+      [100, 260],
+      [250, 260],
+      [175, 360],
+    ]);
+
+    expect(rotation.disableRotation).not.toHaveBeenCalled();
+    control.detach();
+  });
+
+  it.each(['touchcancel', 'detach'] as const)(
+    'restores touch rotation on %s mid-pan',
+    (ending) => {
+      const container = document.createElement('div');
+      const { map, rotation } = createMapDouble();
+      const control = new MapPointerGestureControl(createPivotDouble());
+      control.attach(container, map);
+
+      dispatchTouch(container, 'touchstart', [
+        [100, 300],
+        [250, 300],
+      ]);
+      dispatchTouch(container, 'touchmove', [
+        [100, 260],
+        [250, 260],
+      ]);
+      expect(rotation.disableRotation).toHaveBeenCalledTimes(1);
+
+      if (ending === 'touchcancel') {
+        // Cancellation ends MapLibre's gesture even while two other contacts remain.
+        dispatchTouch(container, 'touchcancel', [
+          [100, 260],
+          [250, 260],
+        ]);
+      } else {
+        control.detach();
+      }
+      expect(rotation.enableRotation).toHaveBeenCalledTimes(1);
+      control.detach();
+      expect(rotation.enableRotation).toHaveBeenCalledTimes(1);
+    },
+  );
 });

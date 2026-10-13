@@ -17,22 +17,37 @@ import {
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 
-/** Browser-local track forecast view state shared by every track. */
+/** Route timeline adjustments for one track; they never change its recorded time. */
+export interface TrackWeatherTimelineSettings {
+  /** Fractional local hour of the day at which the hike starts. */
+  readonly startHour: number;
+  /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
+  readonly paceFactor: number;
+}
+
+/** Browser-local track forecast view state. */
 export interface TrackWeatherPreferences {
+  /** Shared by every track. */
   readonly expanded: boolean;
   /** Local weekday whose next occurrence the forecast date selector opens on. */
   readonly weekday: MarkerWeatherWeekday;
+  /** Adjusted saved tracks by ID; a track without an entry uses the defaults. */
+  readonly timelines: Readonly<Record<string, TrackWeatherTimelineSettings>>;
 }
 
 export const defaultTrackWeatherPreferences: TrackWeatherPreferences = {
   expanded: false,
   weekday: 6,
+  timelines: {},
 };
 
 /** Selectable forecast dates: the local day plus six days, all covered by the forecast. */
 export const TRACK_WEATHER_DATE_COUNT = 7;
-/** Local hour at which the timeline assumes the hike starts. */
-export const TRACK_WEATHER_START_HOUR = 9;
+/** Local hour at which the timeline assumes the hike starts unless the user moves it. */
+export const TRACK_WEATHER_DEFAULT_START_HOUR = 9;
+/** The start hour selector covers the whole local day in half-hour steps. */
+export const TRACK_WEATHER_START_HOUR_STEP = 0.5;
+export const TRACK_WEATHER_LATEST_START_HOUR = 24 - TRACK_WEATHER_START_HOUR_STEP;
 export const TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS = 30_000;
 export const TRACK_WEATHER_TIMELINE_MAXIMUM_SECONDS = 12 * 3_600;
 export const TRACK_WEATHER_CHECKPOINT_INTERVAL_SECONDS = 3 * 3_600;
@@ -211,9 +226,51 @@ function locationAtElapsed(
   };
 }
 
-/** Bounds of the forecast-only pace adjustment, as a multiplier of hiking time. */
+/** Bounds and step of the forecast-only pace adjustment, a multiplier of hiking time. */
 export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
+export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
+
+export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
+  startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
+  paceFactor: 1,
+};
+
+/**
+ * The saved track's timeline settings, or the defaults. Only own entries count, so a
+ * track ID such as `constructor` never reads an `Object.prototype` member.
+ */
+export function trackWeatherTimeline(
+  preferences: TrackWeatherPreferences | null,
+  trackId: string,
+): TrackWeatherTimelineSettings {
+  return preferences !== null && Object.hasOwn(preferences.timelines, trackId)
+    ? (preferences.timelines[trackId] ?? defaultTrackWeatherTimelineSettings)
+    : defaultTrackWeatherTimelineSettings;
+}
+
+/**
+ * Stores a saved track's timeline settings. Default settings and null remove its entry,
+ * so the record only holds adjusted tracks.
+ */
+export function withTrackWeatherTimeline(
+  preferences: TrackWeatherPreferences,
+  trackId: string,
+  settings: TrackWeatherTimelineSettings | null,
+): TrackWeatherPreferences {
+  const others = Object.entries(preferences.timelines).filter(([id]) => id !== trackId);
+  const adjusted =
+    settings !== null &&
+    (settings.startHour !== defaultTrackWeatherTimelineSettings.startHour ||
+      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor);
+  // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
+  return {
+    ...preferences,
+    timelines: Object.fromEntries(
+      adjusted ? [...others, [trackId, settings] as const] : others,
+    ),
+  };
+}
 
 /**
  * Places the hiker on the route every three hours from the start and at the finish.
@@ -307,30 +364,41 @@ export function defaultTrackWeatherDate(
   return date;
 }
 
-/** Local `YYYY-MM-DDTHH:mm` at which the hiker reaches a point on the chosen date. */
-export function trackWeatherLocalTime(date: string, elapsedSeconds: number): string {
+/**
+ * Local `YYYY-MM-DDTHH:mm` at which the hiker reaches a point on the chosen date when
+ * starting at the fractional local `startHour`.
+ */
+export function trackWeatherLocalTime(
+  date: string,
+  startHour: number,
+  elapsedSeconds: number,
+): string {
   return localDateTime(
-    parseLocalDate(date) + (TRACK_WEATHER_START_HOUR * 3_600 + elapsedSeconds) * 1_000,
+    parseLocalDate(date) + (startHour * 3_600 + elapsedSeconds) * 1_000,
   );
 }
 
 /**
  * Summarizes the checkpoint location's forecast hours from its arrival hour until the
- * next checkpoint; the finish covers its arrival hour. Null when the forecast does not
- * reach the chosen date.
+ * next checkpoint; the finish covers its arrival hour. Arrivals after midnight read the
+ * next date's hours. Null unless the forecast reaches the window's last hour, so a late
+ * start on the last date never summarizes a truncated window.
  */
 export function summarizeTrackWeatherCheckpoint(
   forecast: PointWeatherForecast,
   date: string,
+  startHour: number,
   checkpoint: TrackWeatherCheckpoint,
 ): TrackWeatherCheckpointPeriod | null {
-  const startHours = TRACK_WEATHER_START_HOUR + checkpoint.elapsedSeconds / 3_600;
-  const untilHours = TRACK_WEATHER_START_HOUR + checkpoint.untilElapsedSeconds / 3_600;
+  const startHours = startHour + checkpoint.elapsedSeconds / 3_600;
+  const untilHours = startHour + checkpoint.untilElapsedSeconds / 3_600;
   const firstHour = Math.floor(startHours);
   const endHour = Math.max(firstHour + 1, Math.ceil(untilHours));
   const dayStart = parseLocalDate(date);
   const start = localDateTime(dayStart + firstHour * 3_600_000);
+  const lastHour = localDateTime(dayStart + (endHour - 1) * 3_600_000);
   const end = localDateTime(dayStart + endHour * 3_600_000);
+  if ((forecast.hourly.at(-1)?.time ?? '') < lastHour) return null;
   const hours = forecast.hourly.filter((hour) => hour.time >= start && hour.time < end);
   if (hours.length === 0) return null;
   const isDay = hours.filter((hour) => hour.isDay).length * 2 >= hours.length;

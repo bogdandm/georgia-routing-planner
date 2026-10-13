@@ -8,12 +8,15 @@ import type {
 import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
   defaultTrackWeatherDate,
+  defaultTrackWeatherPreferences,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
   trackWeatherDates,
   trackWeatherLocalTime,
+  trackWeatherTimeline,
   trackWeatherWeekday,
+  withTrackWeatherTimeline,
   type TrackWeatherCheckpoint,
 } from '@/application/weather/TrackWeatherForecast';
 import type {
@@ -299,6 +302,51 @@ describe('planTrackWeatherTimeline', () => {
   });
 });
 
+describe('per-track timeline settings', () => {
+  const other = { startHour: 6, paceFactor: 1.5 };
+
+  it('stores adjusted tracks only and keeps other tracks', () => {
+    const adjusted = withTrackWeatherTimeline(
+      { ...defaultTrackWeatherPreferences, timelines: { 'local:other': other } },
+      'local:ridge',
+      { startHour: 7, paceFactor: 1 },
+    );
+    expect(adjusted.timelines).toEqual({
+      'local:other': other,
+      'local:ridge': { startHour: 7, paceFactor: 1 },
+    });
+    expect(trackWeatherTimeline(adjusted, 'local:ridge')).toEqual({
+      startHour: 7,
+      paceFactor: 1,
+    });
+
+    const reset = { startHour: 9, paceFactor: 1 };
+    expect(withTrackWeatherTimeline(adjusted, 'local:ridge', reset).timelines).toEqual({
+      'local:other': other,
+    });
+    expect(withTrackWeatherTimeline(adjusted, 'local:ridge', null).timelines).toEqual({
+      'local:other': other,
+    });
+    expect(trackWeatherTimeline(null, 'local:ridge')).toEqual(reset);
+  });
+
+  it('treats prototype-named track IDs as ordinary entries', () => {
+    expect(trackWeatherTimeline(defaultTrackWeatherPreferences, 'constructor')).toEqual(
+      {
+        startHour: 9,
+        paceFactor: 1,
+      },
+    );
+    const stored = withTrackWeatherTimeline(
+      defaultTrackWeatherPreferences,
+      '__proto__',
+      other,
+    );
+    expect(Object.keys(stored.timelines)).toEqual(['__proto__']);
+    expect(trackWeatherTimeline(stored, '__proto__')).toEqual(other);
+  });
+});
+
 describe('track weather dates', () => {
   it('offers seven local dates and opens the next preferred weekday', () => {
     const dates = trackWeatherDates('2026-07-28');
@@ -318,9 +366,12 @@ describe('track weather dates', () => {
     expect(() => trackWeatherDates('28.07.2026')).toThrow(RangeError);
   });
 
-  it('places arrivals after the 09:00 local start', () => {
-    expect(trackWeatherLocalTime('2026-07-18', 3.5 * hour)).toBe('2026-07-18T12:30');
-    expect(trackWeatherLocalTime('2026-07-18', 15 * hour)).toBe('2026-07-19T00:00');
+  it('places arrivals after the chosen local start, past midnight into the next date', () => {
+    expect(trackWeatherLocalTime('2026-07-18', 9, 3.5 * hour)).toBe('2026-07-18T12:30');
+    expect(trackWeatherLocalTime('2026-07-18', 9, 15 * hour)).toBe('2026-07-19T00:00');
+    expect(trackWeatherLocalTime('2026-07-18', 22.5, 2 * hour)).toBe(
+      '2026-07-19T00:30',
+    );
   });
 });
 
@@ -329,7 +380,12 @@ describe('summarizeTrackWeatherCheckpoint', () => {
     const forecast = await pointForecast();
 
     expect(
-      summarizeTrackWeatherCheckpoint(forecast, '2026-07-18', checkpoint(0, 3 * hour)),
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-18',
+        9,
+        checkpoint(0, 3 * hour),
+      ),
     ).toMatchObject({
       isDay: true,
       period: { temperatureMinCelsius: 9, temperatureMaxCelsius: 11 },
@@ -340,6 +396,7 @@ describe('summarizeTrackWeatherCheckpoint', () => {
       summarizeTrackWeatherCheckpoint(
         forecast,
         '2026-07-18',
+        9,
         checkpoint(arrival, arrival),
       ),
     ).toMatchObject({
@@ -349,11 +406,38 @@ describe('summarizeTrackWeatherCheckpoint', () => {
       summarizeTrackWeatherCheckpoint(
         forecast,
         '2026-07-18',
+        9,
         checkpoint(12 * hour, 13 * hour),
       ),
     ).toMatchObject({ isDay: false, period: { temperatureMinCelsius: 21 } });
+    // A 22:30 start covers 22:00–01:00, reading the next date's hours after midnight.
     expect(
-      summarizeTrackWeatherCheckpoint(forecast, '2026-07-30', checkpoint(0, 3 * hour)),
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-18',
+        22.5,
+        checkpoint(0, 3 * hour),
+      ),
+    ).toMatchObject({
+      isDay: false,
+      period: { temperatureMinCelsius: 0, temperatureMaxCelsius: 23 },
+    });
+    // On the forecast's last date the same start runs past its final hour.
+    expect(
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-25',
+        22.5,
+        checkpoint(0, 3 * hour),
+      ),
+    ).toBeNull();
+    expect(
+      summarizeTrackWeatherCheckpoint(
+        forecast,
+        '2026-07-30',
+        9,
+        checkpoint(0, 3 * hour),
+      ),
     ).toBeNull();
   });
 });

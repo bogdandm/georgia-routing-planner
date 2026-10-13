@@ -11,6 +11,11 @@ import {
   type MarkerWeatherWeekday,
 } from '@/application/weather/MarkerWeatherForecast';
 import {
+  TRACK_WEATHER_LATEST_START_HOUR,
+  TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
+  TRACK_WEATHER_MINIMUM_PACE_FACTOR,
+  TRACK_WEATHER_PACE_FACTOR_STEP,
+  TRACK_WEATHER_START_HOUR_STEP,
   defaultTrackWeatherPreferences,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
@@ -483,7 +488,30 @@ const markerWeatherPreferencesSchema: z.ZodType<WeatherIntervalPreferences> = z
   .strict();
 
 const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
-  .object({ expanded: z.boolean(), weekday: markerWeatherWeekdaySchema })
+  .object({
+    expanded: z.boolean(),
+    weekday: markerWeatherWeekdaySchema,
+    // Records saved before per-track timelines existed have no entries.
+    timelines: z
+      .record(
+        z.string().min(1).max(200),
+        z
+          .object({
+            startHour: z
+              .number()
+              .min(0)
+              .max(TRACK_WEATHER_LATEST_START_HOUR)
+              .multipleOf(TRACK_WEATHER_START_HOUR_STEP),
+            paceFactor: z
+              .number()
+              .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
+              .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
+              .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
+          })
+          .strict(),
+      )
+      .default({}),
+  })
   .strict();
 
 const mapSharePreferencesKey = 'map.share-preferences';

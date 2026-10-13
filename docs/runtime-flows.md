@@ -379,11 +379,18 @@ profile points from `selectTrackElevationLocations`, plus the timeline checkpoin
 `planTrackWeatherTimeline` (`application/weather/TrackWeatherForecast.ts`). The timeline
 accumulates DIN 33466 time over profile samples from cumulative distance, ascent, and
 descent and scales it to the stored `estimatedSeconds`, or uses recorded sample
-timestamps when the track has recorded time. Changing the date only reselects hours from
-the loaded forecasts; collapsing or unmounting aborts pending requests. Results stay in
-component state, keyed by the section's track, and failed locations retry on the next
-expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and saves
-every disclosure or weekday change.
+timestamps when the track has recorded time. Changing the date or the start time only
+reselects hours from the loaded forecasts; collapsing or unmounting aborts pending
+requests. Results stay in component state, keyed by the section's track, and failed
+locations retry on the next expansion. `TracksWorkspaceProvider` loads
+`weather.track-preferences` once and saves every disclosure or weekday change and every
+released start or pace slider of a saved track; changes made before the record loads are
+merged over it, keeping its per-track entries, and then saved. The record's `timelines`
+map holds only tracks whose start or pace differs from the defaults, keyed by saved
+track ID. The provider owns the active track's settings: a preview or shared track keeps
+them in memory and they move to the new saved ID on save. Deleting a track from the
+Tracks workspace removes its entry; tracks removed by synchronization leave an unused
+entry that reattaches if the same ID returns.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan

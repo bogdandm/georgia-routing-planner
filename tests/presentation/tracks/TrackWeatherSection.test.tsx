@@ -5,7 +5,11 @@ import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
-import type { TrackWeatherPreferences } from '@/application/weather/TrackWeatherForecast';
+import {
+  defaultTrackWeatherTimelineSettings,
+  type TrackWeatherPreferences,
+  type TrackWeatherTimelineSettings,
+} from '@/application/weather/TrackWeatherForecast';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   ElevationProfile,
@@ -51,15 +55,24 @@ const dayHike: TrackStatsMetrics = {
   estimatedSeconds: 5.5 * 3_600,
 };
 
+const expandedPreferences: TrackWeatherPreferences = {
+  expanded: true,
+  weekday: 6,
+  timelines: {},
+};
+
 let services: ReturnType<typeof createTestServices>;
 
 function renderSection(
   initial: TrackWeatherPreferences | null,
   metrics: TrackStatsMetrics = dayHike,
+  initialTimeline: TrackWeatherTimelineSettings = defaultTrackWeatherTimelineSettings,
 ) {
   const onPreferencesChange = vi.fn();
+  const onTimelineSettingsChange = vi.fn();
   function Harness() {
     const [preferences, setPreferences] = useState(initial);
+    const [timelineSettings, setTimelineSettings] = useState(initialTimeline);
     return (
       <TrackWeatherSection
         profile={ridge}
@@ -68,6 +81,11 @@ function renderSection(
         onPreferencesChange={(next) => {
           onPreferencesChange(next);
           setPreferences(next);
+        }}
+        timelineSettings={timelineSettings}
+        onTimelineSettingsChange={(next) => {
+          onTimelineSettingsChange(next);
+          setTimelineSettings(next);
         }}
       />
     );
@@ -79,7 +97,7 @@ function renderSection(
       </ThemeProvider>
     </RuntimeServicesProvider>,
   );
-  return { onPreferencesChange };
+  return { onPreferencesChange, onTimelineSettingsChange };
 }
 
 function expandedSection(metrics: TrackStatsMetrics) {
@@ -89,8 +107,10 @@ function expandedSection(metrics: TrackStatsMetrics) {
         <TrackWeatherSection
           profile={ridge}
           metrics={metrics}
-          preferences={{ expanded: true, weekday: 6 }}
+          preferences={expandedPreferences}
           onPreferencesChange={vi.fn()}
+          timelineSettings={defaultTrackWeatherTimelineSettings}
+          onTimelineSettingsChange={vi.fn()}
         />
       </ThemeProvider>
     </RuntimeServicesProvider>
@@ -114,7 +134,7 @@ describe('TrackWeatherSection', () => {
 
     await user.click(disclosure);
 
-    expect(onPreferencesChange).toHaveBeenCalledWith({ expanded: true, weekday: 6 });
+    expect(onPreferencesChange).toHaveBeenCalledWith(expandedPreferences);
     expect(screen.getByRole('button', { name: /July 18/ })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -152,7 +172,7 @@ describe('TrackWeatherSection', () => {
   it('opens the full forecast at a clicked location in Weather', async () => {
     resetMapInteractionStore();
     const user = userEvent.setup();
-    renderSection({ expanded: true, weekday: 6 });
+    renderSection(expandedPreferences);
 
     await user.click(
       await screen.findByRole('button', {
@@ -170,12 +190,12 @@ describe('TrackWeatherSection', () => {
 
   it('remembers the weekday of a chosen forecast date', async () => {
     const user = userEvent.setup();
-    const { onPreferencesChange } = renderSection({ expanded: true, weekday: 6 });
+    const { onPreferencesChange } = renderSection(expandedPreferences);
 
     await user.click(screen.getByRole('button', { name: /July 20/ }));
 
     expect(onPreferencesChange).toHaveBeenLastCalledWith({
-      expanded: true,
+      ...expandedPreferences,
       weekday: 1,
     });
     expect(screen.getByRole('button', { name: /July 20/ })).toHaveAttribute(
@@ -184,8 +204,8 @@ describe('TrackWeatherSection', () => {
     );
   });
 
-  it('limits the route timeline and pace adjustment to day hikes', () => {
-    renderSection({ expanded: true, weekday: 6 }, { distanceMeters: 31_000 });
+  it('limits the route timeline and its start and pace adjustments to day hikes', () => {
+    renderSection(expandedPreferences, { distanceMeters: 31_000 });
 
     expect(
       screen.getByText('Available for day hikes shorter than 30 km and 12 hours.'),
@@ -193,14 +213,89 @@ describe('TrackWeatherSection', () => {
     expect(
       screen.queryByRole('list', { name: 'Forecast along the route' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('slider')).toEqual([]);
+  });
+
+  it('moves the route forecast to a chosen start time above the pace control', async () => {
+    const user = userEvent.setup();
+    const { onTimelineSettingsChange } = renderSection(expandedPreferences);
+    const route = screen.getByRole('list', { name: 'Forecast along the route' });
+    const labels = () =>
+      within(route)
+        .getAllByRole('group')
+        .map((card) => card.getAttribute('aria-label'));
+
+    const sliders = screen.getAllByRole('slider');
+    expect(sliders.map((slider) => slider.getAttribute('aria-labelledby'))).toEqual([
+      screen.getByText('Route start').id,
+      screen.getByText('Adjust pace').id,
+    ]);
+    const start = screen.getByRole('slider', { name: 'Route start' });
+    expect(start).toHaveAttribute('aria-valuetext', '09:00');
+
+    start.focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}');
+
+    expect(start).toHaveAttribute('aria-valuetext', '10:30');
+    expect(labels()).toEqual([
+      '10:30, Start, 2,000 m',
+      '13:30, At 4.8 km, 2,720 m',
+      '16:00, Finish, 2,400 m',
+    ]);
     expect(
-      screen.queryByRole('slider', { name: 'Adjust pace' }),
-    ).not.toBeInTheDocument();
+      screen.getByText(
+        'Starting at 10:30 at the estimated pace, about 5h 30m in total.',
+      ),
+    ).toBeVisible();
+
+    await user.keyboard('{Home}');
+    expect(start).toHaveAttribute('aria-valuetext', '00:00');
+    await user.keyboard('{End}');
+    expect(start).toHaveAttribute('aria-valuetext', '23:30');
+    // Arrivals after midnight fall on the next date; only the time of day is shown.
+    expect(labels()[2]).toBe('05:00, Finish, 2,400 m');
+    expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      startHour: 23.5,
+      paceFactor: 1,
+    });
+  });
+
+  it('opens on the given start time and pace and reports released values on the step grid', async () => {
+    const user = userEvent.setup();
+    const { onTimelineSettingsChange } = renderSection(expandedPreferences, dayHike, {
+      startHour: 7,
+      paceFactor: 2,
+    });
+    const pace = screen.getByRole('slider', { name: 'Adjust pace' });
+    expect(screen.getByRole('slider', { name: 'Route start' })).toHaveAttribute(
+      'aria-valuetext',
+      '07:00',
+    );
+    expect(pace).toHaveAttribute('aria-valuetext', '×2');
+    expect(
+      screen.getByText(
+        'Starting at 07:00 at the adjusted pace, about 11h 0m in total.',
+      ),
+    ).toBeVisible();
+
+    // Ten keyboard steps up from ×0.5 add up to 1.0000000000000004 in floating point.
+    pace.focus();
+    await user.keyboard('{Home}');
+    await user.keyboard(Array.from({ length: 10 }, () => '{ArrowRight}').join(''));
+    expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      startHour: 7,
+      paceFactor: 1,
+    });
+    expect(
+      screen.getByText(
+        'Starting at 07:00 at the estimated pace, about 5h 30m in total.',
+      ),
+    ).toBeVisible();
   });
 
   it('replans the route forecast for an adjusted pace', async () => {
     const user = userEvent.setup();
-    renderSection({ expanded: true, weekday: 6 });
+    renderSection(expandedPreferences);
     const route = () => screen.getByRole('list', { name: 'Forecast along the route' });
     const times = () =>
       within(route())
@@ -237,7 +332,7 @@ describe('TrackWeatherSection', () => {
     vi.spyOn(services.pointWeatherForecast, 'execute').mockRejectedValue(
       new PointWeatherForecastError('provider-unavailable', 'Unavailable.'),
     );
-    renderSection({ expanded: true, weekday: 6 });
+    renderSection(expandedPreferences);
 
     const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
     expect(

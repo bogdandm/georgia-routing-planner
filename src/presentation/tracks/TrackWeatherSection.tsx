@@ -22,9 +22,12 @@ import {
 
 import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
+  TRACK_WEATHER_DEFAULT_START_HOUR,
+  TRACK_WEATHER_LATEST_START_HOUR,
   TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
-  TRACK_WEATHER_START_HOUR,
+  TRACK_WEATHER_PACE_FACTOR_STEP,
+  TRACK_WEATHER_START_HOUR_STEP,
   TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
@@ -37,6 +40,7 @@ import {
   type TrackWeatherCheckpoint,
   type TrackWeatherLocation,
   type TrackWeatherPreferences,
+  type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
@@ -91,12 +95,23 @@ function ForecastPlaceholder({ children }: { readonly children?: ReactNode }) {
   );
 }
 
+/** `HH:mm` for a fractional local hour of the day. */
+function formatStartHour(hour: number): string {
+  const minutes = Math.round(hour * 60);
+  return [Math.floor(minutes / 60), minutes % 60]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
+}
+
 interface TrackWeatherSectionProps {
   readonly profile: ElevationProfile;
   readonly metrics: TrackStatsMetrics;
   /** Null while the stored preferences load; the section then stays collapsed. */
   readonly preferences: TrackWeatherPreferences | null;
   readonly onPreferencesChange: (preferences: TrackWeatherPreferences) => void;
+  /** This track's route start and pace; the workspace decides where they are kept. */
+  readonly timelineSettings: TrackWeatherTimelineSettings;
+  readonly onTimelineSettingsChange: (settings: TrackWeatherTimelineSettings) => void;
 }
 
 /**
@@ -108,6 +123,8 @@ export function TrackWeatherSection({
   metrics,
   preferences,
   onPreferencesChange,
+  timelineSettings,
+  onTimelineSettingsChange,
 }: TrackWeatherSectionProps): ReactElement {
   const { i18n, t } = useLingui();
   const { clock, pointWeatherForecast } = useRuntimeServices();
@@ -124,19 +141,24 @@ export function TrackWeatherSection({
     () => selectTrackElevationLocations(profile),
     [profile],
   );
-  // The slider shows `paceDraft` while dragging; only the released value replans the
-  // timeline, so intermediate positions do not start forecast requests.
-  const [paceFactor, setPaceFactor] = useState(1);
-  const [paceDraft, setPaceDraft] = useState(1);
+  const { paceFactor } = timelineSettings;
+  // Drafts show slider positions while dragging; only released values are stored. The
+  // start draft already moves the checkpoint times, since it only reselects loaded
+  // hours, while the pace waits for release so it does not start forecast requests.
+  const [startDraft, setStartDraft] = useState<number | null>(null);
+  const [paceDraft, setPaceDraft] = useState<number | null>(null);
+  const startHour = startDraft ?? timelineSettings.startHour;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const paceLabelId = `${detailsId}-pace`;
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const startLabelId = `${detailsId}-start`;
   const timeline = useMemo(
     () => planTrackWeatherTimeline(profile, metrics, paceFactor),
     [metrics, paceFactor, profile],
   );
-  // Pace adjustment is offered only for tracks that qualify at their own pace; slowing
-  // one down past the limit keeps the slider so the change can be undone.
-  const paceAdjustable = useMemo(
+  // Start and pace adjustments are offered only for tracks that qualify at their own
+  // pace; slowing one down past the limit keeps the sliders so the change can be undone.
+  const timelineAdjustable = useMemo(
     () => planTrackWeatherTimeline(profile, metrics).status === 'available',
     [metrics, profile],
   );
@@ -279,10 +301,11 @@ export function TrackWeatherSection({
   };
 
   const checkpointCard = (checkpoint: TrackWeatherCheckpoint) => {
-    const time = trackWeatherLocalTime(selectedDate, checkpoint.elapsedSeconds).slice(
-      11,
-      16,
-    );
+    const time = trackWeatherLocalTime(
+      selectedDate,
+      startHour,
+      checkpoint.elapsedSeconds,
+    ).slice(11, 16);
     const elevation = formatTrackElevation(checkpoint.elevationMeters, i18n);
     const distance = formatTrackDistance(checkpoint.distanceMeters, i18n);
     const place =
@@ -294,7 +317,12 @@ export function TrackWeatherSection({
     const state = forecastFor(checkpoint);
     const summary =
       state?.status === 'ready'
-        ? summarizeTrackWeatherCheckpoint(state.forecast, selectedDate, checkpoint)
+        ? summarizeTrackWeatherCheckpoint(
+            state.forecast,
+            selectedDate,
+            startHour,
+            checkpoint,
+          )
         : null;
     const label = [time, place, elevation].join(', ');
     return (
@@ -333,7 +361,7 @@ export function TrackWeatherSection({
     );
   };
 
-  const startTime = `${String(TRACK_WEATHER_START_HOUR).padStart(2, '0')}:00`;
+  const startTime = formatStartHour(startHour);
   const maximumDistance = formatTrackDistance(
     TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
     i18n,
@@ -427,42 +455,93 @@ export function TrackWeatherSection({
             <Typography component="h4" variant="subtitle2">
               <Trans>Along the route</Trans>
             </Typography>
-            {paceAdjustable ? (
-              <Box>
-                <Typography id={paceLabelId} variant="caption" color="text.secondary">
-                  <Trans>Adjust pace</Trans>
-                </Typography>
-                <Stack
-                  direction="row"
-                  spacing={1.5}
-                  sx={{ alignItems: 'center', px: 0.5 }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    <Trans>Faster</Trans>
+            {timelineAdjustable ? (
+              <>
+                <Box>
+                  <Typography
+                    id={startLabelId}
+                    variant="caption"
+                    color="text.secondary"
+                  >
+                    <Trans>Route start</Trans>
                   </Typography>
-                  <Slider
-                    size="small"
-                    aria-labelledby={paceLabelId}
-                    min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
-                    max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
-                    step={0.05}
-                    marks={[{ value: 1 }]}
-                    value={paceDraft}
-                    valueLabelDisplay="auto"
-                    valueLabelFormat={formatPace}
-                    getAriaValueText={formatPace}
-                    onChange={(_event, value) => {
-                      setPaceDraft(value);
-                    }}
-                    onChangeCommitted={(_event, value) => {
-                      setPaceFactor(value);
-                    }}
-                  />
-                  <Typography variant="caption" color="text.secondary">
-                    <Trans>Slower</Trans>
+                  <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{ alignItems: 'center', px: 0.5 }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {formatStartHour(0)}
+                    </Typography>
+                    <Slider
+                      size="small"
+                      aria-labelledby={startLabelId}
+                      min={0}
+                      max={TRACK_WEATHER_LATEST_START_HOUR}
+                      step={TRACK_WEATHER_START_HOUR_STEP}
+                      marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
+                      value={startHour}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={formatStartHour}
+                      getAriaValueText={formatStartHour}
+                      onChange={(_event, value) => {
+                        setStartDraft(value);
+                      }}
+                      onChangeCommitted={(_event, value) => {
+                        setStartDraft(null);
+                        onTimelineSettingsChange({
+                          ...timelineSettings,
+                          startHour: value,
+                        });
+                      }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+                    </Typography>
+                  </Stack>
+                </Box>
+                <Box>
+                  <Typography id={paceLabelId} variant="caption" color="text.secondary">
+                    <Trans>Adjust pace</Trans>
                   </Typography>
-                </Stack>
-              </Box>
+                  <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{ alignItems: 'center', px: 0.5 }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      <Trans>Faster</Trans>
+                    </Typography>
+                    <Slider
+                      size="small"
+                      aria-labelledby={paceLabelId}
+                      min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
+                      max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
+                      step={TRACK_WEATHER_PACE_FACTOR_STEP}
+                      marks={[{ value: 1 }]}
+                      value={paceDraft ?? paceFactor}
+                      valueLabelDisplay="auto"
+                      valueLabelFormat={formatPace}
+                      getAriaValueText={formatPace}
+                      onChange={(_event, value) => {
+                        setPaceDraft(value);
+                      }}
+                      onChangeCommitted={(_event, value) => {
+                        setPaceDraft(null);
+                        // Keyboard steps accumulate floating-point error (×0.5 plus ten
+                        // steps is 1.0000000000000004); hundredths keep exact steps.
+                        onTimelineSettingsChange({
+                          ...timelineSettings,
+                          paceFactor: Math.round(value * 100) / 100,
+                        });
+                      }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      <Trans>Slower</Trans>
+                    </Typography>
+                  </Stack>
+                </Box>
+              </>
             ) : null}
             <Typography variant="caption" color="text.secondary">
               {timelineCaption}

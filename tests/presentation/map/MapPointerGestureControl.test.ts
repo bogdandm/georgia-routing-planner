@@ -361,7 +361,7 @@ describe('MapPointerGestureControl', () => {
     control.detach();
   });
 
-  it('does not rotate three-finger touches', () => {
+  it('does not let a new finger pair rotate from an earlier twist decision', () => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
     const control = new MapPointerGestureControl(createPivotDouble());
@@ -371,14 +371,20 @@ describe('MapPointerGestureControl', () => {
       [100, 300],
       [250, 300],
     ]);
-    dispatchTouch(container, 'touchstart', [
-      [100, 300],
-      [250, 300],
-      [175, 400],
-    ]);
     dispatchTouch(container, 'touchmove', [
       [100, 340],
       [250, 260],
+    ]);
+    expect(mayRotate()).toBe(true);
+
+    dispatchTouch(container, 'touchstart', [
+      [100, 340],
+      [250, 260],
+      [175, 400],
+    ]);
+    dispatchTouch(container, 'touchmove', [
+      [100, 380],
+      [250, 220],
       [175, 400],
     ]);
 

@@ -280,13 +280,14 @@ export class MapPointerGestureControl {
   }
 
   private readonly handleTouchStart = (event: TouchEvent): void => {
+    this.#twoFingerIntent = null;
     const [first, second] = [event.touches[0], event.touches[1]];
     if (event.touches.length !== 2 || first === undefined || second === undefined) {
-      // A third finger leaves an undecided gesture without rotation.
+      // Any other touch count drops the pair, so no later MapLibre pair can start
+      // rotating from a stale decision. A rotation already running keeps going.
       this.#twoFingerTouch = null;
       return;
     }
-    this.#twoFingerIntent = null;
     this.#twoFingerTouch = {
       first: { identifier: first.identifier, x: first.clientX, y: first.clientY },
       second: { identifier: second.identifier, x: second.clientX, y: second.clientY },

@@ -41,6 +41,7 @@ class FakeNativeMap {
   public projectedPoint = { x: 0, y: 0 };
   public padding = { top: 0, right: 0, bottom: 0, left: 0 };
   public cameraForBoundsPadding: FakeNativeMap['padding'] | null = null;
+  public touchZoomRotate = { _touchRotate: { _isBelowThreshold: () => true } };
   readonly #sources = new Map<string, unknown>();
   #longitude = 44.8;
   #latitude = 41.7;

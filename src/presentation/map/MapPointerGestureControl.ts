@@ -3,15 +3,16 @@ import { Marker, type LngLat, type Map as MapLibreMap } from 'maplibre-gl';
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
 const maximumPitchDegrees = 75;
-/** Travel each finger needs before a shared-direction two-finger move counts as a pan. */
-const twoFingerPanDistancePixels = 10;
-/** Minimum cosine between both fingers' travel directions for that pan. */
-const twoFingerPanMinimumAlignment = 0.7;
-/**
- * MapLibre's `TwoFingersTouchRotateHandler` starts rotating once the fingers twist this
- * far along the circle they span (its private `ROTATION_THRESHOLD`).
- */
-const mapLibreRotationThresholdPixels = 25;
+/** Per-finger pinch or pan travel that decides a two-finger touch as zoom-or-pan. */
+const zoomOrPanIntentPixels = 10;
+/** How many times the other movement the deciding movement must reach. */
+const intentDominance = 1.5;
+/** Per-finger twist along the finger circle needed before a touch may rotate. */
+const rotationIntentPixels = 25;
+/** Minimum twist angle before a touch may rotate, so wide finger spans need a real turn. */
+const rotationIntentDegrees = 15;
+
+type TwoFingerIntent = 'zoom-or-pan' | 'rotate';
 
 type Gesture = 'pan' | 'orbit' | null;
 interface TouchStart {
@@ -23,11 +24,11 @@ interface TouchVector {
   readonly x: number;
   readonly y: number;
 }
-/** A two-finger touch whose pan-or-twist intent is still undecided. */
+/** A two-finger touch whose zoom-pan-or-twist intent is still undecided. */
 interface TwoFingerTouch {
   readonly first: TouchStart;
   readonly second: TouchStart;
-  /** Smallest finger span so far; MapLibre scales its rotation threshold by it. */
+  /** Smallest finger span so far, which keeps a pinch-in from inflating the twist. */
   minimumSpan: number;
 }
 
@@ -44,35 +45,55 @@ function touchTravel(touches: TouchList, start: TouchStart): TouchVector | null 
   return null;
 }
 
-function isSharedDirectionPan(first: TouchVector, second: TouchVector): boolean {
-  const firstDistance = Math.hypot(first.x, first.y);
-  const secondDistance = Math.hypot(second.x, second.y);
-  return (
-    firstDistance >= twoFingerPanDistancePixels &&
-    secondDistance >= twoFingerPanDistancePixels &&
-    (first.x * second.x + first.y * second.y) / (firstDistance * secondDistance) >=
-      twoFingerPanMinimumAlignment
-  );
-}
-
-/** Mirrors MapLibre's test for whether a two-finger twist has started rotating. */
-function isPastMapLibreRotationThreshold(touch: TwoFingerTouch, vector: TouchVector) {
+/**
+ * Decides a two-finger touch from each finger's share of pinch, pan, and twist since it
+ * began. A movement decides only once it clearly outweighs the others, so a pinch or
+ * drag that twists a little never rotates and a deliberate twist never needs to zoom.
+ */
+function classifyTwoFingerMove(
+  touch: TwoFingerTouch,
+  first: TouchVector,
+  second: TouchVector,
+): TwoFingerIntent | null {
   const start = {
     x: touch.first.x - touch.second.x,
     y: touch.first.y - touch.second.y,
   };
-  const twistDegrees =
-    (Math.abs(
-      Math.atan2(
-        vector.x * start.y - vector.y * start.x,
-        vector.x * start.x + vector.y * start.y,
-      ),
-    ) *
-      180) /
-    Math.PI;
-  const thresholdDegrees =
-    (mapLibreRotationThresholdPixels / (Math.PI * touch.minimumSpan)) * 360;
-  return twistDegrees >= thresholdDegrees;
+  const current = { x: start.x + first.x - second.x, y: start.y + first.y - second.y };
+  const span = Math.hypot(current.x, current.y);
+  touch.minimumSpan = Math.min(touch.minimumSpan, span);
+
+  const twistRadians = Math.abs(
+    Math.atan2(
+      current.x * start.y - current.y * start.x,
+      current.x * start.x + current.y * start.y,
+    ),
+  );
+  const twist = (twistRadians * touch.minimumSpan) / 2;
+  const pinch = Math.abs(span - Math.hypot(start.x, start.y)) / 2;
+  // Travel both fingers share: a twist around one held finger moves only the other one,
+  // so it adds no pan even though the midpoint moves.
+  const longerTravel = Math.max(
+    Math.hypot(first.x, first.y),
+    Math.hypot(second.x, second.y),
+  );
+  const pan =
+    longerTravel === 0
+      ? 0
+      : Math.max(0, first.x * second.x + first.y * second.y) / longerTravel;
+  const zoomOrPan = Math.max(pinch, pan);
+
+  if (zoomOrPan >= zoomOrPanIntentPixels && zoomOrPan >= intentDominance * twist) {
+    return 'zoom-or-pan';
+  }
+  if (
+    twist >= rotationIntentPixels &&
+    (twistRadians * 180) / Math.PI >= rotationIntentDegrees &&
+    twist >= intentDominance * zoomOrPan
+  ) {
+    return 'rotate';
+  }
+  return null;
 }
 
 /** Reuses one terrain-aware MapLibre marker for the active 3D orbit pivot. */
@@ -98,11 +119,12 @@ function createOrbitPivotIndicator() {
 
 /**
  * Owns middle-button panning and Shift+left terrain orbit gestures without changing
- * MapLibre's ordinary left and right button behavior. It also keeps a two-finger touch
- * pan from rotating: MapLibre rotates as soon as the fingers twist past a small
- * threshold, which an ordinary two-finger drag easily does. Once both fingers travel
- * together before any rotation starts, touch rotation stays off until they lift. A
- * twist that starts first still rotates and pans as before.
+ * MapLibre's ordinary left and right button behavior. It also decides when a two-finger
+ * touch may rotate. MapLibre alone rotates once the fingers twist about 25 px, which an
+ * ordinary pinch-zoom or two-finger drag easily does, especially with fingers spread
+ * wide. This control replaces that threshold check: rotation starts only after the
+ * twist clearly outweighs the pinch and pan, and never in a gesture already decided as
+ * zoom-or-pan.
  */
 export class MapPointerGestureControl {
   #container: HTMLElement | null = null;
@@ -113,7 +135,9 @@ export class MapPointerGestureControl {
   #orbitAnchor: LngLat | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
   #twoFingerTouch: TwoFingerTouch | null = null;
-  #touchRotationLocked = false;
+  /** Decision for the current two-finger gesture; null until one movement dominates. */
+  #twoFingerIntent: TwoFingerIntent | null = null;
+  #restoreRotationThreshold: (() => void) | null = null;
 
   public constructor(
     private readonly pivotIndicator: ReturnType<
@@ -126,6 +150,7 @@ export class MapPointerGestureControl {
     this.detach();
     this.#container = container;
     this.#map = map ?? null;
+    if (map !== undefined) this.gateTouchRotation(map);
     container.addEventListener('mousedown', this.handleMouseDown, true);
     container.addEventListener('auxclick', this.handleAuxClick, true);
     container.addEventListener(
@@ -159,6 +184,8 @@ export class MapPointerGestureControl {
     }
     this.finishGesture();
     this.finishTouchGesture();
+    this.#restoreRotationThreshold?.();
+    this.#restoreRotationThreshold = null;
     this.#container = null;
     this.#map = null;
   }
@@ -236,18 +263,30 @@ export class MapPointerGestureControl {
     if (event.button === 1) event.preventDefault();
   };
 
+  /**
+   * MapLibre's `TwoFingersTouchRotateHandler` asks `_isBelowThreshold` on every move
+   * until rotation starts, then rotates for the rest of the gesture. Answering from the
+   * gesture intent is the only way to delay rotation without losing the gesture:
+   * `disableRotation()` resets the handler, and enabling it again mid-gesture cannot
+   * resume. The handler and method are underscored but part of MapLibre's typings.
+   */
+  private gateTouchRotation(map: MapLibreMap): void {
+    const rotateHandler = map.touchZoomRotate._touchRotate;
+    const originalThresholdCheck = rotateHandler._isBelowThreshold.bind(rotateHandler);
+    rotateHandler._isBelowThreshold = () => this.#twoFingerIntent !== 'rotate';
+    this.#restoreRotationThreshold = () => {
+      rotateHandler._isBelowThreshold = originalThresholdCheck;
+    };
+  }
+
   private readonly handleTouchStart = (event: TouchEvent): void => {
     const [first, second] = [event.touches[0], event.touches[1]];
-    if (
-      event.touches.length !== 2 ||
-      first === undefined ||
-      second === undefined ||
-      this.#touchRotationLocked
-    ) {
-      // A third finger makes the gesture neither a plain two-finger pan nor twist.
+    if (event.touches.length !== 2 || first === undefined || second === undefined) {
+      // A third finger leaves an undecided gesture without rotation.
       this.#twoFingerTouch = null;
       return;
     }
+    this.#twoFingerIntent = null;
     this.#twoFingerTouch = {
       first: { identifier: first.identifier, x: first.clientX, y: first.clientY },
       second: { identifier: second.identifier, x: second.clientX, y: second.clientY },
@@ -260,38 +299,26 @@ export class MapPointerGestureControl {
 
   /**
    * Runs in the capture phase, before MapLibre's own container listeners handle the same
-   * move. A twist past MapLibre's threshold, even on the same move as a pan, is left to
-   * rotate; otherwise a detected pan disables rotation before MapLibre can start it.
-   * `map.isRotating()` cannot decide this because MapLibre only reports rotation after
-   * its next render frame.
+   * move, so a twist decided here starts rotating on this move.
    */
   private readonly handleTouchMove = (event: TouchEvent): void => {
     const touch = this.#twoFingerTouch;
-    const map = this.#map;
-    if (touch === null || map === null) return;
+    if (touch === null) return;
     const first = touchTravel(event.touches, touch.first);
     const second = touchTravel(event.touches, touch.second);
     if (first === null || second === null) return;
 
-    const vector = {
-      x: touch.first.x + first.x - (touch.second.x + second.x),
-      y: touch.first.y + first.y - (touch.second.y + second.y),
-    };
-    touch.minimumSpan = Math.min(touch.minimumSpan, Math.hypot(vector.x, vector.y));
-    if (isPastMapLibreRotationThreshold(touch, vector)) {
-      this.#twoFingerTouch = null;
-    } else if (isSharedDirectionPan(first, second)) {
-      this.#twoFingerTouch = null;
-      this.#touchRotationLocked = true;
-      map.touchZoomRotate.disableRotation();
-    }
+    const intent = classifyTwoFingerMove(touch, first, second);
+    if (intent === null) return;
+    this.#twoFingerIntent = intent;
+    this.#twoFingerTouch = null;
   };
 
   private readonly handleTouchEnd = (event: TouchEvent): void => {
     if (event.touches.length < 2) this.finishTouchGesture();
   };
 
-  /** MapLibre resets every touch handler on cancel, so the lock ends with it. */
+  /** MapLibre resets every touch handler on cancel, so the gesture ends here too. */
   private readonly handleTouchCancel = (): void => {
     this.finishTouchGesture();
   };
@@ -320,8 +347,6 @@ export class MapPointerGestureControl {
 
   private finishTouchGesture(): void {
     this.#twoFingerTouch = null;
-    if (!this.#touchRotationLocked) return;
-    this.#touchRotationLocked = false;
-    this.#map?.touchZoomRotate.enableRotation();
+    this.#twoFingerIntent = null;
   }
 }

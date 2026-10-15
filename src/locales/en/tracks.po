@@ -26,7 +26,7 @@ msgid "{0} tracks"
 msgstr "{0} tracks"
 
 #. js-lingui-id: 3Mpfhk
-#: src/presentation/tracks/ElevationProfileChart.tsx:781
+#: src/presentation/tracks/ElevationProfileChart.tsx:745
 #: src/presentation/tracks/trackFormatters.ts:11
 msgid "{distance} km"
 msgstr "{distance} km"
@@ -430,7 +430,7 @@ msgstr "Discard this unsaved track?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/ElevationProfileChart.tsx:726
+#: src/presentation/tracks/ElevationProfileChart.tsx:811
 #: src/presentation/tracks/TrackSummary.tsx:121
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
@@ -490,7 +490,7 @@ msgstr "Edit folder"
 #. js-lingui-id: fkcYqc
 #: src/presentation/tracks/ElevationProfileChart.tsx:461
 #: src/presentation/tracks/ElevationProfileChart.tsx:548
-#: src/presentation/tracks/ElevationProfileChart.tsx:710
+#: src/presentation/tracks/ElevationProfileChart.tsx:795
 msgid "Elevation"
 msgstr "Elevation"
 
@@ -922,12 +922,12 @@ msgid "Press space to pick up an item. Use arrow keys to move it. Press space to
 msgstr "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 
 #. js-lingui-id: 6aaeK-
-#: src/presentation/tracks/ElevationProfileChart.tsx:719
+#: src/presentation/tracks/ElevationProfileChart.tsx:804
 msgid "Profile axis"
 msgstr "Profile axis"
 
 #. js-lingui-id: 5YLSIO
-#: src/presentation/tracks/ElevationProfileChart.tsx:703
+#: src/presentation/tracks/ElevationProfileChart.tsx:788
 msgid "Profile value"
 msgstr "Profile value"
 
@@ -1164,7 +1164,7 @@ msgstr "Sort: {currentSortLabel}"
 
 #. js-lingui-id: l9wI00
 #: src/presentation/tracks/ElevationProfileChart.tsx:461
-#: src/presentation/tracks/ElevationProfileChart.tsx:713
+#: src/presentation/tracks/ElevationProfileChart.tsx:798
 msgid "Speed"
 msgstr "Speed"
 
@@ -1356,7 +1356,7 @@ msgid "This track link is invalid."
 msgstr "This track link is invalid."
 
 #. js-lingui-id: LhMjLm
-#: src/presentation/tracks/ElevationProfileChart.tsx:729
+#: src/presentation/tracks/ElevationProfileChart.tsx:814
 msgid "Time"
 msgstr "Time"
 

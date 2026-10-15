@@ -695,42 +695,6 @@ export function ElevationProfileChart({
           ) : null}
         </Box>
       ) : null}
-      {showHeading && timeline !== null ? (
-        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            aria-label={t`Profile value`}
-            value={selectedMetric}
-            onChange={(_event, value: ProfileMetric | null) => {
-              if (value !== null) setSelectedMetric(value);
-            }}
-          >
-            <ToggleButton value="elevation">
-              <Trans>Elevation</Trans>
-            </ToggleButton>
-            <ToggleButton value="speed">
-              <Trans>Speed</Trans>
-            </ToggleButton>
-          </ToggleButtonGroup>
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            aria-label={t`Profile axis`}
-            value={selectedAxis}
-            onChange={(_event, value: ProfileAxis | null) => {
-              if (value !== null) setSelectedAxis(value);
-            }}
-          >
-            <ToggleButton value="distance">
-              <Trans>Distance</Trans>
-            </ToggleButton>
-            <ToggleButton value="time">
-              <Trans>Time</Trans>
-            </ToggleButton>
-          </ToggleButtonGroup>
-        </Stack>
-      ) : null}
       <Box role="img" aria-label={profileLabel} sx={{ height: 264, mx: -1 }}>
         <AreaChart<ProfileChartRow>
           aria-hidden
@@ -816,6 +780,42 @@ export function ElevationProfileChart({
           />
         </AreaChart>
       </Box>
+      {showHeading && timeline !== null ? (
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            aria-label={t`Profile value`}
+            value={selectedMetric}
+            onChange={(_event, value: ProfileMetric | null) => {
+              if (value !== null) setSelectedMetric(value);
+            }}
+          >
+            <ToggleButton value="elevation">
+              <Trans>Elevation</Trans>
+            </ToggleButton>
+            <ToggleButton value="speed">
+              <Trans>Speed</Trans>
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            aria-label={t`Profile axis`}
+            value={selectedAxis}
+            onChange={(_event, value: ProfileAxis | null) => {
+              if (value !== null) setSelectedAxis(value);
+            }}
+          >
+            <ToggleButton value="distance">
+              <Trans>Distance</Trans>
+            </ToggleButton>
+            <ToggleButton value="time">
+              <Trans>Time</Trans>
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Stack>
+      ) : null}
     </Stack>
   );
 }

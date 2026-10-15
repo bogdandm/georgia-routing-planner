@@ -44,6 +44,7 @@ export const mapVisualPalette = {
     minor: '#F5BE69',
     path: '#D76A00',
     steps: '#A95100',
+    aerialway: '#33383B',
   },
   terrain: {
     contourMinor: appColors.brand.blueGreenDark,
@@ -53,12 +54,22 @@ export const mapVisualPalette = {
     highlight: '#F5F4EF',
     accent: '#898D8F',
     ridge: '#565A5C',
+    /** Brown of the relief on Soviet/GOST topographic maps. */
+    cliff: '#8C4A1E',
+    pass: '#29343A',
   },
   restricted: {
     line: '#C95050',
   },
   boundary: '#656B70',
-  point: '#365F70',
+  poi: {
+    water: '#0B6E99',
+    hut: '#7A4A1E',
+    campSite: '#3D6B2A',
+    viewpoint: '#29343A',
+    guidepost: '#58636A',
+    attraction: '#365F70',
+  },
   text: {
     primary: '#29343A',
     secondary: '#58636A',
@@ -81,6 +92,7 @@ const mapVisualModePaintPropertyNames = [
   'circle-stroke-opacity',
   'fill-opacity',
   'hillshade-exaggeration',
+  'icon-opacity',
   'line-opacity',
   'text-halo-color',
   'text-opacity',
@@ -111,10 +123,7 @@ export const mapVisualModePaint = {
     [mapLayerIds.hikingSteps]: { 'line-opacity': 0.9 },
     [mapLayerIds.hikingPathDetails]: { 'line-opacity': 0.9 },
     [mapLayerIds.hikingBridleways]: { 'line-opacity': 0.9 },
-    [mapLayerIds.hikingPois]: {
-      'circle-opacity': 0.76,
-      'circle-stroke-opacity': 1,
-    },
+    [mapLayerIds.hikingPois]: { 'icon-opacity': 1 },
     [mapLayerIds.peaks]: { 'circle-opacity': 1, 'circle-stroke-opacity': 1 },
     [mapLayerIds.ridges]: { 'line-opacity': 0.48 },
     [terrainOverlayLayerIds.reliefShade]: { 'hillshade-exaggeration': 0.2 },
@@ -166,10 +175,7 @@ export const mapVisualModePaint = {
     [mapLayerIds.hikingPathDetails]: { 'line-opacity': 0.96 },
     [mapLayerIds.hikingBridleways]: { 'line-opacity': 0.96 },
     [mapLayerIds.hikingSteps]: { 'line-opacity': 0.96 },
-    [mapLayerIds.hikingPois]: {
-      'circle-opacity': 0.76,
-      'circle-stroke-opacity': 1,
-    },
+    [mapLayerIds.hikingPois]: { 'icon-opacity': 1 },
     [mapLayerIds.peaks]: { 'circle-opacity': 1, 'circle-stroke-opacity': 1 },
     [terrainOverlayLayerIds.reliefShade]: { 'hillshade-exaggeration': 0.14 },
     [mapLayerIds.ridges]: { 'line-opacity': 0.56 },

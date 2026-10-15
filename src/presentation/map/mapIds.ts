@@ -122,6 +122,7 @@ export const mapLayerIds = {
   restrictedAreas: 'basemap-restricted-areas',
   parks: 'basemap-parks',
   waterways: 'basemap-waterways',
+  intermittentWaterways: 'basemap-intermittent-waterways',
   water: 'basemap-water',
   buildings: 'basemap-buildings',
   boundaries: 'basemap-boundaries',
@@ -131,16 +132,35 @@ export const mapLayerIds = {
   hikingPathDetails: 'basemap-hiking-path-details',
   hikingBridleways: 'basemap-hiking-bridleways',
   hikingSteps: 'basemap-hiking-steps',
+  aerialways: 'basemap-aerialways',
+  fords: 'basemap-fords',
   hikingPois: 'basemap-hiking-pois',
   hikingPoiLabels: 'basemap-hiking-poi-labels',
   peaks: 'basemap-peaks',
+  mountainPasses: 'basemap-mountain-passes',
   ridges: 'basemap-ridges',
+  cliffs: 'basemap-cliffs',
   peakLabels: 'basemap-peak-labels',
   roadLabels: 'basemap-road-labels',
   riverLabels: 'basemap-river-labels',
   ridgeLabels: 'basemap-ridge-labels',
   waterLabels: 'basemap-water-labels',
   placeLabels: 'basemap-place-labels',
+} as const;
+
+/** Icons and line patterns the basemap style references; generated on first use. */
+export const basemapImageIds = {
+  drinkingWater: 'basemap-drinking-water',
+  hut: 'basemap-hut',
+  shelter: 'basemap-shelter',
+  campSite: 'basemap-camp-site',
+  viewpoint: 'basemap-viewpoint',
+  guidepost: 'basemap-guidepost',
+  attraction: 'basemap-attraction',
+  ford: 'basemap-ford',
+  mountainPass: 'basemap-mountain-pass',
+  cliffPattern: 'basemap-cliff-pattern',
+  aerialwayPattern: 'basemap-aerialway-pattern',
 } as const;
 
 export const mapInsertionPoints = {

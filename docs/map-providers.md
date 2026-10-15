@@ -35,20 +35,22 @@ The basemap is a hybrid of two vector sources. OpenFreeMap serves the unmodified
 `https://tiles.openfreemap.org/planet` (z0–14) and glyphs from
 `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf`. The
 [provider](https://openfreemap.org/) requires no registration or key and currently
-imposes no request limit, but offers no SLA. Provider sprites are not used; hiking
-points render as circles and text.
+imposes no request limit, but offers no SLA. Provider sprites are not used: hiking icons
+come from the bundled CC0 Pinhead set and line patterns are drawn by the client, both
+generated on first use (`src/presentation/map/basemapSymbols.ts`).
 
 | Application concept           | Source layer          | Relevant fields/values                                                       |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------- |
 | Land cover                    | `landcover`           | `class` (`wood`, `grass`, `farmland`, `wetland`, `ice`, etc.) and `subclass` |
 | Human land use                | `landuse`             | `class` (`military`, residential, and other uses)                            |
 | Protected land                | `park`                | `class`, names                                                               |
-| Water                         | `water`, `waterway`   | geometry and `class`                                                         |
+| Water                         | `water`, `waterway`   | geometry, `class`, `intermittent` (dashed)                                   |
 | Boundaries                    | `boundary`            | `admin_level`, `disputed`, `maritime`                                        |
 | Overview paths and bridleways | `transportation`      | `class`, `subclass`, `brunnel`; overview paths stop at z13                   |
+| Fords and aerialways          | `transportation`      | `brunnel = ford` (icon), `class = aerialway` (crossbar line)                 |
 | Road/path labels              | `transportation_name` | names, `class`, `subclass`                                                   |
-| Peaks and passes              | `mountain_peak`       | `class` (`peak`, `saddle`, etc.), names, `ele`                               |
-| Hiking POIs                   | `poi`                 | `class`, `subclass`, names, `rank`                                           |
+| Peaks, passes, and cliffs     | `mountain_peak`       | `class` (`peak`, `saddle` as a cross, `cliff` as a GOST toothed line), `ele` |
+| Hiking POIs                   | `poi`                 | huts, shelters, camp sites, drinking water, viewpoints, guideposts           |
 | Settlements                   | `place`               | `class`, names, `rank`, `capital`                                            |
 | Water labels                  | `water_name`          | names and geometry-specific fields                                           |
 
@@ -60,6 +62,12 @@ provider-generated `name:latin`, then legacy fallbacks
 land-use `military` supplies restricted areas; the schema has no dependable
 access/ownership field, so private-property closures are not inferred. New source-layer
 families must get a Layers control in the same change as their style.
+
+Lodging is limited to `alpine_hut` and `wilderness_hut`; hotels and guest houses are not
+drawn. Cliffs follow the OSM convention that the lower side lies to the right of the
+way, so the teeth point downhill as on Soviet GOST topographic maps. Neither source
+carries springs (`natural=spring`), waterfalls, trail difficulty, or path visibility,
+and both start paths and tracks at z12–13.
 
 ## Detail vector: OSM Shortbread v1
 

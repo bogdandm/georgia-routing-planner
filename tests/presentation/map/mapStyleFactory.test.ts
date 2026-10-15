@@ -5,6 +5,7 @@ import {
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
+  basemapImageIds,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
@@ -426,6 +427,39 @@ describe('createHikingMapStyle', () => {
       ['get', 'class'],
       ['literal', ['peak', 'volcano', 'saddle']],
     ]);
+  });
+
+  it('draws passes as crosses, GOST cliffs, fords, and hiking POIs without hotels', () => {
+    const style = createHikingMapStyle(configuration);
+    const layer = (id: string) => style.layers.find((candidate) => candidate.id === id);
+
+    expect(layer(mapLayerIds.peaks)).toHaveProperty('filter', [
+      'in',
+      ['get', 'class'],
+      ['literal', ['peak', 'volcano']],
+    ]);
+    expect(layer(mapLayerIds.mountainPasses)).toMatchObject({
+      type: 'symbol',
+      'source-layer': 'mountain_peak',
+      filter: ['==', ['get', 'class'], 'saddle'],
+      layout: { 'icon-image': basemapImageIds.mountainPass },
+    });
+    expect(layer(mapLayerIds.cliffs)).toMatchObject({
+      type: 'line',
+      'source-layer': 'mountain_peak',
+      filter: ['==', ['get', 'class'], 'cliff'],
+      paint: { 'line-pattern': basemapImageIds.cliffPattern },
+    });
+    expect(layer(mapLayerIds.fords)).toMatchObject({
+      type: 'symbol',
+      'source-layer': 'transportation',
+      filter: ['==', ['get', 'brunnel'], 'ford'],
+      layout: { 'icon-image': basemapImageIds.ford },
+    });
+    const poiFilter = JSON.stringify(layer(mapLayerIds.hikingPois)?.filter);
+    expect(poiFilter).toContain('"alpine_hut"');
+    expect(poiFilter).toContain('"drinking_water"');
+    expect(poiFilter).not.toContain('"lodging"');
   });
 
   it('keeps labels readable across nearby and distant map detail', () => {

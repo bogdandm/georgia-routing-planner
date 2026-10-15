@@ -555,7 +555,10 @@ The hiking basemap combines OpenFreeMap for hiking layers and OSM Shortbread for
 buildings, and streets; see [map providers](./map-providers.md). Labels prefer
 `name:en`, then `name:latin`, before native names; the client does not invent spellings.
 When satellite imagery is visible, vegetation and land-use fills are removed. Military
-areas show a red perimeter; the map does not claim to identify all private land. Invalid
+areas show a red perimeter; the map does not claim to identify all private land. Passes
+are crosses, cliffs are brown GOST toothed lines pointing downhill, fords, huts,
+shelters, camp sites, drinking water, viewpoints, and guideposts have their own icons,
+intermittent streams are dashed, and hotels and guest houses are not drawn. Invalid
 configuration prevents the map from mounting with a safe fatal message; a single
 vector-source failure is recoverable.
 

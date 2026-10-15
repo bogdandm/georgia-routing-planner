@@ -7,6 +7,7 @@ import type {
 
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
+  basemapImageIds,
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoLayerIds,
@@ -207,8 +208,21 @@ function createBasemapLayers(
       type: 'line',
       source,
       'source-layer': sourceLayers.waterways,
+      filter: ['!=', ['get', 'intermittent'], 1],
       paint: {
         'line-color': mapVisualPalette.water.line,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 14, 2],
+      },
+    },
+    {
+      id: mapLayerIds.intermittentWaterways,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.waterways,
+      filter: ['==', ['get', 'intermittent'], 1],
+      paint: {
+        'line-color': mapVisualPalette.water.line,
+        'line-dasharray': [4, 3],
         'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 14, 2],
       },
     },
@@ -391,37 +405,81 @@ function createBasemapLayers(
       },
     },
     {
+      id: mapLayerIds.aerialways,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.transportation,
+      minzoom: 12,
+      filter: ['==', ['get', 'class'], 'aerialway'],
+      paint: {
+        'line-pattern': basemapImageIds.aerialwayPattern,
+        'line-width': 8,
+      },
+    },
+    {
+      id: mapLayerIds.fords,
+      type: 'symbol',
+      source,
+      'source-layer': sourceLayers.transportation,
+      minzoom: 12,
+      filter: ['==', ['get', 'brunnel'], 'ford'],
+      layout: {
+        'symbol-placement': 'line-center',
+        'icon-image': basemapImageIds.ford,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    },
+    {
       id: mapLayerIds.hikingPois,
-      type: 'circle',
+      type: 'symbol',
       source,
       'source-layer': sourceLayers.pois,
       minzoom: 11,
+      // Lodging is limited to mountain huts: hotels and guest houses are not hiking POIs.
       filter: [
         'any',
-        ['in', ['get', 'class'], ['literal', ['campsite', 'lodging', 'attraction']]],
+        ['in', ['get', 'class'], ['literal', ['campsite', 'attraction']]],
         [
           'in',
           ['get', 'subclass'],
           [
             'literal',
             [
-              'shelter',
               'alpine_hut',
               'wilderness_hut',
-              'camp_site',
+              'shelter',
               'drinking_water',
               'viewpoint',
-              'information',
+              'guidepost',
             ],
           ],
         ],
       ],
-      paint: {
-        'circle-color': mapVisualPalette.point,
-        'circle-opacity': 0.76,
-        'circle-radius': 3,
-        'circle-stroke-color': '#ffffff',
-        'circle-stroke-width': 1,
+      layout: {
+        'icon-image': [
+          'match',
+          ['get', 'subclass'],
+          'drinking_water',
+          basemapImageIds.drinkingWater,
+          ['alpine_hut', 'wilderness_hut'],
+          basemapImageIds.hut,
+          'shelter',
+          basemapImageIds.shelter,
+          'viewpoint',
+          basemapImageIds.viewpoint,
+          'guidepost',
+          basemapImageIds.guidepost,
+          [
+            'match',
+            ['get', 'class'],
+            'campsite',
+            basemapImageIds.campSite,
+            basemapImageIds.attraction,
+          ],
+        ],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
       },
     },
     {
@@ -438,7 +496,7 @@ function createBasemapLayers(
           ['shelter', 'alpine_hut', 'wilderness_hut', 'camp_site', 'viewpoint'],
         ],
       ],
-      layout: labelLayout,
+      layout: { ...labelLayout, 'text-radial-offset': 1 },
       paint: {
         'text-color': mapVisualPalette.text.primary,
         'text-halo-color': mapVisualPalette.text.haloVector,
@@ -451,12 +509,25 @@ function createBasemapLayers(
       source,
       'source-layer': sourceLayers.peaks,
       minzoom: 9,
-      filter: ['in', ['get', 'class'], ['literal', ['peak', 'volcano', 'saddle']]],
+      filter: ['in', ['get', 'class'], ['literal', ['peak', 'volcano']]],
       paint: {
         'circle-color': mapVisualPalette.text.secondary,
         'circle-radius': 3,
         'circle-stroke-color': mapVisualPalette.text.haloVector,
         'circle-stroke-width': 1,
+      },
+    },
+    {
+      id: mapLayerIds.mountainPasses,
+      type: 'symbol',
+      source,
+      'source-layer': sourceLayers.peaks,
+      minzoom: 9,
+      filter: ['==', ['get', 'class'], 'saddle'],
+      layout: {
+        'icon-image': basemapImageIds.mountainPass,
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
       },
     },
     {
@@ -471,6 +542,18 @@ function createBasemapLayers(
         'line-color': mapVisualPalette.terrain.ridge,
         'line-width': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 16, 1],
         ...mapVisualModePaint.vector[mapLayerIds.ridges],
+      },
+    },
+    {
+      id: mapLayerIds.cliffs,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.peaks,
+      minzoom: 13,
+      filter: ['==', ['get', 'class'], 'cliff'],
+      paint: {
+        'line-pattern': basemapImageIds.cliffPattern,
+        'line-width': 10,
       },
     },
     {

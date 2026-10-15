@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
-import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
+import { CompactTrackSummary, TrackStats } from '@/presentation/tracks/TrackSummary';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
@@ -198,5 +198,50 @@ describe('CompactTrackSummary', () => {
     expect(screen.queryByLabelText(/^Distance:/u)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Elevation gain:/u)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Elevation loss:/u)).not.toBeInTheDocument();
+  });
+});
+
+describe('TrackStats', () => {
+  const recordedStartAt = '2025-10-12T04:14:00.000Z';
+  const timedMetrics: TrackMetrics = {
+    ...metrics,
+    recordedStartAt,
+    recordedEndAt: '2025-10-12T05:14:00.000Z',
+    elapsedSeconds: 3_600,
+  };
+  // The start is shown in the browser time zone, which the suite does not pin.
+  const start = new Date(recordedStartAt);
+  const twoDigits = (value: number) => String(value).padStart(2, '0');
+  const localStart = `${twoDigits(start.getDate())}.${twoDigits(start.getMonth() + 1)}.${String(start.getFullYear())} ${twoDigits(start.getHours())}:${twoDigits(start.getMinutes())}`;
+
+  it('shows the recorded start between average speed and elevation change', () => {
+    const { container } = renderWithI18n(
+      <ThemeProvider theme={createAppTheme()}>
+        <TrackStats metrics={timedMetrics} />
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByLabelText(`Start time: ${localStart}`)).toBeVisible();
+    expect(
+      [...container.querySelectorAll('[aria-label*=": "]')].map(
+        (stat) => stat.getAttribute('aria-label')?.split(':')[0],
+      ),
+    ).toEqual([
+      'Recorded time',
+      'Distance',
+      'Average speed',
+      'Start time',
+      'Elevation gain',
+      'Elevation loss',
+    ]);
+  });
+
+  it('omits the start without recorded time and in the compact summary', () => {
+    renderSummary(metrics);
+    expect(screen.queryByLabelText(/^Start time:/u)).not.toBeInTheDocument();
+
+    renderSummary(timedMetrics);
+    expect(screen.getAllByLabelText(/^Recorded time:/u)).toHaveLength(1);
+    expect(screen.queryByLabelText(/^Start time:/u)).not.toBeInTheDocument();
   });
 });

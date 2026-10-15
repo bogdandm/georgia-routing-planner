@@ -58,12 +58,12 @@ msgid "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 msgstr "{heading}: {grade}, {distance}, {primary}, спуск {opposite}"
 
 #. js-lingui-id: i3Frvq
-#: src/presentation/tracks/TrackSummary.tsx:25
+#: src/presentation/tracks/TrackSummary.tsx:27
 msgid "{hours}h {minutes}m"
 msgstr "{hours} ч {minutes} мин"
 
 #. js-lingui-id: HM5aeT
-#: src/presentation/tracks/TrackSummary.tsx:64
+#: src/presentation/tracks/TrackSummary.tsx:70
 msgid "{label}: {value}"
 msgstr "{label} — {value}"
 
@@ -104,7 +104,7 @@ msgid "{pointCount, plural, one {# point} other {# points}} · {segmentCount, pl
 msgstr "{pointCount, plural, one {# точка} few {# точки} many {# точек} other {# точки}} · {segmentCount, plural, one {# сегмент} few {# сегмента} many {# сегментов} other {# сегмента}}"
 
 #. js-lingui-id: l1OB5S
-#: src/presentation/tracks/TrackSummary.tsx:141
+#: src/presentation/tracks/TrackSummary.tsx:147
 msgid "{speed} km/h"
 msgstr "{speed} км/ч"
 
@@ -124,7 +124,7 @@ msgid "↑ Apply place name ↑"
 msgstr "↑ Применить название места ↑"
 
 #. js-lingui-id: C6vDEv
-#: src/presentation/tracks/TrackSummary.tsx:123
+#: src/presentation/tracks/TrackSummary.tsx:129
 msgid "≈{duration}"
 msgstr "≈{duration}"
 
@@ -212,7 +212,7 @@ msgid "Average grade"
 msgstr "Средний уклон"
 
 #. js-lingui-id: 4zUd3z
-#: src/presentation/tracks/TrackSummary.tsx:140
+#: src/presentation/tracks/TrackSummary.tsx:146
 msgid "Average speed"
 msgstr "Средняя скорость"
 
@@ -430,7 +430,7 @@ msgstr "Сбросить этот несохранённый трек?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/TrackSummary.tsx:128
+#: src/presentation/tracks/TrackSummary.tsx:134
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
 msgstr "Расстояние"
@@ -505,7 +505,7 @@ msgstr "Для этого трека нет данных о высоте."
 #. js-lingui-id: c3aKIi
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:272
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:299
-#: src/presentation/tracks/TrackSummary.tsx:148
+#: src/presentation/tracks/TrackSummary.tsx:162
 #: src/presentation/tracks/TracksWorkspace.tsx:3658
 msgid "Elevation gain"
 msgstr "Набор высоты"
@@ -524,7 +524,7 @@ msgstr "Данные о высоте недоступны. Геометрия м
 #. js-lingui-id: Z9RdI1
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:273
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:298
-#: src/presentation/tracks/TrackSummary.tsx:155
+#: src/presentation/tracks/TrackSummary.tsx:169
 msgid "Elevation loss"
 msgstr "Сброс высоты"
 
@@ -577,7 +577,7 @@ msgid "Enter a marker name."
 msgstr "Введите название метки."
 
 #. js-lingui-id: -nuEh_
-#: src/presentation/tracks/TrackSummary.tsx:122
+#: src/presentation/tracks/TrackSummary.tsx:128
 msgid "Estimated time"
 msgstr "Расчётное время"
 
@@ -926,7 +926,7 @@ msgid "Recalculate elevation"
 msgstr "Пересчитать высоты"
 
 #. js-lingui-id: SVCift
-#: src/presentation/tracks/TrackSummary.tsx:115
+#: src/presentation/tracks/TrackSummary.tsx:121
 #: src/presentation/tracks/TracksWorkspace.tsx:3646
 msgid "Recorded time"
 msgstr "Время по записи"
@@ -1154,6 +1154,11 @@ msgstr "Сортировка: {currentSortLabel}"
 #: src/presentation/tracks/TrackWeatherSection.tsx:313
 msgid "Start"
 msgstr "Старт"
+
+#. js-lingui-id: xAYSEs
+#: src/presentation/tracks/TrackSummary.tsx:153
+msgid "Start time"
+msgstr "Время старта"
 
 #. js-lingui-id: QSVyj5
 #: src/presentation/tracks/TrackWeatherSection.tsx:374

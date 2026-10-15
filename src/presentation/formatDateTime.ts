@@ -42,3 +42,9 @@ export function formatDateTime(value: Date, timeZone?: string): string {
   const { day, hour, minute, month, second, year } = numericDateParts(value, timeZone);
   return `${day}.${month}.${year} ${hour}:${minute}:${second}`;
 }
+
+/** Formats a user-visible date and time as DD.MM.YYYY HH:mm in the browser time zone. */
+export function formatDateTimeToMinute(value: Date): string {
+  const { day, hour, minute, month, year } = numericDateParts(value, undefined);
+  return `${day}.${month}.${year} ${hour}:${minute}`;
+}

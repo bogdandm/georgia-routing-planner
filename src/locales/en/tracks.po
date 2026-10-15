@@ -58,12 +58,12 @@ msgid "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 msgstr "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 
 #. js-lingui-id: i3Frvq
-#: src/presentation/tracks/TrackSummary.tsx:25
+#: src/presentation/tracks/TrackSummary.tsx:27
 msgid "{hours}h {minutes}m"
 msgstr "{hours}h {minutes}m"
 
 #. js-lingui-id: HM5aeT
-#: src/presentation/tracks/TrackSummary.tsx:64
+#: src/presentation/tracks/TrackSummary.tsx:70
 msgid "{label}: {value}"
 msgstr "{label}: {value}"
 
@@ -104,7 +104,7 @@ msgid "{pointCount, plural, one {# point} other {# points}} · {segmentCount, pl
 msgstr "{pointCount, plural, one {# point} other {# points}} · {segmentCount, plural, one {# segment} other {# segments}}"
 
 #. js-lingui-id: l1OB5S
-#: src/presentation/tracks/TrackSummary.tsx:141
+#: src/presentation/tracks/TrackSummary.tsx:147
 msgid "{speed} km/h"
 msgstr "{speed} km/h"
 
@@ -124,7 +124,7 @@ msgid "↑ Apply place name ↑"
 msgstr "↑ Apply place name ↑"
 
 #. js-lingui-id: C6vDEv
-#: src/presentation/tracks/TrackSummary.tsx:123
+#: src/presentation/tracks/TrackSummary.tsx:129
 msgid "≈{duration}"
 msgstr "≈{duration}"
 
@@ -212,7 +212,7 @@ msgid "Average grade"
 msgstr "Average grade"
 
 #. js-lingui-id: 4zUd3z
-#: src/presentation/tracks/TrackSummary.tsx:140
+#: src/presentation/tracks/TrackSummary.tsx:146
 msgid "Average speed"
 msgstr "Average speed"
 
@@ -430,7 +430,7 @@ msgstr "Discard this unsaved track?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/TrackSummary.tsx:128
+#: src/presentation/tracks/TrackSummary.tsx:134
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
 msgstr "Distance"
@@ -505,7 +505,7 @@ msgstr "Elevation data is unavailable for this track."
 #. js-lingui-id: c3aKIi
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:272
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:299
-#: src/presentation/tracks/TrackSummary.tsx:148
+#: src/presentation/tracks/TrackSummary.tsx:162
 #: src/presentation/tracks/TracksWorkspace.tsx:3658
 msgid "Elevation gain"
 msgstr "Elevation gain"
@@ -524,7 +524,7 @@ msgstr "Elevation is unavailable. The route geometry is ready and can still be s
 #. js-lingui-id: Z9RdI1
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:273
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:298
-#: src/presentation/tracks/TrackSummary.tsx:155
+#: src/presentation/tracks/TrackSummary.tsx:169
 msgid "Elevation loss"
 msgstr "Elevation loss"
 
@@ -577,7 +577,7 @@ msgid "Enter a marker name."
 msgstr "Enter a marker name."
 
 #. js-lingui-id: -nuEh_
-#: src/presentation/tracks/TrackSummary.tsx:122
+#: src/presentation/tracks/TrackSummary.tsx:128
 msgid "Estimated time"
 msgstr "Estimated time"
 
@@ -926,7 +926,7 @@ msgid "Recalculate elevation"
 msgstr "Recalculate elevation"
 
 #. js-lingui-id: SVCift
-#: src/presentation/tracks/TrackSummary.tsx:115
+#: src/presentation/tracks/TrackSummary.tsx:121
 #: src/presentation/tracks/TracksWorkspace.tsx:3646
 msgid "Recorded time"
 msgstr "Recorded time"
@@ -1154,6 +1154,11 @@ msgstr "Sort: {currentSortLabel}"
 #: src/presentation/tracks/TrackWeatherSection.tsx:313
 msgid "Start"
 msgstr "Start"
+
+#. js-lingui-id: xAYSEs
+#: src/presentation/tracks/TrackSummary.tsx:153
+msgid "Start time"
+msgstr "Start time"
 
 #. js-lingui-id: QSVyj5
 #: src/presentation/tracks/TrackWeatherSection.tsx:374

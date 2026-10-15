@@ -226,15 +226,17 @@ marker, fits its bounds around the open panes, and opens a detail pane with metr
 actions, provenance, and an elevation profile. In 3D the fit also turns the camera to a
 45° pitch with the start at the bottom of the screen: a one-way track faces its finish,
 while a loop faces its point farthest from the start, so its finish stays at the bottom
-too. The stats grid shows duration, distance, average speed, and **Elevation
-gain**/**Elevation loss**; tracks with source elevation also list the calculated DEM
-gain and loss. Without recorded time, duration is an **Estimated time** (`≈`) from DIN
-33466 hiking rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent, with the
-larger of the horizontal and vertical times counted fully and the smaller by half.
-Breaks are not included. Missing measurements are omitted. Source file, point/segment
-counts, and the saved timestamp follow. Closing the track removes its geometry without
-moving the camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the
-prior list state; at 1900 and above the pane stays adjacent and uses **Close track**.
+too. The stats grid shows duration, distance, average speed, **Start time**, and
+**Elevation gain**/**Elevation loss**; tracks with source elevation also list the
+calculated DEM gain and loss. The start time appears only with recorded time, as
+`DD.MM.YYYY HH:mm` in the browser time zone, and wraps between date and time in a narrow
+pane. Without recorded time, duration is an **Estimated time** (`≈`) from DIN 33466
+hiking rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent, with the larger
+of the horizontal and vertical times counted fully and the smaller by half. Breaks are
+not included. Missing measurements are omitted. Source file, point/segment counts, and
+the saved timestamp follow. Closing the track removes its geometry without moving the
+camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the prior list
+state; at 1900 and above the pane stays adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
 **Download KML**, sharing, **Rename** (an inline name editor), **Create reversed
@@ -257,17 +259,17 @@ map. Selecting a row fits the map to the segment; in 3D the camera also turns to
 from its start toward its finish at a 45° pitch, so the start sits at the bottom of the
 screen and the finish at the top. The interactive profile has axes, tooltip, and a map
 marker at the highlighted point. When every profile point has recorded time,
-**Elevation**/**Speed** and **Distance**/**Time** toggles below the chart switch it:
-Time plots against elapsed recorded time, including pauses, and Speed plots a
-Gaussian-smoothed speed (σ of 90 seconds or 1/240 of the duration, whichever is longer)
-so per-fix GPS jitter does not dominate; a stop recorded without fixes, such as an
-auto-pause, drops to zero speed, and hovering it points at the fix where it began. The
-tooltip then also shows elapsed time and smoothed speed. Tracks without complete
-recorded time show elevation over distance only, and the view choice lasts while the
-chart stays open. Source elevation drives the profile, grades, and climbs unless it has
-no complete run, in which case the DEM profile is used. On desktop and tablet, a
-lower-right grade legend explains the colors; its dismissal persists and the profile
-chart offers **Show track grade legend** to restore it.
+**Elevation**/**Speed** and **Distance**/**Time** toggles directly below the chart,
+right-aligned to the plot edge, switch it: Time plots against elapsed recorded time,
+including pauses, and Speed plots a Gaussian-smoothed speed (σ of 90 seconds or 1/240 of
+the duration, whichever is longer) so per-fix GPS jitter does not dominate; a stop
+recorded without fixes, such as an auto-pause, drops to zero speed, and hovering it
+points at the fix where it began. The tooltip then also shows elapsed time and smoothed
+speed. Tracks without complete recorded time show elevation over distance only, and the
+view choice lasts while the chart stays open. Source elevation drives the profile,
+grades, and climbs unless it has no complete run, in which case the DEM profile is used.
+On desktop and tablet, a lower-right grade legend explains the colors; its dismissal
+persists and the profile chart offers **Show track grade legend** to restore it.
 
 Editable single tracks show a collapsed **Markers** section with an add action, map
 navigation, inline rename, and two-stage deletion. Only the active editable track

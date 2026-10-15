@@ -55,7 +55,7 @@ waypoints stay attached to their track and are included in GPX downloads.
 
 When elevation is available, the track view adds:
 
-- Distance, recorded duration, average speed, ascent, and descent.
+- Distance, recorded start time and duration, average speed, ascent, and descent.
 - An interactive elevation profile linked to the map.
 - A breakdown of climbs and descents.
 - Grade colors along the steeper parts of the route.

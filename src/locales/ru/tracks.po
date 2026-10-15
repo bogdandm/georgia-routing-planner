@@ -63,7 +63,7 @@ msgid "{hours}h {minutes}m"
 msgstr "{hours} ч {minutes} мин"
 
 #. js-lingui-id: HM5aeT
-#: src/presentation/tracks/TrackSummary.tsx:57
+#: src/presentation/tracks/TrackSummary.tsx:63
 msgid "{label}: {value}"
 msgstr "{label} — {value}"
 
@@ -124,7 +124,7 @@ msgid "↑ Apply place name ↑"
 msgstr "↑ Применить название места ↑"
 
 #. js-lingui-id: C6vDEv
-#: src/presentation/tracks/TrackSummary.tsx:116
+#: src/presentation/tracks/TrackSummary.tsx:122
 msgid "≈{duration}"
 msgstr "≈{duration}"
 
@@ -212,7 +212,7 @@ msgid "Average grade"
 msgstr "Средний уклон"
 
 #. js-lingui-id: 4zUd3z
-#: src/presentation/tracks/TrackSummary.tsx:129
+#: src/presentation/tracks/TrackSummary.tsx:135
 msgid "Average speed"
 msgstr "Средняя скорость"
 
@@ -430,8 +430,8 @@ msgstr "Сбросить этот несохранённый трек?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/ElevationProfileChart.tsx:827
-#: src/presentation/tracks/TrackSummary.tsx:121
+#: src/presentation/tracks/ElevationProfileChart.tsx:833
+#: src/presentation/tracks/TrackSummary.tsx:127
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
 msgstr "Расстояние"
@@ -490,7 +490,7 @@ msgstr "Редактировать папку"
 #. js-lingui-id: fkcYqc
 #: src/presentation/tracks/ElevationProfileChart.tsx:477
 #: src/presentation/tracks/ElevationProfileChart.tsx:564
-#: src/presentation/tracks/ElevationProfileChart.tsx:811
+#: src/presentation/tracks/ElevationProfileChart.tsx:817
 msgid "Elevation"
 msgstr "Высота"
 
@@ -507,7 +507,7 @@ msgstr "Для этого трека нет данных о высоте."
 #. js-lingui-id: c3aKIi
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:272
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:299
-#: src/presentation/tracks/TrackSummary.tsx:137
+#: src/presentation/tracks/TrackSummary.tsx:151
 #: src/presentation/tracks/TracksWorkspace.tsx:3658
 msgid "Elevation gain"
 msgstr "Набор высоты"
@@ -526,7 +526,7 @@ msgstr "Данные о высоте недоступны. Геометрия м
 #. js-lingui-id: Z9RdI1
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:273
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:298
-#: src/presentation/tracks/TrackSummary.tsx:144
+#: src/presentation/tracks/TrackSummary.tsx:158
 msgid "Elevation loss"
 msgstr "Сброс высоты"
 
@@ -579,7 +579,7 @@ msgid "Enter a marker name."
 msgstr "Введите название метки."
 
 #. js-lingui-id: -nuEh_
-#: src/presentation/tracks/TrackSummary.tsx:115
+#: src/presentation/tracks/TrackSummary.tsx:121
 msgid "Estimated time"
 msgstr "Расчётное время"
 
@@ -922,12 +922,12 @@ msgid "Press space to pick up an item. Use arrow keys to move it. Press space to
 msgstr "Нажмите пробел, чтобы взять элемент. Перемещайте его клавишами со стрелками. Нажмите пробел, чтобы отпустить, или Escape, чтобы отменить."
 
 #. js-lingui-id: 6aaeK-
-#: src/presentation/tracks/ElevationProfileChart.tsx:820
+#: src/presentation/tracks/ElevationProfileChart.tsx:826
 msgid "Profile axis"
 msgstr "Ось профиля"
 
 #. js-lingui-id: 5YLSIO
-#: src/presentation/tracks/ElevationProfileChart.tsx:804
+#: src/presentation/tracks/ElevationProfileChart.tsx:810
 msgid "Profile value"
 msgstr "Величина профиля"
 
@@ -938,7 +938,7 @@ msgid "Recalculate elevation"
 msgstr "Пересчитать высоты"
 
 #. js-lingui-id: SVCift
-#: src/presentation/tracks/TrackSummary.tsx:108
+#: src/presentation/tracks/TrackSummary.tsx:114
 #: src/presentation/tracks/TracksWorkspace.tsx:3646
 msgid "Recorded time"
 msgstr "Время по записи"
@@ -1164,7 +1164,7 @@ msgstr "Сортировка: {currentSortLabel}"
 
 #. js-lingui-id: l9wI00
 #: src/presentation/tracks/ElevationProfileChart.tsx:477
-#: src/presentation/tracks/ElevationProfileChart.tsx:814
+#: src/presentation/tracks/ElevationProfileChart.tsx:820
 msgid "Speed"
 msgstr "Скорость"
 
@@ -1182,6 +1182,11 @@ msgstr "Профиль скорости до {maximumSpeed}"
 #: src/presentation/tracks/TrackWeatherSection.tsx:311
 msgid "Start"
 msgstr "Старт"
+
+#. js-lingui-id: xAYSEs
+#: src/presentation/tracks/TrackSummary.tsx:142
+msgid "Start time"
+msgstr "Время старта"
 
 #. js-lingui-id: QSVyj5
 #: src/presentation/tracks/TrackWeatherSection.tsx:372
@@ -1356,7 +1361,7 @@ msgid "This track link is invalid."
 msgstr "Ссылка на трек недействительна."
 
 #. js-lingui-id: LhMjLm
-#: src/presentation/tracks/ElevationProfileChart.tsx:830
+#: src/presentation/tracks/ElevationProfileChart.tsx:836
 msgid "Time"
 msgstr "Время"
 

@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
+import PlayArrowOutlinedIcon from '@mui/icons-material/PlayArrowOutlined';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
@@ -10,6 +11,7 @@ import type { ReactNode } from 'react';
 
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import { formatDateTimeToMinute } from '@/presentation/formatDateTime';
 import { CompactElevationProfile } from '@/presentation/tracks/ElevationProfileChart';
 import {
   formatTrackDistance,
@@ -25,6 +27,7 @@ export type TrackStatsMetrics = Pick<
   | 'estimatedSeconds'
   | 'ascentMeters'
   | 'descentMeters'
+  | 'recordedStartAt'
 >;
 
 function averageSpeedKilometersPerHour(metrics: TrackStatsMetrics): number | undefined {
@@ -39,6 +42,8 @@ interface TrackStatProps {
   readonly label: string;
   readonly overGraphic?: boolean;
   readonly value: string;
+  /** Lets a long value break at its spaces in a narrow cell instead of truncating. */
+  readonly wrap?: boolean;
 }
 
 export function TrackStat({
@@ -47,6 +52,7 @@ export function TrackStat({
   label,
   overGraphic = false,
   value,
+  wrap = false,
 }: TrackStatProps) {
   const { t } = useLingui();
   return (
@@ -78,7 +84,7 @@ export function TrackStat({
       <Typography
         component="span"
         variant={emphasized ? 'body2' : 'caption'}
-        noWrap
+        noWrap={!wrap}
         sx={{ color: 'text.primary', fontWeight: emphasized ? 600 : 400 }}
       >
         {value}
@@ -128,6 +134,14 @@ export function TrackStats({
         icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
         label: t`Average speed`,
         value: formatTrackSpeed(speedKilometersPerHour, i18n),
+      });
+    }
+    if (metrics.recordedStartAt !== undefined) {
+      stats.push({
+        icon: <PlayArrowOutlinedIcon sx={{ fontSize: 18 }} />,
+        label: t`Start time`,
+        value: formatDateTimeToMinute(new Date(metrics.recordedStartAt)),
+        wrap: true,
       });
     }
   }

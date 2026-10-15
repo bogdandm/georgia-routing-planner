@@ -47,12 +47,10 @@ import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
-import {
-  formatTrackDuration,
-  type TrackStatsMetrics,
-} from '@/presentation/tracks/TrackSummary';
+import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
 import {
   formatTrackDistance,
+  formatTrackDuration,
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
 import {

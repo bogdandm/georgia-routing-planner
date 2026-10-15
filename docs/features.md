@@ -167,11 +167,13 @@ waterfalls, then huts, viewpoints, historic sites, shelters, places of worship, 
 settlements within 2 km, weighting each class by distance. Labels without an English or
 Latin name are romanized: Georgian as on road signs, without apostrophes and with `ყ` as
 `k` (`ყელიდა` → `Kelida`); Cyrillic by BGN/PCGN without diacritics or soft/hard-sign
-marks. Passes gain a `Pass` suffix and peaks an `Mt.` prefix when missing. A failed
-lookup is skipped, and a warning names the failed lookup and its reason, including
-HTTP 429. When source elevation is usable, Save keeps the source points as canonical and
-stores the calculated DEM projection separately; otherwise the DEM projection becomes
-the canonical elevation. The original file bytes are discarded after parsing.
+marks. Latin names write the national system's `q` as `k` unless `u` follows
+(`Qelitsadi Lake` → `Kelitsadi Lake`). Passes gain a `Pass` suffix and peaks an `Mt.`
+prefix when missing. A failed lookup is skipped, and a warning names the failed lookup
+and its reason, including HTTP 429. When source elevation is usable, Save keeps the
+source points as canonical and stores the calculated DEM projection separately;
+otherwise the DEM projection becomes the canonical elevation. The original file bytes
+are discarded after parsing.
 
 GPX import also reads bounded root `<wpt>` elements as track markers. Blank names become
 `Marker N`; invalid or excess waypoints are skipped with warnings and never count as
@@ -553,11 +555,12 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 
 The hiking basemap combines OpenFreeMap for hiking layers and OSM Shortbread for land,
 buildings, and streets; see [map providers](./map-providers.md). Labels prefer
-`name:en`, then `name:latin`, before native names; the client does not invent spellings.
-When satellite imagery is visible, vegetation and land-use fills are removed. Military
-areas show a red perimeter; the map does not claim to identify all private land. Passes
-are crosses, cliffs are brown GOST toothed lines pointing downhill, fords, huts,
-shelters, camp sites, drinking water, viewpoints, and guideposts have their own icons,
+`name:en`, then `name:latin`, before native names, and every label is romanized with the
+track-naming rules above, so map labels never show Georgian or Cyrillic script. When
+satellite imagery is visible, vegetation and land-use fills are removed. Military areas
+show a red perimeter; the map does not claim to identify all private land. Passes are
+crosses, cliffs are brown GOST toothed lines pointing downhill, fords, huts, shelters,
+camp sites, drinking water, viewpoints, and guideposts have their own icons,
 intermittent streams are dashed, and hotels and guest houses are not drawn. Invalid
 configuration prevents the map from mounting with a safe fatal message; a single
 vector-source failure is recoverable.

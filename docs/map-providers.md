@@ -57,11 +57,16 @@ generated on first use (`src/presentation/map/basemapSymbols.ts`).
 OpenMapTiles has no hiking-route relation layer, so the style shows physical ways
 (`path`, `track`, `footway`, `steps`, `bridleway`, `cycleway`) rather than official
 marked routes. Map labels are English-first in every UI language: `name:en`, then the
-provider-generated `name:latin`, then legacy fallbacks
-(`src/presentation/map/mapStyleFactory.ts`). Land-cover `ice` supplies glaciers and
-land-use `military` supplies restricted areas; the schema has no dependable
-access/ownership field, so private-property closures are not inferred. New source-layer
-families must get a Layers control in the same change as their style.
+provider-generated `name:latin`, then legacy fallbacks. The chosen label is romanized in
+the style expression with the same rules as track names, so native-only Georgian or
+Cyrillic names never appear and the national-system `q` of English names is written `k`
+(`src/presentation/map/mapStyleFactory.ts`). MapLibre expressions have no string
+replacement, so the expression maps each of the first 40 characters separately; longer
+labels are shown as published, and the expression adds roughly 50 KB per label layer to
+the style. Land-cover `ice` supplies glaciers and land-use `military` supplies
+restricted areas; the schema has no dependable access/ownership field, so
+private-property closures are not inferred. New source-layer families must get a Layers
+control in the same change as their style.
 
 Lodging is limited to `alpine_hut` and `wilderness_hut`; hotels and guest houses are not
 drawn. Cliffs follow the OSM convention that the lower side lies to the right of the

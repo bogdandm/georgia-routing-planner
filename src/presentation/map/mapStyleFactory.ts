@@ -15,16 +15,123 @@ import {
   satelliteBasemapLayerIds,
 } from '@/presentation/map/mapIds';
 import {
+  cyrillicIotatingPredecessors,
+  cyrillicLatin,
+  georgianLatin,
+  georgianMkhedruliStart,
+} from '@/domain/tracks/trackNaming';
+import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
 
+/** Longer labels are shown unchanged: the expression romanizes one position at a time. */
+const romanizedLabelMaximumLength = 40;
+
+/** Romanized output for each lower-case Georgian and Cyrillic letter, grouped by output. */
+const romanizationMatchArguments: readonly (string | string[])[] = (() => {
+  const lettersByLatin = new Map<string, string[]>();
+  const add = (letter: string, latin: string) => {
+    lettersByLatin.set(latin, [...(lettersByLatin.get(latin) ?? []), letter]);
+  };
+  georgianLatin.forEach((latin, index) => {
+    add(String.fromCharCode(georgianMkhedruliStart + index), latin);
+  });
+  for (const [letter, latin] of Object.entries(cyrillicLatin)) add(letter, latin);
+  return [...lettersByLatin].flatMap(([latin, letters]) => [letters, latin]);
+})();
+
+/**
+ * Mirrors `romanizePlaceLabel` for the character at `index` of the `label` variable.
+ * MapLibre expressions have no string replacement, so each position is matched alone.
+ * A character is a letter exactly when it has distinct cases, which also holds for
+ * Georgian (Mkhedruli/Mtavruli) and Cyrillic.
+ */
+function romanizedCharacterExpression(index: number): ExpressionSpecification {
+  const label: ExpressionSpecification = ['var', 'label'];
+  const character: ExpressionSpecification = ['var', 'character'];
+  const lower: ExpressionSpecification = ['var', 'lower'];
+  const latin: ExpressionSpecification = ['var', 'latin'];
+  const previous: ExpressionSpecification = ['slice', label, index - 1, index];
+  const atWordStart: ExpressionSpecification | boolean = index === 0 || [
+    '==',
+    ['downcase', previous],
+    ['upcase', previous],
+  ];
+  const iotated: ExpressionSpecification | boolean = index === 0 || [
+    'any',
+    atWordStart,
+    ['in', ['downcase', previous], cyrillicIotatingPredecessors],
+  ];
+  const followedByU: ExpressionSpecification = [
+    '==',
+    ['downcase', ['slice', label, index + 1, index + 2]],
+    'u',
+  ];
+  return [
+    'let',
+    'character',
+    ['slice', label, index, index + 1],
+    [
+      'let',
+      'lower',
+      ['downcase', character],
+      [
+        'let',
+        'latin',
+        [
+          'match',
+          lower,
+          ['е', 'ё'],
+          ['case', iotated, 'ye', 'e'],
+          'q',
+          ['case', followedByU, 'q', 'k'],
+          ...romanizationMatchArguments,
+          character,
+        ],
+        [
+          'case',
+          [
+            'case',
+            ['all', ['>=', lower, 'ა'], ['<=', lower, 'ჿ']],
+            atWordStart,
+            ['!=', character, lower],
+          ],
+          ['concat', ['upcase', ['slice', latin, 0, 1]], ['slice', latin, 1]],
+          latin,
+        ],
+      ],
+    ],
+  ];
+}
+
+/**
+ * English name first, then the provider transliteration, then the native name; the
+ * result is romanized like track names (Georgian road-sign style, BGN/PCGN Cyrillic,
+ * national-system `q` as `k`) so the map never shows Georgian or Cyrillic script.
+ */
 export const englishFirstLabelExpression: ExpressionSpecification = [
-  'coalesce',
-  ['get', 'name:en'],
-  ['get', 'name:latin'],
-  ['get', 'name_en'],
-  ['get', 'name'],
+  'let',
+  'label',
+  [
+    'coalesce',
+    ['get', 'name:en'],
+    ['get', 'name:latin'],
+    ['get', 'name_en'],
+    ['get', 'name'],
+    '',
+  ],
+  [
+    'case',
+    ['<=', ['length', ['var', 'label']], romanizedLabelMaximumLength],
+    [
+      'concat',
+      ...Array.from({ length: romanizedLabelMaximumLength }, (_, index) =>
+        romanizedCharacterExpression(index),
+      ),
+    ],
+    ['var', 'label'],
+  ],
 ];
 
 const labelLayout: NonNullable<SymbolLayerSpecification['layout']> = {

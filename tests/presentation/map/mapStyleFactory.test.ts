@@ -1,5 +1,11 @@
+import {
+  createExpression,
+  featureFilter,
+  validateStyleMin,
+} from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 
+import { romanizePlaceLabel } from '@/domain/tracks/trackNaming';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
@@ -23,6 +29,10 @@ const configuration = parseMapProviderConfiguration(
 );
 
 describe('createHikingMapStyle', () => {
+  it('passes the MapLibre style specification validator', () => {
+    expect(validateStyleMin(createHikingMapStyle(configuration))).toEqual([]);
+  });
+
   it('maps the provider schema into a deterministic hiking-focused layer order', () => {
     const style = createHikingMapStyle(configuration);
     const layerIds = style.layers.map((layer) => layer.id);
@@ -333,14 +343,32 @@ describe('createHikingMapStyle', () => {
     expect(restricted).toHaveProperty('filter', ['==', ['get', 'class'], 'military']);
   });
 
-  it('prefers English, then provider transliteration, before a native name', () => {
-    expect(englishFirstLabelExpression).toEqual([
-      'coalesce',
-      ['get', 'name:en'],
-      ['get', 'name:latin'],
-      ['get', 'name_en'],
-      ['get', 'name'],
-    ]);
+  it('labels English first and romanizes native names like track names', () => {
+    const parsed = createExpression(englishFirstLabelExpression, 'text-field');
+    if (parsed.result !== 'success') throw new Error(JSON.stringify(parsed.value));
+    const label = (properties: Record<string, string>) =>
+      parsed.value.evaluate({ zoom: 14 }, { type: 'Point', properties }) as string;
+
+    expect(label({ 'name:en': 'Keli Pass', name: 'Кельский' })).toBe('Keli Pass');
+    expect(label({ 'name:en': 'Qelitsadi Lake', name: 'ყელიცადის ტბა' })).toBe(
+      'Kelitsadi Lake',
+    );
+    expect(label({ 'name:en': 'Mosque Square' })).toBe('Mosque Square');
+    for (const nativeName of [
+      'ესის უღელტეხილი',
+      'ჭაუხის ორმაგი უღელტეხილი',
+      '\u1C9B\u1C94\u1CA1\u1CA2\u1C98\u1C90',
+      'Верхние ночевки',
+      'Ёлка',
+      'Хъелы хох',
+      'სტეფანწმინდა — გველეთი',
+    ]) {
+      expect(label({ name_en: nativeName, name: nativeName })).toBe(
+        romanizePlaceLabel(nativeName),
+      );
+    }
+    expect(label({})).toBe('');
+
     const style = createHikingMapStyle(configuration);
     for (const layerId of [
       mapLayerIds.hikingPoiLabels,
@@ -456,10 +484,20 @@ describe('createHikingMapStyle', () => {
       filter: ['==', ['get', 'brunnel'], 'ford'],
       layout: { 'icon-image': basemapImageIds.ford },
     });
-    const poiFilter = JSON.stringify(layer(mapLayerIds.hikingPois)?.filter);
-    expect(poiFilter).toContain('"alpine_hut"');
-    expect(poiFilter).toContain('"drinking_water"');
-    expect(poiFilter).not.toContain('"lodging"');
+    const pois = layer(mapLayerIds.hikingPois);
+    const poiFilter = featureFilter(
+      pois && 'filter' in pois ? pois.filter : undefined,
+      'filter',
+    );
+    const showsPoi = (properties: Record<string, string>) =>
+      poiFilter.filter({ zoom: 14 }, { type: 1, properties });
+    expect(showsPoi({ class: 'lodging', subclass: 'alpine_hut' })).toBe(true);
+    expect(showsPoi({ class: 'drinking_water', subclass: 'drinking_water' })).toBe(
+      true,
+    );
+    expect(showsPoi({ class: 'information', subclass: 'guidepost' })).toBe(true);
+    expect(showsPoi({ class: 'lodging', subclass: 'hotel' })).toBe(false);
+    expect(showsPoi({ class: 'lodging', subclass: 'guest_house' })).toBe(false);
   });
 
   it('keeps labels readable across nearby and distant map detail', () => {

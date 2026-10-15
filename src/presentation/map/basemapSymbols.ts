@@ -57,9 +57,9 @@ const aerialwayPattern = {
 } as const satisfies PatternGeometry;
 
 /**
- * GOST swamp (болото): thin horizontal blue dashes on plain land. Dash lengths and gaps
- * vary along each row from a fixed seed, and the pattern spans several rows, so the
- * tiled hatch reads as hand-drawn rather than as a regular grid.
+ * GOST swamp (болото): thin horizontal blue dashes on plain land. Dash lengths, gaps,
+ * and heights vary from a fixed seed, and the pattern spans several rows, so the tiled
+ * hatch reads as hand-drawn rather than as a regular grid.
  */
 const wetlandPattern: PatternGeometry = (() => {
   const widthCss = 64;
@@ -74,12 +74,14 @@ const wetlandPattern: PatternGeometry = (() => {
   };
   const rectangles: Rectangle[] = [];
   for (let row = 0; row < rowCount; row += 1) {
-    const top = row * rowSpacingCss + 3.2;
+    const rowTop = row * rowSpacingCss + 3.2;
     let left = 1 + random() * 10;
     for (;;) {
       const right = left + 4 + random() * 7;
       // Dashes never cross the seam, so the gap there stays within the row's rhythm.
       if (right > widthCss - 1) break;
+      // Up to ±1.5 px off the row line keeps neighbouring rows apart.
+      const top = rowTop + (random() - 0.5) * 3;
       rectangles.push([left, top, right, top + strokeCss]);
       left = right + 4 + random() * 6;
     }

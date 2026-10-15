@@ -549,6 +549,24 @@ describe('createHikingMapStyle', () => {
     expect(signFor(mapLayerIds.cemeteries, { kind: 'grave_yard' })).toBe(
       basemapImageIds.cemeteryPattern,
     );
+
+    const detailFill = style.layers.find(
+      (candidate) => candidate.id === mapLayerIds.landcoverDetails,
+    );
+    if (detailFill?.type !== 'fill') throw new Error('Missing detail fill layer');
+    const fillFor = (kind: string) => {
+      const feature = { type: 3 as const, properties: { kind } };
+      if (!featureFilter(detailFill.filter, 'filter').filter({ zoom: 14 }, feature)) {
+        return null;
+      }
+      const color = createExpression(detailFill.paint?.['fill-color'], 'fill-color');
+      if (color.result !== 'success') throw new Error(JSON.stringify(color.value));
+      return String(color.value.evaluate({ zoom: 14 }, feature));
+    };
+    // Shortbread-only areas get the fill their signs belong to; swamps stay plain land.
+    expect(fillFor('forest')).toBe(mapVisualPalette.vegetation.forest);
+    expect(fillFor('vineyard')).toBe(mapVisualPalette.vegetation.farmland);
+    expect(fillFor('bog')).toBeNull();
   });
 
   it('keeps labels readable across nearby and distant map detail', () => {

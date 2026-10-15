@@ -209,6 +209,7 @@ function isSatelliteBasemapSourceId(
 const openStreetMapOpacityProperties = {
   [mapLayerIds.landcover]: ['fill-opacity'],
   [mapLayerIds.glacierAreas]: ['fill-opacity'],
+  [mapLayerIds.landcoverDetails]: ['fill-opacity'],
   [mapLayerIds.landcoverPatterns]: ['fill-opacity'],
   [mapLayerIds.landcoverPatternDetails]: ['fill-opacity'],
   [mapLayerIds.cemeteries]: ['fill-opacity'],
@@ -408,6 +409,7 @@ const logicalNativeLayerGroups: Readonly<
   'natural-features': [
     mapLayerIds.landcover,
     mapLayerIds.glacierAreas,
+    mapLayerIds.landcoverDetails,
     mapLayerIds.landcoverPatterns,
     mapLayerIds.landcoverPatternDetails,
     mapLayerIds.waterways,

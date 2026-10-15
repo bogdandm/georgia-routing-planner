@@ -45,7 +45,7 @@ msgid "{otherResultCount, plural, one {Show # other result} other {Show # other 
 msgstr "{otherResultCount, plural, one {Показать ещё # результат} few {Показать ещё # результата} many {Показать ещё # результатов} other {Показать ещё # результата}}"
 
 #. js-lingui-id: BTrkRg
-#: src/presentation/shell/OnboardingTour.tsx:741
+#: src/presentation/shell/OnboardingTour.tsx:748
 msgid "{position} of {total}"
 msgstr "{position} из {total}"
 
@@ -85,7 +85,7 @@ msgid "A saved track has a menu to rename it, download KML, share a public link,
 msgstr "У сохранённого трека есть меню: переименовать, скачать KML, поделиться публичной ссылкой или удалить."
 
 #. js-lingui-id: 4YPTTQ
-#: src/presentation/shell/OnboardingTour.tsx:748
+#: src/presentation/shell/OnboardingTour.tsx:755
 msgid "A short tour of controls that are easy to miss. Each step shows one section."
 msgstr "Короткий тур по элементам, которые легко не заметить. Каждый шаг показывает один раздел."
 
@@ -151,7 +151,7 @@ msgid "Areas"
 msgstr "Площади"
 
 #. js-lingui-id: iH8pgl
-#: src/presentation/shell/OnboardingTour.tsx:773
+#: src/presentation/shell/OnboardingTour.tsx:780
 msgid "Back"
 msgstr "Назад"
 
@@ -303,7 +303,7 @@ msgid "Developer diagnostics"
 msgstr "Диагностика для разработчиков"
 
 #. js-lingui-id: DPfwMq
-#: src/presentation/shell/OnboardingTour.tsx:786
+#: src/presentation/shell/OnboardingTour.tsx:793
 #: src/presentation/shell/SettingsDialog.tsx:184
 msgid "Done"
 msgstr "Готово"
@@ -565,7 +565,7 @@ msgid "Map is unavailable"
 msgstr "Карта недоступна"
 
 #. js-lingui-id: 1W80Gh
-#: src/presentation/shell/OnboardingMapLegend.tsx:415
+#: src/presentation/shell/OnboardingMapLegend.tsx:419
 msgid "Map legend"
 msgstr "Условные обозначения"
 
@@ -684,7 +684,7 @@ msgid "New marker"
 msgstr "Новая метка"
 
 #. js-lingui-id: hXzOVo
-#: src/presentation/shell/OnboardingTour.tsx:786
+#: src/presentation/shell/OnboardingTour.tsx:793
 msgid "Next"
 msgstr "Далее"
 
@@ -742,6 +742,11 @@ msgstr "Сады, виноградники, посадки"
 #: src/presentation/shell/StorageUsagePanel.tsx:170
 msgid "Origin quota"
 msgstr "Квота хранилища сайта"
+
+#. js-lingui-id: XDdz5j
+#: src/presentation/shell/OnboardingMapLegend.tsx:187
+msgid "Other attraction"
+msgstr "Прочая достопримечательность"
 
 #. js-lingui-id: fnY81r
 #: src/presentation/shell/StorageUsagePanel.tsx:167
@@ -928,7 +933,7 @@ msgid "Ridge"
 msgstr "Хребет"
 
 #. js-lingui-id: W6xcp6
-#: src/presentation/shell/OnboardingTour.tsx:468
+#: src/presentation/shell/OnboardingTour.tsx:471
 msgid "Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point."
 msgstr "Нажмите на карту правой кнопкой мыши, чтобы скопировать координаты, добавить метку, узнать погоду или найти спутниковые снимки этой точки."
 
@@ -1181,7 +1186,7 @@ msgid "Shrubs and heath"
 msgstr "Кустарник и пустошь"
 
 #. js-lingui-id: 8QIxtq
-#: src/presentation/shell/OnboardingTour.tsx:764
+#: src/presentation/shell/OnboardingTour.tsx:771
 msgid "Skip tour"
 msgstr "Пропустить тур"
 

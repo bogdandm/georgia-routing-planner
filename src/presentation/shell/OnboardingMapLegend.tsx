@@ -183,6 +183,10 @@ const legendGroups: readonly {
         label: msg`Guidepost`,
         symbol: { kind: 'icon', image: basemapImageIds.guidepost },
       },
+      {
+        label: msg`Other attraction`,
+        symbol: { kind: 'icon', image: basemapImageIds.attraction },
+      },
     ],
   },
 ];
@@ -404,7 +408,7 @@ export function OnboardingMapLegend() {
       elevation={8}
       role="note"
       aria-labelledby={titleId}
-      sx={{ px: 2, py: 1.5, maxWidth: 'min(720px, calc(100vw - 48px))' }}
+      sx={{ px: 2, py: 1.5, flexShrink: 0, maxWidth: 'min(720px, calc(100vw - 48px))' }}
     >
       <Typography
         id={titleId}

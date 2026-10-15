@@ -732,6 +732,7 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.glacierAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterways)).toBe('none');
     expect(map.visibility.get(mapLayerIds.intermittentWaterways)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.landcoverDetails)).toBe('none');
     expect(map.visibility.get(mapLayerIds.landcoverPatterns)).toBe('none');
     expect(map.visibility.get(mapLayerIds.landcoverPatternDetails)).toBe('none');
     expect(map.visibility.get(mapLayerIds.ridges)).toBe('none');

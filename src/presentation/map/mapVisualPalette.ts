@@ -114,6 +114,7 @@ export const mapVisualModePaint = {
   vector: {
     [mapLayerIds.landcover]: { 'fill-opacity': 1 },
     [mapLayerIds.glacierAreas]: { 'fill-opacity': 1 },
+    [mapLayerIds.landcoverDetails]: { 'fill-opacity': 1 },
     [mapLayerIds.landcoverPatterns]: { 'fill-opacity': 1 },
     [mapLayerIds.landcoverPatternDetails]: { 'fill-opacity': 1 },
     [mapLayerIds.cemeteries]: { 'fill-opacity': 1 },
@@ -170,6 +171,7 @@ export const mapVisualModePaint = {
     [mapLayerIds.landcover]: { 'fill-opacity': 0 },
     [mapLayerIds.glacierAreas]: { 'fill-opacity': 0 },
     // Imagery already shows vegetation, swamps, and scree, so their signs are removed too.
+    [mapLayerIds.landcoverDetails]: { 'fill-opacity': 0 },
     [mapLayerIds.landcoverPatterns]: { 'fill-opacity': 0 },
     [mapLayerIds.landcoverPatternDetails]: { 'fill-opacity': 0 },
     [mapLayerIds.cemeteries]: { 'fill-opacity': 0 },

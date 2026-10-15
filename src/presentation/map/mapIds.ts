@@ -117,6 +117,7 @@ export const mapLayerIds = {
   background: 'basemap-background',
   landcover: 'basemap-landcover',
   glacierAreas: 'basemap-glacier-areas',
+  landcoverDetails: 'basemap-landcover-details',
   landcoverPatterns: 'basemap-landcover-patterns',
   landcoverPatternDetails: 'basemap-landcover-pattern-details',
   landuse: 'basemap-landuse',

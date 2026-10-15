@@ -45,7 +45,7 @@ msgid "{otherResultCount, plural, one {Show # other result} other {Show # other 
 msgstr "{otherResultCount, plural, one {Show # other result} other {Show # other results}}"
 
 #. js-lingui-id: BTrkRg
-#: src/presentation/shell/OnboardingTour.tsx:741
+#: src/presentation/shell/OnboardingTour.tsx:748
 msgid "{position} of {total}"
 msgstr "{position} of {total}"
 
@@ -85,7 +85,7 @@ msgid "A saved track has a menu to rename it, download KML, share a public link,
 msgstr "A saved track has a menu to rename it, download KML, share a public link, or delete it."
 
 #. js-lingui-id: 4YPTTQ
-#: src/presentation/shell/OnboardingTour.tsx:748
+#: src/presentation/shell/OnboardingTour.tsx:755
 msgid "A short tour of controls that are easy to miss. Each step shows one section."
 msgstr "A short tour of controls that are easy to miss. Each step shows one section."
 
@@ -151,7 +151,7 @@ msgid "Areas"
 msgstr "Areas"
 
 #. js-lingui-id: iH8pgl
-#: src/presentation/shell/OnboardingTour.tsx:773
+#: src/presentation/shell/OnboardingTour.tsx:780
 msgid "Back"
 msgstr "Back"
 
@@ -303,7 +303,7 @@ msgid "Developer diagnostics"
 msgstr "Developer diagnostics"
 
 #. js-lingui-id: DPfwMq
-#: src/presentation/shell/OnboardingTour.tsx:786
+#: src/presentation/shell/OnboardingTour.tsx:793
 #: src/presentation/shell/SettingsDialog.tsx:184
 msgid "Done"
 msgstr "Done"
@@ -565,7 +565,7 @@ msgid "Map is unavailable"
 msgstr "Map is unavailable"
 
 #. js-lingui-id: 1W80Gh
-#: src/presentation/shell/OnboardingMapLegend.tsx:415
+#: src/presentation/shell/OnboardingMapLegend.tsx:419
 msgid "Map legend"
 msgstr "Map legend"
 
@@ -684,7 +684,7 @@ msgid "New marker"
 msgstr "New marker"
 
 #. js-lingui-id: hXzOVo
-#: src/presentation/shell/OnboardingTour.tsx:786
+#: src/presentation/shell/OnboardingTour.tsx:793
 msgid "Next"
 msgstr "Next"
 
@@ -742,6 +742,11 @@ msgstr "Orchards, vineyards, plantings"
 #: src/presentation/shell/StorageUsagePanel.tsx:170
 msgid "Origin quota"
 msgstr "Origin quota"
+
+#. js-lingui-id: XDdz5j
+#: src/presentation/shell/OnboardingMapLegend.tsx:187
+msgid "Other attraction"
+msgstr "Other attraction"
 
 #. js-lingui-id: fnY81r
 #: src/presentation/shell/StorageUsagePanel.tsx:167
@@ -928,7 +933,7 @@ msgid "Ridge"
 msgstr "Ridge"
 
 #. js-lingui-id: W6xcp6
-#: src/presentation/shell/OnboardingTour.tsx:468
+#: src/presentation/shell/OnboardingTour.tsx:471
 msgid "Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point."
 msgstr "Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point."
 
@@ -1181,7 +1186,7 @@ msgid "Shrubs and heath"
 msgstr "Shrubs and heath"
 
 #. js-lingui-id: 8QIxtq
-#: src/presentation/shell/OnboardingTour.tsx:764
+#: src/presentation/shell/OnboardingTour.tsx:771
 msgid "Skip tour"
 msgstr "Skip tour"
 

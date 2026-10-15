@@ -268,6 +268,40 @@ function createBasemapLayers(
       },
     },
     {
+      // Fills Shortbread areas OpenMapTiles omits with the same colours, so their signs sit
+      // on the matching fill; swamps stay plain land, as GOST draws them.
+      id: mapLayerIds.landcoverDetails,
+      type: 'fill',
+      source: detailSource,
+      'source-layer': detailSourceLayers.land,
+      minzoom: 12,
+      filter: [
+        'in',
+        ['get', 'kind'],
+        [
+          'literal',
+          ['forest', 'cemetery', 'grave_yard', ...patternedLandcoverSubclasses],
+        ],
+      ],
+      paint: {
+        'fill-antialias': false,
+        'fill-color': [
+          'match',
+          ['get', 'kind'],
+          'forest',
+          mapVisualPalette.vegetation.forest,
+          ['scrub', 'shrubbery', 'heath'],
+          mapVisualPalette.vegetation.scrub,
+          ['orchard', 'vineyard', 'plant_nursery'],
+          mapVisualPalette.vegetation.farmland,
+          ['scree', 'shingle'],
+          mapVisualPalette.base.rock,
+          mapVisualPalette.vegetation.grass,
+        ],
+        ...mapVisualModePaint.vector[mapLayerIds.landcoverDetails],
+      },
+    },
+    {
       id: mapLayerIds.landcoverPatterns,
       type: 'fill',
       source,

@@ -383,6 +383,9 @@ const tourSteps: readonly TourStep[] = [
 /* eslint-enable lingui/no-unlocalized-strings */
 
 const spotlightPadding = 4;
+const tourCardBottom = 32;
+/** Space above the viewport bottom kept clear of overview content: the tour card and a gap. */
+const tourCardReservedHeight = tourCardBottom + 180;
 
 function visibleRect(selector: string): ViewportRect | null {
   for (const element of document.querySelectorAll(selector)) {
@@ -696,19 +699,23 @@ export function OnboardingTour({
           );
         })}
         {currentStep.id === 'overview' ? (
-          // The legend and the map hint share one centred column so they never overlap.
+          // The legend and the map hint share one centred column that ends above the tour
+          // card; on short viewports the column scrolls instead of running under the card.
           <Stack
             spacing={2}
             sx={{
               position: 'absolute',
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)',
+              top: 16,
+              left: 24,
+              right: 24,
+              bottom: tourCardReservedHeight,
               alignItems: 'center',
+              justifyContent: 'safe center',
+              overflowY: 'auto',
             }}
           >
             <OnboardingMapLegend />
-            <Box sx={{ maxWidth: 380 }}>
+            <Box sx={{ maxWidth: 380, flexShrink: 0 }}>
               <TourHintCard rows={mapContextMenuHintRows} />
             </Box>
           </Stack>
@@ -718,7 +725,7 @@ export function OnboardingTour({
           sx={{
             position: 'absolute',
             right: 24,
-            bottom: 32,
+            bottom: tourCardBottom,
             width: 380,
             maxWidth: 'calc(100% - 48px)',
             p: 2,

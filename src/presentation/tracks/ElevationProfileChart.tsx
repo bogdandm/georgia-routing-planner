@@ -680,7 +680,7 @@ export function ElevationProfileChart({
   }
 
   return (
-    <Stack spacing={1.5} data-tour="track-profile">
+    <Stack spacing={1.5} useFlexGap data-tour="track-profile">
       {showHeading ? (
         <Box sx={{ position: 'relative' }}>
           <Typography component="h3" variant="subtitle2">
@@ -797,7 +797,13 @@ export function ElevationProfileChart({
         </AreaChart>
       </Box>
       {showHeading && timeline !== null ? (
-        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+        // Pull the toggles up into the empty band under the x-axis labels, and end them
+        // at the plot's right border: the chart box extends 8px past the content edge
+        // (mx: -1) and reserves a 16px right margin.
+        <Stack
+          direction="row"
+          sx={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1, mt: -2.5, pr: 1 }}
+        >
           <ToggleButtonGroup
             exclusive
             size="small"

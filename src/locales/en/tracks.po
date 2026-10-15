@@ -430,7 +430,7 @@ msgstr "Discard this unsaved track?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/ElevationProfileChart.tsx:827
+#: src/presentation/tracks/ElevationProfileChart.tsx:833
 #: src/presentation/tracks/TrackSummary.tsx:127
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
@@ -490,7 +490,7 @@ msgstr "Edit folder"
 #. js-lingui-id: fkcYqc
 #: src/presentation/tracks/ElevationProfileChart.tsx:477
 #: src/presentation/tracks/ElevationProfileChart.tsx:564
-#: src/presentation/tracks/ElevationProfileChart.tsx:811
+#: src/presentation/tracks/ElevationProfileChart.tsx:817
 msgid "Elevation"
 msgstr "Elevation"
 
@@ -922,12 +922,12 @@ msgid "Press space to pick up an item. Use arrow keys to move it. Press space to
 msgstr "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 
 #. js-lingui-id: 6aaeK-
-#: src/presentation/tracks/ElevationProfileChart.tsx:820
+#: src/presentation/tracks/ElevationProfileChart.tsx:826
 msgid "Profile axis"
 msgstr "Profile axis"
 
 #. js-lingui-id: 5YLSIO
-#: src/presentation/tracks/ElevationProfileChart.tsx:804
+#: src/presentation/tracks/ElevationProfileChart.tsx:810
 msgid "Profile value"
 msgstr "Profile value"
 
@@ -1164,7 +1164,7 @@ msgstr "Sort: {currentSortLabel}"
 
 #. js-lingui-id: l9wI00
 #: src/presentation/tracks/ElevationProfileChart.tsx:477
-#: src/presentation/tracks/ElevationProfileChart.tsx:814
+#: src/presentation/tracks/ElevationProfileChart.tsx:820
 msgid "Speed"
 msgstr "Speed"
 
@@ -1361,7 +1361,7 @@ msgid "This track link is invalid."
 msgstr "This track link is invalid."
 
 #. js-lingui-id: LhMjLm
-#: src/presentation/tracks/ElevationProfileChart.tsx:830
+#: src/presentation/tracks/ElevationProfileChart.tsx:836
 msgid "Time"
 msgstr "Time"
 

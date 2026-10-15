@@ -209,8 +209,9 @@ function isSatelliteBasemapSourceId(
 const openStreetMapOpacityProperties = {
   [mapLayerIds.landcover]: ['fill-opacity'],
   [mapLayerIds.glacierAreas]: ['fill-opacity'],
-  [mapLayerIds.wetlands]: ['fill-opacity'],
-  [mapLayerIds.wetlandDetails]: ['fill-opacity'],
+  [mapLayerIds.landcoverPatterns]: ['fill-opacity'],
+  [mapLayerIds.landcoverPatternDetails]: ['fill-opacity'],
+  [mapLayerIds.cemeteries]: ['fill-opacity'],
   [mapLayerIds.landuse]: ['fill-opacity'],
   [mapLayerIds.brownfieldAreas]: ['fill-opacity'],
   [mapLayerIds.buildings]: ['fill-opacity'],
@@ -407,8 +408,8 @@ const logicalNativeLayerGroups: Readonly<
   'natural-features': [
     mapLayerIds.landcover,
     mapLayerIds.glacierAreas,
-    mapLayerIds.wetlands,
-    mapLayerIds.wetlandDetails,
+    mapLayerIds.landcoverPatterns,
+    mapLayerIds.landcoverPatternDetails,
     mapLayerIds.waterways,
     mapLayerIds.intermittentWaterways,
     mapLayerIds.ridges,
@@ -419,7 +420,11 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.ridgeLabels,
   ],
   'restricted-areas': [mapLayerIds.restrictedAreas],
-  'detail-context': [mapLayerIds.brownfieldAreas, mapLayerIds.buildings],
+  'detail-context': [
+    mapLayerIds.brownfieldAreas,
+    mapLayerIds.cemeteries,
+    mapLayerIds.buildings,
+  ],
   'hiking-paths': [
     mapLayerIds.hikingPaths,
     mapLayerIds.hikingPathDetails,

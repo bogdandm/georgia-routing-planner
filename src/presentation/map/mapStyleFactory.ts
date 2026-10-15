@@ -25,6 +25,18 @@ import {
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
 
+/** Land-cover kinds with a GOST sign; both providers use these OSM values. */
+const patternedLandcoverSubclasses = [
+  'scrub',
+  'shrubbery',
+  'heath',
+  'orchard',
+  'vineyard',
+  'plant_nursery',
+  'scree',
+  'shingle',
+];
+
 /** Longer labels are shown unchanged: the expression romanizes one position at a time. */
 const romanizedLabelMaximumLength = 40;
 
@@ -256,17 +268,41 @@ function createBasemapLayers(
       },
     },
     {
-      id: mapLayerIds.wetlands,
+      id: mapLayerIds.landcoverPatterns,
       type: 'fill',
       source,
       'source-layer': sourceLayers.landcover,
-      filter: ['==', ['get', 'class'], 'wetland'],
-      paint: { 'fill-pattern': basemapImageIds.wetlandPattern },
+      minzoom: 10,
+      filter: [
+        'any',
+        ['in', ['get', 'class'], ['literal', ['wetland', 'wood']]],
+        ['in', ['get', 'subclass'], ['literal', patternedLandcoverSubclasses]],
+      ],
+      paint: {
+        'fill-pattern': [
+          'match',
+          ['get', 'subclass'],
+          ['scrub', 'shrubbery', 'heath'],
+          basemapImageIds.scrubPattern,
+          ['orchard', 'vineyard', 'plant_nursery'],
+          basemapImageIds.plantationPattern,
+          ['scree', 'shingle'],
+          basemapImageIds.screePattern,
+          [
+            'match',
+            ['get', 'class'],
+            'wetland',
+            basemapImageIds.wetlandPattern,
+            basemapImageIds.forestPattern,
+          ],
+        ],
+        ...mapVisualModePaint.vector[mapLayerIds.landcoverPatterns],
+      },
     },
     {
-      // Shortbread adds small bogs and wet meadows that OpenMapTiles omits; both hatches
-      // share the tile pattern grid, so overlapping areas look like one.
-      id: mapLayerIds.wetlandDetails,
+      // Shortbread adds small bogs, orchards, and scree that OpenMapTiles omits; both
+      // layers share the tile pattern grid, so overlapping areas look like one.
+      id: mapLayerIds.landcoverPatternDetails,
       type: 'fill',
       source: detailSource,
       'source-layer': detailSourceLayers.land,
@@ -274,9 +310,36 @@ function createBasemapLayers(
       filter: [
         'in',
         ['get', 'kind'],
-        ['literal', ['bog', 'string_bog', 'marsh', 'swamp', 'reedbed', 'wet_meadow']],
+        [
+          'literal',
+          [
+            'bog',
+            'string_bog',
+            'marsh',
+            'swamp',
+            'reedbed',
+            'wet_meadow',
+            'forest',
+            ...patternedLandcoverSubclasses,
+          ],
+        ],
       ],
-      paint: { 'fill-pattern': basemapImageIds.wetlandPattern },
+      paint: {
+        'fill-pattern': [
+          'match',
+          ['get', 'kind'],
+          ['scrub', 'shrubbery', 'heath'],
+          basemapImageIds.scrubPattern,
+          ['orchard', 'vineyard', 'plant_nursery'],
+          basemapImageIds.plantationPattern,
+          ['scree', 'shingle'],
+          basemapImageIds.screePattern,
+          'forest',
+          basemapImageIds.forestPattern,
+          basemapImageIds.wetlandPattern,
+        ],
+        ...mapVisualModePaint.vector[mapLayerIds.landcoverPatternDetails],
+      },
     },
     {
       id: mapLayerIds.landuse,
@@ -304,6 +367,18 @@ function createBasemapLayers(
           mapVisualPalette.base.land,
         ],
         ...mapVisualModePaint.vector[mapLayerIds.landuse],
+      },
+    },
+    {
+      id: mapLayerIds.cemeteries,
+      type: 'fill',
+      source: detailSource,
+      'source-layer': detailSourceLayers.land,
+      minzoom: 12,
+      filter: ['in', ['get', 'kind'], ['literal', ['cemetery', 'grave_yard']]],
+      paint: {
+        'fill-pattern': basemapImageIds.cemeteryPattern,
+        ...mapVisualModePaint.vector[mapLayerIds.cemeteries],
       },
     },
     {

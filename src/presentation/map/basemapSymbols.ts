@@ -29,6 +29,10 @@ export interface BasemapImage {
 type Rgb = readonly [red: number, green: number, blue: number];
 /** Axis-aligned rectangle in CSS pixels. */
 type Rectangle = readonly [left: number, top: number, right: number, bottom: number];
+/** Filled circle in CSS pixels. */
+type Disc = readonly [x: number, y: number, radius: number];
+/** Circle outline in CSS pixels; `width` is centred on `radius`. */
+type Ring = readonly [x: number, y: number, radius: number, width: number];
 
 const white: Rgb = [255, 255, 255];
 
@@ -56,6 +60,15 @@ const aerialwayPattern = {
   ],
 } as const satisfies PatternGeometry;
 
+/** Park–Miller generator: products stay below 2^53, so every load draws the same pattern. */
+function seededRandom(seed: number): () => number {
+  let state = seed;
+  return () => {
+    state = (state * 48_271) % 2_147_483_647;
+    return state / 2_147_483_647;
+  };
+}
+
 /**
  * GOST swamp (болото): thin horizontal blue dashes on plain land. Dash lengths, gaps,
  * and heights vary from a fixed seed, and the pattern spans several rows, so the tiled
@@ -66,12 +79,7 @@ const wetlandPattern: PatternGeometry = (() => {
   const rowSpacingCss = 8;
   const rowCount = 8;
   const strokeCss = 0.6;
-  let seed = 7;
-  // Park–Miller generator; products stay below 2^53, so every load draws the same hatch.
-  const random = () => {
-    seed = (seed * 48_271) % 2_147_483_647;
-    return seed / 2_147_483_647;
-  };
+  const random = seededRandom(7);
   const rectangles: Rectangle[] = [];
   for (let row = 0; row < rowCount; row += 1) {
     const rowTop = row * rowSpacingCss + 3.2;
@@ -89,10 +97,114 @@ const wetlandPattern: PatternGeometry = (() => {
   return { widthCss, heightCss: rowCount * rowSpacingCss, rectangles };
 })();
 
+/**
+ * Calls `place` once per square cell of a `cellCount × cellCount` grid with a random
+ * point inside the cell, keeping `margin` from the cell edges so signs never cross the
+ * pattern seam. Skipping some cells and jittering the rest avoids a visible grid.
+ */
+function scatterInCells(
+  cellCss: number,
+  cellCount: number,
+  margin: number,
+  random: () => number,
+  place: (x: number, y: number) => void,
+): void {
+  for (let row = 0; row < cellCount; row += 1) {
+    for (let column = 0; column < cellCount; column += 1) {
+      if (random() < 0.35) continue;
+      place(
+        column * cellCss + margin + random() * (cellCss - 2 * margin),
+        row * cellCss + margin + random() * (cellCss - 2 * margin),
+      );
+    }
+  }
+}
+
+/** GOST forest (лес) without tree type: sparse crowns on short stems. */
+const forestPattern: PatternGeometry = (() => {
+  const cellCss = 40;
+  const cellCount = 4;
+  const random = seededRandom(11);
+  const rectangles: Rectangle[] = [];
+  const rings: Ring[] = [];
+  scatterInCells(cellCss, cellCount, 3.5, random, (x, y) => {
+    rings.push([x, y - 1, 1.7, 0.7]);
+    rectangles.push([x - 0.35, y + 0.7, x + 0.35, y + 2.6]);
+  });
+  return {
+    widthCss: cellCss * cellCount,
+    heightCss: cellCss * cellCount,
+    rectangles,
+    rings,
+  };
+})();
+
+/** GOST shrubs (кустарник): scattered clumps of three small dots. */
+const scrubPattern: PatternGeometry = (() => {
+  const cellCss = 30;
+  const cellCount = 4;
+  const random = seededRandom(13);
+  const discs: Disc[] = [];
+  scatterInCells(cellCss, cellCount, 3, random, (x, y) => {
+    discs.push([x - 1.1, y + 0.6, 0.8], [x + 1.1, y + 0.6, 0.8], [x, y - 1.1, 0.8]);
+  });
+  return {
+    widthCss: cellCss * cellCount,
+    heightCss: cellCss * cellCount,
+    rectangles: [],
+    discs,
+  };
+})();
+
+/**
+ * GOST orchard (сад) for every planted crop: small circles in straight rows, so orchards,
+ * vineyards, and nurseries read as man-made plantings.
+ */
+const plantationPattern: PatternGeometry = {
+  widthCss: 14,
+  heightCss: 14,
+  rectangles: [],
+  rings: [[7, 7, 1.3, 0.6]],
+};
+
+/** GOST scree (осыпь): scattered dots of different sizes. */
+const screePattern: PatternGeometry = (() => {
+  const cellCss = 11;
+  const cellCount = 8;
+  const random = seededRandom(17);
+  const discs: Disc[] = [];
+  scatterInCells(cellCss, cellCount, 1.2, random, (x, y) => {
+    discs.push([x, y, 0.35 + random() * 0.45]);
+  });
+  return {
+    widthCss: cellCss * cellCount,
+    heightCss: cellCss * cellCount,
+    rectangles: [],
+    discs,
+  };
+})();
+
+/** GOST cemetery (кладбище): small scattered crosses. */
+const cemeteryPattern: PatternGeometry = (() => {
+  const cellCss = 14;
+  const cellCount = 4;
+  const random = seededRandom(19);
+  const rectangles: Rectangle[] = [];
+  scatterInCells(cellCss, cellCount, 2.5, random, (x, y) => {
+    rectangles.push(
+      [x - 0.35, y - 2, x + 0.35, y + 2],
+      [x - 1.2, y - 1, x + 1.2, y - 0.3],
+    );
+  });
+  return { widthCss: cellCss * cellCount, heightCss: cellCss * cellCount, rectangles };
+})();
+
 interface PatternGeometry {
   readonly widthCss: number;
   readonly heightCss: number;
   readonly rectangles: readonly Rectangle[];
+  readonly discs?: readonly Disc[];
+  readonly rings?: readonly Ring[];
 }
 
 const pinheadIcons: Readonly<
@@ -139,35 +251,60 @@ const pinheadIcons: Readonly<
   },
 };
 
+const patterns: Readonly<
+  Record<string, { readonly geometry: PatternGeometry; readonly color: string }>
+> = {
+  [basemapImageIds.cliffPattern]: {
+    geometry: cliffPattern,
+    color: mapVisualPalette.terrain.cliff,
+  },
+  [basemapImageIds.aerialwayPattern]: {
+    geometry: aerialwayPattern,
+    color: mapVisualPalette.transport.aerialway,
+  },
+  [basemapImageIds.wetlandPattern]: {
+    geometry: wetlandPattern,
+    color: mapVisualPalette.water.wetland,
+  },
+  [basemapImageIds.forestPattern]: {
+    geometry: forestPattern,
+    color: mapVisualPalette.vegetation.sign,
+  },
+  [basemapImageIds.scrubPattern]: {
+    geometry: scrubPattern,
+    color: mapVisualPalette.vegetation.sign,
+  },
+  [basemapImageIds.plantationPattern]: {
+    geometry: plantationPattern,
+    color: mapVisualPalette.vegetation.sign,
+  },
+  [basemapImageIds.screePattern]: {
+    geometry: screePattern,
+    color: mapVisualPalette.terrain.scree,
+  },
+  [basemapImageIds.cemeteryPattern]: {
+    geometry: cemeteryPattern,
+    color: mapVisualPalette.base.cemeterySign,
+  },
+};
+
 /**
  * Creates the image for a basemap icon or pattern ID, or returns null for IDs the
  * basemap does not own. Pinhead icons get a white halo so they stay legible on imagery.
  */
 export function createBasemapImage(imageId: string): Promise<BasemapImage> | null {
-  switch (imageId) {
-    case basemapImageIds.cliffPattern:
-      return Promise.resolve(
-        rasterImage(
-          rasterizePattern(cliffPattern, hexRgb(mapVisualPalette.terrain.cliff)),
-        ),
-      );
-    case basemapImageIds.aerialwayPattern:
-      return Promise.resolve(
-        rasterImage(
-          rasterizePattern(
-            aerialwayPattern,
-            hexRgb(mapVisualPalette.transport.aerialway),
-          ),
-        ),
-      );
-    case basemapImageIds.wetlandPattern:
-      return Promise.resolve(
-        rasterImage(
-          rasterizePattern(wetlandPattern, hexRgb(mapVisualPalette.water.wetland)),
-        ),
-      );
-    case basemapImageIds.attraction:
-      return Promise.resolve(rasterImage(rasterizeAttractionDot()));
+  const pattern = patterns[imageId];
+  if (pattern !== undefined) {
+    return Promise.resolve({
+      image: rasterizePattern(pattern.geometry, hexRgb(pattern.color)),
+      pixelRatio: basemapImagePixelRatio,
+    });
+  }
+  if (imageId === basemapImageIds.attraction) {
+    return Promise.resolve({
+      image: rasterizeAttractionDot(),
+      pixelRatio: basemapImagePixelRatio,
+    });
   }
   const icon = pinheadIcons[imageId];
   return icon === undefined ? null : pinheadImage(icon.svg, icon.color, icon.sizeCss);
@@ -190,18 +327,22 @@ async function pinheadImage(
   return { image, pixelRatio: basemapImagePixelRatio };
 }
 
-function rasterImage(image: RawRgbaImage): BasemapImage {
-  return { image, pixelRatio: basemapImagePixelRatio };
-}
-
 function rasterizePattern(geometry: PatternGeometry, color: Rgb): RawRgbaImage {
-  return rasterize(geometry.widthCss, geometry.heightCss, (x, y) =>
-    geometry.rectangles.some(
-      ([left, top, right, bottom]) => x >= left && x < right && y >= top && y < bottom,
-    )
-      ? color
-      : null,
-  );
+  return rasterize(geometry.widthCss, geometry.heightCss, (x, y) => {
+    const covered =
+      geometry.rectangles.some(
+        ([left, top, right, bottom]) =>
+          x >= left && x < right && y >= top && y < bottom,
+      ) ||
+      (geometry.discs ?? []).some(
+        ([centerX, centerY, radius]) => Math.hypot(x - centerX, y - centerY) <= radius,
+      ) ||
+      (geometry.rings ?? []).some(
+        ([centerX, centerY, radius, width]) =>
+          Math.abs(Math.hypot(x - centerX, y - centerY) - radius) <= width / 2,
+      );
+    return covered ? color : null;
+  });
 }
 
 /** The former POI circle: a 3 px dot with a 1 px white ring. */

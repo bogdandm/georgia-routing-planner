@@ -73,19 +73,26 @@ Lodging is limited to `alpine_hut` and `wilderness_hut`; hotels and guest houses
 drawn. Cliffs follow the OSM convention that the lower side lies to the right of the
 way, so the teeth point downhill as on Soviet GOST topographic maps. Neither source
 carries springs (`natural=spring`), waterfalls, trail difficulty, or path visibility,
-and both start paths and tracks at z12–13. Wetlands are a GOST blue dashed hatch over
-plain land: OpenFreeMap `landcover class = wetland` at every zoom plus Shortbread `land`
-bogs, marshes, swamps, reed beds, and wet meadows from z12, which OpenFreeMap omits when
-small. Neither source records whether a swamp is passable.
+and both start paths and tracks at z12–13.
+
+Land cover carries sparse GOST signs over its fill from z10: OpenFreeMap `landcover`
+everywhere plus Shortbread `land` from z12, which adds small areas OpenFreeMap omits.
+Swamps (bogs, marshes, reed beds, wet meadows) are irregular blue dashes on plain land,
+forest a generic crown-on-stem tree, scrub and heath three-dot clumps, scree and shingle
+scattered dots, and orchards, vineyards, and nurseries share one regular grid of circles
+that marks man-made plantings. Shortbread cemeteries and grave yards get small crosses
+from z12. Neither source records leaf type or whether a swamp is passable, so forest
+type and swamp passability are not drawn. Over imagery these signs are hidden with the
+vegetation fills.
 
 ## Detail vector: OSM Shortbread v1
 
 The OSM Foundation endpoint
 `https://vector.openstreetmap.org/shortbread_v1/tilejson.json` (z0–14, overzoomed above)
-is a second source, not a replacement. Shortbread supplies `land` (`kind = brownfield`
-and wetland kinds), unfiltered `buildings`, and `streets`; OpenFreeMap stays
-authoritative for peaks, saddles, ridges, POIs, water and place labels, glyphs, and
-z10–12 overview paths.
+is a second source, not a replacement. Shortbread supplies `land` (`kind = brownfield`,
+vegetation, wetland, scree, and cemetery kinds), unfiltered `buildings`, and `streets`;
+OpenFreeMap stays authoritative for peaks, saddles, ridges, POIs, water and place
+labels, glyphs, and z10–12 overview paths.
 
 Visible roads use Shortbread `motorway`, `trunk`, `primary`, `secondary`, `tertiary`,
 `unclassified`, `residential`, `living_street`, and `service`; from z13 it also supplies

@@ -117,9 +117,10 @@ export const mapLayerIds = {
   background: 'basemap-background',
   landcover: 'basemap-landcover',
   glacierAreas: 'basemap-glacier-areas',
-  wetlands: 'basemap-wetlands',
-  wetlandDetails: 'basemap-wetland-details',
+  landcoverPatterns: 'basemap-landcover-patterns',
+  landcoverPatternDetails: 'basemap-landcover-pattern-details',
   landuse: 'basemap-landuse',
+  cemeteries: 'basemap-cemeteries',
   brownfieldAreas: 'basemap-brownfield-areas',
   restrictedAreas: 'basemap-restricted-areas',
   parks: 'basemap-parks',
@@ -164,6 +165,11 @@ export const basemapImageIds = {
   cliffPattern: 'basemap-cliff-pattern',
   aerialwayPattern: 'basemap-aerialway-pattern',
   wetlandPattern: 'basemap-wetland-pattern',
+  forestPattern: 'basemap-forest-pattern',
+  scrubPattern: 'basemap-scrub-pattern',
+  plantationPattern: 'basemap-plantation-pattern',
+  screePattern: 'basemap-scree-pattern',
+  cemeteryPattern: 'basemap-cemetery-pattern',
 } as const;
 
 export const mapInsertionPoints = {

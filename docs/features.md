@@ -558,13 +558,15 @@ track-naming rules above, so map labels never show Georgian or Cyrillic script. 
 places whose native name is Georgian, the national-system `q` of an English name is
 written `k` unless `u` follows (`Qelitsadi Lake` → `Kelitsadi Lake`); track names keep
 the OSM English spelling. When satellite imagery is visible, vegetation and land-use
-fills are removed. Military areas show a red perimeter; the map does not claim to
-identify all private land. Passes are crosses, cliffs are brown GOST toothed lines
-pointing downhill, swamps are GOST blue dashed hatching (passability is not in the
-data), fords, huts, shelters, camp sites, drinking water, viewpoints, and guideposts
-have their own icons, intermittent streams are dashed, and hotels and guest houses are
-not drawn. Invalid configuration prevents the map from mounting with a safe fatal
-message; a single vector-source failure is recoverable.
+fills and their signs are removed. Military areas show a red perimeter; the map does not
+claim to identify all private land. Passes are crosses, cliffs are brown GOST toothed
+lines pointing downhill, and land cover carries sparse GOST signs: blue dashes for
+swamps, trees for forest (type is not in the data), dot clumps for scrub, dots for
+scree, crosses for cemeteries, and one regular circle grid for every planting (orchards,
+vineyards, nurseries). Fords, huts, shelters, camp sites, drinking water, viewpoints,
+and guideposts have their own icons, intermittent streams are dashed, and hotels and
+guest houses are not drawn. Invalid configuration prevents the map from mounting with a
+safe fatal message; a single vector-source failure is recoverable.
 
 Relief shading, 3D terrain, and client-generated contours (labeled 200 m index lines,
 minor spacing 20–100 m, default 50 m) use the Mapterhorn DEM as published, without

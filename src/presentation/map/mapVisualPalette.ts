@@ -18,6 +18,7 @@ export const mapVisualPalette = {
     rock: '#CBCAC5',
     sand: '#E5D6B3',
     ice: '#F1F1EE',
+    cemeterySign: '#4A4F52',
   },
   vegetation: {
     forest: '#B5C69A',
@@ -25,6 +26,8 @@ export const mapVisualPalette = {
     farmland: '#DFE0DA',
     scrub: '#C0CBA2',
     park: '#C2CFA7',
+    /** GOST vegetation signs (trees, shrubs, orchards) drawn over the fills. */
+    sign: '#8DA273',
   },
   glacier: {
     fill: '#DCE9ED',
@@ -58,6 +61,7 @@ export const mapVisualPalette = {
     /** Brown of the relief on Soviet/GOST topographic maps. */
     cliff: '#8C4A1E',
     pass: '#29343A',
+    scree: '#A39B91',
   },
   restricted: {
     line: '#C95050',
@@ -110,6 +114,9 @@ export const mapVisualModePaint = {
   vector: {
     [mapLayerIds.landcover]: { 'fill-opacity': 1 },
     [mapLayerIds.glacierAreas]: { 'fill-opacity': 1 },
+    [mapLayerIds.landcoverPatterns]: { 'fill-opacity': 1 },
+    [mapLayerIds.landcoverPatternDetails]: { 'fill-opacity': 1 },
+    [mapLayerIds.cemeteries]: { 'fill-opacity': 1 },
     [mapLayerIds.landuse]: { 'fill-opacity': 1 },
     [mapLayerIds.brownfieldAreas]: { 'fill-opacity': 1 },
     [mapLayerIds.buildings]: { 'fill-opacity': 1 },
@@ -162,6 +169,10 @@ export const mapVisualModePaint = {
   satellite: {
     [mapLayerIds.landcover]: { 'fill-opacity': 0 },
     [mapLayerIds.glacierAreas]: { 'fill-opacity': 0 },
+    // Imagery already shows vegetation, swamps, and scree, so their signs are removed too.
+    [mapLayerIds.landcoverPatterns]: { 'fill-opacity': 0 },
+    [mapLayerIds.landcoverPatternDetails]: { 'fill-opacity': 0 },
+    [mapLayerIds.cemeteries]: { 'fill-opacity': 0 },
     [mapLayerIds.landuse]: { 'fill-opacity': 0 },
     [mapLayerIds.restrictedAreas]: { 'line-opacity': 0.8 },
     [mapLayerIds.parks]: { 'fill-opacity': 0 },

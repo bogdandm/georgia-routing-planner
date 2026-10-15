@@ -24,7 +24,6 @@ export const mapVisualPalette = {
     grass: '#DEE2DA',
     farmland: '#DFE0DA',
     scrub: '#C0CBA2',
-    wetland: '#B3CBC0',
     park: '#C2CFA7',
   },
   glacier: {
@@ -34,6 +33,8 @@ export const mapVisualPalette = {
     fill: '#78B7D5',
     line: '#78B7D5',
     label: '#075E7A',
+    /** Blue swamp hatching of Soviet/GOST topographic maps, drawn over plain land. */
+    wetland: '#2E7DBF',
   },
   transport: {
     casing: '#6E3C08',

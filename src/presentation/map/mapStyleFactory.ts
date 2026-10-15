@@ -45,7 +45,9 @@ const romanizationMatchArguments: readonly (string | string[])[] = (() => {
  * Mirrors `romanizePlaceLabel` for the character at `index` of the `label` variable.
  * MapLibre expressions have no string replacement, so each position is matched alone.
  * A character is a letter exactly when it has distinct cases, which also holds for
- * Georgian (Mkhedruli/Mtavruli) and Cyrillic.
+ * Georgian (Mkhedruli/Mtavruli) and Cyrillic. On features with a Georgian name, Latin
+ * `q` not followed by `u` is written `k`: OSM English names keep the national system's
+ * `q` for ყ (Qelitsadi Lake), while signs and guides write Kelitsadi.
  */
 function romanizedCharacterExpression(index: number): ExpressionSpecification {
   const label: ExpressionSpecification = ['var', 'label'];
@@ -63,10 +65,10 @@ function romanizedCharacterExpression(index: number): ExpressionSpecification {
     atWordStart,
     ['in', ['downcase', previous], cyrillicIotatingPredecessors],
   ];
-  const followedByU: ExpressionSpecification = [
-    '==',
-    ['downcase', ['slice', label, index + 1, index + 2]],
-    'u',
+  const georgianQ: ExpressionSpecification = [
+    'all',
+    ['var', 'georgianName'],
+    ['!=', ['downcase', ['slice', label, index + 1, index + 2]], 'u'],
   ];
   return [
     'let',
@@ -85,7 +87,7 @@ function romanizedCharacterExpression(index: number): ExpressionSpecification {
           ['е', 'ё'],
           ['case', iotated, 'ye', 'e'],
           'q',
-          ['case', followedByU, 'q', 'k'],
+          ['case', georgianQ, 'k', 'q'],
           ...romanizationMatchArguments,
           character,
         ],
@@ -107,8 +109,8 @@ function romanizedCharacterExpression(index: number): ExpressionSpecification {
 
 /**
  * English name first, then the provider transliteration, then the native name; the
- * result is romanized like track names (Georgian road-sign style, BGN/PCGN Cyrillic,
- * national-system `q` as `k`) so the map never shows Georgian or Cyrillic script.
+ * result is romanized like track names (Georgian road-sign style, BGN/PCGN Cyrillic)
+ * so the map never shows Georgian or Cyrillic script.
  */
 export const englishFirstLabelExpression: ExpressionSpecification = [
   'let',
@@ -120,6 +122,14 @@ export const englishFirstLabelExpression: ExpressionSpecification = [
     ['get', 'name_en'],
     ['get', 'name'],
     '',
+  ],
+  // Only the native `name` decides: `name:ka` also exists on foreign places (Qatar).
+  'georgianName',
+  [
+    'let',
+    'initial',
+    ['downcase', ['slice', ['coalesce', ['get', 'name'], ''], 0, 1]],
+    ['all', ['>=', ['var', 'initial'], 'ა'], ['<=', ['var', 'initial'], 'ჿ']],
   ],
   [
     'case',
@@ -222,8 +232,6 @@ function createBasemapLayers(
           mapVisualPalette.vegetation.grass,
           ['==', ['get', 'class'], 'farmland'],
           mapVisualPalette.vegetation.farmland,
-          ['==', ['get', 'class'], 'wetland'],
-          mapVisualPalette.vegetation.wetland,
           ['==', ['get', 'class'], 'rock'],
           mapVisualPalette.base.rock,
           ['==', ['get', 'class'], 'sand'],
@@ -246,6 +254,29 @@ function createBasemapLayers(
         'fill-color': mapVisualPalette.glacier.fill,
         ...mapVisualModePaint.vector[mapLayerIds.glacierAreas],
       },
+    },
+    {
+      id: mapLayerIds.wetlands,
+      type: 'fill',
+      source,
+      'source-layer': sourceLayers.landcover,
+      filter: ['==', ['get', 'class'], 'wetland'],
+      paint: { 'fill-pattern': basemapImageIds.wetlandPattern },
+    },
+    {
+      // Shortbread adds small bogs and wet meadows that OpenMapTiles omits; both hatches
+      // share the tile pattern grid, so overlapping areas look like one.
+      id: mapLayerIds.wetlandDetails,
+      type: 'fill',
+      source: detailSource,
+      'source-layer': detailSourceLayers.land,
+      minzoom: 12,
+      filter: [
+        'in',
+        ['get', 'kind'],
+        ['literal', ['bog', 'string_bog', 'marsh', 'swamp', 'reedbed', 'wet_meadow']],
+      ],
+      paint: { 'fill-pattern': basemapImageIds.wetlandPattern },
     },
     {
       id: mapLayerIds.landuse,

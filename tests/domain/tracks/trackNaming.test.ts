@@ -43,12 +43,6 @@ describe('romanizePlaceLabel', () => {
     expect(romanizePlaceLabel('Щель')).toBe('Shchel');
   });
 
-  it('writes the national-system q of Latin names as k, except in English qu', () => {
-    expect(romanizePlaceLabel('Qelitsadi Lake')).toBe('Kelitsadi Lake');
-    expect(romanizePlaceLabel('Tsqaltubo')).toBe('Tskaltubo');
-    expect(romanizePlaceLabel('Mosque Square')).toBe('Mosque Square');
-  });
-
   it('keeps Latin labels and rejects labels with letters from other scripts', () => {
     expect(romanizePlaceLabel('Tsaishi (MG)')).toBe('Tsaishi (MG)');
     expect(romanizePlaceLabel('Ushbа')).toBe('Ushba');

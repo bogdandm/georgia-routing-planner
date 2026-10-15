@@ -56,6 +56,37 @@ const aerialwayPattern = {
   ],
 } as const satisfies PatternGeometry;
 
+/**
+ * GOST swamp (болото): thin horizontal blue dashes on plain land. Dash lengths and gaps
+ * vary along each row from a fixed seed, and the pattern spans several rows, so the
+ * tiled hatch reads as hand-drawn rather than as a regular grid.
+ */
+const wetlandPattern: PatternGeometry = (() => {
+  const widthCss = 64;
+  const rowSpacingCss = 8;
+  const rowCount = 8;
+  const strokeCss = 0.6;
+  let seed = 7;
+  // Park–Miller generator; products stay below 2^53, so every load draws the same hatch.
+  const random = () => {
+    seed = (seed * 48_271) % 2_147_483_647;
+    return seed / 2_147_483_647;
+  };
+  const rectangles: Rectangle[] = [];
+  for (let row = 0; row < rowCount; row += 1) {
+    const top = row * rowSpacingCss + 3.2;
+    let left = 1 + random() * 10;
+    for (;;) {
+      const right = left + 4 + random() * 7;
+      // Dashes never cross the seam, so the gap there stays within the row's rhythm.
+      if (right > widthCss - 1) break;
+      rectangles.push([left, top, right, top + strokeCss]);
+      left = right + 4 + random() * 6;
+    }
+  }
+  return { widthCss, heightCss: rowCount * rowSpacingCss, rectangles };
+})();
+
 interface PatternGeometry {
   readonly widthCss: number;
   readonly heightCss: number;
@@ -107,7 +138,7 @@ const pinheadIcons: Readonly<
 };
 
 /**
- * Creates the image for a basemap icon or line-pattern ID, or returns null for IDs the
+ * Creates the image for a basemap icon or pattern ID, or returns null for IDs the
  * basemap does not own. Pinhead icons get a white halo so they stay legible on imagery.
  */
 export function createBasemapImage(imageId: string): Promise<BasemapImage> | null {
@@ -125,6 +156,12 @@ export function createBasemapImage(imageId: string): Promise<BasemapImage> | nul
             aerialwayPattern,
             hexRgb(mapVisualPalette.transport.aerialway),
           ),
+        ),
+      );
+    case basemapImageIds.wetlandPattern:
+      return Promise.resolve(
+        rasterImage(
+          rasterizePattern(wetlandPattern, hexRgb(mapVisualPalette.water.wetland)),
         ),
       );
     case basemapImageIds.attraction:

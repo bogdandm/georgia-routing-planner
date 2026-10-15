@@ -353,7 +353,12 @@ describe('createHikingMapStyle', () => {
     expect(label({ 'name:en': 'Qelitsadi Lake', name: 'ყელიცადის ტბა' })).toBe(
       'Kelitsadi Lake',
     );
-    expect(label({ 'name:en': 'Mosque Square' })).toBe('Mosque Square');
+    expect(label({ 'name:en': 'Mosque Square', name: 'მეჩეთის მოედანი' })).toBe(
+      'Mosque Square',
+    );
+    expect(label({ 'name:en': 'Qatar', 'name:ka': 'კატარი', name: 'قطر' })).toBe(
+      'Qatar',
+    );
     for (const nativeName of [
       'ესის უღელტეხილი',
       'ჭაუხის ორმაგი უღელტეხილი',
@@ -457,7 +462,7 @@ describe('createHikingMapStyle', () => {
     ]);
   });
 
-  it('draws passes as crosses, GOST cliffs, fords, and hiking POIs without hotels', () => {
+  it('draws passes as crosses, GOST cliffs and swamps, fords, and hiking POIs without hotels', () => {
     const style = createHikingMapStyle(configuration);
     const layer = (id: string) => style.layers.find((candidate) => candidate.id === id);
 
@@ -478,6 +483,26 @@ describe('createHikingMapStyle', () => {
       filter: ['==', ['get', 'class'], 'cliff'],
       paint: { 'line-pattern': basemapImageIds.cliffPattern },
     });
+    for (const layerId of [mapLayerIds.wetlands, mapLayerIds.wetlandDetails]) {
+      expect(layer(layerId)).toHaveProperty(
+        'paint.fill-pattern',
+        basemapImageIds.wetlandPattern,
+      );
+    }
+    const wetlandDetails = layer(mapLayerIds.wetlandDetails);
+    const showsWetland = featureFilter(
+      wetlandDetails && 'filter' in wetlandDetails ? wetlandDetails.filter : undefined,
+      'filter',
+    );
+    expect(
+      showsWetland.filter({ zoom: 14 }, { type: 3, properties: { kind: 'bog' } }),
+    ).toBe(true);
+    expect(
+      showsWetland.filter(
+        { zoom: 14 },
+        { type: 3, properties: { kind: 'brownfield' } },
+      ),
+    ).toBe(false);
     expect(layer(mapLayerIds.fords)).toMatchObject({
       type: 'symbol',
       'source-layer': 'transportation',

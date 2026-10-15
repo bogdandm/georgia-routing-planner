@@ -78,15 +78,12 @@ function georgianIndex(character: string): number | null {
 
 /**
  * Returns a Latin-script form of a place label. Georgian and Cyrillic are romanized;
- * a label that still contains letters from another script is rejected. Latin `q` not
- * followed by `u` becomes `k`, because OSM English names often keep the national
- * system's `q` for ყ (Qelitsadi Lake → Kelitsadi Lake).
+ * a label that still contains letters from another script is rejected.
  */
 export function romanizePlaceLabel(label: string): string | null {
-  const characters = Array.from(label);
   let result = '';
   let previous = '';
-  for (const [index, character] of characters.entries()) {
+  for (const character of label) {
     const atWordStart = !/\p{L}/u.test(previous);
     const georgian = georgianIndex(character);
     const lower = character.toLowerCase();
@@ -103,8 +100,6 @@ export function romanizePlaceLabel(label: string): string | null {
     } else if (cyrillicLatin[lower] !== undefined) {
       const latin = cyrillicLatin[lower];
       result += lower === character ? latin : capitalize(latin);
-    } else if (lower === 'q' && characters[index + 1]?.toLowerCase() !== 'u') {
-      result += lower === character ? 'k' : 'K';
     } else if (/\p{L}/u.test(character) && !/\p{Script=Latin}/u.test(character)) {
       return null;
     } else {

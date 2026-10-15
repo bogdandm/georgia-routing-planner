@@ -117,6 +117,8 @@ export const mapLayerIds = {
   background: 'basemap-background',
   landcover: 'basemap-landcover',
   glacierAreas: 'basemap-glacier-areas',
+  wetlands: 'basemap-wetlands',
+  wetlandDetails: 'basemap-wetland-details',
   landuse: 'basemap-landuse',
   brownfieldAreas: 'basemap-brownfield-areas',
   restrictedAreas: 'basemap-restricted-areas',
@@ -161,6 +163,7 @@ export const basemapImageIds = {
   mountainPass: 'basemap-mountain-pass',
   cliffPattern: 'basemap-cliff-pattern',
   aerialwayPattern: 'basemap-aerialway-pattern',
+  wetlandPattern: 'basemap-wetland-pattern',
 } as const;
 
 export const mapInsertionPoints = {

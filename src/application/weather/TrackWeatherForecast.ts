@@ -12,6 +12,7 @@ import type {
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
 import {
   estimateHikingSeconds,
   type TrackMetrics,
@@ -139,28 +140,6 @@ export function selectTrackElevationLocations(
     median: location(median),
     lowest: location(lowest),
   };
-}
-
-/**
- * Recorded elapsed seconds per profile point, or null unless every point has a valid
- * timestamp and time advances. Pauses keep the hiker in place; reversed clock jumps do
- * not move time backward.
- */
-function recordedElapsedSeconds(
-  points: readonly ElevationProfilePoint[],
-): readonly number[] | null {
-  const elapsed: number[] = [];
-  let startMilliseconds: number | undefined;
-  let latestSeconds = 0;
-  for (const point of points) {
-    const milliseconds =
-      point.recordedAt === undefined ? Number.NaN : Date.parse(point.recordedAt);
-    if (!Number.isFinite(milliseconds)) return null;
-    startMilliseconds ??= milliseconds;
-    latestSeconds = Math.max(latestSeconds, (milliseconds - startMilliseconds) / 1_000);
-    elapsed.push(latestSeconds);
-  }
-  return latestSeconds > 0 ? elapsed : null;
 }
 
 /**

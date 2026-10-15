@@ -87,6 +87,10 @@ whose controls are absent, hidden, or off-screen are omitted. While a step is sh
 collapsed navigation, track details over the Tracks list, and Satellite results stay
 hidden without changing their saved state.
 
+The first step centres a map legend over the map with the right-click hint below it. The
+legend lists areas, lines, and points with swatches drawn from the same generated images
+and palette as the basemap style, with area signs enlarged for legibility.
+
 Track details imports the bundled example `public/onboarding/sakhizare-from-above.gpx`
 as an unsaved preview, which is never stored or synchronized. Leaving that step or
 closing the tour discards it. The step is left out when the tour would replace an

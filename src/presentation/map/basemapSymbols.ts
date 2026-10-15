@@ -184,16 +184,16 @@ const screePattern: PatternGeometry = (() => {
   };
 })();
 
-/** GOST cemetery (кладбище): small scattered crosses. */
+/** GOST cemetery (кладбище): scattered crosses, large enough to read at a glance. */
 const cemeteryPattern: PatternGeometry = (() => {
-  const cellCss = 14;
+  const cellCss = 18;
   const cellCount = 4;
   const random = seededRandom(19);
   const rectangles: Rectangle[] = [];
-  scatterInCells(cellCss, cellCount, 2.5, random, (x, y) => {
+  scatterInCells(cellCss, cellCount, 4.5, random, (x, y) => {
     rectangles.push(
-      [x - 0.35, y - 2, x + 0.35, y + 2],
-      [x - 1.2, y - 1, x + 1.2, y - 0.3],
+      [x - 0.5, y - 3.5, x + 0.5, y + 3.5],
+      [x - 2.2, y - 1.8, x + 2.2, y - 0.8],
     );
   });
   return { widthCss: cellCss * cellCount, heightCss: cellCss * cellCount, rectangles };

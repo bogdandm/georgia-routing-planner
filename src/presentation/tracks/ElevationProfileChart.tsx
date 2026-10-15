@@ -280,59 +280,75 @@ function ElevationTooltip({
       segment.type === 'climb' ? t`Climb ${typeNumber}` : t`Descent ${typeNumber}`;
   }
 
+  const pointRowSx = {
+    alignItems: 'center',
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS value.
+    flexWrap: 'wrap',
+    columnGap: 1.5,
+    rowGap: 0.25,
+  } as const;
+  const distance = (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+      <SwapHorizIcon aria-hidden sx={{ fontSize: 16 }} />
+      <Typography variant="caption">
+        {formatTrackDistance(row.distanceMeters, i18n)}
+      </Typography>
+    </Stack>
+  );
+  const elevationAndGrade = (
+    <>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <TerrainOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
+        <Typography variant={metric === 'elevation' ? 'body2' : 'caption'}>
+          {formatTrackElevation(row.elevationMeters, i18n)}
+        </Typography>
+      </Stack>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <ChangeHistoryOutlinedIcon
+          aria-hidden
+          sx={{
+            fontSize: 16,
+            transform: hoverGradePct < 0 ? 'rotate(180deg)' : undefined,
+          }}
+        />
+        <Typography variant="caption" color="text.secondary">
+          {formatTrackGrade(hoverGradePct, i18n)}
+        </Typography>
+      </Stack>
+    </>
+  );
+
   return (
     <Paper elevation={3} sx={{ p: 1, minWidth: 210 }}>
       <Stack spacing={0.4}>
-        <Stack
-          direction="row"
-          sx={{
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            columnGap: 1.5,
-            rowGap: 0.25,
-          }}
-        >
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <SwapHorizIcon aria-hidden sx={{ fontSize: 16 }} />
-            <Typography variant="caption">
-              {formatTrackDistance(row.distanceMeters, i18n)}
-            </Typography>
+        {elapsedSeconds === null || speedKilometersPerHour === null ? (
+          <Stack direction="row" sx={pointRowSx}>
+            {distance}
+            {elevationAndGrade}
           </Stack>
-          {elapsedSeconds === null ? null : (
-            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-              <TimerOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
-              <Typography variant="caption">
-                {formatTrackDuration(elapsedSeconds, i18n)}
-              </Typography>
+        ) : (
+          // Timed tracks add two values, so elevation and grade move to a second line.
+          <>
+            <Stack direction="row" sx={pointRowSx}>
+              {distance}
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <TimerOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
+                <Typography variant="caption">
+                  {formatTrackDuration(elapsedSeconds, i18n)}
+                </Typography>
+              </Stack>
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                <SpeedOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
+                <Typography variant={metric === 'speed' ? 'body2' : 'caption'}>
+                  {formatTrackSpeed(speedKilometersPerHour, i18n)}
+                </Typography>
+              </Stack>
             </Stack>
-          )}
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <TerrainOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
-            <Typography variant={metric === 'elevation' ? 'body2' : 'caption'}>
-              {formatTrackElevation(row.elevationMeters, i18n)}
-            </Typography>
-          </Stack>
-          {speedKilometersPerHour === null ? null : (
-            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-              <SpeedOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
-              <Typography variant={metric === 'speed' ? 'body2' : 'caption'}>
-                {formatTrackSpeed(speedKilometersPerHour, i18n)}
-              </Typography>
+            <Stack direction="row" sx={pointRowSx}>
+              {elevationAndGrade}
             </Stack>
-          )}
-          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            <ChangeHistoryOutlinedIcon
-              aria-hidden
-              sx={{
-                fontSize: 16,
-                transform: hoverGradePct < 0 ? 'rotate(180deg)' : undefined,
-              }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {formatTrackGrade(hoverGradePct, i18n)}
-            </Typography>
-          </Stack>
-        </Stack>
+          </>
+        )}
         <Typography variant="body2" sx={{ pt: 0.35, fontWeight: 600 }}>
           {typeLabel}
         </Typography>

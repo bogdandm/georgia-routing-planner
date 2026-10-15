@@ -25,6 +25,20 @@ export function formatTrackElevation(meters: number, i18n: I18n): string {
   return i18n._(msg`${elevation} m`);
 }
 
+export function formatTrackDuration(seconds: number, i18n: I18n): string {
+  const hours = Math.floor(seconds / 3_600);
+  const minutes = Math.round((seconds % 3_600) / 60);
+  return i18n._(msg`${hours}h ${minutes}m`);
+}
+
+export function formatTrackSpeed(kilometersPerHour: number, i18n: I18n): string {
+  const speed = new Intl.NumberFormat(i18n.locale, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(kilometersPerHour);
+  return i18n._(msg`${speed} km/h`);
+}
+
 /** Signed change such as `+320 m` or `-45 m`; zero stays unsigned. */
 export function formatElevationChange(meters: number, i18n: I18n): string {
   const elevation = new Intl.NumberFormat(i18n.locale, {

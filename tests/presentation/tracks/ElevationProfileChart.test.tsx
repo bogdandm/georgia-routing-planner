@@ -645,4 +645,89 @@ describe('ElevationProfileChart', () => {
     expect(container.querySelector('.recharts-cartesian-axis-tick')).toBeNull();
     expect(container.querySelector('.recharts-cartesian-axis-line')).toBeNull();
   });
+
+  describe('with recorded time', () => {
+    // The climb takes 30 minutes and the descent 10, so time and distance diverge.
+    const recordedTimes = [
+      '2026-05-01T08:00:00Z',
+      '2026-05-01T08:30:00Z',
+      '2026-05-01T08:40:00Z',
+    ];
+    const timedProfile: ElevationProfile = {
+      ...profile,
+      points: profile.points.map((point, index) => ({
+        ...point,
+        recordedAt: recordedTimes[index] ?? '',
+      })),
+    };
+
+    function tickTexts(): string[] {
+      return [...document.querySelectorAll('.recharts-cartesian-axis-tick-value')].map(
+        (tick) => tick.textContent,
+      );
+    }
+
+    it('offers no profile modes for tracks without recorded time', () => {
+      renderElevationProfileChart();
+
+      expect(screen.queryByRole('group', { name: 'Profile value' })).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Profile axis' })).toBeNull();
+    });
+
+    it('plots elevation over elapsed time with grade colors placed by time', async () => {
+      const user = userEvent.setup();
+      observedWidth = 420;
+      const { container } = renderElevationProfileChart({ profile: timedProfile });
+
+      await user.click(screen.getByRole('button', { name: 'Time' }));
+
+      expect(
+        [...container.querySelectorAll('stop')].map((stop) =>
+          stop.getAttribute('offset'),
+        ),
+      ).toEqual(['0%', '75%', '75%', '100%']);
+      // JSDOM measures every label as wide as the chart, so Recharts keeps few ticks.
+      const ticks = tickTexts();
+      expect(ticks).toContain('0:40');
+      expect(ticks.some((value) => value.endsWith('km'))).toBe(false);
+      const chartSurface = screen
+        .getByRole('img', { name: 'Elevation profile from 1,000 to 1,120 metres' })
+        .querySelector('svg');
+      if (chartSurface === null) throw new Error('Expected the chart surface.');
+      fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
+      fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
+      expect(await screen.findByText('0h 40m')).toBeVisible();
+      expect(screen.getByText('8.4 km/h')).toBeVisible();
+    });
+
+    it('plots smoothed speed and falls back to elevation for an untimed track', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderElevationProfileChart({ profile: timedProfile });
+
+      await user.click(screen.getByRole('button', { name: 'Speed' }));
+
+      expect(screen.getByRole('heading', { name: 'Speed profile' })).toBeVisible();
+      expect(
+        screen.getByRole('img', { name: 'Speed profile up to 8.4 km/h' }),
+      ).toBeVisible();
+      expect(tickTexts().some((value) => value.endsWith('km/h'))).toBe(true);
+      expect(tickTexts().some((value) => value.endsWith('km'))).toBe(true);
+
+      rerender(
+        <ThemeProvider theme={createAppTheme()}>
+          <ElevationProfileChart
+            profile={profile}
+            activeSegmentIndex={null}
+            selectedSegmentIndex={null}
+            trackGradeLegendDismissed={false}
+            onSegmentHoverChange={vi.fn()}
+            onSegmentSelectionChange={vi.fn()}
+            onTrackGradeLegendDismissedChange={vi.fn()}
+          />
+        </ThemeProvider>,
+      );
+      expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+      expect(screen.queryByRole('group', { name: 'Profile value' })).toBeNull();
+    });
+  });
 });

@@ -1,5 +1,3 @@
-import type { I18n } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import NorthEastIcon from '@mui/icons-material/NorthEast';
@@ -15,15 +13,10 @@ import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
 import { CompactElevationProfile } from '@/presentation/tracks/ElevationProfileChart';
 import {
   formatTrackDistance,
+  formatTrackDuration,
   formatTrackElevation,
+  formatTrackSpeed,
 } from '@/presentation/tracks/trackFormatters';
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function formatTrackDuration(seconds: number, i18n: I18n): string {
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.round((seconds % 3_600) / 60);
-  return i18n._(msg`${hours}h ${minutes}m`);
-}
 
 export type TrackStatsMetrics = Pick<
   TrackMetrics,
@@ -131,14 +124,10 @@ export function TrackStats({
   if (!compact) {
     const speedKilometersPerHour = averageSpeedKilometersPerHour(metrics);
     if (speedKilometersPerHour !== undefined) {
-      const speed = new Intl.NumberFormat(i18n.locale, {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      }).format(speedKilometersPerHour);
       stats.push({
         icon: <SpeedOutlinedIcon sx={{ fontSize: 18 }} />,
         label: t`Average speed`,
-        value: t`${speed} km/h`,
+        value: formatTrackSpeed(speedKilometersPerHour, i18n),
       });
     }
   }

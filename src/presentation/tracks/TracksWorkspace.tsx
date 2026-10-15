@@ -177,7 +177,6 @@ import {
   parseTrackShareLocation,
 } from '@/presentation/tracks/trackShareUrl';
 import {
-  formatTrackDuration,
   TrackStat,
   TrackStats,
   type TrackStatsMetrics,
@@ -196,6 +195,7 @@ import {
 } from '@/application/weather/TrackWeatherForecast';
 import {
   formatTrackDistance,
+  formatTrackDuration,
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
 import {

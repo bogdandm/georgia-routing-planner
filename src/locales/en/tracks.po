@@ -26,7 +26,7 @@ msgid "{0} tracks"
 msgstr "{0} tracks"
 
 #. js-lingui-id: 3Mpfhk
-#: src/presentation/tracks/ElevationProfileChart.tsx:780
+#: src/presentation/tracks/ElevationProfileChart.tsx:781
 #: src/presentation/tracks/trackFormatters.ts:11
 msgid "{distance} km"
 msgstr "{distance} km"
@@ -68,7 +68,7 @@ msgid "{label}: {value}"
 msgstr "{label}: {value}"
 
 #. js-lingui-id: zpwS9F
-#: src/presentation/tracks/ElevationProfileChart.tsx:619
+#: src/presentation/tracks/ElevationProfileChart.tsx:620
 msgid "{maximumElevationMeters, plural, one {Elevation profile from {minimumElevation} to # metre} other {Elevation profile from {minimumElevation} to # metres}}"
 msgstr "{maximumElevationMeters, plural, one {Elevation profile from {minimumElevation} to # metre} other {Elevation profile from {minimumElevation} to # metres}}"
 
@@ -275,7 +275,7 @@ msgstr "Click the map to choose the route start."
 
 #. js-lingui-id: EEa1Qu
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:175
-#: src/presentation/tracks/ElevationProfileChart.tsx:279
+#: src/presentation/tracks/ElevationProfileChart.tsx:280
 msgid "Climb {typeNumber}"
 msgstr "Climb {typeNumber}"
 
@@ -392,7 +392,7 @@ msgstr "Delete track"
 
 #. js-lingui-id: nTkvmF
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:176
-#: src/presentation/tracks/ElevationProfileChart.tsx:279
+#: src/presentation/tracks/ElevationProfileChart.tsx:280
 msgid "Descent {typeNumber}"
 msgstr "Descent {typeNumber}"
 
@@ -430,7 +430,7 @@ msgstr "Discard this unsaved track?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/ElevationProfileChart.tsx:725
+#: src/presentation/tracks/ElevationProfileChart.tsx:726
 #: src/presentation/tracks/TrackSummary.tsx:121
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
@@ -488,9 +488,9 @@ msgid "Edit folder"
 msgstr "Edit folder"
 
 #. js-lingui-id: fkcYqc
-#: src/presentation/tracks/ElevationProfileChart.tsx:460
-#: src/presentation/tracks/ElevationProfileChart.tsx:547
-#: src/presentation/tracks/ElevationProfileChart.tsx:709
+#: src/presentation/tracks/ElevationProfileChart.tsx:461
+#: src/presentation/tracks/ElevationProfileChart.tsx:548
+#: src/presentation/tracks/ElevationProfileChart.tsx:710
 msgid "Elevation"
 msgstr "Elevation"
 
@@ -542,19 +542,19 @@ msgid "Elevation preparation failed."
 msgstr "Elevation preparation failed."
 
 #. js-lingui-id: fGXQ-P
-#: src/presentation/tracks/ElevationProfileChart.tsx:504
-#: src/presentation/tracks/ElevationProfileChart.tsx:673
+#: src/presentation/tracks/ElevationProfileChart.tsx:505
+#: src/presentation/tracks/ElevationProfileChart.tsx:674
 #: src/presentation/tracks/TracksWorkspace.tsx:4753
 msgid "Elevation profile"
 msgstr "Elevation profile"
 
 #. js-lingui-id: D4TjJE
-#: src/presentation/tracks/ElevationProfileChart.tsx:498
+#: src/presentation/tracks/ElevationProfileChart.tsx:499
 msgid "Elevation profile loading"
 msgstr "Elevation profile loading"
 
 #. js-lingui-id: T75oDH
-#: src/presentation/tracks/ElevationProfileChart.tsx:499
+#: src/presentation/tracks/ElevationProfileChart.tsx:500
 msgid "Elevation profile loading: {percent}"
 msgstr "Elevation profile loading: {percent}"
 
@@ -605,7 +605,7 @@ msgid "Finish"
 msgstr "Finish"
 
 #. js-lingui-id: F7cy8b
-#: src/presentation/tracks/ElevationProfileChart.tsx:273
+#: src/presentation/tracks/ElevationProfileChart.tsx:274
 msgid "Flat"
 msgstr "Flat"
 
@@ -665,7 +665,7 @@ msgid "Line"
 msgstr "Line"
 
 #. js-lingui-id: D1UiKJ
-#: src/presentation/tracks/ElevationProfileChart.tsx:495
+#: src/presentation/tracks/ElevationProfileChart.tsx:496
 #: src/presentation/tracks/RoutePlanControls.tsx:236
 msgid "Loading elevation: {percent}"
 msgstr "Loading elevation: {percent}"
@@ -910,7 +910,7 @@ msgid "Preparing elevation"
 msgstr "Preparing elevation"
 
 #. js-lingui-id: DsZhgY
-#: src/presentation/tracks/ElevationProfileChart.tsx:495
+#: src/presentation/tracks/ElevationProfileChart.tsx:496
 #: src/presentation/tracks/RoutePlanControls.tsx:230
 #: src/presentation/tracks/TracksWorkspace.tsx:5800
 msgid "Preparing elevation…"
@@ -922,12 +922,12 @@ msgid "Press space to pick up an item. Use arrow keys to move it. Press space to
 msgstr "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
 
 #. js-lingui-id: 6aaeK-
-#: src/presentation/tracks/ElevationProfileChart.tsx:718
+#: src/presentation/tracks/ElevationProfileChart.tsx:719
 msgid "Profile axis"
 msgstr "Profile axis"
 
 #. js-lingui-id: 5YLSIO
-#: src/presentation/tracks/ElevationProfileChart.tsx:702
+#: src/presentation/tracks/ElevationProfileChart.tsx:703
 msgid "Profile value"
 msgstr "Profile value"
 
@@ -1137,8 +1137,8 @@ msgid "Sharing is enabled, but the link could not be copied."
 msgstr "Sharing is enabled, but the link could not be copied."
 
 #. js-lingui-id: qh04VC
-#: src/presentation/tracks/ElevationProfileChart.tsx:677
-#: src/presentation/tracks/ElevationProfileChart.tsx:679
+#: src/presentation/tracks/ElevationProfileChart.tsx:678
+#: src/presentation/tracks/ElevationProfileChart.tsx:680
 msgid "Show track grade legend"
 msgstr "Show track grade legend"
 
@@ -1163,18 +1163,18 @@ msgid "Sort: {currentSortLabel}"
 msgstr "Sort: {currentSortLabel}"
 
 #. js-lingui-id: l9wI00
-#: src/presentation/tracks/ElevationProfileChart.tsx:460
-#: src/presentation/tracks/ElevationProfileChart.tsx:712
+#: src/presentation/tracks/ElevationProfileChart.tsx:461
+#: src/presentation/tracks/ElevationProfileChart.tsx:713
 msgid "Speed"
 msgstr "Speed"
 
 #. js-lingui-id: UKPsSc
-#: src/presentation/tracks/ElevationProfileChart.tsx:671
+#: src/presentation/tracks/ElevationProfileChart.tsx:672
 msgid "Speed profile"
 msgstr "Speed profile"
 
 #. js-lingui-id: RLu2_1
-#: src/presentation/tracks/ElevationProfileChart.tsx:631
+#: src/presentation/tracks/ElevationProfileChart.tsx:632
 msgid "Speed profile up to {maximumSpeed}"
 msgstr "Speed profile up to {maximumSpeed}"
 
@@ -1356,7 +1356,7 @@ msgid "This track link is invalid."
 msgstr "This track link is invalid."
 
 #. js-lingui-id: LhMjLm
-#: src/presentation/tracks/ElevationProfileChart.tsx:728
+#: src/presentation/tracks/ElevationProfileChart.tsx:729
 msgid "Time"
 msgstr "Time"
 

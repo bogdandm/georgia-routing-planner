@@ -58,7 +58,8 @@ import {
 const HOVER_GRADE_SMOOTHING_RADIUS_METERS = 150;
 const MAXIMUM_TIME_TICK_INTERVALS = 6;
 const TIME_TICK_STEPS_SECONDS = [
-  15, 30, 60, 120, 300, 600, 900, 1_800, 3_600, 7_200, 10_800, 21_600, 43_200, 86_400,
+  1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1_800, 3_600, 7_200, 10_800, 21_600,
+  43_200, 86_400,
 ];
 
 type ProfileMetric = 'elevation' | 'speed';

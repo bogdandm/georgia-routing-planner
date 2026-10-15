@@ -41,7 +41,9 @@ import {
 } from '@/domain/tracks/elevationProfile';
 import {
   recordedElapsedSeconds,
-  smoothedSpeedMetersPerSecond,
+  smoothSpeed,
+  smoothedSpeedAt,
+  type SmoothedSpeed,
 } from '@/domain/tracks/profileTiming';
 import type { TrackElevationPreparationProgress } from '@/application/tracks/prepareImportedTrack';
 import { appColors } from '@/presentation/theme/appColors';
@@ -55,59 +57,115 @@ import {
 
 const HOVER_GRADE_SMOOTHING_RADIUS_METERS = 150;
 const MAXIMUM_TIME_TICK_INTERVALS = 6;
-const TIME_TICK_STEPS_SECONDS = [5, 10, 15, 30, 60, 120, 180, 360, 720, 1_440].map(
-  (minutes) => minutes * 60,
-);
+const TIME_TICK_STEPS_SECONDS = [
+  15, 30, 60, 120, 300, 600, 900, 1_800, 3_600, 7_200, 10_800, 21_600, 43_200, 86_400,
+];
 
 type ProfileMetric = 'elevation' | 'speed';
 type ProfileAxis = 'distance' | 'time';
-type ProfileValueKey = 'elevationMeters' | ((point: ElevationProfilePoint) => number);
 
-/** Recorded time and chart speed, indexed like the profile points. */
+/** Recorded time per profile point and the smoothed speed derived from it. */
 interface ProfileTimeline {
   readonly elapsedSeconds: readonly number[];
-  readonly speedKilometersPerHour: readonly number[];
+  readonly speed: SmoothedSpeed;
 }
 
 function profileTimeline(profile: ElevationProfile): ProfileTimeline | null {
   const elapsedSeconds = recordedElapsedSeconds(profile.points);
   if (elapsedSeconds === null) return null;
-  return {
-    elapsedSeconds,
-    speedKilometersPerHour: smoothedSpeedMetersPerSecond(
-      profile.points,
-      elapsedSeconds,
-    ).map((metersPerSecond) => metersPerSecond * 3.6),
-  };
+  return { elapsedSeconds, speed: smoothSpeed(profile.points, elapsedSeconds) };
 }
 
-/** Plotted value: elevation, or smoothed speed when the speed array is given. */
-function profileValueKey(
-  speedKilometersPerHour: readonly number[] | null,
-): ProfileValueKey {
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts data key.
-  if (speedKilometersPerHour === null) return 'elevationMeters';
-  return (point: ElevationProfilePoint) =>
-    speedKilometersPerHour[point.sampleIndex] ?? 0;
+/**
+ * One plotted vertex. Speed rows inside a recording gap, such as an auto-paused stop,
+ * stay pinned to the fix before the gap so hover and click still reach a real point.
+ */
+interface ProfileChartRow {
+  readonly point: ElevationProfilePoint;
+  readonly distanceMeters: number;
+  readonly elevationMeters: number;
+  readonly elapsedSeconds: number | null;
+  readonly speedKilometersPerHour: number | null;
+}
+
+function profileChartRows(
+  sampledPoints: readonly ElevationProfilePoint[],
+  timeline: ProfileTimeline | null,
+  fillRecordingGaps: boolean,
+): readonly ProfileChartRow[] {
+  const rows: ProfileChartRow[] = [];
+  let previous: { point: ElevationProfilePoint; elapsedSeconds: number } | undefined;
+  for (const point of sampledPoints) {
+    const elapsedSeconds = timeline?.elapsedSeconds[point.sampleIndex] ?? null;
+    if (timeline === null || elapsedSeconds === null) {
+      rows.push({
+        point,
+        distanceMeters: point.distanceMeters,
+        elevationMeters: point.elevationMeters,
+        elapsedSeconds: null,
+        speedKilometersPerHour: null,
+      });
+      continue;
+    }
+    const step = timeline.speed.cellSeconds;
+    if (
+      fillRecordingGaps &&
+      previous !== undefined &&
+      elapsedSeconds - previous.elapsedSeconds > 2 * step
+    ) {
+      const gapStart = previous.elapsedSeconds;
+      const gapDistance = point.distanceMeters - previous.point.distanceMeters;
+      for (
+        let seconds = gapStart + step;
+        seconds < elapsedSeconds - step / 2;
+        seconds += step
+      ) {
+        rows.push({
+          point: previous.point,
+          distanceMeters:
+            previous.point.distanceMeters +
+            (gapDistance * (seconds - gapStart)) / (elapsedSeconds - gapStart),
+          elevationMeters: previous.point.elevationMeters,
+          elapsedSeconds: seconds,
+          speedKilometersPerHour: smoothedSpeedAt(timeline.speed, seconds) * 3.6,
+        });
+      }
+    }
+    rows.push({
+      point,
+      distanceMeters: point.distanceMeters,
+      elevationMeters: point.elevationMeters,
+      elapsedSeconds,
+      speedKilometersPerHour: smoothedSpeedAt(timeline.speed, elapsedSeconds) * 3.6,
+    });
+    previous = { point, elapsedSeconds };
+  }
+  return rows;
 }
 
 /** Round elapsed-time ticks such as 0:30, 1:00, 1:30 instead of arbitrary seconds. */
-function timeAxisTicks(totalSeconds: number): readonly number[] {
+function timeAxisTicks(totalSeconds: number): {
+  readonly values: readonly number[];
+  readonly stepSeconds: number;
+} {
   const stepSeconds =
     TIME_TICK_STEPS_SECONDS.find(
       (step) => totalSeconds / step <= MAXIMUM_TIME_TICK_INTERVALS,
     ) ?? Math.ceil(totalSeconds / MAXIMUM_TIME_TICK_INTERVALS / 86_400) * 86_400;
-  const ticks: number[] = [];
+  const values: number[] = [];
   for (let seconds = 0; seconds <= totalSeconds; seconds += stepSeconds) {
-    ticks.push(seconds);
+    values.push(seconds);
   }
-  return ticks;
+  return { values, stepSeconds };
 }
 
-function formatElapsedTick(seconds: number): string {
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.round((seconds % 3_600) / 60);
-  return `${String(hours)}:${String(minutes).padStart(2, '0')}`;
+/** `h:mm`, or `m:ss` when ticks are less than a minute apart. */
+function formatElapsedTick(seconds: number, stepSeconds: number): string {
+  const [major, minor] =
+    stepSeconds < 60
+      ? [Math.floor(seconds / 60), Math.round(seconds % 60)]
+      : [Math.floor(seconds / 3_600), Math.round((seconds % 3_600) / 60)];
+  return `${String(major)}:${String(minor).padStart(2, '0')}`;
 }
 
 interface ElevationProfileChartProps {
@@ -123,14 +181,21 @@ interface ElevationProfileChartProps {
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
 }
 
+function activeChartRow(
+  activeIndex: unknown,
+  rows: readonly ProfileChartRow[],
+): ProfileChartRow | null {
+  const rowIndex = Number(activeIndex);
+  if (!Number.isInteger(rowIndex)) return null;
+  return rows[rowIndex] ?? null;
+}
+
 function activeProfilePoint(
   { activeIndex, isTooltipActive }: MouseHandlerDataParam,
-  sampledPoints: readonly ElevationProfilePoint[],
+  rows: readonly ProfileChartRow[],
 ): ElevationProfilePoint | null {
   if (!isTooltipActive) return null;
-  const sampledIndex = Number(activeIndex);
-  if (!Number.isInteger(sampledIndex)) return null;
-  return sampledPoints[sampledIndex] ?? null;
+  return activeChartRow(activeIndex, rows)?.point ?? null;
 }
 
 function smoothedHoverGradePct(
@@ -184,48 +249,25 @@ function smoothedHoverGradePct(
 
 interface ElevationTooltipProps extends TooltipContentProps {
   readonly profile: ElevationProfile;
-  readonly timeline: ProfileTimeline | null;
+  readonly rows: readonly ProfileChartRow[];
   readonly metric: ProfileMetric;
 }
 
 function ElevationTooltip({
   active,
-  payload,
+  activeIndex,
   profile,
-  timeline,
+  rows,
   metric,
 }: ElevationTooltipProps): ReactElement | null {
   const { i18n, t } = useLingui();
-  const point: unknown = payload[0]?.payload;
-  if (
-    !active ||
-    typeof point !== 'object' ||
-    point === null ||
-    !('sampleIndex' in point) ||
-    typeof point.sampleIndex !== 'number'
-  ) {
-    return null;
-  }
+  const row = active ? activeChartRow(activeIndex, rows) : null;
+  if (row === null) return null;
+  const { point, elapsedSeconds, speedKilometersPerHour } = row;
   const segmentIndex = elevationSegmentIndexForSample(profile, point.sampleIndex);
   const segment = segmentIndex === null ? undefined : profile.segments[segmentIndex];
-  if (
-    segment === undefined ||
-    !('distanceMeters' in point) ||
-    typeof point.distanceMeters !== 'number' ||
-    !('elevationMeters' in point) ||
-    typeof point.elevationMeters !== 'number' ||
-    !('localGradePct' in point) ||
-    typeof point.localGradePct !== 'number'
-  ) {
-    return null;
-  }
-  const profilePoint = profile.points[point.sampleIndex];
-  const hoverGradePct =
-    profilePoint?.sampleIndex === point.sampleIndex
-      ? smoothedHoverGradePct(profile, profilePoint)
-      : point.localGradePct;
-  const elapsedSeconds = timeline?.elapsedSeconds[point.sampleIndex];
-  const speedKilometersPerHour = timeline?.speedKilometersPerHour[point.sampleIndex];
+  if (segment === undefined) return null;
+  const hoverGradePct = smoothedHoverGradePct(profile, point);
   let typeLabel: string;
   if (segment.type === 'flat') {
     typeLabel = t`Flat`;
@@ -252,10 +294,10 @@ function ElevationTooltip({
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <SwapHorizIcon aria-hidden sx={{ fontSize: 16 }} />
             <Typography variant="caption">
-              {formatTrackDistance(point.distanceMeters, i18n)}
+              {formatTrackDistance(row.distanceMeters, i18n)}
             </Typography>
           </Stack>
-          {elapsedSeconds === undefined ? null : (
+          {elapsedSeconds === null ? null : (
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <TimerOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
               <Typography variant="caption">
@@ -266,10 +308,10 @@ function ElevationTooltip({
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
             <TerrainOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
             <Typography variant={metric === 'elevation' ? 'body2' : 'caption'}>
-              {formatTrackElevation(point.elevationMeters, i18n)}
+              {formatTrackElevation(row.elevationMeters, i18n)}
             </Typography>
           </Stack>
-          {speedKilometersPerHour === undefined ? null : (
+          {speedKilometersPerHour === null ? null : (
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <SpeedOutlinedIcon aria-hidden sx={{ fontSize: 16 }} />
               <Typography variant={metric === 'speed' ? 'body2' : 'caption'}>
@@ -359,7 +401,6 @@ interface ElevationProfileAreaProps {
   readonly gradientId: string;
   readonly activeSegmentIndex: number | null;
   readonly metric: ProfileMetric;
-  readonly valueKey: ProfileValueKey;
   /** Horizontal position of a profile sample; the axis starts at zero. */
   readonly xOfSample: (sampleIndex: number) => number;
 }
@@ -369,7 +410,6 @@ function ElevationProfileArea({
   gradientId,
   activeSegmentIndex,
   metric,
-  valueKey,
   xOfSample,
 }: ElevationProfileAreaProps): ReactElement {
   const { t } = useLingui();
@@ -415,10 +455,11 @@ function ElevationProfileArea({
       </defs>
       <Area
         type="linear"
-        dataKey={valueKey}
+        /* eslint-disable lingui/no-unlocalized-strings -- Recharts data keys and domain token. */
+        dataKey={metric === 'speed' ? 'speedKilometersPerHour' : 'elevationMeters'}
         name={metric === 'speed' ? t`Speed` : t`Elevation`}
-        // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts domain token.
         baseValue={metric === 'speed' ? 0 : 'dataMin'}
+        /* eslint-enable lingui/no-unlocalized-strings */
         dot={false}
         // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG paint reference.
         stroke={`url(#${gradientId})`}
@@ -541,25 +582,19 @@ export function ElevationProfileChart({
   const [selectedAxis, setSelectedAxis] = useState<ProfileAxis>('distance');
   // Tracks without recorded time fall back to elevation over distance.
   const metric: ProfileMetric = timeline === null ? 'elevation' : selectedMetric;
+  const axis: ProfileAxis = timeline === null ? 'distance' : selectedAxis;
   /* eslint-enable lingui/no-unlocalized-strings */
-  const elapsedSeconds =
-    selectedAxis === 'time' ? (timeline?.elapsedSeconds ?? null) : null;
-  const speedKilometersPerHour =
-    metric === 'speed' ? (timeline?.speedKilometersPerHour ?? null) : null;
-  const valueKey = useMemo(
-    () => profileValueKey(speedKilometersPerHour),
-    [speedKilometersPerHour],
+  const rows = useMemo(
+    () => profileChartRows(sampledPoints, timeline, metric === 'speed'),
+    [sampledPoints, timeline, metric],
   );
+  const elapsedSeconds = axis === 'time' ? (timeline?.elapsedSeconds ?? null) : null;
   const xOfSample = useCallback(
     (sampleIndex: number): number =>
       (elapsedSeconds === null
         ? profile.points[sampleIndex]?.distanceMeters
         : elapsedSeconds[sampleIndex]) ?? 0,
     [elapsedSeconds, profile],
-  );
-  const xValueKey = useCallback(
-    (point: ElevationProfilePoint) => xOfSample(point.sampleIndex),
-    [xOfSample],
   );
   const timeTicks = useMemo(
     () => (elapsedSeconds === null ? null : timeAxisTicks(elapsedSeconds.at(-1) ?? 0)),
@@ -576,7 +611,7 @@ export function ElevationProfileChart({
     [i18n.locale],
   );
   let profileLabel: string;
-  if (speedKilometersPerHour === null) {
+  if (metric === 'elevation') {
     const minimumElevation = new Intl.NumberFormat(i18n.locale).format(
       Math.round(profile.minimumMeters),
     );
@@ -587,7 +622,10 @@ export function ElevationProfileChart({
     })}`;
   } else {
     const maximumSpeed = formatTrackSpeed(
-      speedKilometersPerHour.reduce((maximum, speed) => Math.max(maximum, speed), 0),
+      rows.reduce(
+        (maximum, row) => Math.max(maximum, row.speedKilometersPerHour ?? 0),
+        0,
+      ),
       i18n,
     );
     profileLabel = t`Speed profile up to ${maximumSpeed}`;
@@ -606,20 +644,15 @@ export function ElevationProfileChart({
   );
   const tooltipContent = useCallback(
     (props: TooltipContentProps) => (
-      <ElevationTooltip
-        {...props}
-        profile={profile}
-        timeline={timeline}
-        metric={metric}
-      />
+      <ElevationTooltip {...props} profile={profile} rows={rows} metric={metric} />
     ),
-    [profile, timeline, metric],
+    [profile, rows, metric],
   );
 
   function publishActivePoint(
     mouseHandlerData: MouseHandlerDataParam,
   ): ElevationProfilePoint | null {
-    const point = activeProfilePoint(mouseHandlerData, sampledPoints);
+    const point = activeProfilePoint(mouseHandlerData, rows);
     onActivePointChange?.(point);
     onSegmentHoverChange(
       point === null
@@ -698,16 +731,16 @@ export function ElevationProfileChart({
         </Stack>
       ) : null}
       <Box role="img" aria-label={profileLabel} sx={{ height: 264, mx: -1 }}>
-        <AreaChart<ElevationProfilePoint>
+        <AreaChart<ProfileChartRow>
           aria-hidden
           accessibilityLayer={false}
           responsive
-          data={sampledPoints}
+          data={rows}
           margin={{ top: 12, right: 16, bottom: 6, left: 4 }}
           style={{ width: '100%', height: '100%' }}
           onMouseMove={publishActivePoint}
           onClick={(mouseHandlerData) => {
-            const point = activeProfilePoint(mouseHandlerData, sampledPoints);
+            const point = activeProfilePoint(mouseHandlerData, rows);
             if (point === null) return;
             const segmentIndex = elevationSegmentIndexForSample(
               profile,
@@ -733,31 +766,32 @@ export function ElevationProfileChart({
           <CartesianGrid stroke={theme.palette.divider} />
           <XAxis
             type="number"
-            dataKey={xValueKey}
-            // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts domain tokens.
+            /* eslint-disable lingui/no-unlocalized-strings -- Recharts data keys and domain tokens. */
+            dataKey={axis === 'time' ? 'elapsedSeconds' : 'distanceMeters'}
             domain={['dataMin', 'dataMax']}
-            {...(timeTicks === null ? {} : { ticks: timeTicks })}
+            /* eslint-enable lingui/no-unlocalized-strings */
+            {...(timeTicks === null ? {} : { ticks: timeTicks.values })}
             height={32}
             tick={axisText}
             tickFormatter={(value: number) => {
-              if (timeTicks !== null) return formatElapsedTick(value);
+              if (timeTicks !== null)
+                return formatElapsedTick(value, timeTicks.stepSeconds);
               const distance = axisDistanceFormatter.format(value / 1_000);
               return t`${distance} km`;
             }}
           />
           <YAxis
             type="number"
-            dataKey={valueKey}
-            domain={
-              // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts domain tokens.
-              speedKilometersPerHour === null ? ['auto', 'auto'] : [0, 'auto']
-            }
+            /* eslint-disable lingui/no-unlocalized-strings -- Recharts data keys and domain tokens. */
+            dataKey={metric === 'speed' ? 'speedKilometersPerHour' : 'elevationMeters'}
+            domain={metric === 'speed' ? [0, 'auto'] : ['auto', 'auto']}
+            /* eslint-enable lingui/no-unlocalized-strings */
             width={64}
             tick={axisText}
             tickFormatter={(value: number) =>
-              speedKilometersPerHour === null
-                ? formatTrackElevation(value, i18n)
-                : formatTrackSpeed(value, i18n)
+              metric === 'speed'
+                ? formatTrackSpeed(value, i18n)
+                : formatTrackElevation(value, i18n)
             }
           />
           <Tooltip
@@ -777,7 +811,6 @@ export function ElevationProfileChart({
             gradientId={gradientId}
             activeSegmentIndex={activeSegmentIndex}
             metric={metric}
-            valueKey={valueKey}
             xOfSample={xOfSample}
           />
         </AreaChart>
@@ -838,8 +871,6 @@ export function CompactElevationProfile({
           gradientId={gradientId}
           activeSegmentIndex={null}
           metric="elevation"
-          // eslint-disable-next-line lingui/no-unlocalized-strings -- Recharts data key.
-          valueKey="elevationMeters"
           xOfSample={distanceOfSample}
         />
       </AreaChart>

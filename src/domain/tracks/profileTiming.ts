@@ -1,7 +1,4 @@
-/**
- * Recorded time and speed along a profile. Every returned array is indexed like the
- * profile points it was calculated from.
- */
+/** Recorded time and smoothed speed along a profile. */
 
 /** Short tracks still average speed over several minutes of walking. */
 const MINIMUM_SPEED_SIGMA_SECONDS = 90;
@@ -32,16 +29,23 @@ export function recordedElapsedSeconds(
   return latestSeconds > 0 ? elapsed : null;
 }
 
+/** Gaussian-smoothed speed on a uniform time grid; read it with `smoothedSpeedAt`. */
+export interface SmoothedSpeed {
+  /** Grid spacing: cell `k` covers `[k, k + 1) × cellSeconds` of elapsed time. */
+  readonly cellSeconds: number;
+  readonly cellMetersPerSecond: ArrayLike<number>;
+}
+
 /**
- * Gaussian-smoothed speed per point in metres per second. Speed between neighbouring
- * GPS fixes jumps sharply, so travelled distance is first resampled onto a uniform time
- * grid: every recorded second then weighs the same however densely the profile is
- * sampled, and pauses pull the curve smoothly toward zero.
+ * Speed between neighbouring GPS fixes jumps sharply, so travelled distance is first
+ * resampled onto a uniform time grid: every recorded second then weighs the same however
+ * densely the profile is sampled, and pauses pull the curve smoothly toward zero even
+ * when the recording has no fixes during them.
  */
-export function smoothedSpeedMetersPerSecond(
+export function smoothSpeed(
   points: readonly { readonly distanceMeters: number }[],
   elapsedSeconds: readonly number[],
-): readonly number[] {
+): SmoothedSpeed {
   const totalSeconds = elapsedSeconds.at(-1) ?? 0;
   if (points.length !== elapsedSeconds.length || totalSeconds <= 0) {
     throw new RangeError('Speed needs advancing time for every profile point.');
@@ -53,10 +57,12 @@ export function smoothedSpeedMetersPerSecond(
     ) / SPEED_CELLS_PER_SIGMA;
   const cellCount = Math.ceil(totalSeconds / cellSeconds);
 
-  // Distance at every cell boundary, linearly interpolated in time.
+  // Distance at every cell boundary, linearly interpolated in time. Boundary zero keeps
+  // the first fix, so distance between fixes sharing the start time lands in cell zero.
   const boundaryDistances = new Float64Array(cellCount + 1);
+  boundaryDistances[0] = points[0]?.distanceMeters ?? 0;
   let pointIndex = 0;
-  for (let boundary = 0; boundary <= cellCount; boundary += 1) {
+  for (let boundary = 1; boundary <= cellCount; boundary += 1) {
     const seconds = Math.min(boundary * cellSeconds, totalSeconds);
     while (
       pointIndex < points.length - 1 &&
@@ -96,14 +102,18 @@ export function smoothedSpeedMetersPerSecond(
     }
     cellSpeeds[cell] = distanceSum / durationSum;
   }
+  return { cellSeconds, cellMetersPerSecond: cellSpeeds };
+}
 
-  // Linear interpolation between cell centres back onto the profile points.
-  return elapsedSeconds.map((seconds) => {
-    const position = Math.min(Math.max(seconds / cellSeconds - 0.5, 0), cellCount - 1);
-    const cell = Math.floor(position);
-    const fraction = position - cell;
-    const current = cellSpeeds[cell] ?? 0;
-    const next = cellSpeeds[Math.min(cell + 1, cellCount - 1)] ?? current;
-    return current + (next - current) * fraction;
-  });
+/** Speed in metres per second at an elapsed time, linear between cell centres. */
+export function smoothedSpeedAt(speed: SmoothedSpeed, elapsedSeconds: number): number {
+  const cells = speed.cellMetersPerSecond;
+  const position = Math.min(
+    Math.max(elapsedSeconds / speed.cellSeconds - 0.5, 0),
+    cells.length - 1,
+  );
+  const cell = Math.floor(position);
+  const current = cells[cell] ?? 0;
+  const next = cells[Math.min(cell + 1, cells.length - 1)] ?? current;
+  return current + (next - current) * (position - cell);
 }

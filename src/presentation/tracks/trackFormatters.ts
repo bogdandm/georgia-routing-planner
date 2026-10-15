@@ -26,8 +26,9 @@ export function formatTrackElevation(meters: number, i18n: I18n): string {
 }
 
 export function formatTrackDuration(seconds: number, i18n: I18n): string {
-  const hours = Math.floor(seconds / 3_600);
-  const minutes = Math.round((seconds % 3_600) / 60);
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   return i18n._(msg`${hours}h ${minutes}m`);
 }
 

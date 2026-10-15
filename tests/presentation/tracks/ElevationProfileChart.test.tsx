@@ -729,5 +729,37 @@ describe('ElevationProfileChart', () => {
       expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
       expect(screen.queryByRole('group', { name: 'Profile value' })).toBeNull();
     });
+
+    it('plots zero speed through a recording gap pinned to the fix before it', async () => {
+      const user = userEvent.setup();
+      observedWidth = 420;
+      // Walk 1.4 km in 30 minutes, then an auto-paused hour without any fixes.
+      const pausedProfile: ElevationProfile = {
+        ...timedProfile,
+        points: timedProfile.points.map((point, index) =>
+          index === 2
+            ? { ...point, distanceMeters: 1_400, recordedAt: '2026-05-01T09:30:00Z' }
+            : point,
+        ),
+      };
+      const onActivePointChange = vi.fn();
+      renderElevationProfileChart({ profile: pausedProfile, onActivePointChange });
+
+      await user.click(screen.getByRole('button', { name: 'Speed' }));
+      await user.click(screen.getByRole('button', { name: 'Time' }));
+      const chartSurface = screen
+        .getByRole('img', { name: /^Speed profile up to/u })
+        .querySelector('svg');
+      if (chartSurface === null) throw new Error('Expected the chart surface.');
+      // 70 of 90 minutes across the 68-404 px plot area.
+      fireEvent.mouseEnter(chartSurface, { clientX: 329, clientY: 80 });
+      fireEvent.mouseMove(chartSurface, { clientX: 329, clientY: 80 });
+
+      expect(await screen.findByText('1h 10m')).toBeVisible();
+      expect(screen.getByText('0.0 km/h')).toBeVisible();
+      await waitFor(() => {
+        expect(onActivePointChange).toHaveBeenLastCalledWith(pausedProfile.points[1]);
+      });
+    });
   });
 });

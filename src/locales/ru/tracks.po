@@ -26,7 +26,7 @@ msgid "{0} tracks"
 msgstr "Треки в папке «{0}»"
 
 #. js-lingui-id: 3Mpfhk
-#: src/presentation/tracks/ElevationProfileChart.tsx:745
+#: src/presentation/tracks/ElevationProfileChart.tsx:780
 #: src/presentation/tracks/trackFormatters.ts:11
 msgid "{distance} km"
 msgstr "{distance} км"
@@ -38,7 +38,7 @@ msgstr "{distance} м"
 
 #. js-lingui-id: KPwAwW
 #: src/presentation/tracks/trackFormatters.ts:25
-#: src/presentation/tracks/trackFormatters.ts:48
+#: src/presentation/tracks/trackFormatters.ts:49
 msgid "{elevation} m"
 msgstr "{elevation} м"
 
@@ -58,7 +58,7 @@ msgid "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 msgstr "{heading}: {grade}, {distance}, {primary}, спуск {opposite}"
 
 #. js-lingui-id: i3Frvq
-#: src/presentation/tracks/trackFormatters.ts:31
+#: src/presentation/tracks/trackFormatters.ts:32
 msgid "{hours}h {minutes}m"
 msgstr "{hours} ч {minutes} мин"
 
@@ -68,7 +68,7 @@ msgid "{label}: {value}"
 msgstr "{label} — {value}"
 
 #. js-lingui-id: zpwS9F
-#: src/presentation/tracks/ElevationProfileChart.tsx:584
+#: src/presentation/tracks/ElevationProfileChart.tsx:619
 msgid "{maximumElevationMeters, plural, one {Elevation profile from {minimumElevation} to # metre} other {Elevation profile from {minimumElevation} to # metres}}"
 msgstr "{maximumElevationMeters, plural, one {Профиль высот от {minimumElevation} до # метра} few {Профиль высот от {minimumElevation} до # метров} many {Профиль высот от {minimumElevation} до # метров} other {Профиль высот от {minimumElevation} до # метра}}"
 
@@ -104,7 +104,7 @@ msgid "{pointCount, plural, one {# point} other {# points}} · {segmentCount, pl
 msgstr "{pointCount, plural, one {# точка} few {# точки} many {# точек} other {# точки}} · {segmentCount, plural, one {# сегмент} few {# сегмента} many {# сегментов} other {# сегмента}}"
 
 #. js-lingui-id: l1OB5S
-#: src/presentation/tracks/trackFormatters.ts:39
+#: src/presentation/tracks/trackFormatters.ts:40
 msgid "{speed} km/h"
 msgstr "{speed} км/ч"
 
@@ -275,7 +275,7 @@ msgstr "Нажмите на карту, чтобы выбрать начало �
 
 #. js-lingui-id: EEa1Qu
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:175
-#: src/presentation/tracks/ElevationProfileChart.tsx:237
+#: src/presentation/tracks/ElevationProfileChart.tsx:279
 msgid "Climb {typeNumber}"
 msgstr "Подъём {typeNumber}"
 
@@ -392,7 +392,7 @@ msgstr "Удалить трек"
 
 #. js-lingui-id: nTkvmF
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:176
-#: src/presentation/tracks/ElevationProfileChart.tsx:237
+#: src/presentation/tracks/ElevationProfileChart.tsx:279
 msgid "Descent {typeNumber}"
 msgstr "Спуск {typeNumber}"
 
@@ -430,7 +430,7 @@ msgstr "Сбросить этот несохранённый трек?"
 
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx:254
-#: src/presentation/tracks/ElevationProfileChart.tsx:692
+#: src/presentation/tracks/ElevationProfileChart.tsx:725
 #: src/presentation/tracks/TrackSummary.tsx:121
 #: src/presentation/tracks/TracksWorkspace.tsx:3652
 msgid "Distance"
@@ -488,9 +488,9 @@ msgid "Edit folder"
 msgstr "Редактировать папку"
 
 #. js-lingui-id: fkcYqc
-#: src/presentation/tracks/ElevationProfileChart.tsx:419
-#: src/presentation/tracks/ElevationProfileChart.tsx:506
-#: src/presentation/tracks/ElevationProfileChart.tsx:676
+#: src/presentation/tracks/ElevationProfileChart.tsx:460
+#: src/presentation/tracks/ElevationProfileChart.tsx:547
+#: src/presentation/tracks/ElevationProfileChart.tsx:709
 msgid "Elevation"
 msgstr "Высота"
 
@@ -542,19 +542,19 @@ msgid "Elevation preparation failed."
 msgstr "Не удалось подготовить данные о высоте."
 
 #. js-lingui-id: fGXQ-P
-#: src/presentation/tracks/ElevationProfileChart.tsx:463
-#: src/presentation/tracks/ElevationProfileChart.tsx:640
+#: src/presentation/tracks/ElevationProfileChart.tsx:504
+#: src/presentation/tracks/ElevationProfileChart.tsx:673
 #: src/presentation/tracks/TracksWorkspace.tsx:4753
 msgid "Elevation profile"
 msgstr "Профиль высот"
 
 #. js-lingui-id: D4TjJE
-#: src/presentation/tracks/ElevationProfileChart.tsx:457
+#: src/presentation/tracks/ElevationProfileChart.tsx:498
 msgid "Elevation profile loading"
 msgstr "Загрузка профиля высот"
 
 #. js-lingui-id: T75oDH
-#: src/presentation/tracks/ElevationProfileChart.tsx:458
+#: src/presentation/tracks/ElevationProfileChart.tsx:499
 msgid "Elevation profile loading: {percent}"
 msgstr "Загрузка профиля высот: {percent}"
 
@@ -605,7 +605,7 @@ msgid "Finish"
 msgstr "Финиш"
 
 #. js-lingui-id: F7cy8b
-#: src/presentation/tracks/ElevationProfileChart.tsx:231
+#: src/presentation/tracks/ElevationProfileChart.tsx:273
 msgid "Flat"
 msgstr "Ровный участок"
 
@@ -665,7 +665,7 @@ msgid "Line"
 msgstr "Прямая"
 
 #. js-lingui-id: D1UiKJ
-#: src/presentation/tracks/ElevationProfileChart.tsx:454
+#: src/presentation/tracks/ElevationProfileChart.tsx:495
 #: src/presentation/tracks/RoutePlanControls.tsx:236
 msgid "Loading elevation: {percent}"
 msgstr "Загрузка высот: {percent}"
@@ -910,7 +910,7 @@ msgid "Preparing elevation"
 msgstr "Подготовка высот"
 
 #. js-lingui-id: DsZhgY
-#: src/presentation/tracks/ElevationProfileChart.tsx:454
+#: src/presentation/tracks/ElevationProfileChart.tsx:495
 #: src/presentation/tracks/RoutePlanControls.tsx:230
 #: src/presentation/tracks/TracksWorkspace.tsx:5800
 msgid "Preparing elevation…"
@@ -922,12 +922,12 @@ msgid "Press space to pick up an item. Use arrow keys to move it. Press space to
 msgstr "Нажмите пробел, чтобы взять элемент. Перемещайте его клавишами со стрелками. Нажмите пробел, чтобы отпустить, или Escape, чтобы отменить."
 
 #. js-lingui-id: 6aaeK-
-#: src/presentation/tracks/ElevationProfileChart.tsx:685
+#: src/presentation/tracks/ElevationProfileChart.tsx:718
 msgid "Profile axis"
 msgstr "Ось профиля"
 
 #. js-lingui-id: 5YLSIO
-#: src/presentation/tracks/ElevationProfileChart.tsx:669
+#: src/presentation/tracks/ElevationProfileChart.tsx:702
 msgid "Profile value"
 msgstr "Величина профиля"
 
@@ -1137,8 +1137,8 @@ msgid "Sharing is enabled, but the link could not be copied."
 msgstr "Общий доступ включён, но скопировать ссылку не удалось."
 
 #. js-lingui-id: qh04VC
-#: src/presentation/tracks/ElevationProfileChart.tsx:644
-#: src/presentation/tracks/ElevationProfileChart.tsx:646
+#: src/presentation/tracks/ElevationProfileChart.tsx:677
+#: src/presentation/tracks/ElevationProfileChart.tsx:679
 msgid "Show track grade legend"
 msgstr "Показать легенду уклонов трека"
 
@@ -1163,18 +1163,18 @@ msgid "Sort: {currentSortLabel}"
 msgstr "Сортировка: {currentSortLabel}"
 
 #. js-lingui-id: l9wI00
-#: src/presentation/tracks/ElevationProfileChart.tsx:419
-#: src/presentation/tracks/ElevationProfileChart.tsx:679
+#: src/presentation/tracks/ElevationProfileChart.tsx:460
+#: src/presentation/tracks/ElevationProfileChart.tsx:712
 msgid "Speed"
 msgstr "Скорость"
 
 #. js-lingui-id: UKPsSc
-#: src/presentation/tracks/ElevationProfileChart.tsx:638
+#: src/presentation/tracks/ElevationProfileChart.tsx:671
 msgid "Speed profile"
 msgstr "Профиль скорости"
 
 #. js-lingui-id: RLu2_1
-#: src/presentation/tracks/ElevationProfileChart.tsx:593
+#: src/presentation/tracks/ElevationProfileChart.tsx:631
 msgid "Speed profile up to {maximumSpeed}"
 msgstr "Профиль скорости до {maximumSpeed}"
 
@@ -1356,7 +1356,7 @@ msgid "This track link is invalid."
 msgstr "Ссылка на трек недействительна."
 
 #. js-lingui-id: LhMjLm
-#: src/presentation/tracks/ElevationProfileChart.tsx:695
+#: src/presentation/tracks/ElevationProfileChart.tsx:728
 msgid "Time"
 msgstr "Время"
 

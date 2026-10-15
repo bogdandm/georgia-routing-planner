@@ -260,12 +260,14 @@ marker at the highlighted point. When every profile point has recorded time, the
 header offers **Elevation**/**Speed** and **Distance**/**Time** toggles: Time plots
 against elapsed recorded time, including pauses, and Speed plots a Gaussian-smoothed
 speed (σ of 90 seconds or 1/240 of the duration, whichever is longer) so per-fix GPS
-jitter does not dominate. The tooltip then also shows elapsed time and smoothed speed.
-Tracks without complete recorded time show elevation over distance only, and the view
-choice lasts while the chart stays open. Source elevation drives the profile, grades,
-and climbs unless it has no complete run, in which case the DEM profile is used. On
-desktop and tablet, a lower-right grade legend explains the colors; its dismissal
-persists and the profile chart offers **Show track grade legend** to restore it.
+jitter does not dominate; a stop recorded without fixes, such as an auto-pause, drops to
+zero speed, and hovering it points at the fix where it began. The tooltip then also
+shows elapsed time and smoothed speed. Tracks without complete recorded time show
+elevation over distance only, and the view choice lasts while the chart stays open.
+Source elevation drives the profile, grades, and climbs unless it has no complete run,
+in which case the DEM profile is used. On desktop and tablet, a lower-right grade legend
+explains the colors; its dismissal persists and the profile chart offers **Show track
+grade legend** to restore it.
 
 Editable single tracks show a collapsed **Markers** section with an add action, map
 navigation, inline rename, and two-stage deletion. Only the active editable track

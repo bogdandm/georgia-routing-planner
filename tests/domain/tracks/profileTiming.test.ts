@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   recordedElapsedSeconds,
-  smoothedSpeedMetersPerSecond,
+  smoothSpeed,
+  smoothedSpeedAt,
 } from '@/domain/tracks/profileTiming';
 
 const start = Date.parse('2026-05-01T08:00:00Z');
@@ -25,7 +26,7 @@ describe('recordedElapsedSeconds', () => {
   });
 });
 
-describe('smoothedSpeedMetersPerSecond', () => {
+describe('smoothSpeed', () => {
   it('flattens alternating per-fix speeds to the walking pace', () => {
     // Fixes every 5 s alternate 2 m and 8 m steps: raw 0.4 and 1.6 m/s, mean 1 m/s.
     const elapsed: number[] = [];
@@ -37,41 +38,44 @@ describe('smoothedSpeedMetersPerSecond', () => {
       distanceMeters += index % 2 === 0 ? 2 : 8;
     }
 
-    const speeds = smoothedSpeedMetersPerSecond(points, elapsed);
+    const speed = smoothSpeed(points, elapsed);
 
-    for (const speed of speeds.slice(1, -1)) {
-      expect(speed).toBeCloseTo(1, 1);
+    for (const seconds of elapsed.slice(1, -1)) {
+      expect(smoothedSpeedAt(speed, seconds)).toBeCloseTo(1, 1);
     }
   });
 
-  it('weights a sparsely sampled pause by its duration', () => {
-    // 30 min at 1 m/s, a 30 min pause recorded by only three fixes, 30 min at 2 m/s.
+  it('drops to zero through a pause that has no fixes', () => {
+    // 30 min at 1 m/s, a 30 min auto-paused gap without fixes, then 30 min at 2 m/s.
     const elapsed: number[] = [];
     const points: { distanceMeters: number }[] = [];
     for (let seconds = 0; seconds <= 1_800; seconds += 10) {
       elapsed.push(seconds);
       points.push({ distanceMeters: seconds });
     }
-    elapsed.push(2_700, 3_600);
-    points.push({ distanceMeters: 1_800 }, { distanceMeters: 1_800 });
-    for (let seconds = 3_610; seconds <= 5_400; seconds += 10) {
+    for (let seconds = 3_600; seconds <= 5_400; seconds += 10) {
       elapsed.push(seconds);
       points.push({ distanceMeters: 1_800 + (seconds - 3_600) * 2 });
     }
 
-    const speeds = smoothedSpeedMetersPerSecond(points, elapsed);
-    const speedAt = (seconds: number): number =>
-      speeds[elapsed.indexOf(seconds)] ?? Number.NaN;
+    const speed = smoothSpeed(points, elapsed);
 
-    expect(speedAt(900)).toBeCloseTo(1, 3);
-    expect(speedAt(2_700)).toBeCloseTo(0, 3);
-    expect(speedAt(4_500)).toBeCloseTo(2, 3);
-    expect(speedAt(5_400)).toBeCloseTo(2, 3);
+    expect(smoothedSpeedAt(speed, 900)).toBeCloseTo(1, 3);
+    expect(smoothedSpeedAt(speed, 2_700)).toBeCloseTo(0, 3);
+    expect(smoothedSpeedAt(speed, 4_500)).toBeCloseTo(2, 3);
+    expect(smoothedSpeedAt(speed, 5_400)).toBeCloseTo(2, 3);
+  });
+
+  it('keeps distance travelled between fixes that share the start time', () => {
+    const speed = smoothSpeed(
+      [{ distanceMeters: 0 }, { distanceMeters: 100 }, { distanceMeters: 100 }],
+      [0, 0, 10],
+    );
+
+    expect(smoothedSpeedAt(speed, 5)).toBeCloseTo(10, 6);
   });
 
   it('rejects elapsed times that do not match the points', () => {
-    expect(() =>
-      smoothedSpeedMetersPerSecond([{ distanceMeters: 0 }], [0, 10]),
-    ).toThrow(RangeError);
+    expect(() => smoothSpeed([{ distanceMeters: 0 }], [0, 10])).toThrow(RangeError);
   });
 });

@@ -154,9 +154,11 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # An explicit reporter replaces Vitest's CI defaults, so `default` (failure output in
+      # the job log) and `github-actions` (annotations) are listed beside the coverage blob.
       - run:
-          pnpm test:coverage --reporter=blob --shard=${{ matrix.shardIndex }}/${{
-          matrix.shardTotal }}
+          pnpm test:coverage --reporter=default --reporter=github-actions
+          --reporter=blob --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
           VITEST_COVERAGE_SHARD: 'true'
       - name: Upload Vitest shard report

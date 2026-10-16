@@ -510,10 +510,12 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Share link' }));
 
+    // Copying first loads share preferences from IndexedDB, so the clipboard write lands
+    // after the click resolves; the confirmation marks its completion.
+    expect(await screen.findByText('Scene link copied')).toBeVisible();
     expect(writeText).toHaveBeenCalledWith(
       expect.stringContaining('scene=sentinel-2-l2a%3Arestored-scene'),
     );
-    expect(await screen.findByText('Scene link copied')).toBeVisible();
     expect(clearScene).not.toHaveBeenCalled();
 
     await user.click(productMetadata);

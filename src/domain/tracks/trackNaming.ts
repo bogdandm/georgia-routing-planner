@@ -40,26 +40,26 @@ const OUTBOUND_SAMPLE_COUNT = 2_000;
 // the national system (2002) without ejective apostrophes, and ყ as `k` rather than
 // the standard's `q` (ყელიდა → Kelida, ყაზბეგი → Kazbegi). Indexed from U+10D0.
 // prettier-ignore
-const georgianLatin = [
+export const georgianLatin = [
   'a', 'b', 'g', 'd', 'e', 'v', 'z', 't', 'i', 'k', 'l', 'm', 'n', 'o', 'p', 'zh',
   'r', 's', 't', 'u', 'p', 'k', 'gh', 'k', 'sh', 'ch', 'ts', 'dz', 'ts', 'ch', 'kh',
   'j', 'h', 'e', 'y', 'w', 'k', 'o', 'f',
 ] as const;
-const georgianStart = 0x10d0;
+export const georgianMkhedruliStart = 0x10d0;
 /** Mtavruli capitals share Mkhedruli order at this code-point offset. */
-const mtavruliOffset = 0x1c90 - georgianStart;
+const mtavruliOffset = 0x1c90 - georgianMkhedruliStart;
 
 // BGN/PCGN romanization of Russian without diacritics or soft/hard-sign marks, plus
 // the Ukrainian and Belarusian letters that appear in regional OSM names.
 // prettier-ignore
-const cyrillicLatin: Readonly<Record<string, string>> = {
+export const cyrillicLatin: Readonly<Record<string, string>> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k',
   л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
   х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e',
   ю: 'yu', я: 'ya', і: 'i', ї: 'yi', є: 'ye', ґ: 'g', ў: 'u',
 };
 /** After these letters, and at a word start, BGN/PCGN writes `е`/`ё` as `ye`. */
-const cyrillicIotatingPredecessors = 'аеёиоуыэюяйъьіїє';
+export const cyrillicIotatingPredecessors = 'аеёиоуыэюяйъьіїє';
 
 function capitalize(value: string): string {
   return value.length === 0
@@ -71,8 +71,8 @@ function georgianIndex(character: string): number | null {
   const codePoint = character.codePointAt(0) ?? 0;
   const index =
     codePoint >= 0x1c90 && codePoint <= 0x1cbf
-      ? codePoint - mtavruliOffset - georgianStart
-      : codePoint - georgianStart;
+      ? codePoint - mtavruliOffset - georgianMkhedruliStart
+      : codePoint - georgianMkhedruliStart;
   return index >= 0 && index < georgianLatin.length ? index : null;
 }
 

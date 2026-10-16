@@ -51,6 +51,7 @@ import {
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 import { useTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
+import { OnboardingMapLegend } from '@/presentation/shell/OnboardingMapLegend';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 
 export type OnboardingTourStepId =
@@ -71,8 +72,6 @@ interface TourHintRow {
 interface TourHint {
   /** CSS selectors. The first visible match of each is spotlighted; the callout anchors to their union. */
   readonly targets: readonly string[];
-  /** `center` points the callout at the middle of the first target without a spotlight. */
-  readonly anchor: 'spotlight' | 'center';
   readonly placement: PopperPlacementType;
   readonly rows: readonly TourHintRow[];
 }
@@ -112,7 +111,6 @@ const tourSteps: readonly TourStep[] = [
     hints: [
       {
         targets: ['[data-tour="map-search"]'],
-        anchor: 'spotlight',
         placement: 'left',
         rows: [
           {
@@ -123,7 +121,6 @@ const tourSteps: readonly TourStep[] = [
       },
       {
         targets: ['.maplibregl-ctrl-top-right'],
-        anchor: 'spotlight',
         placement: 'left-end',
         rows: [
           { icon: MyLocationOutlinedIcon, text: msg`Show your location.` },
@@ -142,19 +139,7 @@ const tourSteps: readonly TourStep[] = [
         ],
       },
       {
-        targets: ['[data-testid="map-workspace"]'],
-        anchor: 'center',
-        placement: 'bottom',
-        rows: [
-          {
-            icon: MouseOutlinedIcon,
-            text: msg`Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point.`,
-          },
-        ],
-      },
-      {
         targets: ['[data-testid="navigation-collapse-toggle"]'],
-        anchor: 'spotlight',
         placement: 'bottom-start',
         rows: [
           { icon: ChevronLeftOutlinedIcon, text: msg`Hide the panel to see more map.` },
@@ -162,7 +147,6 @@ const tourSteps: readonly TourStep[] = [
       },
       {
         targets: ['[data-tour="rail-actions"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -188,7 +172,6 @@ const tourSteps: readonly TourStep[] = [
           '[data-tour="track-sort"]',
           '[data-tour="create-folder"]',
         ],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -215,7 +198,6 @@ const tourSteps: readonly TourStep[] = [
       },
       {
         targets: ['[data-tour="track-row"]'],
-        anchor: 'spotlight',
         placement: 'bottom',
         rows: [
           {
@@ -233,7 +215,6 @@ const tourSteps: readonly TourStep[] = [
     hints: [
       {
         targets: ['[data-tour="track-preview-actions"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -248,7 +229,6 @@ const tourSteps: readonly TourStep[] = [
       },
       {
         targets: ['[data-tour="track-profile"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -263,7 +243,6 @@ const tourSteps: readonly TourStep[] = [
           '[data-tour="track-markers"]',
           '[data-tour="track-weather"]',
         ],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -289,7 +268,6 @@ const tourSteps: readonly TourStep[] = [
     hints: [
       {
         targets: ['[data-tour="markers-header-actions"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -311,7 +289,6 @@ const tourSteps: readonly TourStep[] = [
     hints: [
       {
         targets: ['[data-tour="sidebar-content"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -329,7 +306,6 @@ const tourSteps: readonly TourStep[] = [
     hints: [
       {
         targets: ['[data-tour="satellite-mosaic"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -340,7 +316,6 @@ const tourSteps: readonly TourStep[] = [
       },
       {
         targets: ['[data-tour="satellite-calendar"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -351,7 +326,6 @@ const tourSteps: readonly TourStep[] = [
       },
       {
         targets: ['[data-tour="satellite-search-area"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -373,7 +347,6 @@ const tourSteps: readonly TourStep[] = [
           '[data-tour="weather-point-toggle"]',
           '[data-tour="weather-more-actions"]',
         ],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           { icon: MapOutlinedIcon, text: msg`Weather map: clouds, rain, and wind.` },
@@ -396,7 +369,6 @@ const tourSteps: readonly TourStep[] = [
     hints: [
       {
         targets: ['[data-tour="user-panel"]'],
-        anchor: 'spotlight',
         placement: 'right',
         rows: [
           {
@@ -411,6 +383,9 @@ const tourSteps: readonly TourStep[] = [
 /* eslint-enable lingui/no-unlocalized-strings */
 
 const spotlightPadding = 4;
+const tourCardBottom = 32;
+/** Space above the viewport bottom kept clear of overview content: the tour card and a gap. */
+const tourCardReservedHeight = tourCardBottom + 180;
 
 function visibleRect(selector: string): ViewportRect | null {
   for (const element of document.querySelectorAll(selector)) {
@@ -445,21 +420,7 @@ function measureHints(step: TourStep): readonly MeasuredHint[] {
     const rects = hint.targets
       .map(visibleRect)
       .filter((rect): rect is ViewportRect => rect !== null);
-    const first = rects[0];
-    if (first === undefined) return;
-    if (hint.anchor === 'center') {
-      measured.push({
-        index,
-        spotlights: [],
-        anchor: {
-          left: first.left + first.width / 2,
-          top: first.top + first.height / 2,
-          width: 0,
-          height: 0,
-        },
-      });
-      return;
-    }
+    if (rects.length === 0) return;
     measured.push({ index, spotlights: rects, anchor: unionRect(rects) });
   });
   return measured;
@@ -502,6 +463,46 @@ interface OnboardingTourProps {
   readonly smartphoneViewport: boolean;
   readonly onStepChange: (step: OnboardingTourStepId) => void;
   readonly onClose: (completed: boolean) => void;
+}
+
+const mapContextMenuHintRows: readonly TourHintRow[] = [
+  {
+    icon: MouseOutlinedIcon,
+    text: msg`Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point.`,
+  },
+];
+
+function TourHintCard({ rows }: { readonly rows: readonly TourHintRow[] }) {
+  const { i18n } = useLingui();
+  return (
+    <Paper
+      role="note"
+      elevation={8}
+      sx={{
+        px: 1.5,
+        py: 1.25,
+        borderLeft: `3px solid ${appColors.brand.amber}`,
+      }}
+    >
+      <Stack spacing={1}>
+        {rows.map((row) => (
+          <Stack
+            key={row.text.id}
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'flex-start' }}
+          >
+            <row.icon
+              aria-hidden
+              color="primary"
+              sx={{ fontSize: 20, mt: '1px', flexShrink: 0 }}
+            />
+            <Typography variant="body2">{i18n._(row.text)}</Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </Paper>
+  );
 }
 
 /**
@@ -693,42 +694,38 @@ export function OnboardingTour({
               ]}
               sx={{ zIndex: 1, maxWidth: 320 }}
             >
-              <Paper
-                role="note"
-                elevation={8}
-                sx={{
-                  px: 1.5,
-                  py: 1.25,
-                  borderLeft: `3px solid ${appColors.brand.amber}`,
-                }}
-              >
-                <Stack spacing={1}>
-                  {definition.rows.map((row) => (
-                    <Stack
-                      key={row.text.id}
-                      direction="row"
-                      spacing={1}
-                      sx={{ alignItems: 'flex-start' }}
-                    >
-                      <row.icon
-                        aria-hidden
-                        color="primary"
-                        sx={{ fontSize: 20, mt: '1px', flexShrink: 0 }}
-                      />
-                      <Typography variant="body2">{i18n._(row.text)}</Typography>
-                    </Stack>
-                  ))}
-                </Stack>
-              </Paper>
+              <TourHintCard rows={definition.rows} />
             </Popper>
           );
         })}
+        {currentStep.id === 'overview' ? (
+          // The legend and the map hint share one centred column that ends above the tour
+          // card; on short viewports the column scrolls instead of running under the card.
+          <Stack
+            spacing={2}
+            sx={{
+              position: 'absolute',
+              top: 16,
+              left: 24,
+              right: 24,
+              bottom: tourCardReservedHeight,
+              alignItems: 'center',
+              justifyContent: 'safe center',
+              overflowY: 'auto',
+            }}
+          >
+            <OnboardingMapLegend />
+            <Box sx={{ maxWidth: 380, flexShrink: 0 }}>
+              <TourHintCard rows={mapContextMenuHintRows} />
+            </Box>
+          </Stack>
+        ) : null}
         <Paper
           elevation={12}
           sx={{
             position: 'absolute',
             right: 24,
-            bottom: 32,
+            bottom: tourCardBottom,
             width: 380,
             maxWidth: 'calc(100% - 48px)',
             p: 2,

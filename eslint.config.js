@@ -138,6 +138,7 @@ export default tseslint.config(
       'src/presentation/shell/formatPlaceSearchCategory.ts',
       'src/presentation/shell/SettingsDialog.tsx',
       'src/presentation/shell/OnboardingTour.tsx',
+      'src/presentation/shell/OnboardingMapLegend.tsx',
       'src/presentation/map/MapWorkspace.tsx',
       'src/presentation/map/MapViewControls.tsx',
       'src/presentation/map/MapShareDialog.tsx',

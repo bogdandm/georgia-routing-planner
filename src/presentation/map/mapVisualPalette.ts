@@ -18,14 +18,16 @@ export const mapVisualPalette = {
     rock: '#CBCAC5',
     sand: '#E5D6B3',
     ice: '#F1F1EE',
+    cemeterySign: '#4A4F52',
   },
   vegetation: {
     forest: '#B5C69A',
     grass: '#DEE2DA',
     farmland: '#DFE0DA',
     scrub: '#C0CBA2',
-    wetland: '#B3CBC0',
     park: '#C2CFA7',
+    /** GOST vegetation signs (trees, shrubs, orchards) drawn over the fills. */
+    sign: '#8DA273',
   },
   glacier: {
     fill: '#DCE9ED',
@@ -34,6 +36,8 @@ export const mapVisualPalette = {
     fill: '#78B7D5',
     line: '#78B7D5',
     label: '#075E7A',
+    /** Blue swamp hatching of Soviet/GOST topographic maps, drawn over plain land. */
+    wetland: '#2E7DBF',
   },
   transport: {
     casing: '#6E3C08',
@@ -44,6 +48,7 @@ export const mapVisualPalette = {
     minor: '#F5BE69',
     path: '#D76A00',
     steps: '#A95100',
+    aerialway: '#33383B',
   },
   terrain: {
     contourMinor: appColors.brand.blueGreenDark,
@@ -53,12 +58,23 @@ export const mapVisualPalette = {
     highlight: '#F5F4EF',
     accent: '#898D8F',
     ridge: '#565A5C',
+    /** Brown of the relief on Soviet/GOST topographic maps. */
+    cliff: '#8C4A1E',
+    pass: '#29343A',
+    scree: '#A39B91',
   },
   restricted: {
     line: '#C95050',
   },
   boundary: '#656B70',
-  point: '#365F70',
+  poi: {
+    water: '#0B6E99',
+    hut: '#7A4A1E',
+    campSite: '#3D6B2A',
+    viewpoint: '#29343A',
+    guidepost: '#58636A',
+    attraction: '#365F70',
+  },
   text: {
     primary: '#29343A',
     secondary: '#58636A',
@@ -81,6 +97,7 @@ const mapVisualModePaintPropertyNames = [
   'circle-stroke-opacity',
   'fill-opacity',
   'hillshade-exaggeration',
+  'icon-opacity',
   'line-opacity',
   'text-halo-color',
   'text-opacity',
@@ -97,6 +114,10 @@ export const mapVisualModePaint = {
   vector: {
     [mapLayerIds.landcover]: { 'fill-opacity': 1 },
     [mapLayerIds.glacierAreas]: { 'fill-opacity': 1 },
+    [mapLayerIds.landcoverDetails]: { 'fill-opacity': 1 },
+    [mapLayerIds.landcoverPatterns]: { 'fill-opacity': 1 },
+    [mapLayerIds.landcoverPatternDetails]: { 'fill-opacity': 1 },
+    [mapLayerIds.cemeteries]: { 'fill-opacity': 1 },
     [mapLayerIds.landuse]: { 'fill-opacity': 1 },
     [mapLayerIds.brownfieldAreas]: { 'fill-opacity': 1 },
     [mapLayerIds.buildings]: { 'fill-opacity': 1 },
@@ -111,10 +132,7 @@ export const mapVisualModePaint = {
     [mapLayerIds.hikingSteps]: { 'line-opacity': 0.9 },
     [mapLayerIds.hikingPathDetails]: { 'line-opacity': 0.9 },
     [mapLayerIds.hikingBridleways]: { 'line-opacity': 0.9 },
-    [mapLayerIds.hikingPois]: {
-      'circle-opacity': 0.76,
-      'circle-stroke-opacity': 1,
-    },
+    [mapLayerIds.hikingPois]: { 'icon-opacity': 1 },
     [mapLayerIds.peaks]: { 'circle-opacity': 1, 'circle-stroke-opacity': 1 },
     [mapLayerIds.ridges]: { 'line-opacity': 0.48 },
     [terrainOverlayLayerIds.reliefShade]: { 'hillshade-exaggeration': 0.2 },
@@ -152,6 +170,11 @@ export const mapVisualModePaint = {
   satellite: {
     [mapLayerIds.landcover]: { 'fill-opacity': 0 },
     [mapLayerIds.glacierAreas]: { 'fill-opacity': 0 },
+    // Imagery already shows vegetation, swamps, and scree, so their signs are removed too.
+    [mapLayerIds.landcoverDetails]: { 'fill-opacity': 0 },
+    [mapLayerIds.landcoverPatterns]: { 'fill-opacity': 0 },
+    [mapLayerIds.landcoverPatternDetails]: { 'fill-opacity': 0 },
+    [mapLayerIds.cemeteries]: { 'fill-opacity': 0 },
     [mapLayerIds.landuse]: { 'fill-opacity': 0 },
     [mapLayerIds.restrictedAreas]: { 'line-opacity': 0.8 },
     [mapLayerIds.parks]: { 'fill-opacity': 0 },
@@ -166,10 +189,7 @@ export const mapVisualModePaint = {
     [mapLayerIds.hikingPathDetails]: { 'line-opacity': 0.96 },
     [mapLayerIds.hikingBridleways]: { 'line-opacity': 0.96 },
     [mapLayerIds.hikingSteps]: { 'line-opacity': 0.96 },
-    [mapLayerIds.hikingPois]: {
-      'circle-opacity': 0.76,
-      'circle-stroke-opacity': 1,
-    },
+    [mapLayerIds.hikingPois]: { 'icon-opacity': 1 },
     [mapLayerIds.peaks]: { 'circle-opacity': 1, 'circle-stroke-opacity': 1 },
     [terrainOverlayLayerIds.reliefShade]: { 'hillshade-exaggeration': 0.14 },
     [mapLayerIds.ridges]: { 'line-opacity': 0.56 },

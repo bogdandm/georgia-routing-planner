@@ -13,6 +13,7 @@ import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatel
 import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import {
+  basemapImageIds,
   importedTrackEndpointImageIds,
   importedTrackLayerIds,
   mapLayerIds,
@@ -39,6 +40,8 @@ class FakeLayerMap {
   readonly #listeners = new Map<string, Set<Listener>>();
   readonly sources = new Map<string, unknown>();
   readonly images = new Map<string, unknown>();
+  readonly imageOptions = new Map<string, unknown>();
+  missingImageResolver: ((imageId: string) => Promise<void>) | null = null;
   readonly layers = new Map<string, Record<string, unknown>>();
   readonly visibility = new Map<string, string>();
   readonly paint = new Map<string, unknown>();
@@ -139,8 +142,15 @@ class FakeLayerMap {
     return this.images.has(id);
   }
 
-  public addImage(id: string, image: unknown): void {
+  public addImage(id: string, image: unknown, options?: unknown): void {
     this.images.set(id, image);
+    this.imageOptions.set(id, options);
+  }
+
+  public setMissingStyleImageResolver(
+    resolver: ((imageId: string) => Promise<void>) | null,
+  ): void {
+    this.missingImageResolver = resolver;
   }
 
   public removeImage(id: string): void {
@@ -683,6 +693,7 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.roadCasings)).toBe('none');
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
     expect(map.visibility.get(mapLayerIds.roadLabels)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.aerialways)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingPaths)).toBe('visible');
     expect(controller.setLayerVisibility('hiking-paths', false)).toEqual({
       status: 'success',
@@ -691,11 +702,13 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.hikingPathDetails)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingBridleways)).toBe('none');
     expect(map.visibility.get(mapLayerIds.hikingSteps)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.fords)).toBe('none');
     expect(controller.setLayerVisibility('detail-context', false)).toEqual({
       status: 'success',
     });
     expect(map.visibility.get(mapLayerIds.brownfieldAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.buildings)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.cemeteries)).toBe('none');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
 
     expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
@@ -718,12 +731,42 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.landcover)).toBe('none');
     expect(map.visibility.get(mapLayerIds.glacierAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterways)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.intermittentWaterways)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.landcoverDetails)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.landcoverPatterns)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.landcoverPatternDetails)).toBe('none');
     expect(map.visibility.get(mapLayerIds.ridges)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.cliffs)).toBe('none');
     expect(map.visibility.get(mapLayerIds.riverLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.ridgeLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
+
+    expect(controller.setLayerVisibility('places-and-pois', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(mapLayerIds.hikingPois)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.mountainPasses)).toBe('none');
+  });
+
+  it('generates basemap images on demand and leaves other images to their owners', async () => {
+    const controller = createTestServices().mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const resolveMissingImage = map.missingImageResolver;
+    expect(resolveMissingImage).not.toBeNull();
+    if (resolveMissingImage === null) return;
+
+    await resolveMissingImage(basemapImageIds.cliffPattern);
+    await resolveMissingImage('saved-marker-place-blue');
+
+    expect(map.hasImage(basemapImageIds.cliffPattern)).toBe(true);
+    expect(map.hasImage('saved-marker-place-blue')).toBe(false);
+
+    controller.detach(map as unknown as MapLibreMap);
+    expect(map.missingImageResolver).toBeNull();
   });
 
   it('publishes bursts of terrain queue updates at a bounded rate with the final state', () => {
@@ -1824,9 +1867,11 @@ describe('MapLibreLayerController', () => {
     expect(
       map.paintProperties.get(`${mapLayerIds.hikingBridleways}.line-opacity`),
     ).toBe(0.48);
-    expect(map.paintProperties.get(`${mapLayerIds.hikingPois}.circle-opacity`)).toBe(
-      0.38,
+    expect(map.paintProperties.get(`${mapLayerIds.hikingPois}.icon-opacity`)).toBe(0.5);
+    expect(map.paintProperties.get(`${mapLayerIds.mountainPasses}.icon-opacity`)).toBe(
+      0.5,
     );
+    expect(map.paintProperties.get(`${mapLayerIds.cliffs}.line-opacity`)).toBe(0.5);
     expect(map.paintProperties.get(`${mapLayerIds.waterLabels}.text-opacity`)).toBe(
       0.5,
     );

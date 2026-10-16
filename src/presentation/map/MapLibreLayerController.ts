@@ -54,6 +54,7 @@ import {
 import { selectNearestForecastTimeIndex } from '@/domain/weather/selectNearestForecastTime';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
+import { createBasemapImage } from '@/presentation/map/basemapSymbols';
 import {
   importedTrackEndpointImageIds,
   importedTrackLayerIds,
@@ -208,27 +209,36 @@ function isSatelliteBasemapSourceId(
 const openStreetMapOpacityProperties = {
   [mapLayerIds.landcover]: ['fill-opacity'],
   [mapLayerIds.glacierAreas]: ['fill-opacity'],
+  [mapLayerIds.landcoverDetails]: ['fill-opacity'],
+  [mapLayerIds.landcoverPatterns]: ['fill-opacity'],
+  [mapLayerIds.landcoverPatternDetails]: ['fill-opacity'],
+  [mapLayerIds.cemeteries]: ['fill-opacity'],
   [mapLayerIds.landuse]: ['fill-opacity'],
   [mapLayerIds.brownfieldAreas]: ['fill-opacity'],
   [mapLayerIds.buildings]: ['fill-opacity'],
   [mapLayerIds.water]: ['fill-opacity'],
   [mapLayerIds.parks]: ['fill-opacity'],
   [mapLayerIds.waterways]: ['line-opacity'],
+  [mapLayerIds.intermittentWaterways]: ['line-opacity'],
   [mapLayerIds.ridges]: ['line-opacity'],
+  [mapLayerIds.cliffs]: ['line-opacity'],
   [mapLayerIds.boundaries]: ['line-opacity'],
   [mapLayerIds.restrictedAreas]: ['line-opacity'],
   [mapLayerIds.hikingPaths]: ['line-opacity'],
   [mapLayerIds.hikingPathDetails]: ['line-opacity'],
   [mapLayerIds.hikingBridleways]: ['line-opacity'],
   [mapLayerIds.hikingSteps]: ['line-opacity'],
+  [mapLayerIds.aerialways]: ['line-opacity'],
+  [mapLayerIds.fords]: ['icon-opacity'],
   [mapLayerIds.roadCasings]: ['line-opacity'],
   [mapLayerIds.roads]: ['line-opacity'],
   [mapLayerIds.roadLabels]: ['text-opacity'],
   [mapLayerIds.riverLabels]: ['text-opacity'],
   [mapLayerIds.ridgeLabels]: ['text-opacity'],
-  [mapLayerIds.hikingPois]: ['circle-opacity', 'circle-stroke-opacity'],
+  [mapLayerIds.hikingPois]: ['icon-opacity'],
   [mapLayerIds.hikingPoiLabels]: ['text-opacity'],
   [mapLayerIds.peaks]: ['circle-opacity', 'circle-stroke-opacity'],
+  [mapLayerIds.mountainPasses]: ['icon-opacity'],
   [mapLayerIds.peakLabels]: ['text-opacity'],
   [mapLayerIds.waterLabels]: ['text-opacity'],
   [mapLayerIds.placeLabels]: ['text-opacity'],
@@ -399,26 +409,42 @@ const logicalNativeLayerGroups: Readonly<
   'natural-features': [
     mapLayerIds.landcover,
     mapLayerIds.glacierAreas,
+    mapLayerIds.landcoverDetails,
+    mapLayerIds.landcoverPatterns,
+    mapLayerIds.landcoverPatternDetails,
     mapLayerIds.waterways,
+    mapLayerIds.intermittentWaterways,
     mapLayerIds.ridges,
+    mapLayerIds.cliffs,
     mapLayerIds.water,
     mapLayerIds.riverLabels,
     mapLayerIds.waterLabels,
     mapLayerIds.ridgeLabels,
   ],
   'restricted-areas': [mapLayerIds.restrictedAreas],
-  'detail-context': [mapLayerIds.brownfieldAreas, mapLayerIds.buildings],
+  'detail-context': [
+    mapLayerIds.brownfieldAreas,
+    mapLayerIds.cemeteries,
+    mapLayerIds.buildings,
+  ],
   'hiking-paths': [
     mapLayerIds.hikingPaths,
     mapLayerIds.hikingPathDetails,
     mapLayerIds.hikingBridleways,
     mapLayerIds.hikingSteps,
+    mapLayerIds.fords,
   ],
-  roads: [mapLayerIds.roadCasings, mapLayerIds.roads, mapLayerIds.roadLabels],
+  roads: [
+    mapLayerIds.roadCasings,
+    mapLayerIds.roads,
+    mapLayerIds.aerialways,
+    mapLayerIds.roadLabels,
+  ],
   'places-and-pois': [
     mapLayerIds.hikingPois,
     mapLayerIds.hikingPoiLabels,
     mapLayerIds.peaks,
+    mapLayerIds.mountainPasses,
     mapLayerIds.peakLabels,
     mapLayerIds.placeLabels,
   ],
@@ -813,7 +839,9 @@ export class MapLibreLayerController {
     this.#map?.off('styledata', this.handleStyleData);
     this.#map?.off('sourcedata', this.handleSourceData);
     this.#map?.off('dataloading', this.handleWeatherMapDataLoading);
+    this.#map?.setMissingStyleImageResolver(null);
     this.#map = map;
+    map.setMissingStyleImageResolver(this.resolveBasemapImage);
     map.on('styledata', this.handleStyleData);
     map.on('error', this.handleTerrainOverlayError);
     map.on('sourcedata', this.handleSourceData);
@@ -840,6 +868,20 @@ export class MapLibreLayerController {
     this.contourTiles.setInteractionActive(active);
   }
 
+  /**
+   * MapLibre awaits this before laying out a tile that references a missing image, so
+   * basemap icons and line patterns are generated on first use without a sprite.
+   */
+  private readonly resolveBasemapImage = async (imageId: string): Promise<void> => {
+    const map = this.#map;
+    const pending = createBasemapImage(imageId);
+    if (map === null || pending === null) return;
+    const { image, pixelRatio } = await pending;
+    if (this.#map === map && !map.hasImage(imageId)) {
+      map.addImage(imageId, image, { pixelRatio });
+    }
+  };
+
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
     this.contourTiles.setInteractionActive(false);
@@ -847,6 +889,7 @@ export class MapLibreLayerController {
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);
+    map.setMissingStyleImageResolver(null);
     this.removeTerrainDemLoadingListeners(map);
     this.clearTerrainDemLoading();
     if (this.#importedTrackFocusFrame !== null) {

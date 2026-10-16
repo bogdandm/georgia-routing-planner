@@ -1,10 +1,17 @@
+import {
+  createExpression,
+  featureFilter,
+  validateStyleMin,
+} from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
 
+import { romanizePlaceLabel } from '@/domain/tracks/trackNaming';
 import {
   defaultMapProviderConfigurationInput,
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
+  basemapImageIds,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
@@ -22,6 +29,10 @@ const configuration = parseMapProviderConfiguration(
 );
 
 describe('createHikingMapStyle', () => {
+  it('passes the MapLibre style specification validator', () => {
+    expect(validateStyleMin(createHikingMapStyle(configuration))).toEqual([]);
+  });
+
   it('maps the provider schema into a deterministic hiking-focused layer order', () => {
     const style = createHikingMapStyle(configuration);
     const layerIds = style.layers.map((layer) => layer.id);
@@ -249,9 +260,13 @@ describe('createHikingMapStyle', () => {
     expect(
       orderedLayerIds.slice(
         orderedLayerIds.indexOf(mapLayerIds.landuse) + 1,
-        orderedLayerIds.indexOf(mapLayerIds.landuse) + 3,
+        orderedLayerIds.indexOf(mapLayerIds.landuse) + 4,
       ),
-    ).toEqual([mapLayerIds.brownfieldAreas, mapLayerIds.restrictedAreas]);
+    ).toEqual([
+      mapLayerIds.cemeteries,
+      mapLayerIds.brownfieldAreas,
+      mapLayerIds.restrictedAreas,
+    ]);
     expect(
       orderedLayerIds.slice(
         orderedLayerIds.indexOf(mapLayerIds.water) + 1,
@@ -332,14 +347,37 @@ describe('createHikingMapStyle', () => {
     expect(restricted).toHaveProperty('filter', ['==', ['get', 'class'], 'military']);
   });
 
-  it('prefers English, then provider transliteration, before a native name', () => {
-    expect(englishFirstLabelExpression).toEqual([
-      'coalesce',
-      ['get', 'name:en'],
-      ['get', 'name:latin'],
-      ['get', 'name_en'],
-      ['get', 'name'],
-    ]);
+  it('labels English first and romanizes native names like track names', () => {
+    const parsed = createExpression(englishFirstLabelExpression, 'text-field');
+    if (parsed.result !== 'success') throw new Error(JSON.stringify(parsed.value));
+    const label = (properties: Record<string, string>) =>
+      parsed.value.evaluate({ zoom: 14 }, { type: 'Point', properties }) as string;
+
+    expect(label({ 'name:en': 'Keli Pass', name: 'Кельский' })).toBe('Keli Pass');
+    expect(label({ 'name:en': 'Qelitsadi Lake', name: 'ყელიცადის ტბა' })).toBe(
+      'Kelitsadi Lake',
+    );
+    expect(label({ 'name:en': 'Mosque Square', name: 'მეჩეთის მოედანი' })).toBe(
+      'Mosque Square',
+    );
+    expect(label({ 'name:en': 'Qatar', 'name:ka': 'კატარი', name: 'قطر' })).toBe(
+      'Qatar',
+    );
+    for (const nativeName of [
+      'ესის უღელტეხილი',
+      'ჭაუხის ორმაგი უღელტეხილი',
+      '\u1C9B\u1C94\u1CA1\u1CA2\u1C98\u1C90',
+      'Верхние ночевки',
+      'Ёлка',
+      'Хъелы хох',
+      'სტეფანწმინდა — გველეთი',
+    ]) {
+      expect(label({ name_en: nativeName, name: nativeName })).toBe(
+        romanizePlaceLabel(nativeName),
+      );
+    }
+    expect(label({})).toBe('');
+
     const style = createHikingMapStyle(configuration);
     for (const layerId of [
       mapLayerIds.hikingPoiLabels,
@@ -426,6 +464,109 @@ describe('createHikingMapStyle', () => {
       ['get', 'class'],
       ['literal', ['peak', 'volcano', 'saddle']],
     ]);
+  });
+
+  it('draws passes as crosses, GOST cliffs, fords, and hiking POIs without hotels', () => {
+    const style = createHikingMapStyle(configuration);
+    const layer = (id: string) => style.layers.find((candidate) => candidate.id === id);
+
+    expect(layer(mapLayerIds.peaks)).toHaveProperty('filter', [
+      'in',
+      ['get', 'class'],
+      ['literal', ['peak', 'volcano']],
+    ]);
+    expect(layer(mapLayerIds.mountainPasses)).toMatchObject({
+      type: 'symbol',
+      'source-layer': 'mountain_peak',
+      filter: ['==', ['get', 'class'], 'saddle'],
+      layout: { 'icon-image': basemapImageIds.mountainPass },
+    });
+    expect(layer(mapLayerIds.cliffs)).toMatchObject({
+      type: 'line',
+      'source-layer': 'mountain_peak',
+      filter: ['==', ['get', 'class'], 'cliff'],
+      paint: { 'line-pattern': basemapImageIds.cliffPattern },
+    });
+    expect(layer(mapLayerIds.fords)).toMatchObject({
+      type: 'symbol',
+      'source-layer': 'transportation',
+      filter: ['==', ['get', 'brunnel'], 'ford'],
+      layout: { 'icon-image': basemapImageIds.ford },
+    });
+    const pois = layer(mapLayerIds.hikingPois);
+    const poiFilter = featureFilter(
+      pois && 'filter' in pois ? pois.filter : undefined,
+      'filter',
+    );
+    const showsPoi = (properties: Record<string, string>) =>
+      poiFilter.filter({ zoom: 14 }, { type: 1, properties });
+    expect(showsPoi({ class: 'lodging', subclass: 'alpine_hut' })).toBe(true);
+    expect(showsPoi({ class: 'drinking_water', subclass: 'drinking_water' })).toBe(
+      true,
+    );
+    expect(showsPoi({ class: 'information', subclass: 'guidepost' })).toBe(true);
+    expect(showsPoi({ class: 'lodging', subclass: 'hotel' })).toBe(false);
+    expect(showsPoi({ class: 'lodging', subclass: 'guest_house' })).toBe(false);
+  });
+
+  it('draws GOST signs for vegetation, plantings, swamps, scree, and cemeteries', () => {
+    const style = createHikingMapStyle(configuration);
+    const signFor = (layerId: string, properties: Record<string, string>) => {
+      const layer = style.layers.find((candidate) => candidate.id === layerId);
+      if (layer?.type !== 'fill') throw new Error(`Missing fill layer ${layerId}`);
+      const feature = { type: 3 as const, properties };
+      if (!featureFilter(layer.filter, 'filter').filter({ zoom: 14 }, feature))
+        return null;
+      const pattern = createExpression(layer.paint?.['fill-pattern'], 'fill-pattern');
+      if (pattern.result !== 'success') throw new Error(JSON.stringify(pattern.value));
+      return pattern.value.evaluate({ zoom: 14 }, feature) as unknown;
+    };
+    const provider = mapLayerIds.landcoverPatterns;
+    const detail = mapLayerIds.landcoverPatternDetails;
+
+    expect(signFor(provider, { class: 'wood', subclass: 'forest' })).toBe(
+      basemapImageIds.forestPattern,
+    );
+    expect(signFor(provider, { class: 'grass', subclass: 'scrub' })).toBe(
+      basemapImageIds.scrubPattern,
+    );
+    expect(signFor(provider, { class: 'farmland', subclass: 'vineyard' })).toBe(
+      basemapImageIds.plantationPattern,
+    );
+    expect(signFor(provider, { class: 'farmland', subclass: 'orchard' })).toBe(
+      basemapImageIds.plantationPattern,
+    );
+    expect(signFor(provider, { class: 'wetland', subclass: 'wetland' })).toBe(
+      basemapImageIds.wetlandPattern,
+    );
+    expect(signFor(provider, { class: 'grass', subclass: 'meadow' })).toBeNull();
+    expect(signFor(detail, { kind: 'bog' })).toBe(basemapImageIds.wetlandPattern);
+    expect(signFor(detail, { kind: 'vineyard' })).toBe(
+      basemapImageIds.plantationPattern,
+    );
+    expect(signFor(detail, { kind: 'scree' })).toBe(basemapImageIds.screePattern);
+    expect(signFor(detail, { kind: 'brownfield' })).toBeNull();
+    expect(signFor(mapLayerIds.cemeteries, { kind: 'grave_yard' })).toBe(
+      basemapImageIds.cemeteryPattern,
+    );
+
+    const detailFill = style.layers.find(
+      (candidate) => candidate.id === mapLayerIds.landcoverDetails,
+    );
+    if (detailFill?.type !== 'fill') throw new Error('Missing detail fill layer');
+    const fillFor = (kind: string) => {
+      const feature = { type: 3 as const, properties: { kind } };
+      if (!featureFilter(detailFill.filter, 'filter').filter({ zoom: 14 }, feature)) {
+        return null;
+      }
+      const color = createExpression(detailFill.paint?.['fill-color'], 'fill-color');
+      if (color.result !== 'success') throw new Error(JSON.stringify(color.value));
+      return String(color.value.evaluate({ zoom: 14 }, feature));
+    };
+    // Shortbread-only areas get the fill their signs belong to; swamps stay plain land.
+    expect(fillFor('forest')).toBe(mapVisualPalette.vegetation.forest);
+    expect(fillFor('vineyard')).toBe(mapVisualPalette.vegetation.farmland);
+    expect(fillFor('bog')).toBeNull();
   });
 
   it('keeps labels readable across nearby and distant map detail', () => {

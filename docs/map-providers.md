@@ -35,39 +35,64 @@ The basemap is a hybrid of two vector sources. OpenFreeMap serves the unmodified
 `https://tiles.openfreemap.org/planet` (z0–14) and glyphs from
 `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf`. The
 [provider](https://openfreemap.org/) requires no registration or key and currently
-imposes no request limit, but offers no SLA. Provider sprites are not used; hiking
-points render as circles and text.
+imposes no request limit, but offers no SLA. Provider sprites are not used: hiking icons
+come from the bundled CC0 Pinhead set and line patterns are drawn by the client, both
+generated on first use (`src/presentation/map/basemapSymbols.ts`).
 
 | Application concept           | Source layer          | Relevant fields/values                                                       |
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------- |
 | Land cover                    | `landcover`           | `class` (`wood`, `grass`, `farmland`, `wetland`, `ice`, etc.) and `subclass` |
 | Human land use                | `landuse`             | `class` (`military`, residential, and other uses)                            |
 | Protected land                | `park`                | `class`, names                                                               |
-| Water                         | `water`, `waterway`   | geometry and `class`                                                         |
+| Water                         | `water`, `waterway`   | geometry, `class`, `intermittent` (dashed)                                   |
 | Boundaries                    | `boundary`            | `admin_level`, `disputed`, `maritime`                                        |
 | Overview paths and bridleways | `transportation`      | `class`, `subclass`, `brunnel`; overview paths stop at z13                   |
+| Fords and aerialways          | `transportation`      | `brunnel = ford` (icon), `class = aerialway` (crossbar line)                 |
 | Road/path labels              | `transportation_name` | names, `class`, `subclass`                                                   |
-| Peaks and passes              | `mountain_peak`       | `class` (`peak`, `saddle`, etc.), names, `ele`                               |
-| Hiking POIs                   | `poi`                 | `class`, `subclass`, names, `rank`                                           |
+| Peaks, passes, and cliffs     | `mountain_peak`       | `class` (`peak`, `saddle` as a cross, `cliff` as a GOST toothed line), `ele` |
+| Hiking POIs                   | `poi`                 | huts, shelters, camp sites, drinking water, viewpoints, guideposts           |
 | Settlements                   | `place`               | `class`, names, `rank`, `capital`                                            |
 | Water labels                  | `water_name`          | names and geometry-specific fields                                           |
 
 OpenMapTiles has no hiking-route relation layer, so the style shows physical ways
 (`path`, `track`, `footway`, `steps`, `bridleway`, `cycleway`) rather than official
 marked routes. Map labels are English-first in every UI language: `name:en`, then the
-provider-generated `name:latin`, then legacy fallbacks
-(`src/presentation/map/mapStyleFactory.ts`). Land-cover `ice` supplies glaciers and
-land-use `military` supplies restricted areas; the schema has no dependable
-access/ownership field, so private-property closures are not inferred. New source-layer
-families must get a Layers control in the same change as their style.
+provider-generated `name:latin`, then legacy fallbacks. The chosen label is romanized in
+the style expression with the same rules as track names, so native-only Georgian or
+Cyrillic names never appear; on places whose native `name` is Georgian, the
+national-system `q` of English names is written `k` unless `u` follows
+(`src/presentation/map/mapStyleFactory.ts`). MapLibre expressions have no string
+replacement, so the expression maps each of the first 40 characters separately; longer
+labels are shown as published, and the expression adds roughly 50 KB per label layer to
+the style. Land-cover `ice` supplies glaciers and land-use `military` supplies
+restricted areas; the schema has no dependable access/ownership field, so
+private-property closures are not inferred. New source-layer families must get a Layers
+control in the same change as their style.
+
+Lodging is limited to `alpine_hut` and `wilderness_hut`; hotels and guest houses are not
+drawn. Cliffs follow the OSM convention that the lower side lies to the right of the
+way, so the teeth point downhill as on Soviet GOST topographic maps. Neither source
+carries springs (`natural=spring`), waterfalls, trail difficulty, or path visibility,
+and both start paths and tracks at z12–13.
+
+Land cover carries sparse GOST signs over its fill from z10: OpenFreeMap `landcover`
+everywhere plus Shortbread `land` from z12, which adds small areas OpenFreeMap omits.
+Swamps (bogs, marshes, reed beds, wet meadows) are irregular blue dashes on plain land,
+forest a generic crown-on-stem tree, scrub and heath three-dot clumps, scree and shingle
+scattered dots, and orchards, vineyards, and nurseries share one regular grid of circles
+that marks man-made plantings. Shortbread cemeteries and grave yards get small crosses
+from z12. Neither source records leaf type or whether a swamp is passable, so forest
+type and swamp passability are not drawn. Over imagery these signs are hidden with the
+vegetation fills.
 
 ## Detail vector: OSM Shortbread v1
 
 The OSM Foundation endpoint
 `https://vector.openstreetmap.org/shortbread_v1/tilejson.json` (z0–14, overzoomed above)
-is a second source, not a replacement. Shortbread supplies `land` (`kind = brownfield`),
-unfiltered `buildings`, and `streets`; OpenFreeMap stays authoritative for peaks,
-saddles, ridges, POIs, water and place labels, glyphs, and z10–12 overview paths.
+is a second source, not a replacement. Shortbread supplies `land` (`kind = brownfield`,
+vegetation, wetland, scree, and cemetery kinds), unfiltered `buildings`, and `streets`;
+OpenFreeMap stays authoritative for peaks, saddles, ridges, POIs, water and place
+labels, glyphs, and z10–12 overview paths.
 
 Visible roads use Shortbread `motorway`, `trunk`, `primary`, `secondary`, `tertiary`,
 `unclassified`, `residential`, `living_street`, and `service`; from z13 it also supplies

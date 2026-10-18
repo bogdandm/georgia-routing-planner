@@ -80,6 +80,7 @@ import {
   requestMarkerCreationAt,
   requestSatelliteSearch,
   requestWeatherForecast,
+  setRenderBenchmarkState,
   type WeatherMapForecastMarker,
 } from '@/presentation/map/mapInteractionStore';
 import {
@@ -461,6 +462,10 @@ export function MapWorkspace({
   const pointInspectionCommand = useStore(
     mapInteractionStore,
     (state) => state.pointInspectionCommand,
+  );
+  const renderBenchmarkStatus = useStore(
+    mapInteractionStore,
+    (state) => state.renderBenchmark.status,
   );
   const developerMode = useUiStore((state) => state.developerMode);
   const elevationGradeLegendDismissed = useUiStore(
@@ -1059,6 +1064,64 @@ export function MapWorkspace({
       });
     };
   }, [developerMode, facade, mapDebugOptions]);
+
+  // The developer drawer only requests the benchmark; the map owns running it. The run
+  // outlives this effect because its own status updates re-run the effect, so only the
+  // current run may write state and the effect below stops it on unmount.
+  const renderBenchmarkRun = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (renderBenchmarkStatus !== 'requested') return;
+    // A map that failed fatally never becomes runnable; degraded maps still render.
+    if (snapshot.lifecycle === 'fatal') {
+      setRenderBenchmarkState({
+        status: 'failed',
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Developer diagnostics are English-only.
+        message: 'The map failed to load, so the benchmark cannot run.',
+      });
+      return;
+    }
+    if (snapshot.lifecycle === 'loading') return;
+    const run = new AbortController();
+    renderBenchmarkRun.current = run;
+    const isCurrent = () => renderBenchmarkRun.current === run;
+    setRenderBenchmarkState({
+      status: 'running',
+      step: 'settle',
+      stepStartedAt: Date.now(),
+    });
+    facade
+      .runRenderBenchmark((step) => {
+        if (!isCurrent()) return;
+        setRenderBenchmarkState({ status: 'running', step, stepStartedAt: Date.now() });
+      }, run.signal)
+      .then(
+        (report) => {
+          if (isCurrent()) setRenderBenchmarkState({ status: 'complete', report });
+        },
+        (error: unknown) => {
+          if (!isCurrent()) return;
+          setRenderBenchmarkState({
+            status: 'failed',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        },
+      )
+      .finally(() => {
+        if (isCurrent()) renderBenchmarkRun.current = null;
+      });
+  }, [facade, renderBenchmarkStatus, snapshot.lifecycle]);
+  useEffect(
+    () => () => {
+      const run = renderBenchmarkRun.current;
+      if (run === null) return;
+      renderBenchmarkRun.current = null;
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- Developer diagnostics are English-only.
+      const message = 'The map closed during the benchmark.';
+      run.abort(new Error(message));
+      setRenderBenchmarkState({ status: 'failed', message });
+    },
+    [facade],
+  );
 
   useEffect(() => {
     const handleOnline = () => {

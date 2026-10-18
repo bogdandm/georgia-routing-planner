@@ -26,6 +26,11 @@ import {
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import {
+  runRenderBenchmark,
+  type RenderBenchmarkReport,
+  type RenderBenchmarkStep,
+} from '@/presentation/map/renderBenchmark';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import type {
   MapLibreLayerController,
@@ -246,6 +251,8 @@ export class MapLibreFacade implements MapFacade {
     readonly promise: Promise<TerrainTransitionResult>;
   } | null = null;
   #terrainCameraAdjustmentActive = false;
+  /** Set while the render benchmark runs; detaching the map aborts it. */
+  #renderBenchmark: AbortController | null = null;
   #terrainSourceRefreshRequired = false;
   #terrainRetryRevision = 0;
   #cancelTerrainWait: (() => void) | null = null;
@@ -702,7 +709,7 @@ export class MapLibreFacade implements MapFacade {
         if (camera.bearing !== 0 || camera.pitch !== 0) {
           this.#map.jumpTo({ bearing: 0, pitch: 0 });
         } else {
-          this.onViewSettled({ camera, terrainMode: 'flat' });
+          this.persistSettledView({ camera, terrainMode: 'flat' });
         }
       }
       return Promise.resolve({ status: 'success', mode });
@@ -717,6 +724,56 @@ export class MapLibreFacade implements MapFacade {
     });
     this.#terrainTransition = { mode, promise };
     return promise;
+  }
+
+  /**
+   * Runs the developer render benchmark in 3D at its fixed scene, then restores the
+   * user's terrain mode and camera. Neither the temporary 3D mode nor benchmark camera
+   * moves are persisted; `signal` and detaching the map stop the run.
+   */
+  public async runRenderBenchmark(
+    onStep: (step: RenderBenchmarkStep) => void,
+    signal: AbortSignal,
+  ): Promise<RenderBenchmarkReport> {
+    const map = this.#map;
+    if (map === null || this.#renderBenchmark !== null) {
+      throw new Error('The map is not ready for a render benchmark.');
+    }
+    const camera = this.readCamera(map);
+    const previousMode = this.#snapshot.terrainMode;
+    const controller = new AbortController();
+    this.#renderBenchmark = controller;
+    try {
+      if (previousMode !== 'terrain') {
+        const result = await this.setTerrainMode('terrain');
+        if (result.status === 'failed') throw new Error(result.reason);
+      }
+      return await runRenderBenchmark(
+        map,
+        onStep,
+        AbortSignal.any([signal, controller.signal]),
+      );
+    } finally {
+      const attached = this.#map === map;
+      if (attached && previousMode !== 'terrain')
+        await this.setTerrainMode(previousMode);
+      this.#renderBenchmark = null;
+      // Not a benchmark move: `moveend` persists the restored view and snapshot camera.
+      if (attached) {
+        map.jumpTo({
+          center: [camera.longitude, camera.latitude],
+          zoom: camera.zoom,
+          bearing: camera.bearing,
+          pitch: camera.pitch,
+        });
+      }
+    }
+  }
+
+  /** Hands a settled view to persistence, except the benchmark's temporary views. */
+  private persistSettledView(view: MapViewState): void {
+    if (this.#renderBenchmark !== null) return;
+    this.onViewSettled(view);
   }
 
   public setDebugOptions(options: MapDebugOptions): void {
@@ -871,11 +928,12 @@ export class MapLibreFacade implements MapFacade {
     this.layerController?.setTerrainInteractionActive(false);
     // Terrain mode changes deliberately issue intermediate camera commands. Persisting
     // one of those transient views can restore a pitched flat map or a level 3D map.
-    if (this.#terrainCameraAdjustmentActive) return;
+    // The render benchmark's scripted scene is never the user's view either.
+    if (this.#terrainCameraAdjustmentActive || this.#renderBenchmark !== null) return;
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
-      this.onViewSettled({ camera, terrainMode: this.#snapshot.terrainMode });
+      this.persistSettledView({ camera, terrainMode: this.#snapshot.terrainMode });
       this.emitSettledViewport(this.#map);
       const now = Date.now();
       if (now - this.#lastCameraDiagnosticAt >= 5_000) {
@@ -1417,7 +1475,7 @@ export class MapLibreFacade implements MapFacade {
         camera: flatCamera,
         message: null,
       });
-      this.onViewSettled({ camera: flatCamera, terrainMode: 'flat' });
+      this.persistSettledView({ camera: flatCamera, terrainMode: 'flat' });
       this.logger.log({ level: 'info', name: 'map.terrain.disabled' });
       return { status: 'success', mode };
     }
@@ -1480,7 +1538,7 @@ export class MapLibreFacade implements MapFacade {
         sourceIds: Object.keys(map.getStyle().sources),
         message: null,
       });
-      this.onViewSettled({ camera: terrainCamera, terrainMode: 'terrain' });
+      this.persistSettledView({ camera: terrainCamera, terrainMode: 'terrain' });
       this.logger.log({ level: 'info', name: 'map.terrain.enabled' });
       return { status: 'success', mode };
     } catch {
@@ -1692,6 +1750,7 @@ export class MapLibreFacade implements MapFacade {
   }
 
   private detach(): void {
+    this.#renderBenchmark?.abort(new Error('The map closed during the benchmark.'));
     this.cancelAllSourceRecoveries();
     this.#initialViewportSettled = false;
     const map = this.#map;

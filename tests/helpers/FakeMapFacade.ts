@@ -19,6 +19,10 @@ import {
   type TerrainMode,
   type TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
+import type {
+  RenderBenchmarkReport,
+  RenderBenchmarkStep,
+} from '@/presentation/map/renderBenchmark';
 
 export class FakeMapFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
@@ -197,6 +201,13 @@ export class FakeMapFacade implements MapFacade {
     }
     this.setSnapshot({ terrainMode: mode });
     return Promise.resolve({ status: 'success', mode });
+  }
+
+  public runRenderBenchmark(
+    _onStep: (step: RenderBenchmarkStep) => void,
+    _signal: AbortSignal,
+  ): Promise<RenderBenchmarkReport> {
+    return Promise.reject(new Error('The fake map cannot render a benchmark.'));
   }
 
   public setDebugOptions(options: MapDebugOptions): void {

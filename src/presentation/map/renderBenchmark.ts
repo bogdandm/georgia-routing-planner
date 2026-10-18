@@ -639,10 +639,16 @@ function finishGpu(gl: WebGL2RenderingContext): void {
   gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
 }
 
+/**
+ * Allocates a framebuffer target and rebinds `sampledTexture` afterwards: drawing while
+ * the target's own texture is bound for sampling is a feedback loop that WebGL 2 drops
+ * with INVALID_OPERATION, which would time no work at all.
+ */
 function createTarget(
   gl: WebGL2RenderingContext,
   size: number,
   mipmapped: boolean,
+  sampledTexture: WebGLTexture,
 ): { readonly texture: WebGLTexture; readonly framebuffer: WebGLFramebuffer } {
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -661,6 +667,7 @@ function createTarget(
   if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
     throw new Error('A benchmark framebuffer could not be allocated.');
   }
+  gl.bindTexture(gl.TEXTURE_2D, sampledTexture);
   return { texture, framebuffer };
 }
 
@@ -713,7 +720,7 @@ function runSyntheticGpuBenchmark(): SyntheticGpuResults | null {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     // Fill rate: 32 textured, blended passes over a 1024 px target, after one warm-up.
-    const fillTarget = createTarget(gl, 1024, false);
+    const fillTarget = createTarget(gl, 1024, false, pattern);
     gl.viewport(0, 0, 1024, 1024);
     gl.uniform1f(scale, 1);
     const fillPasses = 32;
@@ -757,7 +764,7 @@ function runSyntheticGpuBenchmark(): SyntheticGpuResults | null {
       finishGpu(gl);
       const startedAt = performance.now();
       for (let tile = 0; tile < tiles; tile += 1) {
-        const target = createTarget(gl, size, true);
+        const target = createTarget(gl, size, true, pattern);
         gl.viewport(0, 0, size, size);
         gl.clear(gl.COLOR_BUFFER_BIT);
         for (let pass = 0; pass < 8; pass += 1) gl.drawArrays(gl.TRIANGLES, 0, 6);

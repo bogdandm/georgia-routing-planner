@@ -3104,7 +3104,7 @@ export class MapLibreLayerController {
             'text-halo-width': 1.2,
           },
         },
-        mapInsertionPoints.contoursBeforeLayerId,
+        mapInsertionPoints.contourLabelsBeforeLayerId,
       );
     }
   }
@@ -3118,12 +3118,16 @@ export class MapLibreLayerController {
     const indexIndex = layerIds.indexOf(terrainOverlayLayerIds.contourIndex);
     const labelIndex = layerIds.indexOf(terrainOverlayLayerIds.contourLabels);
     const waterIndex = layerIds.indexOf(mapInsertionPoints.contoursBeforeLayerId);
+    const labelAnchorIndex = layerIds.indexOf(
+      mapInsertionPoints.contourLabelsBeforeLayerId,
+    );
     const orderIsCorrect =
       rasterIndex >= 0 &&
       minorIndex > rasterIndex &&
       indexIndex > minorIndex &&
+      indexIndex < waterIndex &&
       labelIndex > indexIndex &&
-      labelIndex < waterIndex;
+      labelIndex < labelAnchorIndex;
     if (orderIsCorrect) return;
     map.moveLayer(
       terrainOverlayLayerIds.contourMinor,
@@ -3135,7 +3139,7 @@ export class MapLibreLayerController {
     );
     map.moveLayer(
       terrainOverlayLayerIds.contourLabels,
-      mapInsertionPoints.contoursBeforeLayerId,
+      mapInsertionPoints.contourLabelsBeforeLayerId,
     );
   }
 

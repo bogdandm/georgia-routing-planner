@@ -146,6 +146,32 @@ describe('createHikingMapStyle', () => {
     ]);
   });
 
+  it('keeps every 3D-draped basemap layer below the first icon or label layer', () => {
+    // MapLibre drapes consecutive layers of these types into one texture per terrain
+    // tile; any other layer between them starts another full set of 3D textures.
+    const drapedLayerTypes: Record<string, true> = {
+      background: true,
+      fill: true,
+      line: true,
+      raster: true,
+      hillshade: true,
+    };
+    const layers = createHikingMapStyle(configuration).layers;
+    const firstUndrapedIndex = layers.findIndex(
+      (layer) => drapedLayerTypes[layer.type] !== true,
+    );
+
+    expect(layers[firstUndrapedIndex]?.id).toBe(
+      mapInsertionPoints.importedTracksBeforeLayerId,
+    );
+    expect(
+      layers
+        .slice(firstUndrapedIndex)
+        .filter((layer) => drapedLayerTypes[layer.type] === true)
+        .map((layer) => layer.id),
+    ).toEqual([]);
+  });
+
   it('renders Shortbread brownfields, buildings, service roads, and detailed paths', () => {
     const style = createHikingMapStyle(configuration);
     const orderedLayerIds = style.layers.map((layer) => layer.id);

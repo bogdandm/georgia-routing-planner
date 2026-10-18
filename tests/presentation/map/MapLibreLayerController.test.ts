@@ -1208,6 +1208,13 @@ describe('MapLibreLayerController', () => {
     expect(Math.max(...importedTrackLineLayerIdsInOrder)).toBeLessThan(
       Math.min(...labelLayerIndices),
     );
+    // Track lines end the 3D-draped line stack directly below the first basemap icons.
+    expect(Math.max(...importedTrackLineLayerIdsInOrder)).toBeLessThan(
+      [...map.layers.keys()].indexOf(mapLayerIds.fords),
+    );
+    expect(Math.min(...importedTrackLineLayerIdsInOrder)).toBeGreaterThan(
+      [...map.layers.keys()].indexOf(mapLayerIds.cliffs),
+    );
     expect([...map.layers.keys()].indexOf(importedTrackLayerIds.trace)).toBeGreaterThan(
       Math.max(...labelLayerIndices),
     );
@@ -2020,8 +2027,15 @@ describe('MapLibreLayerController', () => {
     expect(layerOrder.indexOf(terrainOverlayLayerIds.contourMinor)).toBeGreaterThan(
       layerOrder.indexOf(mapLayerIds.waterways),
     );
-    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeLessThan(
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourIndex)).toBeLessThan(
       layerOrder.indexOf(mapLayerIds.water),
+    );
+    // Labels sit with the other labels so contour lines stay in the 3D-draped line stack.
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeGreaterThan(
+      layerOrder.indexOf(mapLayerIds.fords),
+    );
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeLessThan(
+      layerOrder.indexOf(mapLayerIds.hikingPoiLabels),
     );
 
     expect(
@@ -2138,6 +2152,11 @@ describe('MapLibreLayerController', () => {
     expect(raster.tiles[0]).toContain(`application_origin=${originCacheKey}`);
     expect(raster.bounds).toEqual([44, 42, 45, 43]);
     expect(map.layers.has(sentinelMapLayerIds.footprint)).toBe(true);
+    // The footprint line stays in the 3D-draped line stack below the first basemap icons.
+    const layerOrder = [...map.layers.keys()];
+    expect(layerOrder.indexOf(sentinelMapLayerIds.footprint)).toBe(
+      layerOrder.indexOf(mapLayerIds.fords) - 1,
+    );
     expect(mapLayerStore.getState().appliedImagery).toMatchObject({
       status: 'ready',
       sceneId: 'scene-a',

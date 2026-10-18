@@ -7,6 +7,10 @@ import type {
   MapTravelPath,
   MapViewportBounds,
 } from '@/presentation/map/mapTypes';
+import type {
+  RenderBenchmarkReport,
+  RenderBenchmarkStep,
+} from '@/presentation/map/renderBenchmark';
 
 interface MapNavigationTarget extends MapCoordinate {
   readonly zoom?: number;
@@ -70,6 +74,19 @@ interface MapShareRequest {
   readonly center: MapCoordinate | null;
 }
 
+/** Developer render benchmark: requested by the developer drawer, run by the map. */
+export type RenderBenchmarkState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'requested' }
+  | {
+      readonly status: 'running';
+      readonly step: RenderBenchmarkStep;
+      /** `Date.now()` when the step began, so the drawer can show how long it runs. */
+      readonly stepStartedAt: number;
+    }
+  | { readonly status: 'complete'; readonly report: RenderBenchmarkReport }
+  | { readonly status: 'failed'; readonly message: string };
+
 interface MapInteractionState {
   readonly navigationCommand: MapNavigationCommand | null;
   readonly fitBoundsCommand: MapFitBoundsCommand | null;
@@ -83,6 +100,7 @@ interface MapInteractionState {
   readonly markerPlacement: MarkerPlacement | null;
   readonly markerCreationCommand: MarkerCreationCommand | null;
   readonly shareRequest: MapShareRequest | null;
+  readonly renderBenchmark: RenderBenchmarkState;
 }
 
 export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
@@ -98,6 +116,7 @@ export const mapInteractionStore = createStore<MapInteractionState>()(() => ({
   markerPlacement: null,
   markerCreationCommand: null,
   shareRequest: null,
+  renderBenchmark: { status: 'idle' },
 }));
 
 let nextCommandId = 0;
@@ -341,6 +360,16 @@ export function closeMapShare(): void {
   mapInteractionStore.setState({ shareRequest: null });
 }
 
+export function requestRenderBenchmark(): void {
+  const { status } = mapInteractionStore.getState().renderBenchmark;
+  if (status === 'requested' || status === 'running') return;
+  mapInteractionStore.setState({ renderBenchmark: { status: 'requested' } });
+}
+
+export function setRenderBenchmarkState(renderBenchmark: RenderBenchmarkState): void {
+  mapInteractionStore.setState({ renderBenchmark });
+}
+
 export function resetMapInteractionStore(): void {
   nextCommandId = 0;
   nextSatelliteSearchRequestId = 0;
@@ -359,5 +388,6 @@ export function resetMapInteractionStore(): void {
     markerPlacement: null,
     markerCreationCommand: null,
     shareRequest: null,
+    renderBenchmark: { status: 'idle' },
   });
 }

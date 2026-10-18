@@ -32,6 +32,7 @@ import {
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { HealthCheckResult } from '@/diagnostics/export/diagnosticBundleSchema';
+import { RenderBenchmarkPanel } from '@/presentation/developer-tools/RenderBenchmarkPanel';
 import { SentinelQueryTimeline } from '@/presentation/developer-tools/SentinelQueryTimeline';
 import { formatDateTime } from '@/presentation/formatDateTime';
 import { useUiStore } from '@/presentation/shell/uiStore';
@@ -267,6 +268,8 @@ export function DeveloperDrawer({
               <Typography variant="body2">Commit: {buildInfo.commit}</Typography>
               <Typography variant="body2">Mode: {buildInfo.mode}</Typography>
             </Box>
+            <RenderBenchmarkPanel />
+            <Divider />
             <Button
               size="small"
               startIcon={<HealthAndSafetyOutlinedIcon />}

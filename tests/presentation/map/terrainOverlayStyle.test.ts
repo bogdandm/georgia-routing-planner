@@ -8,7 +8,7 @@ import { mapSourceIds, terrainOverlayLayerIds } from '@/presentation/map/mapIds'
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 
 describe('terrain overlay style contracts', () => {
-  it('loads the provider raster DEM directly from validated configuration', () => {
+  it('declares the provider raster DEM as 256 px so 3D textures stay 1024 px', () => {
     const configuration = parseMapProviderConfiguration(
       defaultMapProviderConfigurationInput,
       'https://example.test/app/',
@@ -17,7 +17,7 @@ describe('terrain overlay style contracts', () => {
     expect(createTerrainDemSource(configuration.terrain)).toEqual({
       type: 'raster-dem',
       tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
-      tileSize: 512,
+      tileSize: 256,
       minzoom: 0,
       maxzoom: 12,
       encoding: 'terrarium',

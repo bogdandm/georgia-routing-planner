@@ -2047,7 +2047,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.get('terrain-dem')).toMatchObject({
       type: 'raster-dem',
       tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
-      tileSize: 512,
+      tileSize: 256,
       maxzoom: 12,
       encoding: 'terrarium',
     });

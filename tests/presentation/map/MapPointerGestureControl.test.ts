@@ -83,7 +83,7 @@ describe('MapPointerGestureControl', () => {
       const container = document.createElement('div');
       const { easeTo, map, panBy, unproject } = createMapDouble();
       const pivot = createPivotDouble();
-      const control = new MapPointerGestureControl(pivot);
+      const control = new MapPointerGestureControl({ pivotIndicator: pivot });
       control.attach(container, map);
       control.setTerrainOrbitEnabled(terrainEnabled);
 
@@ -151,7 +151,7 @@ describe('MapPointerGestureControl', () => {
     container.addEventListener('click', mapClickListener);
     const { easeTo, map, panBy, unproject } = createMapDouble();
     const pivot = createPivotDouble();
-    const control = new MapPointerGestureControl(pivot);
+    const control = new MapPointerGestureControl({ pivotIndicator: pivot });
     control.attach(container, map);
     control.setTerrainOrbitEnabled(true);
 
@@ -216,7 +216,7 @@ describe('MapPointerGestureControl', () => {
       unproject,
     } = createMapDouble();
     const pivot = createPivotDouble();
-    const control = new MapPointerGestureControl(pivot);
+    const control = new MapPointerGestureControl({ pivotIndicator: pivot });
     control.attach(container, map);
     control.setTerrainOrbitEnabled(true);
 
@@ -248,17 +248,18 @@ describe('MapPointerGestureControl', () => {
 
     expect(unproject).not.toHaveBeenCalled();
     expect(pivot.show).not.toHaveBeenCalled();
-    expect(calculateCameraOptionsFromCameraLngLatAltRotation).toHaveBeenCalledWith(
-      cameraPosition,
-      4_200,
-      expect.closeTo(29.6),
-      75,
-    );
-    expect(easeTo).toHaveBeenCalledWith({
+    const [solvedPosition, solvedAltitude, solvedBearing, solvedPitch] =
+      calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0] ?? [];
+    expect(solvedPosition).toBe(cameraPosition);
+    expect(solvedAltitude).toBe(4_200);
+    expect(solvedBearing).toBeCloseTo(29.6);
+    expect(solvedPitch).toBe(75);
+    expect(easeTo).toHaveBeenCalledOnce();
+    expect(easeTo.mock.calls[0]?.[0]).toMatchObject({
       center: { lng: 44.81, lat: 41.72 },
       zoom: 12.5,
       elevation: 1_500,
-      bearing: expect.closeTo(29.6),
+      bearing: solvedBearing,
       pitch: 75,
       duration: 0,
       essential: true,
@@ -285,7 +286,9 @@ describe('MapPointerGestureControl', () => {
         pitch,
       }),
     );
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
     control.setTerrainOrbitEnabled(true);
 
@@ -298,22 +301,66 @@ describe('MapPointerGestureControl', () => {
       }),
     );
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 30 }));
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
 
-    expect(easeTo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        bearing: expect.closeTo(11.96),
-        pitch: 30,
-        zoom: 21.9,
-      }),
-    );
+    expect(easeTo).toHaveBeenCalledOnce();
+    expect(easeTo.mock.calls[0]?.[0]).toMatchObject({ pitch: 30, zoom: 21.9 });
+    expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(11.96);
     control.detach();
+  });
+
+  it('moves the camera once per frame and settles once after a gesture that moved it', () => {
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
+    const container = document.createElement('div');
+    const { easeTo, map } = createMapDouble();
+    const onCameraGestureEnd = vi.fn();
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+      onCameraGestureEnd,
+    });
+    control.attach(container, map);
+    control.setTerrainOrbitEnabled(true);
+    const press = () => {
+      container.dispatchEvent(
+        new MouseEvent('mousedown', { button: 1, clientX: 0, clientY: 0 }),
+      );
+    };
+
+    press();
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 1 }));
+    expect(onCameraGestureEnd).not.toHaveBeenCalled();
+
+    press();
+    for (const clientX of [10, 30, 50]) {
+      window.dispatchEvent(new MouseEvent('mousemove', { clientX, clientY: 0 }));
+    }
+    expect(easeTo).not.toHaveBeenCalled();
+    expect(frames).toHaveLength(1);
+    frames[0]?.(0);
+    expect(easeTo).toHaveBeenCalledOnce();
+    expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(24);
+
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 60, clientY: 0 }));
+    expect(control.cameraGestureActive).toBe(true);
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 1 }));
+    expect(easeTo).toHaveBeenCalledTimes(2);
+    expect(easeTo.mock.calls[1]?.[0].bearing).toBeCloseTo(26.8);
+    expect(control.cameraGestureActive).toBe(false);
+    expect(onCameraGestureEnd).toHaveBeenCalledOnce();
+    control.detach();
+    requestFrame.mockRestore();
   });
 
   it('leaves Shift+left, Ctrl+left, ordinary left, and right native in 2D', () => {
     const container = document.createElement('div');
     const nativeListener = vi.fn();
     const { easeTo, map, panBy } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
     container.addEventListener('mousedown', nativeListener);
 
@@ -347,7 +394,9 @@ describe('MapPointerGestureControl', () => {
   it('never rotates a two-finger drag that twists slightly, until the fingers lift', () => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [
@@ -407,7 +456,9 @@ describe('MapPointerGestureControl', () => {
   ] as const)('never rotates %s, even when it twists later', (_name, moved) => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [
@@ -442,7 +493,9 @@ describe('MapPointerGestureControl', () => {
   ] as const)('rotates %s', (_name, moved) => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [
@@ -458,7 +511,9 @@ describe('MapPointerGestureControl', () => {
   it('waits while a twist neither clearly outweighs a pinch nor is outweighed by it', () => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [
@@ -478,7 +533,9 @@ describe('MapPointerGestureControl', () => {
   it('keeps a twist that started first rotating while it pinches and pans', () => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [
@@ -501,7 +558,9 @@ describe('MapPointerGestureControl', () => {
   it('does not let a new finger pair rotate from an earlier twist decision', () => {
     const container = document.createElement('div');
     const { map, mayRotate } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [
@@ -532,7 +591,9 @@ describe('MapPointerGestureControl', () => {
   it('ends the rotation decision on touchcancel and restores MapLibre on detach', () => {
     const container = document.createElement('div');
     const { map, mayRotate, originalThresholdCheck } = createMapDouble();
-    const control = new MapPointerGestureControl(createPivotDouble());
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+    });
     control.attach(container, map);
 
     dispatchTouch(container, 'touchstart', [

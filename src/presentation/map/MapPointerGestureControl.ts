@@ -102,8 +102,13 @@ function classifyTwoFingerMove(
   return null;
 }
 
+interface OrbitPivotIndicator {
+  show(map: MapLibreMap, coordinate: LngLat): void;
+  hide(): void;
+}
+
 /** Reuses one terrain-aware MapLibre marker for the active 3D orbit pivot. */
-function createOrbitPivotIndicator() {
+function createOrbitPivotIndicator(): OrbitPivotIndicator {
   const element = document.createElement('div');
   element.className = 'map-orbit-pivot';
   element.setAttribute('aria-hidden', 'true');
@@ -140,16 +145,38 @@ export class MapPointerGestureControl {
   #gestureButton: 0 | 1 | null = null;
   #orbitAnchor: LngLat | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
+  /** Pointer travel not yet applied; the camera moves at most once per frame. */
+  #pendingDelta = { x: 0, y: 0 };
+  #frameRequest: number | null = null;
+  #cameraMoved = false;
   #twoFingerTouch: TwoFingerTouch | null = null;
   /** Decision for the current two-finger gesture; null until one movement dominates. */
   #twoFingerIntent: TwoFingerIntent | null = null;
   #restoreRotationThreshold: (() => void) | null = null;
+  readonly #pivotIndicator: OrbitPivotIndicator;
+  readonly #onCameraGestureEnd: () => void;
 
-  public constructor(
-    private readonly pivotIndicator: ReturnType<
-      typeof createOrbitPivotIndicator
-    > = createOrbitPivotIndicator(),
-  ) {}
+  /**
+   * `onCameraGestureEnd` runs once after a gesture that moved the camera is released.
+   * Every step is its own zero-duration MapLibre move with its own `moveend`, so the
+   * owner treats the whole gesture as one movement: it skips step `moveend`s while
+   * `cameraGestureActive` is true and settles here instead.
+   */
+  public constructor({
+    pivotIndicator = createOrbitPivotIndicator(),
+    onCameraGestureEnd = () => undefined,
+  }: {
+    readonly pivotIndicator?: OrbitPivotIndicator;
+    readonly onCameraGestureEnd?: () => void;
+  } = {}) {
+    this.#pivotIndicator = pivotIndicator;
+    this.#onCameraGestureEnd = onCameraGestureEnd;
+  }
+
+  /** True from the press of a pointer camera gesture until its release. */
+  public get cameraGestureActive(): boolean {
+    return this.#gesture !== null;
+  }
 
   public attach(container: HTMLElement, map?: MapLibreMap): void {
     if (this.#container === container && this.#map === (map ?? null)) return;
@@ -229,26 +256,41 @@ export class MapPointerGestureControl {
       event.clientX - bounds.left,
       event.clientY - bounds.top,
     ]);
-    this.pivotIndicator.show(this.#map, this.#orbitAnchor);
+    this.#pivotIndicator.show(this.#map, this.#orbitAnchor);
   };
 
   private readonly handleMouseMove = (event: MouseEvent): void => {
-    const gesture = this.#gesture;
-    const map = this.#map;
     const previous = this.#lastPointer;
-    if (gesture === null || map === null || previous === null) return;
+    if (this.#gesture === null || previous === null) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
-    const horizontalDelta = event.clientX - previous.x;
-    const verticalDelta = event.clientY - previous.y;
+    // Mice report moves faster than the display refreshes, and every camera update runs
+    // MapLibre's full camera pipeline, so moves only accumulate until the next frame.
+    this.#pendingDelta = {
+      x: this.#pendingDelta.x + event.clientX - previous.x,
+      y: this.#pendingDelta.y + event.clientY - previous.y,
+    };
     this.#lastPointer = { x: event.clientX, y: event.clientY };
+    this.#frameRequest ??= window.requestAnimationFrame(this.applyPendingMove);
+  };
+
+  private readonly applyPendingMove = (): void => {
+    this.#frameRequest = null;
+    const gesture = this.#gesture;
+    const map = this.#map;
+    const { x: horizontalDelta, y: verticalDelta } = this.#pendingDelta;
+    this.#pendingDelta = { x: 0, y: 0 };
+    if (gesture === null || map === null) return;
+    if (horizontalDelta === 0 && verticalDelta === 0) return;
 
     if (gesture === 'pan') {
       map.panBy([-horizontalDelta, -verticalDelta], { duration: 0 });
+      this.#cameraMoved = true;
       return;
     }
     if (!this.#terrainOrbitEnabled) return;
+    this.#cameraMoved = true;
     const sensitivity = gesture === 'look' ? lookSensitivity : 1;
     const bearing =
       map.getBearing() + horizontalDelta * bearingDegreesPerPixel * sensitivity;
@@ -303,8 +345,14 @@ export class MapPointerGestureControl {
     const suppressClick = gesture !== 'pan' && event.button === 0;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (this.#frameRequest !== null) {
+      window.cancelAnimationFrame(this.#frameRequest);
+      this.applyPendingMove();
+    }
+    const cameraMoved = this.#cameraMoved;
     this.finishGesture();
     if (suppressClick) this.suppressNextClick();
+    if (cameraMoved) this.#onCameraGestureEnd();
   };
 
   private readonly handleAuxClick = (event: MouseEvent): void => {
@@ -385,11 +433,15 @@ export class MapPointerGestureControl {
   }
 
   private finishGesture(): void {
+    if (this.#frameRequest !== null) window.cancelAnimationFrame(this.#frameRequest);
+    this.#frameRequest = null;
+    this.#pendingDelta = { x: 0, y: 0 };
+    this.#cameraMoved = false;
     this.#gesture = null;
     this.#gestureButton = null;
     this.#orbitAnchor = null;
     this.#lastPointer = null;
-    this.pivotIndicator.hide();
+    this.#pivotIndicator.hide();
     window.removeEventListener('mousemove', this.handleMouseMove, true);
     window.removeEventListener('mouseup', this.handleMouseUp, true);
   }

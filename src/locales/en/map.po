@@ -152,7 +152,7 @@ msgid "Drag to rotate map, click to reset north"
 msgstr "Drag to rotate map, click to reset north"
 
 #. js-lingui-id: 5zBbQV
-#: src/presentation/map/MapLibreFacade.ts:1742
+#: src/presentation/map/MapLibreFacade.ts:1749
 msgid "Elevation {elevationChange}"
 msgstr "Elevation {elevationChange}"
 

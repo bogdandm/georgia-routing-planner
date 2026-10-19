@@ -279,7 +279,11 @@ export class MapLibreFacade implements MapFacade {
   /** Touch sheet height currently applied as bottom camera padding. */
   #bottomOverlayInsetPx = 0;
   readonly #pointInspector: PointInspectorPopup;
-  readonly #pointerGestures = new MapPointerGestureControl();
+  readonly #pointerGestures = new MapPointerGestureControl({
+    onCameraGestureEnd: () => {
+      this.handleMoveEnd();
+    },
+  });
   #interactionMode: MapInteractionMode = 'default';
   #planningPreview: PlanningPreview | null = null;
   /** Overlay holding the drawn cursor preview, so a mode change clears the right one. */
@@ -931,6 +935,9 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMoveEnd = (): void => {
+    // Each step of a pointer camera gesture is its own MapLibre move; the gesture
+    // settles once when it is released, like MapLibre's own drag gestures.
+    if (this.#pointerGestures.cameraGestureActive) return;
     this.layerController?.setTerrainInteractionActive(false);
     // Terrain mode changes deliberately issue intermediate camera commands. Persisting
     // one of those transient views can restore a pitched flat map or a level 3D map.

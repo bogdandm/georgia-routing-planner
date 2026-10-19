@@ -66,7 +66,9 @@ combines both owners so neither clears the other.
    any other terrain transition settle, because a transition ends by restoring the
    camera it started from. A map that is degraded before the attempt fits in 2D at once.
 3. On `moveend` the facade reads center, zoom, bearing, pitch, and terrain mode, updates
-   its snapshot, and calls the view-settled port.
+   its snapshot, and calls the view-settled port. Middle, Shift, and Ctrl drags move the
+   camera at most once per frame, each step a separate MapLibre move; their `moveend`s
+   are skipped and the facade settles once when the button is released.
 4. `SettledCameraPersistence` keeps only the newest view during a 400 ms debounce, then
    the repository writes the terrain mode with center and zoom, plus bearing and pitch
    only in 3D. Writes are chained so saves cannot overtake one another.

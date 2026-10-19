@@ -59,7 +59,7 @@ export interface TerrainOverlayPreferences {
 export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
   contourIntervalMeters: 50,
   shadeAboveSatellite: false,
-  demTileSize: 256,
+  demTileSize: 512,
 };
 
 export interface PersistedMapLayerPreferences {

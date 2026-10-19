@@ -498,7 +498,7 @@ describe('AppDatabase', () => {
       terrainOverlays: {
         contourIntervalMeters: 25,
         shadeAboveSatellite: true,
-        demTileSize: 512,
+        demTileSize: 256,
       },
     } as const;
 
@@ -527,7 +527,7 @@ describe('AppDatabase', () => {
     expect(loaded.terrainOverlays).toEqual({
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
-      demTileSize: 256,
+      demTileSize: 512,
     });
   });
 
@@ -567,7 +567,7 @@ describe('AppDatabase', () => {
       terrainOverlays: {
         contourIntervalMeters: 50,
         shadeAboveSatellite: false,
-        demTileSize: 256,
+        demTileSize: 512,
       },
     });
     await expect(database.settings.get('map.layers')).resolves.not.toHaveProperty(

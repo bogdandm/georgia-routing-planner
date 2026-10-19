@@ -1278,11 +1278,11 @@ describe('WorkspaceShell', () => {
     });
     const elevationTiles = screen.getByRole('group', { name: 'Elevation tiles' });
     expect(
-      within(elevationTiles).getByRole('button', { name: '256 px' }),
+      within(elevationTiles).getByRole('button', { name: '512 px' }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await user.click(within(elevationTiles).getByRole('button', { name: '512 px' }));
+    await user.click(within(elevationTiles).getByRole('button', { name: '256 px' }));
     await waitFor(() => {
-      expect(services.mapLayers?.getTerrainOverlayPreferences().demTileSize).toBe(512);
+      expect(services.mapLayers?.getTerrainOverlayPreferences().demTileSize).toBe(256);
     });
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
@@ -1300,14 +1300,14 @@ describe('WorkspaceShell', () => {
     expect(services.mapLayers?.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
-      demTileSize: 512,
+      demTileSize: 256,
     });
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         terrainOverlays: {
           contourIntervalMeters: 25,
           shadeAboveSatellite: true,
-          demTileSize: 512,
+          demTileSize: 256,
         },
       });
     });

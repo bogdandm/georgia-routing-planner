@@ -1093,7 +1093,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
         shadeAboveSatellite: true,
-        demTileSize: 256,
+        demTileSize: 512,
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
@@ -2019,7 +2019,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
         shadeAboveSatellite: true,
-        demTileSize: 256,
+        demTileSize: 512,
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
@@ -2087,7 +2087,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 25,
         shadeAboveSatellite: false,
-        demTileSize: 256,
+        demTileSize: 512,
       }),
     ).toEqual({ status: 'success' });
     const updatedSource = map.sources.get('terrain-contours') as {
@@ -2107,7 +2107,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.get('terrain-dem')).toMatchObject({
       type: 'raster-dem',
       tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
-      tileSize: 256,
+      tileSize: 512,
       maxzoom: 12,
       encoding: 'terrarium',
     });
@@ -2125,11 +2125,11 @@ describe('MapLibreLayerController', () => {
     expect(
       controller.setTerrainOverlayPreferences({
         ...controller.getTerrainOverlayPreferences(),
-        demTileSize: 512,
+        demTileSize: 256,
       }),
     ).toEqual({ status: 'success' });
 
-    expect(map.sources.get('terrain-dem')).toMatchObject({ tileSize: 512 });
+    expect(map.sources.get('terrain-dem')).toMatchObject({ tileSize: 256 });
     expect(map.layers.has(terrainOverlayLayerIds.reliefShade)).toBe(true);
     // Terrain is detached around the rebuild and restored with the same options.
     expect(map.terrainCalls).toEqual([null, terrain]);
@@ -2137,7 +2137,7 @@ describe('MapLibreLayerController', () => {
     await waitFor(async () => {
       expect(
         (await services.database.loadMapLayerPreferences()).terrainOverlays.demTileSize,
-      ).toBe(512);
+      ).toBe(256);
     });
 
     // An unchanged size leaves the source and terrain alone.

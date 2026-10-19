@@ -730,11 +730,22 @@ export function MapWorkspace({
       },
     );
   }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand]);
+  // A terrain transition ends by jumping back to the camera it started from, so a fit
+  // waits for it, including a restored or shared 3D view that has not entered terrain
+  // yet. In 3D the fit then also faces along the track.
+  const terrainTransitionPending =
+    terrainCommandState === 'enabling' ||
+    terrainCommandState === 'disabling' ||
+    (startupTerrainRequested &&
+      startupTerrainIntentActive &&
+      !mosaicActive &&
+      snapshot.terrainMode !== 'terrain');
   useEffect(() => {
     if (
       fitBoundsCommand === null ||
       snapshot.lifecycle === 'loading' ||
-      cameraWaitsForSheet
+      cameraWaitsForSheet ||
+      terrainTransitionPending
     ) {
       return;
     }
@@ -757,6 +768,7 @@ export function MapWorkspace({
     fitBoundsCommand,
     getNavigationPadding,
     snapshot.lifecycle,
+    terrainTransitionPending,
   ]);
 
   useEffect(() => {
@@ -1032,6 +1044,8 @@ export function MapWorkspace({
     startupTerrainConsumed.current = true;
     void handleTerrainModeChange('terrain').finally(() => {
       cameraPersistence.setStartupTerrainPending(false);
+      // Settled either way; a later 2D fallback must not hold fits as a pending intent.
+      setStartupTerrainIntentActive(false);
     });
   }, [
     cameraPersistence,

@@ -62,6 +62,9 @@ combines both owners so neither clears the other.
    readiness; terrain starts after Ready through the normal retry path. Until that
    attempt settles, settled flat views are still stored as 3D. Selecting 2D or Mosaic
    during loading supersedes that intent, levels the camera, and stores a 2D view.
+   Fit-to-bounds commands, such as opening a shared track, wait until that attempt and
+   any other terrain transition settle, because a transition ends by restoring the
+   camera it started from.
 3. On `moveend` the facade reads center, zoom, bearing, pitch, and terrain mode, updates
    its snapshot, and calls the view-settled port.
 4. `SettledCameraPersistence` keeps only the newest view during a 400 ms debounce, then

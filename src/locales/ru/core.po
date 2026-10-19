@@ -13,10 +13,10 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#. js-lingui-id: XbCGH2
+#. js-lingui-id: piUBUi
 #: src/presentation/localization/appI18n.ts
-msgid "Plan and inspect hiking routes across Georgia."
-msgstr "Планируйте и изучайте пешие маршруты по Грузии."
+msgid "Plan hiking routes and explore maps, 3D terrain, satellite imagery, and weather."
+msgstr "Планируйте пешие маршруты и изучайте карты, 3D-рельеф, спутниковые снимки и погоду."
 
 #. js-lingui-id: Dx9Pe3
 #: src/presentation/localization/appI18n.ts

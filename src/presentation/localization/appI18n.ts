@@ -22,7 +22,7 @@ import { messages as ruUser } from '@/locales/ru/user.po';
 import { messages as ruWeather } from '@/locales/ru/weather.po';
 
 const documentTitle = msg`Trail Planner`;
-const documentDescription = msg`Plan and inspect hiking routes across Georgia.`;
+const documentDescription = msg`Plan hiking routes and explore maps, 3D terrain, satellite imagery, and weather.`;
 
 function mergeCatalogs(catalogs: readonly Messages[]): Messages {
   return Object.assign({}, ...catalogs) as Messages;

@@ -562,8 +562,12 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   scene, and 3D view, and the shared satellite layer replaces their own layer choice.
   Below the whole map section, a **Tracks** table lists the tracks drawn on the map (see
   [public track links](#public-track-links)).
-- **Camera:** left drag pans; middle drag or Shift+left drag rotates and pitches in 3D
-  around the terrain point under the press, marked by a small pivot ring; keyboard pans,
+- **Camera:** left drag pans, with an inertia that covers MapLibre's default distance in
+  half its time; middle drag or Shift+left drag rotates and pitches in 3D around the
+  terrain point under the press, marked by a small pivot ring; Ctrl+left drag in 3D
+  turns and tilts the view in place, like looking around from the camera position, which
+  stays fixed. Middle, Shift, and Ctrl drags released while still moving coast on
+  briefly with fading speed; the next press or wheel stops the coast. Keyboard pans,
   zooms, and orbits once the canvas has focus. Box zoom and right drag are off; pitch is
   capped at 75 degrees. The 2D command resets pitch and bearing. On touch, two fingers
   pinch-zoom, twist to rotate, and drag vertically to pitch. Rotation starts only after

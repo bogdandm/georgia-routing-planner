@@ -12,6 +12,10 @@ import type {
   TerrainMode,
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
+import type {
+  RenderBenchmarkReport,
+  RenderBenchmarkStep,
+} from '@/presentation/map/renderBenchmark';
 
 export type MapInteractionMode =
   | 'default'
@@ -94,6 +98,14 @@ export interface MapFacade {
 
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
+  /**
+   * Developer benchmark in 3D at a fixed scene; restores the user's mode and camera.
+   * `signal` stops the run, and so does detaching the map.
+   */
+  runRenderBenchmark(
+    onStep: (step: RenderBenchmarkStep) => void,
+    signal: AbortSignal,
+  ): Promise<RenderBenchmarkReport>;
   setDebugOptions(options: MapDebugOptions): void;
   setInteractionMode(mode: MapInteractionMode): void;
   setPlanningPreview(preview: PlanningPreview | null): void;

@@ -106,6 +106,7 @@ import {
   type MapPointAction,
 } from '@/presentation/map/MapPointInspectorContent';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
+import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
 import { WeatherTimeControl } from '@/presentation/weather/WeatherTimeControl';
 import {
@@ -1196,7 +1197,12 @@ export function MapWorkspace({
 
   useEffect(() => {
     const shared = sharedMapView;
-    if (shared?.sceneKey !== null && shared !== null) {
+    // A track link with a scene still opens Tracks to show the shared track.
+    if (
+      shared?.sceneKey !== null &&
+      shared !== null &&
+      parseTrackShareLocation(window.location.hash).kind === 'none'
+    ) {
       setActiveTab('satellite');
       setNavigationCollapsed(false);
     }

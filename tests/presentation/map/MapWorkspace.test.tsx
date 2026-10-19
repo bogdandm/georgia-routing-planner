@@ -1669,7 +1669,7 @@ describe('MapWorkspace', () => {
     fireEvent.contextMenu(nativeMap);
     await user.click(screen.getByRole('menuitem', { name: 'Share…' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Share map view' });
+    const dialog = await screen.findByRole('dialog', { name: 'Share' });
     const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
       name: 'Link',
     });

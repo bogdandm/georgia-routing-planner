@@ -45,10 +45,7 @@ describe('WorkspaceShell', () => {
     ]);
 
     const satellite = within(navigation).getByRole('tab', { name: 'Satellite' });
-    const share = within(navigation).getByRole('button', {
-      name: 'Share map view',
-    });
-    expect(share).toHaveTextContent('Share');
+    const share = within(navigation).getByRole('button', { name: 'Share' });
     expect(share).toHaveStyle({ minWidth: '52px', minHeight: '58px' });
     expect(
       satellite.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -64,15 +61,14 @@ describe('WorkspaceShell', () => {
       name: 'Навигация по рабочим разделам',
     });
     expect(within(navigation).getByRole('tab', { name: 'Треки' })).toBeVisible();
-    const share = within(navigation).getByRole('button', {
-      name: 'Поделиться видом карты',
-    });
-    expect(share).toHaveTextContent('Поделиться');
+    const share = within(navigation).getByRole('button', { name: 'Поделиться' });
 
     await user.click(share);
+    const dialog = screen.getByRole('dialog', { name: 'Поделиться' });
+    expect(dialog).toBeVisible();
     expect(
-      screen.getByRole('dialog', { name: 'Поделиться видом карты' }),
-    ).toBeVisible();
+      within(dialog).getByRole('button', { name: 'Ссылка на карту' }),
+    ).toBeInTheDocument();
   });
 
   it('switches tabs before collapsing navigation on a repeated active-tab click', async () => {
@@ -126,8 +122,8 @@ describe('WorkspaceShell', () => {
     renderWorkspaceShell();
 
     expect(window.location.search).toBe('');
-    await user.click(screen.getByRole('button', { name: 'Share map view' }));
-    const dialog = screen.getByRole('dialog', { name: 'Share map view' });
+    await user.click(screen.getByRole('button', { name: 'Share' }));
+    const dialog = screen.getByRole('dialog', { name: 'Share' });
     expect(
       await within(dialog).findByText('41.71234, 44.80123, zoom 12.35'),
     ).toBeVisible();
@@ -142,9 +138,12 @@ describe('WorkspaceShell', () => {
     expect(url.searchParams.get('bearing')).toBeNull();
     expect(window.location.search).toBe('');
 
-    await user.click(within(dialog).getByRole('button', { name: 'Copy link' }));
+    const copy = within(dialog).getByRole('button', { name: 'Copy map link' });
+    await user.click(copy);
     expect(writeText).toHaveBeenCalledWith(link.value);
-    expect(await screen.findByText('Link copied')).toBeVisible();
+    await waitFor(() => {
+      expect(copy).toHaveAccessibleName('Copied');
+    });
   });
 
   it('builds share links from the page URL current when the dialog opens', async () => {
@@ -155,20 +154,18 @@ describe('WorkspaceShell', () => {
     });
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    await user.click(screen.getByRole('button', { name: 'Share' }));
     await screen.findByText('41.70000, 44.80000, zoom 12');
     expect(
       screen.getByRole<HTMLInputElement>('textbox', { name: 'Link' }).value,
     ).not.toContain('probe=first');
     await user.keyboard('{Escape}');
     await waitFor(() => {
-      expect(
-        screen.queryByRole('dialog', { name: 'Share map view' }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Share' })).not.toBeInTheDocument();
     });
 
     window.history.replaceState(null, '', '/?probe=first#markers');
-    await user.click(screen.getByRole('button', { name: 'Share map view' }));
+    await user.click(screen.getByRole('button', { name: 'Share' }));
     const url = new URL(
       screen.getByRole<HTMLInputElement>('textbox', { name: 'Link' }).value,
     );
@@ -334,8 +331,8 @@ describe('WorkspaceShell', () => {
     });
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Share map view' }));
-    const dialog = screen.getByRole('dialog', { name: 'Share map view' });
+    await user.click(screen.getByRole('button', { name: 'Share' }));
+    const dialog = screen.getByRole('dialog', { name: 'Share' });
     const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
       name: 'Link',
     });
@@ -389,8 +386,8 @@ describe('WorkspaceShell', () => {
     services.mapDiagnostics.update(new FakeMapFacade().snapshot);
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Share map view' }));
-    const dialog = screen.getByRole('dialog', { name: 'Share map view' });
+    await user.click(screen.getByRole('button', { name: 'Share' }));
+    const dialog = screen.getByRole('dialog', { name: 'Share' });
     const basemap = within(dialog).getByRole('checkbox', { name: 'Satellite layer' });
     const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
       name: 'Link',

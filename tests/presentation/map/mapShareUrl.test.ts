@@ -70,6 +70,25 @@ describe('mapShareUrl', () => {
     });
   });
 
+  it('never carries an open shared-track capability into a map link', () => {
+    const view = {
+      center: { longitude: 44.8, latitude: 41.7 },
+      zoom: 12,
+      orientation: { mode: '2d' },
+      basemap: null,
+      sceneKey: null,
+    } as const;
+    const token = 'A'.repeat(43);
+    expect(
+      new URL(createMapShareUrl(`https://example.test/#tracks/share/1.${token}`, view))
+        .hash,
+    ).toBe('#tracks');
+    expect(
+      new URL(createMapShareUrl('https://example.test/#tracks/share/1.invalid', view))
+        .hash,
+    ).toBe('#tracks');
+  });
+
   it('supports legacy links and ignores unknown versions and basemaps', () => {
     expect(parseSharedMapView('?lat=42&lon=44&zoom=9&base=vector-osm')).toMatchObject({
       zoom: 9,

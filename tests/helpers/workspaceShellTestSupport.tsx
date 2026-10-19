@@ -18,6 +18,7 @@ import { type TrackShareService } from '@/application/tracks/TrackShareService';
 import { type RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import { type SatelliteScene } from '@/domain/satellite/SatelliteScene';
+import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   type LocalTrackContent,
@@ -339,6 +340,8 @@ export async function renderSavedTrackForSharing(
   });
   const summary = savedTrackSummary('local:share-track', 'Shared trail');
   await services.database.saveLocalTrack(summary, savedTrackContent(summary.id));
+  // Track links extend the Share dialog's map link, which needs a map snapshot.
+  services.mapDiagnostics.update(new FakeMapFacade().snapshot);
   useUiStore.setState({ activeTab: 'tracks' });
   await services.database.saveLatestOpenedTrackId(summary.id);
   renderWorkspaceShell();

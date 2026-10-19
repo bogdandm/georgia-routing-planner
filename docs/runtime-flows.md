@@ -88,12 +88,17 @@ Share links are built only on explicit actions by `presentation/map/mapShareUrl.
 `readShareableMapState` reads the camera, terrain mode, visible static basemap, and the
 selected scene while Sentinel imagery is visible; `selectMapShareView` applies the
 `map.share-preferences` record and an optional clicked center; `createMapShareUrl`
-writes `map=2`, `lat`, `lon`, `z`, `view`, `bearing`/`pitch` in 3D, `base`, and `scene`.
-The rail and **Share…** open `MapShareDialog` through
+writes `map=2`, `lat`, `lon`, `z`, `view`, `bearing`/`pitch` in 3D, `base`, and `scene`,
+and reduces an open `#tracks/share/…` capability to `#tracks`. The rail, point
+**Share…**, and track **Share…** open `MapShareDialog` through
 `mapInteractionStore.shareRequest`, which captures the page URL. The dialog shows its
 link and options only after the stored preferences load, so a copy or change never
 starts from defaults. Point-action **Copy link** and the Satellite card's **Share link**
-read the stored preferences directly.
+read the stored preferences directly. The dialog's `TrackShareTable` reads the drawn
+tracks from `TracksWorkspaceProvider`; each row loads, enables, or disables its public
+share through `TrackShareService` with its own abortable request, and
+`createTrackShareUrl` appends the capability fragment to the dialog's map link. A track
+link with a scene stays on Tracks instead of opening Satellite.
 
 ## Terrain transition
 

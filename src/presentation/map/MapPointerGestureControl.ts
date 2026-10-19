@@ -3,7 +3,7 @@ import { Marker, type LngLat, type Map as MapLibreMap } from 'maplibre-gl';
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
 /** Share of the orbit rate that look-around turns per pixel, for finer aiming. */
-const lookSensitivity = 0.6;
+const lookSensitivity = 0.4;
 const maximumPitchDegrees = 75;
 /** Pointer moves this recent set the release velocity; an older last move is a stop. */
 const releaseVelocityWindowMs = 50;

@@ -937,6 +937,11 @@ export function createHikingMapStyle(
     version: 8,
     name: 'Georgia hiking basemap v1',
     glyphs: configuration.vector.glyphsUrl,
+    // In 3D, MapLibre draws fill, line, raster, and hillshade layers into cached terrain
+    // textures on the first frame after a paint change and never redraws them while a
+    // transition runs, so a fade freezes at its starting value until the camera moves.
+    // Paint changes therefore apply instantly; animated fades step opacity per frame.
+    transition: { duration: 0, delay: 0 },
     sources: {
       [mapSourceIds.basemapVector]: {
         type: 'vector',

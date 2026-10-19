@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
+import { weatherResumeRetryDelayMs } from '@/presentation/weather/useWeatherRetryOnResume';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
@@ -115,6 +116,14 @@ function expandedSection(metrics: TrackStatsMetrics) {
       </ThemeProvider>
     </RuntimeServicesProvider>
   );
+}
+
+function setPageVisibility(state: DocumentVisibilityState): void {
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    value: state,
+  });
+  document.dispatchEvent(new Event('visibilitychange'));
 }
 
 beforeEach(() => {
@@ -338,5 +347,51 @@ describe('TrackWeatherSection', () => {
     expect(
       await within(highest).findByText('The forecast could not be loaded.'),
     ).toBeVisible();
+  });
+
+  it('retries only failed forecasts once the resumed page stays visible', async () => {
+    const realExecute = services.pointWeatherForecast.execute.bind(
+      services.pointWeatherForecast,
+    );
+    let highestFailed = false;
+    const execute = vi
+      .spyOn(services.pointWeatherForecast, 'execute')
+      .mockImplementation(async (input, signal) => {
+        if (input.elevationMeters === 2_900 && !highestFailed) {
+          highestFailed = true;
+          throw new PointWeatherForecastError('provider-timeout', 'network suspended');
+        }
+        return realExecute(input, signal);
+      });
+    renderSection(expandedPreferences);
+    const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
+    expect(
+      await within(highest).findByText('The forecast could not be loaded.'),
+    ).toBeVisible();
+    const lowest = screen.getByRole('group', { name: 'Lowest, 2,000 m' });
+    await within(lowest).findByRole('article', { name: 'Day forecast' });
+    const initialCalls = execute.mock.calls.length;
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      act(() => {
+        setPageVisibility('hidden');
+        setPageVisibility('visible');
+        vi.advanceTimersByTime(weatherResumeRetryDelayMs - 1);
+      });
+      expect(execute).toHaveBeenCalledTimes(initialCalls);
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(
+      await within(highest).findByRole('article', { name: 'Day forecast' }),
+    ).toBeVisible();
+    expect(
+      execute.mock.calls.slice(initialCalls).map(([input]) => input.elevationMeters),
+    ).toEqual([2_900]);
   });
 });

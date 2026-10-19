@@ -301,7 +301,8 @@ are not synchronized to the account. Neither changes the track's recorded or est
 time. Slowing a track past 12 hours hides the timeline until the pace is reduced. Cards
 reuse the 7-day forecast rows from Weather and request each location with its profile
 elevation. Clicking a loaded forecast row opens Weather with the full forecast at that
-location and elevation, labelled with the card's point or time.
+location and elevation, labelled with the card's point or time. Failed track forecasts
+retry automatically as in Weather when the app becomes visible again.
 
 #### Multi-track view
 
@@ -397,7 +398,11 @@ The quick map-layer chooser lists **Vector OSM**, **Google Satellite**, **Bing A
 **Esri World Imagery**, and **NAPR Orthophoto**, then **OSM overlay** and **Weather**
 checkboxes, and a final row with **Sentinel-2** (activates the applied scene or opens
 Satellite) and **Layers tab**. Vector OSM shows the vector map at full opacity without
-changing the saved overlay setting.
+changing the saved overlay setting. The chooser is non-modal and belongs to the map: it
+stays open while choices are toggled, the layer button, Escape, or any press outside it
+closes it, and that press still reaches the map, so panning or clicking the map works
+immediately. It closes when an entry opens a workspace panel, and workspace panels drawn
+above the map also cover it.
 
 ### Satellite
 

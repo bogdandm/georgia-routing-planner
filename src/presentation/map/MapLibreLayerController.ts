@@ -492,9 +492,8 @@ const importedTrackLineWidth = 4;
 /** Opacity multiplier for the track outside a focused climb or descent. */
 const importedTrackDimmedOpacityFactor = 0.15;
 /**
- * Focus fades write their opacity every animation frame instead of using MapLibre paint
- * transitions: with 3D terrain, line layers are drawn into cached terrain textures that a
- * transition never redraws, while each paint change redraws them.
+ * Focus fades write their opacity every animation frame: the style disables paint
+ * transitions because 3D terrain textures would freeze a transition at its first frame.
  */
 const importedTrackFocusFadeMilliseconds = 300;
 /** Two overlays let the next climb or descent fade in while the previous one fades out. */
@@ -3800,7 +3799,6 @@ export class MapLibreLayerController {
             'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
             'line-width': importedTrackCasingWidth,
             'line-opacity': importedTrackOpacity,
-            'line-opacity-transition': { duration: 0, delay: 0 },
           },
         });
       }
@@ -3814,7 +3812,6 @@ export class MapLibreLayerController {
             'line-color': mapVisualPalette.userGeometry.gpxTrack,
             'line-width': importedTrackLineWidth,
             'line-opacity': importedTrackOpacity,
-            'line-opacity-transition': { duration: 0, delay: 0 },
           },
         });
       }
@@ -3951,7 +3948,6 @@ export class MapLibreLayerController {
           'line-width': layer.width,
           // applyImportedTrackPaint sets the real opacity right after creation.
           'line-opacity': 0,
-          'line-opacity-transition': { duration: 0, delay: 0 },
         },
       });
     }

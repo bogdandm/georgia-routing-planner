@@ -149,8 +149,12 @@ stays visible over opaque land-cover fills while water bodies mask isolines. 3D 
 draws consecutive line, fill, raster, and hillshade layers into one draped texture per
 terrain tile, and every icon or label layer between them would add another full set of
 textures and terrain passes; keeping all lines and fills below the first icon layer
-gives the main map one draped stack. Changing the contour interval updates the existing
-vector source's tiles without touching the camera.
+gives the main map one draped stack. A paint change redraws the draped textures only on
+its first frame, so the style disables paint transitions (`transition` of zero): a fade
+would freeze them at the previous value, leaving land-cover fills over imagery after a
+switch to satellite, or missing after a switch back, until the camera moves. Changing
+the contour interval updates the existing vector source's tiles without touching the
+camera.
 
 The `terrain-dem` raster-dem source points at the provider URL, so MapLibre fetches,
 caches, and decodes relief and 3D terrain tiles on its own workers. Contours use a
@@ -524,27 +528,26 @@ crossing the gaps between rows keeps the focus. The profile publishes the curren
 without an effect cleanup, so moving between rows never sends an intermediate `null`. A
 new segment loads into the less visible slot. Each slot's visibility moves toward its
 target over 300 ms, and the controller writes the resulting opacities every animation
-frame with paint transitions disabled. A MapLibre transition would not animate in 3D:
-terrain draws line layers into cached textures that only a paint change redraws. The
-base casing, line, and highlight dim with the slots' combined eased visibility, down to
-15% of the track opacity, so a cross-fade keeps the track dimmed while one segment
-replaces the other, and release fades everything back together. Selecting a row issues a
-fit command with the segment's antimeridian-aware bounds and a travel path: its points
-with elevation, facing start to finish. Import and track selection issue one fit command
-padded for the Tracks panes whose path faces `trackOutboundDirection`: start to finish,
-or start to the farthest point for an `isLoop` track. Tracks without source elevation
-add their DEM samples to the drawn points and fit again once those samples arrive;
-drawing another track clears any focus at once. Flat mode fits the bounds in the current
-orientation. In terrain mode the facade instead flies to the result of
-`directedCameraFit`: MapLibre fits as if unpitched and ignores relief, so at 45° the far
-half compresses and points above the terrain under the center rise toward the horizon.
-The solver projects the path through MapLibre's pinhole camera at the target pitch. It
-uses rendered terrain heights from `queryTerrainElevation` inside the current view and
-track elevations elsewhere, and keeps about 500 points: the per-window extremes across,
-along, and in elevation. It re-solves until the camera sits on the terrain under its own
-center, at that latitude's relief scale. It balances the points against the padded edges
-and keeps the highest zoom that fits. Closing clears the sources without touching
-storage or the camera.
+frame, because the style disables paint transitions (see terrain overlay
+reconciliation). The base casing, line, and highlight dim with the slots' combined eased
+visibility, down to 15% of the track opacity, so a cross-fade keeps the track dimmed
+while one segment replaces the other, and release fades everything back together.
+Selecting a row issues a fit command with the segment's antimeridian-aware bounds and a
+travel path: its points with elevation, facing start to finish. Import and track
+selection issue one fit command padded for the Tracks panes whose path faces
+`trackOutboundDirection`: start to finish, or start to the farthest point for an
+`isLoop` track. Tracks without source elevation add their DEM samples to the drawn
+points and fit again once those samples arrive; drawing another track clears any focus
+at once. Flat mode fits the bounds in the current orientation. In terrain mode the
+facade instead flies to the result of `directedCameraFit`: MapLibre fits as if unpitched
+and ignores relief, so at 45° the far half compresses and points above the terrain under
+the center rise toward the horizon. The solver projects the path through MapLibre's
+pinhole camera at the target pitch. It uses rendered terrain heights from
+`queryTerrainElevation` inside the current view and track elevations elsewhere, and
+keeps about 500 points: the per-window extremes across, along, and in elevation. It
+re-solves until the camera sits on the terrain under its own center, at that latitude's
+relief scale. It balances the points against the padded edges and keeps the highest zoom
+that fits. Closing clears the sources without touching storage or the camera.
 
 Elevation analysis never bridges segment gaps. Complete source elevation runs are
 authoritative; calculated DEM elevation is the profile fallback only when no usable

@@ -31,16 +31,15 @@ type TrackShareState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'disabled' }
   | { readonly kind: 'enabled'; readonly token: string }
+  /** The server has no ready synchronized record for this hash yet. */
+  | { readonly kind: 'unsynced' }
   | { readonly kind: 'status-failed' };
 
-function shareMutationErrorMessage(error: unknown): MessageDescriptor {
-  if (
+function isUnsyncedTrackError(error: unknown): boolean {
+  return (
     error instanceof TrackShareError &&
     (error.category === 'track-not-found' || error.category === 'track-not-ready')
-  ) {
-    return msg`Sync this track before sharing.`;
-  }
-  return msg`Sharing could not be updated. Try again.`;
+  );
 }
 
 function TrackShareRow({
@@ -79,8 +78,10 @@ function TrackShareRow({
         return status.enabled
           ? { kind: 'enabled', token: status.token }
           : { kind: 'disabled' };
-      } catch {
-        return { kind: 'status-failed' };
+      } catch (error) {
+        return isUnsyncedTrackError(error)
+          ? { kind: 'unsynced' }
+          : { kind: 'status-failed' };
       }
     },
     [trackShares],
@@ -130,8 +131,12 @@ function TrackShareRow({
       }
     } catch (error) {
       if (operation.current !== controller) return;
+      if (isUnsyncedTrackError(error)) {
+        setState({ kind: 'unsynced' });
+        return;
+      }
       setState(previous);
-      setProblem(shareMutationErrorMessage(error));
+      setProblem(msg`Sharing could not be updated. Try again.`);
     }
   };
 
@@ -154,7 +159,7 @@ function TrackShareRow({
     note = t`Sharing status could not be loaded.`;
   } else if (!track.saved) {
     note = t`Save the track to share it.`;
-  } else if (signedIn && track.contentHash === null) {
+  } else if (state.kind === 'unsynced' || (signedIn && track.contentHash === null)) {
     note = t`Sync this track before sharing.`;
   }
 
@@ -202,7 +207,7 @@ function TrackShareRow({
           <Switch
             size="small"
             checked={state.kind === 'enabled'}
-            disabled={contentHash === null}
+            disabled={contentHash === null || state.kind === 'unsynced'}
             slotProps={{
               input: { 'aria-label': t`Share ${name} publicly` },
             }}
@@ -244,11 +249,20 @@ export function TrackShareTable({ mapUrl }: { readonly mapUrl: string }) {
   const tracks: DisplayedTrack[] = [];
   if (workspace?.multiTrackMode === true) {
     for (const selection of workspace.multiTrackSelections) {
+      const contentHash = selection.summary.contentHash ?? null;
+      // A public share belongs to the content hash, so tracks with identical geometry
+      // share one row instead of showing diverging states for one server share.
+      if (
+        contentHash !== null &&
+        tracks.some((track) => track.contentHash === contentHash)
+      ) {
+        continue;
+      }
       tracks.push({
         id: selection.summary.id,
         name: selection.summary.name,
         saved: true,
-        contentHash: selection.summary.contentHash ?? null,
+        contentHash,
       });
     }
   } else if (workspace?.active?.kind === 'saved') {

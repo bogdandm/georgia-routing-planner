@@ -917,6 +917,41 @@ describe('MapWorkspace', () => {
       ]);
     });
   });
+  it('fits a restored 3D view at once when the map is degraded before terrain starts', async () => {
+    const facade = new FakeMapFacade();
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          Promise.resolve({
+            camera: {
+              longitude: 45.2,
+              latitude: 42.4,
+              zoom: 10,
+              bearing: 18,
+              pitch: 25,
+            },
+            terrainMode: 'terrain' as const,
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Degraded 3D canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Degraded 3D canvas');
+
+    act(() => {
+      requestMapFitBounds({ west: 43.1, south: 41.6, east: 44.2, north: 42.4 }, 15);
+      facade.setSnapshot({ lifecycle: 'degraded', terrainMode: 'flat' });
+    });
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests).toHaveLength(1);
+    });
+    expect(facade.terrainModeRequests).toEqual([]);
+  });
   it('publishes lifecycle state without mounting a duplicate local banner', () => {
     const facade = new FakeMapFacade();
     const services = createTestServices();

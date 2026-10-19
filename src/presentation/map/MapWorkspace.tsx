@@ -733,13 +733,15 @@ export function MapWorkspace({
   }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand]);
   // A terrain transition ends by jumping back to the camera it started from, so a fit
   // waits for it, including a restored or shared 3D view that has not entered terrain
-  // yet. In 3D the fit then also faces along the track.
+  // yet. In 3D the fit then also faces along the track. The startup intent only starts
+  // on a ready map, so a degraded map fits in 2D instead of waiting.
   const terrainTransitionPending =
     terrainCommandState === 'enabling' ||
     terrainCommandState === 'disabling' ||
     (startupTerrainRequested &&
       startupTerrainIntentActive &&
       !mosaicActive &&
+      snapshot.lifecycle === 'ready' &&
       snapshot.terrainMode !== 'terrain');
   useEffect(() => {
     if (

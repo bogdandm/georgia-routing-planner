@@ -342,7 +342,7 @@ msgid "Confirm rename"
 msgstr "Confirm rename"
 
 #. js-lingui-id: y1eoq1
-#: src/presentation/tracks/TrackShareTable.tsx:216
+#: src/presentation/tracks/TrackShareTable.tsx:221
 msgid "Copy link"
 msgstr "Copy link"
 
@@ -686,7 +686,7 @@ msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Loading route tiles… {loadedTiles}/{totalTiles}"
 
 #. js-lingui-id: 5nnEsR
-#: src/presentation/tracks/TrackShareTable.tsx:188
+#: src/presentation/tracks/TrackShareTable.tsx:193
 msgid "Loading sharing status"
 msgstr "Loading sharing status"
 
@@ -792,7 +792,7 @@ msgid "New route"
 msgstr "New route"
 
 #. js-lingui-id: f1xZWH
-#: src/presentation/tracks/TrackShareTable.tsx:266
+#: src/presentation/tracks/TrackShareTable.tsx:280
 #: src/presentation/tracks/TracksWorkspace.tsx:1547
 #: src/presentation/tracks/TracksWorkspace.tsx:5317
 msgid "New track"
@@ -969,8 +969,8 @@ msgid "Reorder {0}"
 msgstr "Reorder {0}"
 
 #. js-lingui-id: SZzo9N
-#: src/presentation/tracks/TrackShareTable.tsx:190
-#: src/presentation/tracks/TrackShareTable.tsx:193
+#: src/presentation/tracks/TrackShareTable.tsx:195
+#: src/presentation/tracks/TrackShareTable.tsx:198
 msgid "Retry sharing status"
 msgstr "Retry sharing status"
 
@@ -1028,7 +1028,7 @@ msgid "Save a copy"
 msgstr "Save a copy"
 
 #. js-lingui-id: Xov63t
-#: src/presentation/tracks/TrackShareTable.tsx:156
+#: src/presentation/tracks/TrackShareTable.tsx:161
 msgid "Save the track to share it."
 msgstr "Save the track to share it."
 
@@ -1099,7 +1099,7 @@ msgid "Settlement lookup was rate-limited by the provider (HTTP 429); wait a min
 msgstr "Settlement lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 
 #. js-lingui-id: 3N4bs1
-#: src/presentation/tracks/TrackShareTable.tsx:207
+#: src/presentation/tracks/TrackShareTable.tsx:212
 msgid "Share {name} publicly"
 msgstr "Share {name} publicly"
 
@@ -1124,12 +1124,12 @@ msgid "Shared tracks are unavailable because cloud features are not configured."
 msgstr "Shared tracks are unavailable because cloud features are not configured."
 
 #. js-lingui-id: eKm51w
-#: src/presentation/tracks/TrackShareTable.tsx:43
+#: src/presentation/tracks/TrackShareTable.tsx:139
 msgid "Sharing could not be updated. Try again."
 msgstr "Sharing could not be updated. Try again."
 
 #. js-lingui-id: PvziUE
-#: src/presentation/tracks/TrackShareTable.tsx:154
+#: src/presentation/tracks/TrackShareTable.tsx:159
 msgid "Sharing status could not be loaded."
 msgstr "Sharing status could not be loaded."
 
@@ -1140,7 +1140,7 @@ msgid "Show track grade legend"
 msgstr "Show track grade legend"
 
 #. js-lingui-id: lEy7pG
-#: src/presentation/tracks/TrackShareTable.tsx:282
+#: src/presentation/tracks/TrackShareTable.tsx:296
 msgid "Sign in to share tracks publicly."
 msgstr "Sign in to share tracks publicly."
 
@@ -1206,8 +1206,7 @@ msgid "Starting at {startTime} at the recorded pace, {duration} in total."
 msgstr "Starting at {startTime} at the recorded pace, {duration} in total."
 
 #. js-lingui-id: fKf3Bw
-#: src/presentation/tracks/TrackShareTable.tsx:41
-#: src/presentation/tracks/TrackShareTable.tsx:158
+#: src/presentation/tracks/TrackShareTable.tsx:163
 msgid "Sync this track before sharing."
 msgstr "Sync this track before sharing."
 
@@ -1268,7 +1267,7 @@ msgid "The import was cancelled."
 msgstr "The import was cancelled."
 
 #. js-lingui-id: s18Ck2
-#: src/presentation/tracks/TrackShareTable.tsx:145
+#: src/presentation/tracks/TrackShareTable.tsx:150
 msgid "The link could not be copied. Try again."
 msgstr "The link could not be copied. Try again."
 
@@ -1413,8 +1412,8 @@ msgid "Track name must be 200 characters or fewer."
 msgstr "Track name must be 200 characters or fewer."
 
 #. js-lingui-id: 2eFlmt
-#: src/presentation/tracks/TrackShareTable.tsx:278
-#: src/presentation/tracks/TrackShareTable.tsx:285
+#: src/presentation/tracks/TrackShareTable.tsx:292
+#: src/presentation/tracks/TrackShareTable.tsx:299
 msgid "Tracks"
 msgstr "Tracks"
 

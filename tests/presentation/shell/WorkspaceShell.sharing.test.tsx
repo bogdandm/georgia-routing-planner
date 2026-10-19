@@ -769,13 +769,61 @@ describe('WorkspaceShell', () => {
     expect(
       await within(tracks).findByText('Sync this track before sharing.'),
     ).toBeVisible();
-    expect(
-      within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
-    ).not.toBeChecked();
+    const share = within(tracks).getByRole('switch', {
+      name: 'Share Shared trail publicly',
+    });
+    expect(share).not.toBeChecked();
+    expect(share).toBeDisabled();
   });
 
-  it('lists every multi-track selection and asks a signed-out user to sign in', async () => {
-    await saveMultiTrackPair();
+  it('explains instead of retrying when the server has no synchronized track', async () => {
+    const user = userEvent.setup();
+    const status = vi
+      .fn()
+      .mockRejectedValue(
+        new TrackShareError('track-not-found', 'Track was not found.'),
+      );
+    const { details } = await renderSavedTrackForSharing(
+      createTrackShareService({ status }),
+    );
+
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    const tracks = within(
+      await screen.findByRole('dialog', { name: 'Share' }),
+    ).getByRole('list', { name: 'Tracks' });
+
+    expect(
+      await within(tracks).findByText('Sync this track before sharing.'),
+    ).toBeVisible();
+    expect(
+      within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
+    ).toBeDisabled();
+    expect(
+      within(tracks).queryByRole('button', { name: 'Retry sharing status' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lists each shared content once and asks a signed-out user to sign in', async () => {
+    const { beta, betaContent } = await saveMultiTrackPair();
+    await services.database.saveLocalTrack(
+      { ...beta, contentHash: 'b'.repeat(64) },
+      betaContent,
+    );
+    // Same content hash as Alpha trail, so the same server share.
+    const alphaCopy = multiTrackSummary(
+      'local:alpha-copy',
+      'Alpha copy',
+      1_000,
+      1_800,
+      100,
+      80,
+      46,
+    );
+    await services.database.saveLocalTrack(
+      alphaCopy,
+      multiTrackContent(alphaCopy.id, 46),
+    );
     setServices({ ...services, trackShares: createTrackShareService() });
     useUiStore.setState({ activeTab: 'tracks' });
     mockViewportWidth(1900);
@@ -786,17 +834,19 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('button', { name: 'Select multiple tracks' }));
     const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
     await user.click(within(savedTracks).getByRole('button', { name: /^Beta trail/u }));
+    await user.click(within(savedTracks).getByRole('button', { name: /^Alpha copy/u }));
     await screen.findByRole('complementary', { name: 'Multiple track details' });
 
     await user.click(screen.getByRole('button', { name: 'Share' }));
     const dialog = await screen.findByRole('dialog', { name: 'Share' });
     const tracks = within(dialog).getByRole('list', { name: 'Tracks' });
     expect(within(dialog).getByText('Sign in to share tracks publicly.')).toBeVisible();
-    for (const name of ['Alpha trail', 'Beta trail']) {
-      expect(
-        within(tracks).getByRole('switch', { name: `Share ${name} publicly` }),
-      ).toBeDisabled();
-    }
+    const switches = within(tracks).getAllByRole('switch');
+    expect(switches.map((share) => share.getAttribute('aria-label'))).toEqual([
+      'Share Alpha trail publicly',
+      'Share Beta trail publicly',
+    ]);
+    for (const share of switches) expect(share).toBeDisabled();
     for (const copy of within(tracks).getAllByRole('button', { name: 'Copy link' })) {
       expect(copy).toBeDisabled();
     }

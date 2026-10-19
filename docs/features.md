@@ -301,7 +301,8 @@ are not synchronized to the account. Neither changes the track's recorded or est
 time. Slowing a track past 12 hours hides the timeline until the pace is reduced. Cards
 reuse the 7-day forecast rows from Weather and request each location with its profile
 elevation. Clicking a loaded forecast row opens Weather with the full forecast at that
-location and elevation, labelled with the card's point or time.
+location and elevation, labelled with the card's point or time. Failed track forecasts
+retry automatically as in Weather when the app becomes visible again.
 
 #### Multi-track view
 

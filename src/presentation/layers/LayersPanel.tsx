@@ -97,7 +97,7 @@ const naturalFeatureControls = [
   {
     id: 'natural-feature-patterns',
     label: msg`Area patterns`,
-    description: msg`Forest, swamp, scrub, orchard, scree, and cemetery signs. Saved separately for 2D and 3D; off in 3D by default.`,
+    description: msg`Forest, swamp, scrub, orchard, scree, cemetery, and protected-area NR signs. Saved separately for 2D and 3D; off in 3D by default.`,
     requiresScene: false,
     parent: 'natural-features',
   },
@@ -108,6 +108,12 @@ const navigationAndAccessControls = [
     id: 'restricted-areas',
     label: msg`Restricted areas`,
     description: msg`Red perimeters for provider-identified military land.`,
+    requiresScene: false,
+  },
+  {
+    id: 'protected-areas',
+    label: msg`Protected areas`,
+    description: msg`Green outlines, sparse NR signs, and one name label for national parks and nature reserves.`,
     requiresScene: false,
   },
   {

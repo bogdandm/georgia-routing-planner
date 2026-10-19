@@ -269,6 +269,11 @@ msgstr "Изолинии · перезапуск обработчика"
 msgid "Coordinates are outside valid map bounds."
 msgstr "Координаты выходят за допустимые границы карты."
 
+#. js-lingui-id: ummHkM
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Country border"
+msgstr "Государственная граница"
+
 #. js-lingui-id: kaKzkK
 #: src/presentation/shell/AboutDialog.tsx
 msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
@@ -298,6 +303,11 @@ msgstr "Детерминированный прогноз модели с раз
 #: src/presentation/shell/WorkspaceRail.tsx
 msgid "Developer diagnostics"
 msgstr "Диагностика для разработчиков"
+
+#. js-lingui-id: -1nBD_
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Disputed territory line"
+msgstr "Линия спорной территории"
 
 #. js-lingui-id: DPfwMq
 #: src/presentation/shell/OnboardingTour.tsx
@@ -860,6 +870,11 @@ msgstr "Подготовка высот…"
 #: src/presentation/shell/OperationalStatus.tsx
 msgid "Preparing the selected Sentinel scene…"
 msgstr "Подготовка выбранной сцены Sentinel…"
+
+#. js-lingui-id: kCRgce
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Protected area"
+msgstr "Охраняемая территория"
 
 #. js-lingui-id: ckH3fT
 #: src/presentation/shell/OperationalStatus.tsx

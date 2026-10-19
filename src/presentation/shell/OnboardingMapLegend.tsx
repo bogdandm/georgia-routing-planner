@@ -13,7 +13,12 @@ import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 
 /** How one legend swatch is drawn, mirroring the basemap style it explains. */
 type LegendSymbol =
-  | { readonly kind: 'area'; readonly fill: string; readonly pattern?: string }
+  | {
+      readonly kind: 'area';
+      readonly fill: string;
+      readonly pattern?: string;
+      readonly outline?: string;
+    }
   | { readonly kind: 'outline'; readonly color: string }
   | {
       readonly kind: 'line';
@@ -94,6 +99,15 @@ const legendGroups: readonly {
         label: msg`Military area`,
         symbol: { kind: 'outline', color: mapVisualPalette.restricted.line },
       },
+      {
+        label: msg`Protected area`,
+        symbol: {
+          kind: 'area',
+          fill: mapVisualPalette.base.land,
+          pattern: basemapImageIds.protectedAreaPattern,
+          outline: mapVisualPalette.protectedArea.line,
+        },
+      },
     ],
   },
   {
@@ -141,6 +155,19 @@ const legendGroups: readonly {
       {
         label: msg`Cable car or ski lift`,
         symbol: { kind: 'line-pattern', pattern: basemapImageIds.aerialwayPattern },
+      },
+      {
+        label: msg`Country border`,
+        symbol: { kind: 'line', color: mapVisualPalette.boundary.country, width: 2 },
+      },
+      {
+        label: msg`Disputed territory line`,
+        symbol: {
+          kind: 'line',
+          color: mapVisualPalette.boundary.disputed,
+          width: 2.5,
+          dash: [5, 3.75],
+        },
       },
     ],
   },
@@ -249,9 +276,15 @@ async function drawSwatch(
           context.fillRect(0, 0, width, height);
         }
       }
-      context.strokeStyle = 'rgba(0, 0, 0, 0.18)';
-      context.lineWidth = 2;
-      context.strokeRect(1, 1, width - 2, height - 2);
+      if (symbol.outline === undefined) {
+        context.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+        context.lineWidth = 2;
+        context.strokeRect(1, 1, width - 2, height - 2);
+      } else {
+        context.strokeStyle = symbol.outline;
+        context.lineWidth = 3;
+        context.strokeRect(1.5, 1.5, width - 3, height - 3);
+      }
       return;
     }
     case 'outline':

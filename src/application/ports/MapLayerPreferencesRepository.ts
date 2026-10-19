@@ -10,6 +10,7 @@ export type LogicalMapLayerId =
   | 'natural-features'
   | 'natural-feature-patterns'
   | 'restricted-areas'
+  | 'protected-areas'
   | 'detail-context'
   | 'hiking-paths'
   | 'roads'

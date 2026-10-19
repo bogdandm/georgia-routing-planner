@@ -25,7 +25,6 @@ export const mapVisualPalette = {
     grass: '#DEE2DA',
     farmland: '#DFE0DA',
     scrub: '#C0CBA2',
-    park: '#C2CFA7',
     /** GOST vegetation signs (trees, shrubs, orchards) drawn over the fills. */
     sign: '#8DA273',
   },
@@ -66,7 +65,19 @@ export const mapVisualPalette = {
   restricted: {
     line: '#C95050',
   },
-  boundary: '#656B70',
+  /** National parks, reserves, and other protected land. */
+  protectedArea: {
+    /** Outline and NR sign: vivid, as forest green vanished among forest and contours. */
+    line: '#0FA33B',
+    /** Darker shade so names stay readable over green land cover. */
+    label: '#17692F',
+  },
+  boundary: {
+    region: '#656B70',
+    country: '#151719',
+    /** De facto lines of disputed territories below country level. */
+    disputed: '#D1002B',
+  },
   poi: {
     water: '#0B6E99',
     hut: '#7A4A1E',
@@ -122,10 +133,13 @@ export const mapVisualModePaint = {
     [mapLayerIds.brownfieldAreas]: { 'fill-opacity': 1 },
     [mapLayerIds.buildings]: { 'fill-opacity': 1 },
     [mapLayerIds.restrictedAreas]: { 'line-opacity': 0.88 },
-    [mapLayerIds.parks]: { 'fill-opacity': 0 },
+    [mapLayerIds.protectedAreas]: { 'fill-opacity': 0.4 },
+    [mapLayerIds.protectedAreaOutlines]: { 'line-opacity': 0.9 },
     [mapLayerIds.waterways]: { 'line-opacity': 1 },
     [mapLayerIds.water]: { 'fill-opacity': 1 },
     [mapLayerIds.boundaries]: { 'line-opacity': 0.7 },
+    [mapLayerIds.countryBorders]: { 'line-opacity': 0.9 },
+    [mapLayerIds.disputedBorders]: { 'line-opacity': 1 },
     [mapLayerIds.roadCasings]: { 'line-opacity': 0.46 },
     [mapLayerIds.roads]: { 'line-opacity': 0.86 },
     [mapLayerIds.hikingPaths]: { 'line-opacity': 0.9 },
@@ -158,6 +172,10 @@ export const mapVisualModePaint = {
       'text-opacity': 1,
       'text-halo-color': mapVisualPalette.text.haloVector,
     },
+    [mapLayerIds.protectedAreaLabels]: {
+      'text-opacity': 1,
+      'text-halo-color': mapVisualPalette.text.haloVector,
+    },
     [mapLayerIds.waterLabels]: {
       'text-opacity': 1,
       'text-halo-color': mapVisualPalette.text.haloVector,
@@ -177,12 +195,15 @@ export const mapVisualModePaint = {
     [mapLayerIds.cemeteries]: { 'fill-opacity': 0 },
     [mapLayerIds.landuse]: { 'fill-opacity': 0 },
     [mapLayerIds.restrictedAreas]: { 'line-opacity': 0.8 },
-    [mapLayerIds.parks]: { 'fill-opacity': 0 },
+    [mapLayerIds.protectedAreas]: { 'fill-opacity': 0.5 },
+    [mapLayerIds.protectedAreaOutlines]: { 'line-opacity': 1 },
     [mapLayerIds.waterways]: { 'line-opacity': 1 },
     [mapLayerIds.water]: { 'fill-opacity': 0.38 },
     [mapLayerIds.brownfieldAreas]: { 'fill-opacity': 0 },
     [mapLayerIds.buildings]: { 'fill-opacity': 0 },
     [mapLayerIds.boundaries]: { 'line-opacity': 0.7 },
+    [mapLayerIds.countryBorders]: { 'line-opacity': 1 },
+    [mapLayerIds.disputedBorders]: { 'line-opacity': 1 },
     [mapLayerIds.roadCasings]: { 'line-opacity': 0.64 },
     [mapLayerIds.roads]: { 'line-opacity': 0.96 },
     [mapLayerIds.hikingPaths]: { 'line-opacity': 0.96 },
@@ -212,6 +233,10 @@ export const mapVisualModePaint = {
       'text-halo-color': mapVisualPalette.text.haloSatellite,
     },
     [mapLayerIds.roadLabels]: {
+      'text-opacity': 1,
+      'text-halo-color': mapVisualPalette.text.haloSatellite,
+    },
+    [mapLayerIds.protectedAreaLabels]: {
       'text-opacity': 1,
       'text-halo-color': mapVisualPalette.text.haloSatellite,
     },

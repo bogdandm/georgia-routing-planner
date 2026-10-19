@@ -124,12 +124,15 @@ export const mapLayerIds = {
   cemeteries: 'basemap-cemeteries',
   brownfieldAreas: 'basemap-brownfield-areas',
   restrictedAreas: 'basemap-restricted-areas',
-  parks: 'basemap-parks',
+  protectedAreas: 'basemap-protected-areas',
+  protectedAreaOutlines: 'basemap-protected-area-outlines',
   waterways: 'basemap-waterways',
   intermittentWaterways: 'basemap-intermittent-waterways',
   water: 'basemap-water',
   buildings: 'basemap-buildings',
   boundaries: 'basemap-boundaries',
+  countryBorders: 'basemap-country-borders',
+  disputedBorders: 'basemap-disputed-borders',
   roadCasings: 'basemap-road-casings',
   roads: 'basemap-roads',
   hikingPaths: 'basemap-hiking-paths',
@@ -148,6 +151,7 @@ export const mapLayerIds = {
   roadLabels: 'basemap-road-labels',
   riverLabels: 'basemap-river-labels',
   ridgeLabels: 'basemap-ridge-labels',
+  protectedAreaLabels: 'basemap-protected-area-labels',
   waterLabels: 'basemap-water-labels',
   placeLabels: 'basemap-place-labels',
 } as const;
@@ -171,6 +175,8 @@ export const basemapImageIds = {
   plantationPattern: 'basemap-plantation-pattern',
   screePattern: 'basemap-scree-pattern',
   cemeteryPattern: 'basemap-cemetery-pattern',
+  protectedAreaPattern: 'basemap-protected-area-pattern',
+  protectedAreaSparsePattern: 'basemap-protected-area-sparse-pattern',
 } as const;
 
 /**

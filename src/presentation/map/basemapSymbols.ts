@@ -33,6 +33,8 @@ type Rectangle = readonly [left: number, top: number, right: number, bottom: num
 type Disc = readonly [x: number, y: number, radius: number];
 /** Circle outline in CSS pixels; `width` is centred on `radius`. */
 type Ring = readonly [x: number, y: number, radius: number, width: number];
+/** Straight stroke in CSS pixels with round ends; `width` is centred on the line. */
+type Segment = readonly [x1: number, y1: number, x2: number, y2: number, width: number];
 
 const white: Rgb = [255, 255, 255];
 
@@ -199,12 +201,56 @@ const cemeteryPattern: PatternGeometry = (() => {
   return { widthCss: cellCss * cellCount, heightCss: cellCss * cellCount, rectangles };
 })();
 
+/**
+ * Letters N and R drawn as strokes from the top-left corner `(left, top)`: 6 px tall,
+ * 4 px wide, with a chamfered R bowl that stays legible at map size.
+ */
+function natureReserveLetters(left: number, top: number): Segment[] {
+  const stroke = 1.1;
+  const width = 4;
+  const height = 6;
+  const bottom = top + height;
+  const middle = top + height / 2;
+  const r = left + width + 1.8;
+  const rRight = r + width;
+  return [
+    [left, top, left, bottom, stroke],
+    [left, top, left + width, bottom, stroke],
+    [left + width, top, left + width, bottom, stroke],
+    [r, top, r, bottom, stroke],
+    [r, top, rRight - 1, top, stroke],
+    [rRight - 1, top, rRight, top + 1, stroke],
+    [rRight, top + 1, rRight, middle - 1, stroke],
+    [rRight, middle - 1, rRight - 1, middle, stroke],
+    [rRight - 1, middle, r, middle, stroke],
+    [r + 1.4, middle, rRight, bottom, stroke],
+  ];
+}
+
+/**
+ * Protected land: repeated "NR" in two offset rows, so the sign reads as text rather
+ * than as a grid while staying clear of the pattern seams. Patterns keep their screen
+ * size at every zoom, so close zooms use a larger, sparser tile.
+ */
+function protectedAreaPattern(widthCss: number, heightCss: number): PatternGeometry {
+  return {
+    widthCss,
+    heightCss,
+    rectangles: [],
+    segments: [
+      ...natureReserveLetters(widthCss / 8, (heightCss * 7) / 32),
+      ...natureReserveLetters((widthCss * 5) / 8, (heightCss * 23) / 32),
+    ],
+  };
+}
+
 interface PatternGeometry {
   readonly widthCss: number;
   readonly heightCss: number;
   readonly rectangles: readonly Rectangle[];
   readonly discs?: readonly Disc[];
   readonly rings?: readonly Ring[];
+  readonly segments?: readonly Segment[];
 }
 
 const pinheadIcons: Readonly<
@@ -286,6 +332,14 @@ const patterns: Readonly<
     geometry: cemeteryPattern,
     color: mapVisualPalette.base.cemeterySign,
   },
+  [basemapImageIds.protectedAreaPattern]: {
+    geometry: protectedAreaPattern(96, 64),
+    color: mapVisualPalette.protectedArea.line,
+  },
+  [basemapImageIds.protectedAreaSparsePattern]: {
+    geometry: protectedAreaPattern(192, 128),
+    color: mapVisualPalette.protectedArea.line,
+  },
 };
 
 /**
@@ -340,9 +394,31 @@ function rasterizePattern(geometry: PatternGeometry, color: Rgb): RawRgbaImage {
       (geometry.rings ?? []).some(
         ([centerX, centerY, radius, width]) =>
           Math.abs(Math.hypot(x - centerX, y - centerY) - radius) <= width / 2,
+      ) ||
+      (geometry.segments ?? []).some(
+        ([x1, y1, x2, y2, width]) =>
+          distanceToSegment(x, y, x1, y1, x2, y2) <= width / 2,
       );
     return covered ? color : null;
   });
+}
+
+function distanceToSegment(
+  x: number,
+  y: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSquared = dx * dx + dy * dy;
+  const along =
+    lengthSquared === 0
+      ? 0
+      : Math.min(1, Math.max(0, ((x - x1) * dx + (y - y1) * dy) / lengthSquared));
+  return Math.hypot(x - (x1 + along * dx), y - (y1 + along * dy));
 }
 
 /** The former POI circle: a 3 px dot with a 1 px white ring. */

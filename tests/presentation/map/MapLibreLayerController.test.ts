@@ -748,6 +748,15 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.water)).toBe('none');
     expect(map.visibility.get(mapLayerIds.waterLabels)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).toBe('visible');
+
+    expect(controller.setLayerVisibility('protected-areas', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.protectedAreaLabels)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.countryBorders)).not.toBe('none');
+    expect(map.visibility.get(mapLayerIds.disputedBorders)).not.toBe('none');
 
     expect(controller.setLayerVisibility('places-and-pois', false)).toEqual({
       status: 'success',
@@ -792,6 +801,28 @@ describe('MapLibreLayerController', () => {
     for (const layerId of patternLayerIds) {
       expect(map.visibility.get(layerId)).toBe('none');
     }
+  });
+
+  it('draws the protected-area NR sign only while area patterns and protected areas are on', () => {
+    const controller = createTestServices().mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setLayerVisibility('natural-feature-patterns', false);
+    expect(map.visibility.get(mapLayerIds.protectedAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).not.toBe('none');
+
+    // Turning protected areas back on must not bring back the sign hidden by patterns.
+    controller.setLayerVisibility('protected-areas', false);
+    controller.setLayerVisibility('protected-areas', true);
+    expect(map.visibility.get(mapLayerIds.protectedAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).toBe('visible');
+
+    controller.setLayerVisibility('natural-feature-patterns', true);
+    expect(map.visibility.get(mapLayerIds.protectedAreas)).toBe('visible');
+    controller.setLayerVisibility('protected-areas', false);
+    expect(map.visibility.get(mapLayerIds.protectedAreas)).toBe('none');
   });
 
   it('keeps separate area pattern choices for 2D and 3D, off in 3D by default', async () => {
@@ -2896,6 +2927,7 @@ describe('MapLibreLayerController', () => {
         'natural-features': true,
         'natural-feature-patterns': true,
         'restricted-areas': false,
+        'protected-areas': false,
         'detail-context': true,
         'hiking-paths': true,
         roads: false,
@@ -2923,6 +2955,7 @@ describe('MapLibreLayerController', () => {
     expect(map.sources.has('sentinel-raster-a')).toBe(false);
     expect(map.visibility.get(mapLayerIds.roads)).toBe('none');
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
+    expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({

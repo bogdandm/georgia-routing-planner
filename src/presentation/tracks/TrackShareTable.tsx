@@ -167,9 +167,9 @@ function TrackShareRow({
     <Box
       component="li"
       sx={{
+        gridColumn: '1 / -1',
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) 48px auto',
-        columnGap: 1,
+        gridTemplateColumns: 'subgrid',
         alignItems: 'center',
         py: 0.5,
       }}
@@ -188,7 +188,18 @@ function TrackShareRow({
           </Typography>
         )}
       </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+      {/* The small Switch's box: spinner, retry, and switch share it, so neither the
+          row height nor the Share column (and its centered label) moves between states. */}
+      <Box
+        sx={{
+          width: 40,
+          height: 24,
+          justifySelf: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         {state.kind === 'loading' ? (
           <CircularProgress aria-label={t`Loading sharing status`} size={20} />
         ) : state.kind === 'status-failed' ? (
@@ -196,6 +207,7 @@ function TrackShareRow({
             <IconButton
               size="small"
               aria-label={t`Retry sharing status`}
+              sx={{ p: 0.25 }}
               onClick={() => {
                 retryStatus();
               }}
@@ -287,16 +299,53 @@ export function TrackShareTable({ mapUrl }: { readonly mapUrl: string }) {
   return (
     <>
       <Divider />
-      <Box>
+      <Typography variant="body2" color="text.secondary">
+        <Trans>
+          Each track is shared on its own, with a separate link that opens it on this
+          map view. The map link above never includes tracks.
+        </Trans>
+      </Typography>
+      {/* One grid for the header and every row (rows use subgrid), so the Share label
+          stays centered over the switch column whatever its translated width. */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+          columnGap: 1,
+          alignItems: 'center',
+        }}
+      >
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
           <Trans>Tracks</Trans>
         </Typography>
+        <Typography
+          variant="subtitle2"
+          color="text.secondary"
+          sx={{ justifySelf: 'center' }}
+        >
+          <Trans>Share</Trans>
+        </Typography>
         {signedIn ? null : (
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ gridColumn: '1 / -1' }}
+          >
             <Trans>Sign in to share tracks publicly.</Trans>
           </Typography>
         )}
-        <Box component="ul" aria-label={t`Tracks`} sx={{ m: 0, mt: 0.5, p: 0 }}>
+        <Box
+          component="ul"
+          aria-label={t`Tracks`}
+          sx={{
+            gridColumn: '1 / -1',
+            display: 'grid',
+            gridTemplateColumns: 'subgrid',
+            m: 0,
+            mt: 0.5,
+            p: 0,
+          }}
+        >
           {tracks.map((track) => (
             <TrackShareRow
               // Remount on a new hash or sign-in so the row reloads its own status.

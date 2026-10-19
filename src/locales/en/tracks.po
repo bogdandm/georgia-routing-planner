@@ -342,7 +342,7 @@ msgid "Confirm rename"
 msgstr "Confirm rename"
 
 #. js-lingui-id: y1eoq1
-#: src/presentation/tracks/TrackShareTable.tsx:221
+#: src/presentation/tracks/TrackShareTable.tsx:233
 msgid "Copy link"
 msgstr "Copy link"
 
@@ -474,6 +474,11 @@ msgstr "Drop track file"
 #: src/presentation/tracks/TracksWorkspace.tsx:4075
 msgid "Drop tracks here"
 msgstr "Drop tracks here"
+
+#. js-lingui-id: AxUPGi
+#: src/presentation/tracks/TrackShareTable.tsx:303
+msgid "Each track is shared on its own, with a separate link that opens it on this map view. The map link above never includes tracks."
+msgstr "Each track is shared on its own, with a separate link that opens it on this map view. The map link above never includes tracks."
 
 #. js-lingui-id: N6j2JH
 #. placeholder {0}: folder.name
@@ -686,7 +691,7 @@ msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Loading route tiles… {loadedTiles}/{totalTiles}"
 
 #. js-lingui-id: 5nnEsR
-#: src/presentation/tracks/TrackShareTable.tsx:193
+#: src/presentation/tracks/TrackShareTable.tsx:204
 msgid "Loading sharing status"
 msgstr "Loading sharing status"
 
@@ -792,7 +797,7 @@ msgid "New route"
 msgstr "New route"
 
 #. js-lingui-id: f1xZWH
-#: src/presentation/tracks/TrackShareTable.tsx:280
+#: src/presentation/tracks/TrackShareTable.tsx:292
 #: src/presentation/tracks/TracksWorkspace.tsx:1547
 #: src/presentation/tracks/TracksWorkspace.tsx:5317
 msgid "New track"
@@ -969,8 +974,8 @@ msgid "Reorder {0}"
 msgstr "Reorder {0}"
 
 #. js-lingui-id: SZzo9N
-#: src/presentation/tracks/TrackShareTable.tsx:195
-#: src/presentation/tracks/TrackShareTable.tsx:198
+#: src/presentation/tracks/TrackShareTable.tsx:206
+#: src/presentation/tracks/TrackShareTable.tsx:209
 msgid "Retry sharing status"
 msgstr "Retry sharing status"
 
@@ -1098,8 +1103,13 @@ msgstr "Settlement lookup timed out."
 msgid "Settlement lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 msgstr "Settlement lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 
+#. js-lingui-id: Z8lGw6
+#: src/presentation/tracks/TrackShareTable.tsx:326
+msgid "Share"
+msgstr "Share"
+
 #. js-lingui-id: 3N4bs1
-#: src/presentation/tracks/TrackShareTable.tsx:212
+#: src/presentation/tracks/TrackShareTable.tsx:224
 msgid "Share {name} publicly"
 msgstr "Share {name} publicly"
 
@@ -1140,7 +1150,7 @@ msgid "Show track grade legend"
 msgstr "Show track grade legend"
 
 #. js-lingui-id: lEy7pG
-#: src/presentation/tracks/TrackShareTable.tsx:296
+#: src/presentation/tracks/TrackShareTable.tsx:334
 msgid "Sign in to share tracks publicly."
 msgstr "Sign in to share tracks publicly."
 
@@ -1412,8 +1422,8 @@ msgid "Track name must be 200 characters or fewer."
 msgstr "Track name must be 200 characters or fewer."
 
 #. js-lingui-id: 2eFlmt
-#: src/presentation/tracks/TrackShareTable.tsx:292
-#: src/presentation/tracks/TrackShareTable.tsx:299
+#: src/presentation/tracks/TrackShareTable.tsx:319
+#: src/presentation/tracks/TrackShareTable.tsx:339
 msgid "Tracks"
 msgstr "Tracks"
 

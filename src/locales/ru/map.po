@@ -86,7 +86,7 @@ msgid "Clipboard access failed. Try again or use the Share dialog."
 msgstr "Не удалось получить доступ к буферу обмена. Повторите попытку или воспользуйтесь окном «Поделиться»."
 
 #. js-lingui-id: yz7wBu
-#: src/presentation/map/MapShareDialog.tsx:285
+#: src/presentation/map/MapShareDialog.tsx:286
 msgid "Close"
 msgstr "Закрыть"
 

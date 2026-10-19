@@ -1,16 +1,16 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Alert,
   Box,
-  Button,
   Checkbox,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Stack,
   TextField,
   Typography,
@@ -199,7 +199,7 @@ export function MapShareDialog() {
 
   return (
     <Dialog open={open} onClose={close} fullWidth maxWidth="sm">
-      <DialogTitle>
+      <DialogTitle sx={{ pr: 7 }}>
         <Trans>Share</Trans>
       </DialogTitle>
       <DialogContent>
@@ -280,11 +280,15 @@ export function MapShareDialog() {
           <TrackShareTable mapUrl={url} />
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
-        <Button size="small" onClick={close}>
-          <Trans>Close</Trans>
-        </Button>
-      </DialogActions>
+      {/* A sibling of the title, so the dialog's accessible name stays "Share". */}
+      <IconButton
+        size="small"
+        aria-label={t`Close`}
+        onClick={close}
+        sx={{ position: 'absolute', top: 12, right: 12 }}
+      >
+        <CloseIcon sx={{ fontSize: 20 }} />
+      </IconButton>
     </Dialog>
   );
 }

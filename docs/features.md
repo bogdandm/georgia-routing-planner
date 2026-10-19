@@ -319,14 +319,16 @@ mode is never persisted.
 
 The **Share** dialog (rail **Share**, or **Share…** in **Track actions**) lists the
 tracks drawn on the map below its map section: the open track, or every multi-track
-selection. Each row has a public-access switch and **Copy link**, which confirms the
-copy in place with **Copied**. Opening the dialog loads each row's status. Only a
-signed-in owner's synchronized saved track can be shared; other rows stay disabled with
-the reason. Disabling keeps the track synchronized. A track link is the dialog's map
-link plus `#tracks/share/1.<token>`, keeping the capability out of request paths and
-referrers. A recipient needs no account and sees the owner's current snapshot read-only;
-the map starts with the link's layer and 2D/3D mode, then fits to the track once both it
-and any 3D transition are ready. **Save a copy** creates an independent local track.
+selection. A short note above the table says each track is shared separately and the map
+link never includes tracks. Each row has a switch in the **Share** column and **Copy
+link**, which confirms the copy in place with **Copied**. Opening the dialog loads each
+row's status. Only a signed-in owner's synchronized saved track can be shared; other
+rows stay disabled with the reason. Disabling keeps the track synchronized. A track link
+is the dialog's map link plus `#tracks/share/1.<token>`, keeping the capability out of
+request paths and referrers. A recipient needs no account and sees the owner's current
+snapshot read-only; the map starts with the link's layer and 2D/3D mode, then fits to
+the track once both it and any 3D transition are ready. **Save a copy** creates an
+independent local track.
 
 ### Markers
 

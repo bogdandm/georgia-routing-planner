@@ -257,7 +257,7 @@ describe('MapViewControls', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
-  it('closes the chooser and restores button focus on Escape', async () => {
+  it('closes only the chooser on Escape and restores button focus', async () => {
     const user = userEvent.setup();
     renderWithI18n(
       <MapViewControls
@@ -282,10 +282,15 @@ describe('MapViewControls', () => {
     const button = screen.getByRole('button', { name: 'Choose map layer preset' });
     await user.click(button);
     await screen.findByRole('menu');
+    // MapWorkspace cancels marker placement and weather point picking on window Escape.
+    const windowEscape = vi.fn();
+    window.addEventListener('keydown', windowEscape);
     await user.keyboard('{Escape}');
+    window.removeEventListener('keydown', windowEscape);
 
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     expect(button).toHaveFocus();
+    expect(windowEscape).not.toHaveBeenCalled();
   });
   it('disables 3D terrain while Sentinel Mosaic is active', async () => {
     const user = userEvent.setup();

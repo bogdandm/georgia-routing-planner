@@ -72,7 +72,7 @@ msgstr "Проверка данных карты поблизости…"
 #. js-lingui-id: 2uEfCs
 #: src/presentation/map/MapViewControls.tsx:194
 #: src/presentation/map/MapViewControls.tsx:200
-#: src/presentation/map/MapViewControls.tsx:253
+#: src/presentation/map/MapViewControls.tsx:260
 msgid "Choose map layer preset"
 msgstr "Выбрать набор слоёв карты"
 
@@ -97,7 +97,7 @@ msgid "Close map point details"
 msgstr "Закрыть сведения о точке"
 
 #. js-lingui-id: zN8IXs
-#: src/presentation/map/MapViewControls.tsx:317
+#: src/presentation/map/MapViewControls.tsx:326
 msgid "Clouds, precipitation, and wind"
 msgstr "Облака, осадки и ветер"
 
@@ -196,7 +196,7 @@ msgid "Include in link"
 msgstr "Добавить в ссылку"
 
 #. js-lingui-id: VBKJhe
-#: src/presentation/map/MapViewControls.tsx:355
+#: src/presentation/map/MapViewControls.tsx:364
 msgid "Layers tab"
 msgstr "Все слои"
 
@@ -298,7 +298,7 @@ msgid "Open windy.com"
 msgstr "Открыть windy.com"
 
 #. js-lingui-id: pOgx3m
-#: src/presentation/map/MapViewControls.tsx:297
+#: src/presentation/map/MapViewControls.tsx:306
 msgid "OSM overlay"
 msgstr "OSM поверх снимков"
 
@@ -408,7 +408,7 @@ msgid "Vector OSM"
 msgstr "Векторная карта OSM"
 
 #. js-lingui-id: mJZLtT
-#: src/presentation/map/MapViewControls.tsx:316
+#: src/presentation/map/MapViewControls.tsx:325
 msgid "Weather"
 msgstr "Погода"
 

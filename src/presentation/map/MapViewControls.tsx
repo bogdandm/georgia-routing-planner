@@ -232,7 +232,10 @@ export function MapViewControls({
       <Popper
         anchorEl={menuButton}
         disablePortal
-        modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}
+        modifiers={[
+          { name: 'offset', options: { offset: [0, 8] } },
+          { name: 'preventOverflow', options: { padding: 8 } },
+        ]}
         open={menuOpen}
         placement="left-start"
       >
@@ -248,14 +251,20 @@ export function MapViewControls({
             closeMenu();
           }}
         >
-          <Paper elevation={8}>
+          {/* Short landscape phone maps clip the map overflow, so the list scrolls instead. */}
+          <Paper
+            elevation={8}
+            sx={{ maxHeight: 'calc(100dvh - 16px)', overflowY: 'auto' }}
+          >
             <MenuList
               aria-label={t`Choose map layer preset`}
               autoFocusItem
               id={menuId}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
+                  // Escape here closes only the chooser, not an active map operation.
                   event.preventDefault();
+                  event.stopPropagation();
                   closeMenu();
                   menuButton?.focus();
                 } else if (event.key === 'Tab') {

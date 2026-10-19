@@ -259,17 +259,27 @@ export class MapPointerGestureControl {
       // same view ray onto the terrain without moving the camera. The camera position is
       // only exposed on the rendered transform, underscored but part of MapLibre's typings.
       const { transform } = map._camera;
-      map.easeTo({
-        ...map.calculateCameraOptionsFromCameraLngLatAltRotation(
-          transform.getCameraLngLat(),
-          transform.getCameraAltitude(),
+      const cameraPosition = transform.getCameraLngLat();
+      const cameraAltitude = transform.getCameraAltitude();
+      let camera = map.calculateCameraOptionsFromCameraLngLatAltRotation(
+        cameraPosition,
+        cameraAltitude,
+        bearing,
+        pitch,
+      );
+      // A lower pitch shortens the view ray and raises the zoom. MapLibre would clamp a
+      // zoom past its limits and move the camera, so the pitch holds there instead; a
+      // turn alone keeps the ray length and so the zoom.
+      const zoom = camera.zoom ?? map.getZoom();
+      if (zoom > map.getMaxZoom() || zoom < map.getMinZoom()) {
+        camera = map.calculateCameraOptionsFromCameraLngLatAltRotation(
+          cameraPosition,
+          cameraAltitude,
           bearing,
-          pitch,
-        ),
-        duration: 0,
-        essential: true,
-        freezeElevation: true,
-      });
+          map.getPitch(),
+        );
+      }
+      map.easeTo({ ...camera, duration: 0, essential: true, freezeElevation: true });
       return;
     }
     const anchor = this.#orbitAnchor;

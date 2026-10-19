@@ -39,6 +39,9 @@ function createMapDouble() {
       panBy,
       getBearing: () => camera.bearing,
       getPitch: () => camera.pitch,
+      getZoom: () => 12.5,
+      getMinZoom: () => 0,
+      getMaxZoom: () => 22,
       easeTo,
       calculateCameraOptionsFromCameraLngLatAltRotation,
       _camera: {
@@ -267,6 +270,39 @@ describe('MapPointerGestureControl', () => {
     expect(mapClickListener).not.toHaveBeenCalled();
     control.detach();
     container.remove();
+  });
+
+  it('holds the look-around pitch where the fixed camera would exceed the zoom limit', () => {
+    const container = document.createElement('div');
+    const { calculateCameraOptionsFromCameraLngLatAltRotation, easeTo, map } =
+      createMapDouble();
+    calculateCameraOptionsFromCameraLngLatAltRotation.mockImplementation(
+      (_position, _altitude, bearing, pitch) => ({
+        center: { lng: 44.81, lat: 41.72 },
+        zoom: pitch < 30 ? 22.4 : 21.9,
+        elevation: 1_500,
+        bearing,
+        pitch,
+      }),
+    );
+    const control = new MapPointerGestureControl(createPivotDouble());
+    control.attach(container, map);
+    control.setTerrainOrbitEnabled(true);
+
+    container.dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        ctrlKey: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    );
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 30 }));
+
+    expect(easeTo).toHaveBeenCalledWith(
+      expect.objectContaining({ bearing: 12.8, pitch: 30, zoom: 21.9 }),
+    );
+    control.detach();
   });
 
   it('leaves Shift+left, Ctrl+left, ordinary left, and right native in 2D', () => {

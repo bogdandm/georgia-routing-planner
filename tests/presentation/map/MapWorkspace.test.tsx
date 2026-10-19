@@ -860,6 +860,98 @@ describe('MapWorkspace', () => {
     });
     expect(mapInteractionStore.getState().fitBoundsCommand).toBeNull();
   });
+  it('holds a fit until the restored 3D view finishes entering terrain', async () => {
+    // The terrain transition jumps back to the camera it started from, so a fit that
+    // ran during it would be undone.
+    const facade = new FakeMapFacade();
+    let finishTerrain!: () => void;
+    facade.terrainTransition = (mode) =>
+      new Promise((resolve) => {
+        finishTerrain = () => {
+          facade.setSnapshot({ terrainMode: mode });
+          resolve({ status: 'success', mode });
+        };
+      });
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          Promise.resolve({
+            camera: {
+              longitude: 45.2,
+              latitude: 42.4,
+              zoom: 10,
+              bearing: 18,
+              pitch: 25,
+            },
+            terrainMode: 'terrain' as const,
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Restored 3D canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Restored 3D canvas');
+
+    act(() => {
+      requestMapFitBounds({ west: 43.1, south: 41.6, east: 44.2, north: 42.4 }, 15);
+      facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    });
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+    expect(facade.fitBoundsRequests).toEqual([]);
+
+    act(() => {
+      finishTerrain();
+    });
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests).toEqual([
+        {
+          bounds: { west: 43.1, south: 41.6, east: 44.2, north: 42.4 },
+          maxZoom: 15,
+        },
+      ]);
+    });
+  });
+  it('fits a restored 3D view at once when the map is degraded before terrain starts', async () => {
+    const facade = new FakeMapFacade();
+    const services = {
+      ...createTestServices(),
+      mapCameraRepository: {
+        load: () =>
+          Promise.resolve({
+            camera: {
+              longitude: 45.2,
+              latitude: 42.4,
+              zoom: 10,
+              bearing: 18,
+              pitch: 25,
+            },
+            terrainMode: 'terrain' as const,
+          }),
+        save: () => Promise.resolve(),
+      },
+    };
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Degraded 3D canvas</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Degraded 3D canvas');
+
+    act(() => {
+      requestMapFitBounds({ west: 43.1, south: 41.6, east: 44.2, north: 42.4 }, 15);
+      facade.setSnapshot({ lifecycle: 'degraded', terrainMode: 'flat' });
+    });
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests).toHaveLength(1);
+    });
+    expect(facade.terrainModeRequests).toEqual([]);
+  });
   it('publishes lifecycle state without mounting a duplicate local banner', () => {
     const facade = new FakeMapFacade();
     const services = createTestServices();
@@ -1612,7 +1704,7 @@ describe('MapWorkspace', () => {
     fireEvent.contextMenu(nativeMap);
     await user.click(screen.getByRole('menuitem', { name: 'Share…' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Share map view' });
+    const dialog = await screen.findByRole('dialog', { name: 'Share' });
     const link = within(dialog).getByRole<HTMLInputElement>('textbox', {
       name: 'Link',
     });

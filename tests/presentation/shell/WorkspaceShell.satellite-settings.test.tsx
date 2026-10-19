@@ -946,9 +946,7 @@ describe('WorkspaceShell', () => {
       within(collapsedProjectLogo).getByTestId('project-logo-image');
     expect(navigation).toBeVisible();
     expect(navigation).toHaveStyle({ width: '94px' });
-    expect(
-      screen.queryByRole('button', { name: 'Share map view' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Share' })).not.toBeInTheDocument();
     expect(collapsedLogoImage).toHaveStyle({
       width: '52px',
       height: '52px',
@@ -1643,7 +1641,7 @@ describe('WorkspaceShell', () => {
       screen.getByRole('tab', { name: 'Tracks' }),
       screen.getByRole('tab', { name: 'Layers' }),
       screen.getByRole('tab', { name: 'Markers' }),
-      screen.getByRole('button', { name: 'Share map view' }),
+      screen.getByRole('button', { name: 'Share' }),
       screen.getByRole('button', { name: 'Developer diagnostics' }),
       userButton,
       screen.getByRole('button', { name: 'Open settings' }),

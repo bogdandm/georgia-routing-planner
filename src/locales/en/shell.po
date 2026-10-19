@@ -90,8 +90,8 @@ msgid "A short tour of controls that are easy to miss. Each step shows one secti
 msgstr "A short tour of controls that are easy to miss. Each step shows one section."
 
 #. js-lingui-id: uqTLqP
+#: src/presentation/shell/WorkspaceRail.tsx:562
 #: src/presentation/shell/WorkspaceRail.tsx:563
-#: src/presentation/shell/WorkspaceRail.tsx:564
 msgid "About this site"
 msgstr "About this site"
 
@@ -297,8 +297,8 @@ msgid "Deterministic 9 km model forecast; not a measured weather-station observa
 msgstr "Deterministic 9 km model forecast; not a measured weather-station observation."
 
 #. js-lingui-id: HIQP0Z
+#: src/presentation/shell/WorkspaceRail.tsx:515
 #: src/presentation/shell/WorkspaceRail.tsx:516
-#: src/presentation/shell/WorkspaceRail.tsx:517
 msgid "Developer diagnostics"
 msgstr "Developer diagnostics"
 
@@ -709,7 +709,7 @@ msgid "Open meteoblue.com"
 msgstr "Open meteoblue.com"
 
 #. js-lingui-id: Yp-Hi_
-#: src/presentation/shell/WorkspaceRail.tsx:555
+#: src/presentation/shell/WorkspaceRail.tsx:554
 msgid "Open settings"
 msgstr "Open settings"
 
@@ -1113,7 +1113,7 @@ msgstr "Sentinel search cancelled"
 
 #. js-lingui-id: Tz0i8g
 #: src/presentation/shell/SettingsDialog.tsx:75
-#: src/presentation/shell/WorkspaceRail.tsx:556
+#: src/presentation/shell/WorkspaceRail.tsx:555
 msgid "Settings"
 msgstr "Settings"
 
@@ -1123,14 +1123,9 @@ msgid "Settings tabs"
 msgstr "Settings tabs"
 
 #. js-lingui-id: Z8lGw6
-#: src/presentation/shell/WorkspaceRail.tsx:498
+#: src/presentation/shell/WorkspaceRail.tsx:497
 msgid "Share"
 msgstr "Share"
-
-#. js-lingui-id: bdo1_8
-#: src/presentation/shell/WorkspaceRail.tsx:477
-msgid "Share map view"
-msgstr "Share map view"
 
 #. js-lingui-id: Gd8EbX
 #: src/presentation/shell/OnboardingMapLegend.tsx:163
@@ -1164,8 +1159,8 @@ msgid "Show this tour again."
 msgstr "Show this tour again."
 
 #. js-lingui-id: fOJVzK
+#: src/presentation/shell/WorkspaceRail.tsx:570
 #: src/presentation/shell/WorkspaceRail.tsx:571
-#: src/presentation/shell/WorkspaceRail.tsx:572
 msgid "Show tour"
 msgstr "Show tour"
 

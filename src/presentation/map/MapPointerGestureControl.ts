@@ -14,7 +14,11 @@ const rotationIntentDegrees = 15;
 
 type TwoFingerIntent = 'zoom-or-pan' | 'rotate';
 
-type Gesture = 'pan' | 'orbit' | null;
+/**
+ * `orbit` turns the camera around the terrain point under the press; `look` turns it in
+ * place, around the camera position itself.
+ */
+type Gesture = 'pan' | 'orbit' | 'look' | null;
 interface TouchStart {
   readonly identifier: number;
   readonly x: number;
@@ -118,13 +122,13 @@ function createOrbitPivotIndicator() {
 }
 
 /**
- * Owns middle-button panning and Shift+left terrain orbit gestures without changing
- * MapLibre's ordinary left and right button behavior. It also decides when a two-finger
- * touch may rotate. MapLibre alone rotates once the fingers twist about 25 px, which an
- * ordinary pinch-zoom or two-finger drag easily does, especially with fingers spread
- * wide. This control replaces that threshold check: rotation starts only after the
- * twist clearly outweighs the pinch and pan, and never in a gesture already decided as
- * zoom-or-pan.
+ * Owns middle-button panning, Shift+left terrain orbit, and Ctrl+left look-around
+ * gestures without changing MapLibre's ordinary left and right button behavior. It also
+ * decides when a two-finger touch may rotate. MapLibre alone rotates once the fingers
+ * twist about 25 px, which an ordinary pinch-zoom or two-finger drag easily does,
+ * especially with fingers spread wide. This control replaces that threshold check:
+ * rotation starts only after the twist clearly outweighs the pinch and pan, and never in
+ * a gesture already decided as zoom-or-pan.
  */
 export class MapPointerGestureControl {
   #container: HTMLElement | null = null;
@@ -167,9 +171,12 @@ export class MapPointerGestureControl {
     );
   }
 
+  /** Allows the 3D camera gestures, orbit and look-around; disabling ends a running one. */
   public setTerrainOrbitEnabled(enabled: boolean): void {
     this.#terrainOrbitEnabled = enabled;
-    if (!enabled && this.#gesture === 'orbit') this.finishGesture();
+    if (!enabled && (this.#gesture === 'orbit' || this.#gesture === 'look')) {
+      this.finishGesture();
+    }
   }
 
   public detach(): void {
@@ -196,8 +203,12 @@ export class MapPointerGestureControl {
         ? this.#terrainOrbitEnabled
           ? 'orbit'
           : 'pan'
-        : event.button === 0 && event.shiftKey && this.#terrainOrbitEnabled
-          ? 'orbit'
+        : event.button === 0 && this.#terrainOrbitEnabled
+          ? event.ctrlKey
+            ? 'look'
+            : event.shiftKey
+              ? 'orbit'
+              : null
           : null;
     if (gesture === null || this.#container === null) return;
 
@@ -235,15 +246,38 @@ export class MapPointerGestureControl {
       map.panBy([-horizontalDelta, -verticalDelta], { duration: 0 });
       return;
     }
+    if (!this.#terrainOrbitEnabled) return;
+    const bearing = map.getBearing() + horizontalDelta * bearingDegreesPerPixel;
+    const pitch = Math.min(
+      maximumPitchDegrees,
+      Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel),
+    );
+    if (gesture === 'look') {
+      // MapLibre solves the center and zoom that keep the camera where it is with the
+      // new rotation. That center sits at the current center elevation, so the elevation
+      // stays frozen through the jump; once it ends, MapLibre moves the center along the
+      // same view ray onto the terrain without moving the camera. The camera position is
+      // only exposed on the rendered transform, underscored but part of MapLibre's typings.
+      const { transform } = map._camera;
+      map.easeTo({
+        ...map.calculateCameraOptionsFromCameraLngLatAltRotation(
+          transform.getCameraLngLat(),
+          transform.getCameraAltitude(),
+          bearing,
+          pitch,
+        ),
+        duration: 0,
+        essential: true,
+        freezeElevation: true,
+      });
+      return;
+    }
     const anchor = this.#orbitAnchor;
-    if (!this.#terrainOrbitEnabled || anchor === null) return;
+    if (anchor === null) return;
     map.easeTo({
       around: anchor,
-      bearing: map.getBearing() + horizontalDelta * bearingDegreesPerPixel,
-      pitch: Math.min(
-        maximumPitchDegrees,
-        Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel),
-      ),
+      bearing,
+      pitch,
       duration: 0,
       essential: true,
     });
@@ -252,7 +286,7 @@ export class MapPointerGestureControl {
   private readonly handleMouseUp = (event: MouseEvent): void => {
     const gesture = this.#gesture;
     if (gesture === null || event.button !== this.#gestureButton) return;
-    const suppressClick = gesture === 'orbit' && event.button === 0;
+    const suppressClick = gesture !== 'pan' && event.button === 0;
     event.preventDefault();
     event.stopImmediatePropagation();
     this.finishGesture();

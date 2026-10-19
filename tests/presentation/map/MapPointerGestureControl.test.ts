@@ -13,12 +13,24 @@ function createMapDouble() {
       camera.pitch = options.pitch;
     },
   );
+  const cameraPosition = { lng: 44.79, lat: 41.68 };
+  const calculateCameraOptionsFromCameraLngLatAltRotation = vi.fn(
+    (_position: unknown, _altitude: number, bearing: number, pitch: number) => ({
+      center: { lng: 44.81, lat: 41.72 },
+      zoom: 12.5,
+      elevation: 1_500,
+      bearing,
+      pitch,
+    }),
+  );
   const originalThresholdCheck = vi.fn(() => true);
   const rotateHandler = { _isBelowThreshold: originalThresholdCheck };
   return {
     unproject,
     panBy,
     easeTo,
+    cameraPosition,
+    calculateCameraOptionsFromCameraLngLatAltRotation,
     originalThresholdCheck,
     /** Whether MapLibre's rotate handler would start rotating on the current move. */
     mayRotate: () => !rotateHandler._isBelowThreshold(),
@@ -28,6 +40,13 @@ function createMapDouble() {
       getBearing: () => camera.bearing,
       getPitch: () => camera.pitch,
       easeTo,
+      calculateCameraOptionsFromCameraLngLatAltRotation,
+      _camera: {
+        transform: {
+          getCameraLngLat: () => cameraPosition,
+          getCameraAltitude: () => 4_200,
+        },
+      },
       touchZoomRotate: { _touchRotate: rotateHandler },
     } as unknown as MapLibreMap,
   };
@@ -181,7 +200,76 @@ describe('MapPointerGestureControl', () => {
     container.remove();
   });
 
-  it('leaves Shift+left, ordinary left, and right native in 2D', () => {
+  it('turns the 3D camera in place with Ctrl+left, without a pivot, and suppresses click', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const mapClickListener = vi.fn();
+    container.addEventListener('click', mapClickListener);
+    const {
+      calculateCameraOptionsFromCameraLngLatAltRotation,
+      cameraPosition,
+      easeTo,
+      map,
+      unproject,
+    } = createMapDouble();
+    const pivot = createPivotDouble();
+    const control = new MapPointerGestureControl(pivot);
+    control.attach(container, map);
+    control.setTerrainOrbitEnabled(true);
+
+    container.dispatchEvent(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        ctrlKey: true,
+        shiftKey: true,
+        clientX: 10,
+        clientY: 10,
+      }),
+    );
+    window.dispatchEvent(
+      new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        buttons: 1,
+        clientX: 110,
+        clientY: -1_000,
+      }),
+    );
+    window.dispatchEvent(
+      new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0 }),
+    );
+
+    expect(unproject).not.toHaveBeenCalled();
+    expect(pivot.show).not.toHaveBeenCalled();
+    expect(calculateCameraOptionsFromCameraLngLatAltRotation).toHaveBeenCalledWith(
+      cameraPosition,
+      4_200,
+      38,
+      75,
+    );
+    expect(easeTo).toHaveBeenCalledWith({
+      center: { lng: 44.81, lat: 41.72 },
+      zoom: 12.5,
+      elevation: 1_500,
+      bearing: 38,
+      pitch: 75,
+      duration: 0,
+      essential: true,
+      freezeElevation: true,
+    });
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    container.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(mapClickListener).not.toHaveBeenCalled();
+    control.detach();
+    container.remove();
+  });
+
+  it('leaves Shift+left, Ctrl+left, ordinary left, and right native in 2D', () => {
     const container = document.createElement('div');
     const nativeListener = vi.fn();
     const { easeTo, map, panBy } = createMapDouble();
@@ -196,14 +284,23 @@ describe('MapPointerGestureControl', () => {
       buttons: 1,
       shiftKey: true,
     });
+    const ctrlDown = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      buttons: 1,
+      ctrlKey: true,
+    });
     container.dispatchEvent(shiftDown);
+    container.dispatchEvent(ctrlDown);
     container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
     container.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
 
     expect(shiftDown.defaultPrevented).toBe(false);
+    expect(ctrlDown.defaultPrevented).toBe(false);
     expect(easeTo).not.toHaveBeenCalled();
     expect(panBy).not.toHaveBeenCalled();
-    expect(nativeListener).toHaveBeenCalledTimes(3);
+    expect(nativeListener).toHaveBeenCalledTimes(4);
     control.detach();
   });
 

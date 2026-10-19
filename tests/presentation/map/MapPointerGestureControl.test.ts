@@ -270,7 +270,7 @@ describe('MapPointerGestureControl', () => {
       calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0] ?? [];
     expect(solvedPosition).toBe(cameraPosition);
     expect(solvedAltitude).toBe(4_200);
-    expect(solvedBearing).toBeCloseTo(21.2);
+    expect(solvedBearing).toBeCloseTo(-1.2);
     expect(solvedPitch).toBe(75);
     expect(easeTo).toHaveBeenCalledOnce();
     expect(easeTo.mock.calls[0]?.[0]).toMatchObject({
@@ -323,7 +323,7 @@ describe('MapPointerGestureControl', () => {
 
     expect(easeTo).toHaveBeenCalledOnce();
     expect(easeTo.mock.calls[0]?.[0]).toMatchObject({ pitch: 30, zoom: 21.9 });
-    expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(11.12);
+    expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(8.88);
     control.detach();
   });
 

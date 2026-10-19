@@ -351,15 +351,13 @@ export class MapPointerGestureControl {
     }
     if (!this.#terrainOrbitEnabled) return false;
     const look = gesture === 'look';
-    const sensitivity = look ? lookSensitivity : 1;
-    const bearing =
-      map.getBearing() + horizontalDelta * bearingDegreesPerPixel * sensitivity;
-    // Orbit keeps MapLibre's drag-up-to-tilt. Look-around moves the view with the pointer
-    // vertically instead: a drag down raises the gaze toward the horizon.
-    const pitchDelta = verticalDelta * pitchDegreesPerPixel * sensitivity;
+    // Orbit follows MapLibre's drag-right-to-turn and drag-up-to-tilt. Look-around drags
+    // the view with the pointer instead, so both axes turn the opposite way, more finely.
+    const rate = look ? -lookSensitivity : 1;
+    const bearing = map.getBearing() + horizontalDelta * bearingDegreesPerPixel * rate;
     const pitch = Math.min(
       maximumPitchDegrees,
-      Math.max(0, map.getPitch() + (look ? pitchDelta : -pitchDelta)),
+      Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel * rate),
     );
     if (look) {
       // MapLibre solves the center and zoom that keep the camera where it is with the

@@ -2,9 +2,12 @@ import { Marker, type LngLat, type Map as MapLibreMap } from 'maplibre-gl';
 
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
-/** Share of the orbit rate that look-around turns per pixel, for finer aiming. */
-const lookSensitivity = 0.4;
 const maximumPitchDegrees = 75;
+/**
+ * Look-around turns faster as the view looks further down; below this pitch the turn
+ * rate stops growing so a near-vertical view cannot spin wildly.
+ */
+const minimumLookTurnPitchDegrees = 15;
 /** Pointer moves this recent set the release velocity; an older last move is a stop. */
 const releaseVelocityWindowMs = 50;
 /** Decay time of the coast after release; it adds about release speed × this of travel. */
@@ -350,20 +353,26 @@ export class MapPointerGestureControl {
       return true;
     }
     if (!this.#terrainOrbitEnabled) return false;
-    const sensitivity = gesture === 'look' ? lookSensitivity : 1;
-    const bearing =
-      map.getBearing() + horizontalDelta * bearingDegreesPerPixel * sensitivity;
-    const pitch = Math.min(
-      maximumPitchDegrees,
-      Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel * sensitivity),
-    );
     if (gesture === 'look') {
+      // The view follows the drag: each pixel turns by the angle it spans in the camera's
+      // view, so a point grabbed near the screen center stays about under the pointer.
+      // A turn moves that point sideways only by the sine of the pitch, so the turn is
+      // scaled up by it. The camera position and focal distance are only exposed on the
+      // rendered transform, underscored but part of MapLibre's typings.
+      const { transform } = map._camera;
+      const degreesPerPixel = 180 / Math.PI / transform.cameraToCenterDistance;
+      const turnPitch = Math.max(map.getPitch(), minimumLookTurnPitchDegrees);
+      const bearing =
+        map.getBearing() -
+        (horizontalDelta * degreesPerPixel) / Math.sin((turnPitch * Math.PI) / 180);
+      const pitch = Math.min(
+        maximumPitchDegrees,
+        Math.max(0, map.getPitch() + verticalDelta * degreesPerPixel),
+      );
       // MapLibre solves the center and zoom that keep the camera where it is with the
       // new rotation. That center sits at the current center elevation, so the elevation
       // stays frozen through the jump; once it ends, MapLibre moves the center along the
-      // same view ray onto the terrain without moving the camera. The camera position is
-      // only exposed on the rendered transform, underscored but part of MapLibre's typings.
-      const { transform } = map._camera;
+      // same view ray onto the terrain without moving the camera.
       const cameraPosition = transform.getCameraLngLat();
       const cameraAltitude = transform.getCameraAltitude();
       let camera = map.calculateCameraOptionsFromCameraLngLatAltRotation(
@@ -391,8 +400,11 @@ export class MapPointerGestureControl {
     if (anchor === null) return false;
     map.easeTo({
       around: anchor,
-      bearing,
-      pitch,
+      bearing: map.getBearing() + horizontalDelta * bearingDegreesPerPixel,
+      pitch: Math.min(
+        maximumPitchDegrees,
+        Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel),
+      ),
       duration: 0,
       essential: true,
     });

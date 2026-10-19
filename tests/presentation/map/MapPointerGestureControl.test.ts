@@ -59,6 +59,8 @@ function createMapDouble() {
         transform: {
           getCameraLngLat: () => cameraPosition,
           getCameraAltitude: () => 4_200,
+          // 0.1 degrees of view per pixel.
+          cameraToCenterDistance: 1_800 / Math.PI,
         },
       },
       touchZoomRotate: { _touchRotate: rotateHandler },
@@ -257,7 +259,7 @@ describe('MapPointerGestureControl', () => {
         button: 0,
         buttons: 1,
         clientX: 110,
-        clientY: -1_000,
+        clientY: 1_000,
       }),
     );
     window.dispatchEvent(
@@ -270,7 +272,8 @@ describe('MapPointerGestureControl', () => {
       calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0] ?? [];
     expect(solvedPosition).toBe(cameraPosition);
     expect(solvedAltitude).toBe(4_200);
-    expect(solvedBearing).toBeCloseTo(21.2);
+    // At 30 degrees of pitch, a turn moves the center sideways by half its angle.
+    expect(solvedBearing).toBeCloseTo(-10);
     expect(solvedPitch).toBe(75);
     expect(easeTo).toHaveBeenCalledOnce();
     expect(easeTo.mock.calls[0]?.[0]).toMatchObject({
@@ -318,12 +321,12 @@ describe('MapPointerGestureControl', () => {
         clientY: 10,
       }),
     );
-    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 30 }));
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: -10 }));
     window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
 
     expect(easeTo).toHaveBeenCalledOnce();
     expect(easeTo.mock.calls[0]?.[0]).toMatchObject({ pitch: 30, zoom: 21.9 });
-    expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(11.12);
+    expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(8);
     control.detach();
   });
 

@@ -99,7 +99,11 @@ import {
 } from '@/presentation/map/trackEndpointIcons';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
-import type { MapLayerPreset, MapRecoveryState } from '@/presentation/map/mapTypes';
+import type {
+  MapLayerPreset,
+  MapRecoveryState,
+  TerrainMode,
+} from '@/presentation/map/mapTypes';
 import {
   weatherCloudCoverColorScale,
   weatherPrecipitationColorScale,
@@ -735,6 +739,16 @@ export class MapLibreLayerController {
     readonly 'terrain-relief': boolean;
     readonly 'elevation-isolines': boolean;
   } | null = null;
+  /**
+   * Area patterns keep one choice per 2D/3D mode; the store's visibility holds the
+   * current mode's choice and persistence stores both. The mode follows the native
+   * terrain, so patterns change together with the draped textures.
+   */
+  #terrainMode: TerrainMode = 'flat';
+  #naturalFeaturePatternsByMode: Record<TerrainMode, boolean> = {
+    flat: true,
+    terrain: false,
+  };
   readonly #weatherMapLayerAnchors = new Map<string, unknown>();
   #appliedWeatherMapOpacity: number | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
@@ -872,6 +886,7 @@ export class MapLibreLayerController {
     this.reconcileSatelliteBasemapSource();
     this.reconcileMosaicEntries();
     this.reconcileTerrainOverlays();
+    this.syncTerrainMode();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
     this.reconcileWeatherMap();
@@ -884,6 +899,21 @@ export class MapLibreLayerController {
 
   public setTerrainInteractionActive(active: boolean): void {
     this.contourTiles.setInteractionActive(active);
+  }
+
+  /** Shows the area pattern choice of the mode the native map currently draws. */
+  private syncTerrainMode(): void {
+    const terrain = this.#map?.getTerrain() ?? null;
+    const mode: TerrainMode = terrain === null ? 'flat' : 'terrain';
+    if (this.#terrainMode === mode) return;
+    this.#terrainMode = mode;
+    const visible = this.#naturalFeaturePatternsByMode[mode];
+    const state = mapLayerStore.getState();
+    if (state.visibility['natural-feature-patterns'] === visible) return;
+    mapLayerStore.setState({
+      visibility: { ...state.visibility, 'natural-feature-patterns': visible },
+    });
+    this.applyBaseLayerVisibility();
   }
 
   /**
@@ -1131,6 +1161,12 @@ export class MapLibreLayerController {
     }
 
     const visibility = { ...state.visibility, [layerId]: visible };
+    if (layerId === 'natural-feature-patterns') {
+      this.#naturalFeaturePatternsByMode = {
+        ...this.#naturalFeaturePatternsByMode,
+        [this.#terrainMode]: visible,
+      };
+    }
     let appliedImagery = state.appliedImagery;
     const staticBasemapSelected = isStaticSatelliteLayerId(layerId);
 
@@ -1857,7 +1893,18 @@ export class MapLibreLayerController {
   private async loadPersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
-      const visibility = this.normalizeImageryVisibility(persisted.visibility);
+      const normalizedVisibility = this.normalizeImageryVisibility(
+        persisted.visibility,
+      );
+      this.#naturalFeaturePatternsByMode = {
+        flat: normalizedVisibility['natural-feature-patterns'],
+        terrain: persisted.naturalFeaturePatternsIn3d,
+      };
+      const visibility = {
+        ...normalizedVisibility,
+        'natural-feature-patterns':
+          this.#naturalFeaturePatternsByMode[this.#terrainMode],
+      };
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
@@ -1879,7 +1926,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
-      if (visibility !== persisted.visibility) this.persistStableState();
+      if (normalizedVisibility !== persisted.visibility) this.persistStableState();
     } catch {
       this.logger.log({
         level: 'warn',
@@ -2753,7 +2800,11 @@ export class MapLibreLayerController {
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
-        visibility,
+        visibility: {
+          ...visibility,
+          'natural-feature-patterns': this.#naturalFeaturePatternsByMode.flat,
+        },
+        naturalFeaturePatternsIn3d: this.#naturalFeaturePatternsByMode.terrain,
         openStreetMapOpacity,
         importedTrackOpacity,
         weatherMapOpacity: weatherMap.opacity,
@@ -2787,6 +2838,7 @@ export class MapLibreLayerController {
   };
 
   private readonly handleTerrainDemStateChange = (): void => {
+    this.syncTerrainMode();
     this.updateTerrainDemLoading();
   };
 

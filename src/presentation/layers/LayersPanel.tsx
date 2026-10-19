@@ -97,7 +97,7 @@ const naturalFeatureControls = [
   {
     id: 'natural-feature-patterns',
     label: msg`Area patterns`,
-    description: msg`Forest, swamp, scrub, orchard, scree, and cemetery signs.`,
+    description: msg`Forest, swamp, scrub, orchard, scree, and cemetery signs. Saved separately for 2D and 3D; off in 3D by default.`,
     requiresScene: false,
     parent: 'natural-features',
   },

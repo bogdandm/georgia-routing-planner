@@ -251,6 +251,7 @@ class FakeLayerMap {
   public setTerrain(terrain: unknown): void {
     this.terrainCalls.push(terrain);
     this.terrain = terrain;
+    this.fire('terrain', { terrain });
   }
   public getBounds(): {
     readonly getWest: () => number;
@@ -791,6 +792,46 @@ describe('MapLibreLayerController', () => {
     for (const layerId of patternLayerIds) {
       expect(map.visibility.get(layerId)).toBe('none');
     }
+  });
+
+  it('keeps separate area pattern choices for 2D and 3D, off in 3D by default', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.restorePersistedState();
+    const patternsVisibility = () => map.visibility.get(mapLayerIds.landcoverPatterns);
+    const terrain = { source: 'terrain-dem', exaggeration: 1.15 };
+
+    // Patterns follow the native terrain, not a later published 3D mode.
+    map.setTerrain(terrain);
+    expect(mapLayerStore.getState().visibility['natural-feature-patterns']).toBe(false);
+    expect(patternsVisibility()).toBe('none');
+
+    controller.setLayerVisibility('natural-feature-patterns', true);
+    map.setTerrain(null);
+    controller.setLayerVisibility('natural-feature-patterns', false);
+    map.setTerrain(terrain);
+    expect(patternsVisibility()).toBe('visible');
+    map.setTerrain(null);
+    expect(patternsVisibility()).toBe('none');
+
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        visibility: { 'natural-feature-patterns': false },
+        naturalFeaturePatternsIn3d: true,
+      });
+    });
+
+    // A reload that starts in 3D restores the 3D choice from the same browser database.
+    const reloaded = createTestServices().mapLayers;
+    if (reloaded === null) return;
+    const reloadedMap = new FakeLayerMap();
+    reloadedMap.terrain = terrain;
+    reloaded.attach(reloadedMap as unknown as MapLibreMap);
+    await reloaded.restorePersistedState();
+    expect(reloadedMap.visibility.get(mapLayerIds.landcoverPatterns)).toBe('visible');
   });
 
   it('generates basemap images on demand and leaves other images to their owners', async () => {
@@ -2862,6 +2903,7 @@ describe('MapLibreLayerController', () => {
         'imported-tracks': false,
         'track-elevation-gradient': false,
       },
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: 0.55,
       importedTrackOpacity: 0.6,
       weatherMapOpacity: 0.7,
@@ -2917,6 +2959,7 @@ describe('MapLibreLayerController', () => {
         'satellite-imagery': true,
         'napr-orthophoto': true,
       },
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
@@ -2950,6 +2993,7 @@ describe('MapLibreLayerController', () => {
     if (controller === null) return;
     await services.database.saveMapLayerPreferences({
       visibility: { ...mapLayerStore.getState().visibility, 'google-satellite': true },
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
@@ -2978,6 +3022,7 @@ describe('MapLibreLayerController', () => {
     if (controller === null) return;
     await services.database.saveMapLayerPreferences({
       visibility: mapLayerStore.getState().visibility,
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,

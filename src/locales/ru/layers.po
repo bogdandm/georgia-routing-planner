@@ -160,10 +160,10 @@ msgstr "Мировые спутниковые снимки и аэроснимк
 msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
 
-#. js-lingui-id: aQCIRG
+#. js-lingui-id: hUgQwQ
 #: src/presentation/layers/LayersPanel.tsx:100
-msgid "Forest, swamp, scrub, orchard, scree, and cemetery signs."
-msgstr "Знаки леса, болот, кустарника, садов, осыпей и кладбищ."
+msgid "Forest, swamp, scrub, orchard, scree, and cemetery signs. Saved separately for 2D and 3D; off in 3D by default."
+msgstr "Знаки леса, болот, кустарника, садов, осыпей и кладбищ. Сохраняется отдельно для 2D и 3D; в 3D по умолчанию выключено."
 
 #. js-lingui-id: 9ARWz1
 #: src/presentation/layers/LayersPanel.tsx:154

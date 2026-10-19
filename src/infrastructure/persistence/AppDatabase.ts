@@ -580,6 +580,7 @@ const mapLayerPreferencesSchema = z
         'track-elevation-gradient': z.boolean().default(true),
       })
       .strict(),
+    naturalFeaturePatternsIn3d: z.boolean().default(false),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     importedTrackOpacity: z.number().min(0).max(1).default(1),
     weatherMapOpacity: z.number().min(0).max(1).default(defaultWeatherMapOpacity),
@@ -647,6 +648,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'imported-tracks': true,
     'track-elevation-gradient': true,
   },
+  naturalFeaturePatternsIn3d: false,
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,
   weatherMapOpacity: defaultWeatherMapOpacity,

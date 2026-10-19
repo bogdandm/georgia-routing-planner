@@ -63,7 +63,10 @@ export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
 };
 
 export interface PersistedMapLayerPreferences {
+  /** `natural-feature-patterns` here is the 2D choice; 3D keeps its own below. */
   readonly visibility: MapLayerVisibilityPreferences;
+  /** Area patterns in 3D, off by default because they add work to every draped texture. */
+  readonly naturalFeaturePatternsIn3d: boolean;
   readonly openStreetMapOpacity: number;
   readonly importedTrackOpacity: number;
   readonly weatherMapOpacity: number;

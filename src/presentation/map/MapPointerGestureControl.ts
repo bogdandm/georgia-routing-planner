@@ -2,6 +2,8 @@ import { Marker, type LngLat, type Map as MapLibreMap } from 'maplibre-gl';
 
 const bearingDegreesPerPixel = 0.28;
 const pitchDegreesPerPixel = 0.175;
+/** Share of the orbit rate that look-around turns per pixel, for finer aiming. */
+const lookSensitivity = 0.7;
 const maximumPitchDegrees = 75;
 /** Per-finger pinch or pan travel that decides a two-finger touch as zoom-or-pan. */
 const zoomOrPanIntentPixels = 10;
@@ -247,10 +249,12 @@ export class MapPointerGestureControl {
       return;
     }
     if (!this.#terrainOrbitEnabled) return;
-    const bearing = map.getBearing() + horizontalDelta * bearingDegreesPerPixel;
+    const sensitivity = gesture === 'look' ? lookSensitivity : 1;
+    const bearing =
+      map.getBearing() + horizontalDelta * bearingDegreesPerPixel * sensitivity;
     const pitch = Math.min(
       maximumPitchDegrees,
-      Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel),
+      Math.max(0, map.getPitch() - verticalDelta * pitchDegreesPerPixel * sensitivity),
     );
     if (gesture === 'look') {
       // MapLibre solves the center and zoom that keep the camera where it is with the

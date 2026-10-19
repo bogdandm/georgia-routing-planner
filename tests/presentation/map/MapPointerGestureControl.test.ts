@@ -251,14 +251,14 @@ describe('MapPointerGestureControl', () => {
     expect(calculateCameraOptionsFromCameraLngLatAltRotation).toHaveBeenCalledWith(
       cameraPosition,
       4_200,
-      38,
+      expect.closeTo(29.6),
       75,
     );
     expect(easeTo).toHaveBeenCalledWith({
       center: { lng: 44.81, lat: 41.72 },
       zoom: 12.5,
       elevation: 1_500,
-      bearing: 38,
+      bearing: expect.closeTo(29.6),
       pitch: 75,
       duration: 0,
       essential: true,
@@ -300,7 +300,11 @@ describe('MapPointerGestureControl', () => {
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 30 }));
 
     expect(easeTo).toHaveBeenCalledWith(
-      expect.objectContaining({ bearing: 12.8, pitch: 30, zoom: 21.9 }),
+      expect.objectContaining({
+        bearing: expect.closeTo(11.96),
+        pitch: 30,
+        zoom: 21.9,
+      }),
     );
     control.detach();
   });

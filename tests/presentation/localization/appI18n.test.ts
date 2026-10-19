@@ -15,7 +15,7 @@ describe('activateAppLocale', () => {
     expect(document.title).toBe('Trail Planner');
     expect(document.querySelector('meta[name="description"]')).toHaveAttribute(
       'content',
-      'Планируйте и изучайте пешие маршруты по Грузии.',
+      'Планируйте пешие маршруты и изучайте карты, 3D-рельеф, спутниковые снимки и погоду.',
     );
 
     activateAppLocale('en');
@@ -23,7 +23,7 @@ describe('activateAppLocale', () => {
     expect(document.documentElement.lang).toBe('en');
     expect(document.querySelector('meta[name="description"]')).toHaveAttribute(
       'content',
-      'Plan and inspect hiking routes across Georgia.',
+      'Plan hiking routes and explore maps, 3D terrain, satellite imagery, and weather.',
     );
   });
 });

@@ -7,6 +7,9 @@ const config: LinguiConfig = {
   format: formatter({
     printLinguiId: true,
     printPlaceholdersInComments: true,
+    // File-only references: line numbers churn on every unrelated source edit and
+    // make parallel branches conflict in the catalogs.
+    lineNumbers: false,
   }),
   catalogsMergePath: '<rootDir>/node_modules/.tmp/locales/{locale}',
   catalogs: [

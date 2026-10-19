@@ -14,665 +14,657 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: dEjxW2
-#: src/presentation/weather/WeatherPanel.tsx:747
-#: src/presentation/weather/WeatherPanel.tsx:852
-#: src/presentation/weather/WeatherPanel.tsx:1141
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} forecast"
 msgstr "Прогноз: {label}"
 
 #. js-lingui-id: M5q3wg
-#: src/presentation/weather/WeatherPanel.tsx:1006
-#: src/presentation/weather/WeatherPanel.tsx:1132
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} gusts"
 msgstr "{label}: порывы"
 
 #. js-lingui-id: NpoidF
-#: src/presentation/weather/WeatherPanel.tsx:578
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} gusts {minimumGusts} to {maximumGusts} metres per second"
 msgstr "{label}: порывы от {minimumGusts} до {maximumGusts} м/с"
 
 #. js-lingui-id: xE-FG6
-#: src/presentation/weather/WeatherPanel.tsx:1021
-#: src/presentation/weather/WeatherPanel.tsx:1116
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} precipitation"
 msgstr "{label}: осадки"
 
 #. js-lingui-id: oAEGp8
-#: src/presentation/weather/WeatherPanel.tsx:581
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} precipitation {millimetres} millimetres"
 msgstr "{label}: осадки {millimetres} мм"
 
 #. js-lingui-id: jxOazA
-#: src/presentation/weather/WeatherPanel.tsx:570
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} temperature {minimumTemperature} to {maximumTemperature} degrees Celsius"
 msgstr "{label}: температура от {minimumTemperature} до {maximumTemperature} °C"
 
 #. js-lingui-id: ipkl_X
-#: src/presentation/weather/WeatherPanel.tsx:1000
-#: src/presentation/weather/WeatherPanel.tsx:1125
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} wind"
 msgstr "{label}: ветер"
 
 #. js-lingui-id: ibhafe
-#: src/presentation/weather/WeatherPanel.tsx:574
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label} wind {minimumWind} to {maximumWind} metres per second"
 msgstr "{label}: ветер от {minimumWind} до {maximumWind} м/с"
 
 #. js-lingui-id: SeiNzs
-#: src/presentation/weather/WeatherPanel.tsx:723
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{label}: {condition}"
 msgstr "{label}: {condition}"
 
 #. js-lingui-id: eG3c17
-#: src/presentation/weather/weatherConditionLabels.ts:145
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{level, select, poor {Brief poor visibility} other {Brief reduced visibility}}"
 msgstr "{level, select, poor {Кратковременная плохая видимость} other {Кратковременное ухудшение видимости}}"
 
 #. js-lingui-id: iFvswI
-#: src/presentation/weather/weatherConditionLabels.ts:155
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{level, select, poor {Poor visibility in the afternoon} other {Reduced visibility in the afternoon}}"
 msgstr "{level, select, poor {Плохая видимость во второй половине дня} other {Ухудшение видимости во второй половине дня}}"
 
 #. js-lingui-id: JYh5Js
-#: src/presentation/weather/weatherConditionLabels.ts:160
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{level, select, poor {Poor visibility in the evening} other {Reduced visibility in the evening}}"
 msgstr "{level, select, poor {Плохая видимость вечером} other {Ухудшение видимости вечером}}"
 
 #. js-lingui-id: RTy0Om
-#: src/presentation/weather/weatherConditionLabels.ts:150
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{level, select, poor {Poor visibility in the morning} other {Reduced visibility in the morning}}"
 msgstr "{level, select, poor {Плохая видимость утром} other {Ухудшение видимости утром}}"
 
 #. js-lingui-id: X6mOj7
-#: src/presentation/weather/weatherConditionLabels.ts:165
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{level, select, poor {Poor visibility overnight} other {Reduced visibility overnight}}"
 msgstr "{level, select, poor {Плохая видимость ночью} other {Ухудшение видимости ночью}}"
 
 #. js-lingui-id: 4OXXLI
-#: src/presentation/weather/weatherFormatters.ts:40
-#: src/presentation/weather/WeatherTimeControl.tsx:219
+#: src/presentation/weather/weatherFormatters.ts
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "{millimetres} mm"
 msgstr "{millimetres} мм"
 
 #. js-lingui-id: WOxIJW
-#: src/presentation/weather/weatherFormatters.ts:51
+#: src/presentation/weather/weatherFormatters.ts
 msgid "{minimum} °C"
 msgstr "{minimum} °C"
 
 #. js-lingui-id: KpLYqG
-#: src/presentation/weather/WeatherPanel.tsx:207
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{minimum} m/s"
 msgstr "{minimum} м/с"
 
 #. js-lingui-id: N-w3lW
-#: src/presentation/weather/weatherFormatters.ts:52
+#: src/presentation/weather/weatherFormatters.ts
 msgid "{minimum}…{maximum} °C"
 msgstr "{minimum}…{maximum} °C"
 
 #. js-lingui-id: kJt8-Q
-#: src/presentation/weather/WeatherPanel.tsx:208
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "{minimum}…{maximum} m/s"
 msgstr "{minimum}…{maximum} м/с"
 
 #. js-lingui-id: 88Vhf9
-#: src/presentation/weather/weatherConditionLabels.ts:135
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{periodKind, select, current {Fog for most of the interval} day {Fog for most of the day} other {Fog for most of the night}}"
 msgstr "{periodKind, select, current {Туман большую часть интервала} day {Туман большую часть дня} other {Туман большую часть ночи}}"
 
 #. js-lingui-id: yeN_xw
-#: src/presentation/weather/weatherConditionLabels.ts:173
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{periodKind, select, current {Poor visibility for most of the interval} day {Poor visibility for most of the day} other {Poor visibility for most of the night}}"
 msgstr "{periodKind, select, current {Плохая видимость большую часть интервала} day {Плохая видимость большую часть дня} other {Плохая видимость большую часть ночи}}"
 
 #. js-lingui-id: jSmK-_
-#: src/presentation/weather/weatherConditionLabels.ts:178
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{periodKind, select, current {Reduced visibility for most of the interval} day {Reduced visibility for most of the day} other {Reduced visibility for most of the night}}"
 msgstr "{periodKind, select, current {Ухудшение видимости большую часть интервала} day {Ухудшение видимости большую часть дня} other {Ухудшение видимости большую часть ночи}}"
 
 #. js-lingui-id: kHCM7U
-#: src/presentation/weather/weatherConditionLabels.ts:49
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{sky, select, clear {Clear with isolated showers} mostly_clear {Mostly clear with isolated showers} partly_cloudy {Partly cloudy with isolated showers} mostly_cloudy {Mostly cloudy with isolated showers} other {Overcast with isolated showers}}"
 msgstr "{sky, select, clear {Ясно, местами ливни} mostly_clear {Малооблачно, местами ливни} partly_cloudy {Переменная облачность, местами ливни} mostly_cloudy {Облачно с прояснениями, местами ливни} other {Пасмурно, местами ливни}}"
 
 #. js-lingui-id: XGs8pr
-#: src/presentation/weather/weatherConditionLabels.ts:57
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{sky, select, clear {Clear with showers} mostly_clear {Mostly clear with showers} partly_cloudy {Partly cloudy with showers} mostly_cloudy {Mostly cloudy with showers} other {Overcast with showers}}"
 msgstr "{sky, select, clear {Ясно, ливни} mostly_clear {Малооблачно, ливни} partly_cloudy {Переменная облачность, ливни} mostly_cloudy {Облачно с прояснениями, ливни} other {Пасмурно, ливни}}"
 
 #. js-lingui-id: Imy55c
-#: src/presentation/weather/weatherConditionLabels.ts:83
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{sky, select, clear {Clear} mostly_clear {Mostly clear} partly_cloudy {Partly cloudy} mostly_cloudy {Mostly cloudy} other {Overcast}}"
 msgstr "{sky, select, clear {Ясно} mostly_clear {Малооблачно} partly_cloudy {Переменная облачность} mostly_cloudy {Облачно с прояснениями} other {Пасмурно}}"
 
 #. js-lingui-id: TRqicX
-#: src/presentation/weather/weatherConditionLabels.ts:66
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "{sky, select, clear {Mostly clear with occasional rain} mostly_clear {Mostly clear with occasional rain} partly_cloudy {Partly cloudy with occasional rain} mostly_cloudy {Mostly cloudy with occasional rain} other {Overcast with occasional rain}}"
 msgstr "{sky, select, clear {Малооблачно, временами дождь} mostly_clear {Малооблачно, временами дождь} partly_cloudy {Переменная облачность, временами дождь} mostly_cloudy {Облачно с прояснениями, временами дождь} other {Пасмурно, временами дождь}}"
 
 #. js-lingui-id: XdCytn
-#: src/presentation/weather/HourlyForecastTable.tsx:998
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} cloud cover {cloudCover} percent"
 msgstr "{time}: облачность {cloudCover} %"
 
 #. js-lingui-id: 7QXcMF
-#: src/presentation/weather/HourlyForecastTable.tsx:978
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} gusts {speed} metres per second"
 msgstr "{time}: порывы {speed} м/с"
 
 #. js-lingui-id: v9hJTz
-#: src/presentation/weather/HourlyForecastTable.tsx:974
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} gusts {speed} metres per second, critical"
 msgstr "{time}: порывы {speed} м/с, опасные"
 
 #. js-lingui-id: zxVbWk
-#: src/presentation/weather/HourlyForecastTable.tsx:976
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} gusts {speed} metres per second, strong"
 msgstr "{time}: порывы {speed} м/с, сильные"
 
 #. js-lingui-id: W1Jf7l
-#: src/presentation/weather/HourlyForecastTable.tsx:851
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} local time"
 msgstr "{time} по местному времени"
 
 #. js-lingui-id: E7pBmc
-#: src/presentation/weather/HourlyForecastTable.tsx:915
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} precipitation {precipitation} millimetres"
 msgstr "{time}: осадки {precipitation} мм"
 
 #. js-lingui-id: Skr4yC
-#: src/presentation/weather/HourlyForecastTable.tsx:885
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} temperature {temperature} degrees Celsius"
 msgstr "{time}: температура {temperature} °C"
 
 #. js-lingui-id: QCPq68
-#: src/presentation/weather/HourlyForecastTable.tsx:1013
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} visibility {visibility} kilometres"
 msgstr "{time}: видимость {visibility} км"
 
 #. js-lingui-id: NBqEB9
-#: src/presentation/weather/HourlyForecastTable.tsx:872
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} weather {condition}"
 msgstr "{time}: погода — {condition}"
 
 #. js-lingui-id: 9lmBm5
-#: src/presentation/weather/HourlyForecastTable.tsx:950
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} wind {speed} metres per second"
 msgstr "{time}: ветер {speed} м/с"
 
 #. js-lingui-id: OOlmtX
-#: src/presentation/weather/HourlyForecastTable.tsx:946
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} wind {speed} metres per second, critical"
 msgstr "{time}: ветер {speed} м/с, опасный"
 
 #. js-lingui-id: r2D1QK
-#: src/presentation/weather/HourlyForecastTable.tsx:948
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} wind {speed} metres per second, strong"
 msgstr "{time}: ветер {speed} м/с, сильный"
 
 #. js-lingui-id: USukLP
-#: src/presentation/weather/WeatherPanel.tsx:1619
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "24-hour forecast · Day · {date}"
 msgstr "Прогноз на 24 часа · День · {date}"
 
 #. js-lingui-id: 4iKz7k
-#: src/presentation/weather/WeatherPanel.tsx:1620
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "24-hour forecast · Night · {date}"
 msgstr "Прогноз на 24 часа · Ночь · {date}"
 
 #. js-lingui-id: YS-lui
-#: src/presentation/weather/WeatherPanel.tsx:1332
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "7-day forecast"
 msgstr "Прогноз на 7 дней"
 
 #. js-lingui-id: PqoHqp
-#: src/presentation/weather/weatherConditionLabels.ts:127
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Afternoon fog"
 msgstr "Туман во второй половине дня"
 
 #. js-lingui-id: iTV55G
-#: src/presentation/weather/weatherConditionLabels.ts:123
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Brief fog"
 msgstr "Кратковременный туман"
 
 #. js-lingui-id: -TnMtY
-#: src/presentation/weather/weatherConditionLabels.ts:11
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Clear sky"
 msgstr "Ясно"
 
 #. js-lingui-id: nPcvCq
-#: src/presentation/weather/WeatherPanel.tsx:1555
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Click the map to load its ECMWF IFS forecast."
 msgstr "Нажмите на карту, чтобы загрузить прогноз ECMWF IFS для этой точки."
 
 #. js-lingui-id: i4L-Zv
-#: src/presentation/weather/HourlyForecastTable.tsx:1203
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Close hourly forecast"
 msgstr "Закрыть почасовой прогноз"
 
 #. js-lingui-id: zPQCNP
-#: src/presentation/weather/HourlyForecastTable.tsx:992
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Cloud (%)"
 msgstr "Облака (%)"
 
 #. js-lingui-id: yemKbA
-#: src/presentation/weather/WeatherTimeControl.tsx:378
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Cloud cover · ≤30 transparent"
 msgstr "Облачность · ≤30 прозрачно"
 
 #. js-lingui-id: iZDNcm
-#: src/presentation/weather/HourlyForecastTable.tsx:786
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Collapse hourly forecast"
 msgstr "Свернуть почасовой прогноз"
 
 #. js-lingui-id: k6zIi6
-#: src/presentation/weather/WeatherPanel.tsx:1182
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Current, day, and night summary"
 msgstr "Сводка: сейчас, день и ночь"
 
 #. js-lingui-id: H7OUPr
-#: src/presentation/weather/WeatherPanel.tsx:1207
-#: src/presentation/weather/WeatherPanel.tsx:1298
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Day"
 msgstr "День"
 
 #. js-lingui-id: E0Y7iX
-#: src/presentation/weather/weatherConditionLabels.ts:19
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Dense drizzle"
 msgstr "Сильная морось"
 
 #. js-lingui-id: YvJO21
-#: src/presentation/weather/weatherConditionLabels.ts:21
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Dense freezing drizzle"
 msgstr "Сильная переохлаждённая морось"
 
 #. js-lingui-id: TGPSD2
-#: src/presentation/weather/weatherConditionLabels.ts:16
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Depositing rime fog"
 msgstr "Туман с изморозью"
 
 #. js-lingui-id: yA4z6u
-#: src/presentation/weather/weatherConditionLabels.ts:129
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Evening fog"
 msgstr "Вечерний туман"
 
 #. js-lingui-id: 9LgejW
-#: src/presentation/weather/HourlyForecastTable.tsx:786
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Expand hourly forecast"
 msgstr "Развернуть почасовой прогноз"
 
 #. js-lingui-id: 8v4JhY
-#: src/presentation/weather/weatherConditionLabels.ts:15
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Fog"
 msgstr "Туман"
 
 #. js-lingui-id: t_T61G
-#: src/presentation/weather/weatherConditionLabels.ts:131
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Fog overnight"
 msgstr "Туман ночью"
 
 #. js-lingui-id: zVEcxv
-#: src/presentation/weather/WeatherTimeControl.tsx:309
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Forecast day"
 msgstr "День прогноза"
 
 #. js-lingui-id: MKJBRa
-#: src/presentation/weather/WeatherTimeControl.tsx:347
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Forecast time"
 msgstr "Время прогноза"
 
 #. js-lingui-id: TgZ99D
-#: src/presentation/weather/weatherConditionLabels.ts:109
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Freezing precipitation"
 msgstr "Ледяные осадки"
 
 #. js-lingui-id: tQu0TY
-#: src/presentation/weather/WeatherPanel.tsx:823
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Gusts"
 msgstr "Порывы"
 
 #. js-lingui-id: jy8MVL
-#: src/presentation/weather/HourlyForecastTable.tsx:964
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Gusts (m/s)"
 msgstr "Порывы (м/с)"
 
 #. js-lingui-id: tIV67z
-#: src/presentation/weather/weatherConditionLabels.ts:26
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Heavy freezing rain"
 msgstr "Сильный ледяной дождь"
 
 #. js-lingui-id: VKmOt_
-#: src/presentation/weather/weatherConditionLabels.ts:24
-#: src/presentation/weather/weatherConditionLabels.ts:99
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Heavy rain"
 msgstr "Сильный дождь"
 
 #. js-lingui-id: Q69V8F
-#: src/presentation/weather/weatherConditionLabels.ts:29
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Heavy snow"
 msgstr "Сильный снег"
 
 #. js-lingui-id: ROsLXv
-#: src/presentation/weather/weatherConditionLabels.ts:35
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Heavy snow showers"
 msgstr "Сильный ливневый снег"
 
 #. js-lingui-id: WKBw3T
-#: src/presentation/weather/HourlyForecastTable.tsx:805
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Hourly forecast"
 msgstr "Почасовой прогноз"
 
 #. js-lingui-id: saHs6K
-#: src/presentation/weather/weatherConditionLabels.ts:133
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Intermittent fog"
 msgstr "Временами туман"
 
 #. js-lingui-id: 1ie4P6
-#: src/presentation/weather/weatherConditionLabels.ts:170
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Intermittent reduced visibility"
 msgstr "Временами ухудшение видимости"
 
 #. js-lingui-id: na3eOk
-#: src/presentation/weather/weatherConditionLabels.ts:17
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Light drizzle"
 msgstr "Слабая морось"
 
 #. js-lingui-id: 8XRSLd
-#: src/presentation/weather/weatherConditionLabels.ts:20
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Light freezing drizzle"
 msgstr "Слабая переохлаждённая морось"
 
 #. js-lingui-id: R59lAq
-#: src/presentation/weather/weatherConditionLabels.ts:25
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Light freezing rain"
 msgstr "Слабый ледяной дождь"
 
 #. js-lingui-id: 1LwCYE
-#: src/presentation/weather/WeatherPanel.tsx:360
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Loading current, day, and night summary"
 msgstr "Загрузка сводки: сейчас, день и ночь"
 
 #. js-lingui-id: u8phJQ
-#: src/presentation/weather/WeatherPanel.tsx:509
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Loading hourly forecast"
 msgstr "Загрузка почасового прогноза"
 
 #. js-lingui-id: VhOOOR
-#: src/presentation/weather/WeatherPanel.tsx:514
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Loading seven-day forecast"
 msgstr "Загрузка прогноза на 7 дней"
 
 #. js-lingui-id: SaTtUH
-#: src/presentation/weather/WeatherTimeControl.tsx:423
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Low-resolution data. Use <0>Windy</0> for a precise forecast."
 msgstr "Данные низкого разрешения. Для точного прогноза используйте <0>Windy</0>."
 
 #. js-lingui-id: eD-p3l
-#: src/presentation/weather/weatherConditionLabels.ts:12
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Mainly clear"
 msgstr "Преимущественно ясно"
 
 #. js-lingui-id: L6kiFD
-#: src/presentation/weather/WeatherTimeControl.tsx:388
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "mm"
 msgstr "мм"
 
 #. js-lingui-id: QfriLd
-#: src/presentation/weather/weatherConditionLabels.ts:18
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Moderate drizzle"
 msgstr "Умеренная морось"
 
 #. js-lingui-id: Ap1xpV
-#: src/presentation/weather/weatherConditionLabels.ts:23
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Moderate rain"
 msgstr "Умеренный дождь"
 
 #. js-lingui-id: N2IIAv
-#: src/presentation/weather/weatherConditionLabels.ts:32
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Moderate rain showers"
 msgstr "Умеренный ливень"
 
 #. js-lingui-id: oco2IP
-#: src/presentation/weather/weatherConditionLabels.ts:28
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Moderate snow"
 msgstr "Умеренный снег"
 
 #. js-lingui-id: RAnNND
-#: src/presentation/weather/weatherConditionLabels.ts:125
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Morning fog"
 msgstr "Утренний туман"
 
 #. js-lingui-id: QMFocf
-#: src/presentation/weather/HourlyForecastTable.tsx:760
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Next 24 hours"
 msgstr "Ближайшие 24 часа"
 
 #. js-lingui-id: jnd7HN
-#: src/presentation/weather/WeatherPanel.tsx:1209
-#: src/presentation/weather/WeatherPanel.tsx:1308
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Night"
 msgstr "Ночь"
 
 #. js-lingui-id: V5eHC4
-#: src/presentation/weather/WeatherPanel.tsx:738
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Now · next 3 h"
 msgstr "Сейчас · 3 ч"
 
 #. js-lingui-id: wzXPss
-#: src/presentation/weather/weatherConditionLabels.ts:103
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Occasional snow"
 msgstr "Временами снег"
 
 #. js-lingui-id: 27TKdk
-#: src/presentation/weather/WeatherPanel.tsx:1147
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Open 24-hour forecast for {label}, {dateLabel}"
 msgstr "Открыть прогноз на 24 часа: {label}, {dateLabel}"
 
 #. js-lingui-id: hopzvZ
-#: src/presentation/weather/HourlyForecastTable.tsx:1197
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Open in Weather"
 msgstr "Открыть в разделе «Погода»"
 
 #. js-lingui-id: M9VW44
-#: src/presentation/weather/weatherConditionLabels.ts:14
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Overcast"
 msgstr "Пасмурно"
 
 #. js-lingui-id: 96In6f
-#: src/presentation/weather/weatherConditionLabels.ts:13
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Partly cloudy"
 msgstr "Переменная облачность"
 
 #. js-lingui-id: 2teukk
-#: src/presentation/weather/HourlyForecastTable.tsx:909
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Precip (mm)"
 msgstr "Осадки (мм)"
 
 #. js-lingui-id: bXiQOh
-#: src/presentation/weather/WeatherPanel.tsx:829
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Precipitation"
 msgstr "Осадки"
 
 #. js-lingui-id: fPsUrA
-#: src/presentation/weather/WeatherTimeControl.tsx:386
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Precipitation · ≤0.5 transparent"
 msgstr "Осадки · ≤0,5 прозрачно"
 
 #. js-lingui-id: W22y-a
-#: src/presentation/weather/weatherConditionLabels.ts:97
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Rain"
 msgstr "Дождь"
 
 #. js-lingui-id: Nh8yBV
-#: src/presentation/weather/weatherConditionLabels.ts:107
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Rain and snow"
 msgstr "Дождь со снегом"
 
 #. js-lingui-id: -7dgaQ
-#: src/presentation/weather/weatherConditionLabels.ts:96
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Rain with sunny intervals"
 msgstr "Дождь с прояснениями"
 
 #. js-lingui-id: 6gRgw8
-#: src/presentation/weather/WeatherPanel.tsx:1600
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Retry"
 msgstr "Повторить"
 
 #. js-lingui-id: OOKV1j
-#: src/presentation/weather/HourlyForecastTable.tsx:764
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Scroll hourly forecast backward"
 msgstr "Прокрутить почасовой прогноз назад"
 
 #. js-lingui-id: kF9bTz
-#: src/presentation/weather/HourlyForecastTable.tsx:774
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Scroll hourly forecast forward"
 msgstr "Прокрутить почасовой прогноз вперёд"
 
 #. js-lingui-id: sTc5Ls
-#: src/presentation/weather/WeatherPanel.tsx:1551
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Select a forecast point"
 msgstr "Выберите точку прогноза"
 
 #. js-lingui-id: Wj8HS4
-#: src/presentation/weather/WeatherPanel.tsx:1334
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Seven-day forecast"
 msgstr "Прогноз на 7 дней"
 
 #. js-lingui-id: oNLMs8
-#: src/presentation/weather/weatherConditionLabels.ts:22
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Slight rain"
 msgstr "Слабый дождь"
 
 #. js-lingui-id: YW7xjy
-#: src/presentation/weather/weatherConditionLabels.ts:31
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Slight rain showers"
 msgstr "Слабый ливень"
 
 #. js-lingui-id: 1ehV4l
-#: src/presentation/weather/weatherConditionLabels.ts:27
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Slight snow"
 msgstr "Слабый снег"
 
 #. js-lingui-id: Q_XfIn
-#: src/presentation/weather/weatherConditionLabels.ts:34
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Slight snow showers"
 msgstr "Слабый ливневый снег"
 
 #. js-lingui-id: JiA8JY
-#: src/presentation/weather/weatherConditionLabels.ts:105
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Snow"
 msgstr "Снег"
 
 #. js-lingui-id: FRgKig
-#: src/presentation/weather/weatherConditionLabels.ts:30
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Snow grains"
 msgstr "Снежные зёрна"
 
 #. js-lingui-id: 7O993A
-#: src/presentation/weather/weatherConditionLabels.ts:101
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Snow showers"
 msgstr "Ливневый снег"
 
 #. js-lingui-id: U42huV
-#: src/presentation/weather/HourlyForecastTable.tsx:879
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Temp (°C)"
 msgstr "t (°C)"
 
 #. js-lingui-id: OyW0XY
-#: src/presentation/weather/weatherConditionLabels.ts:36
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Thunderstorm"
 msgstr "Гроза"
 
 #. js-lingui-id: sBa3aZ
-#: src/presentation/weather/weatherConditionLabels.ts:37
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Thunderstorm with hail"
 msgstr "Гроза с градом"
 
 #. js-lingui-id: LhMjLm
-#: src/presentation/weather/HourlyForecastTable.tsx:847
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Time"
 msgstr "Время"
 
 #. js-lingui-id: y-eB5_
-#: src/presentation/weather/weatherConditionLabels.ts:38
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Unknown weather"
 msgstr "Погода неизвестна"
 
 #. js-lingui-id: UX4Eez
-#: src/presentation/weather/WeatherPanel.tsx:1357
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Update time unavailable"
 msgstr "Время обновления неизвестно"
 
 #. js-lingui-id: 3GCtgk
-#: src/presentation/weather/WeatherPanel.tsx:1369
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Updated {updatedAt}"
 msgstr "Обновлено {updatedAt}"
 
 #. js-lingui-id: ADzgNz
-#: src/presentation/weather/WeatherPanel.tsx:1557
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Use the header action, then click the map to load its ECMWF IFS forecast."
 msgstr "Нажмите кнопку выбора точки в заголовке, затем точку на карте, чтобы загрузить прогноз ECMWF IFS."
 
 #. js-lingui-id: ph9OHp
-#: src/presentation/weather/weatherConditionLabels.ts:33
+#: src/presentation/weather/weatherConditionLabels.ts
 msgid "Violent rain showers"
 msgstr "Очень сильный ливень"
 
 #. js-lingui-id: aOKAXp
-#: src/presentation/weather/HourlyForecastTable.tsx:1007
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Visibility (km)"
 msgstr "Видим. (км)"
 
 #. js-lingui-id: mJZLtT
-#: src/presentation/weather/HourlyForecastTable.tsx:867
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Weather"
 msgstr "Погода"
 
 #. js-lingui-id: oUZ9_u
-#: src/presentation/weather/WeatherPanel.tsx:1396
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Weather data by Open-Meteo"
 msgstr "Погодные данные: Open-Meteo"
 
 #. js-lingui-id: yoBADg
-#: src/presentation/weather/WeatherPanel.tsx:218
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Weather data could not be read. Try another point or try again later."
 msgstr "Не удалось прочитать данные о погоде. Выберите другую точку или повторите попытку позже."
 
 #. js-lingui-id: xxls-e
-#: src/presentation/weather/WeatherPanel.tsx:1544
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Weather forecast"
 msgstr "Прогноз погоды"
 
 #. js-lingui-id: iAG3S2
-#: src/presentation/weather/WeatherPanel.tsx:216
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Weather forecast could not be loaded. Check your connection and try again."
 msgstr "Не удалось загрузить прогноз погоды. Проверьте подключение и повторите попытку."
 
 #. js-lingui-id: 1I9PVB
-#: src/presentation/weather/WeatherTimeControl.tsx:287
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Weather forecast time"
 msgstr "Время прогноза погоды"
 
 #. js-lingui-id: d0PRYF
-#: src/presentation/weather/WeatherTimeControl.tsx:368
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Weather map legend"
 msgstr "Легенда карты погоды"
 
 #. js-lingui-id: Tv9JdX
-#: src/presentation/weather/WeatherPanel.tsx:213
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Weather service is temporarily rate-limited. Try again shortly."
 msgstr "Сервис погоды временно ограничил число запросов. Повторите попытку чуть позже."
 
 #. js-lingui-id: 018Wpc
-#: src/presentation/weather/WeatherPanel.tsx:817
+#: src/presentation/weather/WeatherPanel.tsx
 msgid "Wind"
 msgstr "Ветер"
 
 #. js-lingui-id: clnqMm
-#: src/presentation/weather/HourlyForecastTable.tsx:936
+#: src/presentation/weather/HourlyForecastTable.tsx
 msgid "Wind (m/s)"
 msgstr "Ветер (м/с)"
 
 #. js-lingui-id: QCyhsP
-#: src/presentation/weather/WeatherTimeControl.tsx:415
+#: src/presentation/weather/WeatherTimeControl.tsx
 msgid "Wind direction and speed"
 msgstr "Направление и скорость ветра"

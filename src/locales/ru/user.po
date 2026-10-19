@@ -14,282 +14,278 @@ msgstr ""
 "Plural-Forms: \n"
 
 #. js-lingui-id: TA0kCQ
-#: src/presentation/user/UserPanel.tsx:308
+#: src/presentation/user/UserPanel.tsx
 msgid "({reservedMiB} MiB reserved)"
 msgstr "({reservedMiB} МиБ зарезервировано)"
 
 #. js-lingui-id: 2vd1bD
-#: src/presentation/user/UserPanel.tsx:302
+#: src/presentation/user/UserPanel.tsx
 msgid "{usedMiB} MiB / {limitMiB} MiB"
 msgstr "{usedMiB} МиБ / {limitMiB} МиБ"
 
 #. js-lingui-id: 1ZAF9w
-#: src/presentation/user/UserPanel.tsx:210
+#: src/presentation/user/UserPanel.tsx
 msgid "Account features are not configured. Your tracks remain stored locally in this browser."
 msgstr "Функции учётной записи не настроены. Ваши треки по-прежнему хранятся локально в этом браузере."
 
 #. js-lingui-id: W4_cQH
-#: src/presentation/user/UserPanel.tsx:77
+#: src/presentation/user/UserPanel.tsx
 msgid "Account mode"
 msgstr "Режим учётной записи"
 
 #. js-lingui-id: dEgA5A
-#: src/presentation/user/UserDataBackupSection.tsx:145
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Cancel"
 msgstr "Отмена"
 
 #. js-lingui-id: 1Snvcx
-#: src/presentation/user/userDataMessages.ts:32
+#: src/presentation/user/userDataMessages.ts
 msgid "Check your email to confirm your account, then sign in."
 msgstr "Подтвердите учётную запись по ссылке в письме, затем войдите."
 
 #. js-lingui-id: Xcgi7n
-#: src/presentation/user/UserPanel.tsx:313
+#: src/presentation/user/UserPanel.tsx
 msgid "Cloud track quota"
 msgstr "Квота облачного хранилища треков"
 
 #. js-lingui-id: mCx31Q
-#: src/presentation/user/userDataMessages.ts:27
+#: src/presentation/user/userDataMessages.ts
 msgid "Cloud track storage is full. Delete a synchronized track and try again."
 msgstr "Облачное хранилище треков заполнено. Удалите синхронизированный трек и повторите попытку."
 
 #. js-lingui-id: QHcLEN
-#: src/presentation/user/UserPanel.tsx:251
+#: src/presentation/user/UserPanel.tsx
 msgid "Connected"
 msgstr "Подключено"
 
 #. js-lingui-id: 1hMWR6
-#: src/presentation/user/UserPanel.tsx:96
-#: src/presentation/user/UserPanel.tsx:171
+#: src/presentation/user/UserPanel.tsx
 msgid "Create account"
 msgstr "Создать учётную запись"
 
 #. js-lingui-id: xgnl4l
-#: src/presentation/user/UserPanel.tsx:101
+#: src/presentation/user/UserPanel.tsx
 msgid "Create an account to confirm your email address."
 msgstr "Создайте учётную запись, чтобы подтвердить адрес электронной почты."
 
 #. js-lingui-id: C7onlH
-#: src/presentation/user/UserPanel.tsx:168
+#: src/presentation/user/UserPanel.tsx
 msgid "Creating account…"
 msgstr "Создание учётной записи…"
 
 #. js-lingui-id: HKH-W-
-#: src/presentation/user/UserDataBackupSection.tsx:72
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Data"
 msgstr "Данные"
 
 #. js-lingui-id: Eg3Qrc
-#: src/presentation/user/UserDataBackupSection.tsx:106
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Data archive"
 msgstr "Архив данных"
 
 #. js-lingui-id: ZCgrx6
-#: src/presentation/user/UserDataBackupSection.tsx:48
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Data could not be exported."
 msgstr "Не удалось экспортировать данные."
 
 #. js-lingui-id: Jkmjwk
-#: src/presentation/user/UserDataBackupSection.tsx:61
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Data could not be imported from this file. Nothing was changed."
 msgstr "Не удалось импортировать данные из этого файла. Ничего не изменено."
 
 #. js-lingui-id: cnGeoo
-#: src/presentation/user/RemoteDeletionDialog.tsx:43
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "Delete"
 msgstr "Удалить"
 
 #. js-lingui-id: 9GSV7H
-#: src/presentation/user/RemoteDeletionDialog.tsx:45
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "Delete selected, upload the rest again"
 msgstr "Удалить выбранные, остальные загрузить снова"
 
 #. js-lingui-id: O3oNi5
-#: src/presentation/user/UserPanel.tsx:120
+#: src/presentation/user/UserPanel.tsx
 msgid "Email"
 msgstr "Электронная почта"
 
 #. js-lingui-id: aJDBqw
-#: src/presentation/user/UserPanel.tsx:258
+#: src/presentation/user/UserPanel.tsx
 msgid "Email unavailable"
 msgstr "Адрес электронной почты недоступен"
 
 #. js-lingui-id: BB2-PH
-#: src/presentation/user/UserDataBackupSection.tsx:91
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Export data as gzip"
 msgstr "Экспортировать данные в gzip"
 
 #. js-lingui-id: Pw01g0
-#: src/presentation/user/UserPanel.tsx:142
+#: src/presentation/user/UserPanel.tsx
 msgid "Hide password"
 msgstr "Скрыть пароль"
 
 #. js-lingui-id: l3s5ri
-#: src/presentation/user/UserDataBackupSection.tsx:153
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Import"
 msgstr "Импортировать"
 
 #. js-lingui-id: 4zGHqT
-#: src/presentation/user/UserDataBackupSection.tsx:99
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Import data from gzip"
 msgstr "Импортировать данные из gzip"
 
 #. js-lingui-id: YZTjDW
-#: src/presentation/user/UserDataBackupSection.tsx:128
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Import data?"
 msgstr "Импортировать данные?"
 
 #. js-lingui-id: iA06_8
-#: src/presentation/user/RemoteDeletionDialog.tsx:189
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "Items deleted from cloud"
 msgstr "Объекты, удалённые из облака"
 
 #. js-lingui-id: Rcw29-
-#: src/presentation/user/RemoteDeletionDialog.tsx:128
-#: src/presentation/user/RemoteDeletionDialog.tsx:130
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "Markers"
 msgstr "Метки"
 
 #. js-lingui-id: 8ZsakT
-#: src/presentation/user/UserPanel.tsx:132
+#: src/presentation/user/UserPanel.tsx
 msgid "Password"
 msgstr "Пароль"
 
 #. js-lingui-id: yKu_3Y
-#: src/presentation/user/RemoteDeletionDialog.tsx:44
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "Restore"
 msgstr "Восстановить"
 
 #. js-lingui-id: 1f599Z
-#: src/presentation/user/UserPanel.tsx:223
+#: src/presentation/user/UserPanel.tsx
 msgid "Restoring account session…"
 msgstr "Восстановление сеанса учётной записи…"
 
 #. js-lingui-id: 7C-Jn5
-#: src/presentation/user/UserPanel.tsx:142
+#: src/presentation/user/UserPanel.tsx
 msgid "Show password"
 msgstr "Показать пароль"
 
 #. js-lingui-id: 5lWFkC
-#: src/presentation/user/UserPanel.tsx:86
-#: src/presentation/user/UserPanel.tsx:172
+#: src/presentation/user/UserPanel.tsx
 msgid "Sign in"
 msgstr "Войти"
 
 #. js-lingui-id: u4Jg_2
-#: src/presentation/user/UserPanel.tsx:103
+#: src/presentation/user/UserPanel.tsx
 msgid "Sign in to your account."
 msgstr "Войдите в учётную запись."
 
 #. js-lingui-id: fcWrnU
-#: src/presentation/user/UserPanel.tsx:347
+#: src/presentation/user/UserPanel.tsx
 msgid "Sign out"
 msgstr "Выйти"
 
 #. js-lingui-id: zU-Ro7
-#: src/presentation/user/UserPanel.tsx:256
+#: src/presentation/user/UserPanel.tsx
 msgid "Signed in as"
 msgstr "Вы вошли как"
 
 #. js-lingui-id: mRv0ca
-#: src/presentation/user/UserPanel.tsx:169
+#: src/presentation/user/UserPanel.tsx
 msgid "Signing in…"
 msgstr "Вход…"
 
 #. js-lingui-id: tFI3Lp
-#: src/presentation/user/UserPanel.tsx:346
+#: src/presentation/user/UserPanel.tsx
 msgid "Signing out…"
 msgstr "Выход…"
 
 #. js-lingui-id: Cz1Pp9
-#: src/presentation/user/UserPanel.tsx:285
+#: src/presentation/user/UserPanel.tsx
 msgid "Sync across devices"
 msgstr "Синхронизация между устройствами"
 
 #. js-lingui-id: lb_UU4
-#: src/presentation/user/UserPanel.tsx:331
+#: src/presentation/user/UserPanel.tsx
 msgid "Sync now"
 msgstr "Синхронизировать"
 
 #. js-lingui-id: Sy8_iI
-#: src/presentation/user/userDataMessages.ts:23
+#: src/presentation/user/userDataMessages.ts
 msgid "Synchronization could not finish. Your local tracks, folders, and markers remain available."
 msgstr "Не удалось завершить синхронизацию. Ваши локальные треки, папки и метки по-прежнему доступны."
 
 #. js-lingui-id: KIdp4G
-#: src/presentation/user/UserPanel.tsx:247
+#: src/presentation/user/UserPanel.tsx
 msgid "Synchronization needs attention"
 msgstr "Требуется проверить синхронизацию"
 
 #. js-lingui-id: oSMAmM
-#: src/presentation/user/UserPanel.tsx:249
+#: src/presentation/user/UserPanel.tsx
 msgid "Synchronization needs your decision"
 msgstr "Для синхронизации требуется ваше решение"
 
 #. js-lingui-id: FLZtaU
-#: src/presentation/user/UserPanel.tsx:245
+#: src/presentation/user/UserPanel.tsx
 msgid "Synchronizing…"
 msgstr "Синхронизация…"
 
 #. js-lingui-id: d-ppML
 #. placeholder {0}: countFormatter.format(snapshot.syncProgress.completedItems)
 #. placeholder {1}: countFormatter.format(snapshot.syncProgress.totalItems)
-#: src/presentation/user/UserPanel.tsx:244
+#: src/presentation/user/UserPanel.tsx
 msgid "Synchronizing… {0}/{1}"
 msgstr "Синхронизация… {0}/{1}"
 
 #. js-lingui-id: XhImrb
-#: src/presentation/user/RemoteDeletionDialog.tsx:94
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "These items were deleted from your account. Select the items to delete from this browser. Unselected items will be uploaded again."
 msgstr "Эти объекты удалены из вашей учётной записи. Выберите объекты, которые нужно удалить из этого браузера. Остальные объекты будут загружены снова."
 
 #. js-lingui-id: 2eFlmt
-#: src/presentation/user/RemoteDeletionDialog.tsx:100
-#: src/presentation/user/RemoteDeletionDialog.tsx:102
+#: src/presentation/user/RemoteDeletionDialog.tsx
 msgid "Tracks"
 msgstr "Треки"
 
 #. js-lingui-id: 2N7bbU
-#: src/presentation/user/UserDataBackupSection.tsx:79
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Tracks as GPX files by folder, with track metadata, markers, settings, and checksums."
 msgstr "Треки в виде файлов GPX по папкам, их метаданные, метки, настройки и контрольные суммы."
 
 #. js-lingui-id: -x_CUs
-#: src/presentation/user/UserDataBackupSection.tsx:132
+#: src/presentation/user/UserDataBackupSection.tsx
 msgid "Tracks, folders, and markers from the archive replace items with the same ID; other items stay. Settings are replaced by the archived settings. The page reloads afterward."
 msgstr "Треки, папки и метки из архива заменят элементы с теми же ID, остальные элементы сохранятся. Настройки будут заменены настройками из архива. После этого страница перезагрузится."
 
 #. js-lingui-id: H5vJRH
-#: src/presentation/user/userDataMessages.ts:13
+#: src/presentation/user/userDataMessages.ts
 msgid "Unable to apply the deletion decision. Your local data remains available."
 msgstr "Не удалось применить решение об удалении. Ваши локальные данные по-прежнему доступны."
 
 #. js-lingui-id: fsl7HS
-#: src/presentation/user/userDataMessages.ts:21
+#: src/presentation/user/userDataMessages.ts
 msgid "Unable to create an account. Try again."
 msgstr "Не удалось создать учётную запись. Повторите попытку."
 
 #. js-lingui-id: Ezy2bo
-#: src/presentation/user/userDataMessages.ts:15
+#: src/presentation/user/userDataMessages.ts
 msgid "Unable to restore your account session."
 msgstr "Не удалось восстановить сеанс учётной записи."
 
 #. js-lingui-id: 9vg_NY
-#: src/presentation/user/userDataMessages.ts:17
+#: src/presentation/user/userDataMessages.ts
 msgid "Unable to sign in. Check your email and password."
 msgstr "Не удалось войти. Проверьте адрес электронной почты и пароль."
 
 #. js-lingui-id: cBcyO7
-#: src/presentation/user/userDataMessages.ts:19
+#: src/presentation/user/userDataMessages.ts
 msgid "Unable to sign out. Try again."
 msgstr "Не удалось выйти. Повторите попытку."
 
 #. js-lingui-id: XsmhGu
-#: src/presentation/user/userDataMessages.ts:25
+#: src/presentation/user/userDataMessages.ts
 msgid "Unable to update synchronization. Your previous setting is unchanged."
 msgstr "Не удалось изменить синхронизацию. Предыдущая настройка не изменилась."
 
 #. js-lingui-id: GjhOGB
-#: src/presentation/user/UserPanel.tsx:262
+#: src/presentation/user/UserPanel.tsx
 msgid "User ID"
 msgstr "ID пользователя"

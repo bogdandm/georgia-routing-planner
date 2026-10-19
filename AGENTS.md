@@ -651,9 +651,10 @@ changes are complete.
 3. For executable code, run `pnpm format:check`, `pnpm typecheck`, `pnpm lint`, and
    `pnpm i18n:check` once, unless a broader aggregate already includes them. Run
    `pnpm i18n:check` after the last source edit and before handing off: it re-extracts
-   the catalogs and fails when any `.po` file changes, including source-reference line
-   numbers shifted by edits to already-localized files. On failure, commit the
-   regenerated catalogs and run it again until it passes.
+   the catalogs and fails when any `.po` file changes, including a message added,
+   removed, or moved to another source file. Catalog references carry file paths only,
+   so line shifts never change them. On failure, commit the regenerated catalogs and run
+   it again until it passes.
 4. Read and apply [`tests/AGENTS.md`](tests/AGENTS.md) when the changed behavior or
    selected verification requires Vitest. Read and apply
    [`e2e/AGENTS.md`](e2e/AGENTS.md) only when the maintainer explicitly requests local

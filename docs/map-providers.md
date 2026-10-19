@@ -83,7 +83,7 @@ scattered dots, and orchards, vineyards, and nurseries share one regular grid of
 that marks man-made plantings. Shortbread cemeteries and grave yards get small crosses
 from z12. Neither source records leaf type or whether a swamp is passable, so forest
 type and swamp passability are not drawn. Over imagery these signs are hidden with the
-vegetation fills.
+vegetation fills, and the Layers tab's **Area patterns** hides them on their own.
 
 ## Detail vector: OSM Shortbread v1
 
@@ -184,9 +184,15 @@ the source at z12 and MapLibre overzooms above it. Georgia is built from Coperni
 GLO-30 (about 30 m source spacing); one z12 pixel is about 14 m there.
 
 MapLibre loads this URL directly as the `terrain-dem` raster-dem source for hillshade
-relief and 3D terrain (exaggeration 1.15) and decodes it on its own workers. DEM
+relief and 3D terrain (exaggeration 1.15) and decodes it on its own workers. By default
+the source declares the images' real 512-pixel size. MapLibre sizes every 3D
+render-to-texture tile at four times the declared tile size, so this means 2048-pixel
+draped textures over fewer terrain tiles; it measured well on the maintainer's devices.
+The Layers tab's **Elevation tiles** choice can declare 256 pixels instead: 1024-pixel
+textures, more terrain tiles, and one zoom level finer DEM tiles below z12. The choice
+is saved with the layer preferences and rebuilds the source in place, keeping 3D on. DEM
 elevation sampling for tracks, point inspection, and forecast downscaling uses the same
-tiles (`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
+tiles at their real size (`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
 
 Mapterhorn was checked over Georgia before it replaced the AWS Open Data Mapzen
 Terrarium tiles: no out-of-range or isolated spike pixels were found, including the

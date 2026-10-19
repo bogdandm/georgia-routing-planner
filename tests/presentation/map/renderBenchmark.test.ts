@@ -31,7 +31,7 @@ function phase(
 function report(phases: readonly RenderBenchmarkPhase[]): RenderBenchmarkReport {
   return {
     kind: 'trail-planner-render-benchmark',
-    version: 1,
+    version: 2,
     createdAt: '2026-10-18T00:00:00.000Z',
     environment: {
       userAgent: 'test',

@@ -137,13 +137,13 @@ export const mapLayerIds = {
   hikingBridleways: 'basemap-hiking-bridleways',
   hikingSteps: 'basemap-hiking-steps',
   aerialways: 'basemap-aerialways',
+  ridges: 'basemap-ridges',
+  cliffs: 'basemap-cliffs',
   fords: 'basemap-fords',
   hikingPois: 'basemap-hiking-pois',
   hikingPoiLabels: 'basemap-hiking-poi-labels',
   peaks: 'basemap-peaks',
   mountainPasses: 'basemap-mountain-passes',
-  ridges: 'basemap-ridges',
-  cliffs: 'basemap-cliffs',
   peakLabels: 'basemap-peak-labels',
   roadLabels: 'basemap-road-labels',
   riverLabels: 'basemap-river-labels',
@@ -173,14 +173,23 @@ export const basemapImageIds = {
   cemeteryPattern: 'basemap-cemetery-pattern',
 } as const;
 
+/**
+ * 3D terrain renders consecutive line, fill, raster, and hillshade layers into one draped
+ * texture per terrain tile; every symbol or circle layer between them starts another full
+ * set of textures and terrain passes. Lines and fills therefore stay below the first
+ * basemap icon layer, and labels and icons sit above all of them.
+ */
 export const mapInsertionPoints = {
   satelliteBeforeLayerId: mapLayerIds.landcover,
   // Relief needs to render over opaque land-cover and land-use fills.
   terrainOverlaysBeforeLayerId: mapLayerIds.boundaries,
   // Water polygons mask generated terrain contours while waterways remain visible.
   contoursBeforeLayerId: mapLayerIds.water,
+  contourLabelsBeforeLayerId: mapLayerIds.hikingPoiLabels,
   // Weather stays below roads, hiking paths, labels, user routes, and markers.
   weatherBeforeLayerId: mapLayerIds.roadCasings,
-  satelliteFootprintBeforeLayerId: mapLayerIds.roadLabels,
-  importedTracksBeforeLayerId: mapLayerIds.hikingPoiLabels,
+  // User routes, tracks, and the Sentinel scene footprint are the last lines, directly
+  // below the first basemap icons.
+  satelliteFootprintBeforeLayerId: mapLayerIds.fords,
+  importedTracksBeforeLayerId: mapLayerIds.fords,
 } as const;

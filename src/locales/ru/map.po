@@ -142,7 +142,7 @@ msgid "Drag to rotate map, click to reset north"
 msgstr "Перетащите, чтобы повернуть карту; нажмите, чтобы вернуть север наверх"
 
 #. js-lingui-id: 5zBbQV
-#: src/presentation/map/MapLibreFacade.ts:1732
+#: src/presentation/map/MapLibreFacade.ts:1742
 msgid "Elevation {elevationChange}"
 msgstr "Перепад {elevationChange}"
 

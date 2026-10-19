@@ -27,6 +27,7 @@ import type {
   MapLayerPreferencesRepository,
   SatelliteRenderingMode,
   SatelliteRenderingTuning,
+  TerrainDemTileSize,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import {
@@ -98,7 +99,11 @@ import {
 } from '@/presentation/map/trackEndpointIcons';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
-import type { MapLayerPreset, MapRecoveryState } from '@/presentation/map/mapTypes';
+import type {
+  MapLayerPreset,
+  MapRecoveryState,
+  TerrainMode,
+} from '@/presentation/map/mapTypes';
 import {
   weatherCloudCoverColorScale,
   weatherPrecipitationColorScale,
@@ -410,8 +415,6 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.landcover,
     mapLayerIds.glacierAreas,
     mapLayerIds.landcoverDetails,
-    mapLayerIds.landcoverPatterns,
-    mapLayerIds.landcoverPatternDetails,
     mapLayerIds.waterways,
     mapLayerIds.intermittentWaterways,
     mapLayerIds.ridges,
@@ -421,12 +424,14 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.waterLabels,
     mapLayerIds.ridgeLabels,
   ],
-  'restricted-areas': [mapLayerIds.restrictedAreas],
-  'detail-context': [
-    mapLayerIds.brownfieldAreas,
+  // GOST area signs: forest, swamp, scrub, plantation, scree, and cemetery patterns.
+  'natural-feature-patterns': [
+    mapLayerIds.landcoverPatterns,
+    mapLayerIds.landcoverPatternDetails,
     mapLayerIds.cemeteries,
-    mapLayerIds.buildings,
   ],
+  'restricted-areas': [mapLayerIds.restrictedAreas],
+  'detail-context': [mapLayerIds.brownfieldAreas, mapLayerIds.buildings],
   'hiking-paths': [
     mapLayerIds.hikingPaths,
     mapLayerIds.hikingPathDetails,
@@ -464,6 +469,23 @@ const logicalNativeLayerGroups: Readonly<
     importedTrackLayerIds.focusHighlightB,
   ],
 };
+
+/** Sub-layers draw only while their parent layer is visible as well. */
+const logicalSubLayers = [
+  { id: 'track-elevation-gradient', parent: 'imported-tracks' },
+  { id: 'natural-feature-patterns', parent: 'natural-features' },
+] as const satisfies readonly {
+  readonly id: LogicalMapLayerId;
+  readonly parent: LogicalMapLayerId;
+}[];
+
+function logicalLayerVisible(
+  layerId: LogicalMapLayerId,
+  visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+): boolean {
+  const parent = logicalSubLayers.find((subLayer) => subLayer.id === layerId)?.parent;
+  return visibility[layerId] && (parent === undefined || visibility[parent]);
+}
 
 const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
@@ -717,6 +739,16 @@ export class MapLibreLayerController {
     readonly 'terrain-relief': boolean;
     readonly 'elevation-isolines': boolean;
   } | null = null;
+  /**
+   * Area patterns keep one choice per 2D/3D mode; the store's visibility holds the
+   * current mode's choice and persistence stores both. The mode follows the native
+   * terrain, so patterns change together with the draped textures.
+   */
+  #terrainMode: TerrainMode = 'flat';
+  #naturalFeaturePatternsByMode: Record<TerrainMode, boolean> = {
+    flat: true,
+    terrain: false,
+  };
   readonly #weatherMapLayerAnchors = new Map<string, unknown>();
   #appliedWeatherMapOpacity: number | null = null;
   readonly #visualModeLayerAnchors = new Map<string, unknown>();
@@ -854,6 +886,7 @@ export class MapLibreLayerController {
     this.reconcileSatelliteBasemapSource();
     this.reconcileMosaicEntries();
     this.reconcileTerrainOverlays();
+    this.syncTerrainMode();
     this.applyBaseLayerVisibility();
     this.applyMapVisualMode();
     this.reconcileWeatherMap();
@@ -866,6 +899,21 @@ export class MapLibreLayerController {
 
   public setTerrainInteractionActive(active: boolean): void {
     this.contourTiles.setInteractionActive(active);
+  }
+
+  /** Shows the area pattern choice of the mode the native map currently draws. */
+  private syncTerrainMode(): void {
+    const terrain = this.#map?.getTerrain() ?? null;
+    const mode: TerrainMode = terrain === null ? 'flat' : 'terrain';
+    if (this.#terrainMode === mode) return;
+    this.#terrainMode = mode;
+    const visible = this.#naturalFeaturePatternsByMode[mode];
+    const state = mapLayerStore.getState();
+    if (state.visibility['natural-feature-patterns'] === visible) return;
+    mapLayerStore.setState({
+      visibility: { ...state.visibility, 'natural-feature-patterns': visible },
+    });
+    this.applyBaseLayerVisibility();
   }
 
   /**
@@ -1113,6 +1161,12 @@ export class MapLibreLayerController {
     }
 
     const visibility = { ...state.visibility, [layerId]: visible };
+    if (layerId === 'natural-feature-patterns') {
+      this.#naturalFeaturePatternsByMode = {
+        ...this.#naturalFeaturePatternsByMode,
+        [this.#terrainMode]: visible,
+      };
+    }
     let appliedImagery = state.appliedImagery;
     const staticBasemapSelected = isStaticSatelliteLayerId(layerId);
 
@@ -1136,19 +1190,19 @@ export class MapLibreLayerController {
       }
     }
 
-    const highlightVisible = this.importedTrackHighlightVisible(visibility);
+    const nativeVisible = logicalLayerVisible(layerId, visibility);
     for (const nativeId of nativeLayerIds) {
-      const nativeVisible =
-        layerId === 'track-elevation-gradient' ? highlightVisible : visible;
       map.setLayoutProperty(nativeId, 'visibility', nativeVisible ? 'visible' : 'none');
     }
-    if (layerId === 'imported-tracks') {
-      for (const nativeId of logicalNativeLayerGroups['track-elevation-gradient']) {
+    for (const subLayer of logicalSubLayers) {
+      if (subLayer.parent !== layerId) continue;
+      const subLayerVisible = logicalLayerVisible(subLayer.id, visibility);
+      for (const nativeId of logicalNativeLayerGroups[subLayer.id]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
             nativeId,
             'visibility',
-            highlightVisible ? 'visible' : 'none',
+            subLayerVisible ? 'visible' : 'none',
           );
         }
       }
@@ -1839,7 +1893,18 @@ export class MapLibreLayerController {
   private async loadPersistedState(): Promise<void> {
     try {
       const persisted = await this.preferences.loadMapLayerPreferences();
-      const visibility = this.normalizeImageryVisibility(persisted.visibility);
+      const normalizedVisibility = this.normalizeImageryVisibility(
+        persisted.visibility,
+      );
+      this.#naturalFeaturePatternsByMode = {
+        flat: normalizedVisibility['natural-feature-patterns'],
+        terrain: persisted.naturalFeaturePatternsIn3d,
+      };
+      const visibility = {
+        ...normalizedVisibility,
+        'natural-feature-patterns':
+          this.#naturalFeaturePatternsByMode[this.#terrainMode],
+      };
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
@@ -1861,7 +1926,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrack();
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
-      if (visibility !== persisted.visibility) this.persistStableState();
+      if (normalizedVisibility !== persisted.visibility) this.persistStableState();
     } catch {
       this.logger.log({
         level: 'warn',
@@ -2735,7 +2800,11 @@ export class MapLibreLayerController {
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
-        visibility,
+        visibility: {
+          ...visibility,
+          'natural-feature-patterns': this.#naturalFeaturePatternsByMode.flat,
+        },
+        naturalFeaturePatternsIn3d: this.#naturalFeaturePatternsByMode.terrain,
         openStreetMapOpacity,
         importedTrackOpacity,
         weatherMapOpacity: weatherMap.opacity,
@@ -2769,6 +2838,7 @@ export class MapLibreLayerController {
   };
 
   private readonly handleTerrainDemStateChange = (): void => {
+    this.syncTerrainMode();
     this.updateTerrainDemLoading();
   };
 
@@ -2906,8 +2976,15 @@ export class MapLibreLayerController {
       return { status: 'success' };
     }
     try {
-      if (map.getSource(mapSourceIds.terrainDem) === undefined) {
-        map.addSource(mapSourceIds.terrainDem, createTerrainDemSource(this.terrain));
+      const demTileSize = this.#terrainOverlayPreferences.demTileSize;
+      const demSource = map.getSource(mapSourceIds.terrainDem);
+      if (demSource === undefined) {
+        map.addSource(
+          mapSourceIds.terrainDem,
+          createTerrainDemSource(this.terrain, demTileSize),
+        );
+      } else if (demSource.tileSize !== demTileSize) {
+        this.replaceTerrainDemSource(map, demTileSize);
       }
       if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
         map.addLayer(
@@ -3011,6 +3088,33 @@ export class MapLibreLayerController {
     }
   }
 
+  /**
+   * MapLibre cannot change a source's tile size in place. 3D terrain and the relief layer
+   * both read the DEM source, so terrain is detached and restored with the same options
+   * around the rebuild; the caller re-adds the relief layer in its usual position.
+   */
+  private replaceTerrainDemSource(
+    map: MapLibreMap,
+    tileSize: TerrainDemTileSize,
+  ): void {
+    const terrain = map.getTerrain();
+    if (terrain !== null) map.setTerrain(null);
+    if (map.getLayer(terrainOverlayLayerIds.reliefShade) !== undefined) {
+      map.removeLayer(terrainOverlayLayerIds.reliefShade);
+    }
+    map.removeSource(mapSourceIds.terrainDem);
+    map.addSource(
+      mapSourceIds.terrainDem,
+      createTerrainDemSource(this.terrain, tileSize),
+    );
+    if (terrain !== null) map.setTerrain(terrain);
+    this.logger.log({
+      level: 'info',
+      name: 'map.terrain.dem-tile-size-changed',
+      data: { tileSize },
+    });
+  }
+
   private ensureContourLayers(map: MapLibreMap): void {
     const minzoom = this.terrain.overlays.contourMinZoom;
     if (map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined) {
@@ -3104,7 +3208,7 @@ export class MapLibreLayerController {
             'text-halo-width': 1.2,
           },
         },
-        mapInsertionPoints.contoursBeforeLayerId,
+        mapInsertionPoints.contourLabelsBeforeLayerId,
       );
     }
   }
@@ -3118,12 +3222,16 @@ export class MapLibreLayerController {
     const indexIndex = layerIds.indexOf(terrainOverlayLayerIds.contourIndex);
     const labelIndex = layerIds.indexOf(terrainOverlayLayerIds.contourLabels);
     const waterIndex = layerIds.indexOf(mapInsertionPoints.contoursBeforeLayerId);
+    const labelAnchorIndex = layerIds.indexOf(
+      mapInsertionPoints.contourLabelsBeforeLayerId,
+    );
     const orderIsCorrect =
       rasterIndex >= 0 &&
       minorIndex > rasterIndex &&
       indexIndex > minorIndex &&
+      indexIndex < waterIndex &&
       labelIndex > indexIndex &&
-      labelIndex < waterIndex;
+      labelIndex < labelAnchorIndex;
     if (orderIsCorrect) return;
     map.moveLayer(
       terrainOverlayLayerIds.contourMinor,
@@ -3135,7 +3243,7 @@ export class MapLibreLayerController {
     );
     map.moveLayer(
       terrainOverlayLayerIds.contourLabels,
-      mapInsertionPoints.contoursBeforeLayerId,
+      mapInsertionPoints.contourLabelsBeforeLayerId,
     );
   }
 
@@ -3171,12 +3279,6 @@ export class MapLibreLayerController {
       normalized[layerId] = layerId === selectedStaticLayer;
     }
     return normalized;
-  }
-
-  private importedTrackHighlightVisible(
-    visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
-  ): boolean {
-    return visibility['imported-tracks'] && visibility['track-elevation-gradient'];
   }
 
   private currentVisibleRasterLayerId(): string | null {
@@ -3250,6 +3352,7 @@ export class MapLibreLayerController {
       'terrain-relief',
       'elevation-isolines',
       'natural-features',
+      'natural-feature-patterns',
       'restricted-areas',
       'detail-context',
       'hiking-paths',
@@ -3258,10 +3361,7 @@ export class MapLibreLayerController {
       'imported-tracks',
       'track-elevation-gradient',
     ] as const) {
-      const layerVisible =
-        layerId === 'track-elevation-gradient'
-          ? this.importedTrackHighlightVisible(visibility)
-          : visibility[layerId];
+      const layerVisible = logicalLayerVisible(layerId, visibility);
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
@@ -3788,7 +3888,8 @@ export class MapLibreLayerController {
     const trackVisibility: 'visible' | 'none' = visibility['imported-tracks']
       ? 'visible'
       : 'none';
-    const highlightVisibility: 'visible' | 'none' = this.importedTrackHighlightVisible(
+    const highlightVisibility: 'visible' | 'none' = logicalLayerVisible(
+      'track-elevation-gradient',
       visibility,
     )
       ? 'visible'

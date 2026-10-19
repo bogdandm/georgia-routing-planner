@@ -376,8 +376,11 @@ MapLibre layer IDs; native IDs never reach the UI.
   and results.
 - **Terrain:** relief shading, elevation isolines, and contour spacing.
 - **OpenStreetMap:** **OSM detail**, Hiking paths, Roads, Places and POIs, Natural
-  features, Restricted areas, and one opacity that applies to OSM layers and isolines
-  while a raster is active.
+  features with its indented **Area patterns** (the GOST forest, swamp, scrub, planting,
+  scree, and cemetery signs, usable only while Natural features is on; 2D and 3D keep
+  separate saved choices, and 3D starts with them off because each pattern adds work to
+  every draped terrain texture), Restricted areas, and one opacity that applies to OSM
+  layers and isolines while a raster is active.
 
 Visibility, opacities, imagery choice, rendering mode, stretch, and terrain preferences
 persist locally. Sentinel scene data is never persisted; imagery starts empty unless a
@@ -578,8 +581,10 @@ minor spacing 20–100 m, default 50 m) use the Mapterhorn DEM as published, wit
 client-side repair. Contour work runs in a terrain worker and falls back to inline work
 with a Layers warning if the worker cannot recover. The 2D/3D control reuses the same
 map and DEM source; failed 3D activation returns to 2D and reports in the status line.
-Reloads restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing
-and pitch and re-enters terrain once the map is ready. Details are in
+Under Relief shading, **Elevation tiles** chooses 512 px (default) or 256 px declared
+DEM tiles; it is saved in the browser and applies to relief and 3D at once. Reloads
+restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing and pitch
+and re-enters terrain once the map is ready. Details are in
 [runtime flows](./runtime-flows.md).
 
 Map errors are classified and shown in the status line; offline messaging promises only
@@ -602,28 +607,29 @@ CLI in `tools/diagnostics` migrates versions 1 and 2. Provider reachability chec
 only on request.
 
 The Overview tab's **Run 3D benchmark** compares rendering across computers. It switches
-to 3D at a fixed forested scene above Mestia (z14.5, pitch 70°), loads the tiles once,
-then measures a still view, an orbit, a zoom out and back across the detail-layer zooms,
-and a pan. The map repaints every frame during each phase, so pauses in the camera
-script never read as freezes, while time without any frame, including at the start or
-end of a phase, does. Each phase reports frame rate, frame-interval percentiles, freezes
-over 100 ms and 500 ms, MapLibre's main-thread time per frame, GPU time per frame when
-the browser exposes WebGL timer queries, WebGL calls per frame, and long tasks. The
-verdict uses the camera-motion phases, from the worst phase's 95th percentile frame
-interval and the freezes over 500 ms summed across them: Good within 34 ms with no
-freeze, Okay within 100 ms with at most one, Bad within 250 ms with at most three, and
-Potato for anything worse. A separate WebGL context then measures fill rate, draw-call
-cost, and one draped terrain texture at 1024 and 2048 px, which tells fill-limited GPUs
-from call-limited ones; it reports nothing rather than a number when the browser cannot
-allocate or finish that work. The drawer shows the verdict with the key numbers, the
-running step with its elapsed time, and downloads the full JSON report. Loading the
-scene waits at most 30 s and each phase at most 10 s; the report records whether loading
-finished, and the drawer warns when measurements include tile loading. Browsers pause
-rendering in hidden tabs, so hiding the tab stops the run with an explanation, and
-closing the map stops it too. Afterwards the user's 2D/3D mode and camera are restored;
-neither the temporary 3D mode nor benchmark camera moves are persisted. Reports contain
-browser, screen, GPU, and visible layer IDs but no user camera, tracks, markers, or
-URLs, and are never uploaded.
+to 3D at a fixed scene over Tbilisi looking toward the horizon (z14.26, pitch 75°, the
+maximum), where dense streets, buildings, and labels fill the view, loads the tiles
+once, then measures a still view, an orbit, a zoom out and back across the detail-layer
+zooms, and a pan. The map repaints every frame during each phase, so pauses in the
+camera script never read as freezes, while time without any frame, including at the
+start or end of a phase, does. Each phase reports frame rate, frame-interval
+percentiles, freezes over 100 ms and 500 ms, MapLibre's main-thread time per frame, GPU
+time per frame when the browser exposes WebGL timer queries, WebGL calls per frame, and
+long tasks. The verdict uses the camera-motion phases, from the worst phase's 95th
+percentile frame interval and the freezes over 500 ms summed across them: Good within 34
+ms with no freeze, Okay within 100 ms with at most one, Bad within 250 ms with at most
+three, and Potato for anything worse. A separate WebGL context then measures fill rate,
+draw-call cost, and one draped terrain texture at 1024 and 2048 px, which tells
+fill-limited GPUs from call-limited ones; it reports nothing rather than a number when
+the browser cannot allocate or finish that work. The drawer shows the verdict with the
+key numbers, the running step with its elapsed time, and downloads the full JSON report.
+Loading the scene waits at most 30 s and each phase at most 10 s; the report records
+whether loading finished, and the drawer warns when measurements include tile loading.
+Browsers pause rendering in hidden tabs, so hiding the tab stops the run with an
+explanation, and closing the map stops it too. Afterwards the user's 2D/3D mode and
+camera are restored; neither the temporary 3D mode nor benchmark camera moves are
+persisted. Reports contain browser, screen, GPU, and visible layer IDs but no user
+camera, tracks, markers, or URLs, and are never uploaded.
 
 ## Configuration
 

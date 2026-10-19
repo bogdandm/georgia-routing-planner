@@ -135,9 +135,14 @@ On style readiness, style data changes, imagery swaps, preference changes, and 3
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 generated contour source, minor/index lines, and index labels. The order is base surface
 fills, relief/satellite in the selected order, waterways, contours, water-body polygons,
-then OSM boundaries, transport, and labels, so relief stays visible over opaque
-land-cover fills while water bodies mask isolines. Changing the contour interval updates
-the existing vector source's tiles without touching the camera.
+then OSM boundaries, transport, ridges and cliffs, the Sentinel scene footprint, user
+routes and tracks, and finally icons and labels (contour labels included), so relief
+stays visible over opaque land-cover fills while water bodies mask isolines. 3D terrain
+draws consecutive line, fill, raster, and hillshade layers into one draped texture per
+terrain tile, and every icon or label layer between them would add another full set of
+textures and terrain passes; keeping all lines and fills below the first icon layer
+gives the main map one draped stack. Changing the contour interval updates the existing
+vector source's tiles without touching the camera.
 
 The `terrain-dem` raster-dem source points at the provider URL, so MapLibre fetches,
 caches, and decodes relief and 3D terrain tiles on its own workers. Contours use a

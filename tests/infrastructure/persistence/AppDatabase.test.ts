@@ -481,6 +481,7 @@ describe('AppDatabase', () => {
         'terrain-relief': false,
         'elevation-isolines': true,
         'natural-features': true,
+        'natural-feature-patterns': false,
         'restricted-areas': true,
         'detail-context': true,
         'hiking-paths': true,
@@ -489,6 +490,7 @@ describe('AppDatabase', () => {
         'imported-tracks': false,
         'track-elevation-gradient': false,
       },
+      naturalFeaturePatternsIn3d: true,
       openStreetMapOpacity: 0.65,
       importedTrackOpacity: 0.7,
       weatherMapOpacity: 0.8,
@@ -497,6 +499,7 @@ describe('AppDatabase', () => {
       terrainOverlays: {
         contourIntervalMeters: 25,
         shadeAboveSatellite: true,
+        demTileSize: 256,
       },
     } as const;
 
@@ -505,7 +508,7 @@ describe('AppDatabase', () => {
     await expect(database.loadMapLayerPreferences()).resolves.toEqual(preferences);
   });
 
-  it('loads stored layer preferences that still carry the removed DEM repair flag', async () => {
+  it('loads stored layer preferences saved before the DEM tile size setting', async () => {
     const preferences = await database.loadMapLayerPreferences();
     await database.settings.put({
       key: 'map.layers',
@@ -525,6 +528,7 @@ describe('AppDatabase', () => {
     expect(loaded.terrainOverlays).toEqual({
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
+      demTileSize: 512,
     });
   });
 
@@ -552,10 +556,12 @@ describe('AppDatabase', () => {
         'terrain-relief': true,
         'elevation-isolines': true,
         'natural-features': true,
+        'natural-feature-patterns': true,
         'restricted-areas': true,
         'imported-tracks': true,
         'track-elevation-gradient': true,
       },
+      naturalFeaturePatternsIn3d: false,
       importedTrackOpacity: 1,
       weatherMapOpacity: 1,
       satelliteRenderingMode: 'auto',
@@ -563,6 +569,7 @@ describe('AppDatabase', () => {
       terrainOverlays: {
         contourIntervalMeters: 50,
         shadeAboveSatellite: false,
+        demTileSize: 512,
       },
     });
     await expect(database.settings.get('map.layers')).resolves.not.toHaveProperty(

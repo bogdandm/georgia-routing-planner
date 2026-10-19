@@ -570,6 +570,7 @@ const mapLayerPreferencesSchema = z
         'terrain-relief': z.boolean().default(true),
         'elevation-isolines': z.boolean().default(true),
         'natural-features': z.boolean().default(true),
+        'natural-feature-patterns': z.boolean().default(true),
         'restricted-areas': z.boolean().default(true),
         'detail-context': z.boolean().default(true),
         'hiking-paths': z.boolean(),
@@ -579,6 +580,7 @@ const mapLayerPreferencesSchema = z
         'track-elevation-gradient': z.boolean().default(true),
       })
       .strict(),
+    naturalFeaturePatternsIn3d: z.boolean().default(false),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     importedTrackOpacity: z.number().min(0).max(1).default(1),
     weatherMapOpacity: z.number().min(0).max(1).default(defaultWeatherMapOpacity),
@@ -604,6 +606,10 @@ const mapLayerPreferencesSchema = z
         // Records saved before the provider switch may still carry the removed DEM
         // repair flag; this non-strict object strips it on load.
         shadeAboveSatellite: z.boolean(),
+        // Records saved before this setting load with the default size.
+        demTileSize: z
+          .union([z.literal(256), z.literal(512)])
+          .default(defaultTerrainOverlayPreferences.demTileSize),
       })
       .default(defaultTerrainOverlayPreferences),
   })
@@ -633,6 +639,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'terrain-relief': true,
     'elevation-isolines': true,
     'natural-features': true,
+    'natural-feature-patterns': true,
     'restricted-areas': true,
     'detail-context': true,
     'hiking-paths': true,
@@ -641,6 +648,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'imported-tracks': true,
     'track-elevation-gradient': true,
   },
+  naturalFeaturePatternsIn3d: false,
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,
   weatherMapOpacity: defaultWeatherMapOpacity,

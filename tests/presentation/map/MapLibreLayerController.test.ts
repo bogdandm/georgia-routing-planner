@@ -52,6 +52,7 @@ class FakeLayerMap {
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
   terrain: unknown = null;
+  readonly terrainCalls: unknown[] = [];
   loadSourceOnNextSourceDataSubscription = false;
   styleLoaded = true;
   directRasterSourceAdds = 0;
@@ -245,6 +246,12 @@ class FakeLayerMap {
 
   public getTerrain(): unknown {
     return this.terrain;
+  }
+
+  public setTerrain(terrain: unknown): void {
+    this.terrainCalls.push(terrain);
+    this.terrain = terrain;
+    this.fire('terrain', { terrain });
   }
   public getBounds(): {
     readonly getWest: () => number;
@@ -708,7 +715,6 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(mapLayerIds.brownfieldAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.buildings)).toBe('none');
-    expect(map.visibility.get(mapLayerIds.cemeteries)).toBe('none');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
 
     expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
@@ -748,6 +754,84 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(mapLayerIds.hikingPois)).toBe('none');
     expect(map.visibility.get(mapLayerIds.mountainPasses)).toBe('none');
+  });
+
+  it('hides area patterns on their own and keeps that choice under natural features', () => {
+    const controller = createTestServices().mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const patternLayerIds = [
+      mapLayerIds.landcoverPatterns,
+      mapLayerIds.landcoverPatternDetails,
+      mapLayerIds.cemeteries,
+    ];
+
+    expect(controller.setLayerVisibility('natural-feature-patterns', false)).toEqual({
+      status: 'success',
+    });
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('none');
+    }
+    expect(map.visibility.get(mapLayerIds.landcover)).toBe('visible');
+
+    // Natural features off and on again restores fills but not the hidden patterns.
+    controller.setLayerVisibility('natural-features', false);
+    controller.setLayerVisibility('natural-features', true);
+    expect(map.visibility.get(mapLayerIds.landcover)).toBe('visible');
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('none');
+    }
+
+    // Patterns on again only draw while natural features are visible.
+    controller.setLayerVisibility('natural-feature-patterns', true);
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+    controller.setLayerVisibility('natural-features', false);
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('none');
+    }
+  });
+
+  it('keeps separate area pattern choices for 2D and 3D, off in 3D by default', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    await controller.restorePersistedState();
+    const patternsVisibility = () => map.visibility.get(mapLayerIds.landcoverPatterns);
+    const terrain = { source: 'terrain-dem', exaggeration: 1.15 };
+
+    // Patterns follow the native terrain, not a later published 3D mode.
+    map.setTerrain(terrain);
+    expect(mapLayerStore.getState().visibility['natural-feature-patterns']).toBe(false);
+    expect(patternsVisibility()).toBe('none');
+
+    controller.setLayerVisibility('natural-feature-patterns', true);
+    map.setTerrain(null);
+    controller.setLayerVisibility('natural-feature-patterns', false);
+    map.setTerrain(terrain);
+    expect(patternsVisibility()).toBe('visible');
+    map.setTerrain(null);
+    expect(patternsVisibility()).toBe('none');
+
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        visibility: { 'natural-feature-patterns': false },
+        naturalFeaturePatternsIn3d: true,
+      });
+    });
+
+    // A reload that starts in 3D restores the 3D choice from the same browser database.
+    const reloaded = createTestServices().mapLayers;
+    if (reloaded === null) return;
+    const reloadedMap = new FakeLayerMap();
+    reloadedMap.terrain = terrain;
+    reloaded.attach(reloadedMap as unknown as MapLibreMap);
+    await reloaded.restorePersistedState();
+    expect(reloadedMap.visibility.get(mapLayerIds.landcoverPatterns)).toBe('visible');
   });
 
   it('generates basemap images on demand and leaves other images to their owners', async () => {
@@ -1050,6 +1134,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
         shadeAboveSatellite: true,
+        demTileSize: 512,
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
@@ -1207,6 +1292,13 @@ describe('MapLibreLayerController', () => {
     );
     expect(Math.max(...importedTrackLineLayerIdsInOrder)).toBeLessThan(
       Math.min(...labelLayerIndices),
+    );
+    // Track lines end the 3D-draped line stack directly below the first basemap icons.
+    expect(Math.max(...importedTrackLineLayerIdsInOrder)).toBeLessThan(
+      [...map.layers.keys()].indexOf(mapLayerIds.fords),
+    );
+    expect(Math.min(...importedTrackLineLayerIdsInOrder)).toBeGreaterThan(
+      [...map.layers.keys()].indexOf(mapLayerIds.cliffs),
     );
     expect([...map.layers.keys()].indexOf(importedTrackLayerIds.trace)).toBeGreaterThan(
       Math.max(...labelLayerIndices),
@@ -1968,6 +2060,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
         shadeAboveSatellite: true,
+        demTileSize: 512,
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
@@ -2020,14 +2113,22 @@ describe('MapLibreLayerController', () => {
     expect(layerOrder.indexOf(terrainOverlayLayerIds.contourMinor)).toBeGreaterThan(
       layerOrder.indexOf(mapLayerIds.waterways),
     );
-    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeLessThan(
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourIndex)).toBeLessThan(
       layerOrder.indexOf(mapLayerIds.water),
+    );
+    // Labels sit with the other labels so contour lines stay in the 3D-draped line stack.
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeGreaterThan(
+      layerOrder.indexOf(mapLayerIds.fords),
+    );
+    expect(layerOrder.indexOf(terrainOverlayLayerIds.contourLabels)).toBeLessThan(
+      layerOrder.indexOf(mapLayerIds.hikingPoiLabels),
     );
 
     expect(
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 25,
         shadeAboveSatellite: false,
+        demTileSize: 512,
       }),
     ).toEqual({ status: 'success' });
     const updatedSource = map.sources.get('terrain-contours') as {
@@ -2051,6 +2152,38 @@ describe('MapLibreLayerController', () => {
       maxzoom: 12,
       encoding: 'terrarium',
     });
+  });
+
+  it('rebuilds the DEM source at the chosen tile size and keeps 3D terrain on it', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const terrain = { source: 'terrain-dem', exaggeration: 1.15 };
+    map.terrain = terrain;
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        ...controller.getTerrainOverlayPreferences(),
+        demTileSize: 256,
+      }),
+    ).toEqual({ status: 'success' });
+
+    expect(map.sources.get('terrain-dem')).toMatchObject({ tileSize: 256 });
+    expect(map.layers.has(terrainOverlayLayerIds.reliefShade)).toBe(true);
+    // Terrain is detached around the rebuild and restored with the same options.
+    expect(map.terrainCalls).toEqual([null, terrain]);
+    expect(map.terrain).toBe(terrain);
+    await waitFor(async () => {
+      expect(
+        (await services.database.loadMapLayerPreferences()).terrainOverlays.demTileSize,
+      ).toBe(256);
+    });
+
+    // An unchanged size leaves the source and terrain alone.
+    controller.setTerrainOverlayPreferences(controller.getTerrainOverlayPreferences());
+    expect(map.terrainCalls).toHaveLength(2);
   });
 
   it('publishes terrain loading only after sustained DEM loading while relief is in use', () => {
@@ -2138,6 +2271,11 @@ describe('MapLibreLayerController', () => {
     expect(raster.tiles[0]).toContain(`application_origin=${originCacheKey}`);
     expect(raster.bounds).toEqual([44, 42, 45, 43]);
     expect(map.layers.has(sentinelMapLayerIds.footprint)).toBe(true);
+    // The footprint line stays in the 3D-draped line stack below the first basemap icons.
+    const layerOrder = [...map.layers.keys()];
+    expect(layerOrder.indexOf(sentinelMapLayerIds.footprint)).toBe(
+      layerOrder.indexOf(mapLayerIds.fords) - 1,
+    );
     expect(mapLayerStore.getState().appliedImagery).toMatchObject({
       status: 'ready',
       sceneId: 'scene-a',
@@ -2756,6 +2894,7 @@ describe('MapLibreLayerController', () => {
         'terrain-relief': false,
         'elevation-isolines': false,
         'natural-features': true,
+        'natural-feature-patterns': true,
         'restricted-areas': false,
         'detail-context': true,
         'hiking-paths': true,
@@ -2764,6 +2903,7 @@ describe('MapLibreLayerController', () => {
         'imported-tracks': false,
         'track-elevation-gradient': false,
       },
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: 0.55,
       importedTrackOpacity: 0.6,
       weatherMapOpacity: 0.7,
@@ -2772,6 +2912,7 @@ describe('MapLibreLayerController', () => {
       terrainOverlays: {
         contourIntervalMeters: 25,
         shadeAboveSatellite: true,
+        demTileSize: 256,
       },
     });
     const map = new FakeLayerMap();
@@ -2803,6 +2944,7 @@ describe('MapLibreLayerController', () => {
     expect(controller.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
+      demTileSize: 256,
     });
   });
 
@@ -2817,6 +2959,7 @@ describe('MapLibreLayerController', () => {
         'satellite-imagery': true,
         'napr-orthophoto': true,
       },
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
@@ -2850,6 +2993,7 @@ describe('MapLibreLayerController', () => {
     if (controller === null) return;
     await services.database.saveMapLayerPreferences({
       visibility: { ...mapLayerStore.getState().visibility, 'google-satellite': true },
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
@@ -2878,6 +3022,7 @@ describe('MapLibreLayerController', () => {
     if (controller === null) return;
     await services.database.saveMapLayerPreferences({
       visibility: mapLayerStore.getState().visibility,
+      naturalFeaturePatternsIn3d: false,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,

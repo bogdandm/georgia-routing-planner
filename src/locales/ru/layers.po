@@ -159,10 +159,10 @@ msgstr "Мировые спутниковые снимки и аэроснимк
 msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
 
-#. js-lingui-id: hUgQwQ
+#. js-lingui-id: hh7zer
 #: src/presentation/layers/LayersPanel.tsx
-msgid "Forest, swamp, scrub, orchard, scree, and cemetery signs. Saved separately for 2D and 3D; off in 3D by default."
-msgstr "Знаки леса, болот, кустарника, садов, осыпей и кладбищ. Сохраняется отдельно для 2D и 3D; в 3D по умолчанию выключено."
+msgid "Forest, swamp, scrub, orchard, scree, cemetery, and protected-area NR signs. Saved separately for 2D and 3D; off in 3D by default."
+msgstr "Знаки леса, болот, кустарника, садов, осыпей, кладбищ и знаки NR охраняемых территорий. Сохраняется отдельно для 2D и 3D; в 3D по умолчанию выключено."
 
 #. js-lingui-id: 9ARWz1
 #: src/presentation/layers/LayersPanel.tsx
@@ -178,6 +178,11 @@ msgstr "Спутниковые снимки Google"
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Google satellite tiles for the current map view."
 msgstr "Снимки Google для видимой области карты."
+
+#. js-lingui-id: eUNcuD
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Green outlines, sparse NR signs, and one name label for national parks and nature reserves."
+msgstr "Зелёные контуры, редкие знаки NR и одна подпись с названием для национальных парков и заповедников."
 
 #. js-lingui-id: VL5S_6
 #: src/presentation/layers/LayersPanel.tsx
@@ -270,6 +275,11 @@ msgstr "Тропы, грунтовые дороги, пешеходные дор
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Places and POIs"
 msgstr "Места и объекты"
+
+#. js-lingui-id: -om0ca
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Protected areas"
+msgstr "Охраняемые территории"
 
 #. js-lingui-id: QQ1vZI
 #: src/presentation/layers/LayersPanel.tsx

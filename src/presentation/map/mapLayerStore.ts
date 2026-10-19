@@ -205,6 +205,7 @@ const initialMapLayerState: MapLayerState = {
     'natural-features': true,
     'natural-feature-patterns': true,
     'restricted-areas': true,
+    'protected-areas': true,
     'detail-context': true,
     'hiking-paths': true,
     roads: true,

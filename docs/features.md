@@ -384,10 +384,11 @@ MapLibre layer IDs; native IDs never reach the UI.
 - **Terrain:** relief shading, elevation isolines, and contour spacing.
 - **OpenStreetMap:** **OSM detail**, Hiking paths, Roads, Places and POIs, Natural
   features with its indented **Area patterns** (the GOST forest, swamp, scrub, planting,
-  scree, and cemetery signs, usable only while Natural features is on; 2D and 3D keep
-  separate saved choices, and 3D starts with them off because each pattern adds work to
-  every draped terrain texture), Restricted areas, and one opacity that applies to OSM
-  layers and isolines while a raster is active.
+  scree, and cemetery signs and the protected-area NR sign, usable only while Natural
+  features is on; 2D and 3D keep separate saved choices, and 3D starts with them off
+  because each pattern adds work to every draped terrain texture), Restricted areas,
+  Protected areas (outline, NR sign while Area patterns is on, and name), and one
+  opacity that applies to OSM layers and isolines while a raster is active.
 
 Visibility, opacities, imagery choice, rendering mode, stretch, and terrain preferences
 persist locally. Sentinel scene data is never persisted; imagery starts empty unless a
@@ -586,9 +587,15 @@ the national-system `q` of an English name is written `k` unless `u` follows
 (`Qelitsadi Lake` → `Kelitsadi Lake`); track names keep the OSM English spelling. When
 satellite imagery is visible, vegetation and land-use fills and their signs are removed.
 Military areas show a red perimeter; the map does not claim to identify all private
-land. Passes are crosses, cliffs are brown GOST toothed lines pointing downhill, and
-land cover carries sparse GOST signs: blue dashes for swamps, trees for forest (type is
-not in the data), dot clumps for scrub, dots for scree, crosses for cemeteries, and one
+land. Protected land (national parks, nature reserves, and other protected areas except
+protected landscapes) has a green outline from z7, a sparse translucent green "NR" sign
+from z9 (sparser from z13), and from z8 its name at the provider's label point inside
+each part of the area, all kept over imagery. Land country borders are solid black
+lines. Lines of disputed territories below country level are a bold red dash; like the
+other borders, they have no own toggle and follow the OSM overlay opacity over imagery.
+Passes are crosses, cliffs are brown GOST toothed lines pointing downhill, and land
+cover carries sparse GOST signs: blue dashes for swamps, trees for forest (type is not
+in the data), dot clumps for scrub, dots for scree, crosses for cemeteries, and one
 regular circle grid for every planting (orchards, vineyards, nurseries). Fords, huts,
 shelters, camp sites, drinking water, viewpoints, and guideposts have their own icons,
 intermittent streams are dashed, and hotels and guest houses are not drawn. Invalid

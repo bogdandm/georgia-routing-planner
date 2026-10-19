@@ -165,6 +165,16 @@ const labelLayout: NonNullable<SymbolLayerSpecification['layout']> = {
   'text-justify': 'auto',
 };
 
+/**
+ * Protected land drawn by the style. `conservation` (protected landscapes) covers
+ * inhabited and farmed land too broadly to mark as a reserve, so it is left out.
+ */
+const protectedAreaFilter: ExpressionSpecification = [
+  '!=',
+  ['get', 'class'],
+  'conservation',
+];
+
 function createBasemapLayers(
   sourceLayers: MapProviderConfiguration['vector']['sourceLayers'],
   detailSourceLayers: MapProviderConfiguration['detailVector']['sourceLayers'],
@@ -440,14 +450,39 @@ function createBasemapLayers(
       },
     },
     {
-      id: mapLayerIds.parks,
+      // Protected-land polygons: national parks, reserves, and other
+      // `boundary=protected_area` land except protected landscapes. At country scale the
+      // sign would only add noise, so the outline appears first and the NR sign follows
+      // from z9; from z13 a sparser tile keeps a small visible area from filling with
+      // signs.
+      id: mapLayerIds.protectedAreas,
       type: 'fill',
       source,
       'source-layer': sourceLayers.parks,
+      minzoom: 9,
+      filter: protectedAreaFilter,
       paint: {
-        'fill-antialias': false,
-        'fill-color': mapVisualPalette.vegetation.park,
-        ...mapVisualModePaint.vector[mapLayerIds.parks],
+        'fill-pattern': [
+          'step',
+          ['zoom'],
+          basemapImageIds.protectedAreaPattern,
+          13,
+          basemapImageIds.protectedAreaSparsePattern,
+        ],
+        ...mapVisualModePaint.vector[mapLayerIds.protectedAreas],
+      },
+    },
+    {
+      id: mapLayerIds.protectedAreaOutlines,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.parks,
+      minzoom: 7,
+      filter: protectedAreaFilter,
+      paint: {
+        'line-color': mapVisualPalette.protectedArea.line,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1, 14, 2.5],
+        ...mapVisualModePaint.vector[mapLayerIds.protectedAreaOutlines],
       },
     },
     {
@@ -495,16 +530,63 @@ function createBasemapLayers(
       },
     },
     {
+      // Region lines and every sea border, disputed or not; land country borders and
+      // disputed land lines have their own layers below.
       id: mapLayerIds.boundaries,
       type: 'line',
       source,
       'source-layer': sourceLayers.boundaries,
-      filter: ['all', ['in', ['get', 'admin_level'], ['literal', [2, 4]]]],
+      filter: [
+        'all',
+        ['in', ['get', 'admin_level'], ['literal', [2, 4]]],
+        [
+          'any',
+          ['==', ['get', 'maritime'], 1],
+          ['all', ['==', ['get', 'admin_level'], 4], ['!=', ['get', 'disputed'], 1]],
+        ],
+      ],
       paint: {
-        'line-color': mapVisualPalette.boundary,
+        'line-color': mapVisualPalette.boundary.region,
         'line-dasharray': [3, 2],
-        'line-opacity': 0.7,
         'line-width': ['match', ['get', 'admin_level'], 2, 1.5, 0.8],
+        ...mapVisualModePaint.vector[mapLayerIds.boundaries],
+      },
+    },
+    {
+      // Includes disputed country-level segments: they still separate two countries.
+      id: mapLayerIds.countryBorders,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.boundaries,
+      filter: [
+        'all',
+        ['==', ['get', 'admin_level'], 2],
+        ['!=', ['get', 'maritime'], 1],
+      ],
+      layout: { 'line-join': 'round' },
+      paint: {
+        'line-color': mapVisualPalette.boundary.country,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 1, 10, 1.8, 14, 2.6],
+        ...mapVisualModePaint.vector[mapLayerIds.countryBorders],
+      },
+    },
+    {
+      // OpenMapTiles flags lines of disputed territories below country level.
+      id: mapLayerIds.disputedBorders,
+      type: 'line',
+      source,
+      'source-layer': sourceLayers.boundaries,
+      filter: [
+        'all',
+        ['==', ['get', 'disputed'], 1],
+        ['!=', ['get', 'admin_level'], 2],
+        ['!=', ['get', 'maritime'], 1],
+      ],
+      paint: {
+        'line-color': mapVisualPalette.boundary.disputed,
+        'line-dasharray': [2, 1.5],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.5, 10, 2.5, 14, 3.5],
+        ...mapVisualModePaint.vector[mapLayerIds.disputedBorders],
       },
     },
     {
@@ -884,6 +966,22 @@ function createBasemapLayers(
       paint: {
         'text-color': mapVisualPalette.terrain.ridge,
         'text-halo-color': mapVisualPalette.text.haloVector,
+        'text-halo-width': 1,
+      },
+    },
+    {
+      // The provider publishes one point per protected area inside its polygon, so each
+      // name is drawn once near the middle instead of repeating along the outline.
+      id: mapLayerIds.protectedAreaLabels,
+      type: 'symbol',
+      source,
+      'source-layer': sourceLayers.parks,
+      minzoom: 8,
+      filter: ['all', ['==', ['geometry-type'], 'Point'], protectedAreaFilter],
+      layout: { ...labelLayout, 'text-size': 12 },
+      paint: {
+        'text-color': mapVisualPalette.protectedArea.label,
+        ...mapVisualModePaint.vector[mapLayerIds.protectedAreaLabels],
         'text-halo-width': 1,
       },
     },

@@ -269,6 +269,11 @@ msgstr "Contours · worker restarting"
 msgid "Coordinates are outside valid map bounds."
 msgstr "Coordinates are outside valid map bounds."
 
+#. js-lingui-id: ummHkM
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Country border"
+msgstr "Country border"
+
 #. js-lingui-id: kaKzkK
 #: src/presentation/shell/AboutDialog.tsx
 msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
@@ -298,6 +303,11 @@ msgstr "Deterministic 9 km model forecast; not a measured weather-station observ
 #: src/presentation/shell/WorkspaceRail.tsx
 msgid "Developer diagnostics"
 msgstr "Developer diagnostics"
+
+#. js-lingui-id: -1nBD_
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Disputed territory line"
+msgstr "Disputed territory line"
 
 #. js-lingui-id: DPfwMq
 #: src/presentation/shell/OnboardingTour.tsx
@@ -860,6 +870,11 @@ msgstr "Preparing elevation…"
 #: src/presentation/shell/OperationalStatus.tsx
 msgid "Preparing the selected Sentinel scene…"
 msgstr "Preparing the selected Sentinel scene…"
+
+#. js-lingui-id: kCRgce
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Protected area"
+msgstr "Protected area"
 
 #. js-lingui-id: ckH3fT
 #: src/presentation/shell/OperationalStatus.tsx

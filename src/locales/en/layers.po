@@ -159,10 +159,10 @@ msgstr "Esri global satellite and aerial imagery."
 msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
 
-#. js-lingui-id: hUgQwQ
+#. js-lingui-id: hh7zer
 #: src/presentation/layers/LayersPanel.tsx
-msgid "Forest, swamp, scrub, orchard, scree, and cemetery signs. Saved separately for 2D and 3D; off in 3D by default."
-msgstr "Forest, swamp, scrub, orchard, scree, and cemetery signs. Saved separately for 2D and 3D; off in 3D by default."
+msgid "Forest, swamp, scrub, orchard, scree, cemetery, and protected-area NR signs. Saved separately for 2D and 3D; off in 3D by default."
+msgstr "Forest, swamp, scrub, orchard, scree, cemetery, and protected-area NR signs. Saved separately for 2D and 3D; off in 3D by default."
 
 #. js-lingui-id: 9ARWz1
 #: src/presentation/layers/LayersPanel.tsx
@@ -178,6 +178,11 @@ msgstr "Google satellite imagery"
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Google satellite tiles for the current map view."
 msgstr "Google satellite tiles for the current map view."
+
+#. js-lingui-id: eUNcuD
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Green outlines, sparse NR signs, and one name label for national parks and nature reserves."
+msgstr "Green outlines, sparse NR signs, and one name label for national parks and nature reserves."
 
 #. js-lingui-id: VL5S_6
 #: src/presentation/layers/LayersPanel.tsx
@@ -270,6 +275,11 @@ msgstr "Paths, tracks, footways, and steps."
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Places and POIs"
 msgstr "Places and POIs"
+
+#. js-lingui-id: -om0ca
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Protected areas"
+msgstr "Protected areas"
 
 #. js-lingui-id: QQ1vZI
 #: src/presentation/layers/LayersPanel.tsx

@@ -142,6 +142,7 @@ describe('createHikingMapStyle', () => {
       mapLayerIds.roadLabels,
       mapLayerIds.riverLabels,
       mapLayerIds.ridgeLabels,
+      mapLayerIds.protectedAreaLabels,
       mapLayerIds.waterLabels,
     ]);
   });
@@ -380,6 +381,117 @@ describe('createHikingMapStyle', () => {
     );
     expect(restricted).toHaveProperty('paint.line-opacity', 0.88);
     expect(restricted).toHaveProperty('filter', ['==', ['get', 'class'], 'military']);
+  });
+
+  it('draws land country borders black and disputed-territory lines as a red dash', () => {
+    const style = createHikingMapStyle(configuration);
+    const boundaryLayerIds = [
+      mapLayerIds.boundaries,
+      mapLayerIds.countryBorders,
+      mapLayerIds.disputedBorders,
+    ];
+    // Property sets as published in OpenFreeMap boundary tiles.
+    const layersDrawing = (properties: Record<string, string | number>) =>
+      boundaryLayerIds.filter((layerId) => {
+        const layer = style.layers.find((candidate) => candidate.id === layerId);
+        if (layer?.type !== 'line') throw new Error(`Missing line layer ${layerId}`);
+        return featureFilter(layer.filter, 'filter').filter(
+          { zoom: 10 },
+          { type: 2, properties },
+        );
+      });
+
+    expect(
+      layersDrawing({
+        disputed: 1,
+        disputed_name: 'Territory',
+        maritime: 0,
+        admin_level: 3,
+      }),
+    ).toEqual([mapLayerIds.disputedBorders]);
+    expect(
+      layersDrawing({
+        disputed: 1,
+        disputed_name: 'Territory',
+        maritime: 0,
+        admin_level: 2,
+      }),
+    ).toEqual([mapLayerIds.countryBorders]);
+    expect(
+      layersDrawing({
+        adm0_l: 'GEO',
+        adm0_r: 'ARM',
+        disputed: 0,
+        maritime: 0,
+        admin_level: 2,
+      }),
+    ).toEqual([mapLayerIds.countryBorders]);
+    expect(
+      layersDrawing({ adm0_r: 'GEO', disputed: 0, maritime: 1, admin_level: 2 }),
+    ).toEqual([mapLayerIds.boundaries]);
+    expect(
+      layersDrawing({ disputed: 1, disputed_name: 'Sea', maritime: 1, admin_level: 2 }),
+    ).toEqual([mapLayerIds.boundaries]);
+    expect(layersDrawing({ disputed: 0, maritime: 0, admin_level: 4 })).toEqual([
+      mapLayerIds.boundaries,
+    ]);
+    expect(layersDrawing({ disputed: 0, maritime: 0, admin_level: 3 })).toEqual([]);
+
+    const country = style.layers.find(
+      (layer) => layer.id === mapLayerIds.countryBorders,
+    );
+    const disputed = style.layers.find(
+      (layer) => layer.id === mapLayerIds.disputedBorders,
+    );
+    expect(country).toHaveProperty(
+      'paint.line-color',
+      mapVisualPalette.boundary.country,
+    );
+    expect(country).not.toHaveProperty('paint.line-dasharray');
+    expect(disputed).toHaveProperty(
+      'paint.line-color',
+      mapVisualPalette.boundary.disputed,
+    );
+    expect(disputed).toHaveProperty('paint.line-dasharray');
+  });
+
+  it('labels each protected area once from its provider point, not along its polygon', () => {
+    const style = createHikingMapStyle(configuration);
+    const labels = style.layers.find(
+      (layer) => layer.id === mapLayerIds.protectedAreaLabels,
+    );
+    if (labels?.type !== 'symbol') throw new Error('Missing protected-area labels');
+    const filter = featureFilter(labels.filter, 'filter');
+    const properties = { class: 'national_park', name: 'Park' };
+
+    expect(filter.filter({ zoom: 12 }, { type: 1, properties })).toBe(true);
+    expect(filter.filter({ zoom: 12 }, { type: 3, properties })).toBe(false);
+  });
+
+  it('draws national parks and reserves but leaves protected landscapes out', () => {
+    const style = createHikingMapStyle(configuration);
+    // Classes observed in OpenFreeMap park tiles over Georgia; each layer is checked
+    // with the geometry it draws: polygons for sign and outline, points for the name.
+    const drawn = (protectionClass: string) =>
+      (
+        [
+          [mapLayerIds.protectedAreas, 3],
+          [mapLayerIds.protectedAreaOutlines, 3],
+          [mapLayerIds.protectedAreaLabels, 1],
+        ] as const
+      ).map(([layerId, type]) => {
+        const layer = style.layers.find((candidate) => candidate.id === layerId);
+        if (layer === undefined || !('filter' in layer)) throw new Error(layerId);
+        return featureFilter(layer.filter, 'filter').filter(
+          { zoom: 12 },
+          { type, properties: { class: protectionClass } },
+        );
+      });
+
+    for (const protectionClass of ['national_park', 'sustainable', 'nature_reserve']) {
+      expect(drawn(protectionClass)).toEqual([true, true, true]);
+    }
+    expect(drawn('conservation')).toEqual([false, false, false]);
   });
 
   it('labels English first and romanizes native names like track names', () => {

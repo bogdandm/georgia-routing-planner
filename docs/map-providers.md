@@ -43,7 +43,7 @@ generated on first use (`src/presentation/map/basemapSymbols.ts`).
 | ----------------------------- | --------------------- | ---------------------------------------------------------------------------- |
 | Land cover                    | `landcover`           | `class` (`wood`, `grass`, `farmland`, `wetland`, `ice`, etc.) and `subclass` |
 | Human land use                | `landuse`             | `class` (`military`, residential, and other uses)                            |
-| Protected land                | `park`                | `class`, names                                                               |
+| Protected land                | `park`                | free-form `class` from `protection_title`; all but `conservation` drawn      |
 | Water                         | `water`, `waterway`   | geometry, `class`, `intermittent` (dashed)                                   |
 | Boundaries                    | `boundary`            | `admin_level`, `disputed`, `maritime`                                        |
 | Overview paths and bridleways | `transportation`      | `class`, `subclass`, `brunnel`; overview paths stop at z13                   |
@@ -68,6 +68,13 @@ the style. Land-cover `ice` supplies glaciers and land-use `military` supplies
 restricted areas; the schema has no dependable access/ownership field, so
 private-property closures are not inferred. New source-layer families must get a Layers
 control in the same change as their style.
+
+Land boundaries with `admin_level = 2` are country borders, including segments flagged
+`disputed`. Lines with `disputed = 1` below country level are drawn as
+disputed-territory lines. The flag is the only signal: a de facto line published as an
+ordinary boundary is indistinguishable by its fields from other lines of its level and
+is not highlighted. Region lines (`admin_level = 4`) and sea borders stay grey and
+dashed.
 
 Lodging is limited to `alpine_hut` and `wilderness_hut`; hotels and guest houses are not
 drawn. Cliffs follow the OSM convention that the lower side lies to the right of the

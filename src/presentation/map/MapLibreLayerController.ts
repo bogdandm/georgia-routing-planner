@@ -222,12 +222,15 @@ const openStreetMapOpacityProperties = {
   [mapLayerIds.brownfieldAreas]: ['fill-opacity'],
   [mapLayerIds.buildings]: ['fill-opacity'],
   [mapLayerIds.water]: ['fill-opacity'],
-  [mapLayerIds.parks]: ['fill-opacity'],
+  [mapLayerIds.protectedAreas]: ['fill-opacity'],
+  [mapLayerIds.protectedAreaOutlines]: ['line-opacity'],
   [mapLayerIds.waterways]: ['line-opacity'],
   [mapLayerIds.intermittentWaterways]: ['line-opacity'],
   [mapLayerIds.ridges]: ['line-opacity'],
   [mapLayerIds.cliffs]: ['line-opacity'],
   [mapLayerIds.boundaries]: ['line-opacity'],
+  [mapLayerIds.countryBorders]: ['line-opacity'],
+  [mapLayerIds.disputedBorders]: ['line-opacity'],
   [mapLayerIds.restrictedAreas]: ['line-opacity'],
   [mapLayerIds.hikingPaths]: ['line-opacity'],
   [mapLayerIds.hikingPathDetails]: ['line-opacity'],
@@ -240,6 +243,7 @@ const openStreetMapOpacityProperties = {
   [mapLayerIds.roadLabels]: ['text-opacity'],
   [mapLayerIds.riverLabels]: ['text-opacity'],
   [mapLayerIds.ridgeLabels]: ['text-opacity'],
+  [mapLayerIds.protectedAreaLabels]: ['text-opacity'],
   [mapLayerIds.hikingPois]: ['icon-opacity'],
   [mapLayerIds.hikingPoiLabels]: ['text-opacity'],
   [mapLayerIds.peaks]: ['circle-opacity', 'circle-stroke-opacity'],
@@ -424,13 +428,20 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.waterLabels,
     mapLayerIds.ridgeLabels,
   ],
-  // GOST area signs: forest, swamp, scrub, plantation, scree, and cemetery patterns.
+  // GOST area signs: forest, swamp, scrub, plantation, scree, and cemetery patterns, plus
+  // the protected-area NR sign, which therefore also needs Protected areas on.
   'natural-feature-patterns': [
     mapLayerIds.landcoverPatterns,
     mapLayerIds.landcoverPatternDetails,
     mapLayerIds.cemeteries,
+    mapLayerIds.protectedAreas,
   ],
   'restricted-areas': [mapLayerIds.restrictedAreas],
+  'protected-areas': [
+    mapLayerIds.protectedAreas,
+    mapLayerIds.protectedAreaOutlines,
+    mapLayerIds.protectedAreaLabels,
+  ],
   'detail-context': [mapLayerIds.brownfieldAreas, mapLayerIds.buildings],
   'hiking-paths': [
     mapLayerIds.hikingPaths,
@@ -485,6 +496,38 @@ function logicalLayerVisible(
 ): boolean {
   const parent = logicalSubLayers.find((subLayer) => subLayer.id === layerId)?.parent;
   return visibility[layerId] && (parent === undefined || visibility[parent]);
+}
+
+/** Logical layers whose native layers are fixed style layers, in application order. */
+const baseLogicalLayerIds = [
+  'google-satellite',
+  'bing-satellite',
+  'esri-satellite',
+  'napr-orthophoto',
+  'terrain-relief',
+  'elevation-isolines',
+  'natural-features',
+  'natural-feature-patterns',
+  'restricted-areas',
+  'protected-areas',
+  'detail-context',
+  'hiking-paths',
+  'roads',
+  'places-and-pois',
+  'imported-tracks',
+  'track-elevation-gradient',
+] as const satisfies readonly (keyof typeof logicalNativeLayerGroups)[];
+
+/** A native layer listed in several logical groups draws only while all of them do. */
+function nativeLayerVisible(
+  nativeId: string,
+  visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+): boolean {
+  return baseLogicalLayerIds.every(
+    (layerId) =>
+      !logicalNativeLayerGroups[layerId].includes(nativeId) ||
+      logicalLayerVisible(layerId, visibility),
+  );
 }
 
 const importedTrackCasingWidth = 7;
@@ -1191,17 +1234,20 @@ export class MapLibreLayerController {
 
     const nativeVisible = logicalLayerVisible(layerId, visibility);
     for (const nativeId of nativeLayerIds) {
-      map.setLayoutProperty(nativeId, 'visibility', nativeVisible ? 'visible' : 'none');
+      map.setLayoutProperty(
+        nativeId,
+        'visibility',
+        nativeVisible && nativeLayerVisible(nativeId, visibility) ? 'visible' : 'none',
+      );
     }
     for (const subLayer of logicalSubLayers) {
       if (subLayer.parent !== layerId) continue;
-      const subLayerVisible = logicalLayerVisible(subLayer.id, visibility);
       for (const nativeId of logicalNativeLayerGroups[subLayer.id]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
             nativeId,
             'visibility',
-            subLayerVisible ? 'visible' : 'none',
+            nativeLayerVisible(nativeId, visibility) ? 'visible' : 'none',
           );
         }
       }
@@ -3343,30 +3389,13 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null) return;
     const { visibility } = mapLayerStore.getState();
-    for (const layerId of [
-      'google-satellite',
-      'bing-satellite',
-      'esri-satellite',
-      'napr-orthophoto',
-      'terrain-relief',
-      'elevation-isolines',
-      'natural-features',
-      'natural-feature-patterns',
-      'restricted-areas',
-      'detail-context',
-      'hiking-paths',
-      'roads',
-      'places-and-pois',
-      'imported-tracks',
-      'track-elevation-gradient',
-    ] as const) {
-      const layerVisible = logicalLayerVisible(layerId, visibility);
+    for (const layerId of baseLogicalLayerIds) {
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
             nativeId,
             'visibility',
-            layerVisible ? 'visible' : 'none',
+            nativeLayerVisible(nativeId, visibility) ? 'visible' : 'none',
           );
         }
       }

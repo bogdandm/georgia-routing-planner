@@ -25,6 +25,7 @@ function createMapDouble() {
   );
   const originalThresholdCheck = vi.fn(() => true);
   const rotateHandler = { _isBelowThreshold: originalThresholdCheck };
+  const mapListeners = new Map<string, Set<() => void>>();
   return {
     unproject,
     panBy,
@@ -34,6 +35,10 @@ function createMapDouble() {
     originalThresholdCheck,
     /** Whether MapLibre's rotate handler would start rotating on the current move. */
     mayRotate: () => !rotateHandler._isBelowThreshold(),
+    /** Fires a MapLibre event that no gesture step caused, such as a keyboard move. */
+    fireMapEvent: (type: string) => {
+      for (const listener of mapListeners.get(type) ?? []) listener();
+    },
     map: {
       unproject,
       panBy,
@@ -42,6 +47,12 @@ function createMapDouble() {
       getZoom: () => 12.5,
       getMinZoom: () => 0,
       getMaxZoom: () => 22,
+      on: (type: string, listener: () => void) => {
+        mapListeners.set(type, (mapListeners.get(type) ?? new Set()).add(listener));
+      },
+      off: (type: string, listener: () => void) => {
+        mapListeners.get(type)?.delete(listener);
+      },
       easeTo,
       calculateCameraOptionsFromCameraLngLatAltRotation,
       _camera: {
@@ -393,13 +404,13 @@ describe('MapPointerGestureControl', () => {
     requestFrame.mockRestore();
   });
 
-  it('coasts briefly after a moving release and stops on the next press', () => {
+  it('coasts briefly after a moving release and stops on the next press or movement', () => {
     const frames: FrameRequestCallback[] = [];
     const requestFrame = vi
       .spyOn(window, 'requestAnimationFrame')
       .mockImplementation((callback) => frames.push(callback));
     const container = document.createElement('div');
-    const { easeTo, map } = createMapDouble();
+    const { easeTo, fireMapEvent, map } = createMapDouble();
     const onCameraGestureEnd = vi.fn();
     const control = new MapPointerGestureControl({
       pivotIndicator: createPivotDouble(),
@@ -417,12 +428,12 @@ describe('MapPointerGestureControl', () => {
       // 20 px over the 25 ms since the oldest recent move: 0.8 px/ms.
       window.dispatchEvent(mouseAt('mouseup', { button: 1 }, 25));
     };
-    /** Runs coast frames 1/60 s apart until none is requested; returns their count. */
+    /** Runs coast frames 1/60 s apart from the release until none is requested. */
     const runCoast = () => {
       let ran = 0;
       while (frames.length > 0 && ran < 100) {
-        frames.shift()?.(1_000 + (ran * 1_000) / 60);
         ran += 1;
+        frames.shift()?.(25 + (ran * 1_000) / 60);
       }
       return ran;
     };
@@ -440,12 +451,21 @@ describe('MapPointerGestureControl', () => {
     expect(onCameraGestureEnd).toHaveBeenCalledOnce();
 
     releaseMovingOrbit();
-    frames.shift()?.(2_000);
+    frames.shift()?.(42);
     const stepsBeforePress = easeTo.mock.calls.length;
     container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));
     expect(onCameraGestureEnd).toHaveBeenCalledTimes(2);
     runCoast();
     expect(easeTo).toHaveBeenCalledTimes(stepsBeforePress);
+
+    // A keyboard or programmatic move replaces the coast and settles on its own.
+    releaseMovingOrbit();
+    frames.shift()?.(42);
+    const stepsBeforeMove = easeTo.mock.calls.length;
+    fireMapEvent('movestart');
+    runCoast();
+    expect(easeTo).toHaveBeenCalledTimes(stepsBeforeMove);
+    expect(onCameraGestureEnd).toHaveBeenCalledTimes(2);
     control.detach();
     requestFrame.mockRestore();
   });

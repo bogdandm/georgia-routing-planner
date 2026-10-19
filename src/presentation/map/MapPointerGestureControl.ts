@@ -166,7 +166,7 @@ export class MapPointerGestureControl {
   #recentMoves: readonly PointerMove[] = [];
   /** Pixels per millisecond while a released gesture coasts; null while held or idle. */
   #coastVelocity: { readonly x: number; readonly y: number } | null = null;
-  #lastCoastFrameTime: number | null = null;
+  #lastCoastFrameTime = 0;
   #twoFingerTouch: TwoFingerTouch | null = null;
   /** Decision for the current two-finger gesture; null until one movement dominates. */
   #twoFingerIntent: TwoFingerIntent | null = null;
@@ -179,7 +179,9 @@ export class MapPointerGestureControl {
    * The owner treats the whole gesture as one movement: it skips the `moveend`s fired
    * while `movingCamera` is true and settles once in `onCameraGestureEnd`, which runs
    * when a gesture that moved the camera ends: after its release coast, on focus loss,
-   * on another press or wheel during the coast, or when 3D turns off.
+   * on another press or wheel during the coast, when 3D turns off, or on detach. A
+   * keyboard or programmatic movement replacing the coast settles through its own
+   * `moveend` instead.
    */
   public constructor({
     pivotIndicator = createOrbitPivotIndicator(),
@@ -245,7 +247,7 @@ export class MapPointerGestureControl {
       container.removeEventListener('touchend', this.handleTouchEnd, true);
       container.removeEventListener('touchcancel', this.handleTouchCancel, true);
     }
-    this.finishGesture();
+    this.endGesture();
     this.finishTouchGesture();
     this.#restoreRotationThreshold?.();
     this.#restoreRotationThreshold = null;
@@ -415,6 +417,15 @@ export class MapPointerGestureControl {
   };
 
   /**
+   * A keyboard, search, or fit movement replaces the coast: the next coast frame would
+   * stop its animation. That movement's own `moveend` settles the view, so the coast
+   * ends without settling.
+   */
+  private readonly handleCoastInterruption = (): void => {
+    if (!this.#movingCamera) this.finishGesture();
+  };
+
+  /**
    * Ends a held gesture. A pointer still moving at release coasts on for a moment with
    * exponentially decaying speed, like Google Earth's slight inertia; one that had
    * stopped ends at once.
@@ -442,12 +453,14 @@ export class MapPointerGestureControl {
       this.handleCoastWheel,
       observerListenerOptions,
     );
+    this.#map?.on('movestart', this.handleCoastInterruption);
     if (this.#frameRequest !== null) {
       window.cancelAnimationFrame(this.#frameRequest);
       this.applyPendingMove();
     }
     this.#coastVelocity = { x: travelX / span, y: travelY / span };
-    this.#lastCoastFrameTime = null;
+    // Event and frame times share one clock, so the first frame coasts from the release.
+    this.#lastCoastFrameTime = time;
     this.#frameRequest = window.requestAnimationFrame(this.coast);
   }
 
@@ -455,10 +468,8 @@ export class MapPointerGestureControl {
     this.#frameRequest = null;
     const velocity = this.#coastVelocity;
     if (velocity === null) return;
-    const elapsed =
-      this.#lastCoastFrameTime === null
-        ? 1000 / 60
-        : Math.min(time - this.#lastCoastFrameTime, 100);
+    // A frame's time is when it began, which can precede the release event within it.
+    const elapsed = Math.min(Math.max(time - this.#lastCoastFrameTime, 0), 100);
     this.#lastCoastFrameTime = time;
     // Travel of the decaying velocity over this frame, exact for any frame length.
     const decay = Math.exp(-elapsed / coastTimeConstantMs);
@@ -568,7 +579,7 @@ export class MapPointerGestureControl {
     this.#cameraMoved = false;
     this.#recentMoves = [];
     this.#coastVelocity = null;
-    this.#lastCoastFrameTime = null;
+    this.#lastCoastFrameTime = 0;
     this.#gesture = null;
     this.#gestureButton = null;
     this.#orbitAnchor = null;
@@ -582,6 +593,7 @@ export class MapPointerGestureControl {
       this.handleCoastWheel,
       observerListenerOptions,
     );
+    this.#map?.off('movestart', this.handleCoastInterruption);
   }
 
   private finishTouchGesture(): void {

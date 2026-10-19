@@ -1417,20 +1417,19 @@ export function MapWorkspace({
     }
   };
   const handleLayerPresetChange = useCallback(
-    (preset: MapLayerPreset): boolean => {
-      if (mapLayers === null) return false;
+    (preset: MapLayerPreset): 'map' | 'navigated' => {
+      if (mapLayers === null) return 'map';
       if (
         preset === 'sentinel-2' &&
         mapLayers.getAppliedScene() === null &&
         !mosaicImageryAvailable
       ) {
         openWorkspaceTab('satellite');
-        return true;
+        return 'navigated';
       }
       const result = mapLayers.setMapLayerPreset(preset);
-      if (result.status === 'success') return true;
-      setLayerChangeFailed(true);
-      return false;
+      if (result.status === 'failed') setLayerChangeFailed(true);
+      return 'map';
     },
     [mapLayers, mosaicImageryAvailable, openWorkspaceTab],
   );

@@ -7,11 +7,13 @@ import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import {
   CircularProgress,
+  ClickAwayListener,
   ListItemIcon,
   ListItemText,
-  Menu,
   MenuItem,
+  MenuList,
   Paper,
+  Popper,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -37,7 +39,8 @@ interface MapViewControlsProps {
   readonly weatherMapDisabled: boolean;
   readonly measurementActive: boolean;
   readonly onTerrainModeChange: (mode: TerrainMode) => void;
-  readonly onLayerPresetChange: (preset: MapLayerPreset) => boolean;
+  /** Returns `navigated` when the choice opened a workspace panel instead of the map. */
+  readonly onLayerPresetChange: (preset: MapLayerPreset) => 'map' | 'navigated';
   readonly onHybridOverlayChange: (enabled: boolean) => void;
   readonly onWeatherMapChange: (enabled: boolean) => void;
   readonly onOpenLayersTab: () => void;
@@ -97,6 +100,9 @@ export function MapViewControls({
   const selectedMode: TerrainMode =
     terrainState === 'terrain' || terrainState === 'enabling' ? 'terrain' : 'flat';
   const menuOpen = menuButton !== null;
+  const closeMenu = () => {
+    setMenuButton(null);
+  };
 
   const handleTerrainModeChange = (
     _event: MouseEvent<HTMLElement>,
@@ -194,8 +200,9 @@ export function MapViewControls({
               aria-label={t`Choose map layer preset`}
               disabled={layerPresetDisabled}
               onClick={(event) => {
-                setMenuButton(event.currentTarget);
+                setMenuButton(menuOpen ? null : event.currentTarget);
               }}
+              selected={menuOpen}
               sx={{ borderRadius: 0, mt: '-1px', width: 40, height: 36, p: 0 }}
               value="layer-preset"
             >
@@ -217,112 +224,140 @@ export function MapViewControls({
           </ToggleButton>
         </Tooltip>
       </Paper>
-      <Menu
+      {/*
+        Non-modal and inside the map: map gestures keep working while it is open, a
+        pointer press elsewhere closes it without being swallowed, and workspace panels
+        drawn above the map also cover it.
+      */}
+      <Popper
         anchorEl={menuButton}
-        anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
-        id={menuId}
-        onClose={() => {
-          setMenuButton(null);
-        }}
+        disablePortal
+        modifiers={[{ name: 'offset', options: { offset: [0, 8] } }]}
         open={menuOpen}
-        slotProps={{
-          list: { sx: { pb: 0 } },
-          paper: { sx: { ml: -1 } },
-        }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        variant="menu"
+        placement="left-start"
       >
-        {layerPresets.map((preset) => (
-          <MenuItem
-            aria-checked={activeLayerPreset === preset.value}
-            key={preset.value}
-            onClick={() => {
-              onLayerPresetChange(preset.value);
-            }}
-            role="menuitemradio"
-            selected={activeLayerPreset === preset.value}
-            sx={{ minHeight: 44, minWidth: 240, px: 2 }}
-          >
-            <ListItemText primary={t(preset.label)} />
-          </MenuItem>
-        ))}
-        <MenuItem
-          aria-checked={hybridOverlayEnabled}
-          disabled={hybridOverlayDisabled}
-          onClick={() => {
-            onHybridOverlayChange(!hybridOverlayEnabled);
-          }}
-          role="menuitemcheckbox"
-          sx={{ minHeight: 44, minWidth: 240, px: 2 }}
-        >
-          <ListItemIcon sx={{ minWidth: 36 }}>
-            {hybridOverlayEnabled ? (
-              <CheckBoxIcon fontSize="small" />
-            ) : (
-              <CheckBoxOutlineBlankIcon fontSize="small" />
-            )}
-          </ListItemIcon>
-          <ListItemText primary={t`OSM overlay`} />
-        </MenuItem>
-        <MenuItem
-          aria-checked={weatherMapEnabled}
-          disabled={weatherMapDisabled}
-          onClick={() => {
-            onWeatherMapChange(!weatherMapEnabled);
-          }}
-          role="menuitemcheckbox"
-          sx={{ minHeight: 44, minWidth: 240, px: 2 }}
-        >
-          <ListItemIcon sx={{ minWidth: 36 }}>
-            {weatherMapEnabled ? (
-              <CheckBoxIcon fontSize="small" />
-            ) : (
-              <CheckBoxOutlineBlankIcon fontSize="small" />
-            )}
-          </ListItemIcon>
-          <ListItemText
-            primary={t`Weather`}
-            secondary={t`Clouds, precipitation, and wind`}
-          />
-        </MenuItem>
-        <MenuItem
-          aria-checked={activeLayerPreset === 'sentinel-2'}
-          onClick={() => {
-            onLayerPresetChange('sentinel-2');
-          }}
-          role="menuitemradio"
-          selected={activeLayerPreset === 'sentinel-2'}
-          sx={{
-            display: 'inline-flex',
-            justifyContent: 'center',
-            minHeight: 40,
-            px: 1,
-            verticalAlign: 'top',
-            width: '50%',
+        <ClickAwayListener
+          // Closes on press rather than click, so a map drag that starts outside closes it too.
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- React event prop name.
+          mouseEvent="onPointerDown"
+          touchEvent={false}
+          onClickAway={(event) => {
+            // The layer button toggles the chooser itself.
+            if (event.target instanceof Node && menuButton?.contains(event.target))
+              return;
+            closeMenu();
           }}
         >
-          {sentinelPresetLabel}
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setMenuButton(null);
-            onOpenLayersTab();
-          }}
-          role="menuitem"
-          sx={{
-            borderLeft: 1,
-            borderColor: 'divider',
-            display: 'inline-flex',
-            justifyContent: 'center',
-            minHeight: 40,
-            px: 1,
-            verticalAlign: 'top',
-            width: '50%',
-          }}
-        >
-          {t`Layers tab`}
-        </MenuItem>
-      </Menu>
+          <Paper elevation={8}>
+            <MenuList
+              aria-label={t`Choose map layer preset`}
+              autoFocusItem
+              id={menuId}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  closeMenu();
+                  menuButton?.focus();
+                } else if (event.key === 'Tab') {
+                  closeMenu();
+                }
+              }}
+              sx={{ pb: 0 }}
+            >
+              {layerPresets.map((preset) => (
+                <MenuItem
+                  aria-checked={activeLayerPreset === preset.value}
+                  key={preset.value}
+                  onClick={() => {
+                    onLayerPresetChange(preset.value);
+                  }}
+                  role="menuitemradio"
+                  selected={activeLayerPreset === preset.value}
+                  sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+                >
+                  <ListItemText primary={t(preset.label)} />
+                </MenuItem>
+              ))}
+              <MenuItem
+                aria-checked={hybridOverlayEnabled}
+                disabled={hybridOverlayDisabled}
+                onClick={() => {
+                  onHybridOverlayChange(!hybridOverlayEnabled);
+                }}
+                role="menuitemcheckbox"
+                sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  {hybridOverlayEnabled ? (
+                    <CheckBoxIcon fontSize="small" />
+                  ) : (
+                    <CheckBoxOutlineBlankIcon fontSize="small" />
+                  )}
+                </ListItemIcon>
+                <ListItemText primary={t`OSM overlay`} />
+              </MenuItem>
+              <MenuItem
+                aria-checked={weatherMapEnabled}
+                disabled={weatherMapDisabled}
+                onClick={() => {
+                  onWeatherMapChange(!weatherMapEnabled);
+                }}
+                role="menuitemcheckbox"
+                sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  {weatherMapEnabled ? (
+                    <CheckBoxIcon fontSize="small" />
+                  ) : (
+                    <CheckBoxOutlineBlankIcon fontSize="small" />
+                  )}
+                </ListItemIcon>
+                <ListItemText
+                  primary={t`Weather`}
+                  secondary={t`Clouds, precipitation, and wind`}
+                />
+              </MenuItem>
+              <MenuItem
+                aria-checked={activeLayerPreset === 'sentinel-2'}
+                onClick={() => {
+                  if (onLayerPresetChange('sentinel-2') === 'navigated') closeMenu();
+                }}
+                role="menuitemradio"
+                selected={activeLayerPreset === 'sentinel-2'}
+                sx={{
+                  display: 'inline-flex',
+                  justifyContent: 'center',
+                  minHeight: 40,
+                  px: 1,
+                  verticalAlign: 'top',
+                  width: '50%',
+                }}
+              >
+                {sentinelPresetLabel}
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  closeMenu();
+                  onOpenLayersTab();
+                }}
+                role="menuitem"
+                sx={{
+                  borderLeft: 1,
+                  borderColor: 'divider',
+                  display: 'inline-flex',
+                  justifyContent: 'center',
+                  minHeight: 40,
+                  px: 1,
+                  verticalAlign: 'top',
+                  width: '50%',
+                }}
+              >
+                {t`Layers tab`}
+              </MenuItem>
+            </MenuList>
+          </Paper>
+        </ClickAwayListener>
+      </Popper>
     </>
   );
 }

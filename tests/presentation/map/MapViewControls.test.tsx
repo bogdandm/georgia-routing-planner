@@ -57,7 +57,7 @@ describe('MapViewControls', () => {
         onOpenLayersTab={vi.fn()}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
-        onLayerPresetChange={() => true}
+        onLayerPresetChange={() => 'map'}
         onTerrainModeChange={onTerrainModeChange}
         terrainState="flat"
       />,
@@ -88,7 +88,7 @@ describe('MapViewControls', () => {
         onOpenLayersTab={vi.fn()}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
-        onLayerPresetChange={() => true}
+        onLayerPresetChange={() => 'map'}
         onTerrainModeChange={vi.fn()}
         terrainState="enabling"
       />,
@@ -114,7 +114,7 @@ describe('MapViewControls', () => {
         weatherMapEnabled={false}
         weatherMapDisabled={false}
         onWeatherMapChange={onWeatherMapChange}
-        onLayerPresetChange={() => true}
+        onLayerPresetChange={() => 'map'}
         onOpenLayersTab={onOpenLayersTab}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
@@ -159,7 +159,7 @@ describe('MapViewControls', () => {
 
   it('keeps the chooser open after applying a preset', async () => {
     const user = userEvent.setup();
-    const onLayerPresetChange = vi.fn().mockReturnValue(true);
+    const onLayerPresetChange = vi.fn().mockReturnValue('map');
     renderWithI18n(
       <MapViewControls
         activeLayerPreset={null}
@@ -189,6 +189,74 @@ describe('MapViewControls', () => {
     expect(screen.getByRole('menu')).toBeVisible();
   });
 
+  it('closes the chooser when Sentinel-2 opens the Satellite panel instead', async () => {
+    const user = userEvent.setup();
+    renderWithI18n(
+      <MapViewControls
+        activeLayerPreset="vector-osm"
+        terrainDisabled={false}
+        layerPresetDisabled={false}
+        hybridOverlayDisabled
+        hybridOverlayEnabled
+        onHybridOverlayChange={vi.fn()}
+        weatherMapEnabled={false}
+        weatherMapDisabled={false}
+        onWeatherMapChange={vi.fn()}
+        onOpenLayersTab={vi.fn()}
+        measurementActive={false}
+        onMeasurementActiveChange={vi.fn()}
+        onLayerPresetChange={() => 'navigated'}
+        onTerrainModeChange={vi.fn()}
+        terrainState="flat"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Sentinel-2' }));
+
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('lets a press outside the open chooser reach its target and closes it', async () => {
+    const user = userEvent.setup();
+    const onMapPress = vi.fn();
+    renderWithI18n(
+      <>
+        <button type="button" onClick={onMapPress}>
+          Map surface
+        </button>
+        <MapViewControls
+          activeLayerPreset="vector-osm"
+          terrainDisabled={false}
+          layerPresetDisabled={false}
+          hybridOverlayDisabled
+          hybridOverlayEnabled
+          onHybridOverlayChange={vi.fn()}
+          weatherMapEnabled={false}
+          weatherMapDisabled={false}
+          onWeatherMapChange={vi.fn()}
+          onOpenLayersTab={vi.fn()}
+          measurementActive={false}
+          onMeasurementActiveChange={vi.fn()}
+          onLayerPresetChange={() => 'map'}
+          onTerrainModeChange={vi.fn()}
+          terrainState="flat"
+        />
+      </>,
+    );
+    const layerButton = screen.getByRole('button', { name: 'Choose map layer preset' });
+
+    await user.click(layerButton);
+    await user.click(screen.getByRole('button', { name: 'Map surface' }));
+    expect(onMapPress).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+
+    await user.click(layerButton);
+    expect(screen.getByRole('menu')).toBeVisible();
+    await user.click(layerButton);
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
   it('closes the chooser and restores button focus on Escape', async () => {
     const user = userEvent.setup();
     renderWithI18n(
@@ -205,7 +273,7 @@ describe('MapViewControls', () => {
         onOpenLayersTab={vi.fn()}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
-        onLayerPresetChange={() => true}
+        onLayerPresetChange={() => 'map'}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
       />,
@@ -235,7 +303,7 @@ describe('MapViewControls', () => {
         onOpenLayersTab={vi.fn()}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
-        onLayerPresetChange={() => true}
+        onLayerPresetChange={() => 'map'}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
       />,
@@ -272,7 +340,7 @@ describe('MapViewControls', () => {
         onOpenLayersTab={vi.fn()}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
-        onLayerPresetChange={() => true}
+        onLayerPresetChange={() => 'map'}
         onTerrainModeChange={() => undefined}
         terrainState="flat"
       />,

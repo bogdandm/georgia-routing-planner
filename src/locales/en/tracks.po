@@ -182,12 +182,12 @@ msgid "Additional valid waypoints were omitted."
 msgstr "Additional valid waypoints were omitted."
 
 #. js-lingui-id: rKEsFD
-#: src/presentation/tracks/TrackWeatherSection.tsx:503
+#: src/presentation/tracks/TrackWeatherSection.tsx:516
 msgid "Adjust pace"
 msgstr "Adjust pace"
 
 #. js-lingui-id: Gbx5p_
-#: src/presentation/tracks/TrackWeatherSection.tsx:454
+#: src/presentation/tracks/TrackWeatherSection.tsx:467
 msgid "Along the route"
 msgstr "Along the route"
 
@@ -197,12 +197,12 @@ msgid "Apply place name"
 msgstr "Apply place name"
 
 #. js-lingui-id: -zt5fR
-#: src/presentation/tracks/TrackWeatherSection.tsx:314
+#: src/presentation/tracks/TrackWeatherSection.tsx:327
 msgid "At {distance}"
 msgstr "At {distance}"
 
 #. js-lingui-id: 926sk4
-#: src/presentation/tracks/TrackWeatherSection.tsx:370
+#: src/presentation/tracks/TrackWeatherSection.tsx:383
 msgid "Available for day hikes shorter than {maximumDistance} and 12 hours."
 msgstr "Available for day hikes shorter than {maximumDistance} and 12 hours."
 
@@ -233,7 +233,7 @@ msgid "Building route graph… {graphProgress}"
 msgstr "Building route graph… {graphProgress}"
 
 #. js-lingui-id: 67TcRf
-#: src/presentation/tracks/TrackWeatherSection.tsx:444
+#: src/presentation/tracks/TrackWeatherSection.tsx:457
 msgid "By elevation"
 msgstr "By elevation"
 
@@ -359,7 +359,7 @@ msgid "Create reversed track"
 msgstr "Create reversed track"
 
 #. js-lingui-id: H7OUPr
-#: src/presentation/tracks/TrackWeatherSection.tsx:286
+#: src/presentation/tracks/TrackWeatherSection.tsx:299
 msgid "Day"
 msgstr "Day"
 
@@ -590,7 +590,7 @@ msgid "Expand {0}"
 msgstr "Expand {0}"
 
 #. js-lingui-id: qmIOJX
-#: src/presentation/tracks/TrackWeatherSection.tsx:511
+#: src/presentation/tracks/TrackWeatherSection.tsx:524
 msgid "Faster"
 msgstr "Faster"
 
@@ -600,7 +600,7 @@ msgid "Files with DTD or entity declarations are not supported."
 msgstr "Files with DTD or entity declarations are not supported."
 
 #. js-lingui-id: JmZ_-d
-#: src/presentation/tracks/TrackWeatherSection.tsx:313
+#: src/presentation/tracks/TrackWeatherSection.tsx:326
 msgid "Finish"
 msgstr "Finish"
 
@@ -620,22 +620,22 @@ msgid "Folder names must be 200 characters or fewer."
 msgstr "Folder names must be 200 characters or fewer."
 
 #. js-lingui-id: 2JKkIm
-#: src/presentation/tracks/TrackWeatherSection.tsx:548
+#: src/presentation/tracks/TrackWeatherSection.tsx:561
 msgid "Forecast along the route"
 msgstr "Forecast along the route"
 
 #. js-lingui-id: AFitTJ
-#: src/presentation/tracks/TrackWeatherSection.tsx:446
+#: src/presentation/tracks/TrackWeatherSection.tsx:459
 msgid "Forecast by elevation"
 msgstr "Forecast by elevation"
 
 #. js-lingui-id: qpYeDl
-#: src/presentation/tracks/TrackWeatherSection.tsx:417
+#: src/presentation/tracks/TrackWeatherSection.tsx:430
 msgid "Forecast date"
 msgstr "Forecast date"
 
 #. js-lingui-id: _WH_9-
-#: src/presentation/tracks/TrackWeatherSection.tsx:447
+#: src/presentation/tracks/TrackWeatherSection.tsx:460
 msgid "Highest"
 msgstr "Highest"
 
@@ -706,7 +706,7 @@ msgid "Looking up representative places…"
 msgstr "Looking up representative places…"
 
 #. js-lingui-id: 05qZg8
-#: src/presentation/tracks/TrackWeatherSection.tsx:449
+#: src/presentation/tracks/TrackWeatherSection.tsx:462
 msgid "Lowest"
 msgstr "Lowest"
 
@@ -731,7 +731,7 @@ msgid "Markers ({markerCount})"
 msgstr "Markers ({markerCount})"
 
 #. js-lingui-id: jbPrMa
-#: src/presentation/tracks/TrackWeatherSection.tsx:448
+#: src/presentation/tracks/TrackWeatherSection.tsx:461
 msgid "Median"
 msgstr "Median"
 
@@ -820,8 +820,8 @@ msgid "No elevation profile is available for this track."
 msgstr "No elevation profile is available for this track."
 
 #. js-lingui-id: wm5OI3
-#: src/presentation/tracks/TrackWeatherSection.tsx:281
-#: src/presentation/tracks/TrackWeatherSection.tsx:342
+#: src/presentation/tracks/TrackWeatherSection.tsx:294
+#: src/presentation/tracks/TrackWeatherSection.tsx:355
 msgid "No forecast for this date."
 msgstr "No forecast for this date."
 
@@ -877,8 +877,8 @@ msgid "Only GPX 1.0 and 1.1 are supported."
 msgstr "Only GPX 1.0 and 1.1 are supported."
 
 #. js-lingui-id: zZj-jN
-#: src/presentation/tracks/TrackWeatherSection.tsx:290
-#: src/presentation/tracks/TrackWeatherSection.tsx:351
+#: src/presentation/tracks/TrackWeatherSection.tsx:303
+#: src/presentation/tracks/TrackWeatherSection.tsx:364
 msgid "Open the forecast for {label} in Weather"
 msgstr "Open the forecast for {label} in Weather"
 
@@ -993,7 +993,7 @@ msgid "Route ready. Click the map to add another point."
 msgstr "Route ready. Click the map to add another point."
 
 #. js-lingui-id: aSXLtp
-#: src/presentation/tracks/TrackWeatherSection.tsx:464
+#: src/presentation/tracks/TrackWeatherSection.tsx:477
 msgid "Route start"
 msgstr "Route start"
 
@@ -1143,7 +1143,7 @@ msgid "Show track grade legend"
 msgstr "Show track grade legend"
 
 #. js-lingui-id: w625t8
-#: src/presentation/tracks/TrackWeatherSection.tsx:538
+#: src/presentation/tracks/TrackWeatherSection.tsx:551
 msgid "Slower"
 msgstr "Slower"
 
@@ -1179,7 +1179,7 @@ msgid "Speed profile up to {maximumSpeed}"
 msgstr "Speed profile up to {maximumSpeed}"
 
 #. js-lingui-id: tXkhj_
-#: src/presentation/tracks/TrackWeatherSection.tsx:311
+#: src/presentation/tracks/TrackWeatherSection.tsx:324
 msgid "Start"
 msgstr "Start"
 
@@ -1189,17 +1189,17 @@ msgid "Start time"
 msgstr "Start time"
 
 #. js-lingui-id: QSVyj5
-#: src/presentation/tracks/TrackWeatherSection.tsx:372
+#: src/presentation/tracks/TrackWeatherSection.tsx:385
 msgid "Starting at {startTime} at the adjusted pace, about {duration} in total."
 msgstr "Starting at {startTime} at the adjusted pace, about {duration} in total."
 
 #. js-lingui-id: phlNWx
-#: src/presentation/tracks/TrackWeatherSection.tsx:375
+#: src/presentation/tracks/TrackWeatherSection.tsx:388
 msgid "Starting at {startTime} at the estimated pace, about {duration} in total."
 msgstr "Starting at {startTime} at the estimated pace, about {duration} in total."
 
 #. js-lingui-id: Cj8J4o
-#: src/presentation/tracks/TrackWeatherSection.tsx:374
+#: src/presentation/tracks/TrackWeatherSection.tsx:387
 msgid "Starting at {startTime} at the recorded pace, {duration} in total."
 msgstr "Starting at {startTime} at the recorded pace, {duration} in total."
 
@@ -1254,8 +1254,8 @@ msgid "The folder order could not be saved."
 msgstr "The folder order could not be saved."
 
 #. js-lingui-id: Z_3eUd
-#: src/presentation/tracks/TrackWeatherSection.tsx:277
-#: src/presentation/tracks/TrackWeatherSection.tsx:338
+#: src/presentation/tracks/TrackWeatherSection.tsx:290
+#: src/presentation/tracks/TrackWeatherSection.tsx:351
 msgid "The forecast could not be loaded."
 msgstr "The forecast could not be loaded."
 
@@ -1423,7 +1423,7 @@ msgid "Unfiled tracks"
 msgstr "Unfiled tracks"
 
 #. js-lingui-id: xxls-e
-#: src/presentation/tracks/TrackWeatherSection.tsx:382
-#: src/presentation/tracks/TrackWeatherSection.tsx:397
+#: src/presentation/tracks/TrackWeatherSection.tsx:395
+#: src/presentation/tracks/TrackWeatherSection.tsx:410
 msgid "Weather forecast"
 msgstr "Weather forecast"

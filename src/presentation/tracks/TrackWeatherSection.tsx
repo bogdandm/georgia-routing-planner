@@ -57,6 +57,7 @@ import {
   DailyPeriodRow,
   WeatherForecastCard,
 } from '@/presentation/weather/WeatherPanel';
+import { useWeatherRetryOnResume } from '@/presentation/weather/useWeatherRetryOnResume';
 
 type ForecastState =
   | { readonly status: 'ready'; readonly forecast: PointWeatherForecast }
@@ -172,8 +173,10 @@ export function TrackWeatherSection({
   const [forecasts, setForecasts] = useState<ReadonlyMap<string, ForecastState>>(
     () => new Map(),
   );
-  // Keys with a request in flight or a loaded forecast; failures retry on next expand.
+  // Keys with a request in flight or a loaded forecast. Failed keys are released, so
+  // the next expand or retry revision requests only them again.
   const requestedKeys = useRef(new Set<string>());
+  const [retryRevision, setRetryRevision] = useState(0);
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -215,7 +218,17 @@ export function TrackWeatherSection({
       // promises settle, requests these locations again.
       for (const key of inFlight) requested.delete(key);
     };
-  }, [expanded, locations, pointWeatherForecast]);
+  }, [expanded, locations, pointWeatherForecast, retryRevision]);
+
+  useWeatherRetryOnResume(
+    expanded &&
+      locations.some(
+        (location) => forecasts.get(locationKey(location))?.status === 'error',
+      ),
+    () => {
+      setRetryRevision((revision) => revision + 1);
+    },
+  );
 
   const weekdayFormat = new Intl.DateTimeFormat(i18n.locale, {
     // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option tokens.

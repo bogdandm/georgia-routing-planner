@@ -481,6 +481,7 @@ describe('AppDatabase', () => {
         'terrain-relief': false,
         'elevation-isolines': true,
         'natural-features': true,
+        'natural-feature-patterns': false,
         'restricted-areas': true,
         'detail-context': true,
         'hiking-paths': true,
@@ -554,6 +555,7 @@ describe('AppDatabase', () => {
         'terrain-relief': true,
         'elevation-isolines': true,
         'natural-features': true,
+        'natural-feature-patterns': true,
         'restricted-areas': true,
         'imported-tracks': true,
         'track-elevation-gradient': true,
@@ -565,6 +567,7 @@ describe('AppDatabase', () => {
       terrainOverlays: {
         contourIntervalMeters: 50,
         shadeAboveSatellite: false,
+        demTileSize: 256,
       },
     });
     await expect(database.settings.get('map.layers')).resolves.not.toHaveProperty(

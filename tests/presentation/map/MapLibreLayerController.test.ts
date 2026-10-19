@@ -714,7 +714,6 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(mapLayerIds.brownfieldAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.buildings)).toBe('none');
-    expect(map.visibility.get(mapLayerIds.cemeteries)).toBe('none');
     expect(mapLayerStore.getState().visibility.roads).toBe(false);
 
     expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
@@ -754,6 +753,44 @@ describe('MapLibreLayerController', () => {
     });
     expect(map.visibility.get(mapLayerIds.hikingPois)).toBe('none');
     expect(map.visibility.get(mapLayerIds.mountainPasses)).toBe('none');
+  });
+
+  it('hides area patterns on their own and keeps that choice under natural features', () => {
+    const controller = createTestServices().mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const patternLayerIds = [
+      mapLayerIds.landcoverPatterns,
+      mapLayerIds.landcoverPatternDetails,
+      mapLayerIds.cemeteries,
+    ];
+
+    expect(controller.setLayerVisibility('natural-feature-patterns', false)).toEqual({
+      status: 'success',
+    });
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('none');
+    }
+    expect(map.visibility.get(mapLayerIds.landcover)).toBe('visible');
+
+    // Natural features off and on again restores fills but not the hidden patterns.
+    controller.setLayerVisibility('natural-features', false);
+    controller.setLayerVisibility('natural-features', true);
+    expect(map.visibility.get(mapLayerIds.landcover)).toBe('visible');
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('none');
+    }
+
+    // Patterns on again only draw while natural features are visible.
+    controller.setLayerVisibility('natural-feature-patterns', true);
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+    controller.setLayerVisibility('natural-features', false);
+    for (const layerId of patternLayerIds) {
+      expect(map.visibility.get(layerId)).toBe('none');
+    }
   });
 
   it('generates basemap images on demand and leaves other images to their owners', async () => {
@@ -2816,6 +2853,7 @@ describe('MapLibreLayerController', () => {
         'terrain-relief': false,
         'elevation-isolines': false,
         'natural-features': true,
+        'natural-feature-patterns': true,
         'restricted-areas': false,
         'detail-context': true,
         'hiking-paths': true,

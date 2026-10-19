@@ -15,412 +15,422 @@ msgstr ""
 
 #. js-lingui-id: hbWk0T
 #. placeholder {0}: group.title
-#: src/presentation/layers/LayersPanel.tsx:576
+#: src/presentation/layers/LayersPanel.tsx:585
 msgid "{0} layers"
 msgstr "{0} layers"
 
 #. js-lingui-id: p2mUFe
-#: src/presentation/layers/LayersPanel.tsx:695
+#: src/presentation/layers/LayersPanel.tsx:710
 msgid "{contourIntervalMeters, plural, one {# metre} other {# metres}}"
 msgstr "{contourIntervalMeters, plural, one {# metre} other {# metres}}"
 
 #. js-lingui-id: UHDMPz
-#: src/presentation/layers/LayersPanel.tsx:663
+#: src/presentation/layers/LayersPanel.tsx:678
 msgid "{size} px"
 msgstr "{size} px"
 
 #. js-lingui-id: bXom1Q
-#: src/presentation/layers/LayersPanel.tsx:416
+#: src/presentation/layers/LayersPanel.tsx:425
 msgid "All weather fields use the same metadata-selected forecast frame."
 msgstr "All weather fields use the same metadata-selected forecast frame."
 
 #. js-lingui-id: IVtOJv
-#: src/presentation/layers/LayersPanel.tsx:673
+#: src/presentation/layers/LayersPanel.tsx:688
 msgid "Applies to relief and 3D. 256 px keeps 3D textures at 1024 px; 512 px loads fewer tiles with 2048 px textures."
 msgstr "Applies to relief and 3D. 256 px keeps 3D textures at 1024 px; 512 px loads fewer tiles with 2048 px textures."
 
 #. js-lingui-id: SrvjBt
-#: src/presentation/layers/LayersPanel.tsx:208
+#: src/presentation/layers/LayersPanel.tsx:217
 msgid "Apply a Sentinel scene before changing it."
 msgstr "Apply a Sentinel scene before changing it."
 
 #. js-lingui-id: kZKWZX
-#: src/presentation/layers/LayersPanel.tsx:210
+#: src/presentation/layers/LayersPanel.tsx:219
 msgid "Apply a Sentinel scene before choosing this preset."
 msgstr "Apply a Sentinel scene before choosing this preset."
 
 #. js-lingui-id: 589eFx
-#: src/presentation/layers/LayersPanel.tsx:626
+#: src/presentation/layers/LayersPanel.tsx:641
 msgid "Apply a Sentinel scene to enable this layer."
 msgstr "Apply a Sentinel scene to enable this layer."
 
 #. js-lingui-id: K6poSG
-#: src/presentation/layers/LayersPanel.tsx:625
+#: src/presentation/layers/LayersPanel.tsx:640
 msgid "Apply Sentinel imagery to enable this layer."
 msgstr "Apply Sentinel imagery to enable this layer."
 
+#. js-lingui-id: SdLuPu
+#: src/presentation/layers/LayersPanel.tsx:99
+msgid "Area patterns"
+msgstr "Area patterns"
+
 #. js-lingui-id: kkZcDd
-#: src/presentation/layers/LayersPanel.tsx:54
+#: src/presentation/layers/LayersPanel.tsx:56
 msgid "Bing aerial imagery"
 msgstr "Bing aerial imagery"
 
 #. js-lingui-id: 370Iiz
-#: src/presentation/layers/LayersPanel.tsx:55
+#: src/presentation/layers/LayersPanel.tsx:57
 msgid "Bing aerial tiles for the current map view."
 msgstr "Bing aerial tiles for the current map view."
 
 #. js-lingui-id: LMAtzm
-#: src/presentation/layers/LayersPanel.tsx:107
+#: src/presentation/layers/LayersPanel.tsx:116
 msgid "Brownfield land and building footprints from OSM Shortbread."
 msgstr "Brownfield land and building footprints from OSM Shortbread."
 
 #. js-lingui-id: VvzNmc
-#: src/presentation/layers/LayersPanel.tsx:172
+#: src/presentation/layers/LayersPanel.tsx:181
 msgid "Choose a supported contour distance that divides the 200 m index interval."
 msgstr "Choose a supported contour distance that divides the 200 m index interval."
 
 #. js-lingui-id: O4EUuL
-#: src/presentation/layers/LayersPanel.tsx:195
+#: src/presentation/layers/LayersPanel.tsx:204
 msgid "Choose an available weather forecast time."
 msgstr "Choose an available weather forecast time."
 
 #. js-lingui-id: nDQMVg
-#: src/presentation/layers/LayersPanel.tsx:197
-#: src/presentation/layers/LayersPanel.tsx:214
+#: src/presentation/layers/LayersPanel.tsx:206
+#: src/presentation/layers/LayersPanel.tsx:223
 msgid "Choose an opacity between 0 and 100 percent."
 msgstr "Choose an opacity between 0 and 100 percent."
 
 #. js-lingui-id: 4RvaOl
-#: src/presentation/layers/LayersPanel.tsx:160
+#: src/presentation/layers/LayersPanel.tsx:169
 msgid "Climb and descent grade colors across the active track."
 msgstr "Climb and descent grade colors across the active track."
 
 #. js-lingui-id: 8kF1MP
-#: src/presentation/layers/LayersPanel.tsx:595
+#: src/presentation/layers/LayersPanel.tsx:610
 msgid "Copernicus Sentinel-2 via {satelliteCatalogLabel}"
 msgstr "Copernicus Sentinel-2 via {satelliteCatalogLabel}"
 
 #. js-lingui-id: DIIomD
-#: src/presentation/layers/LayersPanel.tsx:206
+#: src/presentation/layers/LayersPanel.tsx:215
 msgid "Disable the weather map before enabling terrain overlays."
 msgstr "Disable the weather map before enabling terrain overlays."
 
 #. js-lingui-id: siFQoN
-#: src/presentation/layers/LayersPanel.tsx:383
+#: src/presentation/layers/LayersPanel.tsx:392
 msgid "ECMWF IFS clouds, precipitation, and compact wind arrows from Open-Meteo."
 msgstr "ECMWF IFS clouds, precipitation, and compact wind arrows from Open-Meteo."
 
 #. js-lingui-id: 4I0BQt
-#: src/presentation/layers/LayersPanel.tsx:159
+#: src/presentation/layers/LayersPanel.tsx:168
 msgid "Elevation gradient"
 msgstr "Elevation gradient"
 
 #. js-lingui-id: gZOskp
-#: src/presentation/layers/LayersPanel.tsx:144
+#: src/presentation/layers/LayersPanel.tsx:153
 msgid "Elevation isolines"
 msgstr "Elevation isolines"
 
 #. js-lingui-id: e3hfCa
-#: src/presentation/layers/LayersPanel.tsx:176
+#: src/presentation/layers/LayersPanel.tsx:185
 msgid "Elevation isolines could not be generated. Relief and the base map remain available."
 msgstr "Elevation isolines could not be generated. Relief and the base map remain available."
 
 #. js-lingui-id: yEd2QC
-#: src/presentation/layers/LayersPanel.tsx:641
+#: src/presentation/layers/LayersPanel.tsx:656
 msgid "Elevation tiles"
 msgstr "Elevation tiles"
 
 #. js-lingui-id: ME-el8
-#: src/presentation/layers/LayersPanel.tsx:306
+#: src/presentation/layers/LayersPanel.tsx:315
 msgid "Elevation tiles for relief, contours, and 3D terrain."
 msgstr "Elevation tiles for relief, contours, and 3D terrain."
 
 #. js-lingui-id: r3Wm_7
-#: src/presentation/layers/LayersPanel.tsx:417
+#: src/presentation/layers/LayersPanel.tsx:426
 msgid "Enable the combined weather layer from the Weather tab."
 msgstr "Enable the combined weather layer from the Weather tab."
 
 #. js-lingui-id: C50Coj
-#: src/presentation/layers/LayersPanel.tsx:193
+#: src/presentation/layers/LayersPanel.tsx:202
 msgid "Enable the weather map before choosing its time."
 msgstr "Enable the weather map before choosing its time."
 
 #. js-lingui-id: TTvYEQ
-#: src/presentation/layers/LayersPanel.tsx:62
+#: src/presentation/layers/LayersPanel.tsx:64
 msgid "Esri global satellite and aerial imagery."
 msgstr "Esri global satellite and aerial imagery."
 
 #. js-lingui-id: bNOfxj
-#: src/presentation/layers/LayersPanel.tsx:61
+#: src/presentation/layers/LayersPanel.tsx:63
 msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
 
+#. js-lingui-id: aQCIRG
+#: src/presentation/layers/LayersPanel.tsx:100
+msgid "Forest, swamp, scrub, orchard, scree, and cemetery signs."
+msgstr "Forest, swamp, scrub, orchard, scree, and cemetery signs."
+
 #. js-lingui-id: 9ARWz1
-#: src/presentation/layers/LayersPanel.tsx:145
+#: src/presentation/layers/LayersPanel.tsx:154
 msgid "Generated contour lines and labeled index elevations."
 msgstr "Generated contour lines and labeled index elevations."
 
 #. js-lingui-id: 5jVB98
-#: src/presentation/layers/LayersPanel.tsx:47
+#: src/presentation/layers/LayersPanel.tsx:49
 msgid "Google satellite imagery"
 msgstr "Google satellite imagery"
 
 #. js-lingui-id: WDPc86
-#: src/presentation/layers/LayersPanel.tsx:48
+#: src/presentation/layers/LayersPanel.tsx:50
 msgid "Google satellite tiles for the current map view."
 msgstr "Google satellite tiles for the current map view."
 
 #. js-lingui-id: VL5S_6
-#: src/presentation/layers/LayersPanel.tsx:112
+#: src/presentation/layers/LayersPanel.tsx:121
 msgid "Hiking paths"
 msgstr "Hiking paths"
 
 #. js-lingui-id: Ck5Mnm
-#: src/presentation/layers/LayersPanel.tsx:139
+#: src/presentation/layers/LayersPanel.tsx:148
 msgid "Hillshade derived from the configured elevation tiles."
 msgstr "Hillshade derived from the configured elevation tiles."
 
 #. js-lingui-id: DxCeHZ
-#: src/presentation/layers/LayersPanel.tsx:153
+#: src/presentation/layers/LayersPanel.tsx:162
 msgid "Imported tracks"
 msgstr "Imported tracks"
 
 #. js-lingui-id: m5EkIN
-#: src/presentation/layers/LayersPanel.tsx:691
+#: src/presentation/layers/LayersPanel.tsx:706
 msgid "Isolines distance"
 msgstr "Isolines distance"
 
 #. js-lingui-id: Cfr3AZ
-#: src/presentation/layers/LayersPanel.tsx:287
+#: src/presentation/layers/LayersPanel.tsx:296
 msgid "Local GPX"
 msgstr "Local GPX"
 
 #. js-lingui-id: DYhGfX
-#: src/presentation/layers/LayersPanel.tsx:370
+#: src/presentation/layers/LayersPanel.tsx:379
 msgid "Map layer controls are unavailable."
 msgstr "Map layer controls are unavailable."
 
 #. js-lingui-id: WlrBzh
-#: src/presentation/layers/LayersPanel.tsx:68
+#: src/presentation/layers/LayersPanel.tsx:70
 msgid "NAPR Orthophoto"
 msgstr "NAPR Orthophoto"
 
 #. js-lingui-id: _jiIQv
-#: src/presentation/layers/LayersPanel.tsx:91
+#: src/presentation/layers/LayersPanel.tsx:93
 msgid "Natural features"
 msgstr "Natural features"
 
 #. js-lingui-id: _-9hUf
-#: src/presentation/layers/LayersPanel.tsx:69
+#: src/presentation/layers/LayersPanel.tsx:71
 msgid "Newest available NAPR orthophoto: 2025, then 2020, then 2016–2017."
 msgstr "Newest available NAPR orthophoto: 2025, then 2020, then 2016–2017."
 
 #. js-lingui-id: aoLy25
-#: src/presentation/layers/LayersPanel.tsx:425
-#: src/presentation/layers/LayersPanel.tsx:506
+#: src/presentation/layers/LayersPanel.tsx:434
+#: src/presentation/layers/LayersPanel.tsx:515
 msgid "Opacity"
 msgstr "Opacity"
 
 #. js-lingui-id: vORMhI
-#: src/presentation/layers/LayersPanel.tsx:407
+#: src/presentation/layers/LayersPanel.tsx:416
 msgid "Open Weather tab"
 msgstr "Open Weather tab"
 
 #. js-lingui-id: XPsWsV
-#: src/presentation/layers/LayersPanel.tsx:189
+#: src/presentation/layers/LayersPanel.tsx:198
 msgid "Open-Meteo did not provide an available forecast time."
 msgstr "Open-Meteo did not provide an available forecast time."
 
 #. js-lingui-id: jF8AR1
-#: src/presentation/layers/LayersPanel.tsx:187
+#: src/presentation/layers/LayersPanel.tsx:196
 msgid "Open-Meteo weather map data is unavailable."
 msgstr "Open-Meteo weather map data is unavailable."
 
 #. js-lingui-id: K5BVkn
 #. placeholder {0}: provider.vector.label
 #. placeholder {1}: provider.detailVector.label
-#: src/presentation/layers/LayersPanel.tsx:314
+#: src/presentation/layers/LayersPanel.tsx:323
 msgid "OpenStreetMap via {0} + {1}"
 msgstr "OpenStreetMap via {0} + {1}"
 
 #. js-lingui-id: 4CBa5N
-#: src/presentation/layers/LayersPanel.tsx:313
+#: src/presentation/layers/LayersPanel.tsx:322
 msgid "OpenStreetMap via vector tile provider"
 msgstr "OpenStreetMap via vector tile provider"
 
 #. js-lingui-id: U12MXM
-#: src/presentation/layers/LayersPanel.tsx:106
+#: src/presentation/layers/LayersPanel.tsx:115
 msgid "OSM detail"
 msgstr "OSM detail"
 
 #. js-lingui-id: EHuoxs
-#: src/presentation/layers/LayersPanel.tsx:113
+#: src/presentation/layers/LayersPanel.tsx:122
 msgid "Paths, tracks, footways, and steps."
 msgstr "Paths, tracks, footways, and steps."
 
 #. js-lingui-id: XnwFMA
-#: src/presentation/layers/LayersPanel.tsx:124
+#: src/presentation/layers/LayersPanel.tsx:133
 msgid "Places and POIs"
 msgstr "Places and POIs"
 
 #. js-lingui-id: QQ1vZI
-#: src/presentation/layers/LayersPanel.tsx:101
+#: src/presentation/layers/LayersPanel.tsx:110
 msgid "Red perimeters for provider-identified military land."
 msgstr "Red perimeters for provider-identified military land."
 
 #. js-lingui-id: 5rAKFG
-#: src/presentation/layers/LayersPanel.tsx:138
+#: src/presentation/layers/LayersPanel.tsx:147
 msgid "Relief shading"
 msgstr "Relief shading"
 
 #. js-lingui-id: qFDnlT
-#: src/presentation/layers/LayersPanel.tsx:100
+#: src/presentation/layers/LayersPanel.tsx:109
 msgid "Restricted areas"
 msgstr "Restricted areas"
 
 #. js-lingui-id: NH06nf
-#: src/presentation/layers/LayersPanel.tsx:119
+#: src/presentation/layers/LayersPanel.tsx:128
 msgid "Road lines, casings, and labels."
 msgstr "Road lines, casings, and labels."
 
 #. js-lingui-id: 2_vQ6h
-#: src/presentation/layers/LayersPanel.tsx:118
+#: src/presentation/layers/LayersPanel.tsx:127
 msgid "Roads"
 msgstr "Roads"
 
 #. js-lingui-id: K7ecHl
-#: src/presentation/layers/LayersPanel.tsx:294
+#: src/presentation/layers/LayersPanel.tsx:303
 msgid "Satellite basemaps and applied observation scenes."
 msgstr "Satellite basemaps and applied observation scenes."
 
 #. js-lingui-id: 5wgfjJ
-#: src/presentation/layers/LayersPanel.tsx:323
+#: src/presentation/layers/LayersPanel.tsx:332
 msgid "satellite catalog"
 msgstr "satellite catalog"
 
 #. js-lingui-id: -dCnti
-#: src/presentation/layers/LayersPanel.tsx:76
+#: src/presentation/layers/LayersPanel.tsx:78
 msgid "Satellite imagery"
 msgstr "Satellite imagery"
 
 #. js-lingui-id: XmKyHn
-#: src/presentation/layers/LayersPanel.tsx:293
+#: src/presentation/layers/LayersPanel.tsx:302
 msgid "Satellites"
 msgstr "Satellites"
 
 #. js-lingui-id: w1AEdy
-#: src/presentation/layers/LayersPanel.tsx:82
+#: src/presentation/layers/LayersPanel.tsx:84
 msgid "Scene footprint"
 msgstr "Scene footprint"
 
 #. js-lingui-id: 2H81oa
-#: src/presentation/layers/LayersPanel.tsx:125
+#: src/presentation/layers/LayersPanel.tsx:134
 msgid "Settlements, peaks, and hiking places."
 msgstr "Settlements, peaks, and hiking places."
 
 #. js-lingui-id: M4RWWV
-#: src/presentation/layers/LayersPanel.tsx:305
+#: src/presentation/layers/LayersPanel.tsx:314
 msgid "Terrain elevation"
 msgstr "Terrain elevation"
 
 #. js-lingui-id: Yil7hI
-#: src/presentation/layers/LayersPanel.tsx:486
+#: src/presentation/layers/LayersPanel.tsx:495
 msgid "Terrain processing is running in compatibility mode. Terrain features remain available, but map movement may be slower."
 msgstr "Terrain processing is running in compatibility mode. Terrain features remain available, but map movement may be slower."
 
 #. js-lingui-id: LpVRfA
-#: src/presentation/layers/LayersPanel.tsx:174
+#: src/presentation/layers/LayersPanel.tsx:183
 msgid "Terrain relief could not be rendered. The base map remains available."
 msgstr "Terrain relief could not be rendered. The base map remains available."
 
 #. js-lingui-id: XlRlgt
-#: src/presentation/layers/LayersPanel.tsx:154
+#: src/presentation/layers/LayersPanel.tsx:163
 msgid "The active local GPX preview or saved track."
 msgstr "The active local GPX preview or saved track."
 
 #. js-lingui-id: 4J-bX9
-#: src/presentation/layers/LayersPanel.tsx:83
+#: src/presentation/layers/LayersPanel.tsx:85
 msgid "The actual boundary of the applied scene."
 msgstr "The actual boundary of the applied scene."
 
 #. js-lingui-id: yrzpRp
-#: src/presentation/layers/LayersPanel.tsx:77
+#: src/presentation/layers/LayersPanel.tsx:79
 msgid "The applied Sentinel true-color imagery."
 msgstr "The applied Sentinel true-color imagery."
 
 #. js-lingui-id: 3AawMX
-#: src/presentation/layers/LayersPanel.tsx:218
+#: src/presentation/layers/LayersPanel.tsx:227
 msgid "The imported track could not be rendered."
 msgstr "The imported track could not be rendered."
 
 #. js-lingui-id: bXGbn3
-#: src/presentation/layers/LayersPanel.tsx:216
+#: src/presentation/layers/LayersPanel.tsx:225
 msgid "The imported track geometry is invalid."
 msgstr "The imported track geometry is invalid."
 
 #. js-lingui-id: bf7D7L
-#: src/presentation/layers/LayersPanel.tsx:170
-#: src/presentation/layers/LayersPanel.tsx:183
-#: src/presentation/layers/LayersPanel.tsx:204
+#: src/presentation/layers/LayersPanel.tsx:179
+#: src/presentation/layers/LayersPanel.tsx:192
+#: src/presentation/layers/LayersPanel.tsx:213
 msgid "The map is not ready yet."
 msgstr "The map is not ready yet."
 
 #. js-lingui-id: Rd8yfr
-#: src/presentation/layers/LayersPanel.tsx:222
+#: src/presentation/layers/LayersPanel.tsx:231
 msgid "The planned line could not be rendered."
 msgstr "The planned line could not be rendered."
 
 #. js-lingui-id: 0njjvb
-#: src/presentation/layers/LayersPanel.tsx:220
+#: src/presentation/layers/LayersPanel.tsx:229
 msgid "The planned line geometry is invalid."
 msgstr "The planned line geometry is invalid."
 
 #. js-lingui-id: uXV_yx
-#: src/presentation/layers/LayersPanel.tsx:212
+#: src/presentation/layers/LayersPanel.tsx:221
 msgid "The requested map layer is not available yet."
 msgstr "The requested map layer is not available yet."
 
 #. js-lingui-id: nHJSzm
-#: src/presentation/layers/LayersPanel.tsx:191
+#: src/presentation/layers/LayersPanel.tsx:200
 msgid "The selected weather frame could not be shown."
 msgstr "The selected weather frame could not be shown."
 
 #. js-lingui-id: chPCIv
-#: src/presentation/layers/LayersPanel.tsx:185
+#: src/presentation/layers/LayersPanel.tsx:194
 msgid "The weather map provider is unavailable."
 msgstr "The weather map provider is unavailable."
 
 #. js-lingui-id: W7HXf3
-#: src/presentation/layers/LayersPanel.tsx:548
+#: src/presentation/layers/LayersPanel.tsx:557
 msgid "Track opacity"
 msgstr "Track opacity"
 
 #. js-lingui-id: H3vxOc
-#: src/presentation/layers/LayersPanel.tsx:288
+#: src/presentation/layers/LayersPanel.tsx:297
 msgid "Tracks retained only in this browser."
 msgstr "Tracks retained only in this browser."
 
 #. js-lingui-id: 5b2r4X
-#: src/presentation/layers/LayersPanel.tsx:315
+#: src/presentation/layers/LayersPanel.tsx:324
 msgid "Vector basemap data styled for hiking and navigation."
 msgstr "Vector basemap data styled for hiking and navigation."
 
 #. js-lingui-id: mzDjSY
-#: src/presentation/layers/LayersPanel.tsx:92
+#: src/presentation/layers/LayersPanel.tsx:94
 msgid "Vegetation, glaciers, wetlands, rivers, and water bodies."
 msgstr "Vegetation, glaciers, wetlands, rivers, and water bodies."
 
 #. js-lingui-id: mJZLtT
-#: src/presentation/layers/LayersPanel.tsx:376
+#: src/presentation/layers/LayersPanel.tsx:385
 msgid "Weather"
 msgstr "Weather"
 
 #. js-lingui-id: Izttjs
-#: src/presentation/layers/LayersPanel.tsx:407
+#: src/presentation/layers/LayersPanel.tsx:416
 msgid "Weather map visible"
 msgstr "Weather map visible"
 
 #. js-lingui-id: NM2cJz
-#: src/presentation/layers/LayersPanel.tsx:622
+#: src/presentation/layers/LayersPanel.tsx:637
 msgid "Weather temporarily hides terrain and restores this setting when disabled."
 msgstr "Weather temporarily hides terrain and restores this setting when disabled."

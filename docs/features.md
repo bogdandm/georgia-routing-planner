@@ -376,8 +376,10 @@ MapLibre layer IDs; native IDs never reach the UI.
   and results.
 - **Terrain:** relief shading, elevation isolines, and contour spacing.
 - **OpenStreetMap:** **OSM detail**, Hiking paths, Roads, Places and POIs, Natural
-  features, Restricted areas, and one opacity that applies to OSM layers and isolines
-  while a raster is active.
+  features with its indented **Area patterns** (the GOST forest, swamp, scrub, planting,
+  scree, and cemetery signs, usable only while Natural features is on), Restricted
+  areas, and one opacity that applies to OSM layers and isolines while a raster is
+  active.
 
 Visibility, opacities, imagery choice, rendering mode, stretch, and terrain preferences
 persist locally. Sentinel scene data is never persisted; imagery starts empty unless a

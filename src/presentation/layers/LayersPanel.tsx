@@ -40,6 +40,8 @@ interface LayerControl {
   readonly label: MessageDescriptor;
   readonly description: MessageDescriptor;
   readonly requiresScene: boolean;
+  /** Drawn indented and only usable while this parent layer is shown. */
+  readonly parent?: LogicalMapLayerId;
 }
 
 const googleSatelliteControl = {
@@ -91,6 +93,13 @@ const naturalFeatureControls = [
     label: msg`Natural features`,
     description: msg`Vegetation, glaciers, wetlands, rivers, and water bodies.`,
     requiresScene: false,
+  },
+  {
+    id: 'natural-feature-patterns',
+    label: msg`Area patterns`,
+    description: msg`Forest, swamp, scrub, orchard, scree, and cemetery signs.`,
+    requiresScene: false,
+    parent: 'natural-features',
   },
 ] as const satisfies readonly LayerControl[];
 
@@ -579,12 +588,18 @@ export function LayersPanel() {
                     control.id === 'satellite-imagery'
                       ? state.sentinelImageryAvailable
                       : state.sceneAvailable;
+                  const parentLayerId =
+                    'parent' in control ? control.parent : undefined;
                   const disabled =
                     mapLayers === null ||
                     (group.id === 'terrain' && state.weatherMapEnabled) ||
-                    (control.requiresScene && !requiredImageryAvailable);
+                    (control.requiresScene && !requiredImageryAvailable) ||
+                    (parentLayerId !== undefined && !state.visibility[parentLayerId]);
                   return (
-                    <Box key={control.id}>
+                    <Box
+                      key={control.id}
+                      sx={{ pl: parentLayerId === undefined ? 0 : 3.5 }}
+                    >
                       {group.id === 'satellites' &&
                       control.id === 'satellite-imagery' ? (
                         <Typography

@@ -203,6 +203,7 @@ const initialMapLayerState: MapLayerState = {
     'terrain-relief': true,
     'elevation-isolines': true,
     'natural-features': true,
+    'natural-feature-patterns': true,
     'restricted-areas': true,
     'detail-context': true,
     'hiking-paths': true,

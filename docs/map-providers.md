@@ -83,7 +83,7 @@ scattered dots, and orchards, vineyards, and nurseries share one regular grid of
 that marks man-made plantings. Shortbread cemeteries and grave yards get small crosses
 from z12. Neither source records leaf type or whether a swamp is passable, so forest
 type and swamp passability are not drawn. Over imagery these signs are hidden with the
-vegetation fills.
+vegetation fills, and the Layers tab's **Area patterns** hides them on their own.
 
 ## Detail vector: OSM Shortbread v1
 

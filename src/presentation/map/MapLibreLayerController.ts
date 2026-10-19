@@ -411,8 +411,6 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.landcover,
     mapLayerIds.glacierAreas,
     mapLayerIds.landcoverDetails,
-    mapLayerIds.landcoverPatterns,
-    mapLayerIds.landcoverPatternDetails,
     mapLayerIds.waterways,
     mapLayerIds.intermittentWaterways,
     mapLayerIds.ridges,
@@ -422,12 +420,14 @@ const logicalNativeLayerGroups: Readonly<
     mapLayerIds.waterLabels,
     mapLayerIds.ridgeLabels,
   ],
-  'restricted-areas': [mapLayerIds.restrictedAreas],
-  'detail-context': [
-    mapLayerIds.brownfieldAreas,
+  // GOST area signs: forest, swamp, scrub, plantation, scree, and cemetery patterns.
+  'natural-feature-patterns': [
+    mapLayerIds.landcoverPatterns,
+    mapLayerIds.landcoverPatternDetails,
     mapLayerIds.cemeteries,
-    mapLayerIds.buildings,
   ],
+  'restricted-areas': [mapLayerIds.restrictedAreas],
+  'detail-context': [mapLayerIds.brownfieldAreas, mapLayerIds.buildings],
   'hiking-paths': [
     mapLayerIds.hikingPaths,
     mapLayerIds.hikingPathDetails,
@@ -465,6 +465,23 @@ const logicalNativeLayerGroups: Readonly<
     importedTrackLayerIds.focusHighlightB,
   ],
 };
+
+/** Sub-layers draw only while their parent layer is visible as well. */
+const logicalSubLayers = [
+  { id: 'track-elevation-gradient', parent: 'imported-tracks' },
+  { id: 'natural-feature-patterns', parent: 'natural-features' },
+] as const satisfies readonly {
+  readonly id: LogicalMapLayerId;
+  readonly parent: LogicalMapLayerId;
+}[];
+
+function logicalLayerVisible(
+  layerId: LogicalMapLayerId,
+  visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+): boolean {
+  const parent = logicalSubLayers.find((subLayer) => subLayer.id === layerId)?.parent;
+  return visibility[layerId] && (parent === undefined || visibility[parent]);
+}
 
 const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
@@ -1137,19 +1154,19 @@ export class MapLibreLayerController {
       }
     }
 
-    const highlightVisible = this.importedTrackHighlightVisible(visibility);
+    const nativeVisible = logicalLayerVisible(layerId, visibility);
     for (const nativeId of nativeLayerIds) {
-      const nativeVisible =
-        layerId === 'track-elevation-gradient' ? highlightVisible : visible;
       map.setLayoutProperty(nativeId, 'visibility', nativeVisible ? 'visible' : 'none');
     }
-    if (layerId === 'imported-tracks') {
-      for (const nativeId of logicalNativeLayerGroups['track-elevation-gradient']) {
+    for (const subLayer of logicalSubLayers) {
+      if (subLayer.parent !== layerId) continue;
+      const subLayerVisible = logicalLayerVisible(subLayer.id, visibility);
+      for (const nativeId of logicalNativeLayerGroups[subLayer.id]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
             nativeId,
             'visibility',
-            highlightVisible ? 'visible' : 'none',
+            subLayerVisible ? 'visible' : 'none',
           );
         }
       }
@@ -3212,12 +3229,6 @@ export class MapLibreLayerController {
     return normalized;
   }
 
-  private importedTrackHighlightVisible(
-    visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
-  ): boolean {
-    return visibility['imported-tracks'] && visibility['track-elevation-gradient'];
-  }
-
   private currentVisibleRasterLayerId(): string | null {
     const map = this.#map;
     if (map === null) return null;
@@ -3289,6 +3300,7 @@ export class MapLibreLayerController {
       'terrain-relief',
       'elevation-isolines',
       'natural-features',
+      'natural-feature-patterns',
       'restricted-areas',
       'detail-context',
       'hiking-paths',
@@ -3297,10 +3309,7 @@ export class MapLibreLayerController {
       'imported-tracks',
       'track-elevation-gradient',
     ] as const) {
-      const layerVisible =
-        layerId === 'track-elevation-gradient'
-          ? this.importedTrackHighlightVisible(visibility)
-          : visibility[layerId];
+      const layerVisible = logicalLayerVisible(layerId, visibility);
       for (const nativeId of logicalNativeLayerGroups[layerId]) {
         if (map.getLayer(nativeId) !== undefined) {
           map.setLayoutProperty(
@@ -3827,7 +3836,8 @@ export class MapLibreLayerController {
     const trackVisibility: 'visible' | 'none' = visibility['imported-tracks']
       ? 'visible'
       : 'none';
-    const highlightVisibility: 'visible' | 'none' = this.importedTrackHighlightVisible(
+    const highlightVisibility: 'visible' | 'none' = logicalLayerVisible(
+      'track-elevation-gradient',
       visibility,
     )
       ? 'visible'

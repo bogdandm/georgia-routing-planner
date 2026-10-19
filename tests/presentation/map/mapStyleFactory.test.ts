@@ -172,6 +172,15 @@ describe('createHikingMapStyle', () => {
     ).toEqual([]);
   });
 
+  it('applies paint changes instantly so 3D-draped textures never freeze mid-fade', () => {
+    // MapLibre redraws draped terrain textures only on the first frame of a paint change;
+    // a transition would leave OSM fills stuck at their previous opacity in 3D.
+    expect(createHikingMapStyle(configuration).transition).toEqual({
+      duration: 0,
+      delay: 0,
+    });
+  });
+
   it('renders Shortbread brownfields, buildings, service roads, and detailed paths', () => {
     const style = createHikingMapStyle(configuration);
     const orderedLayerIds = style.layers.map((layer) => layer.id);

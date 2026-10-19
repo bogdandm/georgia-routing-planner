@@ -142,7 +142,7 @@ export function RenderBenchmarkPanel() {
     <Stack spacing={1}>
       <Typography variant="overline">3D render benchmark</Typography>
       <Typography variant="body2" color="text.secondary">
-        Switches to 3D above Mestia for about a minute, measures rendering, then
+        Switches to 3D over Tbilisi for about a minute, measures rendering, then
         restores your view. Keep this tab visible and leave the map alone while it runs.
       </Typography>
       <Button

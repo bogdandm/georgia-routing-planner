@@ -1,10 +1,11 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
 /**
- * Developer 3D render benchmark. It drives the native map through a fixed forested scene
- * above Mestia so reports from different computers describe the same work, and adds
- * synthetic WebGL measurements that separate fill-rate from draw-call limits. Reports
- * contain no user camera, tracks, markers, or URLs beyond provider host names.
+ * Developer 3D render benchmark. It drives the native map through a fixed scene over
+ * Tbilisi, looking toward the horizon across dense streets, buildings, and labels, so
+ * reports from different computers describe the same work, and adds synthetic WebGL
+ * measurements that separate fill-rate from draw-call limits. Reports contain no user
+ * camera, tracks, markers, or URLs beyond provider host names.
  */
 
 export type RenderBenchmarkPhaseName = 'static' | 'orbit' | 'zoom' | 'pan';
@@ -65,7 +66,8 @@ export interface SyntheticGpuResults {
 
 export interface RenderBenchmarkReport {
   readonly kind: 'trail-planner-render-benchmark';
-  readonly version: 1;
+  /** 2: the Tbilisi horizon scene; version 1 reports used a Mestia slope and differ. */
+  readonly version: 2;
   readonly createdAt: string;
   readonly environment: {
     readonly userAgent: string;
@@ -135,12 +137,13 @@ export interface RenderBenchmarkSummary {
   readonly gpuFrameP50Ms: number | null;
 }
 
+/** At the app's maximum pitch, so the horizon and many distant tiles stay in view. */
 const scene = {
-  longitude: 42.73,
-  latitude: 43.035,
-  zoom: 14.5,
-  bearing: 20,
-  pitch: 70,
+  longitude: 44.74552,
+  latitude: 41.78669,
+  zoom: 14.26,
+  bearing: 26.47,
+  pitch: 75,
 };
 /** Loading the scene from a cold cache can take this long on slow connections. */
 export const sceneSettleTimeoutMs = 30_000;
@@ -490,7 +493,7 @@ const phaseScripts: Record<
     await ease(map, { zoom: scene.zoom, duration: 1_500 }, signal);
     await sleep(1_500, signal);
   },
-  // Pans across the valley with a bearing change, like a user exploring a route.
+  // Pans across the city with a bearing change, like a user exploring a route.
   pan: async (map, signal) => {
     await ease(
       map,
@@ -910,7 +913,7 @@ export async function runRenderBenchmark(
 
     return {
       kind: 'trail-planner-render-benchmark',
-      version: 1,
+      version: 2,
       createdAt: new Date().toISOString(),
       environment: readEnvironment(map, gl),
       webGl: readWebGlInfo(gl, probe.timerQuery),

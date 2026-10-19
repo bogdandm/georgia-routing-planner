@@ -109,25 +109,25 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 
 ## State ownership
 
-| State                                                                         | Owner                                                           |
-| ----------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Active rail section, dialogs, developer mode, list sorts                      | Zustand `uiStore`                                               |
-| Native map, listeners, camera snapshot, terrain operation                     | `MapLibreFacade`                                                |
-| Middle-drag pan, Shift+left orbit, Ctrl+left look-around, touch rotation lock | `MapPointerGestureControl`                                      |
-| Native sources/layers for imagery, terrain, weather, tracks                   | `MapLibreLayerController`                                       |
-| Serializable layer, imagery, weather-map, and worker status                   | `mapLayerStore`                                                 |
-| Map navigation, placement, Satellite anchor, Weather point                    | `mapInteractionStore`                                           |
-| Settled viewport for search controls                                          | `MapViewportSnapshotStore`                                      |
-| Direct visual-COG scene registry and raster worker                            | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
-| Contour DEM fetch, parse, contour caches, worker fallback                     | `TerrainComputeEngine` / `TerrainComputeBackend`                |
-| Tracks, folders, markers, camera, layer and UI preferences                    | `AppDatabase` behind the application ports                      |
-| Loaded folders, previews, route plan, selection, multi-view                   | `TracksWorkspaceProvider` React state                           |
-| Marker collection, editor draft, per-marker forecasts                         | `MarkersWorkspaceProvider` React state                          |
-| Point-forecast request/result lifecycle                                       | `WeatherPanel` React state                                      |
-| Scene search results                                                          | `SatelliteBrowser` React state                                  |
-| Mosaic mode, dates, and request identity                                      | `SatelliteMosaicProvider` React state                           |
-| Map diagnostic snapshot / Sentinel query timeline                             | `MapDiagnosticsSnapshotStore` / `SentinelQueryDiagnosticsStore` |
-| Account session                                                               | Official Supabase client via `UserDataService`                  |
+| State                                                       | Owner                                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------- |
+| Active rail section, dialogs, developer mode, list sorts    | Zustand `uiStore`                                               |
+| Native map, listeners, camera snapshot, terrain operation   | `MapLibreFacade`                                                |
+| Mouse pan, orbit, look-around gestures; touch rotation lock | `MapPointerGestureControl`                                      |
+| Native sources/layers for imagery, terrain, weather, tracks | `MapLibreLayerController`                                       |
+| Serializable layer, imagery, weather-map, and worker status | `mapLayerStore`                                                 |
+| Map navigation, placement, Satellite anchor, Weather point  | `mapInteractionStore`                                           |
+| Settled viewport for search controls                        | `MapViewportSnapshotStore`                                      |
+| Direct visual-COG scene registry and raster worker          | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
+| Contour DEM fetch, parse, contour caches, worker fallback   | `TerrainComputeEngine` / `TerrainComputeBackend`                |
+| Tracks, folders, markers, camera, layer and UI preferences  | `AppDatabase` behind the application ports                      |
+| Loaded folders, previews, route plan, selection, multi-view | `TracksWorkspaceProvider` React state                           |
+| Marker collection, editor draft, per-marker forecasts       | `MarkersWorkspaceProvider` React state                          |
+| Point-forecast request/result lifecycle                     | `WeatherPanel` React state                                      |
+| Scene search results                                        | `SatelliteBrowser` React state                                  |
+| Mosaic mode, dates, and request identity                    | `SatelliteMosaicProvider` React state                           |
+| Map diagnostic snapshot / Sentinel query timeline           | `MapDiagnosticsSnapshotStore` / `SentinelQueryDiagnosticsStore` |
+| Account session                                             | Official Supabase client via `UserDataService`                  |
 
 Do not mirror authoritative map or durable data into Zustand. React reads map snapshots
 through `useSyncExternalStore`; snapshots are new readonly values per update and must

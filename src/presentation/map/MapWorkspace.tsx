@@ -131,6 +131,16 @@ const unavailableMapStyle: StyleSpecification = {
 
 const cameraRestoreTimeoutMs = 2_000;
 const terrainRetryDelaysMs = [1_000, 3_000] as const;
+/**
+ * MapLibre's drag-pan inertia covering the same distance in half the time. Its coast
+ * lasts velocity / deceleration and covers velocity² × linearity / (2 × deceleration),
+ * so doubling deceleration, linearity, and the speed cap halves only the duration.
+ */
+const dragPanInertia = {
+  linearity: 0.6,
+  deceleration: 5_000,
+  maxSpeed: 2_800,
+} as const;
 
 type MapWorkspaceNotice =
   'camera-save-failed' | 'camera-restore-failed' | 'shared-scene-restore-failed';
@@ -1520,7 +1530,7 @@ export function MapWorkspace({
             onClick={handleMapClick}
             boxZoom={false}
             doubleClickZoom
-            dragPan
+            dragPan={dragPanInertia}
             dragRotate={false}
             attributionControl={smartphoneViewport ? false : { compact: false }}
             keyboard

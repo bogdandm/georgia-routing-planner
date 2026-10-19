@@ -8,6 +8,7 @@ import {
 } from 'maplibre-gl';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
+import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
@@ -117,7 +118,12 @@ type MapLayerControllerLifecycle = Pick<
   | 'setTerrainInteractionActive'
 > &
   Partial<
-    Pick<MapLibreLayerController, 'getRasterSourceId' | 'isExpectedRasterCancellation'>
+    Pick<
+      MapLibreLayerController,
+      | 'getRasterSourceId'
+      | 'getTerrainOverlayPreferences'
+      | 'isExpectedRasterCancellation'
+    >
   >;
 
 const sourceRecoveryStabilityMs = 2_000;
@@ -1433,7 +1439,11 @@ export class MapLibreFacade implements MapFacade {
       if (map.getSource(mapSourceIds.terrainDem) === undefined) {
         map.addSource(
           mapSourceIds.terrainDem,
-          createTerrainDemSource(provider.terrain),
+          createTerrainDemSource(
+            provider.terrain,
+            this.layerController?.getTerrainOverlayPreferences?.().demTileSize ??
+              defaultTerrainOverlayPreferences.demTileSize,
+          ),
         );
       }
       if (this.#terrainSourceRefreshRequired) {

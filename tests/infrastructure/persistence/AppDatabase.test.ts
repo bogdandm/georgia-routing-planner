@@ -497,6 +497,7 @@ describe('AppDatabase', () => {
       terrainOverlays: {
         contourIntervalMeters: 25,
         shadeAboveSatellite: true,
+        demTileSize: 512,
       },
     } as const;
 
@@ -505,7 +506,7 @@ describe('AppDatabase', () => {
     await expect(database.loadMapLayerPreferences()).resolves.toEqual(preferences);
   });
 
-  it('loads stored layer preferences that still carry the removed DEM repair flag', async () => {
+  it('loads stored layer preferences saved before the DEM tile size setting', async () => {
     const preferences = await database.loadMapLayerPreferences();
     await database.settings.put({
       key: 'map.layers',
@@ -525,6 +526,7 @@ describe('AppDatabase', () => {
     expect(loaded.terrainOverlays).toEqual({
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
+      demTileSize: 256,
     });
   });
 

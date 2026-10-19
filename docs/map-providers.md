@@ -184,13 +184,16 @@ the source at z12 and MapLibre overzooms above it. Georgia is built from Coperni
 GLO-30 (about 30 m source spacing); one z12 pixel is about 14 m there.
 
 MapLibre loads this URL directly as the `terrain-dem` raster-dem source for hillshade
-relief and 3D terrain (exaggeration 1.15) and decodes it on its own workers. The source
-declares 256-pixel tiles although the images are 512 pixels: MapLibre sizes every 3D
-render-to-texture tile at four times the declared tile size, so the declaration keeps
-those textures at 1024 pixels instead of 2048. MapLibre therefore requests one zoom
-level finer DEM tiles below z12 than the image size alone would need. DEM elevation
-sampling for tracks, point inspection, and forecast downscaling uses the same tiles at
-their real size (`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
+relief and 3D terrain (exaggeration 1.15) and decodes it on its own workers. By default
+the source declares 256-pixel tiles although the images are 512 pixels: MapLibre sizes
+every 3D render-to-texture tile at four times the declared tile size, so the declaration
+keeps those textures at 1024 pixels instead of 2048, and MapLibre requests one zoom
+level finer DEM tiles below z12 than the image size alone would need. The Layers tab's
+**Elevation tiles** choice switches the declaration to 512 pixels (fewer terrain tiles,
+2048-pixel textures) for comparing both on real hardware; it is saved with the layer
+preferences and rebuilds the source in place, keeping 3D on. DEM elevation sampling for
+tracks, point inspection, and forecast downscaling uses the same tiles at their real
+size (`src/infrastructure/elevation/RasterDemElevationProvider.ts`).
 
 Mapterhorn was checked over Georgia before it replaced the AWS Open Data Mapzen
 Terrarium tiles: no out-of-range or isolated spike pixels were found, including the

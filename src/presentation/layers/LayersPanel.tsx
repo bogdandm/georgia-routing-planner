@@ -10,6 +10,8 @@ import {
   FormGroup,
   Slider,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -19,6 +21,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   supportedContourIntervals,
+  supportedTerrainDemTileSizes,
   type LogicalMapLayerId,
   type TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
@@ -316,6 +319,7 @@ export function LayersPanel() {
   const terrainOverlayProblem =
     terrainOverlayCommandProblem ?? state.terrainOverlays.problem;
   const contourIntervalMeters = state.terrainOverlays.preferences.contourIntervalMeters;
+  const demTileSize = state.terrainOverlays.preferences.demTileSize;
   const satelliteCatalogLabel = provider?.satellite.label ?? t`satellite catalog`;
 
   const changeVisibility = (layerId: LogicalMapLayerId, visible: boolean) => {
@@ -622,6 +626,57 @@ export function LayersPanel() {
                               : t`Apply a Sentinel scene to enable this layer.`
                             : i18n._(control.description)}
                       </Typography>
+                      {control.id === 'terrain-relief' ? (
+                        <Box sx={{ mt: 1, pl: 3.5 }}>
+                          <Stack
+                            direction="row"
+                            spacing={1.5}
+                            sx={{ alignItems: 'center' }}
+                          >
+                            <Typography
+                              id="dem-tile-size-label"
+                              variant="body2"
+                              sx={{ minWidth: 104 }}
+                            >
+                              <Trans>Elevation tiles</Trans>
+                            </Typography>
+                            <ToggleButtonGroup
+                              exclusive
+                              size="small"
+                              aria-labelledby="dem-tile-size-label"
+                              value={demTileSize}
+                              disabled={mapLayers === null || state.weatherMapEnabled}
+                              onChange={(_event, value: unknown) => {
+                                const nextDemTileSize =
+                                  supportedTerrainDemTileSizes.find(
+                                    (size) => size === value,
+                                  );
+                                if (nextDemTileSize === undefined) return;
+                                changeTerrainOverlayPreferences({
+                                  ...state.terrainOverlays.preferences,
+                                  demTileSize: nextDemTileSize,
+                                });
+                              }}
+                            >
+                              {supportedTerrainDemTileSizes.map((size) => (
+                                <ToggleButton key={size} value={size}>
+                                  {t`${size} px`}
+                                </ToggleButton>
+                              ))}
+                            </ToggleButtonGroup>
+                          </Stack>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block', mt: 0.5 }}
+                          >
+                            <Trans>
+                              Applies to relief and 3D. 256 px keeps 3D textures at 1024
+                              px; 512 px loads fewer tiles with 2048 px textures.
+                            </Trans>
+                          </Typography>
+                        </Box>
+                      ) : null}
                       {control.id === 'elevation-isolines' ? (
                         <Stack
                           direction="row"

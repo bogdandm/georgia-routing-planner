@@ -578,8 +578,10 @@ minor spacing 20–100 m, default 50 m) use the Mapterhorn DEM as published, wit
 client-side repair. Contour work runs in a terrain worker and falls back to inline work
 with a Layers warning if the worker cannot recover. The 2D/3D control reuses the same
 map and DEM source; failed 3D activation returns to 2D and reports in the status line.
-Reloads restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing
-and pitch and re-enters terrain once the map is ready. Details are in
+Under Relief shading, **Elevation tiles** chooses 256 px (default) or 512 px declared
+DEM tiles; it is saved in the browser and applies to relief and 3D at once. Reloads
+restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing and pitch
+and re-enters terrain once the map is ready. Details are in
 [runtime flows](./runtime-flows.md).
 
 Map errors are classified and shown in the status line; offline messaging promises only

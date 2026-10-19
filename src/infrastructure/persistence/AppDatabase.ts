@@ -604,6 +604,10 @@ const mapLayerPreferencesSchema = z
         // Records saved before the provider switch may still carry the removed DEM
         // repair flag; this non-strict object strips it on load.
         shadeAboveSatellite: z.boolean(),
+        // Records saved before this setting load with the default size.
+        demTileSize: z
+          .union([z.literal(256), z.literal(512)])
+          .default(defaultTerrainOverlayPreferences.demTileSize),
       })
       .default(defaultTerrainOverlayPreferences),
   })

@@ -52,6 +52,7 @@ class FakeLayerMap {
   fitOptions: Record<string, unknown> | null = null;
   sourceLoaded = true;
   terrain: unknown = null;
+  readonly terrainCalls: unknown[] = [];
   loadSourceOnNextSourceDataSubscription = false;
   styleLoaded = true;
   directRasterSourceAdds = 0;
@@ -245,6 +246,11 @@ class FakeLayerMap {
 
   public getTerrain(): unknown {
     return this.terrain;
+  }
+
+  public setTerrain(terrain: unknown): void {
+    this.terrainCalls.push(terrain);
+    this.terrain = terrain;
   }
   public getBounds(): {
     readonly getWest: () => number;
@@ -1050,6 +1056,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
         shadeAboveSatellite: true,
+        demTileSize: 256,
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
@@ -1975,6 +1982,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 50,
         shadeAboveSatellite: true,
+        demTileSize: 256,
       }),
     ).toEqual({ status: 'success' });
     const aboveOrder = [...map.layers.keys()];
@@ -2042,6 +2050,7 @@ describe('MapLibreLayerController', () => {
       controller.setTerrainOverlayPreferences({
         contourIntervalMeters: 25,
         shadeAboveSatellite: false,
+        demTileSize: 256,
       }),
     ).toEqual({ status: 'success' });
     const updatedSource = map.sources.get('terrain-contours') as {
@@ -2065,6 +2074,38 @@ describe('MapLibreLayerController', () => {
       maxzoom: 12,
       encoding: 'terrarium',
     });
+  });
+
+  it('rebuilds the DEM source at the chosen tile size and keeps 3D terrain on it', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const terrain = { source: 'terrain-dem', exaggeration: 1.15 };
+    map.terrain = terrain;
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        ...controller.getTerrainOverlayPreferences(),
+        demTileSize: 512,
+      }),
+    ).toEqual({ status: 'success' });
+
+    expect(map.sources.get('terrain-dem')).toMatchObject({ tileSize: 512 });
+    expect(map.layers.has(terrainOverlayLayerIds.reliefShade)).toBe(true);
+    // Terrain is detached around the rebuild and restored with the same options.
+    expect(map.terrainCalls).toEqual([null, terrain]);
+    expect(map.terrain).toBe(terrain);
+    await waitFor(async () => {
+      expect(
+        (await services.database.loadMapLayerPreferences()).terrainOverlays.demTileSize,
+      ).toBe(512);
+    });
+
+    // An unchanged size leaves the source and terrain alone.
+    controller.setTerrainOverlayPreferences(controller.getTerrainOverlayPreferences());
+    expect(map.terrainCalls).toHaveLength(2);
   });
 
   it('publishes terrain loading only after sustained DEM loading while relief is in use', () => {
@@ -2791,6 +2832,7 @@ describe('MapLibreLayerController', () => {
       terrainOverlays: {
         contourIntervalMeters: 25,
         shadeAboveSatellite: true,
+        demTileSize: 256,
       },
     });
     const map = new FakeLayerMap();
@@ -2822,6 +2864,7 @@ describe('MapLibreLayerController', () => {
     expect(controller.getTerrainOverlayPreferences()).toEqual({
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
+      demTileSize: 256,
     });
   });
 

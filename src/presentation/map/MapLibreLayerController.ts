@@ -27,6 +27,7 @@ import type {
   MapLayerPreferencesRepository,
   SatelliteRenderingMode,
   SatelliteRenderingTuning,
+  TerrainDemTileSize,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import {
@@ -2906,8 +2907,15 @@ export class MapLibreLayerController {
       return { status: 'success' };
     }
     try {
-      if (map.getSource(mapSourceIds.terrainDem) === undefined) {
-        map.addSource(mapSourceIds.terrainDem, createTerrainDemSource(this.terrain));
+      const demTileSize = this.#terrainOverlayPreferences.demTileSize;
+      const demSource = map.getSource(mapSourceIds.terrainDem);
+      if (demSource === undefined) {
+        map.addSource(
+          mapSourceIds.terrainDem,
+          createTerrainDemSource(this.terrain, demTileSize),
+        );
+      } else if (demSource.tileSize !== demTileSize) {
+        this.replaceTerrainDemSource(map, demTileSize);
       }
       if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
         map.addLayer(
@@ -3009,6 +3017,33 @@ export class MapLibreLayerController {
     } catch {
       return this.terrainOverlayFailure('relief-render-failed');
     }
+  }
+
+  /**
+   * MapLibre cannot change a source's tile size in place. 3D terrain and the relief layer
+   * both read the DEM source, so terrain is detached and restored with the same options
+   * around the rebuild; the caller re-adds the relief layer in its usual position.
+   */
+  private replaceTerrainDemSource(
+    map: MapLibreMap,
+    tileSize: TerrainDemTileSize,
+  ): void {
+    const terrain = map.getTerrain();
+    if (terrain !== null) map.setTerrain(null);
+    if (map.getLayer(terrainOverlayLayerIds.reliefShade) !== undefined) {
+      map.removeLayer(terrainOverlayLayerIds.reliefShade);
+    }
+    map.removeSource(mapSourceIds.terrainDem);
+    map.addSource(
+      mapSourceIds.terrainDem,
+      createTerrainDemSource(this.terrain, tileSize),
+    );
+    if (terrain !== null) map.setTerrain(terrain);
+    this.logger.log({
+      level: 'info',
+      name: 'map.terrain.dem-tile-size-changed',
+      data: { tileSize },
+    });
   }
 
   private ensureContourLayers(map: MapLibreMap): void {

@@ -149,6 +149,7 @@ export class MapPointerGestureControl {
   #pendingDelta = { x: 0, y: 0 };
   #frameRequest: number | null = null;
   #cameraMoved = false;
+  #movingCamera = false;
   #twoFingerTouch: TwoFingerTouch | null = null;
   /** Decision for the current two-finger gesture; null until one movement dominates. */
   #twoFingerIntent: TwoFingerIntent | null = null;
@@ -157,10 +158,10 @@ export class MapPointerGestureControl {
   readonly #onCameraGestureEnd: () => void;
 
   /**
-   * `onCameraGestureEnd` runs once after a gesture that moved the camera is released.
-   * Every step is its own zero-duration MapLibre move with its own `moveend`, so the
-   * owner treats the whole gesture as one movement: it skips step `moveend`s while
-   * `cameraGestureActive` is true and settles here instead.
+   * Every gesture step is its own zero-duration MapLibre move with its own `moveend`.
+   * The owner treats the whole gesture as one movement: it skips the `moveend`s fired
+   * while `movingCamera` is true and settles once in `onCameraGestureEnd`, which runs
+   * when a gesture that moved the camera ends by release, focus loss, or 3D turning off.
    */
   public constructor({
     pivotIndicator = createOrbitPivotIndicator(),
@@ -173,9 +174,9 @@ export class MapPointerGestureControl {
     this.#onCameraGestureEnd = onCameraGestureEnd;
   }
 
-  /** True from the press of a pointer camera gesture until its release. */
-  public get cameraGestureActive(): boolean {
-    return this.#gesture !== null;
+  /** True only while a gesture step synchronously moves the camera. */
+  public get movingCamera(): boolean {
+    return this.#movingCamera;
   }
 
   public attach(container: HTMLElement, map?: MapLibreMap): void {
@@ -204,7 +205,7 @@ export class MapPointerGestureControl {
   public setTerrainOrbitEnabled(enabled: boolean): void {
     this.#terrainOrbitEnabled = enabled;
     if (!enabled && (this.#gesture === 'orbit' || this.#gesture === 'look')) {
-      this.finishGesture();
+      this.endGesture();
     }
   }
 
@@ -227,6 +228,8 @@ export class MapPointerGestureControl {
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
+    // A chorded press stays native; the running gesture owns the camera until it ends.
+    if (this.#gesture !== null) return;
     const gesture: Gesture =
       event.button === 1
         ? this.#terrainOrbitEnabled
@@ -248,6 +251,8 @@ export class MapPointerGestureControl {
     this.#lastPointer = { x: event.clientX, y: event.clientY };
     window.addEventListener('mousemove', this.handleMouseMove, true);
     window.addEventListener('mouseup', this.handleMouseUp, true);
+    // Without focus the release never arrives, so the gesture ends here instead.
+    window.addEventListener('blur', this.handleWindowBlur);
 
     if (gesture !== 'orbit' || this.#map === null) return;
 
@@ -283,14 +288,28 @@ export class MapPointerGestureControl {
     this.#pendingDelta = { x: 0, y: 0 };
     if (gesture === null || map === null) return;
     if (horizontalDelta === 0 && verticalDelta === 0) return;
+    this.#movingCamera = true;
+    try {
+      if (this.moveCamera(gesture, map, horizontalDelta, verticalDelta)) {
+        this.#cameraMoved = true;
+      }
+    } finally {
+      this.#movingCamera = false;
+    }
+  };
 
+  /** Applies one frame of pointer travel; returns whether the camera was moved. */
+  private moveCamera(
+    gesture: Exclude<Gesture, null>,
+    map: MapLibreMap,
+    horizontalDelta: number,
+    verticalDelta: number,
+  ): boolean {
     if (gesture === 'pan') {
       map.panBy([-horizontalDelta, -verticalDelta], { duration: 0 });
-      this.#cameraMoved = true;
-      return;
+      return true;
     }
-    if (!this.#terrainOrbitEnabled) return;
-    this.#cameraMoved = true;
+    if (!this.#terrainOrbitEnabled) return false;
     const sensitivity = gesture === 'look' ? lookSensitivity : 1;
     const bearing =
       map.getBearing() + horizontalDelta * bearingDegreesPerPixel * sensitivity;
@@ -326,10 +345,10 @@ export class MapPointerGestureControl {
         );
       }
       map.easeTo({ ...camera, duration: 0, essential: true, freezeElevation: true });
-      return;
+      return true;
     }
     const anchor = this.#orbitAnchor;
-    if (anchor === null) return;
+    if (anchor === null) return false;
     map.easeTo({
       around: anchor,
       bearing,
@@ -337,23 +356,32 @@ export class MapPointerGestureControl {
       duration: 0,
       essential: true,
     });
-  };
+    return true;
+  }
 
   private readonly handleMouseUp = (event: MouseEvent): void => {
     const gesture = this.#gesture;
     if (gesture === null || event.button !== this.#gestureButton) return;
-    const suppressClick = gesture !== 'pan' && event.button === 0;
     event.preventDefault();
     event.stopImmediatePropagation();
+    this.endGesture();
+    if (gesture !== 'pan' && event.button === 0) this.suppressNextClick();
+  };
+
+  private readonly handleWindowBlur = (): void => {
+    this.endGesture();
+  };
+
+  /** Applies travel still waiting for a frame, ends the gesture, and settles a move. */
+  private endGesture(): void {
     if (this.#frameRequest !== null) {
       window.cancelAnimationFrame(this.#frameRequest);
       this.applyPendingMove();
     }
     const cameraMoved = this.#cameraMoved;
     this.finishGesture();
-    if (suppressClick) this.suppressNextClick();
     if (cameraMoved) this.#onCameraGestureEnd();
-  };
+  }
 
   private readonly handleAuxClick = (event: MouseEvent): void => {
     if (event.button === 1) event.preventDefault();
@@ -444,6 +472,7 @@ export class MapPointerGestureControl {
     this.#pivotIndicator.hide();
     window.removeEventListener('mousemove', this.handleMouseMove, true);
     window.removeEventListener('mouseup', this.handleMouseUp, true);
+    window.removeEventListener('blur', this.handleWindowBlur);
   }
 
   private finishTouchGesture(): void {

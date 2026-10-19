@@ -936,8 +936,8 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMoveEnd = (): void => {
     // Each step of a pointer camera gesture is its own MapLibre move; the gesture
-    // settles once when it is released, like MapLibre's own drag gestures.
-    if (this.#pointerGestures.cameraGestureActive) return;
+    // settles once when it ends, like MapLibre's own drag gestures.
+    if (this.#pointerGestures.movingCamera) return;
     this.layerController?.setTerrainInteractionActive(false);
     // Terrain mode changes deliberately issue intermediate camera commands. Persisting
     // one of those transient views can restore a pitched flat map or a level 3D map.

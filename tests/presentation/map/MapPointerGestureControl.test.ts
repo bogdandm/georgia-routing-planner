@@ -316,6 +316,12 @@ describe('MapPointerGestureControl', () => {
       .mockImplementation((callback) => frames.push(callback));
     const container = document.createElement('div');
     const { easeTo, map } = createMapDouble();
+    const movingDuringSteps: boolean[] = [];
+    const applyStep = easeTo.getMockImplementation();
+    easeTo.mockImplementation((options) => {
+      movingDuringSteps.push(control.movingCamera);
+      applyStep?.(options);
+    });
     const onCameraGestureEnd = vi.fn();
     const control = new MapPointerGestureControl({
       pivotIndicator: createPivotDouble(),
@@ -344,12 +350,33 @@ describe('MapPointerGestureControl', () => {
     expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(24);
 
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 60, clientY: 0 }));
-    expect(control.cameraGestureActive).toBe(true);
     window.dispatchEvent(new MouseEvent('mouseup', { button: 1 }));
     expect(easeTo).toHaveBeenCalledTimes(2);
     expect(easeTo.mock.calls[1]?.[0].bearing).toBeCloseTo(26.8);
-    expect(control.cameraGestureActive).toBe(false);
+    expect(movingDuringSteps).toEqual([true, true]);
+    expect(control.movingCamera).toBe(false);
     expect(onCameraGestureEnd).toHaveBeenCalledOnce();
+
+    // A chorded Ctrl+left stays native, and losing focus ends the orbit with its
+    // queued travel instead of waiting for a release that never arrives.
+    press();
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 0 }));
+    const chord = new MouseEvent('mousedown', {
+      button: 0,
+      ctrlKey: true,
+      cancelable: true,
+    });
+    container.dispatchEvent(chord);
+    window.dispatchEvent(new Event('blur'));
+    expect(chord.defaultPrevented).toBe(false);
+    expect(easeTo).toHaveBeenCalledTimes(3);
+    expect(easeTo.mock.calls[2]?.[0]).toMatchObject({
+      around: { lng: 44.8, lat: 41.7 },
+    });
+    expect(easeTo.mock.calls[2]?.[0].bearing).toBeCloseTo(32.4);
+    expect(onCameraGestureEnd).toHaveBeenCalledTimes(2);
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 90, clientY: 0 }));
+    expect(frames).toHaveLength(3);
     control.detach();
     requestFrame.mockRestore();
   });

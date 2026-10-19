@@ -474,7 +474,6 @@ export function WorkspaceRail({
       </Tabs>
 
       <ButtonBase
-        aria-label={t`Share map view`}
         onClick={onShare}
         sx={{
           minWidth: 52,

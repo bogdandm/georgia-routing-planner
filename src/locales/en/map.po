@@ -109,6 +109,11 @@ msgstr "Coordinates"
 msgid "Coordinates copied"
 msgstr "Coordinates copied"
 
+#. js-lingui-id: 6V3Ea3
+#: src/presentation/map/CopyLinkButton.tsx
+msgid "Copied"
+msgstr "Copied"
+
 #. js-lingui-id: hAvoLY
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Copy coordinates"
@@ -116,9 +121,13 @@ msgstr "Copy coordinates"
 
 #. js-lingui-id: y1eoq1
 #: src/presentation/map/MapPointInspectorContent.tsx
-#: src/presentation/map/MapShareDialog.tsx
 msgid "Copy link"
 msgstr "Copy link"
+
+#. js-lingui-id: zpqEOw
+#: src/presentation/map/MapShareDialog.tsx
+msgid "Copy map link"
+msgstr "Copy map link"
 
 #. js-lingui-id: ViKH90
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -203,7 +212,6 @@ msgid "Link"
 msgstr "Link"
 
 #. js-lingui-id: edWbV6
-#: src/presentation/map/MapShareDialog.tsx
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Link copied"
 msgstr "Link copied"
@@ -237,6 +245,11 @@ msgstr "Map point"
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Map point actions"
 msgstr "Map point actions"
+
+#. js-lingui-id: klnHKy
+#: src/presentation/map/MapShareDialog.tsx
+msgid "Map view"
+msgstr "Map view"
 
 #. js-lingui-id: iDuQuY
 #: src/presentation/map/MapWorkspace.tsx
@@ -314,10 +327,10 @@ msgstr "Search satellite scenes here"
 msgid "Sentinel-2 image"
 msgstr "Sentinel-2 image"
 
-#. js-lingui-id: bdo1_8
+#. js-lingui-id: Z8lGw6
 #: src/presentation/map/MapShareDialog.tsx
-msgid "Share map view"
-msgstr "Share map view"
+msgid "Share"
+msgstr "Share"
 
 #. js-lingui-id: LFKLqp
 #: src/presentation/map/MapPointInspectorContent.tsx

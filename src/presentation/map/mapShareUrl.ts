@@ -8,6 +8,7 @@ import type {
   MapLayerPreset,
   TerrainMode,
 } from '@/presentation/map/mapTypes';
+import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 
 const mapShareSchemaVersion = 2;
 
@@ -219,10 +220,12 @@ export function updateWeatherMapUrl(
 
 /**
  * Creates a share URL only when called from an explicit user action. Other query
- * parameters and the workspace-tab hash are kept; a shared scene opens Satellite.
+ * parameters and the workspace-tab hash are kept; a shared scene opens Satellite. An
+ * open shared-track capability is reduced to `#tracks`: a map link never shares a track.
  */
 export function createMapShareUrl(currentUrl: string, view: MapShareView): string {
   const url = new URL(currentUrl);
+  if (parseTrackShareLocation(url.hash).kind !== 'none') url.hash = '#tracks';
   url.searchParams.set('map', String(mapShareSchemaVersion));
   url.searchParams.set('lat', view.center.latitude.toFixed(coordinatePrecision));
   url.searchParams.set('lon', view.center.longitude.toFixed(coordinatePrecision));

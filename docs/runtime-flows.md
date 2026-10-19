@@ -62,6 +62,9 @@ combines both owners so neither clears the other.
    readiness; terrain starts after Ready through the normal retry path. Until that
    attempt settles, settled flat views are still stored as 3D. Selecting 2D or Mosaic
    during loading supersedes that intent, levels the camera, and stores a 2D view.
+   Fit-to-bounds commands, such as opening a shared track, wait until that attempt and
+   any other terrain transition settle, because a transition ends by restoring the
+   camera it started from. A map that is degraded before the attempt fits in 2D at once.
 3. On `moveend` the facade reads center, zoom, bearing, pitch, and terrain mode, updates
    its snapshot, and calls the view-settled port.
 4. `SettledCameraPersistence` keeps only the newest view during a 400 ms debounce, then
@@ -85,12 +88,17 @@ Share links are built only on explicit actions by `presentation/map/mapShareUrl.
 `readShareableMapState` reads the camera, terrain mode, visible static basemap, and the
 selected scene while Sentinel imagery is visible; `selectMapShareView` applies the
 `map.share-preferences` record and an optional clicked center; `createMapShareUrl`
-writes `map=2`, `lat`, `lon`, `z`, `view`, `bearing`/`pitch` in 3D, `base`, and `scene`.
-The rail and **Share…** open `MapShareDialog` through
+writes `map=2`, `lat`, `lon`, `z`, `view`, `bearing`/`pitch` in 3D, `base`, and `scene`,
+and reduces an open `#tracks/share/…` capability to `#tracks`. The rail, point
+**Share…**, and track **Share…** open `MapShareDialog` through
 `mapInteractionStore.shareRequest`, which captures the page URL. The dialog shows its
 link and options only after the stored preferences load, so a copy or change never
 starts from defaults. Point-action **Copy link** and the Satellite card's **Share link**
-read the stored preferences directly.
+read the stored preferences directly. The dialog's `TrackShareTable` reads the drawn
+tracks from `TracksWorkspaceProvider`; each row loads, enables, or disables its public
+share through `TrackShareService` with its own abortable request, and
+`createTrackShareUrl` appends the capability fragment to the dialog's map link. A track
+link with a scene stays on Tracks instead of opening Satellite.
 
 ## Terrain transition
 

@@ -1,18 +1,16 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   Alert,
   Box,
-  Button,
   Checkbox,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  Snackbar,
+  IconButton,
   Stack,
   TextField,
   Typography,
@@ -25,6 +23,7 @@ import {
   type MapSharePreferences,
 } from '@/application/map/MapSharePreferences';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { CopyLinkButton } from '@/presentation/map/CopyLinkButton';
 import {
   closeMapShare,
   mapInteractionStore,
@@ -36,6 +35,7 @@ import {
   selectMapShareView,
   type SatelliteBasemap,
 } from '@/presentation/map/mapShareUrl';
+import { TrackShareTable } from '@/presentation/tracks/TrackShareTable';
 
 // The same names as the quick layer chooser, so both share one catalog entry each.
 const basemapLabels: Readonly<Record<SatelliteBasemap, MessageDescriptor>> = {
@@ -44,12 +44,6 @@ const basemapLabels: Readonly<Record<SatelliteBasemap, MessageDescriptor>> = {
   'esri-satellite': msg`Esri World Imagery`,
   'napr-orthophoto': msg`NAPR Orthophoto`,
 };
-
-enum CopyState {
-  Idle,
-  Copied,
-  Failed,
-}
 
 function ShareOption({
   label,
@@ -98,9 +92,10 @@ function ShareOption({
 }
 
 /**
- * The single map share dialog, opened from the rail for the map center or from map point
- * actions for a clicked point. Its options are browser-local preferences that the
- * point action **Copy link** applies without opening the dialog.
+ * The single Share dialog, opened from the rail for the map center or from map point
+ * actions for a clicked point. Its map options are browser-local preferences that the
+ * point action **Copy link** applies without opening the dialog. Below the map link,
+ * the tracks drawn on the map get their own public links built on that map link.
  */
 export function MapShareDialog() {
   const { t, i18n } = useLingui();
@@ -120,7 +115,7 @@ export function MapShareDialog() {
   // Null until the stored record loads; the link and options wait for it so a copy or
   // change never starts from defaults that would overwrite the stored choices.
   const [preferences, setPreferences] = useState<MapSharePreferences | null>(null);
-  const [copyState, setCopyState] = useState(CopyState.Idle);
+  const [copyFailed, setCopyFailed] = useState(false);
   const open = request !== null;
 
   useEffect(() => {
@@ -163,14 +158,16 @@ export function MapShareDialog() {
       : createMapShareUrl(shownRequest.pageUrl, view);
   const close = () => {
     closeMapShare();
-    if (copyState === CopyState.Failed) setCopyState(CopyState.Idle);
+    setCopyFailed(false);
   };
-  const copyLink = async () => {
+  const copyLink = async (): Promise<boolean> => {
     try {
       await navigator.clipboard.writeText(url);
-      setCopyState(CopyState.Copied);
+      setCopyFailed(false);
+      return true;
     } catch {
-      setCopyState(CopyState.Failed);
+      setCopyFailed(true);
+      return false;
     }
   };
 
@@ -201,56 +198,61 @@ export function MapShareDialog() {
   }
 
   return (
-    <>
-      <Dialog open={open} onClose={close} fullWidth maxWidth="sm">
-        <DialogTitle>
-          <Trans>Share map view</Trans>
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2}>
+    <Dialog open={open} onClose={close} fullWidth maxWidth="sm">
+      <DialogTitle sx={{ pr: 7 }}>
+        <Trans>Share</Trans>
+      </DialogTitle>
+      <DialogContent>
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              <Trans>Map view</Trans>
+            </Typography>
             {locationText === null ? null : (
               <Typography variant="body2" color="text.secondary">
                 {locationText}
               </Typography>
             )}
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                <Trans>Include in link</Trans>
-              </Typography>
-              <Stack spacing={1.5} sx={{ px: 1 }}>
-                <ShareOption
-                  label={t`Satellite layer`}
-                  description={
-                    basemapLabel === null
-                      ? t`No satellite layer is shown on the map.`
-                      : i18n._(basemapLabel)
-                  }
-                  available={preferences !== null && basemapLabel !== null}
-                  included={preferences?.includeSatelliteLayer ?? false}
-                  onChange={(includeSatelliteLayer) => {
-                    changePreferences({ includeSatelliteLayer });
-                  }}
-                />
-                <ShareOption
-                  label={t`Sentinel-2 image`}
-                  description={sceneText}
-                  available={preferences !== null && sharedScene !== null}
-                  included={preferences?.includeSentinelImage ?? false}
-                  onChange={(includeSentinelImage) => {
-                    changePreferences({ includeSentinelImage });
-                  }}
-                />
-                <ShareOption
-                  label={t`3D camera`}
-                  description={cameraText}
-                  available={preferences !== null && state?.terrainMode === 'terrain'}
-                  included={preferences?.include3dCamera ?? false}
-                  onChange={(include3dCamera) => {
-                    changePreferences({ include3dCamera });
-                  }}
-                />
-              </Stack>
-            </Box>
+          </Box>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+              <Trans>Include in link</Trans>
+            </Typography>
+            <Stack spacing={1.5} sx={{ px: 1 }}>
+              <ShareOption
+                label={t`Satellite layer`}
+                description={
+                  basemapLabel === null
+                    ? t`No satellite layer is shown on the map.`
+                    : i18n._(basemapLabel)
+                }
+                available={preferences !== null && basemapLabel !== null}
+                included={preferences?.includeSatelliteLayer ?? false}
+                onChange={(includeSatelliteLayer) => {
+                  changePreferences({ includeSatelliteLayer });
+                }}
+              />
+              <ShareOption
+                label={t`Sentinel-2 image`}
+                description={sceneText}
+                available={preferences !== null && sharedScene !== null}
+                included={preferences?.includeSentinelImage ?? false}
+                onChange={(includeSentinelImage) => {
+                  changePreferences({ includeSentinelImage });
+                }}
+              />
+              <ShareOption
+                label={t`3D camera`}
+                description={cameraText}
+                available={preferences !== null && state?.terrainMode === 'terrain'}
+                included={preferences?.include3dCamera ?? false}
+                onChange={(include3dCamera) => {
+                  changePreferences({ include3dCamera });
+                }}
+              />
+            </Stack>
+          </Box>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <TextField
               fullWidth
               size="small"
@@ -261,38 +263,32 @@ export function MapShareDialog() {
                 event.target.select();
               }}
             />
-            {copyState === CopyState.Failed ? (
-              <Alert severity="error">
-                <Trans>
-                  The link could not be copied. Select it and copy it manually.
-                </Trans>
-              </Alert>
-            ) : null}
+            <CopyLinkButton
+              label={t`Copy map link`}
+              variant="contained"
+              disabled={url === ''}
+              copy={copyLink}
+            />
           </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, pt: 1, gap: 1 }}>
-          <Button size="small" onClick={close}>
-            <Trans>Close</Trans>
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<ContentCopyOutlinedIcon />}
-            disabled={url === ''}
-            onClick={() => void copyLink()}
-          >
-            <Trans>Copy link</Trans>
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar
-        open={copyState === CopyState.Copied}
-        autoHideDuration={2_500}
-        message={t`Link copied`}
-        onClose={() => {
-          setCopyState(CopyState.Idle);
-        }}
-      />
-    </>
+          {copyFailed ? (
+            <Alert severity="error">
+              <Trans>
+                The link could not be copied. Select it and copy it manually.
+              </Trans>
+            </Alert>
+          ) : null}
+          <TrackShareTable mapUrl={url} />
+        </Stack>
+      </DialogContent>
+      {/* A sibling of the title, so the dialog's accessible name stays "Share". */}
+      <IconButton
+        size="small"
+        aria-label={t`Close`}
+        onClick={close}
+        sx={{ position: 'absolute', top: 12, right: 12 }}
+      >
+        <CloseIcon sx={{ fontSize: 20 }} />
+      </IconButton>
+    </Dialog>
   );
 }

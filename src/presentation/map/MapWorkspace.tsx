@@ -106,6 +106,7 @@ import {
   type MapPointAction,
 } from '@/presentation/map/MapPointInspectorContent';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
+import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
 import { WeatherTimeControl } from '@/presentation/weather/WeatherTimeControl';
 import {
@@ -730,11 +731,24 @@ export function MapWorkspace({
       },
     );
   }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand]);
+  // A terrain transition ends by jumping back to the camera it started from, so a fit
+  // waits for it, including a restored or shared 3D view that has not entered terrain
+  // yet. In 3D the fit then also faces along the track. The startup intent only starts
+  // on a ready map, so a degraded map fits in 2D instead of waiting.
+  const terrainTransitionPending =
+    terrainCommandState === 'enabling' ||
+    terrainCommandState === 'disabling' ||
+    (startupTerrainRequested &&
+      startupTerrainIntentActive &&
+      !mosaicActive &&
+      snapshot.lifecycle === 'ready' &&
+      snapshot.terrainMode !== 'terrain');
   useEffect(() => {
     if (
       fitBoundsCommand === null ||
       snapshot.lifecycle === 'loading' ||
-      cameraWaitsForSheet
+      cameraWaitsForSheet ||
+      terrainTransitionPending
     ) {
       return;
     }
@@ -757,6 +771,7 @@ export function MapWorkspace({
     fitBoundsCommand,
     getNavigationPadding,
     snapshot.lifecycle,
+    terrainTransitionPending,
   ]);
 
   useEffect(() => {
@@ -1032,6 +1047,8 @@ export function MapWorkspace({
     startupTerrainConsumed.current = true;
     void handleTerrainModeChange('terrain').finally(() => {
       cameraPersistence.setStartupTerrainPending(false);
+      // Settled either way; a later 2D fallback must not hold fits as a pending intent.
+      setStartupTerrainIntentActive(false);
     });
   }, [
     cameraPersistence,
@@ -1182,7 +1199,12 @@ export function MapWorkspace({
 
   useEffect(() => {
     const shared = sharedMapView;
-    if (shared?.sceneKey !== null && shared !== null) {
+    // A track link with a scene still opens Tracks to show the shared track.
+    if (
+      shared?.sceneKey !== null &&
+      shared !== null &&
+      parseTrackShareLocation(window.location.hash).kind === 'none'
+    ) {
       setActiveTab('satellite');
       setNavigationCollapsed(false);
     }

@@ -1,16 +1,5 @@
 const sharePrefix = '#tracks/share/';
 const tokenPattern = /^[A-Za-z0-9_-]{43}$/;
-const staleMapParameters = [
-  'map',
-  'lat',
-  'lon',
-  'z',
-  'zoom',
-  'scene',
-  'view',
-  'bearing',
-  'pitch',
-] as const;
 
 export function parseTrackShareLocation(
   hash: string,
@@ -33,10 +22,13 @@ export function parseTrackShareLocation(
   return { kind: 'shared', token };
 }
 
-export function createTrackShareUrl(currentUrl: string, token: string): string {
+/**
+ * Adds a track capability to a map share link. The recipient's map starts with the
+ * link's view, layer, and 2D/3D mode, then fits to the track once it loads.
+ */
+export function createTrackShareUrl(mapShareUrl: string, token: string): string {
   if (!tokenPattern.test(token)) throw new Error('Track share token is invalid.');
-  const url = new URL(currentUrl);
-  for (const parameter of staleMapParameters) url.searchParams.delete(parameter);
+  const url = new URL(mapShareUrl);
   url.hash = `tracks/share/1.${token}`;
   return url.toString();
 }

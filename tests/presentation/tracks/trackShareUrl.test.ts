@@ -8,13 +8,13 @@ import {
 const token = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
 describe('track share URLs', () => {
-  it('round-trips the canonical fragment', () => {
+  it('adds the capability fragment to a map link and round-trips it', () => {
     const url = createTrackShareUrl(
-      'https://example.test/planner/?developer=1&lat=42&zoom=10#satellite',
+      'https://example.test/planner/?developer=1&map=2&lat=42&lon=44&z=10&view=3d&bearing=12&pitch=50&scene=sentinel-2-l2a:S2A#satellite',
       token,
     );
     expect(url).toBe(
-      `https://example.test/planner/?developer=1#tracks/share/1.${token}`,
+      `https://example.test/planner/?developer=1&map=2&lat=42&lon=44&z=10&view=3d&bearing=12&pitch=50&scene=sentinel-2-l2a:S2A#tracks/share/1.${token}`,
     );
     expect(parseTrackShareLocation(new URL(url).hash)).toEqual({
       kind: 'shared',

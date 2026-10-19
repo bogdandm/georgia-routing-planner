@@ -109,6 +109,11 @@ msgstr "Координаты"
 msgid "Coordinates copied"
 msgstr "Координаты скопированы"
 
+#. js-lingui-id: 6V3Ea3
+#: src/presentation/map/CopyLinkButton.tsx
+msgid "Copied"
+msgstr "Скопировано"
+
 #. js-lingui-id: hAvoLY
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Copy coordinates"
@@ -116,9 +121,13 @@ msgstr "Копировать координаты"
 
 #. js-lingui-id: y1eoq1
 #: src/presentation/map/MapPointInspectorContent.tsx
-#: src/presentation/map/MapShareDialog.tsx
 msgid "Copy link"
 msgstr "Копировать ссылку"
+
+#. js-lingui-id: zpqEOw
+#: src/presentation/map/MapShareDialog.tsx
+msgid "Copy map link"
+msgstr "Ссылка на карту"
 
 #. js-lingui-id: ViKH90
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -203,7 +212,6 @@ msgid "Link"
 msgstr "Ссылка"
 
 #. js-lingui-id: edWbV6
-#: src/presentation/map/MapShareDialog.tsx
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Link copied"
 msgstr "Ссылка скопирована"
@@ -237,6 +245,11 @@ msgstr "Точка на карте"
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Map point actions"
 msgstr "Действия с точкой карты"
+
+#. js-lingui-id: klnHKy
+#: src/presentation/map/MapShareDialog.tsx
+msgid "Map view"
+msgstr "Вид карты"
 
 #. js-lingui-id: iDuQuY
 #: src/presentation/map/MapWorkspace.tsx
@@ -314,10 +327,10 @@ msgstr "Найти спутниковые снимки"
 msgid "Sentinel-2 image"
 msgstr "Снимок Sentinel-2"
 
-#. js-lingui-id: bdo1_8
+#. js-lingui-id: Z8lGw6
 #: src/presentation/map/MapShareDialog.tsx
-msgid "Share map view"
-msgstr "Поделиться видом карты"
+msgid "Share"
+msgstr "Поделиться"
 
 #. js-lingui-id: LFKLqp
 #: src/presentation/map/MapPointInspectorContent.tsx

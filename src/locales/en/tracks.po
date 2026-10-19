@@ -332,10 +332,10 @@ msgstr "Confirm deletion of {markerName}"
 msgid "Confirm rename"
 msgstr "Confirm rename"
 
-#. js-lingui-id: RGCCrg
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Copy share link"
-msgstr "Copy share link"
+#. js-lingui-id: y1eoq1
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Copy link"
+msgstr "Copy link"
 
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx
@@ -458,6 +458,11 @@ msgstr "Drop track file"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Drop tracks here"
 msgstr "Drop tracks here"
+
+#. js-lingui-id: AxUPGi
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Each track is shared on its own, with a separate link that opens it on this map view. The map link above never includes tracks."
+msgstr "Each track is shared on its own, with a separate link that opens it on this map view. The map link above never includes tracks."
 
 #. js-lingui-id: N6j2JH
 #. placeholder {0}: folder.name
@@ -662,7 +667,7 @@ msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Loading route tiles… {loadedTiles}/{totalTiles}"
 
 #. js-lingui-id: 5nnEsR
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Loading sharing status"
 msgstr "Loading sharing status"
 
@@ -768,6 +773,7 @@ msgid "New route"
 msgstr "New route"
 
 #. js-lingui-id: f1xZWH
+#: src/presentation/tracks/TrackShareTable.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "New track"
 msgstr "New track"
@@ -935,7 +941,7 @@ msgid "Reorder {0}"
 msgstr "Reorder {0}"
 
 #. js-lingui-id: SZzo9N
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Retry sharing status"
 msgstr "Retry sharing status"
 
@@ -991,6 +997,11 @@ msgstr "Save"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Save a copy"
 msgstr "Save a copy"
+
+#. js-lingui-id: Xov63t
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Save the track to share it."
+msgstr "Save the track to share it."
 
 #. js-lingui-id: GNReNP
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1058,19 +1069,19 @@ msgid "Settlement lookup was rate-limited by the provider (HTTP 429); wait a min
 msgstr "Settlement lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 
 #. js-lingui-id: Z8lGw6
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Share"
 msgstr "Share"
 
-#. js-lingui-id: knHYgz
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Share link copied."
-msgstr "Share link copied."
+#. js-lingui-id: 3N4bs1
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Share {name} publicly"
+msgstr "Share {name} publicly"
 
-#. js-lingui-id: EvS-Rw
+#. js-lingui-id: LFKLqp
 #: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Share track publicly"
-msgstr "Share track publicly"
+msgid "Share…"
+msgstr "Share…"
 
 #. js-lingui-id: xVsHr4
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1088,24 +1099,24 @@ msgid "Shared tracks are unavailable because cloud features are not configured."
 msgstr "Shared tracks are unavailable because cloud features are not configured."
 
 #. js-lingui-id: eKm51w
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Sharing could not be updated. Try again."
 msgstr "Sharing could not be updated. Try again."
 
-#. js-lingui-id: 6a2P86
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Sharing disabled."
-msgstr "Sharing disabled."
-
-#. js-lingui-id: QgKL0R
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Sharing is enabled, but the link could not be copied."
-msgstr "Sharing is enabled, but the link could not be copied."
+#. js-lingui-id: PvziUE
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Sharing status could not be loaded."
+msgstr "Sharing status could not be loaded."
 
 #. js-lingui-id: qh04VC
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Show track grade legend"
 msgstr "Show track grade legend"
+
+#. js-lingui-id: lEy7pG
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Sign in to share tracks publicly."
+msgstr "Sign in to share tracks publicly."
 
 #. js-lingui-id: w625t8
 #: src/presentation/tracks/TrackWeatherSection.tsx
@@ -1168,7 +1179,7 @@ msgid "Starting at {startTime} at the recorded pace, {duration} in total."
 msgstr "Starting at {startTime} at the recorded pace, {duration} in total."
 
 #. js-lingui-id: fKf3Bw
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Sync this track before sharing."
 msgstr "Sync this track before sharing."
 
@@ -1226,6 +1237,11 @@ msgstr "The forecast could not be loaded."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The import was cancelled."
 msgstr "The import was cancelled."
+
+#. js-lingui-id: s18Ck2
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "The link could not be copied. Try again."
+msgstr "The link could not be copied. Try again."
 
 #. js-lingui-id: my4tL6
 #: src/presentation/tracks/TrackMarkersSection.tsx
@@ -1362,6 +1378,11 @@ msgstr "Track name is required."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Track name must be 200 characters or fewer."
 msgstr "Track name must be 200 characters or fewer."
+
+#. js-lingui-id: 2eFlmt
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Tracks"
+msgstr "Tracks"
 
 #. js-lingui-id: 9uI_rE
 #: src/presentation/tracks/RoutePlanControls.tsx

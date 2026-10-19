@@ -243,10 +243,10 @@ camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the prior 
 state; at 1900 and above the pane stays adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
-**Download KML**, sharing, **Rename** (an inline name editor), **Create reversed
-track**, and **Delete track**. Downloads preserve segments, name, canonical elevation,
-and aligned timestamps. GPX also writes track markers as root `<wpt>` elements before
-`<trk>`; KML is geometry-only.
+**Download KML**, **Share…** (opens the Share dialog), **Rename** (an inline name
+editor), **Create reversed track**, and **Delete track**. Downloads preserve segments,
+name, canonical elevation, and aligned timestamps. GPX also writes track markers as root
+`<wpt>` elements before `<trk>`; KML is geometry-only.
 
 **Create reversed track** saves the track walked the other way as a new track named
 "_name_ (reversed)" in the same folder, then opens it. Segment and point order flip,
@@ -318,12 +318,18 @@ mode is never persisted.
 
 #### Public track links
 
-A signed-in owner of a synchronized saved track uses **Share** in **Track actions**.
-Opening the menu loads the current status. The **Share** toggle enables or disables
-public access; enabling copies the link, and **Copy share link** retrieves it later.
-Disabling keeps the track synchronized. Links use `#tracks/share/1.<token>`, keeping the
-capability out of request paths and referrers. A recipient needs no account and sees the
-owner's current snapshot read-only; **Save a copy** creates an independent local track.
+The **Share** dialog (rail **Share**, or **Share…** in **Track actions**) lists the
+tracks drawn on the map below its map section: the open track, or every multi-track
+selection. A short note above the table says each track is shared separately and the map
+link never includes tracks. Each row has a switch in the **Share** column and **Copy
+link**, which confirms the copy in place with **Copied**. Opening the dialog loads each
+row's status. Only a signed-in owner's synchronized saved track can be shared; other
+rows stay disabled with the reason. Disabling keeps the track synchronized. A track link
+is the dialog's map link plus `#tracks/share/1.<token>`, keeping the capability out of
+request paths and referrers. A recipient needs no account and sees the owner's current
+snapshot read-only; the map starts with the link's layer and 2D/3D mode, then fits to
+the track once both it and any 3D transition are ready. **Save a copy** creates an
+independent local track.
 
 ### Markers
 
@@ -540,18 +546,22 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   move lands with the point above the sheet, in 2D and 3D; a tapped point under the
   sheet moves above it. Closing a sheet that moved the map recenters it on the full
   screen.
-- **Sharing:** one **Share map view** dialog builds a link to the current map. The rail
-  **Share** action opens it on the map center; **Share…** in the point actions opens it
-  on the clicked point with the current zoom. The link always carries the center and
-  zoom, and can also carry the visible static satellite layer (Google, Bing, Esri, or
-  NAPR), the visible Sentinel-2 scene, and in 3D terrain the 3D mode with bearing and
-  pitch. Each part has an **Include in link** checkbox, unavailable while the map does
-  not show it; turning all three off shares coordinates only. The choices persist in
-  this browser, and **Copy link** in the point actions copies a link to the clicked
-  point with them without opening the dialog. Links keep the page's other query
-  parameters and its workspace-tab hash; a shared Sentinel-2 scene opens Satellite. A
-  recipient's map switches to the shared satellite layer, scene, and 3D view, and the
-  shared satellite layer replaces their own layer choice.
+- **Sharing:** one **Share** dialog builds a link to the current map. The rail **Share**
+  action opens it on the map center; **Share…** in the point actions opens it on the
+  clicked point with the current zoom. Its **Map view** section always carries the
+  center and zoom, and can also carry the visible static satellite layer (Google, Bing,
+  Esri, or NAPR), the visible Sentinel-2 scene, and in 3D terrain the 3D mode with
+  bearing and pitch. Each part has an **Include in link** checkbox, unavailable while
+  the map does not show it; turning all three off shares coordinates only. The choices
+  persist in this browser, and **Copy link** in the point actions copies a link to the
+  clicked point with them without opening the dialog. **Copy map link** next to the link
+  field confirms the copy in place with **Copied** for two seconds; the map link never
+  includes tracks. Links keep the page's other query parameters and its workspace-tab
+  hash, except that an open shared-track link is reduced to Tracks; a shared Sentinel-2
+  scene opens Satellite. A recipient's map switches to the shared satellite layer,
+  scene, and 3D view, and the shared satellite layer replaces their own layer choice.
+  Below the whole map section, a **Tracks** table lists the tracks drawn on the map (see
+  [public track links](#public-track-links)).
 - **Camera:** left drag pans; middle drag or Shift+left drag rotates and pitches in 3D
   around the terrain point under the press, marked by a small pivot ring; keyboard pans,
   zooms, and orbits once the canvas has focus. Box zoom and right drag are off; pitch is

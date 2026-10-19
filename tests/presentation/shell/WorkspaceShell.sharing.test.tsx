@@ -616,118 +616,138 @@ describe('WorkspaceShell', () => {
     });
   });
 
-  it('public sharing loads status, enables, copies, and disables from Track actions', async () => {
+  it('shares the open track from the Share dialog on top of the map link', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
-    const status = vi
-      .fn()
-      .mockResolvedValueOnce({ enabled: false })
-      .mockResolvedValueOnce({ enabled: true, token: trackShareToken })
-      .mockResolvedValueOnce({ enabled: false });
+    const status = vi.fn().mockResolvedValue({ enabled: false });
     const enable = vi.fn().mockResolvedValue({
       enabled: true,
       token: trackShareToken,
     });
     const disable = vi.fn().mockResolvedValue(undefined);
-    const trackShares = createTrackShareService({ status, enable, disable });
-    const { details, summary } = await renderSavedTrackForSharing(trackShares);
+    const { details, summary } = await renderSavedTrackForSharing(
+      createTrackShareService({ status, enable, disable }),
+    );
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await waitFor(() => {
-      expect(status).toHaveBeenCalledWith(summary.contentHash, expect.any(AbortSignal));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Share' });
+    const tracks = within(dialog).getByRole('list', { name: 'Tracks' });
+    const share = await within(tracks).findByRole('switch', {
+      name: 'Share Shared trail publicly',
     });
-    const share = await screen.findByRole('menuitemcheckbox', { name: /^Share/u });
-    expect(share).toHaveAttribute('aria-checked', 'false');
+    expect(status).toHaveBeenCalledWith(summary.contentHash, expect.any(AbortSignal));
+    expect(share).not.toBeChecked();
+    const copyTrack = within(tracks).getByRole('button', { name: 'Copy link' });
+    expect(copyTrack).toBeDisabled();
+    // The map's own copy button sits above the table, outside it.
+    const copyMap = within(dialog).getByRole('button', { name: 'Copy map link' });
+    expect(
+      copyMap.compareDocumentPosition(tracks) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     await user.click(share);
     await waitFor(() => {
-      expect(enable).toHaveBeenCalledOnce();
-      expect(enable).toHaveBeenCalledWith(summary.contentHash, expect.any(AbortSignal));
-      expect(writeText).toHaveBeenCalledWith(
-        `${window.location.origin}/#tracks/share/1.${trackShareToken}`,
-      );
+      expect(
+        within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
+      ).toBeChecked();
+    });
+    expect(enable).toHaveBeenCalledWith(summary.contentHash, expect.any(AbortSignal));
+    expect(writeText).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(copyTrack).toBeEnabled();
+    });
+    await user.click(copyTrack);
+    const mapLink = within(dialog).getByRole<HTMLInputElement>('textbox', {
+      name: 'Link',
+    }).value;
+    const trackLink = new URL(String(writeText.mock.calls[0]?.[0]));
+    expect(trackLink.hash).toBe(`#tracks/share/1.${trackShareToken}`);
+    expect(trackLink.search).toBe(new URL(mapLink).search);
+    expect(trackLink.searchParams.get('map')).toBe('2');
+    await waitFor(() => {
+      expect(copyTrack).toHaveAccessibleName('Copied');
     });
 
-    expect(
-      await screen.findByRole('menuitem', { name: 'Copy share link' }),
-    ).toBeVisible();
-    expect(screen.getByRole('menu')).toBeVisible();
-    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
-      'aria-checked',
-      'true',
+    await user.click(copyMap);
+    expect(writeText).toHaveBeenLastCalledWith(mapLink);
+    expect(new URL(mapLink).hash).not.toContain('share');
+
+    await user.click(
+      within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
     );
-    await user.click(screen.getByRole('menuitemcheckbox', { name: /^Share/u }));
     await waitFor(() => {
-      expect(disable).toHaveBeenCalledOnce();
       expect(disable).toHaveBeenCalledWith(
         summary.contentHash,
         expect.any(AbortSignal),
       );
+      expect(
+        within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
+      ).not.toBeChecked();
     });
-
-    expect(screen.getByRole('menu')).toBeVisible();
-    expect(
-      screen.queryByRole('menuitem', { name: 'Copy share link' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    );
+    expect(copyTrack).toBeDisabled();
   });
 
-  it('shows a spinner instead of the Share toggle while status loads', async () => {
+  it('shows a spinner instead of the track Share switch while status loads', async () => {
     const user = userEvent.setup();
     const statusResult = deferred<{ readonly enabled: false }>();
-    const status = vi.fn(() => statusResult.promise);
     const { details } = await renderSavedTrackForSharing(
-      createTrackShareService({ status }),
+      createTrackShareService({ status: vi.fn(() => statusResult.promise) }),
     );
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    const share = await screen.findByRole('menuitemcheckbox', { name: /^Share/u });
-    expect(share).toHaveAttribute('aria-disabled', 'true');
-    expect(share.querySelector('[role="progressbar"]')).not.toBeNull();
-    expect(share.querySelector('input')).toBeNull();
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    const tracks = within(
+      await screen.findByRole('dialog', { name: 'Share' }),
+    ).getByRole('list', { name: 'Tracks' });
+    expect(
+      within(tracks).getByRole('progressbar', { name: 'Loading sharing status' }),
+    ).toBeVisible();
+    expect(within(tracks).queryByRole('switch')).not.toBeInTheDocument();
 
     statusResult.resolve({ enabled: false });
-    await waitFor(() => {
-      expect(share).not.toHaveAttribute('aria-disabled', 'true');
-      expect(share.querySelector('[role="progressbar"]')).toBeNull();
-    });
+    expect(
+      await within(tracks).findByRole('switch', {
+        name: 'Share Shared trail publicly',
+      }),
+    ).toBeEnabled();
   });
 
-  it('public sharing stays enabled when automatic clipboard copy is denied', async () => {
+  it('keeps a track shared and reports a denied track-link copy', async () => {
     const user = userEvent.setup();
     vi.stubGlobal('navigator', {
       clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
     });
-    const status = vi
-      .fn()
-      .mockResolvedValueOnce({ enabled: false })
-      .mockResolvedValueOnce({ enabled: true, token: trackShareToken });
     const { details } = await renderSavedTrackForSharing(
-      createTrackShareService({ status }),
+      createTrackShareService({
+        status: vi.fn().mockResolvedValue({ enabled: true, token: trackShareToken }),
+      }),
     );
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    const tracks = within(
+      await screen.findByRole('dialog', { name: 'Share' }),
+    ).getByRole('list', { name: 'Tracks' });
+    const copyTrack = within(tracks).getByRole('button', { name: 'Copy link' });
+    await waitFor(() => {
+      expect(copyTrack).toBeEnabled();
+    });
+    await user.click(copyTrack);
 
     expect(
-      await screen.findByText('Sharing is enabled, but the link could not be copied.'),
+      await within(tracks).findByText('The link could not be copied. Try again.'),
     ).toBeVisible();
+    expect(copyTrack).toHaveAccessibleName('Copy link');
     expect(
-      await screen.findByRole('menuitem', { name: 'Copy share link' }),
-    ).toBeVisible();
-    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
+      within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
+    ).toBeChecked();
   });
 
-  it('public sharing keeps disabled status when the track is not ready', async () => {
+  it('keeps a track unshared when it is not ready on the server', async () => {
     const user = userEvent.setup();
-    vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn() } });
     const enable = vi
       .fn()
       .mockRejectedValue(new TrackShareError('track-not-ready', 'Not ready'));
@@ -736,47 +756,100 @@ describe('WorkspaceShell', () => {
     );
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
-
-    expect(await screen.findByText('Sync this track before sharing.')).toBeVisible();
-    expect(screen.getByRole('menuitemcheckbox', { name: /^Share/u })).toHaveAttribute(
-      'aria-checked',
-      'false',
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    const tracks = within(
+      await screen.findByRole('dialog', { name: 'Share' }),
+    ).getByRole('list', { name: 'Tracks' });
+    await user.click(
+      await within(tracks).findByRole('switch', {
+        name: 'Share Shared trail publicly',
+      }),
     );
+
+    expect(
+      await within(tracks).findByText('Sync this track before sharing.'),
+    ).toBeVisible();
+    const share = within(tracks).getByRole('switch', {
+      name: 'Share Shared trail publicly',
+    });
+    expect(share).not.toBeChecked();
+    expect(share).toBeDisabled();
   });
 
-  it('public sharing ignores a late clipboard completion after disable', async () => {
+  it('explains instead of retrying when the server has no synchronized track', async () => {
     const user = userEvent.setup();
-    const copy = deferred<undefined>();
-    vi.stubGlobal('navigator', {
-      clipboard: { writeText: vi.fn(() => copy.promise) },
-    });
     const status = vi
       .fn()
-      .mockResolvedValueOnce({ enabled: true, token: trackShareToken })
-      .mockResolvedValueOnce({ enabled: true, token: trackShareToken })
-      .mockResolvedValueOnce({ enabled: false });
-    const disable = vi.fn().mockResolvedValue(undefined);
+      .mockRejectedValue(
+        new TrackShareError('track-not-found', 'Track was not found.'),
+      );
     const { details } = await renderSavedTrackForSharing(
-      createTrackShareService({ status, disable }),
+      createTrackShareService({ status }),
     );
 
     await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Copy share link' }));
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(await screen.findByRole('menuitemcheckbox', { name: /^Share/u }));
-    await waitFor(() => {
-      expect(disable).toHaveBeenCalledOnce();
-      expect(screen.getByText('Sharing disabled.')).toBeVisible();
-    });
-    copy.resolve(undefined);
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    const tracks = within(
+      await screen.findByRole('dialog', { name: 'Share' }),
+    ).getByRole('list', { name: 'Tracks' });
 
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('menuitem', { name: 'Copy share link' }),
-      ).not.toBeInTheDocument();
-    });
-    expect(screen.queryByText('Share link copied.')).not.toBeInTheDocument();
+    expect(
+      await within(tracks).findByText('Sync this track before sharing.'),
+    ).toBeVisible();
+    expect(
+      within(tracks).getByRole('switch', { name: 'Share Shared trail publicly' }),
+    ).toBeDisabled();
+    expect(
+      within(tracks).queryByRole('button', { name: 'Retry sharing status' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('lists each shared content once and asks a signed-out user to sign in', async () => {
+    const { beta, betaContent } = await saveMultiTrackPair();
+    await services.database.saveLocalTrack(
+      { ...beta, contentHash: 'b'.repeat(64) },
+      betaContent,
+    );
+    // Same content hash as Alpha trail, so the same server share.
+    const alphaCopy = multiTrackSummary(
+      'local:alpha-copy',
+      'Alpha copy',
+      1_000,
+      1_800,
+      100,
+      80,
+      46,
+    );
+    await services.database.saveLocalTrack(
+      alphaCopy,
+      multiTrackContent(alphaCopy.id, 46),
+    );
+    setServices({ ...services, trackShares: createTrackShareService() });
+    useUiStore.setState({ activeTab: 'tracks' });
+    mockViewportWidth(1900);
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await screen.findByRole('complementary', { name: 'Track details' });
+    await user.click(screen.getByRole('button', { name: 'Select multiple tracks' }));
+    const savedTracks = screen.getByRole('list', { name: 'Saved tracks' });
+    await user.click(within(savedTracks).getByRole('button', { name: /^Beta trail/u }));
+    await user.click(within(savedTracks).getByRole('button', { name: /^Alpha copy/u }));
+    await screen.findByRole('complementary', { name: 'Multiple track details' });
+
+    await user.click(screen.getByRole('button', { name: 'Share' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Share' });
+    const tracks = within(dialog).getByRole('list', { name: 'Tracks' });
+    expect(within(dialog).getByText('Sign in to share tracks publicly.')).toBeVisible();
+    const switches = within(tracks).getAllByRole('switch');
+    expect(switches.map((share) => share.getAttribute('aria-label'))).toEqual([
+      'Share Alpha trail publicly',
+      'Share Beta trail publicly',
+    ]);
+    for (const share of switches) expect(share).toBeDisabled();
+    for (const copy of within(tracks).getAllByRole('button', { name: 'Copy link' })) {
+      expect(copy).toBeDisabled();
+    }
   });
 
   it('opens a shared link read-only and saves an independent local copy', async () => {

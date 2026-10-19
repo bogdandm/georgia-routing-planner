@@ -1112,11 +1112,6 @@ msgstr "Вкладки настроек"
 msgid "Share"
 msgstr "Поделиться"
 
-#. js-lingui-id: bdo1_8
-#: src/presentation/shell/WorkspaceRail.tsx
-msgid "Share map view"
-msgstr "Поделиться видом карты"
-
 #. js-lingui-id: Gd8EbX
 #: src/presentation/shell/OnboardingMapLegend.tsx
 msgid "Shelter"

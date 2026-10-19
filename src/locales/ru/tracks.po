@@ -332,9 +332,9 @@ msgstr "Подтвердить удаление: {markerName}"
 msgid "Confirm rename"
 msgstr "Подтвердить переименование"
 
-#. js-lingui-id: RGCCrg
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Copy share link"
+#. js-lingui-id: y1eoq1
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Copy link"
 msgstr "Копировать ссылку"
 
 #. js-lingui-id: Oo7YVo
@@ -458,6 +458,11 @@ msgstr "Перетащите файл трека"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Drop tracks here"
 msgstr "Перетащите треки сюда"
+
+#. js-lingui-id: AxUPGi
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Each track is shared on its own, with a separate link that opens it on this map view. The map link above never includes tracks."
+msgstr "Каждым треком делятся отдельно: у него своя ссылка, которая открывает его на этом виде карты. Ссылка на карту выше треков не содержит."
 
 #. js-lingui-id: N6j2JH
 #. placeholder {0}: folder.name
@@ -662,7 +667,7 @@ msgid "Loading route tiles… {loadedTiles}/{totalTiles}"
 msgstr "Загрузка тайлов маршрутов… {loadedTiles}/{totalTiles}"
 
 #. js-lingui-id: 5nnEsR
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Loading sharing status"
 msgstr "Загрузка статуса общего доступа"
 
@@ -768,6 +773,7 @@ msgid "New route"
 msgstr "Новый маршрут"
 
 #. js-lingui-id: f1xZWH
+#: src/presentation/tracks/TrackShareTable.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "New track"
 msgstr "Новый трек"
@@ -935,7 +941,7 @@ msgid "Reorder {0}"
 msgstr "Изменить порядок: {0}"
 
 #. js-lingui-id: SZzo9N
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Retry sharing status"
 msgstr "Обновить статус доступа"
 
@@ -991,6 +997,11 @@ msgstr "Сохранить"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Save a copy"
 msgstr "Сохранить копию"
+
+#. js-lingui-id: Xov63t
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Save the track to share it."
+msgstr "Сохраните трек, чтобы поделиться им."
 
 #. js-lingui-id: GNReNP
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1058,19 +1069,19 @@ msgid "Settlement lookup was rate-limited by the provider (HTTP 429); wait a min
 msgstr "Сервис ограничил поиск населённого пункта (HTTP 429); подождите минуту и импортируйте трек снова."
 
 #. js-lingui-id: Z8lGw6
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Share"
 msgstr "Поделиться"
 
-#. js-lingui-id: knHYgz
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Share link copied."
-msgstr "Ссылка скопирована."
+#. js-lingui-id: 3N4bs1
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Share {name} publicly"
+msgstr "Публичный доступ к треку «{name}»"
 
-#. js-lingui-id: EvS-Rw
+#. js-lingui-id: LFKLqp
 #: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Share track publicly"
-msgstr "Публичный доступ к треку"
+msgid "Share…"
+msgstr "Поделиться…"
 
 #. js-lingui-id: xVsHr4
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1088,24 +1099,24 @@ msgid "Shared tracks are unavailable because cloud features are not configured."
 msgstr "Общие треки недоступны: облачные функции не настроены."
 
 #. js-lingui-id: eKm51w
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Sharing could not be updated. Try again."
 msgstr "Не удалось обновить общий доступ. Повторите попытку."
 
-#. js-lingui-id: 6a2P86
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Sharing disabled."
-msgstr "Общий доступ отключён."
-
-#. js-lingui-id: QgKL0R
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Sharing is enabled, but the link could not be copied."
-msgstr "Общий доступ включён, но скопировать ссылку не удалось."
+#. js-lingui-id: PvziUE
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Sharing status could not be loaded."
+msgstr "Не удалось загрузить статус общего доступа."
 
 #. js-lingui-id: qh04VC
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Show track grade legend"
 msgstr "Показать легенду уклонов трека"
+
+#. js-lingui-id: lEy7pG
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Sign in to share tracks publicly."
+msgstr "Войдите, чтобы открыть публичный доступ к трекам."
 
 #. js-lingui-id: w625t8
 #: src/presentation/tracks/TrackWeatherSection.tsx
@@ -1168,7 +1179,7 @@ msgid "Starting at {startTime} at the recorded pace, {duration} in total."
 msgstr "Старт в {startTime} в записанном темпе, всего {duration}."
 
 #. js-lingui-id: fKf3Bw
-#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackShareTable.tsx
 msgid "Sync this track before sharing."
 msgstr "Синхронизируйте трек, прежде чем делиться им."
 
@@ -1226,6 +1237,11 @@ msgstr "Не удалось загрузить прогноз."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The import was cancelled."
 msgstr "Импорт отменён."
+
+#. js-lingui-id: s18Ck2
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "The link could not be copied. Try again."
+msgstr "Не удалось скопировать ссылку. Повторите попытку."
 
 #. js-lingui-id: my4tL6
 #: src/presentation/tracks/TrackMarkersSection.tsx
@@ -1362,6 +1378,11 @@ msgstr "Введите название трека."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Track name must be 200 characters or fewer."
 msgstr "Название трека должно быть не длиннее 200 символов."
+
+#. js-lingui-id: 2eFlmt
+#: src/presentation/tracks/TrackShareTable.tsx
+msgid "Tracks"
+msgstr "Треки"
 
 #. js-lingui-id: 9uI_rE
 #: src/presentation/tracks/RoutePlanControls.tsx

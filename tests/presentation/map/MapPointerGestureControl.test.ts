@@ -257,7 +257,7 @@ describe('MapPointerGestureControl', () => {
         button: 0,
         buttons: 1,
         clientX: 110,
-        clientY: -1_000,
+        clientY: 1_000,
       }),
     );
     window.dispatchEvent(
@@ -318,7 +318,7 @@ describe('MapPointerGestureControl', () => {
         clientY: 10,
       }),
     );
-    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: 30 }));
+    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 20, clientY: -10 }));
     window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
 
     expect(easeTo).toHaveBeenCalledOnce();

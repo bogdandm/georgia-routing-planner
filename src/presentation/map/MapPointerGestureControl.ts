@@ -5,6 +5,12 @@ const pitchDegreesPerPixel = 0.175;
 /** Share of the orbit rate that look-around turns per pixel, for finer aiming. */
 const lookSensitivity = 0.7;
 const maximumPitchDegrees = 75;
+/** Pointer moves this recent set the release velocity; an older last move is a stop. */
+const releaseVelocityWindowMs = 50;
+/** Decay time of the coast after release; it adds about release speed × this of travel. */
+const coastTimeConstantMs = 60;
+/** Coasting stops, or never starts, below this speed in pixels per millisecond. */
+const coastStopSpeed = 0.02;
 /** Per-finger pinch or pan travel that decides a two-finger touch as zoom-or-pan. */
 const zoomOrPanIntentPixels = 10;
 /** How many times the other movement the deciding movement must reach. */
@@ -30,6 +36,12 @@ interface TouchVector {
   readonly x: number;
   readonly y: number;
 }
+/** Pointer travel since the previous move, stamped with the event time. */
+interface PointerMove {
+  readonly time: number;
+  readonly x: number;
+  readonly y: number;
+}
 /** A two-finger touch whose zoom-pan-or-twist intent is still undecided. */
 interface TwoFingerTouch {
   readonly first: TouchStart;
@@ -38,8 +50,8 @@ interface TwoFingerTouch {
   minimumSpan: number;
 }
 
-/** Observes touches before MapLibre's listeners on the same container, never blocking them. */
-const touchListenerOptions = { capture: true, passive: true } as const;
+/** Observes events before MapLibre's listeners on the same container, never blocking them. */
+const observerListenerOptions = { capture: true, passive: true } as const;
 
 /** Returns how far the touch that began at `start` has moved, or null once it lifted. */
 function touchTravel(touches: TouchList, start: TouchStart): TouchVector | null {
@@ -150,6 +162,11 @@ export class MapPointerGestureControl {
   #frameRequest: number | null = null;
   #cameraMoved = false;
   #movingCamera = false;
+  /** Recent pointer moves of the held gesture, oldest first, for the release velocity. */
+  #recentMoves: readonly PointerMove[] = [];
+  /** Pixels per millisecond while a released gesture coasts; null while held or idle. */
+  #coastVelocity: { readonly x: number; readonly y: number } | null = null;
+  #lastCoastFrameTime: number | null = null;
   #twoFingerTouch: TwoFingerTouch | null = null;
   /** Decision for the current two-finger gesture; null until one movement dominates. */
   #twoFingerIntent: TwoFingerIntent | null = null;
@@ -161,7 +178,8 @@ export class MapPointerGestureControl {
    * Every gesture step is its own zero-duration MapLibre move with its own `moveend`.
    * The owner treats the whole gesture as one movement: it skips the `moveend`s fired
    * while `movingCamera` is true and settles once in `onCameraGestureEnd`, which runs
-   * when a gesture that moved the camera ends by release, focus loss, or 3D turning off.
+   * when a gesture that moved the camera ends: after its release coast, on focus loss,
+   * on another press or wheel during the coast, or when 3D turns off.
    */
   public constructor({
     pivotIndicator = createOrbitPivotIndicator(),
@@ -190,14 +208,22 @@ export class MapPointerGestureControl {
     container.addEventListener(
       'touchstart',
       this.handleTouchStart,
-      touchListenerOptions,
+      observerListenerOptions,
     );
-    container.addEventListener('touchmove', this.handleTouchMove, touchListenerOptions);
-    container.addEventListener('touchend', this.handleTouchEnd, touchListenerOptions);
+    container.addEventListener(
+      'touchmove',
+      this.handleTouchMove,
+      observerListenerOptions,
+    );
+    container.addEventListener(
+      'touchend',
+      this.handleTouchEnd,
+      observerListenerOptions,
+    );
     container.addEventListener(
       'touchcancel',
       this.handleTouchCancel,
-      touchListenerOptions,
+      observerListenerOptions,
     );
   }
 
@@ -228,7 +254,8 @@ export class MapPointerGestureControl {
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {
-    // A chorded press stays native; the running gesture owns the camera until it ends.
+    // Any press stops a coast, and a chorded press stays native while a gesture is held.
+    if (this.#coastVelocity !== null) this.endGesture();
     if (this.#gesture !== null) return;
     const gesture: Gesture =
       event.button === 1
@@ -270,12 +297,23 @@ export class MapPointerGestureControl {
 
     event.preventDefault();
     event.stopImmediatePropagation();
+    const move: PointerMove = {
+      time: event.timeStamp,
+      x: event.clientX - previous.x,
+      y: event.clientY - previous.y,
+    };
     // Mice report moves faster than the display refreshes, and every camera update runs
     // MapLibre's full camera pipeline, so moves only accumulate until the next frame.
     this.#pendingDelta = {
-      x: this.#pendingDelta.x + event.clientX - previous.x,
-      y: this.#pendingDelta.y + event.clientY - previous.y,
+      x: this.#pendingDelta.x + move.x,
+      y: this.#pendingDelta.y + move.y,
     };
+    this.#recentMoves = [
+      ...this.#recentMoves.filter(
+        (recent) => move.time - recent.time <= releaseVelocityWindowMs,
+      ),
+      move,
+    ];
     this.#lastPointer = { x: event.clientX, y: event.clientY };
     this.#frameRequest ??= window.requestAnimationFrame(this.applyPendingMove);
   };
@@ -364,12 +402,75 @@ export class MapPointerGestureControl {
     if (gesture === null || event.button !== this.#gestureButton) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    this.endGesture();
     if (gesture !== 'pan' && event.button === 0) this.suppressNextClick();
+    this.releaseGesture(event.timeStamp);
   };
 
   private readonly handleWindowBlur = (): void => {
     this.endGesture();
+  };
+
+  private readonly handleCoastWheel = (): void => {
+    this.endGesture();
+  };
+
+  /**
+   * Ends a held gesture. A pointer still moving at release coasts on for a moment with
+   * exponentially decaying speed, like Google Earth's slight inertia; one that had
+   * stopped ends at once.
+   */
+  private releaseGesture(time: number): void {
+    const moves = this.#recentMoves.filter(
+      (move) => time - move.time <= releaseVelocityWindowMs,
+    );
+    // The oldest move only marks when the window starts; its travel happened before.
+    const span = moves.length < 2 ? 0 : time - (moves[0]?.time ?? time);
+    let travelX = 0;
+    let travelY = 0;
+    for (const move of moves.slice(1)) {
+      travelX += move.x;
+      travelY += move.y;
+    }
+    if (span <= 0 || Math.hypot(travelX, travelY) / span < coastStopSpeed) {
+      this.endGesture();
+      return;
+    }
+    window.removeEventListener('mousemove', this.handleMouseMove, true);
+    window.removeEventListener('mouseup', this.handleMouseUp, true);
+    this.#container?.addEventListener(
+      'wheel',
+      this.handleCoastWheel,
+      observerListenerOptions,
+    );
+    if (this.#frameRequest !== null) {
+      window.cancelAnimationFrame(this.#frameRequest);
+      this.applyPendingMove();
+    }
+    this.#coastVelocity = { x: travelX / span, y: travelY / span };
+    this.#lastCoastFrameTime = null;
+    this.#frameRequest = window.requestAnimationFrame(this.coast);
+  }
+
+  private readonly coast = (time: number): void => {
+    this.#frameRequest = null;
+    const velocity = this.#coastVelocity;
+    if (velocity === null) return;
+    const elapsed =
+      this.#lastCoastFrameTime === null
+        ? 1000 / 60
+        : Math.min(time - this.#lastCoastFrameTime, 100);
+    this.#lastCoastFrameTime = time;
+    // Travel of the decaying velocity over this frame, exact for any frame length.
+    const decay = Math.exp(-elapsed / coastTimeConstantMs);
+    const travel = coastTimeConstantMs * (1 - decay);
+    this.#pendingDelta = { x: velocity.x * travel, y: velocity.y * travel };
+    this.#coastVelocity = { x: velocity.x * decay, y: velocity.y * decay };
+    this.applyPendingMove();
+    if (Math.hypot(velocity.x, velocity.y) * decay < coastStopSpeed) {
+      this.endGesture();
+      return;
+    }
+    this.#frameRequest = window.requestAnimationFrame(this.coast);
   };
 
   /** Applies travel still waiting for a frame, ends the gesture, and settles a move. */
@@ -465,6 +566,9 @@ export class MapPointerGestureControl {
     this.#frameRequest = null;
     this.#pendingDelta = { x: 0, y: 0 };
     this.#cameraMoved = false;
+    this.#recentMoves = [];
+    this.#coastVelocity = null;
+    this.#lastCoastFrameTime = null;
     this.#gesture = null;
     this.#gestureButton = null;
     this.#orbitAnchor = null;
@@ -473,6 +577,11 @@ export class MapPointerGestureControl {
     window.removeEventListener('mousemove', this.handleMouseMove, true);
     window.removeEventListener('mouseup', this.handleMouseUp, true);
     window.removeEventListener('blur', this.handleWindowBlur);
+    this.#container?.removeEventListener(
+      'wheel',
+      this.handleCoastWheel,
+      observerListenerOptions,
+    );
   }
 
   private finishTouchGesture(): void {

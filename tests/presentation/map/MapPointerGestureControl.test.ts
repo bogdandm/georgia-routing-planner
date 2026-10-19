@@ -76,6 +76,13 @@ function createPivotDouble() {
   return { show: vi.fn(), hide: vi.fn() };
 }
 
+/** A mouse event at `timeStamp` ms, which sets the release velocity of a gesture. */
+function mouseAt(type: string, init: MouseEventInit, timeStamp: number) {
+  const event = new MouseEvent(type, init);
+  Object.defineProperty(event, 'timeStamp', { value: timeStamp });
+  return event;
+}
+
 describe('MapPointerGestureControl', () => {
   it.each([false, true])(
     'pans in 2D and orbits the 3D camera with middle drag (%s)',
@@ -340,8 +347,12 @@ describe('MapPointerGestureControl', () => {
     expect(onCameraGestureEnd).not.toHaveBeenCalled();
 
     press();
-    for (const clientX of [10, 30, 50]) {
-      window.dispatchEvent(new MouseEvent('mousemove', { clientX, clientY: 0 }));
+    for (const [time, clientX] of [
+      [0, 10],
+      [10, 30],
+      [20, 50],
+    ] as const) {
+      window.dispatchEvent(mouseAt('mousemove', { clientX, clientY: 0 }, time));
     }
     expect(easeTo).not.toHaveBeenCalled();
     expect(frames).toHaveLength(1);
@@ -349,8 +360,9 @@ describe('MapPointerGestureControl', () => {
     expect(easeTo).toHaveBeenCalledOnce();
     expect(easeTo.mock.calls[0]?.[0].bearing).toBeCloseTo(24);
 
-    window.dispatchEvent(new MouseEvent('mousemove', { clientX: 60, clientY: 0 }));
-    window.dispatchEvent(new MouseEvent('mouseup', { button: 1 }));
+    window.dispatchEvent(mouseAt('mousemove', { clientX: 60, clientY: 0 }, 30));
+    // Released long after the last move, so nothing coasts.
+    window.dispatchEvent(mouseAt('mouseup', { button: 1 }, 500));
     expect(easeTo).toHaveBeenCalledTimes(2);
     expect(easeTo.mock.calls[1]?.[0].bearing).toBeCloseTo(26.8);
     expect(movingDuringSteps).toEqual([true, true]);
@@ -377,6 +389,63 @@ describe('MapPointerGestureControl', () => {
     expect(onCameraGestureEnd).toHaveBeenCalledTimes(2);
     window.dispatchEvent(new MouseEvent('mousemove', { clientX: 90, clientY: 0 }));
     expect(frames).toHaveLength(3);
+    control.detach();
+    requestFrame.mockRestore();
+  });
+
+  it('coasts briefly after a moving release and stops on the next press', () => {
+    const frames: FrameRequestCallback[] = [];
+    const requestFrame = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
+    const container = document.createElement('div');
+    const { easeTo, map } = createMapDouble();
+    const onCameraGestureEnd = vi.fn();
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+      onCameraGestureEnd,
+    });
+    control.attach(container, map);
+    control.setTerrainOrbitEnabled(true);
+    const releaseMovingOrbit = () => {
+      container.dispatchEvent(
+        mouseAt('mousedown', { button: 1, clientX: 0, clientY: 0 }, 0),
+      );
+      for (const time of [0, 10, 20]) {
+        window.dispatchEvent(mouseAt('mousemove', { clientX: time, clientY: 0 }, time));
+      }
+      // 20 px over the 25 ms since the oldest recent move: 0.8 px/ms.
+      window.dispatchEvent(mouseAt('mouseup', { button: 1 }, 25));
+    };
+    /** Runs coast frames 1/60 s apart until none is requested; returns their count. */
+    const runCoast = () => {
+      let ran = 0;
+      while (frames.length > 0 && ran < 100) {
+        frames.shift()?.(1_000 + (ran * 1_000) / 60);
+        ran += 1;
+      }
+      return ran;
+    };
+
+    releaseMovingOrbit();
+    const bearingAtRelease = easeTo.mock.lastCall?.[0].bearing ?? Number.NaN;
+    expect(bearingAtRelease).toBeCloseTo(10 + 20 * 0.28);
+    expect(onCameraGestureEnd).not.toHaveBeenCalled();
+    expect(runCoast()).toBeGreaterThan(5);
+    // The coast adds less than release speed × 60 ms of travel.
+    const coastTravel =
+      ((easeTo.mock.lastCall?.[0].bearing ?? Number.NaN) - bearingAtRelease) / 0.28;
+    expect(coastTravel).toBeGreaterThan(40);
+    expect(coastTravel).toBeLessThan(48);
+    expect(onCameraGestureEnd).toHaveBeenCalledOnce();
+
+    releaseMovingOrbit();
+    frames.shift()?.(2_000);
+    const stepsBeforePress = easeTo.mock.calls.length;
+    container.dispatchEvent(new MouseEvent('mousedown', { button: 0 }));
+    expect(onCameraGestureEnd).toHaveBeenCalledTimes(2);
+    runCoast();
+    expect(easeTo).toHaveBeenCalledTimes(stepsBeforePress);
     control.detach();
     requestFrame.mockRestore();
   });

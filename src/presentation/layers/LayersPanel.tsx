@@ -1,7 +1,6 @@
 import { msg, plural } from '@lingui/core/macro';
 import type { MessageDescriptor } from '@lingui/core';
 import { Trans, useLingui } from '@lingui/react/macro';
-import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import {
   Alert,
   Box,
@@ -9,12 +8,10 @@ import {
   Divider,
   FormControlLabel,
   FormGroup,
-  IconButton,
   Slider,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -46,10 +43,6 @@ interface LayerControl {
   /** Drawn indented and only usable while this parent layer is shown. */
   readonly parent?: LogicalMapLayerId;
 }
-
-const sovietTopographicLegendUrl =
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- External reference URL.
-  'https://www.planinite.info/Maps/pdf/%D0%A3%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5_%D0%B7%D0%BD%D0%B0%D0%BA%D0%B8_%D1%82%D0%BE%D0%BF%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D1%85_%D0%BA%D0%B0%D1%80%D1%82_%D0%A1%D0%A1%D0%A1%D0%A0-1966.pdf';
 
 const googleSatelliteControl = {
   id: 'google-satellite',
@@ -634,39 +627,22 @@ export function LayersPanel() {
                           </Trans>
                         </Typography>
                       ) : null}
-                      <Stack direction="row" sx={{ alignItems: 'center' }}>
-                        <FormControlLabel
-                          sx={{ m: 0 }}
-                          slotProps={{ typography: { variant: 'body2' } }}
-                          disabled={disabled}
-                          control={
-                            <Checkbox
-                              size="small"
-                              sx={{ p: 0, mr: 1 }}
-                              checked={state.visibility[control.id]}
-                              onChange={(event) => {
-                                changeVisibility(control.id, event.target.checked);
-                              }}
-                            />
-                          }
-                          label={i18n._(control.label)}
-                        />
-                        {control.id === 'soviet-topographic' ? (
-                          <Tooltip title={t`Topographic map symbols (PDF)`}>
-                            <IconButton
-                              component="a"
-                              href={sovietTopographicLegendUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              size="small"
-                              aria-label={t`Open topographic map symbols (PDF)`}
-                              sx={{ ml: 0.25, p: 0.25 }}
-                            >
-                              <HelpOutlineOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        ) : null}
-                      </Stack>
+                      <FormControlLabel
+                        sx={{ m: 0 }}
+                        slotProps={{ typography: { variant: 'body2' } }}
+                        disabled={disabled}
+                        control={
+                          <Checkbox
+                            size="small"
+                            sx={{ p: 0, mr: 1 }}
+                            checked={state.visibility[control.id]}
+                            onChange={(event) => {
+                              changeVisibility(control.id, event.target.checked);
+                            }}
+                          />
+                        }
+                        label={i18n._(control.label)}
+                      />
                       <Typography
                         variant="caption"
                         color="text.secondary"

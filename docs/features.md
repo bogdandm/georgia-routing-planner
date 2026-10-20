@@ -398,14 +398,16 @@ share URL requests a scene. Per-layer opacity, drag ordering, and custom layers 
 offered.
 
 The quick map-layer chooser lists **Vector OSM**, **Google Satellite**, **Bing Aerial**,
-**Esri World Imagery**, **NAPR Orthophoto**, and **Soviet Topographic**, then **OSM
-overlay** and **Weather** checkboxes, and a final row with **Sentinel-2** (activates the
-applied scene or opens Satellite) and **Layers tab**. Vector OSM shows the vector map at
-full opacity without changing the saved overlay setting. The chooser is non-modal and
-belongs to the map: it stays open while choices are toggled, the layer button, Escape,
-or any press outside it closes it, and that press still reaches the map, so panning or
-clicking the map works immediately. It closes when an entry opens a workspace panel, and
-workspace panels drawn above the map also cover it.
+**Esri World Imagery**, **NAPR Orthophoto**, and **Soviet Topographic** (with an
+adjacent help item that opens a scanned 1966 guide to Soviet topographic map symbols in
+a new tab), then **OSM overlay** and **Weather** checkboxes, and a final row with
+**Sentinel-2** (activates the applied scene or opens Satellite) and **Layers tab**.
+Vector OSM shows the vector map at full opacity without changing the saved overlay
+setting. The chooser is non-modal and belongs to the map: it stays open while choices
+are toggled, the layer button, Escape, or any press outside it closes it, and that press
+still reaches the map, so panning or clicking the map works immediately. It closes when
+an entry opens a workspace panel, and workspace panels drawn above the map also cover
+it.
 
 ### Satellite
 

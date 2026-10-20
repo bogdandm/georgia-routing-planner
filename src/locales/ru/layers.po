@@ -239,11 +239,6 @@ msgstr "Официальные сканы NAPR: карты 1:25 000 по все�
 msgid "Opacity"
 msgstr "Непрозрачность"
 
-#. js-lingui-id: FuC3Le
-#: src/presentation/layers/LayersPanel.tsx
-msgid "Open topographic map symbols (PDF)"
-msgstr "Открыть условные обозначения топографических карт (PDF)"
-
 #. js-lingui-id: vORMhI
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Open Weather tab"
@@ -420,11 +415,6 @@ msgstr "Не удалось показать выбранный кадр пог�
 #: src/presentation/layers/LayersPanel.tsx
 msgid "The weather map provider is unavailable."
 msgstr "Поставщик карты погоды недоступен."
-
-#. js-lingui-id: gd3dhq
-#: src/presentation/layers/LayersPanel.tsx
-msgid "Topographic map symbols (PDF)"
-msgstr "Условные обозначения топографических карт (PDF)"
 
 #. js-lingui-id: W7HXf3
 #: src/presentation/layers/LayersPanel.tsx

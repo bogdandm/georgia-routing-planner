@@ -141,6 +141,17 @@ describe('MapViewControls', () => {
     expect(
       screen.getByRole('menuitemradio', { name: 'Google Satellite' }),
     ).toHaveAttribute('aria-checked', 'true');
+    const legendLink = screen.getByRole('menuitem', {
+      name: 'Open topographic map symbols (PDF)',
+    });
+    expect(legendLink).toHaveAttribute(
+      'href',
+      'https://www.planinite.info/Maps/pdf/%D0%A3%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5_%D0%B7%D0%BD%D0%B0%D0%BA%D0%B8_%D1%82%D0%BE%D0%BF%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D1%85_%D0%BA%D0%B0%D1%80%D1%82_%D0%A1%D0%A1%D0%A1%D0%A0-1966.pdf',
+    );
+    expect(legendLink).toHaveAttribute('target', '_blank');
+    screen.getByRole('menuitemradio', { name: 'Soviet Topographic' }).focus();
+    await user.keyboard('{ArrowDown}');
+    expect(legendLink).toHaveFocus();
     const hybridToggle = screen.getByRole('menuitemcheckbox', { name: 'OSM overlay' });
     await user.click(hybridToggle);
     expect(onHybridOverlayChange).toHaveBeenCalledWith(false);

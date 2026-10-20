@@ -3,6 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import {
@@ -19,7 +20,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import type { IControl, Map as MapLibreMap } from 'maplibre-gl';
-import { useId, useState, type MouseEvent } from 'react';
+import { Fragment, useId, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useControl } from 'react-map-gl/maplibre';
 
@@ -60,6 +61,9 @@ const layerPresets: readonly {
 ];
 // eslint-disable-next-line lingui/no-unlocalized-strings -- Satellite mission name stays invariant.
 const sentinelPresetLabel = 'Sentinel-2';
+const sovietTopographicLegendUrl =
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- External reference URL.
+  'https://www.planinite.info/Maps/pdf/%D0%A3%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5_%D0%B7%D0%BD%D0%B0%D0%BA%D0%B8_%D1%82%D0%BE%D0%BF%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D1%85_%D0%BA%D0%B0%D1%80%D1%82_%D0%A1%D0%A1%D0%A1%D0%A0-1966.pdf';
 
 class MapViewControlHost implements IControl {
   readonly element: HTMLDivElement = document.createElement('div');
@@ -274,20 +278,61 @@ export function MapViewControls({
               }}
               sx={{ pb: 0 }}
             >
-              {layerPresets.map((preset) => (
-                <MenuItem
-                  aria-checked={activeLayerPreset === preset.value}
-                  key={preset.value}
-                  onClick={() => {
-                    onLayerPresetChange(preset.value);
-                  }}
-                  role="menuitemradio"
-                  selected={activeLayerPreset === preset.value}
-                  sx={{ minHeight: 44, minWidth: 240, px: 2 }}
-                >
-                  <ListItemText primary={t(preset.label)} />
-                </MenuItem>
-              ))}
+              {layerPresets.map((preset) => {
+                // The symbol guide is a sibling item: a link nested inside a menuitemradio
+                // would be an inaccessible nested interactive control.
+                const hasLegend = preset.value === 'soviet-topographic';
+                return (
+                  <Fragment key={preset.value}>
+                    <MenuItem
+                      aria-checked={activeLayerPreset === preset.value}
+                      onClick={() => {
+                        onLayerPresetChange(preset.value);
+                      }}
+                      role="menuitemradio"
+                      selected={activeLayerPreset === preset.value}
+                      sx={
+                        hasLegend
+                          ? {
+                              display: 'inline-flex',
+                              minHeight: 44,
+                              px: 2,
+                              verticalAlign: 'top',
+                              width: 'calc(100% - 44px)',
+                            }
+                          : { minHeight: 44, minWidth: 240, px: 2 }
+                      }
+                    >
+                      <ListItemText primary={t(preset.label)} />
+                    </MenuItem>
+                    {hasLegend ? (
+                      <Tooltip
+                        disableInteractive
+                        title={t`Topographic map symbols (PDF)`}
+                      >
+                        <MenuItem
+                          aria-label={t`Open topographic map symbols (PDF)`}
+                          component="a"
+                          href={sovietTopographicLegendUrl}
+                          rel="noopener noreferrer"
+                          role="menuitem"
+                          target="_blank"
+                          sx={{
+                            display: 'inline-flex',
+                            justifyContent: 'center',
+                            minHeight: 44,
+                            px: 0,
+                            verticalAlign: 'top',
+                            width: 44,
+                          }}
+                        >
+                          <HelpOutlineOutlinedIcon fontSize="small" />
+                        </MenuItem>
+                      </Tooltip>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
               <MenuItem
                 aria-checked={hybridOverlayEnabled}
                 disabled={hybridOverlayDisabled}

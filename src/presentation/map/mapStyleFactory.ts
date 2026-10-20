@@ -912,9 +912,11 @@ function createBasemapLayers(
       'source-layer': sourceLayers.pois,
       minzoom: 11,
       // Lodging is limited to mountain huts: hotels and guest houses are not hiking POIs.
+      // OpenMapTiles class `castle` carries `historic=castle` (fortresses included) and
+      // `historic=ruins` as subclasses `castle` and `ruins`.
       filter: [
         'any',
-        ['in', ['get', 'class'], ['literal', ['campsite', 'attraction']]],
+        ['in', ['get', 'class'], ['literal', ['campsite', 'attraction', 'castle']]],
         [
           'in',
           ['get', 'subclass'],
@@ -945,6 +947,10 @@ function createBasemapLayers(
           basemapImageIds.viewpoint,
           'guidepost',
           basemapImageIds.guidepost,
+          'castle',
+          basemapImageIds.castle,
+          'ruins',
+          basemapImageIds.ruins,
           [
             'match',
             ['get', 'class'],
@@ -968,7 +974,15 @@ function createBasemapLayers(
         ['get', 'subclass'],
         [
           'literal',
-          ['shelter', 'alpine_hut', 'wilderness_hut', 'camp_site', 'viewpoint'],
+          [
+            'shelter',
+            'alpine_hut',
+            'wilderness_hut',
+            'camp_site',
+            'viewpoint',
+            'castle',
+            'ruins',
+          ],
         ],
       ],
       layout: { ...labelLayout, 'text-radial-offset': 1 },

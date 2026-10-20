@@ -84,6 +84,7 @@ export const mapVisualPalette = {
     campSite: '#3D6B2A',
     viewpoint: '#29343A',
     guidepost: '#58636A',
+    historic: '#7A2E2E',
     attraction: '#365F70',
   },
   text: {

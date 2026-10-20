@@ -164,6 +164,8 @@ export const basemapImageIds = {
   campSite: 'basemap-camp-site',
   viewpoint: 'basemap-viewpoint',
   guidepost: 'basemap-guidepost',
+  castle: 'basemap-castle',
+  ruins: 'basemap-ruins',
   attraction: 'basemap-attraction',
   ford: 'basemap-ford',
   mountainPass: 'basemap-mountain-pass',

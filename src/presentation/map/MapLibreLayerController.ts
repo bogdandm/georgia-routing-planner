@@ -97,6 +97,10 @@ import {
   trackEndpointIconPixelRatio,
   type TrackEndpointKind,
 } from '@/presentation/map/trackEndpointIcons';
+import {
+  satelliteFootprintPaint,
+  sentinelRasterPaint,
+} from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type {
@@ -255,6 +259,31 @@ const openStreetMapOpacityProperties = {
   [terrainOverlayLayerIds.contourIndex]: ['line-opacity'],
   [terrainOverlayLayerIds.contourLabels]: ['text-opacity'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
+
+type MapVisualModePaintProperty = (typeof mapVisualModePaintPropertyNames)[number];
+
+/**
+ * Paint the OSM overlay opacity writes in a visual mode: over imagery it scales each
+ * reference layer's mode opacity; on the vector map every layer keeps its mode opacity.
+ */
+export function openStreetMapOpacityPaint(
+  mode: MapVisualMode,
+  opacity: number,
+): MapVisualModePaint {
+  const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
+  const effectiveOpacity = mode === 'satellite' ? opacity : 1;
+  const paint: Record<string, Partial<Record<MapVisualModePaintProperty, number>>> = {};
+  for (const [layerId, properties] of Object.entries(openStreetMapOpacityProperties)) {
+    const layerPaint: Partial<Record<MapVisualModePaintProperty, number>> = {};
+    for (const property of properties) {
+      const baseOpacity = modePaint[layerId]?.[property];
+      layerPaint[property] =
+        effectiveOpacity * (typeof baseOpacity === 'number' ? baseOpacity : 1);
+    }
+    paint[layerId] = layerPaint;
+  }
+  return paint;
+}
 
 const maximumRasterRecoveryAttempts = 3;
 const rasterRecoveryBaseDelayMs = 1_000;
@@ -530,6 +559,19 @@ function nativeLayerVisible(
   );
 }
 
+/** Visibility of every fixed base-style native layer under the logical layer choices. */
+export function baseNativeLayerVisibility(
+  visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+): ReadonlyMap<string, boolean> {
+  const nativeVisibility = new Map<string, boolean>();
+  for (const layerId of baseLogicalLayerIds) {
+    for (const nativeId of logicalNativeLayerGroups[layerId]) {
+      nativeVisibility.set(nativeId, nativeLayerVisible(nativeId, visibility));
+    }
+  }
+  return nativeVisibility;
+}
+
 const importedTrackCasingWidth = 7;
 const importedTrackLineWidth = 4;
 /** Opacity multiplier for the track outside a focused climb or descent. */
@@ -694,6 +736,31 @@ function isAborted(signal: AbortSignal, error: unknown): boolean {
   return signal.aborted || error instanceof DOMException;
 }
 
+/**
+ * Whether `auto` rendering should move a map's only Sentinel raster to direct rendering:
+ * a 429 or response-less failure of that source's tiles. Chromium can omit the source ID
+ * for cross-origin failures, so a source-less error counts unless its URL is another
+ * template's.
+ */
+export function isSentinelDirectFallbackError(
+  event: MapLibreErrorEvent,
+  sourceId: string,
+  tileUrl: string,
+): boolean {
+  const reportedSourceId = sourceIdFromError(event);
+  if (reportedSourceId !== null && reportedSourceId !== sourceId) return false;
+  const requestUrl = requestUrlFromError(event);
+  if (
+    reportedSourceId === null &&
+    requestUrl !== null &&
+    !requestMatchesTileTemplate(requestUrl, tileUrl)
+  ) {
+    return false;
+  }
+  const { reason } = mapFailureDetails(event);
+  return reason === 'rate-limit' || reason === 'no-response';
+}
+
 type SentinelRasterProblem = Extract<
   SatelliteImageryProblem,
   { code: 'tile-failed' | 'unsupported-asset' }
@@ -743,6 +810,16 @@ function describeSceneApplyProblem(problem: SceneApplyProblem): string {
     case 'unknown':
       return 'The imagery renderer did not return a usable tile. The current map remains usable; retry or reset the imagery stretch.';
   }
+}
+
+export interface SatelliteSceneRasterTiles {
+  readonly tileUrl: string;
+  readonly directTileUrl: string;
+  readonly renderingMode: SatelliteRenderingMode;
+  readonly tileSize: number;
+  readonly minzoom: number;
+  readonly maxzoom: number;
+  readonly attribution: string;
 }
 
 /**
@@ -1988,6 +2065,35 @@ export class MapLibreLayerController {
     return this.#satelliteRenderingMode;
   }
 
+  /**
+   * Raster tiles for showing a scene on a map this controller does not own, such as a
+   * comparison pane: `tileUrl` follows the persisted rendering mode and imagery tuning,
+   * and `directTileUrl` is the browser-rendered visual COG that `auto` mode switches to
+   * on throttling. Registers the scene with the direct COG protocol. Returns null for a
+   * scene without a Sentinel-2 L2A visual COG.
+   */
+  public createSceneRasterTiles(
+    scene: SatelliteScene,
+  ): SatelliteSceneRasterTiles | null {
+    if (scene.visualAsset.kind !== 'sentinel-l2a') return null;
+    const sceneKey = satelliteSceneKey(scene);
+    this.satelliteCogTiles.registerScene(sceneKey, scene.visualAsset);
+    const directTileUrl = this.satelliteCogTiles.createTileUrl(sceneKey);
+    const renderingMode = this.#satelliteRenderingMode;
+    return {
+      tileUrl:
+        renderingMode === 'direct'
+          ? directTileUrl
+          : this.createTileUrl(scene.visualAsset.itemHref),
+      directTileUrl,
+      renderingMode,
+      tileSize: this.renderer.tileSize,
+      minzoom: this.renderer.minZoom,
+      maxzoom: this.renderer.maxZoom,
+      attribution: this.renderer.attribution,
+    };
+  }
+
   public async setRenderingMode(
     mode: SatelliteRenderingMode,
     signal: AbortSignal,
@@ -2203,10 +2309,7 @@ export class MapLibreLayerController {
           type: 'raster',
           source: slot.sourceId,
           layout: { visibility: 'visible' },
-          paint: {
-            'raster-opacity': 1,
-            'raster-fade-duration': 0,
-          },
+          paint: { ...sentinelRasterPaint },
         },
         mapInsertionPoints.satelliteBeforeLayerId,
       );
@@ -2650,10 +2753,7 @@ export class MapLibreLayerController {
             ? 'visible'
             : 'none',
         },
-        paint: {
-          'raster-opacity': 1,
-          'raster-fade-duration': 0,
-        },
+        paint: { ...sentinelRasterPaint },
       },
       mapInsertionPoints.satelliteBeforeLayerId,
     );
@@ -3389,15 +3489,9 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null) return;
     const { visibility } = mapLayerStore.getState();
-    for (const layerId of baseLogicalLayerIds) {
-      for (const nativeId of logicalNativeLayerGroups[layerId]) {
-        if (map.getLayer(nativeId) !== undefined) {
-          map.setLayoutProperty(
-            nativeId,
-            'visibility',
-            nativeLayerVisible(nativeId, visibility) ? 'visible' : 'none',
-          );
-        }
+    for (const [nativeId, visible] of baseNativeLayerVisibility(visibility)) {
+      if (map.getLayer(nativeId) !== undefined) {
+        map.setLayoutProperty(nativeId, 'visibility', visible ? 'visible' : 'none');
       }
     }
   }
@@ -4181,22 +4275,14 @@ export class MapLibreLayerController {
       return;
     this.#appliedOpenStreetMapOpacity = opacity;
     this.#openStreetMapOpacityLayerAnchors.clear();
-    const mode = this.currentMapVisualMode();
-    const modePaint: MapVisualModePaint = mapVisualModePaint[mode];
-    const effectiveOpacity = mode === 'satellite' ? opacity : 1;
-    for (const [layerId, properties] of Object.entries(
-      openStreetMapOpacityProperties,
-    )) {
+    const paint = openStreetMapOpacityPaint(this.currentMapVisualMode(), opacity);
+    for (const [layerId, properties] of Object.entries(paint)) {
       const layer = map.getLayer(layerId);
       if (layer === undefined) continue;
       this.#openStreetMapOpacityLayerAnchors.set(layerId, layer);
-      for (const property of properties) {
-        const baseOpacity = modePaint[layerId]?.[property];
-        map.setPaintProperty(
-          layerId,
-          property,
-          effectiveOpacity * (typeof baseOpacity === 'number' ? baseOpacity : 1),
-        );
+      for (const property of mapVisualModePaintPropertyNames) {
+        const value = properties[property];
+        if (value !== undefined) map.setPaintProperty(layerId, property, value);
       }
     }
   }
@@ -4219,11 +4305,7 @@ export class MapLibreLayerController {
         id: sentinelMapLayerIds.footprint,
         type: 'line',
         source: mapSourceIds.sentinelFootprint,
-        paint: {
-          'line-color': mapVisualPalette.userGeometry.satelliteFootprint,
-          'line-width': 2.5,
-          'line-opacity': 0.95,
-        },
+        paint: { ...satelliteFootprintPaint },
       },
       mapInsertionPoints.satelliteFootprintBeforeLayerId,
     );
@@ -4476,10 +4558,7 @@ export class MapLibreLayerController {
           type: 'raster',
           source: slot.sourceId,
           layout: { visibility: 'visible' },
-          paint: {
-            'raster-opacity': 1,
-            'raster-fade-duration': 0,
-          },
+          paint: { ...sentinelRasterPaint },
         },
         mapInsertionPoints.satelliteBeforeLayerId,
       );

@@ -22,7 +22,9 @@ interface CachedScene {
 }
 
 const rasterSampleSize = 258;
-const maximumCachedScenes = 2;
+// Four comparison panes can render four scenes at once. An entry holds only the opened
+// COG header and image directories, not pixel blocks, so the cache stays small.
+const maximumCachedScenes = 4;
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));

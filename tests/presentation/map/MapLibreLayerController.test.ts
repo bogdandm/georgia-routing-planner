@@ -11,7 +11,10 @@ import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
 import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
-import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
+import {
+  isSentinelDirectFallbackError,
+  MapLibreLayerController,
+} from '@/presentation/map/MapLibreLayerController';
 import {
   basemapImageIds,
   importedTrackEndpointImageIds,
@@ -2609,6 +2612,93 @@ describe('MapLibreLayerController', () => {
     expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
       mapVisualModePaint.vector[mapLayerIds.landcover]['fill-opacity'],
     );
+  });
+
+  it('creates comparison tiles with the persisted rendering mode and imagery tuning', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    await controller.setRenderingTuning(
+      { reflectanceMax: 6_250, gamma: 1.55, saturation: 1.25 },
+      new AbortController().signal,
+    );
+
+    const autoTiles = controller.createSceneRasterTiles(scene('compare-a'));
+    expect(autoTiles).toMatchObject({
+      renderingMode: 'auto',
+      directTileUrl: expect.stringContaining('test-satellite-cog://tiles/') as string,
+    });
+    expect(autoTiles?.tileUrl).toContain('rescale=0%2C6250');
+    expect(autoTiles?.tileUrl).toContain('Gamma%20RGB%201.55');
+    expect(autoTiles?.tileUrl).toContain('Saturation%201.25');
+
+    await controller.setRenderingMode('direct', new AbortController().signal);
+    const directTiles = controller.createSceneRasterTiles(scene('compare-a'));
+    expect(directTiles?.renderingMode).toBe('direct');
+    expect(directTiles?.tileUrl).toBe(directTiles?.directTileUrl);
+
+    expect(
+      controller.createSceneRasterTiles({
+        ...scene('compare-without-cog'),
+        visualAsset: { kind: 'unavailable' },
+      }),
+    ).toBeNull();
+  });
+
+  it('falls back to direct rendering only for throttled or unanswered Sentinel tiles', () => {
+    const tileUrl = 'https://titiler.example.test/tiles/{z}/{x}/{y}.png?item=a';
+    const failure = (error: Record<string, unknown>, sourceId?: string) =>
+      ({
+        type: 'error',
+        error: { message: 'AJAXError', ...error },
+        ...(sourceId === undefined ? {} : { sourceId }),
+      }) as unknown as MapLibreErrorEvent;
+
+    expect(
+      isSentinelDirectFallbackError(
+        failure({ status: 429 }, 'sentinel-raster-a'),
+        'sentinel-raster-a',
+        tileUrl,
+      ),
+    ).toBe(true);
+    expect(
+      isSentinelDirectFallbackError(
+        failure({ status: 0 }),
+        'sentinel-raster-a',
+        tileUrl,
+      ),
+    ).toBe(true);
+    expect(
+      isSentinelDirectFallbackError(
+        failure({
+          status: 0,
+          url: 'https://titiler.example.test/tiles/9/1/2.png?item=a',
+        }),
+        'sentinel-raster-a',
+        tileUrl,
+      ),
+    ).toBe(true);
+    expect(
+      isSentinelDirectFallbackError(
+        failure({ status: 429 }, 'basemap-vector'),
+        'sentinel-raster-a',
+        tileUrl,
+      ),
+    ).toBe(false);
+    expect(
+      isSentinelDirectFallbackError(
+        failure({ status: 0, url: 'https://tiles.example.test/planet/9/1/2.pbf' }),
+        'sentinel-raster-a',
+        tileUrl,
+      ),
+    ).toBe(false);
+    expect(
+      isSentinelDirectFallbackError(
+        failure({ status: 503 }, 'sentinel-raster-a'),
+        'sentinel-raster-a',
+        tileUrl,
+      ),
+    ).toBe(false);
   });
 
   it('keeps server mode on TiTiler without direct fallback', async () => {

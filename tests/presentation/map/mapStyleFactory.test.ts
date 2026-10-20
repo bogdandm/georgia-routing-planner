@@ -1,3 +1,4 @@
+import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import {
   createExpression,
   featureFilter,
@@ -18,10 +19,21 @@ import {
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sentinelMapLayerIds,
 } from '@/presentation/map/mapIds';
-import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
+import {
+  createHikingMapStyle,
+  createSatelliteCompareMapStyle,
+} from '@/presentation/map/mapStyleFactory';
 import { englishFirstLabelExpression } from '@/presentation/map/mapStyleFactory';
+import {
+  baseNativeLayerVisibility,
+  openStreetMapOpacityPaint,
+} from '@/presentation/map/MapLibreLayerController';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
+import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 
 const configuration = parseMapProviderConfiguration(
   defaultMapProviderConfigurationInput,
@@ -784,5 +796,138 @@ describe('createHikingMapStyle', () => {
     expect(brownfields).toHaveProperty('source-layer', 'fixture_land');
     expect(buildings).toHaveProperty('source-layer', 'fixture_buildings');
     expect(roads).toHaveProperty('source-layer', 'fixture_streets');
+  });
+});
+
+describe('createSatelliteCompareMapStyle', () => {
+  const scene: SatelliteScene = {
+    id: 'S2A_38TMN_20190814',
+    collection: 'sentinel-2-l2a',
+    platform: 'sentinel-2a',
+    productLevel: 'L2A',
+    acquiredAt: '2019-08-14T07:52:00.000Z',
+    cloudCoverPercent: 4,
+    footprint: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [44, 42],
+          [45, 42],
+          [45, 43],
+          [44, 43],
+          [44, 42],
+        ],
+      ],
+    },
+    tileId: '38TMN',
+    orbit: 'R036',
+    productId: 'S2A_38TMN_20190814',
+    thumbnailHref: null,
+    visualAsset: {
+      kind: 'sentinel-l2a',
+      itemHref: 'https://earth-search.example.test/items/S2A_38TMN_20190814',
+      visualHref: 'https://sentinel.example.test/S2A_38TMN_20190814/TCI.tif',
+      mediaType: 'image/tiff; application=geotiff; profile=cloud-optimized',
+      projectionEpsg: 32638,
+    },
+    attribution: 'Synthetic test data',
+  };
+  const tileUrl = 'https://titiler.example.test/tiles/{z}/{x}/{y}.png?item=fixture';
+
+  function compareStyle(
+    visibilityChanges: Partial<Record<LogicalMapLayerId, boolean>>,
+    openStreetMapOpacity: number,
+  ): StyleSpecification {
+    return createSatelliteCompareMapStyle(configuration, {
+      scene,
+      raster: {
+        tileUrl,
+        tileSize: 256,
+        minzoom: 8,
+        maxzoom: 14,
+        attribution: 'Sentinel-2 test attribution',
+      },
+      baseLayerVisibility: baseNativeLayerVisibility({
+        ...mapLayerStore.getState().visibility,
+        ...visibilityChanges,
+      }),
+      openStreetMapOpacityPaint: openStreetMapOpacityPaint(
+        'satellite',
+        openStreetMapOpacity,
+      ),
+    });
+  }
+
+  function layer(style: StyleSpecification, layerId: string): LayerSpecification {
+    const found = style.layers.find((candidate) => candidate.id === layerId);
+    if (found === undefined) throw new Error(`Missing layer ${layerId}.`);
+    return found;
+  }
+
+  it('passes the MapLibre style specification validator', () => {
+    expect(validateStyleMin(compareStyle({}, 1))).toEqual([]);
+  });
+
+  it('draws the scene below land cover and its footprint below the first icons', () => {
+    const style = compareStyle({}, 1);
+    const layerIds = style.layers.map((candidate) => candidate.id);
+
+    expect(layerIds.indexOf(sentinelMapLayerIds.rasterA)).toBe(
+      layerIds.indexOf(mapInsertionPoints.satelliteBeforeLayerId) - 1,
+    );
+    expect(layerIds.indexOf(sentinelMapLayerIds.footprint)).toBe(
+      layerIds.indexOf(mapInsertionPoints.satelliteFootprintBeforeLayerId) - 1,
+    );
+    expect(style.sources[mapSourceIds.sentinelRasterA]).toEqual({
+      type: 'raster',
+      tiles: [tileUrl],
+      tileSize: 256,
+      minzoom: 8,
+      maxzoom: 14,
+      bounds: [44, 42, 45, 43],
+      attribution: 'Sentinel-2 test attribution',
+    });
+    expect(layer(style, sentinelMapLayerIds.rasterA)).toHaveProperty('paint', {
+      'raster-opacity': 1,
+      'raster-fade-duration': 0,
+    });
+  });
+
+  it('hides static imagery basemaps and the layers the user turned off', () => {
+    const style = compareStyle({ 'google-satellite': true, roads: false }, 1);
+
+    for (const layerId of [
+      satelliteBasemapLayerIds.imagery,
+      naprOrthophotoLayerIds.national2016To2017,
+      mapLayerIds.roads,
+      mapLayerIds.roadLabels,
+    ]) {
+      expect(layer(style, layerId)).toHaveProperty('layout.visibility', 'none');
+    }
+    expect(layer(style, mapLayerIds.hikingPaths)).toHaveProperty(
+      'layout.visibility',
+      'visible',
+    );
+  });
+
+  it('applies the satellite contrast paint scaled by the OSM overlay opacity', () => {
+    const style = compareStyle({}, 0.5);
+
+    expect(layer(style, mapLayerIds.landcover)).toHaveProperty(
+      ['paint', 'fill-opacity'],
+      0,
+    );
+    expect(layer(style, mapLayerIds.roads)).toHaveProperty(
+      ['paint', 'line-opacity'],
+      0.48,
+    );
+    expect(layer(style, mapLayerIds.placeLabels)).toHaveProperty(
+      ['paint', 'text-opacity'],
+      0.5,
+    );
+    expect(layer(style, mapLayerIds.placeLabels)).toHaveProperty(
+      ['paint', 'text-halo-color'],
+      mapVisualPalette.text.haloSatellite,
+    );
   });
 });

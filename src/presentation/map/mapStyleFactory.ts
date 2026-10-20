@@ -1,18 +1,26 @@
 import type {
   ExpressionSpecification,
   LayerSpecification,
+  LineLayerSpecification,
+  RasterLayerSpecification,
   StyleSpecification,
   SymbolLayerSpecification,
 } from 'maplibre-gl';
 
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
+  satelliteSceneBounds,
+  type SatelliteScene,
+} from '@/domain/satellite/SatelliteScene';
+import {
   basemapImageIds,
+  mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sentinelMapLayerIds,
 } from '@/presentation/map/mapIds';
 import {
   cyrillicIotatingPredecessors,
@@ -23,7 +31,21 @@ import {
 import {
   mapVisualModePaint,
   mapVisualPalette,
+  type MapVisualModePaint,
 } from '@/presentation/map/mapVisualPalette';
+
+/** Sentinel scene raster paint on the main map and in comparison panes. */
+export const sentinelRasterPaint = {
+  'raster-opacity': 1,
+  'raster-fade-duration': 0,
+} as const satisfies RasterLayerSpecification['paint'];
+
+/** Sentinel scene footprint outline on the main map and in comparison panes. */
+export const satelliteFootprintPaint = {
+  'line-color': mapVisualPalette.userGeometry.satelliteFootprint,
+  'line-width': 2.5,
+  'line-opacity': 0.95,
+} as const satisfies LineLayerSpecification['paint'];
 
 /** Land-cover kinds with a GOST sign; both providers use these OSM values. */
 const patternedLandcoverSubclasses = [
@@ -1112,5 +1134,96 @@ export function createHikingMapStyle(
         configuration.detailVector.sourceLayers,
       ),
     ],
+  };
+}
+
+export interface SatelliteCompareMapStyleOptions {
+  readonly scene: SatelliteScene;
+  readonly raster: {
+    readonly tileUrl: string;
+    readonly tileSize: number;
+    readonly minzoom: number;
+    readonly maxzoom: number;
+    readonly attribution: string;
+  };
+  /** Native base-layer visibility under the user's logical layer choices. */
+  readonly baseLayerVisibility: ReadonlyMap<string, boolean>;
+  /** The OSM overlay opacity paint for the satellite visual mode. */
+  readonly openStreetMapOpacityPaint: MapVisualModePaint;
+}
+
+const staticImageryLayerIds: ReadonlySet<string> = new Set([
+  ...Object.values(satelliteBasemapLayerIds),
+  ...Object.values(naprOrthophotoLayerIds),
+]);
+
+/**
+ * Builds a comparison pane style: the hiking basemap as the main map draws it over one
+ * Sentinel scene, with the static satellite visual mode and the user's base-layer
+ * visibility and OSM overlay opacity baked in. Static imagery basemaps stay hidden.
+ */
+export function createSatelliteCompareMapStyle(
+  configuration: MapProviderConfiguration,
+  options: SatelliteCompareMapStyleOptions,
+): StyleSpecification {
+  const style = createHikingMapStyle(configuration);
+  const satellitePaint: MapVisualModePaint = mapVisualModePaint.satellite;
+  const layers: LayerSpecification[] = [];
+  for (const layer of style.layers) {
+    if (layer.id === mapInsertionPoints.satelliteBeforeLayerId) {
+      layers.push({
+        id: sentinelMapLayerIds.rasterA,
+        type: 'raster',
+        source: mapSourceIds.sentinelRasterA,
+        paint: { ...sentinelRasterPaint },
+      });
+    }
+    if (layer.id === mapInsertionPoints.satelliteFootprintBeforeLayerId) {
+      layers.push({
+        id: sentinelMapLayerIds.footprint,
+        type: 'line',
+        source: mapSourceIds.sentinelFootprint,
+        paint: { ...satelliteFootprintPaint },
+      });
+    }
+    const visible = staticImageryLayerIds.has(layer.id)
+      ? false
+      : options.baseLayerVisibility.get(layer.id);
+    const paint = {
+      ...satellitePaint[layer.id],
+      ...options.openStreetMapOpacityPaint[layer.id],
+    };
+    const compareLayer = { ...layer };
+    // Layer unions cannot type a per-property spread. The keys are the ones the main map
+    // writes through setLayoutProperty and setPaintProperty for the same layer IDs.
+    if (visible !== undefined) {
+      Object.assign(compareLayer, {
+        layout: { ...layer.layout, visibility: visible ? 'visible' : 'none' },
+      });
+    }
+    if (Object.keys(paint).length > 0) {
+      Object.assign(compareLayer, { paint: { ...layer.paint, ...paint } });
+    }
+    layers.push(compareLayer);
+  }
+  return {
+    ...style,
+    sources: {
+      ...style.sources,
+      [mapSourceIds.sentinelRasterA]: {
+        type: 'raster',
+        tiles: [options.raster.tileUrl],
+        tileSize: options.raster.tileSize,
+        minzoom: options.raster.minzoom,
+        maxzoom: options.raster.maxzoom,
+        bounds: satelliteSceneBounds(options.scene),
+        attribution: options.raster.attribution,
+      },
+      [mapSourceIds.sentinelFootprint]: {
+        type: 'geojson',
+        data: { type: 'Feature', properties: {}, geometry: options.scene.footprint },
+      },
+    },
+    layers,
   };
 }

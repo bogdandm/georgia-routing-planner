@@ -14,6 +14,8 @@ import type {
 
 interface MapNavigationTarget extends MapCoordinate {
   readonly zoom?: number;
+  /** Keeps `zoom` in 3D instead of the terrain close-up zoom. */
+  readonly exactZoom?: boolean;
 }
 
 interface MapNavigationCommand {

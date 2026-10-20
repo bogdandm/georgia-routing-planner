@@ -50,6 +50,14 @@ import {
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
 import {
+  SatelliteComparisonPanel,
+  SatelliteComparisonShortcut,
+} from '@/presentation/satellite-browser/SatelliteComparison';
+import {
+  isComparisonOpen,
+  satelliteCompareStore,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
+import {
   useSatelliteMode,
   useSatelliteMosaic,
 } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
@@ -262,6 +270,8 @@ export function WorkspaceSidebar({
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const satelliteMode = useSatelliteMode();
   const { toggleMosaicMode } = useSatelliteMosaic();
+  const comparisonActive =
+    useStore(satelliteCompareStore, isComparisonOpen) && !fullWidth;
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
     useState<WeatherHeaderPoint | null>(null);
   const [weatherForecastMenuAnchor, setWeatherForecastMenuAnchor] =
@@ -307,7 +317,8 @@ export function WorkspaceSidebar({
       aria-label={t`${sidebarTitle} tools`}
       sx={{
         position: 'relative',
-        width: fullWidth ? '100%' : { xs: 420, xl: 464 },
+        // While comparing, the shell narrows the column; the sidebar fills it.
+        width: fullWidth || comparisonActive ? '100%' : { xs: 420, xl: 464 },
         height: '100%',
         flexGrow: fullWidth ? 1 : 0,
         flexShrink: 0,
@@ -484,7 +495,10 @@ export function WorkspaceSidebar({
             </Menu>
           </>
         ) : null}
-        {activeTab === 'satellite' ? (
+        {activeTab === 'satellite' && !comparisonActive && !fullWidth ? (
+          <SatelliteComparisonShortcut />
+        ) : null}
+        {activeTab === 'satellite' && !comparisonActive ? (
           <Tooltip
             title={
               satelliteMode === 'mosaic'
@@ -674,17 +688,21 @@ export function WorkspaceSidebar({
           />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
-          {satelliteMode === 'mosaic' ? (
-            <SatelliteMosaicBrowser onShowMap={showSmartphoneMap} />
-          ) : (
-            <SatelliteBrowser
-              active={activeTab === 'satellite'}
-              auxiliaryOverlay={auxiliaryOverlay}
-              fallbackCoordinates={searchAreaCoordinates}
-              onPaneOpenChange={onSatellitePaneOpenChange}
-              onShowMap={showSmartphoneMap}
-            />
-          )}
+          {comparisonActive ? <SatelliteComparisonPanel /> : null}
+          {/* The search session stays mounted under the comparison panel. */}
+          <Box sx={{ display: comparisonActive ? 'none' : 'block' }}>
+            {satelliteMode === 'mosaic' ? (
+              <SatelliteMosaicBrowser onShowMap={showSmartphoneMap} />
+            ) : (
+              <SatelliteBrowser
+                active={activeTab === 'satellite'}
+                auxiliaryOverlay={auxiliaryOverlay}
+                fallbackCoordinates={searchAreaCoordinates}
+                onPaneOpenChange={onSatellitePaneOpenChange}
+                onShowMap={showSmartphoneMap}
+              />
+            )}
+          </Box>
         </Box>
         <Box
           sx={{

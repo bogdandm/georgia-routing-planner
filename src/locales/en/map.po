@@ -33,6 +33,11 @@ msgstr "{name} ({category}), {distance} m away"
 msgid "{name}, {distance} m away"
 msgstr "{name}, {distance} m away"
 
+#. js-lingui-id: WbW5zx
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "{time} · {cloud} cloud"
+msgstr "{time} · {cloud} cloud"
+
 #. js-lingui-id: gEHU4K
 #: src/presentation/map/MapShareDialog.tsx
 msgid "3D camera"
@@ -63,6 +68,11 @@ msgstr "Bing Aerial"
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Cancel"
 msgstr "Cancel"
+
+#. js-lingui-id: ROXMZ9
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Change image date, {date}"
+msgstr "Change image date, {date}"
 
 #. js-lingui-id: WdJ-u8
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -143,6 +153,11 @@ msgstr "Create marker here"
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
+
+#. js-lingui-id: SMM_gj
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Drag onto another map to swap"
+msgstr "Drag onto another map to swap"
 
 #. js-lingui-id: Doe-8p
 #: src/presentation/map/MapWorkspace.tsx
@@ -228,6 +243,7 @@ msgstr "Location not available"
 
 #. js-lingui-id: 4HBFYh
 #: src/presentation/map/MapWorkspace.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Map"
 msgstr "Map"
 
@@ -250,6 +266,11 @@ msgstr "Map point actions"
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Map view"
 msgstr "Map view"
+
+#. js-lingui-id: wtUfaN
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Map without an image"
+msgstr "Map without an image"
 
 #. js-lingui-id: iDuQuY
 #: src/presentation/map/MapWorkspace.tsx
@@ -312,6 +333,11 @@ msgstr "Open windy.com"
 msgid "OSM overlay"
 msgstr "OSM overlay"
 
+#. js-lingui-id: m-QLEF
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Pick image date"
+msgstr "Pick image date"
+
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Satellite layer"
@@ -326,6 +352,11 @@ msgstr "Search satellite scenes here"
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Sentinel-2 image"
 msgstr "Sentinel-2 image"
+
+#. js-lingui-id: AqBneL
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Sentinel-2 image from {date}"
+msgstr "Sentinel-2 image from {date}"
 
 #. js-lingui-id: Z8lGw6
 #: src/presentation/map/MapShareDialog.tsx
@@ -379,6 +410,7 @@ msgstr "The map layer could not be changed. Try again."
 
 #. js-lingui-id: U5Trc5
 #: src/presentation/map/MapWorkspace.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 
@@ -387,13 +419,24 @@ msgstr "The map provider configuration is invalid. The basemap was not started. 
 msgid "The saved camera could not be restored. The Georgia overview is shown instead."
 msgstr "The saved camera could not be restored. The Georgia overview is shown instead."
 
+#. js-lingui-id: gu1XtA
+#: src/presentation/map/MapWorkspace.tsx
+msgid "The shared image comparison could not be opened. The shared map location is still available."
+msgstr "The shared image comparison could not be opened. The shared map location is still available."
+
 #. js-lingui-id: IDB1Ps
 #: src/presentation/map/MapWorkspace.tsx
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
 
+#. js-lingui-id: HUfyUv
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "This scene has no supported true-color asset."
+msgstr "This scene has no supported true-color asset."
+
 #. js-lingui-id: Tm0RL6
 #: src/presentation/map/MapWorkspace.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Toggle attribution"
 msgstr "Toggle attribution"
 

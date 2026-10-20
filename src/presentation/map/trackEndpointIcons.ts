@@ -1,3 +1,4 @@
+import { importedTrackEndpointImageIds } from './mapIds';
 import { mapVisualPalette } from './mapVisualPalette';
 
 export type TrackEndpointKind = 'start' | 'finish';
@@ -73,6 +74,26 @@ export function createTrackEndpointIcon(kind: TrackEndpointKind): TrackEndpointI
     }
   }
   return { width: size, height: size, data };
+}
+
+/**
+ * The endpoint icon a style requests as `imageId`, for maps that add images on demand
+ * through `setMissingStyleImageResolver`; null for every other image.
+ */
+export function createTrackEndpointImage(
+  imageId: string,
+): { readonly image: TrackEndpointIcon; readonly pixelRatio: number } | null {
+  const kind =
+    imageId === importedTrackEndpointImageIds.start
+      ? 'start'
+      : imageId === importedTrackEndpointImageIds.finish
+        ? 'finish'
+        : null;
+  if (kind === null) return null;
+  return {
+    image: createTrackEndpointIcon(kind),
+    pixelRatio: trackEndpointIconPixelRatio,
+  };
 }
 
 function hexRgb(hex: string): readonly [number, number, number] {

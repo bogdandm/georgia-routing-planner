@@ -211,6 +211,14 @@ const legendGroups: readonly {
         symbol: { kind: 'icon', image: basemapImageIds.guidepost },
       },
       {
+        label: msg`Castle or fortress`,
+        symbol: { kind: 'icon', image: basemapImageIds.castle },
+      },
+      {
+        label: msg`Ruins`,
+        symbol: { kind: 'icon', image: basemapImageIds.ruins },
+      },
+      {
         label: msg`Other attraction`,
         symbol: { kind: 'icon', image: basemapImageIds.attraction },
       },

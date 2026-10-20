@@ -51,6 +51,7 @@ generated on first use (`src/presentation/map/basemapSymbols.ts`).
 | Road/path labels              | `transportation_name` | names, `class`, `subclass`                                                   |
 | Peaks, passes, and cliffs     | `mountain_peak`       | `class` (`peak`, `saddle` as a cross, `cliff` as a GOST toothed line), `ele` |
 | Hiking POIs                   | `poi`                 | huts, shelters, camp sites, drinking water, viewpoints, guideposts           |
+| Historic POIs                 | `poi`                 | `class = castle`: subclass `castle` (fortresses too) and `ruins`             |
 | Settlements                   | `place`               | `class`, names, `rank`, `capital`                                            |
 | Water labels                  | `water_name`          | names and geometry-specific fields                                           |
 

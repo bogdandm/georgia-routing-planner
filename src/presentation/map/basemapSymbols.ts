@@ -2,8 +2,10 @@ import fordSvg from '@waysidemapping/pinhead/dist/icons/arrows_left_right_above_
 import viewpointSvg from '@waysidemapping/pinhead/dist/icons/binoculars.svg?raw';
 import hutSvg from '@waysidemapping/pinhead/dist/icons/cabin.svg?raw';
 import campSiteSvg from '@waysidemapping/pinhead/dist/icons/campsite.svg?raw';
+import castleSvg from '@waysidemapping/pinhead/dist/icons/fortress.svg?raw';
 import guidepostSvg from '@waysidemapping/pinhead/dist/icons/guidepost.svg?raw';
 import shelterSvg from '@waysidemapping/pinhead/dist/icons/shelter.svg?raw';
+import ruinsSvg from '@waysidemapping/pinhead/dist/icons/stone_wall.svg?raw';
 import drinkingWaterSvg from '@waysidemapping/pinhead/dist/icons/water_tap.svg?raw';
 import mountainPassSvg from '@waysidemapping/pinhead/dist/icons/x_cross.svg?raw';
 
@@ -283,6 +285,17 @@ const pinheadIcons: Readonly<
   [basemapImageIds.guidepost]: {
     svg: guidepostSvg,
     color: mapVisualPalette.poi.guidepost,
+    sizeCss: 15,
+  },
+  [basemapImageIds.castle]: {
+    svg: castleSvg,
+    color: mapVisualPalette.poi.historic,
+    sizeCss: 16,
+  },
+  // Pinhead has no ruins glyph; a masonry fragment reads as ruined walls at map size.
+  [basemapImageIds.ruins]: {
+    svg: ruinsSvg,
+    color: mapVisualPalette.poi.historic,
     sizeCss: 15,
   },
   [basemapImageIds.ford]: {

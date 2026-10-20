@@ -194,6 +194,11 @@ msgstr "Canal"
 msgid "Cancel forecast point selection"
 msgstr "Cancel forecast point selection"
 
+#. js-lingui-id: zeLLr5
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Castle or fortress"
+msgstr "Castle or fortress"
+
 #. js-lingui-id: 9sT6Sd
 #: src/presentation/shell/OnboardingMapLegend.tsx
 msgid "Cemetery"
@@ -960,6 +965,11 @@ msgstr "Road"
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Route planning is unavailable because map routing data is not configured"
 msgstr "Route planning is unavailable because map routing data is not configured"
+
+#. js-lingui-id: 2mX_wb
+#: src/presentation/shell/OnboardingMapLegend.tsx
+msgid "Ruins"
+msgstr "Ruins"
 
 #. js-lingui-id: pDVOHm
 #: src/presentation/shell/OnboardingTour.tsx

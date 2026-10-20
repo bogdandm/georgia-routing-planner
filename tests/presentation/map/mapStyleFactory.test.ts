@@ -613,7 +613,7 @@ describe('createHikingMapStyle', () => {
     ]);
   });
 
-  it('draws passes as crosses, GOST cliffs, fords, and hiking POIs without hotels', () => {
+  it('draws passes as crosses, GOST cliffs, fords, and hiking and historic POIs without hotels', () => {
     const style = createHikingMapStyle(configuration);
     const layer = (id: string) => style.layers.find((candidate) => candidate.id === id);
 
@@ -654,6 +654,21 @@ describe('createHikingMapStyle', () => {
     expect(showsPoi({ class: 'information', subclass: 'guidepost' })).toBe(true);
     expect(showsPoi({ class: 'lodging', subclass: 'hotel' })).toBe(false);
     expect(showsPoi({ class: 'lodging', subclass: 'guest_house' })).toBe(false);
+    if (pois?.type !== 'symbol') throw new Error('Missing hiking POI symbol layer');
+    const iconImage = createExpression(pois.layout?.['icon-image'], 'icon-image');
+    if (iconImage.result !== 'success') throw new Error('Invalid POI icon expression');
+    const poiIcon = (properties: Record<string, string>) =>
+      iconImage.value.evaluate({ zoom: 14 }, { type: 'Point', properties }) as unknown;
+    for (const subclass of ['castle', 'ruins']) {
+      expect(showsPoi({ class: 'castle', subclass })).toBe(true);
+    }
+    expect(poiIcon({ class: 'castle', subclass: 'castle' })).toBe(
+      basemapImageIds.castle,
+    );
+    expect(poiIcon({ class: 'castle', subclass: 'ruins' })).toBe(basemapImageIds.ruins);
+    expect(poiIcon({ class: 'attraction', subclass: 'attraction' })).toBe(
+      basemapImageIds.attraction,
+    );
   });
 
   it('draws GOST signs for vegetation, plantings, swamps, scree, and cemeteries', () => {

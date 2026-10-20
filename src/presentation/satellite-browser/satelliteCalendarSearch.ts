@@ -37,7 +37,7 @@ export function searchMonthRange(month: string, today: Date): SearchMonthRange {
   };
 }
 
-/** Months kept per search service; older entries are dropped first. */
+/** Months kept per search service; the least recently used entries are dropped first. */
 const monthResultCacheLimit = 64;
 
 /**
@@ -50,21 +50,37 @@ const monthResultCaches = new WeakMap<
   Map<string, SatelliteSearchResult>
 >();
 
-/** Rounding to about 10 m absorbs float noise between the synchronized panes' views. */
-function monthResultKey(viewport: SatelliteSearchViewport, month: string): string {
+/**
+ * The searched range, so the current month misses once a new day extends it. Rounding to
+ * about 10 m absorbs float noise between the synchronized panes' views.
+ */
+function monthResultKey(
+  viewport: SatelliteSearchViewport,
+  range: SearchMonthRange,
+): string {
   const { west, south, east, north } = viewport.bounds;
   const { longitude, latitude } = viewport.center;
-  return [month, west, south, east, north, longitude, latitude]
-    .map((value) => (typeof value === 'number' ? value.toFixed(4) : value))
-    .join('|');
+  return [
+    range.startDate,
+    range.endDate,
+    ...[west, south, east, north, longitude, latitude].map((value) => value.toFixed(4)),
+  ].join('|');
 }
 
 export function cachedCalendarMonth(
   searchScenes: SearchSatelliteScenes,
   viewport: SatelliteSearchViewport,
   month: string,
+  today: Date,
 ): SatelliteSearchResult | undefined {
-  return monthResultCaches.get(searchScenes)?.get(monthResultKey(viewport, month));
+  const cache = monthResultCaches.get(searchScenes);
+  const key = monthResultKey(viewport, searchMonthRange(month, today));
+  const result = cache?.get(key);
+  if (cache !== undefined && result !== undefined) {
+    cache.delete(key);
+    cache.set(key, result);
+  }
+  return result;
 }
 
 /** Loads one calendar month at a viewport and remembers the result. */
@@ -91,7 +107,7 @@ export async function loadCalendarMonth(
     cache = new Map();
     monthResultCaches.set(searchScenes, cache);
   }
-  const key = monthResultKey(viewport, month);
+  const key = monthResultKey(viewport, range);
   cache.delete(key);
   cache.set(key, result);
   if (cache.size > monthResultCacheLimit) {

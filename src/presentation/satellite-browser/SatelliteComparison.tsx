@@ -120,7 +120,7 @@ export function ComparedSceneDatePicker({
   const cachedResult =
     searchSatelliteScenes === null
       ? undefined
-      : cachedCalendarMonth(searchSatelliteScenes, viewport, month);
+      : cachedCalendarMonth(searchSatelliteScenes, viewport, month, today);
   const monthSearch: MonthSearch | null =
     cachedResult !== undefined
       ? { month, result: cachedResult, failed: false }
@@ -467,7 +467,10 @@ export function SatelliteComparisonPanel() {
                     {time} · {cloud} cloud
                   </Trans>
                 </Typography>
-                <TileProgressBar day={day} progress={tileProgress[index]} />
+                {/* A scene without a supported raster shows a warning in its pane. */}
+                {scene.visualAsset.kind === 'sentinel-l2a' ? (
+                  <TileProgressBar day={day} progress={tileProgress[index]} />
+                ) : null}
               </Box>
               <Tooltip title={t`Remove ${day} from comparison`}>
                 <IconButton

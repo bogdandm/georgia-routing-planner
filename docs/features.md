@@ -479,11 +479,11 @@ Comparison replaces the map with the grid. The rail is hidden and a narrow sideb
 beside the grid instead of floating over it, so every pane is fully visible; the results
 pane is hidden. The sidebar lists the shown scenes with their date, local time, and
 cloud, a remove button that turns that pane back into a plain map, **Share link** (two
-or more scenes), **Clear**, and **Back to search**. Each listed scene has a progress bar
-for its pane's imagery: it waits until the first tile is requested, then counts finished
-of requested tiles in the current view, and reads **Imagery loaded** once the pane is
-idle. When a pane falls back from TiTiler, the sidebar shows a warning that direct
-imagery is active and slower.
+or more scenes), **Clear**, and **Back to search**. Each listed scene with a supported
+raster has a progress bar for its pane's imagery: it waits for the first tile request,
+then counts settled (loaded or failed) of requested tiles in the current view, and reads
+**Imagery loaded** once the pane is idle. When a pane falls back from TiTiler, the
+sidebar shows a warning that direct imagery is active and slower.
 
 Each pane is a 2D, north-up map. A scene pane shows its scene with the default
 OpenStreetMap overlay (labels, roads, and objects) at the saved overlay opacity and

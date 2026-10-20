@@ -410,8 +410,24 @@ function SatelliteComparePane({
           tileLoad.current.finished.delete(tileKey);
           publishTileProgress(false);
         }),
-        // Idle means every requested tile, failed ones included, is settled; failed
-        // tiles raise an error event instead of a data event.
+        // A failed tile raises an error instead of a data event. Cross-origin failures
+        // can omit the source ID, so a source-less error counts when its tile is pending.
+        map.on('error', (event) => {
+          const failure = event as unknown as {
+            readonly sourceId?: unknown;
+            readonly tile?: { readonly tileID?: { readonly key?: unknown } };
+          };
+          const tileKey = failure.tile?.tileID?.key;
+          if (typeof tileKey !== 'string') return;
+          const sentinel =
+            failure.sourceId === mapSourceIds.sentinelRasterA ||
+            (failure.sourceId === undefined && tileLoad.current.requested.has(tileKey));
+          if (!sentinel) return;
+          tileLoad.current.finished.add(tileKey);
+          publishTileProgress(false);
+        }),
+        // Idle means every requested tile is settled. With no tile requested, the scene
+        // does not reach this view, so there is nothing left to load either.
         map.on('idle', () => {
           if (map.getSource(mapSourceIds.sentinelRasterA) !== undefined) {
             publishTileProgress(true);

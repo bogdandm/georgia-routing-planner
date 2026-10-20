@@ -392,7 +392,7 @@ msgstr "Показать прогноз погоды"
 #: src/presentation/map/MapShareDialog.tsx
 #: src/presentation/map/MapViewControls.tsx
 msgid "Soviet Topographic"
-msgstr "Советская топографическая карта"
+msgstr "Топокарта СССР"
 
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx

@@ -4,7 +4,9 @@ import { defaultMapSharePreferences } from '@/application/map/MapSharePreference
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
   applySharedMapView,
+  createComparisonShareUrl,
   createMapShareUrl,
+  parseSharedComparison,
   parseSharedMapView,
   parseWeatherMapUrlState,
   readShareableMapState,
@@ -46,6 +48,58 @@ describe('mapShareUrl', () => {
       basemap: null,
       sceneKey: 'sentinel-2-l2a:S2B_38TMM_20260720_0_L2A',
     });
+  });
+
+  it('round-trips a 2D comparison link that replaces a shared scene', () => {
+    const sceneKeys = ['sentinel-2-l2a:S2A_2017', 'sentinel-2-l2a:S2B_2026'];
+    const url = createComparisonShareUrl(
+      'https://example.test/app/?scene=old%3Ascene&base=bing-satellite&view=3d#tracks',
+      { longitude: 44.801234, latitude: 41.712345 },
+      11.5,
+      sceneKeys,
+    );
+    const { search, hash } = new URL(url);
+
+    expect(hash).toBe('#satellite');
+    expect(parseSharedComparison(search)).toEqual(sceneKeys);
+    expect(parseSharedMapView(search)).toEqual({
+      center: { longitude: 44.80123, latitude: 41.71234 },
+      zoom: 11.5,
+      orientation: { mode: '2d' },
+      basemap: null,
+      sceneKey: null,
+    });
+    // An ordinary map link made from a comparison page does not reopen the grid.
+    expect(
+      parseSharedComparison(
+        new URL(
+          createMapShareUrl(url, {
+            center: { longitude: 44.8, latitude: 41.7 },
+            zoom: 11,
+            orientation: { mode: '2d' },
+            basemap: null,
+            sceneKey: null,
+          }),
+        ).search,
+      ),
+    ).toEqual([]);
+  });
+
+  it.each([
+    ['one scene', 'compare=sentinel-2-l2a:a'],
+    [
+      'five scenes',
+      `compare=${['a', 'b', 'c', 'd', 'e'].map((id) => `s2:${id}`).join(',')}`,
+    ],
+    ['a duplicate', 'compare=s2:a,s2:a'],
+    ['an unsafe key', 'compare=s2:a,s2:%3Cscript%3E'],
+    ['an empty key', 'compare=s2:a,'],
+  ])('opens no comparison for a link with %s', (_case, search) => {
+    expect(parseSharedComparison(`?${search}`)).toEqual([]);
+  });
+
+  it('accepts four comparison scenes', () => {
+    expect(parseSharedComparison('?compare=s2:a,s2:b,s2:c,s2:d')).toHaveLength(4);
   });
 
   it('round-trips a 3D camera and the Soviet topographic basemap while keeping the tab hash', () => {

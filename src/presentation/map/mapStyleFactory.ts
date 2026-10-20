@@ -1,18 +1,30 @@
 import type {
   ExpressionSpecification,
   LayerSpecification,
+  LineLayerSpecification,
+  RasterLayerSpecification,
+  SourceSpecification,
   StyleSpecification,
   SymbolLayerSpecification,
 } from 'maplibre-gl';
+import type { FeatureCollection, MultiLineString, Point } from 'geojson';
 
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
+  satelliteSceneBounds,
+  type SatelliteScene,
+} from '@/domain/satellite/SatelliteScene';
+import {
   basemapImageIds,
+  importedTrackEndpointImageIds,
+  importedTrackLayerIds,
+  mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sentinelMapLayerIds,
   sovietTopographicLayerIds,
   sovietTopographicSourceIds,
 } from '@/presentation/map/mapIds';
@@ -25,7 +37,115 @@ import {
 import {
   mapVisualModePaint,
   mapVisualPalette,
+  type MapVisualModePaint,
 } from '@/presentation/map/mapVisualPalette';
+import type { SatelliteComparisonOverlays } from '@/presentation/map/MapLibreLayerController';
+import {
+  createContourLabelLayer,
+  createContourLineLayer,
+  createReliefShadeLayer,
+} from '@/presentation/map/terrainOverlayStyle';
+import type { TrackEndpointKind } from '@/presentation/map/trackEndpointIcons';
+
+export const importedTrackCasingWidth = 7;
+export const importedTrackLineWidth = 4;
+
+export interface ImportedTrackEndpoint {
+  readonly kind: TrackEndpointKind;
+  readonly coordinate: readonly [number, number];
+}
+
+export type ImportedTrackEndpointCollection = FeatureCollection<
+  Point,
+  { readonly endpoint: TrackEndpointKind }
+>;
+
+/** The imported track exactly as the main map draws it, read once for another map. */
+export interface ImportedTrackOverlaySnapshot {
+  readonly geometry: MultiLineString;
+  readonly endpoints: ImportedTrackEndpointCollection;
+  readonly opacity: number;
+  readonly visible: boolean;
+}
+
+export function createImportedTrackEndpointCollection(
+  endpoints: readonly ImportedTrackEndpoint[],
+): ImportedTrackEndpointCollection {
+  return {
+    type: 'FeatureCollection',
+    features: endpoints.map(({ kind, coordinate }) => ({
+      type: 'Feature',
+      properties: { endpoint: kind },
+      geometry: { type: 'Point', coordinates: [...coordinate] },
+    })),
+  };
+}
+
+/** The casing below and the line above it share the imported track source. */
+export function createImportedTrackLineLayer(
+  kind: 'casing' | 'line',
+  visible: boolean,
+  opacity: number,
+): LineLayerSpecification {
+  const casing = kind === 'casing';
+  return {
+    id: casing ? importedTrackLayerIds.casing : importedTrackLayerIds.line,
+    type: 'line',
+    source: mapSourceIds.importedTrack,
+    layout: {
+      visibility: visible ? 'visible' : 'none',
+      'line-cap': 'round',
+      'line-join': 'round',
+    },
+    paint: {
+      'line-color': casing
+        ? mapVisualPalette.userGeometry.gpxTrackCasing
+        : mapVisualPalette.userGeometry.gpxTrack,
+      'line-width': casing ? importedTrackCasingWidth : importedTrackLineWidth,
+      'line-opacity': opacity,
+    },
+  };
+}
+
+/** Start and finish icons; the map must provide `importedTrackEndpointImageIds`. */
+export function createImportedTrackEndpointLayer(
+  visible: boolean,
+  opacity: number,
+): SymbolLayerSpecification {
+  return {
+    id: importedTrackLayerIds.endpoints,
+    type: 'symbol',
+    source: mapSourceIds.importedTrackEndpoints,
+    layout: {
+      visibility: visible ? 'visible' : 'none',
+      'icon-image': [
+        'match',
+        ['get', 'endpoint'],
+        'start',
+        importedTrackEndpointImageIds.start,
+        importedTrackEndpointImageIds.finish,
+      ],
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      // Source order, not screen position, decides which coincident icon is on top.
+      'symbol-z-order': 'source',
+    },
+    paint: { 'icon-opacity': opacity },
+  };
+}
+
+/** Sentinel scene raster paint on the main map and in comparison panes. */
+export const sentinelRasterPaint = {
+  'raster-opacity': 1,
+  'raster-fade-duration': 0,
+} as const satisfies RasterLayerSpecification['paint'];
+
+/** Sentinel scene footprint outline on the main map and in comparison panes. */
+export const satelliteFootprintPaint = {
+  'line-color': mapVisualPalette.userGeometry.satelliteFootprint,
+  'line-width': 2.5,
+  'line-opacity': 0.95,
+} as const satisfies LineLayerSpecification['paint'];
 
 /** Land-cover kinds with a GOST sign; both providers use these OSM values. */
 const patternedLandcoverSubclasses = [
@@ -1147,4 +1267,182 @@ export function createHikingMapStyle(
       ),
     ],
   };
+}
+
+export interface SatelliteCompareMapStyleOptions {
+  /** null => plain vector pane with the main map's relief and isolines. */
+  readonly sceneRaster: {
+    readonly scene: SatelliteScene;
+    readonly raster: {
+      readonly tileUrl: string;
+      readonly tileSize: number;
+      readonly minzoom: number;
+      readonly maxzoom: number;
+      readonly attribution: string;
+    };
+  } | null;
+  /** Native base-layer visibility under the pane's logical layer choices. */
+  readonly baseLayerVisibility: ReadonlyMap<string, boolean>;
+  /** OSM overlay opacity paint in the satellite visual mode; used only with sceneRaster. */
+  readonly openStreetMapOpacityPaint: MapVisualModePaint;
+  readonly overlays: SatelliteComparisonOverlays;
+}
+
+const staticImageryLayerIds: ReadonlySet<string> = new Set([
+  ...Object.values(satelliteBasemapLayerIds),
+  ...Object.values(naprOrthophotoLayerIds),
+]);
+
+/**
+ * Builds a comparison pane style: the hiking basemap as the main map draws it with the
+ * imported track, and the user's base-layer visibility baked in. With a scene, the pane
+ * shows it in the static satellite visual mode with the OSM overlay opacity; without
+ * one, it is the vector map with the main map's relief and isolines. Static imagery
+ * basemaps stay hidden.
+ */
+export function createSatelliteCompareMapStyle(
+  configuration: MapProviderConfiguration,
+  options: SatelliteCompareMapStyleOptions,
+): StyleSpecification {
+  const style = createHikingMapStyle(configuration);
+  const { sceneRaster } = options;
+  const { importedTrack, terrain } = options.overlays;
+  const sources: Record<string, SourceSpecification> = {
+    ...style.sources,
+    [mapSourceIds.importedTrack]: {
+      type: 'geojson',
+      data: { type: 'Feature', properties: {}, geometry: importedTrack.geometry },
+    },
+    [mapSourceIds.importedTrackEndpoints]: {
+      type: 'geojson',
+      data: importedTrack.endpoints,
+    },
+  };
+  // Each overlay is drawn directly below its base layer, in this order, where the main
+  // map's controller settles it.
+  const overlayLayers: (readonly [beforeId: string, layer: LayerSpecification])[] = [];
+  let paintByLayer: MapVisualModePaint;
+  if (sceneRaster === null) {
+    sources[mapSourceIds.terrainDem] = terrain.demSource;
+    sources[mapSourceIds.terrainContours] = terrain.contourSource;
+    overlayLayers.push(
+      [
+        mapInsertionPoints.contoursBeforeLayerId,
+        createReliefShadeLayer(terrain.reliefVisible),
+      ],
+      [
+        mapInsertionPoints.contoursBeforeLayerId,
+        createContourLineLayer(
+          'minor',
+          terrain.contourMinZoom,
+          terrain.isolinesVisible,
+        ),
+      ],
+      [
+        mapInsertionPoints.contoursBeforeLayerId,
+        createContourLineLayer(
+          'index',
+          terrain.contourMinZoom,
+          terrain.isolinesVisible,
+        ),
+      ],
+      [
+        mapInsertionPoints.contourLabelsBeforeLayerId,
+        createContourLabelLayer(terrain.contourMinZoom, terrain.isolinesVisible),
+      ],
+    );
+    paintByLayer = mapVisualModePaint.vector;
+  } else {
+    const { scene, raster } = sceneRaster;
+    sources[mapSourceIds.sentinelRasterA] = {
+      type: 'raster',
+      tiles: [raster.tileUrl],
+      tileSize: raster.tileSize,
+      minzoom: raster.minzoom,
+      maxzoom: raster.maxzoom,
+      bounds: satelliteSceneBounds(scene),
+      attribution: raster.attribution,
+    };
+    sources[mapSourceIds.sentinelFootprint] = {
+      type: 'geojson',
+      data: { type: 'Feature', properties: {}, geometry: scene.footprint },
+    };
+    overlayLayers.push(
+      [
+        mapInsertionPoints.satelliteBeforeLayerId,
+        {
+          id: sentinelMapLayerIds.rasterA,
+          type: 'raster',
+          source: mapSourceIds.sentinelRasterA,
+          paint: { ...sentinelRasterPaint },
+        },
+      ],
+      [
+        mapInsertionPoints.satelliteFootprintBeforeLayerId,
+        {
+          id: sentinelMapLayerIds.footprint,
+          type: 'line',
+          source: mapSourceIds.sentinelFootprint,
+          paint: { ...satelliteFootprintPaint },
+        },
+      ],
+    );
+    const satellitePaint: MapVisualModePaint = mapVisualModePaint.satellite;
+    paintByLayer = Object.fromEntries(
+      [
+        ...Object.keys(satellitePaint),
+        ...Object.keys(options.openStreetMapOpacityPaint),
+      ].map((layerId) => [
+        layerId,
+        { ...satellitePaint[layerId], ...options.openStreetMapOpacityPaint[layerId] },
+      ]),
+    );
+  }
+  overlayLayers.push(
+    [
+      mapInsertionPoints.importedTracksBeforeLayerId,
+      createImportedTrackLineLayer(
+        'casing',
+        importedTrack.visible,
+        importedTrack.opacity,
+      ),
+    ],
+    [
+      mapInsertionPoints.importedTracksBeforeLayerId,
+      createImportedTrackLineLayer(
+        'line',
+        importedTrack.visible,
+        importedTrack.opacity,
+      ),
+    ],
+    [
+      mapInsertionPoints.importedTracksBeforeLayerId,
+      createImportedTrackEndpointLayer(importedTrack.visible, importedTrack.opacity),
+    ],
+  );
+  const orderedLayers = style.layers.flatMap((baseLayer) => [
+    ...overlayLayers.flatMap(([beforeId, overlay]) =>
+      beforeId === baseLayer.id ? [overlay] : [],
+    ),
+    baseLayer,
+  ]);
+  const layers = orderedLayers.map((layer): LayerSpecification => {
+    const visible = staticImageryLayerIds.has(layer.id)
+      ? false
+      : options.baseLayerVisibility.get(layer.id);
+    const paint = paintByLayer[layer.id];
+    const compareLayer = { ...layer };
+    // Layer unions cannot type a per-property spread. The keys are the ones the main map
+    // writes through setLayoutProperty and setPaintProperty for the same layer IDs.
+    if (visible !== undefined) {
+      Object.assign(compareLayer, {
+        layout: { ...layer.layout, visibility: visible ? 'visible' : 'none' },
+      });
+    }
+    if (paint !== undefined && Object.keys(paint).length > 0) {
+      Object.assign(compareLayer, { paint: { ...layer.paint, ...paint } });
+    }
+    return compareLayer;
+  });
+  return { ...style, sources, layers };
 }

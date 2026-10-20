@@ -103,6 +103,27 @@ share through `TrackShareService` with its own abortable request, and
 `createTrackShareUrl` appends the capability fragment to the dialog's map link. A track
 link with a scene stays on Tracks instead of opening Satellite.
 
+The comparison sidebar's **Share link** calls `createComparisonShareUrl`, which writes a
+2D map link without `scene` or `base` plus `compare=<key>,…` and `#satellite`; every
+other map link drops `compare`. `parseSharedComparison` accepts two to four distinct
+keys that each match the scene-key pattern and otherwise returns none. On desktop,
+`MapWorkspace` opens Satellite, resolves every key through the same allowlisted
+`getScene` in parallel, and calls `openSharedComparison` with the resolved scenes in
+link order and the shared camera when at least two resolve, dropping missing or failed
+keys; otherwise it shows a notice. Smartphones and track-share links ignore `compare`.
+
+While the grid is open, `WorkspaceShell` hides the mounted main map and the rail, docks
+a narrow sidebar, and gives `SatelliteCompareMaps` the remaining area. MapLibre limits
+concurrent raster requests for the whole page (16) and TiTiler answers each tile in
+about a second, so the grid multiplies that limit by four while mounted and restores it
+on unmount; otherwise four panes queue behind each other for tens of seconds. The grid
+waits for `restorePersistedState` so panes read stored layer choices, overlay opacity,
+rendering mode, and stretch once. `SatelliteCompareSync` copies the moving pane's center
+and zoom to the others with `jumpTo` under a guard, re-projects the crosshair on every
+move, and reports one settled camera per gesture to `satelliteCompareStore`. Closing the
+grid issues a `requestMapNavigation` to that camera with `exactZoom`, so a 3D main map
+keeps the compared zoom instead of the terrain close-up zoom.
+
 ## Terrain transition
 
 ```mermaid

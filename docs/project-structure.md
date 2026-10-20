@@ -126,6 +126,8 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 | Point-forecast request/result lifecycle                     | `WeatherPanel` React state                                      |
 | Scene search results                                        | `SatelliteBrowser` React state                                  |
 | Mosaic mode, dates, and request identity                    | `SatelliteMosaicProvider` React state                           |
+| Comparison tray, grid slots, last grid camera, TiTiler loss | Zustand `satelliteCompareStore`                                 |
+| Comparison pane maps, shared camera, mirrored crosshair     | `SatelliteCompareMaps` / `SatelliteCompareSync`                 |
 | Map diagnostic snapshot / Sentinel query timeline           | `MapDiagnosticsSnapshotStore` / `SentinelQueryDiagnosticsStore` |
 | Account session                                             | Official Supabase client via `UserDataService`                  |
 
@@ -184,6 +186,14 @@ validates and persists layer preferences and projects its state into `mapLayerSt
 `ContourTileGenerator` registers the contour protocol and adapts the terrain backend to
 `maplibre-contour`; `SatelliteCogTileProvider` registers the `georgia-satellite-cog`
 protocol. Runtime behavior is described in [runtime-flows.md](runtime-flows.md).
+
+`SatelliteCompareMaps` renders the comparison grid as separate lightweight maps, keyed
+by grid position, that never attach to the facade or the controller's map. Each pane's
+style comes from the pure `createSatelliteCompareMapStyle`; its tiles come from the
+controller's `createSceneRasterTiles`, which shares the TiTiler URL, stretch, and
+direct-COG registration with the main map, and its imported track, relief, and isolines
+from `createComparisonOverlays`, built by the same layer helpers the controller uses.
+The main map stays mounted and hidden underneath.
 
 `BrowserStorageUsageReader` implements `StorageUsageReader` for Settings; missing
 browser capabilities produce unavailable values rather than failing the dialog.

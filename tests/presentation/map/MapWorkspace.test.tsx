@@ -32,6 +32,10 @@ import {
   SatelliteMosaicProvider,
   useSatelliteMosaic,
 } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
+import {
+  resetSatelliteCompareStore,
+  satelliteCompareStore,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
 import { appColors } from '@/presentation/theme/appColors';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -240,6 +244,7 @@ describe('MapWorkspace', () => {
     activateAppLocale('en');
     resetMapInteractionStore();
     resetMapLayerStore();
+    resetSatelliteCompareStore();
     mapClickCoordinate.longitude = 44.8;
     mapClickCoordinate.latitude = 41.7;
     window.history.replaceState(null, '', '/');
@@ -499,6 +504,83 @@ describe('MapWorkspace', () => {
       expect(applyScene).toHaveBeenCalledWith(sharedScene, expect.any(AbortSignal));
       expect(facade.terrainModeRequests).toEqual(['terrain']);
     });
+  });
+
+  it('opens the resolvable scenes of a shared comparison in link order', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=12&view=2d&compare=sentinel-2-l2a%3Alater%2Csentinel-2-l2a%3Aunreachable%2Csentinel-2-l2a%3Aearlier#tracks',
+    );
+    useUiStore.setState({ activeTab: 'tracks', navigationCollapsed: true });
+    const scenes: Readonly<Record<string, SatelliteScene>> = {
+      later: { ...sharedScene, id: 'later', acquiredAt: '2025-08-01T08:00:00.000Z' },
+      earlier: {
+        ...sharedScene,
+        id: 'earlier',
+        acquiredAt: '2017-08-03T08:00:00.000Z',
+      },
+    };
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene: (_collection, id) => {
+          const scene = scenes[id];
+          return scene === undefined
+            ? Promise.reject(new Error('catalog unavailable'))
+            : Promise.resolve(scene);
+        },
+      },
+    });
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Compare map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await waitFor(() => {
+      expect(satelliteCompareStore.getState().slots).toHaveLength(2);
+    });
+    expect(
+      satelliteCompareStore.getState().slots.map((scene) => scene?.id ?? null),
+    ).toEqual(['later', 'earlier']);
+    expect(satelliteCompareStore.getState().camera).toEqual({
+      center: { longitude: 44.8, latitude: 41.7 },
+      zoom: 12,
+    });
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'satellite',
+      navigationCollapsed: false,
+    });
+  });
+
+  it('keeps the shared camera and reports a comparison with one resolvable scene', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?map=2&lat=41.7&lon=44.8&z=12&view=2d&compare=sentinel-2-l2a%3Ashared-scene%2Csentinel-2-l2a%3Amissing',
+    );
+    const services = createTestServices({
+      satelliteCatalogGateway: {
+        search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
+        getScene: (_collection, id) =>
+          Promise.resolve(id === sharedScene.id ? sharedScene : null),
+      },
+    });
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Compare map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    expect(
+      await screen.findByText(
+        'The shared image comparison could not be opened. The shared map location is still available.',
+      ),
+    ).toBeVisible();
+    expect(satelliteCompareStore.getState().slots).toEqual([]);
   });
 
   it('switches to a shared satellite basemap after stored layers load on a ready map', async () => {

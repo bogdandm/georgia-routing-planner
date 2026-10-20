@@ -80,6 +80,8 @@ export interface MapFacade {
       readonly longitude: number;
       readonly latitude: number;
       readonly zoom?: number;
+      /** Keeps `zoom` in 3D instead of the terrain close-up zoom. */
+      readonly exactZoom?: boolean;
     },
     visibleAreaPadding?: MapFitPadding,
   ): void;

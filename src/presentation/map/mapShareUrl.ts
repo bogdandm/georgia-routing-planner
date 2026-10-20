@@ -15,6 +15,8 @@ const mapShareSchemaVersion = 2;
 const coordinatePrecision = 5;
 const zoomPrecision = 2;
 const sceneKeyPattern = /^[a-z0-9._-]{1,100}:[a-z0-9._-]{1,300}$/iu;
+const minimumComparisonSceneKeys = 2;
+const maximumComparisonSceneKeys = 4;
 const weatherTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{3})?)?Z$/u;
 
 /** Static satellite basemaps a link may select; Sentinel imagery travels as `scene`. */
@@ -109,6 +111,23 @@ export function parseSharedMapView(search: string): MapShareView | null {
       ? ({ mode: '3d', bearing, pitch } as const)
       : ({ mode: '2d' } as const);
   return { center: { longitude, latitude }, zoom, orientation, basemap, sceneKey };
+}
+
+/**
+ * Reads the scene keys of a comparison link (`compare=<key>,<key>[,…]`). A link with
+ * an invalid key, a duplicate, or fewer than two or more than four keys opens no
+ * comparison.
+ */
+export function parseSharedComparison(search: string): readonly string[] {
+  const candidate = new URLSearchParams(search).get('compare');
+  if (candidate === null) return [];
+  const sceneKeys = candidate.split(',');
+  return sceneKeys.length >= minimumComparisonSceneKeys &&
+    sceneKeys.length <= maximumComparisonSceneKeys &&
+    new Set(sceneKeys).size === sceneKeys.length &&
+    sceneKeys.every((sceneKey) => sceneKeyPattern.test(sceneKey))
+    ? sceneKeys
+    : [];
 }
 
 export function applySharedMapView(
@@ -222,7 +241,8 @@ export function updateWeatherMapUrl(
 /**
  * Creates a share URL only when called from an explicit user action. Other query
  * parameters and the workspace-tab hash are kept; a shared scene opens Satellite. An
- * open shared-track capability is reduced to `#tracks`: a map link never shares a track.
+ * open shared-track capability is reduced to `#tracks`: a map link never shares a track,
+ * and a comparison travels only through `createComparisonShareUrl`.
  */
 export function createMapShareUrl(currentUrl: string, view: MapShareView): string {
   const url = new URL(currentUrl);
@@ -251,5 +271,27 @@ export function createMapShareUrl(currentUrl: string, view: MapShareView): strin
   } else {
     url.searchParams.delete('scene');
   }
+  url.searchParams.delete('compare');
+  return url.toString();
+}
+
+/** Creates a 2D link that opens Satellite with these scenes in the comparison grid. */
+export function createComparisonShareUrl(
+  currentUrl: string,
+  center: MapCoordinate,
+  zoom: number,
+  sceneKeys: readonly string[],
+): string {
+  const url = new URL(
+    createMapShareUrl(currentUrl, {
+      center,
+      zoom,
+      orientation: { mode: '2d' },
+      basemap: null,
+      sceneKey: null,
+    }),
+  );
+  url.searchParams.set('compare', sceneKeys.join(','));
+  url.hash = '#satellite';
   return url.toString();
 }

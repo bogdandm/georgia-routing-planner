@@ -565,6 +565,7 @@ export class MapLibreFacade implements MapFacade {
       readonly longitude: number;
       readonly latitude: number;
       readonly zoom?: number;
+      readonly exactZoom?: boolean;
     },
     visibleAreaPadding?: MapFitPadding,
   ): void {
@@ -575,9 +576,11 @@ export class MapLibreFacade implements MapFacade {
     const options = {
       center,
       zoom:
-        this.#snapshot.terrainMode === 'terrain'
-          ? 15
-          : (target.zoom ?? Math.max(map.getZoom(), 13)),
+        target.exactZoom === true && target.zoom !== undefined
+          ? target.zoom
+          : this.#snapshot.terrainMode === 'terrain'
+            ? 15
+            : (target.zoom ?? Math.max(map.getZoom(), 13)),
       duration: 650,
       essential: true,
       padding,

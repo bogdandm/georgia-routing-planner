@@ -28,6 +28,11 @@ msgstr "Облачность {cloudPercent}"
 msgid "{coveragePercent} coverage"
 msgstr "Покрытие {coveragePercent}"
 
+#. js-lingui-id: XBUzrK
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{finished} of {requested} tiles"
+msgstr "Тайлов загружено: {finished} из {requested}"
+
 #. js-lingui-id: HmvK6l
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "{formattedDate}, expected Sentinel-2 pass"
@@ -67,6 +72,16 @@ msgstr "{imageCount, plural, one {# снимок} few {# снимка} many {# �
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "{monthLabel} imagery could not be loaded. Try again."
 msgstr "Не удалось загрузить снимки за {monthLabel}. Повторите попытку."
+
+#. js-lingui-id: icVXm6
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{sceneCount, plural, one {Comparing # image} other {Comparing # images}}"
+msgstr "{sceneCount, plural, one {Сравнение # снимка} few {Сравнение # снимков} many {Сравнение # снимков} other {Сравнение # снимка}}"
+
+#. js-lingui-id: WbW5zx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{time} · {cloud} cloud"
+msgstr "{time} · облачность {cloud}"
 
 #. js-lingui-id: CE1MRg
 #: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx
@@ -109,6 +124,11 @@ msgstr "Календарь съёмки"
 msgid "Acquisition year"
 msgstr "Год съёмки"
 
+#. js-lingui-id: kwP347
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Add at least two images"
+msgstr "Добавьте хотя бы два снимка"
+
 #. js-lingui-id: KSDnus
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "All dates before it will be selected."
@@ -144,10 +164,20 @@ msgstr "Авто"
 msgid "Back to satellite search"
 msgstr "Назад к поиску снимков"
 
+#. js-lingui-id: nsm7BA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Back to search"
+msgstr "Назад к поиску"
+
 #. js-lingui-id: 5TviPn
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Cancel search"
 msgstr "Отменить поиск"
+
+#. js-lingui-id: 7kudva
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Change image date"
+msgstr "Сменить дату снимка"
 
 #. js-lingui-id: PhApqn
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
@@ -179,8 +209,19 @@ msgstr "Выбрать месяц и год"
 msgid "Choose the last date to include in the Mosaic."
 msgstr "Выберите последнюю дату, которую нужно включить в мозаику."
 
+#. js-lingui-id: xCJdfg
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Clear"
+msgstr "Очистить"
+
+#. js-lingui-id: h584zm
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
+msgstr "Нажмите на дату на карте, чтобы выбрать другой снимок. Перетащите дату на другую карту, чтобы поменять их местами."
+
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
 msgid "Clipboard access failed. Try again."
 msgstr "Нет доступа к буферу обмена. Повторите попытку."
 
@@ -193,6 +234,32 @@ msgstr "Закрыть результаты поиска снимков"
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
 msgid "Cloud cover must be between 0 and 100 percent."
 msgstr "Облачность должна быть от 0 до 100 процентов."
+
+#. js-lingui-id: YGShnx
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Compare"
+msgstr "Сравнить"
+
+#. js-lingui-id: lMoJUA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Compare images from different dates side by side"
+msgstr "Сравнить снимки за разные даты рядом"
+
+#. js-lingui-id: HrBFhl
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+msgid "Compared"
+msgstr "В сравнении"
+
+#. js-lingui-id: 0frQ-M
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Comparison link copied"
+msgstr "Ссылка на сравнение скопирована"
+
+#. js-lingui-id: 2_xA3S
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Comparison: {count} of {maximumComparedScenes}"
+msgstr "Сравнение: {count} из {maximumComparedScenes}"
 
 #. js-lingui-id: EcGYZW
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
@@ -250,10 +317,25 @@ msgstr "Гамма"
 msgid "High cloud cover: {cloudPercent}"
 msgstr "Высокая облачность: {cloudPercent}"
 
+#. js-lingui-id: vxvXV5
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Image comparison"
+msgstr "Сравнение снимков"
+
 #. js-lingui-id: hHoLcB
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Image failed to apply"
 msgstr "Не удалось применить снимок"
+
+#. js-lingui-id: 5JOFGH
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Imagery loaded"
+msgstr "Снимок загружен"
+
+#. js-lingui-id: Ts49-Y
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Imagery loading for {day}"
+msgstr "Загрузка снимка за {day}"
 
 #. js-lingui-id: n8JIYw
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
@@ -261,14 +343,25 @@ msgid "Imagery tuning values are out of range."
 msgstr "Параметры обработки снимка вне допустимого диапазона."
 
 #. js-lingui-id: aAbMw4
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
 msgstr "Снимки: данные Copernicus Sentinel через Element 84 Earth Search."
+
+#. js-lingui-id: QR79kA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Images for this month could not be loaded."
+msgstr "Не удалось загрузить снимки за этот месяц."
 
 #. js-lingui-id: 2LlWfy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Images near {coordinates}"
 msgstr "Снимки рядом с {coordinates}"
+
+#. js-lingui-id: soIt6G
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+msgid "In comparison"
+msgstr "Добавлен в сравнение"
 
 #. js-lingui-id: cXonY8
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -315,10 +408,20 @@ msgstr "Максимальная облачность"
 msgid "Next acquisition month"
 msgstr "Следующий месяц съёмки"
 
+#. js-lingui-id: _z6YXf
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Next acquisition year"
+msgstr "Следующий год съёмки"
+
 #. js-lingui-id: g8JmSC
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "Next month"
 msgstr "Следующий месяц"
+
+#. js-lingui-id: Uosxno
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Next year"
+msgstr "Следующий год"
 
 #. js-lingui-id: lX5HU_
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
@@ -335,6 +438,16 @@ msgstr "Подходящих снимков нет. Увеличьте поро�
 msgid "No Sentinel imagery found through the archive."
 msgstr "В архиве не найдено снимков Sentinel."
 
+#. js-lingui-id: YJQPdw
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Open image comparison"
+msgstr "Открыть сравнение снимков"
+
+#. js-lingui-id: m-QLEF
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Pick image date"
+msgstr "Выбрать дату снимка"
+
 #. js-lingui-id: NHlrjI
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Point"
@@ -345,10 +458,20 @@ msgstr "Точка"
 msgid "Previous acquisition month"
 msgstr "Предыдущий месяц съёмки"
 
+#. js-lingui-id: 5V0TT0
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Previous acquisition year"
+msgstr "Предыдущий год съёмки"
+
 #. js-lingui-id: 1xwZj_
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "Previous month"
 msgstr "Предыдущий месяц"
+
+#. js-lingui-id: PmGtCr
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Previous year"
+msgstr "Предыдущий год"
 
 #. js-lingui-id: kwTqXK
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -369,6 +492,11 @@ msgstr "Потолок отражательной способности"
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Relief shading could not be updated. Try again."
 msgstr "Не удалось обновить отмывку рельефа. Повторите попытку."
+
+#. js-lingui-id: J8e2aG
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Remove {day} from comparison"
+msgstr "Убрать {day} из сравнения"
 
 #. js-lingui-id: WIbcl9
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -492,6 +620,7 @@ msgstr "Настройки"
 
 #. js-lingui-id: uIZ2tg
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
 msgid "Share link"
 msgstr "Поделиться ссылкой"
 
@@ -509,6 +638,11 @@ msgstr "Показывать отмывку рельефа поверх спут
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Stored locally. Release a slider to replace the active raster; lower ceilings brighten terrain but can clip bright snow."
 msgstr "Сохраняется локально. Отпустите ползунок, чтобы заменить активный растр; более низкий потолок делает рельеф светлее, но может пересветить яркий снег."
+
+#. js-lingui-id: n65fbt
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "That image is already in the comparison."
+msgstr "Этот снимок уже есть в сравнении."
 
 #. js-lingui-id: sGmQE_
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
@@ -595,6 +729,11 @@ msgstr "У этой сцены нет поддерживаемого изобр�
 msgid "Tile {tileId} · Orbit {orbit}"
 msgstr "Тайл {tileId} · Орбита {orbit}"
 
+#. js-lingui-id: t6tTnX
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly."
+msgstr "TiTiler недоступен. Используются прямые предварительно отрисованные снимки Sentinel, они загружаются медленнее."
+
 #. js-lingui-id: 8m2Wwx
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "True-color imagery applied"
@@ -604,6 +743,11 @@ msgstr "Снимок в естественных цветах применён"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Unavailable"
 msgstr "Нет данных"
+
+#. js-lingui-id: FhzFth
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+msgid "Up to {maximumComparedScenes} images can be compared"
+msgstr "Можно сравнить не более {maximumComparedScenes} снимков"
 
 #. js-lingui-id: 5upB_g
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
@@ -639,6 +783,11 @@ msgstr "Дождитесь остановки карты."
 #: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx
 msgid "Wait for the satellite renderer change to finish."
 msgstr "Дождитесь завершения смены способа отрисовки снимков."
+
+#. js-lingui-id: 1k9vlD
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Waiting for imagery…"
+msgstr "Ожидание снимка…"
 
 #. js-lingui-id: H7wWdy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

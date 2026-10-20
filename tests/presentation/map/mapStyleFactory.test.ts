@@ -1,3 +1,4 @@
+import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import {
   createExpression,
   featureFilter,
@@ -12,18 +13,42 @@ import {
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
   basemapImageIds,
+  importedTrackEndpointImageIds,
+  importedTrackLayerIds,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sentinelMapLayerIds,
   sovietTopographicLayerIds,
   sovietTopographicSourceIds,
+  terrainOverlayLayerIds,
 } from '@/presentation/map/mapIds';
-import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
+import {
+  createHikingMapStyle,
+  createImportedTrackEndpointCollection,
+  createSatelliteCompareMapStyle,
+} from '@/presentation/map/mapStyleFactory';
 import { englishFirstLabelExpression } from '@/presentation/map/mapStyleFactory';
-import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
+import {
+  baseNativeLayerVisibility,
+  openStreetMapOpacityPaint,
+  type SatelliteComparisonOverlays,
+} from '@/presentation/map/MapLibreLayerController';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import {
+  mapVisualModePaint,
+  mapVisualPalette,
+} from '@/presentation/map/mapVisualPalette';
+import {
+  createTerrainContourSource,
+  createTerrainDemSource,
+} from '@/presentation/map/terrainOverlayStyle';
+import { createTrackEndpointImage } from '@/presentation/map/trackEndpointIcons';
+import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
+import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 
 const configuration = parseMapProviderConfiguration(
   defaultMapProviderConfigurationInput,
@@ -818,5 +843,352 @@ describe('createHikingMapStyle', () => {
     expect(brownfields).toHaveProperty('source-layer', 'fixture_land');
     expect(buildings).toHaveProperty('source-layer', 'fixture_buildings');
     expect(roads).toHaveProperty('source-layer', 'fixture_streets');
+  });
+});
+
+describe('createSatelliteCompareMapStyle', () => {
+  const scene: SatelliteScene = {
+    id: 'S2A_38TMN_20190814',
+    collection: 'sentinel-2-l2a',
+    platform: 'sentinel-2a',
+    productLevel: 'L2A',
+    acquiredAt: '2019-08-14T07:52:00.000Z',
+    cloudCoverPercent: 4,
+    footprint: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [44, 42],
+          [45, 42],
+          [45, 43],
+          [44, 43],
+          [44, 42],
+        ],
+      ],
+    },
+    tileId: '38TMN',
+    orbit: 'R036',
+    productId: 'S2A_38TMN_20190814',
+    thumbnailHref: null,
+    visualAsset: {
+      kind: 'sentinel-l2a',
+      itemHref: 'https://earth-search.example.test/items/S2A_38TMN_20190814',
+      visualHref: 'https://sentinel.example.test/S2A_38TMN_20190814/TCI.tif',
+      mediaType: 'image/tiff; application=geotiff; profile=cloud-optimized',
+      projectionEpsg: 32638,
+    },
+    attribution: 'Synthetic test data',
+  };
+  const tileUrl = 'https://titiler.example.test/tiles/{z}/{x}/{y}.png?item=fixture';
+  const contourTileUrl = 'test-contour://tiles/{z}/{x}/{y}?minor=25&major=200';
+
+  function overlays(
+    visibility: Readonly<Record<LogicalMapLayerId, boolean>>,
+  ): SatelliteComparisonOverlays {
+    return {
+      importedTrack: {
+        geometry: {
+          type: 'MultiLineString',
+          coordinates: [
+            [
+              [44.2, 42.2],
+              [44.3, 42.3],
+            ],
+          ],
+        },
+        endpoints: createImportedTrackEndpointCollection([
+          { kind: 'finish', coordinate: [44.3, 42.3] },
+          { kind: 'start', coordinate: [44.2, 42.2] },
+        ]),
+        opacity: 0.6,
+        visible: visibility['imported-tracks'],
+      },
+      terrain: {
+        demSource: createTerrainDemSource(configuration.terrain, 256),
+        contourSource: createTerrainContourSource(
+          configuration.terrain,
+          contourTileUrl,
+        ),
+        contourMinZoom: configuration.terrain.overlays.contourMinZoom,
+        reliefVisible: visibility['terrain-relief'],
+        isolinesVisible: visibility['elevation-isolines'],
+      },
+    };
+  }
+
+  function compareStyle(
+    visibilityChanges: Partial<Record<LogicalMapLayerId, boolean>>,
+    openStreetMapOpacity: number,
+    withScene = true,
+  ): StyleSpecification {
+    const visibility = {
+      ...mapLayerStore.getState().visibility,
+      ...visibilityChanges,
+    };
+    return createSatelliteCompareMapStyle(configuration, {
+      sceneRaster: withScene
+        ? {
+            scene,
+            raster: {
+              tileUrl,
+              tileSize: 256,
+              minzoom: 8,
+              maxzoom: 14,
+              attribution: 'Sentinel-2 test attribution',
+            },
+          }
+        : null,
+      baseLayerVisibility: baseNativeLayerVisibility(visibility),
+      openStreetMapOpacityPaint: openStreetMapOpacityPaint(
+        'satellite',
+        openStreetMapOpacity,
+      ),
+      overlays: overlays(visibility),
+    });
+  }
+
+  function plainStyle(
+    visibilityChanges: Partial<Record<LogicalMapLayerId, boolean>> = {},
+  ): StyleSpecification {
+    return compareStyle(visibilityChanges, 0.5, false);
+  }
+
+  function layer(style: StyleSpecification, layerId: string): LayerSpecification {
+    const found = style.layers.find((candidate) => candidate.id === layerId);
+    if (found === undefined) throw new Error(`Missing layer ${layerId}.`);
+    return found;
+  }
+
+  it('passes the MapLibre style specification validator', () => {
+    expect(validateStyleMin(compareStyle({}, 1))).toEqual([]);
+    expect(validateStyleMin(plainStyle())).toEqual([]);
+  });
+
+  it('draws the scene below land cover and its footprint below the track and first icons', () => {
+    const style = compareStyle({}, 1);
+    const layerIds = style.layers.map((candidate) => candidate.id);
+
+    expect(layerIds.indexOf(sentinelMapLayerIds.rasterA)).toBe(
+      layerIds.indexOf(mapInsertionPoints.satelliteBeforeLayerId) - 1,
+    );
+    // As on the main map, the imported track settles between the footprint and the icons.
+    expect(layerIds.indexOf(sentinelMapLayerIds.footprint)).toBe(
+      layerIds.indexOf(importedTrackLayerIds.casing) - 1,
+    );
+    expect(layerIds.indexOf(importedTrackLayerIds.endpoints)).toBe(
+      layerIds.indexOf(mapInsertionPoints.satelliteFootprintBeforeLayerId) - 1,
+    );
+    expect(style.sources[mapSourceIds.sentinelRasterA]).toEqual({
+      type: 'raster',
+      tiles: [tileUrl],
+      tileSize: 256,
+      minzoom: 8,
+      maxzoom: 14,
+      bounds: [44, 42, 45, 43],
+      attribution: 'Sentinel-2 test attribution',
+    });
+    expect(layer(style, sentinelMapLayerIds.rasterA)).toHaveProperty('paint', {
+      'raster-opacity': 1,
+      'raster-fade-duration': 0,
+    });
+  });
+
+  it('hides static imagery basemaps and the layers the user turned off', () => {
+    const style = compareStyle({ 'google-satellite': true, roads: false }, 1);
+
+    for (const layerId of [
+      satelliteBasemapLayerIds.imagery,
+      naprOrthophotoLayerIds.national2016To2017,
+      mapLayerIds.roads,
+      mapLayerIds.roadLabels,
+    ]) {
+      expect(layer(style, layerId)).toHaveProperty('layout.visibility', 'none');
+    }
+    expect(layer(style, mapLayerIds.hikingPaths)).toHaveProperty(
+      'layout.visibility',
+      'visible',
+    );
+  });
+
+  it('applies the satellite contrast paint scaled by the OSM overlay opacity', () => {
+    const style = compareStyle({}, 0.5);
+
+    expect(layer(style, mapLayerIds.landcover)).toHaveProperty(
+      ['paint', 'fill-opacity'],
+      0,
+    );
+    expect(layer(style, mapLayerIds.roads)).toHaveProperty(
+      ['paint', 'line-opacity'],
+      0.48,
+    );
+    expect(layer(style, mapLayerIds.placeLabels)).toHaveProperty(
+      ['paint', 'text-opacity'],
+      0.5,
+    );
+    expect(layer(style, mapLayerIds.placeLabels)).toHaveProperty(
+      ['paint', 'text-halo-color'],
+      mapVisualPalette.text.haloSatellite,
+    );
+  });
+
+  it('draws an empty pane as the vector map with the relief and isolines', () => {
+    const style = plainStyle();
+    const layerIds = style.layers.map((candidate) => candidate.id);
+
+    expect(style.sources).not.toHaveProperty(mapSourceIds.sentinelRasterA);
+    expect(style.sources).not.toHaveProperty(mapSourceIds.sentinelFootprint);
+    expect(layerIds).not.toContain(sentinelMapLayerIds.rasterA);
+    expect(style.sources[mapSourceIds.terrainDem]).toEqual(
+      createTerrainDemSource(configuration.terrain, 256),
+    );
+    expect(style.sources[mapSourceIds.terrainContours]).toHaveProperty('tiles', [
+      contourTileUrl,
+    ]);
+    const waterIndex = layerIds.indexOf(mapInsertionPoints.contoursBeforeLayerId);
+    expect(layerIds.slice(waterIndex - 3, waterIndex)).toEqual([
+      terrainOverlayLayerIds.reliefShade,
+      terrainOverlayLayerIds.contourMinor,
+      terrainOverlayLayerIds.contourIndex,
+    ]);
+    expect(layerIds.indexOf(terrainOverlayLayerIds.contourLabels)).toBe(
+      layerIds.indexOf(mapInsertionPoints.contourLabelsBeforeLayerId) - 1,
+    );
+    for (const layerId of [
+      terrainOverlayLayerIds.reliefShade,
+      terrainOverlayLayerIds.contourMinor,
+      terrainOverlayLayerIds.contourIndex,
+      terrainOverlayLayerIds.contourLabels,
+    ]) {
+      expect(layer(style, layerId)).toHaveProperty('layout.visibility', 'visible');
+    }
+    // The vector visual mode, unscaled by the OSM overlay opacity.
+    for (const [layerId, paint] of Object.entries(mapVisualModePaint.vector)) {
+      const found = style.layers.find((candidate) => candidate.id === layerId);
+      if (found === undefined) continue;
+      for (const [property, value] of Object.entries(paint)) {
+        expect(found).toHaveProperty(['paint', property], value);
+      }
+    }
+    expect(layer(style, mapLayerIds.roads)).not.toHaveProperty(
+      ['paint', 'line-opacity'],
+      0.48,
+    );
+    expect(layer(style, satelliteBasemapLayerIds.imagery)).toHaveProperty(
+      'layout.visibility',
+      'none',
+    );
+  });
+
+  it('hides the relief and isolines the main map hides', () => {
+    const style = plainStyle({ 'terrain-relief': false, 'elevation-isolines': false });
+
+    for (const layerId of [
+      terrainOverlayLayerIds.reliefShade,
+      terrainOverlayLayerIds.contourMinor,
+      terrainOverlayLayerIds.contourIndex,
+      terrainOverlayLayerIds.contourLabels,
+    ]) {
+      expect(layer(style, layerId)).toHaveProperty('layout.visibility', 'none');
+    }
+  });
+
+  it('keeps relief and isolines off satellite panes', () => {
+    const style = compareStyle({}, 1);
+    const layerIds = style.layers.map((candidate) => candidate.id);
+
+    expect(style.sources).not.toHaveProperty(mapSourceIds.terrainDem);
+    expect(style.sources).not.toHaveProperty(mapSourceIds.terrainContours);
+    for (const layerId of Object.values(terrainOverlayLayerIds)) {
+      expect(layerIds).not.toContain(layerId);
+    }
+  });
+
+  it.each([
+    ['satellite', true],
+    ['plain', false],
+  ])('draws the imported track on a %s pane below the first icons', (_, withScene) => {
+    const style = compareStyle({}, 1, withScene);
+    const layerIds = style.layers.map((candidate) => candidate.id);
+
+    expect(style.sources[mapSourceIds.importedTrack]).toHaveProperty(
+      'data.geometry.coordinates',
+      [
+        [
+          [44.2, 42.2],
+          [44.3, 42.3],
+        ],
+      ],
+    );
+    expect(style.sources[mapSourceIds.importedTrackEndpoints]).toHaveProperty(
+      'data.features',
+      [
+        ['finish', [44.3, 42.3]],
+        ['start', [44.2, 42.2]],
+      ].map(([endpoint, coordinates]) => ({
+        type: 'Feature',
+        properties: { endpoint },
+        geometry: { type: 'Point', coordinates },
+      })),
+    );
+    const fordsIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
+    expect(layerIds.slice(fordsIndex - 3, fordsIndex)).toEqual([
+      importedTrackLayerIds.casing,
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.endpoints,
+    ]);
+    expect(layer(style, importedTrackLayerIds.casing)).toMatchObject({
+      layout: { visibility: 'visible' },
+      paint: {
+        'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
+        'line-width': 7,
+        'line-opacity': 0.6,
+      },
+    });
+    expect(layer(style, importedTrackLayerIds.line)).toMatchObject({
+      layout: { visibility: 'visible' },
+      paint: { 'line-width': 4, 'line-opacity': 0.6 },
+    });
+    expect(layer(style, importedTrackLayerIds.endpoints)).toMatchObject({
+      layout: { visibility: 'visible' },
+      paint: { 'icon-opacity': 0.6 },
+    });
+    for (const layerId of [
+      importedTrackLayerIds.highlight,
+      importedTrackLayerIds.focusLineA,
+      importedTrackLayerIds.trace,
+    ]) {
+      expect(layerIds).not.toContain(layerId);
+    }
+  });
+
+  it.each([
+    ['satellite', true],
+    ['plain', false],
+  ])(
+    'hides the imported track on a %s pane with imported tracks off',
+    (_, withScene) => {
+      const style = compareStyle({ 'imported-tracks': false }, 1, withScene);
+
+      for (const layerId of [
+        importedTrackLayerIds.casing,
+        importedTrackLayerIds.line,
+        importedTrackLayerIds.endpoints,
+      ]) {
+        expect(layer(style, layerId)).toHaveProperty('layout.visibility', 'none');
+      }
+    },
+  );
+
+  it('resolves the track endpoint images a pane requests on demand', () => {
+    expect(createTrackEndpointImage(importedTrackEndpointImageIds.start)).toMatchObject(
+      {
+        image: { width: 40, height: 40 },
+        pixelRatio: 2,
+      },
+    );
+    expect(
+      createTrackEndpointImage(importedTrackEndpointImageIds.finish),
+    ).not.toBeNull();
+    expect(createTrackEndpointImage(basemapImageIds.attraction)).toBeNull();
   });
 });

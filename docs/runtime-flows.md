@@ -103,6 +103,23 @@ share through `TrackShareService` with its own abortable request, and
 `createTrackShareUrl` appends the capability fragment to the dialog's map link. A track
 link with a scene stays on Tracks instead of opening Satellite.
 
+The comparison sidebar's **Share link** calls `createComparisonShareUrl`, which writes a
+2D map link without `scene` or `base` plus `compare=<key>,…` and `#satellite`; every
+other map link drops `compare`. `parseSharedComparison` accepts two to four distinct
+keys that each match the scene-key pattern and otherwise returns none. On desktop,
+`MapWorkspace` opens Satellite, resolves every key through the same allowlisted
+`getScene` in parallel, and calls `openSharedComparison` with the resolved scenes and
+the shared camera when at least two resolve; otherwise it shows a notice. Smartphones
+and track-share links ignore `compare`.
+
+While the grid is open, `WorkspaceShell` hides the mounted main map, docks the rail and
+sidebar, and gives `SatelliteCompareMaps` the remaining area. The grid waits for
+`restorePersistedState` so panes read stored layer choices, overlay opacity, rendering
+mode, and stretch once. `SatelliteCompareSync` copies the moving pane's center and zoom
+to the others with `jumpTo` under a guard, re-projects the crosshair on every move, and
+reports one settled camera per gesture to `satelliteCompareStore`. Closing the grid
+issues a `requestMapNavigation` to that camera.
+
 ## Terrain transition
 
 ```mermaid

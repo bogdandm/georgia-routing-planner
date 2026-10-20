@@ -18,7 +18,8 @@ _This project was built 100% with LLMs._
 
 - Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
 - Switch to Google, Bing, Esri, or Georgian NAPR aerial imagery, or apply a recent
-  Sentinel-2 satellite scene.
+  Sentinel-2 satellite scene. Compare up to four Sentinel-2 scenes from different dates
+  side by side.
 - Search for places or coordinates. Right-click or tap any map point to copy it, share
   it, place a marker, search satellite imagery, or open its weather.
 - Get a seven-day forecast for any point, and view clouds, precipitation, and wind on a
@@ -84,8 +85,9 @@ Layers controls map detail, terrain overlays, imagery, weather, and track visibi
 You can use one aerial imagery basemap at a time: Google, Bing, Esri, or the Georgian
 NAPR orthophoto. The Satellite workspace finds recent Sentinel-2 scenes and shows each
 scene's acquisition time, cloud cover, and coverage before you apply it. Mosaic mode
-combines several recent scenes to cover the visible area. Imagery stays aligned with the
-terrain in both 2D and 3D.
+combines several recent scenes to cover the visible area. On desktop, up to four scenes
+from any dates can be compared side by side in synchronized, date-labeled maps. Imagery
+stays aligned with the terrain in both 2D and 3D.
 
 ## Weather
 

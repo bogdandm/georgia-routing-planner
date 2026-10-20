@@ -111,6 +111,7 @@ function sceneTimeZone(scene: SatelliteScene): string {
 export function SatelliteComparisonPanel() {
   const { i18n, t } = useLingui();
   const scenes = useStore(satelliteCompareStore, (state) => state.scenes);
+  const sceneCount = scenes.length;
   const camera = useStore(satelliteCompareStore, (state) => state.camera);
   const [copyLinkStatus, setCopyLinkStatus] = useState<'idle' | 'copied' | 'failed'>(
     // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
@@ -175,7 +176,7 @@ export function SatelliteComparisonPanel() {
         </Button>
       </Box>
       <Typography component="h3" variant="subtitle2">
-        {t`${plural(scenes.length, {
+        {t`${plural(sceneCount, {
           one: 'Comparing # image',
           other: 'Comparing # images',
         })}`}

@@ -68,6 +68,16 @@ msgstr "{imageCount, plural, one {# image} other {# images}} · {dayCount, plura
 msgid "{monthLabel} imagery could not be loaded. Try again."
 msgstr "{monthLabel} imagery could not be loaded. Try again."
 
+#. js-lingui-id: icVXm6
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{sceneCount, plural, one {Comparing # image} other {Comparing # images}}"
+msgstr "{sceneCount, plural, one {Comparing # image} other {Comparing # images}}"
+
+#. js-lingui-id: WbW5zx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{time} · {cloud} cloud"
+msgstr "{time} · {cloud} cloud"
+
 #. js-lingui-id: CE1MRg
 #: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx
 msgid "A Mosaic request is already in progress."
@@ -109,6 +119,11 @@ msgstr "Acquisition calendar"
 msgid "Acquisition year"
 msgstr "Acquisition year"
 
+#. js-lingui-id: kwP347
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Add at least two images"
+msgstr "Add at least two images"
+
 #. js-lingui-id: KSDnus
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "All dates before it will be selected."
@@ -143,6 +158,11 @@ msgstr "Auto"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Back to satellite search"
 msgstr "Back to satellite search"
+
+#. js-lingui-id: nsm7BA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Back to search"
+msgstr "Back to search"
 
 #. js-lingui-id: 5TviPn
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -179,8 +199,14 @@ msgstr "Choose month and year"
 msgid "Choose the last date to include in the Mosaic."
 msgstr "Choose the last date to include in the Mosaic."
 
+#. js-lingui-id: xCJdfg
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Clear"
+msgstr "Clear"
+
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
 msgid "Clipboard access failed. Try again."
 msgstr "Clipboard access failed. Try again."
 
@@ -193,6 +219,27 @@ msgstr "Close imagery results"
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
 msgid "Cloud cover must be between 0 and 100 percent."
 msgstr "Cloud cover must be between 0 and 100 percent."
+
+#. js-lingui-id: YGShnx
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Compare"
+msgstr "Compare"
+
+#. js-lingui-id: HrBFhl
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+msgid "Compared"
+msgstr "Compared"
+
+#. js-lingui-id: 0frQ-M
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Comparison link copied"
+msgstr "Comparison link copied"
+
+#. js-lingui-id: 2_xA3S
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Comparison: {count} of {maximumComparedScenes}"
+msgstr "Comparison: {count} of {maximumComparedScenes}"
 
 #. js-lingui-id: EcGYZW
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
@@ -250,6 +297,11 @@ msgstr "Gamma"
 msgid "High cloud cover: {cloudPercent}"
 msgstr "High cloud cover: {cloudPercent}"
 
+#. js-lingui-id: vxvXV5
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Image comparison"
+msgstr "Image comparison"
+
 #. js-lingui-id: hHoLcB
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Image failed to apply"
@@ -261,6 +313,7 @@ msgid "Imagery tuning values are out of range."
 msgstr "Imagery tuning values are out of range."
 
 #. js-lingui-id: aAbMw4
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
 msgstr "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
@@ -269,6 +322,11 @@ msgstr "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Images near {coordinates}"
 msgstr "Images near {coordinates}"
+
+#. js-lingui-id: soIt6G
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+msgid "In comparison"
+msgstr "In comparison"
 
 #. js-lingui-id: cXonY8
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -315,10 +373,20 @@ msgstr "Maximum cloud"
 msgid "Next acquisition month"
 msgstr "Next acquisition month"
 
+#. js-lingui-id: _z6YXf
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Next acquisition year"
+msgstr "Next acquisition year"
+
 #. js-lingui-id: g8JmSC
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "Next month"
 msgstr "Next month"
+
+#. js-lingui-id: Uosxno
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Next year"
+msgstr "Next year"
 
 #. js-lingui-id: lX5HU_
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
@@ -345,10 +413,20 @@ msgstr "Point"
 msgid "Previous acquisition month"
 msgstr "Previous acquisition month"
 
+#. js-lingui-id: 5V0TT0
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Previous acquisition year"
+msgstr "Previous acquisition year"
+
 #. js-lingui-id: 1xwZj_
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "Previous month"
 msgstr "Previous month"
+
+#. js-lingui-id: PmGtCr
+#: src/presentation/satellite-browser/AcquisitionCalendar.tsx
+msgid "Previous year"
+msgstr "Previous year"
 
 #. js-lingui-id: kwTqXK
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -369,6 +447,11 @@ msgstr "Reflectance ceiling"
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Relief shading could not be updated. Try again."
 msgstr "Relief shading could not be updated. Try again."
+
+#. js-lingui-id: J8e2aG
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Remove {day} from comparison"
+msgstr "Remove {day} from comparison"
 
 #. js-lingui-id: WIbcl9
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -492,6 +575,7 @@ msgstr "Settings"
 
 #. js-lingui-id: uIZ2tg
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
 msgid "Share link"
 msgstr "Share link"
 
@@ -604,6 +688,11 @@ msgstr "True-color imagery applied"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Unavailable"
 msgstr "Unavailable"
+
+#. js-lingui-id: FhzFth
+#: src/presentation/satellite-browser/SatelliteBrowser.tsx
+msgid "Up to {maximumComparedScenes} images can be compared"
+msgstr "Up to {maximumComparedScenes} images can be compared"
 
 #. js-lingui-id: 5upB_g
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx

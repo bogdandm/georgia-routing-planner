@@ -427,8 +427,9 @@ their shortest observed gap: upcoming days without imagery get a dashed, non-sel
 outline. Predictions are deterministic for the loaded acquisitions and may miss changes
 to a satellite's acquisition plan or the polar-season start and end. In both the scene
 and Mosaic calendars, today's UTC day number sits on a small translucent circle,
-independent of the day frames. Calendar controls include a current-month shortcut and a
-non-modal month-year picker; months outside the archive are disabled.
+independent of the day frames. Calendar controls include previous/next month and year
+arrows, a current-month shortcut, and a non-modal month-year picker; months outside the
+archive are disabled, and a year step clamps to the nearest available month.
 
 Results open in an adjacent pane grouped by month, newest first, with acquisition time
 in the search point's local time zone, product level, cloud, and viewport coverage. A
@@ -436,8 +437,9 @@ warning appears when the scene edge is within 5 km of the search point. **Load m
 images** reveals further cards and then earlier months; a sparse pane auto-loads a few
 more months. Clicking a card selects, expands, and applies that scene; clicking the
 applied card removes its imagery. The expanded card shows acquisition, tile, orbit,
-product, edge distance, and attribution, plus **Fit footprint** and **Share link**. At
-desktop widths the Satellite session survives rail changes.
+product, edge distance, and attribution, plus **Fit footprint** and **Share link** once
+applied, and **Compare** on desktop. At desktop widths the Satellite session survives
+rail changes.
 
 TiTiler normally renders the L2A red, green, and blue reflectance COGs below hiking
 layers, with persistent reflectance-ceiling, gamma, and saturation controls; the
@@ -463,6 +465,34 @@ cancels work and clears the mosaic; moving the map refreshes it for the next set
 viewport. Mosaic and a single scene are mutually exclusive, and Mosaic disables 3D.
 Mosaic state is transient and never shared in URLs. See
 [runtime flows](./runtime-flows.md#sentinel-mosaic).
+
+#### Comparison
+
+On desktop, **Compare** on an expanded card adds the scene to a comparison of up to four
+scenes; **Compared** removes it, and compared cards show a compare icon. A tray pinned
+to the bottom of the results pane shows the count with **Clear** and **Compare**, which
+needs at least two scenes.
+
+Comparison replaces the map with a grid: two scenes side by side, three or four in a 2×2
+grid with one empty cell for three. Scenes appear in acquisition order. The rail and a
+compact sidebar are laid out beside the grid instead of floating over it, so every pane
+is fully visible; navigation cannot collapse and the results pane is hidden. The sidebar
+lists each scene with its date, local time, and cloud, a remove button, **Share link**,
+**Clear**, and **Back to search**. Removing a scene below two closes the grid.
+
+Each pane is a 2D, north-up map showing its scene with the default OpenStreetMap overlay
+(labels, roads, and objects) at the saved overlay opacity and layer choices, and the
+scene footprint. Tracks, markers, weather, relief, and contours are not shown. The panes
+share one camera; the pointer over one pane shows a crosshair at the same point in the
+others. A label shows the year in bold, the day and month, and the local time and cloud,
+all in the scene's local time zone. Panes read the rendering mode and stretch when they
+open; in Auto, a throttled pane alone switches to direct reads.
+
+Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid and
+moves the main map to the compared area; the tray keeps its scenes until cleared.
+**Share link** copies a 2D link with `compare=<key>,…`; opening it on desktop shows the
+grid once at least two scenes resolve, and otherwise shows a notice and the shared
+location. Comparison state is never persisted.
 
 ### Weather
 

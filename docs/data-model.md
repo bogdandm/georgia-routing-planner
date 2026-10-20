@@ -310,11 +310,12 @@ Unknown setting keys are ignored.
 
 ## Transient map and satellite state
 
-MapLibre objects, satellite search results, selected scenes, Mosaic selections, and
-applied imagery are runtime state and never enter IndexedDB. A shared map URL carries
-only the camera, optional 3D orientation, one scene key, and weather point/time
-(`src/presentation/map/mapShareUrl.ts`). Mosaic state and scene lists do not enter URLs
-or diagnostic exports.
+MapLibre objects, satellite search results, selected scenes, Mosaic selections, compared
+scenes, and applied imagery are runtime state and never enter IndexedDB. A shared map
+URL carries only the camera, optional 3D orientation, one scene key, and weather
+point/time; a comparison link carries a 2D camera and two to four scene keys as
+`compare=<key>,…` (`src/presentation/map/mapShareUrl.ts`). Mosaic state and search
+result lists do not enter URLs or diagnostic exports.
 
 ## Diagnostics
 

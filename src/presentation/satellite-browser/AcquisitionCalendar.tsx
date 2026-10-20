@@ -2,7 +2,9 @@ import { useLingui } from '@lingui/react/macro';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
+import LastPageIcon from '@mui/icons-material/LastPage';
 import {
   Box,
   ButtonBase,
@@ -205,25 +207,41 @@ export function AcquisitionCalendar({
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: '80px minmax(0, 1fr) 80px',
+          gridTemplateColumns: '90px minmax(0, 1fr) 90px',
           alignItems: 'center',
           mb: 0.5,
         }}
       >
-        <Tooltip title={t`Previous month`}>
-          <span style={{ display: 'flex', width: 'fit-content' }}>
-            <IconButton
-              size="small"
-              aria-label={t`Previous acquisition month`}
-              disabled={navigationDisabled || displayMonth <= minimumMonth}
-              onClick={() => {
-                changeMonth(-1);
-              }}
-            >
-              <ChevronLeftIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <Stack direction="row">
+          <Tooltip title={t`Previous year`}>
+            <span style={{ display: 'flex' }}>
+              <IconButton
+                size="small"
+                aria-label={t`Previous acquisition year`}
+                disabled={navigationDisabled || year <= minimumYear}
+                onClick={() => {
+                  selectYear(year - 1);
+                }}
+              >
+                <KeyboardDoubleArrowLeftIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t`Previous month`}>
+            <span style={{ display: 'flex' }}>
+              <IconButton
+                size="small"
+                aria-label={t`Previous acquisition month`}
+                disabled={navigationDisabled || displayMonth <= minimumMonth}
+                onClick={() => {
+                  changeMonth(-1);
+                }}
+              >
+                <ChevronLeftIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
         <Stack
           direction="row"
           spacing={1}
@@ -272,6 +290,20 @@ export function AcquisitionCalendar({
               </IconButton>
             </span>
           </Tooltip>
+          <Tooltip title={t`Next year`}>
+            <span style={{ display: 'flex' }}>
+              <IconButton
+                size="small"
+                aria-label={t`Next acquisition year`}
+                disabled={navigationDisabled || year >= maximumYear}
+                onClick={() => {
+                  selectYear(year + 1);
+                }}
+              >
+                <KeyboardDoubleArrowRightIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip title={t`Return to current month`}>
             <span style={{ display: 'flex' }}>
               <IconButton
@@ -282,7 +314,7 @@ export function AcquisitionCalendar({
                   onMonthChange(maximumMonth);
                 }}
               >
-                <KeyboardDoubleArrowRightIcon fontSize="small" />
+                <LastPageIcon fontSize="small" />
               </IconButton>
             </span>
           </Tooltip>
@@ -295,8 +327,18 @@ export function AcquisitionCalendar({
         modifiers={[{ name: 'offset', options: { offset: [0, 4] } }]}
         sx={{ zIndex: 'modal' }}
       >
+        {/* The year menu opens on mousedown, so the browser dispatches the following
+            click on body; listen to mousedown instead. The trigger toggles itself. */}
         <ClickAwayListener
-          onClickAway={() => {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI event token.
+          mouseEvent="onMouseDown"
+          onClickAway={(event) => {
+            if (
+              event.target instanceof Node &&
+              monthPickerAnchor?.contains(event.target)
+            ) {
+              return;
+            }
             setMonthPickerAnchor(null);
           }}
         >

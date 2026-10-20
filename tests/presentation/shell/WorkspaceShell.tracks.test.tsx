@@ -2573,7 +2573,9 @@ describe('WorkspaceShell', () => {
     });
 
     await user.click(screen.getByRole('button', { name: /^Restored trail/u }));
-    expect(fakeFacade.fitBoundsRequests).toEqual([]);
+    await waitFor(() => {
+      expect(fakeFacade.fitBoundsRequests).toEqual([expectedFitBoundsRequest]);
+    });
 
     fakeFacade.fitBoundsRequests.splice(0);
     await user.click(screen.getByRole('button', { name: 'Close track' }));

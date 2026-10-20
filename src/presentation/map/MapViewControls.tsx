@@ -294,9 +294,13 @@ export function MapViewControls({
                       sx={
                         hasLegend
                           ? {
+                              // Both row halves use one fixed height so their selection and
+                              // hover backgrounds line up regardless of their content.
                               display: 'inline-flex',
+                              height: 44,
                               minHeight: 44,
                               px: 2,
+                              py: 0,
                               verticalAlign: 'top',
                               width: 'calc(100% - 44px)',
                             }
@@ -319,9 +323,10 @@ export function MapViewControls({
                           target="_blank"
                           sx={{
                             display: 'inline-flex',
+                            height: 44,
                             justifyContent: 'center',
                             minHeight: 44,
-                            px: 0,
+                            p: 0,
                             verticalAlign: 'top',
                             width: 44,
                           }}

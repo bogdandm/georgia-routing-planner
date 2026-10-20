@@ -141,7 +141,7 @@ const defaultSovietTopographicMap = {
     },
   },
   attribution:
-    'Topographic maps: <a href="https://nsdi.gov.ge/en/geoportal?layers=1%3A112%2C2%3A112%2C3%3A112" target="_blank">National Agency of Public Registry (NAPR) / NSDI, Soviet-era scans 1:10,000 and 1:25,000</a>',
+    'Topographic maps: <a href="https://nsdi.gov.ge/en/geoportal?layers=1%3A112%2C1%3A113%2C2%3A112%2C2%3A113%2C3%3A112%2C3%3A113" target="_blank">National Agency of Public Registry (NAPR) / NSDI, Soviet-era scans 1:10,000 and 1:25,000</a>',
 };
 
 const sourceLayerMappingSchema = z

@@ -1202,6 +1202,54 @@ describe('MapLibreLayerController', () => {
     );
   });
 
+  it('waits for the nationwide Soviet map and orders relief around both raster layers', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(controller.setLayerVisibility('soviet-topographic', true)).toEqual({
+      status: 'success',
+    });
+    map.fire('sourcedata', {
+      sourceId: sovietTopographicSourceIds.detailed10k,
+      sourceDataType: 'content',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(1);
+
+    const belowOrder = map.getLayersOrder();
+    expect(belowOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      belowOrder.indexOf(sovietTopographicLayerIds.nationwide25k),
+    );
+    expect(belowOrder.indexOf(sovietTopographicLayerIds.nationwide25k)).toBeLessThan(
+      belowOrder.indexOf(sovietTopographicLayerIds.detailed10k),
+    );
+
+    map.fire('sourcedata', {
+      sourceId: sovietTopographicSourceIds.nationwide25k,
+      sourceDataType: 'content',
+    });
+    expect(map.paintProperties.get(`${mapLayerIds.landcover}.fill-opacity`)).toBe(
+      mapVisualModePaint.satellite[mapLayerIds.landcover]['fill-opacity'],
+    );
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 50,
+        shadeAboveSatellite: true,
+        demTileSize: 512,
+      }),
+    ).toEqual({ status: 'success' });
+    const aboveOrder = map.getLayersOrder();
+    expect(aboveOrder.indexOf(sovietTopographicLayerIds.detailed10k)).toBeLessThan(
+      aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade),
+    );
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      aboveOrder.indexOf(terrainOverlayLayerIds.contourMinor),
+    );
+  });
+
   it.each(Object.values(naprOrthophotoSourceIds))(
     'uses NAPR source %s readiness and clears it after recreation',
     (sourceId) => {

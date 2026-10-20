@@ -37,12 +37,13 @@ vi.mock('react-map-gl/maplibre', () => ({
   }) {
     useEffect(() => {
       nativeMaps.created += 1;
-      // Just enough of the native map for the pane: sync, rotation lock, and the
-      // visible area that anchors its date picker.
+      // Just enough of the native map for the pane: sync, rotation lock, tile progress,
+      // and the visible area that anchors its date picker.
       const nativeMap = {
         keyboard: { disableRotation: () => undefined },
         touchZoomRotate: { disableRotation: () => undefined },
         setMissingStyleImageResolver: () => undefined,
+        on: () => ({ unsubscribe: () => undefined }),
         jumpTo: () => undefined,
         getCenter: () => ({ lng: 44.5, lat: 42.5 }),
         getBounds: () => ({
@@ -307,5 +308,41 @@ describe('SatelliteCompareMaps', () => {
       await screen.findByRole('region', { name: 'Sentinel-2 image from Aug 29, 2019' }),
     ).toBeInTheDocument();
     expect(nativeMaps.created).toBe(2);
+  });
+
+  it('reuses loaded months when a pane calendar pages back or opens again', async () => {
+    const user = userEvent.setup();
+    const search = vi.fn(() =>
+      Promise.resolve({ totalMatched: 1, scenes: [scene2019] }),
+    );
+    openSharedComparison([scene2019, scene2021], camera);
+    renderWithI18n(
+      <RuntimeServicesProvider
+        services={createTestServices({ satelliteCatalogGateway: { search } })}
+      >
+        <StoreGrid />
+      </RuntimeServicesProvider>,
+    );
+    const openPicker = async () => {
+      await user.click(
+        await screen.findByRole('button', { name: 'Change image date, Aug 14, 2019' }),
+      );
+      await screen.findByRole('gridcell', {
+        name: /^Aug 14, 2019, imagery available/u,
+      });
+    };
+
+    await openPicker();
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    await screen.findByText('September 2019');
+    await user.click(
+      screen.getByRole('button', { name: 'Previous acquisition month' }),
+    );
+    await screen.findByRole('gridcell', { name: /^Aug 14, 2019, imagery available/u });
+    await user.keyboard('{Escape}');
+    await openPicker();
+
+    // August once, September once; the return and the reopen are served from memory.
+    expect(search).toHaveBeenCalledTimes(2);
   });
 });

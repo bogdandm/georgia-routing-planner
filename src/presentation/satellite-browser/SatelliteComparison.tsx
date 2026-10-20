@@ -10,6 +10,7 @@ import {
   Box,
   Button,
   IconButton,
+  LinearProgress,
   Snackbar,
   Stack,
   ToggleButton,
@@ -34,8 +35,8 @@ import { appColors } from '@/presentation/theme/appColors';
 import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
 import {
   bestCoverageMatchOn,
-  catalogCloudCoverCeilingPercent,
-  searchMonthRange,
+  cachedCalendarMonth,
+  loadCalendarMonth,
   toDateInputValue,
 } from '@/presentation/satellite-browser/satelliteCalendarSearch';
 import {
@@ -48,6 +49,7 @@ import {
   openComparison,
   openComparisonGrid,
   satelliteCompareStore,
+  type ComparisonTileProgress,
   setComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 
@@ -115,7 +117,16 @@ export function ComparedSceneDatePicker({
   const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(50);
   const [search, setSearch] = useState<MonthSearch | null>(null);
   const [alreadyCompared, setAlreadyCompared] = useState(false);
-  const monthSearch = search?.month === month ? search : null;
+  const cachedResult =
+    searchSatelliteScenes === null
+      ? undefined
+      : cachedCalendarMonth(searchSatelliteScenes, viewport, month);
+  const monthSearch: MonthSearch | null =
+    cachedResult !== undefined
+      ? { month, result: cachedResult, failed: false }
+      : search?.month === month
+        ? search
+        : null;
 
   useEffect(() => {
     let active = true;
@@ -130,34 +141,29 @@ export function ComparedSceneDatePicker({
     };
   }, [database]);
 
+  const monthCached = cachedResult !== undefined;
   useEffect(() => {
-    if (searchSatelliteScenes === null) return undefined;
+    if (searchSatelliteScenes === null || monthCached) return undefined;
     const controller = new AbortController();
-    const range = searchMonthRange(month, today);
-    searchSatelliteScenes
-      .execute(
-        {
-          viewport,
-          startDate: range.startDate,
-          endDate: range.endDate,
-          productLevel: 'L2A',
-          maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
-        },
-        controller.signal,
-      )
-      .then(
-        (result) => {
-          if (!controller.signal.aborted) setSearch({ month, result, failed: false });
-        },
-        () => {
-          if (!controller.signal.aborted)
-            setSearch({ month, result: null, failed: true });
-        },
-      );
+    loadCalendarMonth(
+      searchSatelliteScenes,
+      viewport,
+      month,
+      today,
+      controller.signal,
+    ).then(
+      (result) => {
+        if (!controller.signal.aborted) setSearch({ month, result, failed: false });
+      },
+      () => {
+        if (!controller.signal.aborted)
+          setSearch({ month, result: null, failed: true });
+      },
+    );
     return () => {
       controller.abort();
     };
-  }, [month, searchSatelliteScenes, today, viewport]);
+  }, [month, monthCached, searchSatelliteScenes, today, viewport]);
 
   const selectDate = (date: string) => {
     const result = monthSearch?.result;
@@ -298,6 +304,42 @@ export function SatelliteComparisonShortcut() {
   );
 }
 
+/** One map's Sentinel tile loading: waiting, a determinate bar, then complete. */
+function TileProgressBar({
+  day,
+  progress,
+}: {
+  readonly day: string;
+  readonly progress: ComparisonTileProgress | undefined;
+}) {
+  const { t } = useLingui();
+  const finished = progress?.finished ?? 0;
+  const requested = progress?.requested ?? 0;
+  const complete = progress?.complete === true;
+  const percent = complete
+    ? 100
+    : requested === 0
+      ? null
+      : Math.round((finished / requested) * 100);
+  return (
+    <Box sx={{ mt: 0.75 }}>
+      <LinearProgress
+        aria-label={t`Imagery loading for ${day}`}
+        color={complete ? 'success' : 'primary'}
+        variant={percent === null ? 'indeterminate' : 'determinate'}
+        value={percent ?? 0}
+        sx={{ height: 4, borderRadius: 2 }}
+      />
+      <Typography variant="caption" color="text.secondary">
+        {complete
+          ? t`Imagery loaded`
+          : percent === null
+            ? t`Waiting for imagery…`
+            : t`${finished} of ${requested} tiles`}
+      </Typography>
+    </Box>
+  );
+}
 function sceneTimeZone(scene: SatelliteScene): string {
   const [west, south, east, north] = satelliteSceneBounds(scene);
   return lookupTimeZone((south + north) / 2, (west + east) / 2);
@@ -311,6 +353,7 @@ export function SatelliteComparisonPanel() {
     satelliteCompareStore,
     (state) => state.directFallback,
   );
+  const tileProgress = useStore(satelliteCompareStore, (state) => state.tileProgress);
   const filledSlots = slots.flatMap((scene, index) =>
     scene === null ? [] : [{ scene, index }],
   );
@@ -424,6 +467,7 @@ export function SatelliteComparisonPanel() {
                     {time} · {cloud} cloud
                   </Trans>
                 </Typography>
+                <TileProgressBar day={day} progress={tileProgress[index]} />
               </Box>
               <Tooltip title={t`Remove ${day} from comparison`}>
                 <IconButton

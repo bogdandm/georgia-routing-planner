@@ -13,6 +13,14 @@ export const maximumComparedScenes = 4;
 /** A grid position: a scene, or an empty plain map whose date is still to be picked. */
 export type ComparisonSlot = SatelliteScene | null;
 
+/** Sentinel tiles of one pane's current view: finished (loaded or failed) of requested. */
+export interface ComparisonTileProgress {
+  readonly finished: number;
+  readonly requested: number;
+  /** Every tile of the current view is in; the next move starts a new count. */
+  readonly complete: boolean;
+}
+
 /**
  * Transient Sentinel-2 comparison. Never persisted; a compare link carries the keys.
  *
@@ -27,6 +35,8 @@ interface SatelliteCompareState {
   readonly camera: SatelliteCompareCamera | null;
   /** A pane switched from TiTiler to slower browser-rendered imagery. */
   readonly directFallback: boolean;
+  /** Imagery loading per grid position; positions without a report are still waiting. */
+  readonly tileProgress: Readonly<Record<number, ComparisonTileProgress>>;
 }
 
 const initialState: SatelliteCompareState = {
@@ -34,6 +44,7 @@ const initialState: SatelliteCompareState = {
   slots: [],
   camera: null,
   directFallback: false,
+  tileProgress: {},
 };
 
 export const satelliteCompareStore = createStore<SatelliteCompareState>()(
@@ -100,6 +111,7 @@ export function openComparison(camera: SatelliteCompareCamera): void {
     slots: gridSlots(scenes, 2),
     camera,
     directFallback: false,
+    tileProgress: {},
   });
 }
 
@@ -109,6 +121,7 @@ export function openComparisonGrid(camera: SatelliteCompareCamera): void {
     slots: gridSlots(satelliteCompareStore.getState().scenes, 4),
     camera,
     directFallback: false,
+    tileProgress: {},
   });
 }
 
@@ -122,6 +135,7 @@ export function openSharedComparison(
     slots: gridSlots(scenes.slice(0, maximumComparedScenes), 2),
     camera,
     directFallback: false,
+    tileProgress: {},
   });
 }
 
@@ -184,6 +198,18 @@ export function reportComparisonDirectFallback(): void {
   }
 }
 
+/** A pane's imagery loading; null forgets it, as for a pane that lost its scene. */
+export function setComparisonTileProgress(
+  index: number,
+  progress: ComparisonTileProgress | null,
+): void {
+  const { [index]: _previous, ...others } =
+    satelliteCompareStore.getState().tileProgress;
+  satelliteCompareStore.setState({
+    tileProgress: progress === null ? others : { ...others, [index]: progress },
+  });
+}
+
 /**
  * Closes the grid, keeps its scenes in the tray, and moves the main map to the area that
  * was being compared.
@@ -195,6 +221,7 @@ export function closeComparison(): void {
     scenes: chronological(slots.filter((slot) => slot !== null)),
     slots: [],
     directFallback: false,
+    tileProgress: {},
   });
   if (camera !== null) {
     requestMapNavigation({

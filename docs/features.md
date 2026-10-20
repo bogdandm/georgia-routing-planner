@@ -479,8 +479,11 @@ Comparison replaces the map with the grid. The rail is hidden and a narrow sideb
 beside the grid instead of floating over it, so every pane is fully visible; the results
 pane is hidden. The sidebar lists the shown scenes with their date, local time, and
 cloud, a remove button that turns that pane back into a plain map, **Share link** (two
-or more scenes), **Clear**, and **Back to search**. When a pane falls back from TiTiler,
-the sidebar shows a warning that direct imagery is active and slower.
+or more scenes), **Clear**, and **Back to search**. Each listed scene has a progress bar
+for its pane's imagery: it waits until the first tile is requested, then counts finished
+of requested tiles in the current view, and reads **Imagery loaded** once the pane is
+idle. When a pane falls back from TiTiler, the sidebar shows a warning that direct
+imagery is active and slower.
 
 Each pane is a 2D, north-up map. A scene pane shows its scene with the default
 OpenStreetMap overlay (labels, roads, and objects) at the saved overlay opacity and
@@ -496,13 +499,15 @@ A scene pane's label shows the year in bold, the day and month, and the local ti
 cloud, all in the scene's local time zone; a plain pane's label reads **Pick image
 date**. Clicking a label opens the acquisition calendar for that pane's visible area on
 the scene's month or the current one; a day shows that day's best-coverage scene in the
-pane, unless another pane already shows it. Labels end with a dropdown arrow. A scene
-label also starts with a dotted drag handle, outlines itself on hover, and shows the
-grab cursor; dragging it onto another pane swaps the two positions. Panes read the
-rendering mode and stretch when they open; in Auto, a throttled pane alone switches to
-direct reads. While the grid is open, the page-wide MapLibre raster request limit is
-raised so four panes load in parallel. The attribution sits flush with the grid's
-bottom-right corner, as on the main map.
+pane, unless another pane already shows it. Loaded months are kept for the page session
+per visible area, so paging back or reopening a calendar on the same view does not query
+the catalog again. Labels end with a dropdown arrow. A scene label also starts with a
+dotted drag handle, outlines itself on hover, and shows the grab cursor; dragging it
+onto another pane swaps the two positions. Panes read the rendering mode and stretch
+when they open; in Auto, a throttled pane alone switches to direct reads. While the grid
+is open, the page-wide MapLibre raster request limit is raised so four panes load in
+parallel. The attribution sits flush with the grid's bottom-right corner, as on the main
+map.
 
 Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid,
 returns the shown scenes to the tray in acquisition order, and moves the main map to the

@@ -28,6 +28,11 @@ msgstr "{cloudPercent} cloud"
 msgid "{coveragePercent} coverage"
 msgstr "{coveragePercent} coverage"
 
+#. js-lingui-id: XBUzrK
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{finished} of {requested} tiles"
+msgstr "{finished} of {requested} tiles"
+
 #. js-lingui-id: HmvK6l
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "{formattedDate}, expected Sentinel-2 pass"
@@ -321,6 +326,16 @@ msgstr "Image comparison"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Image failed to apply"
 msgstr "Image failed to apply"
+
+#. js-lingui-id: 5JOFGH
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Imagery loaded"
+msgstr "Imagery loaded"
+
+#. js-lingui-id: Ts49-Y
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Imagery loading for {day}"
+msgstr "Imagery loading for {day}"
 
 #. js-lingui-id: n8JIYw
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
@@ -768,6 +783,11 @@ msgstr "Wait for the map to stop moving."
 #: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx
 msgid "Wait for the satellite renderer change to finish."
 msgstr "Wait for the satellite renderer change to finish."
+
+#. js-lingui-id: 1k9vlD
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Waiting for imagery…"
+msgstr "Waiting for imagery…"
 
 #. js-lingui-id: H7wWdy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

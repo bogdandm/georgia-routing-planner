@@ -9,6 +9,7 @@ import {
   setMaxParallelImageRequests,
   type ErrorEvent as MapLibreErrorEvent,
   type Map as MapLibreMap,
+  type MapSourceDataEvent,
 } from 'maplibre-gl';
 import {
   useCallback,
@@ -45,6 +46,7 @@ import { SatelliteCompareSync } from '@/presentation/map/SatelliteCompareSync';
 import { ComparedSceneDatePicker } from '@/presentation/satellite-browser/SatelliteComparison';
 import {
   maximumComparedScenes,
+  setComparisonTileProgress,
   swapComparisonSlots,
   type ComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
@@ -325,11 +327,45 @@ function SatelliteComparePane({
     readonly viewport: SatelliteSearchViewport;
   } | null>(null);
   const [dropTarget, setDropTarget] = useState(false);
+
+  // Sentinel tiles of the current view, for the sidebar's per-map progress bar. A tile
+  // counts as finished once loaded or failed; an aborted tile leaves the count.
+  const tileLoad = useRef({
+    requested: new Set<string>(),
+    finished: new Set<string>(),
+  });
+  const publishTileProgress = useCallback(
+    (complete: boolean) => {
+      const { requested, finished } = tileLoad.current;
+      setComparisonTileProgress(index, {
+        requested: requested.size,
+        finished: finished.size,
+        complete,
+      });
+      if (complete) {
+        requested.clear();
+        finished.clear();
+      }
+    },
+    [index],
+  );
+  useEffect(() => {
+    tileLoad.current.requested.clear();
+    tileLoad.current.finished.clear();
+    setComparisonTileProgress(index, null);
+    return () => {
+      setComparisonTileProgress(index, null);
+    };
+  }, [index, sceneKey]);
+  const tileListeners = useRef<readonly { unsubscribe: () => void }[]>([]);
+
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
       if (mapRef === null) {
         attachedMap.current = null;
         sync.detach(key);
+        for (const listener of tileListeners.current) listener.unsubscribe();
+        tileListeners.current = [];
         return;
       }
       const map = mapRef.getMap();
@@ -348,8 +384,43 @@ function SatelliteComparePane({
         }
       });
       sync.attach(key, map, crosshairRef.current);
+      // MapLibre types `coord` as always set, but source-level events carry none.
+      const sentinelTileKey = (event: MapSourceDataEvent) =>
+        event.sourceId === mapSourceIds.sentinelRasterA && 'coord' in event
+          ? event.coord.key
+          : null;
+      /* eslint-disable lingui/no-unlocalized-strings -- MapLibre event names. */
+      tileListeners.current = [
+        map.on('sourcedataloading', (event) => {
+          const tileKey = sentinelTileKey(event);
+          if (tileKey === null) return;
+          tileLoad.current.requested.add(tileKey);
+          publishTileProgress(false);
+        }),
+        map.on('sourcedata', (event) => {
+          const tileKey = sentinelTileKey(event);
+          if (tileKey === null) return;
+          tileLoad.current.finished.add(tileKey);
+          publishTileProgress(false);
+        }),
+        map.on('sourcedataabort', (event) => {
+          const tileKey = sentinelTileKey(event);
+          if (tileKey === null) return;
+          tileLoad.current.requested.delete(tileKey);
+          tileLoad.current.finished.delete(tileKey);
+          publishTileProgress(false);
+        }),
+        // Idle means every requested tile, failed ones included, is settled; failed
+        // tiles raise an error event instead of a data event.
+        map.on('idle', () => {
+          if (map.getSource(mapSourceIds.sentinelRasterA) !== undefined) {
+            publishTileProgress(true);
+          }
+        }),
+      ];
+      /* eslint-enable lingui/no-unlocalized-strings */
     },
-    [key, sync],
+    [key, publishTileProgress, sync],
   );
 
   const handleError = (event: MapLibreErrorEvent) => {

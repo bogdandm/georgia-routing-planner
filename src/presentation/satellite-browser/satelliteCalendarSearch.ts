@@ -1,3 +1,5 @@
+import type { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
+import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import type {
   SatelliteSceneMatch,
   SatelliteSearchResult,
@@ -33,6 +35,70 @@ export function searchMonthRange(month: string, today: Date): SearchMonthRange {
     startDate: toDateInputValue(start),
     endDate: toDateInputValue(end),
   };
+}
+
+/** Months kept per search service; older entries are dropped first. */
+const monthResultCacheLimit = 64;
+
+/**
+ * Loaded calendar months of the comparison pickers, per search service, so reopening a
+ * picker or paging back to a month does not query the catalog again. Only successful
+ * results are kept, for the page session.
+ */
+const monthResultCaches = new WeakMap<
+  SearchSatelliteScenes,
+  Map<string, SatelliteSearchResult>
+>();
+
+/** Rounding to about 10 m absorbs float noise between the synchronized panes' views. */
+function monthResultKey(viewport: SatelliteSearchViewport, month: string): string {
+  const { west, south, east, north } = viewport.bounds;
+  const { longitude, latitude } = viewport.center;
+  return [month, west, south, east, north, longitude, latitude]
+    .map((value) => (typeof value === 'number' ? value.toFixed(4) : value))
+    .join('|');
+}
+
+export function cachedCalendarMonth(
+  searchScenes: SearchSatelliteScenes,
+  viewport: SatelliteSearchViewport,
+  month: string,
+): SatelliteSearchResult | undefined {
+  return monthResultCaches.get(searchScenes)?.get(monthResultKey(viewport, month));
+}
+
+/** Loads one calendar month at a viewport and remembers the result. */
+export async function loadCalendarMonth(
+  searchScenes: SearchSatelliteScenes,
+  viewport: SatelliteSearchViewport,
+  month: string,
+  today: Date,
+  signal: AbortSignal,
+): Promise<SatelliteSearchResult> {
+  const range = searchMonthRange(month, today);
+  const result = await searchScenes.execute(
+    {
+      viewport,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      productLevel: 'L2A',
+      maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
+    },
+    signal,
+  );
+  let cache = monthResultCaches.get(searchScenes);
+  if (cache === undefined) {
+    cache = new Map();
+    monthResultCaches.set(searchScenes, cache);
+  }
+  const key = monthResultKey(viewport, month);
+  cache.delete(key);
+  cache.set(key, result);
+  if (cache.size > monthResultCacheLimit) {
+    const oldest = cache.keys().next();
+    if (oldest.done !== true) cache.delete(oldest.value);
+  }
+  return result;
 }
 
 /** The scene a calendar day click applies: the one covering most of the viewport. */

@@ -28,6 +28,11 @@ msgstr "Облачность {cloudPercent}"
 msgid "{coveragePercent} coverage"
 msgstr "Покрытие {coveragePercent}"
 
+#. js-lingui-id: XBUzrK
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{finished} of {requested} tiles"
+msgstr "Тайлов загружено: {finished} из {requested}"
+
 #. js-lingui-id: HmvK6l
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "{formattedDate}, expected Sentinel-2 pass"
@@ -321,6 +326,16 @@ msgstr "Сравнение снимков"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Image failed to apply"
 msgstr "Не удалось применить снимок"
+
+#. js-lingui-id: 5JOFGH
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Imagery loaded"
+msgstr "Снимок загружен"
+
+#. js-lingui-id: Ts49-Y
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Imagery loading for {day}"
+msgstr "Загрузка снимка за {day}"
 
 #. js-lingui-id: n8JIYw
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts
@@ -768,6 +783,11 @@ msgstr "Дождитесь остановки карты."
 #: src/presentation/satellite-browser/SatelliteMosaicProvider.tsx
 msgid "Wait for the satellite renderer change to finish."
 msgstr "Дождитесь завершения смены способа отрисовки снимков."
+
+#. js-lingui-id: 1k9vlD
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Waiting for imagery…"
+msgstr "Ожидание снимка…"
 
 #. js-lingui-id: H7wWdy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

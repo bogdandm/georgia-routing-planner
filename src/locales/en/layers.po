@@ -239,6 +239,11 @@ msgstr "Official NAPR scans: nationwide 1:25,000 maps with 1:10,000 detail where
 msgid "Opacity"
 msgstr "Opacity"
 
+#. js-lingui-id: FuC3Le
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Open topographic map symbols (PDF)"
+msgstr "Open topographic map symbols (PDF)"
+
 #. js-lingui-id: vORMhI
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Open Weather tab"
@@ -415,6 +420,11 @@ msgstr "The selected weather frame could not be shown."
 #: src/presentation/layers/LayersPanel.tsx
 msgid "The weather map provider is unavailable."
 msgstr "The weather map provider is unavailable."
+
+#. js-lingui-id: gd3dhq
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Topographic map symbols (PDF)"
+msgstr "Topographic map symbols (PDF)"
 
 #. js-lingui-id: W7HXf3
 #: src/presentation/layers/LayersPanel.tsx

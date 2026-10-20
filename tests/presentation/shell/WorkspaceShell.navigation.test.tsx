@@ -519,6 +519,12 @@ describe('WorkspaceShell', () => {
         'Newest available NAPR orthophoto: 2025, then 2020, then 2016–2017.',
       ),
     ).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Open topographic map symbols (PDF)' }),
+    ).toHaveAttribute(
+      'href',
+      'https://www.planinite.info/Maps/pdf/%D0%A3%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5_%D0%B7%D0%BD%D0%B0%D0%BA%D0%B8_%D1%82%D0%BE%D0%BF%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D1%85_%D0%BA%D0%B0%D1%80%D1%82_%D0%A1%D0%A1%D0%A1%D0%A0-1966.pdf',
+    );
     expect(screen.getByRole('checkbox', { name: 'Satellite imagery' })).toBeDisabled();
     expect(screen.getByRole('checkbox', { name: 'Relief shading' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Elevation isolines' })).toBeChecked();

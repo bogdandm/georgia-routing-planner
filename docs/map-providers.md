@@ -51,6 +51,7 @@ generated on first use (`src/presentation/map/basemapSymbols.ts`).
 | Road/path labels              | `transportation_name` | names, `class`, `subclass`                                                   |
 | Peaks, passes, and cliffs     | `mountain_peak`       | `class` (`peak`, `saddle` as a cross, `cliff` as a GOST toothed line), `ele` |
 | Hiking POIs                   | `poi`                 | huts, shelters, camp sites, drinking water, viewpoints, guideposts           |
+| Historic POIs                 | `poi`                 | `class = castle`: subclass `castle` (fortresses too) and `ruins`             |
 | Settlements                   | `place`               | `class`, names, `rank`, `capital`                                            |
 | Water labels                  | `water_name`          | names and geometry-specific fields                                           |
 
@@ -77,10 +78,12 @@ is not highlighted. Region lines (`admin_level = 4`) and sea borders stay grey a
 dashed.
 
 Lodging is limited to `alpine_hut` and `wilderness_hut`; hotels and guest houses are not
-drawn. Cliffs follow the OSM convention that the lower side lies to the right of the
-way, so the teeth point downhill as on Soviet GOST topographic maps. Neither source
-carries springs (`natural=spring`), waterfalls, trail difficulty, or path visibility,
-and both start paths and tracks at z12–13.
+drawn. OpenMapTiles puts hiking and historic POIs only in z14 tiles (its z12–13 `poi`
+layer carries only stations and large campuses), so these icons appear from map zoom 14
+whatever the style's `minzoom`. Cliffs follow the OSM convention that the lower side
+lies to the right of the way, so the teeth point downhill as on Soviet GOST topographic
+maps. Neither source carries springs (`natural=spring`), waterfalls, trail difficulty,
+or path visibility, and both start paths and tracks at z12–13.
 
 Land cover carries sparse GOST signs over its fill from z10: OpenFreeMap `landcover`
 everywhere plus Shortbread `land` from z12, which adds small areas OpenFreeMap omits.

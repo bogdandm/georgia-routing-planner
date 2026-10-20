@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   keep-alive:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     env:
       SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}

@@ -431,8 +431,12 @@ After final verification:
    `gh pr view --json mergeable,mergeStateStatus,url`. Do not hand off while `mergeable`
    is `CONFLICTING` or `mergeStateStatus` is `DIRTY`. Merge the latest `origin/main`
    into the feature branch without rebasing, resolve every conflict, rerun only
-   invalidated checks, push, and query the PR again. If GitHub temporarily reports
-   `UNKNOWN`, wait for mergeability calculation and query the same PR once more rather
+   invalidated checks, push, and query the PR again. If GitHub reports `UNKNOWN`, first
+   inspect whether the referenced pull request is already merged or closed. For an
+   already merged or closed pull request, `UNKNOWN` means that pull request cannot
+   deliver commits pushed afterward: immediately open a new pull request targeting
+   `main` (the same branch may be reused when the maintainer requests it). Only for an
+   open pull request, wait for mergeability calculation and query it once more rather
    than assuming it is conflict-free.
 5. Give the user the pull-request link and report the active branch, commits, checks
    run, checks skipped as not applicable, and whether the branch is awaiting approval.

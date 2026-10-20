@@ -15,12 +15,12 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # Only pull requests are classified. Every main push runs the complete matrix
@@ -57,15 +57,15 @@ jobs:
   # executable check below is skipped. `verify` accepts skipped dependencies.
   quality:
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -89,7 +89,7 @@ jobs:
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
       - name: Upload deployable Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pages-dist-${{ github.sha }}
           path: dist
@@ -99,15 +99,15 @@ jobs:
   supabase-database:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -117,15 +117,15 @@ jobs:
   supabase-functions:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -136,7 +136,7 @@ jobs:
   vitest:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       fail-fast: false
@@ -144,12 +144,12 @@ jobs:
         shardIndex: [1, 2, 3, 4, 5, 6]
         shardTotal: [6]
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -163,7 +163,7 @@ jobs:
           VITEST_COVERAGE_SHARD: 'true'
       - name: Upload Vitest shard report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vitest-results-${{ matrix.shardIndex }}
           path: .vitest-reports
@@ -179,21 +179,21 @@ jobs:
       - changes
       - vitest
     if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Download Vitest shard reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: vitest-results-*
           path: .vitest-reports
@@ -205,7 +205,7 @@ jobs:
   e2e:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The runner image already has every shared library Chromium needs; the test step
     # takes up to four minutes per shard.
     timeout-minutes: 10
@@ -215,12 +215,12 @@ jobs:
         shardIndex: [1, 2, 3]
         shardTotal: [3]
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.9.0
           run_install: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -234,7 +234,7 @@ jobs:
         run: pnpm e2e --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
       - name: Upload browser failure artifacts
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-failure-${{ github.run_id }}-${{ matrix.shardIndex }}
           path: |
@@ -253,7 +253,7 @@ jobs:
       - coverage
       - e2e
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Require every verification dependency to pass or skip

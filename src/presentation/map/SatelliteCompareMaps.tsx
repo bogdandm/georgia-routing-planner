@@ -40,6 +40,7 @@ import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { createSatelliteCompareMapStyle } from '@/presentation/map/mapStyleFactory';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
+import { appColors } from '@/presentation/theme/appColors';
 import { SatelliteCompareSync } from '@/presentation/map/SatelliteCompareSync';
 import { ComparedSceneDatePicker } from '@/presentation/satellite-browser/SatelliteComparison';
 import {
@@ -48,8 +49,21 @@ import {
   type ComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 
-/* eslint-disable lingui/no-unlocalized-strings -- Drag data type token. */
+/* eslint-disable lingui/no-unlocalized-strings -- Drag data type and SVG/CSS tokens. */
 const slotDragType = 'application/x-trail-planner-comparison-slot';
+
+const pointerCrosshairPath = 'M2 16H11M21 16H30M16 2V11M16 21V30';
+/**
+ * The real pointer is a large sky-blue crosshair with a center dot, so it stands out
+ * from the small white crosshairs that mirror it in the other panes.
+ */
+const pointerCursor = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">` +
+    `<path d="${pointerCrosshairPath}" fill="none" stroke="${appColors.brand.deepSpace}" stroke-width="5" stroke-linecap="round"/>` +
+    `<path d="${pointerCrosshairPath}" fill="none" stroke="${appColors.brand.sky}" stroke-width="3" stroke-linecap="round"/>` +
+    `<circle cx="16" cy="16" r="2.5" fill="${appColors.brand.sky}" stroke="${appColors.brand.deepSpace}" stroke-width="1.5"/>` +
+    `</svg>`,
+)}") 16 16, crosshair`;
 /* eslint-enable lingui/no-unlocalized-strings */
 
 export interface SatelliteCompareCamera {
@@ -424,9 +438,9 @@ function SatelliteComparePane({
           }}
           mapStyle={mapStyle}
           maxPitch={0}
-          // A crosshair over every pane, so the grab hand marks only the draggable dates.
-          // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS cursor token.
-          cursor="crosshair"
+          // The pane under the pointer shows the sky-blue crosshair; the grab hand marks only
+          // the draggable dates.
+          cursor={pointerCursor}
           attributionControl={false}
           boxZoom={false}
           dragRotate={false}
@@ -474,24 +488,24 @@ function SatelliteComparePane({
         }}
       >
         <svg
-          width="25"
-          height="25"
-          viewBox="-12.5 -12.5 25 25"
-          style={{ position: 'absolute', left: -12.5, top: -12.5 }}
+          width="17"
+          height="17"
+          viewBox="-8.5 -8.5 17 17"
+          style={{ position: 'absolute', left: -8.5, top: -8.5 }}
         >
           <path
-            d="M-11 0H-4M4 0H11M0 -11V-4M0 4V11"
+            d="M-7 0H-3M3 0H7M0 -7V-3M0 3V7"
             fill="none"
             stroke="rgb(0 0 0 / 75%)"
             strokeLinecap="round"
-            strokeWidth={4}
+            strokeWidth={3}
           />
           <path
-            d="M-11 0H-4M4 0H11M0 -11V-4M0 4V11"
+            d="M-7 0H-3M3 0H7M0 -7V-3M0 3V7"
             fill="none"
             stroke="#FFFFFF"
             strokeLinecap="round"
-            strokeWidth={2}
+            strokeWidth={1.5}
           />
         </svg>
       </Box>

@@ -488,8 +488,9 @@ layer choices and the scene footprint; natural features (vegetation, water bodie
 glaciers) are off there so their fills cannot hide the land cover being compared. A pane
 without a scene is the plain vector map with the main map's layer choices, relief
 shading, and isolines. Every pane draws the imported track as the main map does; markers
-and weather are not shown. The panes share one camera; the pointer over one pane shows a
-crosshair at the same point in the others.
+and weather are not shown. The panes share one camera. Over a pane the pointer is a
+large sky-blue crosshair with a center dot; the other panes show a small white crosshair
+at the same point.
 
 A scene pane's label shows the year in bold, the day and month, and the local time and
 cloud, all in the scene's local time zone; a plain pane's label reads **Pick image
@@ -497,11 +498,11 @@ date**. Clicking a label opens the acquisition calendar for that pane's visible 
 the scene's month or the current one; a day shows that day's best-coverage scene in the
 pane, unless another pane already shows it. Labels end with a dropdown arrow. A scene
 label also starts with a dotted drag handle, outlines itself on hover, and shows the
-grab cursor; dragging it onto another pane swaps the two positions. The maps themselves
-show a crosshair cursor. Panes read the rendering mode and stretch when they open; in
-Auto, a throttled pane alone switches to direct reads. While the grid is open, the
-page-wide MapLibre raster request limit is raised so four panes load in parallel. The
-attribution sits flush with the grid's bottom-right corner, as on the main map.
+grab cursor; dragging it onto another pane swaps the two positions. Panes read the
+rendering mode and stretch when they open; in Auto, a throttled pane alone switches to
+direct reads. While the grid is open, the page-wide MapLibre raster request limit is
+raised so four panes load in parallel. The attribution sits flush with the grid's
+bottom-right corner, as on the main map.
 
 Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid,
 returns the shown scenes to the tray in acquisition order, and moves the main map to the

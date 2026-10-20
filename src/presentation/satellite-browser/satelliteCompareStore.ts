@@ -99,6 +99,7 @@ export function closeComparison(): void {
       longitude: camera.center.longitude,
       latitude: camera.center.latitude,
       zoom: camera.zoom,
+      exactZoom: true,
     });
   }
 }

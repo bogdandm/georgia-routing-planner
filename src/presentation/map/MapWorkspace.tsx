@@ -1297,7 +1297,8 @@ export function MapWorkspace({
     setActiveTab('satellite');
     setNavigationCollapsed(false);
     const controller = new AbortController();
-    void Promise.all(
+    // A failed or missing key only drops that scene; any two resolved scenes still open.
+    void Promise.allSettled(
       sharedComparison.map((sceneKey) => {
         const separator = sceneKey.indexOf(':');
         return getScene(sceneKey.slice(0, separator), sceneKey.slice(separator + 1), {
@@ -1305,30 +1306,21 @@ export function MapWorkspace({
           signal: controller.signal,
         });
       }),
-    )
-      .then((scenes) => {
-        if (controller.signal.aborted) return;
-        const resolved = scenes.filter((scene) => scene !== null);
-        if (resolved.length < minimumComparedScenes) {
-          // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
-          setCameraNotice('shared-comparison-restore-failed');
-          return;
-        }
-        openSharedComparison(resolved, {
-          center: sharedMapView.center,
-          zoom: sharedMapView.zoom,
-        });
-      })
-      .catch((error: unknown) => {
-        if (
-          controller.signal.aborted ||
-          (error instanceof DOMException && error.name === 'AbortError')
-        ) {
-          return;
-        }
+    ).then((results) => {
+      if (controller.signal.aborted) return;
+      const resolved = results.flatMap((result) =>
+        result.status === 'fulfilled' && result.value !== null ? [result.value] : [],
+      );
+      if (resolved.length < minimumComparedScenes) {
         // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
         setCameraNotice('shared-comparison-restore-failed');
+        return;
+      }
+      openSharedComparison(resolved, {
+        center: sharedMapView.center,
+        zoom: sharedMapView.zoom,
       });
+    });
     return () => {
       controller.abort();
     };

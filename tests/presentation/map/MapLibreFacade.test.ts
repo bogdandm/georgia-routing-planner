@@ -403,6 +403,22 @@ describe('MapLibreFacade', () => {
     });
   });
 
+  it('keeps an exact navigation zoom while terrain is active', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem' };
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('style.load');
+
+    facade.navigateTo({ longitude: 44.8, latitude: 41.7, zoom: 11.5, exactZoom: true });
+
+    expect(nativeMap.easeCalls.at(-1)).toMatchObject({
+      center: [44.8, 41.7],
+      zoom: 11.5,
+    });
+  });
+
   it('faces a 3D track fit from start to finish at 45 degrees', () => {
     const services = createTestServices();
     const bounds = { west: 44, south: 42, east: 44.1, north: 42.001 };

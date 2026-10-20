@@ -178,6 +178,7 @@ export class FakeMapFacade implements MapFacade {
       readonly longitude: number;
       readonly latitude: number;
       readonly zoom?: number;
+      readonly exactZoom?: boolean;
     },
     visibleAreaPadding?: MapFitPadding,
   ): void {

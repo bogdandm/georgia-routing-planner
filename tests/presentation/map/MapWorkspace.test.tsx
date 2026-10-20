@@ -506,11 +506,11 @@ describe('MapWorkspace', () => {
     });
   });
 
-  it('opens a shared comparison chronologically at the shared 2D camera', async () => {
+  it('opens the resolvable scenes of a shared comparison chronologically', async () => {
     window.history.replaceState(
       null,
       '',
-      '/?map=2&lat=41.7&lon=44.8&z=12&view=2d&compare=sentinel-2-l2a%3Alater%2Csentinel-2-l2a%3Aearlier#tracks',
+      '/?map=2&lat=41.7&lon=44.8&z=12&view=2d&compare=sentinel-2-l2a%3Alater%2Csentinel-2-l2a%3Aunreachable%2Csentinel-2-l2a%3Aearlier#tracks',
     );
     useUiStore.setState({ activeTab: 'tracks', navigationCollapsed: true });
     const scenes: Readonly<Record<string, SatelliteScene>> = {
@@ -524,7 +524,12 @@ describe('MapWorkspace', () => {
     const services = createTestServices({
       satelliteCatalogGateway: {
         search: () => Promise.resolve({ scenes: [], totalMatched: 0 }),
-        getScene: (_collection, id) => Promise.resolve(scenes[id] ?? null),
+        getScene: (_collection, id) => {
+          const scene = scenes[id];
+          return scene === undefined
+            ? Promise.reject(new Error('catalog unavailable'))
+            : Promise.resolve(scene);
+        },
       },
     });
 

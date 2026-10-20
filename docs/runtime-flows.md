@@ -109,8 +109,8 @@ other map link drops `compare`. `parseSharedComparison` accepts two to four dist
 keys that each match the scene-key pattern and otherwise returns none. On desktop,
 `MapWorkspace` opens Satellite, resolves every key through the same allowlisted
 `getScene` in parallel, and calls `openSharedComparison` with the resolved scenes and
-the shared camera when at least two resolve; otherwise it shows a notice. Smartphones
-and track-share links ignore `compare`.
+the shared camera when at least two resolve, dropping missing or failed keys; otherwise
+it shows a notice. Smartphones and track-share links ignore `compare`.
 
 While the grid is open, `WorkspaceShell` hides the mounted main map, docks the rail and
 sidebar, and gives `SatelliteCompareMaps` the remaining area. The grid waits for
@@ -118,7 +118,8 @@ sidebar, and gives `SatelliteCompareMaps` the remaining area. The grid waits for
 mode, and stretch once. `SatelliteCompareSync` copies the moving pane's center and zoom
 to the others with `jumpTo` under a guard, re-projects the crosshair on every move, and
 reports one settled camera per gesture to `satelliteCompareStore`. Closing the grid
-issues a `requestMapNavigation` to that camera.
+issues a `requestMapNavigation` to that camera with `exactZoom`, so a 3D main map keeps
+the compared zoom instead of the terrain close-up zoom.
 
 ## Terrain transition
 

@@ -86,6 +86,7 @@ import {
 import {
   applySharedMapView,
   createMapShareUrl,
+  parseSharedComparison,
   parseSharedMapView,
   parseWeatherMapUrlState,
   readShareableMapState,
@@ -93,6 +94,10 @@ import {
   updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
+import {
+  minimumComparedScenes,
+  openSharedComparison,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
@@ -143,7 +148,10 @@ const dragPanInertia = {
 } as const;
 
 type MapWorkspaceNotice =
-  'camera-save-failed' | 'camera-restore-failed' | 'shared-scene-restore-failed';
+  | 'camera-save-failed'
+  | 'camera-restore-failed'
+  | 'shared-scene-restore-failed'
+  | 'shared-comparison-restore-failed';
 type CopyConfirmation = 'coordinates' | 'link' | 'weather-link';
 type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 
@@ -317,6 +325,10 @@ export function MapWorkspace({
   const satelliteMode = useSatelliteMode();
   const mosaicActive = satelliteMode === 'mosaic';
   const sharedMapView = useMemo(() => parseSharedMapView(window.location.search), []);
+  const sharedComparison = useMemo(
+    () => parseSharedComparison(window.location.search),
+    [],
+  );
   const sharedWeatherMap = useMemo(
     () => parseWeatherMapUrlState(window.location.search),
     [],
@@ -1269,6 +1281,67 @@ export function MapWorkspace({
     };
   }, [idGenerator, mapLayers, mosaicActive, satelliteCatalogGateway, sharedMapView]);
 
+  // A comparison link opens Satellite with the grid once its scenes resolve; any two
+  // resolved scenes are enough. Phones keep the plain shared camera.
+  useEffect(() => {
+    if (
+      sharedMapView === null ||
+      sharedComparison.length === 0 ||
+      smartphoneViewport ||
+      parseTrackShareLocation(window.location.hash).kind !== 'none' ||
+      satelliteCatalogGateway?.getScene === undefined
+    ) {
+      return;
+    }
+    const getScene = satelliteCatalogGateway.getScene.bind(satelliteCatalogGateway);
+    setActiveTab('satellite');
+    setNavigationCollapsed(false);
+    const controller = new AbortController();
+    void Promise.all(
+      sharedComparison.map((sceneKey) => {
+        const separator = sceneKey.indexOf(':');
+        return getScene(sceneKey.slice(0, separator), sceneKey.slice(separator + 1), {
+          operationId: idGenerator.generate(),
+          signal: controller.signal,
+        });
+      }),
+    )
+      .then((scenes) => {
+        if (controller.signal.aborted) return;
+        const resolved = scenes.filter((scene) => scene !== null);
+        if (resolved.length < minimumComparedScenes) {
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+          setCameraNotice('shared-comparison-restore-failed');
+          return;
+        }
+        openSharedComparison(resolved, {
+          center: sharedMapView.center,
+          zoom: sharedMapView.zoom,
+        });
+      })
+      .catch((error: unknown) => {
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return;
+        }
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Notice code.
+        setCameraNotice('shared-comparison-restore-failed');
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [
+    idGenerator,
+    satelliteCatalogGateway,
+    setActiveTab,
+    setNavigationCollapsed,
+    sharedComparison,
+    sharedMapView,
+    smartphoneViewport,
+  ]);
+
   useEffect(() => {
     if (mosaicActive || sharedSceneRestorationCancelled.current) return;
     if (
@@ -1493,6 +1566,8 @@ export function MapWorkspace({
     cameraNoticeText = t`The saved camera could not be restored. The Georgia overview is shown instead.`;
   } else if (cameraNotice === 'shared-scene-restore-failed') {
     cameraNoticeText = t`The shared satellite image could not be restored. The shared map location is still available.`;
+  } else if (cameraNotice === 'shared-comparison-restore-failed') {
+    cameraNoticeText = t`The shared image comparison could not be opened. The shared map location is still available.`;
   }
   let copyConfirmationText: string | null = null;
   if (copyConfirmation === 'coordinates') {

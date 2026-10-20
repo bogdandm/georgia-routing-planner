@@ -3,6 +3,8 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import ArrowBackOutlinedIcon from '@mui/icons-material/ArrowBackOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
+import CompareOutlinedIcon from '@mui/icons-material/CompareOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -26,7 +28,9 @@ import {
   Slider,
   Snackbar,
   Stack,
+  Tooltip,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
 import {
   useCallback,
@@ -76,6 +80,14 @@ import { appColors } from '@/presentation/theme/appColors';
 import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
 import { SatelliteRenderingControls } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
+import { SatelliteComparisonTray } from '@/presentation/satellite-browser/SatelliteComparison';
+import {
+  addComparedScene,
+  isComparedScene,
+  maximumComparedScenes,
+  removeComparedScene,
+  satelliteCompareStore,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
 import {
   satelliteImageryProblemMessage,
   satelliteSearchErrorMessage,
@@ -393,6 +405,8 @@ function visibleGroups(
 
 function SceneCard({
   appliedImagery,
+  compared,
+  comparisonFull,
   formats,
   match,
   selected,
@@ -401,8 +415,11 @@ function SceneCard({
   onCopyLink,
   onFitFootprint,
   onSelect,
+  onToggleCompared,
 }: {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
+  readonly compared: boolean;
+  readonly comparisonFull: boolean;
   readonly formats: DisplayFormats;
   readonly match: SatelliteSceneMatch;
   readonly selected: boolean;
@@ -411,6 +428,8 @@ function SceneCard({
   readonly onCopyLink: () => void;
   readonly onFitFootprint: () => void;
   readonly onSelect: () => void;
+  /** Toggles the scene in the comparison; `null` where comparison is unavailable. */
+  readonly onToggleCompared: (() => void) | null;
 }) {
   const { i18n, t } = useLingui();
   const { scene, coverage } = match;
@@ -544,6 +563,15 @@ function SceneCard({
               </Typography>
             )}
           </Box>
+          {compared ? (
+            <Tooltip title={t`In comparison`}>
+              <CompareOutlinedIcon
+                aria-label={t`In comparison`}
+                color="primary"
+                fontSize="small"
+              />
+            </Tooltip>
+          ) : null}
           <ChevronRightIcon color="action" fontSize="small" />
         </Stack>
         {coverage.hasEdgeWarning ? (
@@ -552,7 +580,7 @@ function SceneCard({
           </Alert>
         ) : null}
         {selected ? (
-          <Box sx={{ px: 2, pb: applied ? 0 : 2 }}>
+          <Box sx={{ px: 2 }}>
             <Typography variant="caption" sx={{ fontWeight: 700 }}>
               {applying
                 ? t`Applying true-color imagery…`
@@ -607,32 +635,67 @@ function SceneCard({
           </Box>
         ) : null}
       </ListItemButton>
-      {selected && applied ? (
+      {selected && (applied || onToggleCompared !== null) ? (
         <Stack direction="row" spacing={0.5} sx={{ p: 0.5 }}>
-          <Button
-            color="inherit"
-            startIcon={<CenterFocusStrongIcon />}
-            onClick={onFitFootprint}
-            sx={{
-              minHeight: 40,
-              px: 1.5,
-              '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
-            }}
-          >
-            <Trans>Fit footprint</Trans>
-          </Button>
-          <Button
-            color="inherit"
-            startIcon={<ShareOutlinedIcon />}
-            onClick={onCopyLink}
-            sx={{
-              minHeight: 40,
-              px: 1.5,
-              '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
-            }}
-          >
-            <Trans>Share link</Trans>
-          </Button>
+          {applied ? (
+            <>
+              <Button
+                color="inherit"
+                startIcon={<CenterFocusStrongIcon />}
+                onClick={onFitFootprint}
+                sx={{
+                  minHeight: 40,
+                  px: 1.5,
+                  '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
+                }}
+              >
+                <Trans>Fit footprint</Trans>
+              </Button>
+              <Button
+                color="inherit"
+                startIcon={<ShareOutlinedIcon />}
+                onClick={onCopyLink}
+                sx={{
+                  minHeight: 40,
+                  px: 1.5,
+                  '&:hover': { bgcolor: appColors.interaction.navigationHoverOverlay },
+                }}
+              >
+                <Trans>Share link</Trans>
+              </Button>
+            </>
+          ) : null}
+          {onToggleCompared === null ? null : (
+            <Tooltip
+              title={
+                comparisonFull && !compared
+                  ? t`Up to ${maximumComparedScenes} images can be compared`
+                  : ''
+              }
+            >
+              <span>
+                <Button
+                  color={compared ? 'primary' : 'inherit'}
+                  aria-pressed={compared}
+                  disabled={
+                    (comparisonFull && !compared) ||
+                    scene.visualAsset.kind !== 'sentinel-l2a'
+                  }
+                  startIcon={compared ? <CheckOutlinedIcon /> : <CompareOutlinedIcon />}
+                  onClick={onToggleCompared}
+                  sx={{
+                    minHeight: 40,
+                    px: 1.5,
+                    '&:hover': {
+                      bgcolor: appColors.interaction.navigationHoverOverlay,
+                    },
+                  }}
+                >
+                  {compared ? <Trans>Compared</Trans> : <Trans>Compare</Trans>}
+                </Button>
+              </span>
+            </Tooltip>
+          )}
         </Stack>
       ) : null}
     </Box>
@@ -683,6 +746,10 @@ function SatelliteResultsPane({
   const groups = result === null ? [] : visibleGroups(result, visibleCount);
   const shownCount = groups.reduce((count, group) => count + group.scenes.length, 0);
   const scrollViewport = useRef<HTMLDivElement | null>(null);
+  const comparedScenes = useStore(satelliteCompareStore, (state) => state.scenes);
+  const comparisonFull = comparedScenes.length >= maximumComparedScenes;
+  // Comparison is a desktop feature: the grid needs room for two to four maps.
+  const comparisonAvailable = !useMediaQuery('(width < 900px)');
 
   useEffect(() => {
     if (
@@ -829,28 +896,45 @@ function SatelliteResultsPane({
                   <Divider sx={{ flex: 1 }} />
                 </Stack>
               ) : null}
-              {group.scenes.map((match, sceneIndex) => (
-                <SceneCard
-                  appliedImagery={appliedImagery}
-                  formats={formats}
-                  key={`${match.scene.collection}:${match.scene.id}`}
-                  match={match}
-                  selected={match.scene.id === selectedSceneId}
-                  showBottomDivider={
-                    sceneIndex < group.scenes.length - 1 ||
-                    groups[index + 1] === undefined ||
-                    groups[index + 1]?.date.slice(0, 7) === group.date.slice(0, 7)
-                  }
-                  timeZone={timeZone}
-                  onSelect={() => {
-                    onSelect(match);
-                  }}
-                  onCopyLink={() => {
-                    onCopyLink(satelliteSceneKey(match.scene));
-                  }}
-                  onFitFootprint={onFitFootprint}
-                />
-              ))}
+              {group.scenes.map((match, sceneIndex) => {
+                const sceneKey = satelliteSceneKey(match.scene);
+                const compared = isComparedScene(comparedScenes, sceneKey);
+                return (
+                  <SceneCard
+                    appliedImagery={appliedImagery}
+                    compared={compared}
+                    comparisonFull={comparisonFull}
+                    formats={formats}
+                    key={sceneKey}
+                    match={match}
+                    selected={match.scene.id === selectedSceneId}
+                    showBottomDivider={
+                      sceneIndex < group.scenes.length - 1 ||
+                      groups[index + 1] === undefined ||
+                      groups[index + 1]?.date.slice(0, 7) === group.date.slice(0, 7)
+                    }
+                    timeZone={timeZone}
+                    onSelect={() => {
+                      onSelect(match);
+                    }}
+                    onCopyLink={() => {
+                      onCopyLink(sceneKey);
+                    }}
+                    onFitFootprint={onFitFootprint}
+                    onToggleCompared={
+                      comparisonAvailable
+                        ? () => {
+                            if (compared) {
+                              removeComparedScene(sceneKey);
+                            } else {
+                              addComparedScene(match.scene);
+                            }
+                          }
+                        : null
+                    }
+                  />
+                );
+              })}
             </Stack>
           ))}
         </Stack>
@@ -871,6 +955,7 @@ function SatelliteResultsPane({
           </Button>
         ) : null}
       </Box>
+      {comparisonAvailable ? <SatelliteComparisonTray /> : null}
     </Box>
   );
 }

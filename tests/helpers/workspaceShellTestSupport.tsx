@@ -27,6 +27,7 @@ import {
 import { resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { resetMapInteractionStore } from '@/presentation/map/mapInteractionStore';
 import { resetSatelliteRequestStatus } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
+import { resetSatelliteCompareStore } from '@/presentation/satellite-browser/satelliteCompareStore';
 import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
@@ -192,6 +193,7 @@ export function setupWorkspaceShellTest(): void {
     resetMapLayerStore();
     resetMapInteractionStore();
     resetSatelliteRequestStatus();
+    resetSatelliteCompareStore();
     activateAppLocale('en');
     setServices(createTestServices());
     await services.database.delete();

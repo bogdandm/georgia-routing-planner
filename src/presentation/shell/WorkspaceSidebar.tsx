@@ -49,6 +49,8 @@ import {
 } from '@/presentation/markers/MarkersWorkspace';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
+import { SatelliteComparisonPanel } from '@/presentation/satellite-browser/SatelliteComparison';
+import { satelliteCompareStore } from '@/presentation/satellite-browser/satelliteCompareStore';
 import {
   useSatelliteMode,
   useSatelliteMosaic,
@@ -262,6 +264,8 @@ export function WorkspaceSidebar({
   const { multiTrackMode, startRoutePlan, toggleMultiTrackMode } = useTracksWorkspace();
   const satelliteMode = useSatelliteMode();
   const { toggleMosaicMode } = useSatelliteMosaic();
+  const comparisonActive =
+    useStore(satelliteCompareStore, (state) => state.open) && !fullWidth;
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
     useState<WeatherHeaderPoint | null>(null);
   const [weatherForecastMenuAnchor, setWeatherForecastMenuAnchor] =
@@ -484,7 +488,7 @@ export function WorkspaceSidebar({
             </Menu>
           </>
         ) : null}
-        {activeTab === 'satellite' ? (
+        {activeTab === 'satellite' && !comparisonActive ? (
           <Tooltip
             title={
               satelliteMode === 'mosaic'
@@ -674,17 +678,21 @@ export function WorkspaceSidebar({
           />
         </Box>
         <Box sx={{ display: activeTab === 'satellite' ? 'block' : 'none' }}>
-          {satelliteMode === 'mosaic' ? (
-            <SatelliteMosaicBrowser onShowMap={showSmartphoneMap} />
-          ) : (
-            <SatelliteBrowser
-              active={activeTab === 'satellite'}
-              auxiliaryOverlay={auxiliaryOverlay}
-              fallbackCoordinates={searchAreaCoordinates}
-              onPaneOpenChange={onSatellitePaneOpenChange}
-              onShowMap={showSmartphoneMap}
-            />
-          )}
+          {comparisonActive ? <SatelliteComparisonPanel /> : null}
+          {/* The search session stays mounted under the comparison panel. */}
+          <Box sx={{ display: comparisonActive ? 'none' : 'block' }}>
+            {satelliteMode === 'mosaic' ? (
+              <SatelliteMosaicBrowser onShowMap={showSmartphoneMap} />
+            ) : (
+              <SatelliteBrowser
+                active={activeTab === 'satellite'}
+                auxiliaryOverlay={auxiliaryOverlay}
+                fallbackCoordinates={searchAreaCoordinates}
+                onPaneOpenChange={onSatellitePaneOpenChange}
+                onShowMap={showSmartphoneMap}
+              />
+            )}
+          </Box>
         </Box>
         <Box
           sx={{

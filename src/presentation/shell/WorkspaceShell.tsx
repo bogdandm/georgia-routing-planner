@@ -17,6 +17,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
@@ -27,6 +28,7 @@ import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { DeveloperDrawer } from '@/presentation/developer-tools/DeveloperDrawer';
 import { MapShareDialog } from '@/presentation/map/MapShareDialog';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
+import { SatelliteCompareMaps } from '@/presentation/map/SatelliteCompareMaps';
 import {
   cancelMarkerPlacement,
   openMapShare,
@@ -42,6 +44,11 @@ import {
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
 import { SatelliteMosaicProvider } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
+import {
+  closeComparison,
+  satelliteCompareStore,
+  setComparisonCamera,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { WorkspaceRail } from '@/presentation/shell/WorkspaceRail';
 import { WorkspaceSidebar } from '@/presentation/shell/WorkspaceSidebar';
@@ -71,6 +78,7 @@ const hashChangeEvent = 'hashchange';
 const popStateEvent = 'popstate';
 const mobileWorkspaceId = 'mobile-workspace';
 const contextualSidebarWidths = { xs: 420, xl: 464 } as const;
+const railWidth = 64;
 
 interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
@@ -236,6 +244,16 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   useEffect(() => {
     if (activeTab !== 'markers') cancelMarkerPlacement();
   }, [activeTab]);
+
+  // The comparison grid replaces the map only in the desktop Satellite section.
+  const comparisonOpen = useStore(satelliteCompareStore, (state) => state.open);
+  const comparisonScenes = useStore(satelliteCompareStore, (state) => state.scenes);
+  const comparisonCamera = useStore(satelliteCompareStore, (state) => state.camera);
+  const comparisonActive =
+    comparisonOpen && activeTab === 'satellite' && !smartphoneViewport;
+  useEffect(() => {
+    if (activeTab !== 'satellite' || smartphoneViewport) closeComparison();
+  }, [activeTab, smartphoneViewport]);
 
   useEffect(() => {
     const restoreTabFromUrl = () => {
@@ -462,12 +480,19 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         !auxiliaryOverlayViewport ||
         !multiTrackDetailsDismissed);
   const satelliteResultsOpen =
-    activeTab === 'satellite' && satellitePaneOpen && tourStep !== 'satellite';
+    activeTab === 'satellite' &&
+    satellitePaneOpen &&
+    tourStep !== 'satellite' &&
+    !comparisonActive;
   const auxiliaryOpen = trackDetailsOpen || satelliteResultsOpen;
   const mobileTrackDisclosureOpen =
     smartphoneViewport && trackDetailsExist && !mobileWorkspaceOpen;
   const desktopNavigationCollapsed =
-    !smartphoneViewport && navigationCollapsed && tourStep === null;
+    !smartphoneViewport &&
+    navigationCollapsed &&
+    tourStep === null &&
+    !comparisonActive;
+  const mapHidden = (smartphoneViewport && mobileWorkspaceOpen) || comparisonActive;
   const collapsedTrackSummary =
     desktopNavigationCollapsed && activeTrackMetrics !== null ? (
       <CompactTrackSummary metrics={activeTrackMetrics} profile={summaryProfile} />
@@ -498,12 +523,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     >
       <Box
         component="main"
-        aria-hidden={smartphoneViewport && mobileWorkspaceOpen}
+        aria-hidden={mapHidden}
         sx={{
           position: 'absolute',
           inset: 0,
-          visibility: smartphoneViewport && mobileWorkspaceOpen ? 'hidden' : 'visible',
-          pointerEvents: smartphoneViewport && mobileWorkspaceOpen ? 'none' : 'auto',
+          visibility: mapHidden ? 'hidden' : 'visible',
+          pointerEvents: mapHidden ? 'none' : 'auto',
         }}
       >
         <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -512,6 +537,28 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           <OperationalStatus />
         </Box>
       </Box>
+      {/* The main map stays mounted underneath; the grid takes the area beside the
+          navigation, which is laid out next to it instead of floating over it. */}
+      {comparisonActive && comparisonCamera !== null ? (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: {
+              xs: railWidth + contextualSidebarWidths.xs,
+              xl: railWidth + contextualSidebarWidths.xl,
+            },
+          }}
+        >
+          <SatelliteCompareMaps
+            scenes={comparisonScenes}
+            initialCamera={comparisonCamera}
+            onCameraSettled={setComparisonCamera}
+          />
+        </Box>
+      ) : null}
 
       <IconButton
         aria-controls={mobileWorkspaceId}
@@ -695,23 +742,28 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         sx={{
           position: 'absolute',
           inset: smartphoneViewport ? 0 : undefined,
-          top: smartphoneViewport ? undefined : 6,
-          left: smartphoneViewport ? undefined : 6,
+          // While comparing, the navigation is docked beside the grid, not floating.
+          top: smartphoneViewport ? undefined : comparisonActive ? 0 : 6,
+          left: smartphoneViewport ? undefined : comparisonActive ? 0 : 6,
           width: smartphoneViewport ? '100%' : undefined,
-          height: smartphoneViewport
-            ? '100dvh'
-            : desktopNavigationCollapsed
-              ? 64
-              : 'calc(100dvh - 12px)',
+          height:
+            smartphoneViewport || comparisonActive
+              ? '100dvh'
+              : desktopNavigationCollapsed
+                ? 64
+                : 'calc(100dvh - 12px)',
           zIndex: smartphoneViewport && !mobileWorkspaceOpen ? 3 : 4,
           display: 'flex',
           gap: 0,
           bgcolor: smartphoneViewport ? 'background.paper' : 'transparent',
-          filter: smartphoneViewport
-            ? 'none'
-            : desktopNavigationCollapsed
-              ? 'drop-shadow(0 6px 9px rgba(0, 0, 0, 0.18))'
-              : 'drop-shadow(0 8px 14px rgba(2, 48, 71, 0.2))',
+          borderRight: comparisonActive ? 1 : 0,
+          borderColor: 'divider',
+          filter:
+            smartphoneViewport || comparisonActive
+              ? 'none'
+              : desktopNavigationCollapsed
+                ? 'drop-shadow(0 6px 9px rgba(0, 0, 0, 0.18))'
+                : 'drop-shadow(0 8px 14px rgba(2, 48, 71, 0.2))',
           visibility: smartphoneViewport && !mobileWorkspaceOpen ? 'hidden' : 'visible',
           opacity: smartphoneViewport && !mobileWorkspaceOpen ? 0 : 1,
           pointerEvents: smartphoneViewport && !mobileWorkspaceOpen ? 'none' : 'auto',
@@ -747,7 +799,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             collapsed={desktopNavigationCollapsed}
             collapsedSummary={collapsedTrackSummary}
             collapsedControls={collapsedRoutePlanControls}
-            squareEdges={smartphoneViewport}
+            squareEdges={smartphoneViewport || comparisonActive}
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}
             developerMode={developerMode}
@@ -824,7 +876,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                   ? 'hidden'
                   : 'visible',
             overflow: 'hidden',
-            borderRadius: smartphoneViewport ? 0 : '0 0 8px 0',
+            borderRadius: smartphoneViewport || comparisonActive ? 0 : '0 0 8px 0',
             transition: (theme) =>
               `${theme.transitions.create(['opacity', 'transform', 'max-width'], {
                 duration: theme.transitions.duration.short,
@@ -913,7 +965,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             }}
           />
         </Box>
-        {!desktopNavigationCollapsed && !smartphoneViewport ? (
+        {!desktopNavigationCollapsed && !smartphoneViewport && !comparisonActive ? (
           <Tooltip title={t`Hide navigation`} placement="right">
             <IconButton
               aria-label={t`Hide navigation`}

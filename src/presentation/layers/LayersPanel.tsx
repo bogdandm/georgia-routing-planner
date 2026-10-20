@@ -72,6 +72,13 @@ const naprOrthophotoControl = {
   requiresScene: false,
 } as const satisfies LayerControl;
 
+const sovietTopographicControl = {
+  id: 'soviet-topographic',
+  label: msg`Soviet topographic maps`,
+  description: msg`Official NAPR scans: nationwide 1:25,000 maps with 1:10,000 detail where available.`,
+  requiresScene: false,
+} as const satisfies LayerControl;
+
 const sentinelControls = [
   {
     id: 'satellite-imagery',
@@ -312,6 +319,7 @@ export function LayersPanel() {
         bingSatelliteControl,
         esriSatelliteControl,
         naprOrthophotoControl,
+        sovietTopographicControl,
         ...sentinelControls,
       ],
     },
@@ -528,6 +536,7 @@ export function LayersPanel() {
                         !state.visibility['bing-satellite'] &&
                         !state.visibility['esri-satellite'] &&
                         !state.visibility['napr-orthophoto'] &&
+                        !state.visibility['soviet-topographic'] &&
                         !state.satelliteImageryVisible)
                     }
                     min={0}

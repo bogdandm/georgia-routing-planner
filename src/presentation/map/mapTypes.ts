@@ -10,6 +10,7 @@ export type MapLayerPreset =
   | 'bing-satellite'
   | 'esri-satellite'
   | 'napr-orthophoto'
+  | 'soviet-topographic'
   | 'sentinel-2';
 
 export interface MapCoordinate {

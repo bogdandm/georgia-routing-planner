@@ -134,6 +134,7 @@ describe('MapViewControls', () => {
       'Bing Aerial',
       'Esri World Imagery',
       'NAPR Orthophoto',
+      'Soviet Topographic',
       'Sentinel-2',
     ]);
     expect(menu.querySelectorAll('img')).toHaveLength(0);

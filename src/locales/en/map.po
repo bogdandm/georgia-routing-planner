@@ -352,6 +352,12 @@ msgstr "Show flat 2D map"
 msgid "Show weather forecast"
 msgstr "Show weather forecast"
 
+#. js-lingui-id: qy1-46
+#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/MapViewControls.tsx
+msgid "Soviet Topographic"
+msgstr "Soviet Topographic"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"

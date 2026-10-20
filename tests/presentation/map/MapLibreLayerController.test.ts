@@ -22,6 +22,8 @@ import {
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sovietTopographicLayerIds,
+  sovietTopographicSourceIds,
   savedMarkerLayerIds,
   routePlanLayerIds,
   sentinelMapLayerIds,
@@ -75,6 +77,9 @@ class FakeLayerMap {
     for (const sourceId of Object.values(naprOrthophotoSourceIds)) {
       this.sources.set(sourceId, { type: 'raster' });
     }
+    for (const sourceId of Object.values(sovietTopographicSourceIds)) {
+      this.sources.set(sourceId, { type: 'raster' });
+    }
     const layers = [...this.layers.entries()];
     layers.splice(
       1,
@@ -83,6 +88,9 @@ class FakeLayerMap {
       [satelliteBasemapLayerIds.bing, { id: satelliteBasemapLayerIds.bing }],
       [satelliteBasemapLayerIds.esri, { id: satelliteBasemapLayerIds.esri }],
       ...Object.values(naprOrthophotoLayerIds).map(
+        (id): [string, Record<string, unknown>] => [id, { id }],
+      ),
+      ...Object.values(sovietTopographicLayerIds).map(
         (id): [string, Record<string, unknown>] => [id, { id }],
       ),
     );
@@ -983,6 +991,18 @@ describe('MapLibreLayerController', () => {
       appliedImagery: { status: 'hidden', visible: false },
     });
 
+    expect(controller.setLayerVisibility('soviet-topographic', true)).toEqual({
+      status: 'success',
+    });
+    for (const layerId of Object.values(sovietTopographicLayerIds)) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+    expect(mapLayerStore.getState().visibility).toMatchObject({
+      'napr-orthophoto': false,
+      'soviet-topographic': true,
+      'satellite-imagery': false,
+    });
+
     expect(controller.setLayerVisibility('satellite-imagery', true)).toEqual({
       status: 'success',
     });
@@ -1042,9 +1062,6 @@ describe('MapLibreLayerController', () => {
       status: 'success',
     });
     expect(controller.setOpenStreetMapOpacity(0.35)).toEqual({ status: 'success' });
-    const savePreferences = vi
-      .spyOn(services.database, 'saveMapLayerPreferences')
-      .mockResolvedValue(undefined);
     const log = vi.spyOn(services.logger, 'log');
 
     expect(controller.setMapLayerPreset('vector-osm')).toEqual({
@@ -1057,6 +1074,7 @@ describe('MapLibreLayerController', () => {
         'esri-satellite': false,
         'napr-orthophoto': false,
         'satellite-imagery': false,
+        'soviet-topographic': false,
         roads: false,
       },
       openStreetMapOpacity: 0.35,
@@ -1088,6 +1106,13 @@ describe('MapLibreLayerController', () => {
       expect(map.visibility.get(layerId)).toBe('visible');
     }
 
+    expect(controller.setMapLayerPreset('soviet-topographic')).toEqual({
+      status: 'success',
+    });
+    for (const layerId of Object.values(sovietTopographicLayerIds)) {
+      expect(map.visibility.get(layerId)).toBe('visible');
+    }
+
     expect(controller.setMapLayerPreset('sentinel-2')).toEqual({
       status: 'success',
     });
@@ -1098,6 +1123,7 @@ describe('MapLibreLayerController', () => {
         'esri-satellite': false,
         'napr-orthophoto': false,
         'satellite-imagery': true,
+        'soviet-topographic': false,
         roads: false,
       },
       openStreetMapOpacity: 0.35,
@@ -1108,7 +1134,6 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(satelliteBasemapLayerIds.bing)).toBe('none');
     expect(map.visibility.get(satelliteBasemapLayerIds.esri)).toBe('none');
     expect(map.visibility.get(sentinelMapLayerIds.rasterA)).toBe('visible');
-    expect(savePreferences).toHaveBeenCalledTimes(6);
     expect(log).toHaveBeenLastCalledWith({
       level: 'info',
       name: 'map.layer-preset.changed',

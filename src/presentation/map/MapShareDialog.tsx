@@ -43,6 +43,7 @@ const basemapLabels: Readonly<Record<SatelliteBasemap, MessageDescriptor>> = {
   'bing-satellite': msg`Bing Aerial`,
   'esri-satellite': msg`Esri World Imagery`,
   'napr-orthophoto': msg`NAPR Orthophoto`,
+  'soviet-topographic': msg`Soviet Topographic`,
 };
 
 function ShareOption({

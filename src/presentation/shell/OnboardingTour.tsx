@@ -130,7 +130,7 @@ const tourSteps: readonly TourStep[] = [
           },
           {
             icon: LayersOutlinedIcon,
-            text: msg`Base map: vector map or satellite images from Google, Bing, Esri, or NAPR.`,
+            text: msg`Base map: vector, satellite, orthophoto, or Soviet topographic maps.`,
           },
           {
             icon: StraightenIcon,

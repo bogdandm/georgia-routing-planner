@@ -56,6 +56,7 @@ const layerPresets: readonly {
   { label: msg`Bing Aerial`, value: 'bing-satellite' },
   { label: msg`Esri World Imagery`, value: 'esri-satellite' },
   { label: msg`NAPR Orthophoto`, value: 'napr-orthophoto' },
+  { label: msg`Soviet Topographic`, value: 'soviet-topographic' },
 ];
 // eslint-disable-next-line lingui/no-unlocalized-strings -- Satellite mission name stays invariant.
 const sentinelPresetLabel = 'Sentinel-2';

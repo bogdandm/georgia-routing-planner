@@ -352,6 +352,12 @@ msgstr "Показать плоскую 2D-карту"
 msgid "Show weather forecast"
 msgstr "Показать прогноз погоды"
 
+#. js-lingui-id: qy1-46
+#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/MapViewControls.tsx
+msgid "Soviet Topographic"
+msgstr "Советская топографическая карта"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"

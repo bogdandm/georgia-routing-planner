@@ -3,6 +3,7 @@ export type LogicalMapLayerId =
   | 'bing-satellite'
   | 'esri-satellite'
   | 'napr-orthophoto'
+  | 'soviet-topographic'
   | 'satellite-imagery'
   | 'scene-footprint'
   | 'terrain-relief'

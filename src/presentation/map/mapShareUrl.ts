@@ -23,6 +23,7 @@ export const satelliteBasemaps = [
   'bing-satellite',
   'esri-satellite',
   'napr-orthophoto',
+  'soviet-topographic',
 ] as const satisfies readonly MapLayerPreset[];
 
 export type SatelliteBasemap = (typeof satelliteBasemaps)[number];

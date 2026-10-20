@@ -154,10 +154,10 @@ msgstr "Areas"
 msgid "Back"
 msgstr "Back"
 
-#. js-lingui-id: LG4DxE
+#. js-lingui-id: BR9WHy
 #: src/presentation/shell/OnboardingTour.tsx
-msgid "Base map: vector map or satellite images from Google, Bing, Esri, or NAPR."
-msgstr "Base map: vector map or satellite images from Google, Bing, Esri, or NAPR."
+msgid "Base map: vector, satellite, orthophoto, or Soviet topographic maps."
+msgstr "Base map: vector, satellite, orthophoto, or Soviet topographic maps."
 
 #. js-lingui-id: ovXmYn
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -1191,6 +1191,11 @@ msgstr "Sort markers, including by color, icon, or distance."
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Sort tracks, including by distance from the map center."
 msgstr "Sort tracks, including by distance from the map center."
+
+#. js-lingui-id: OEGf7O
+#: src/presentation/shell/AboutDialog.tsx
+msgid "Soviet-era topographic map mosaic"
+msgstr "Soviet-era topographic map mosaic"
 
 #. js-lingui-id: og87nv
 #: src/presentation/shell/formatPlaceSearchCategory.ts

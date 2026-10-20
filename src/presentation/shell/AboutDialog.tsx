@@ -265,6 +265,17 @@ export function AboutDialog({
         title: mapProviders.naprOrthophoto.label,
       });
     }
+
+    const sovietTopographicTileUrl =
+      mapProviders.sovietTopographicMap.sources.nationwide25k.tileUrls[0];
+    if (sovietTopographicTileUrl !== undefined) {
+      dataEntries.push({
+        description: t`Soviet-era topographic map mosaic`,
+        details: mapProviders.sovietTopographicMap.attribution.replace(/<[^>]*>/gu, ''),
+        href: originFor(sovietTopographicTileUrl),
+        title: mapProviders.sovietTopographicMap.label,
+      });
+    }
   }
   dataEntries.push({
     description: t`Weather forecast data`,

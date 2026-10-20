@@ -140,6 +140,36 @@ describe('MapProviderConfiguration', () => {
       attribution:
         'Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>',
     });
+    expect(configuration.sovietTopographicMap).toEqual({
+      id: 'soviet-topographic',
+      label: 'Soviet topographic maps',
+      sources: {
+        nationwide25k: {
+          tileUrls: [
+            'https://mp.napr.gov.ge/TOPO_25k_1953-2004/wmts/TOPO_25000_1953-2004/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
+          ],
+          tileSize: 256,
+          minZoom: 0,
+          maxZoom: 16,
+          bounds: [
+            39.97466826053387, 40.82104762068601, 46.92637978480328, 43.802903144991,
+          ],
+        },
+        detailed10k: {
+          tileUrls: [
+            'https://mp.napr.gov.ge/TOPO_10k_1952_2007/wmts/TOPO_10000_1952_2007/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
+          ],
+          tileSize: 256,
+          minZoom: 0,
+          maxZoom: 17,
+          bounds: [
+            41.59260724154067, 40.94360901669176, 46.86812724513158, 42.46084232353987,
+          ],
+        },
+      },
+      attribution:
+        'Topographic maps: <a href="https://nsdi.gov.ge/en/geoportal?layers=1%3A112%2C2%3A112%2C3%3A112" target="_blank">National Agency of Public Registry (NAPR) / NSDI, Soviet-era scans 1:10,000 and 1:25,000</a>',
+    });
     expect(summarizeMapProviderConfiguration(configuration)).toEqual({
       schemaVersion: 2,
       vectorId: 'openfreemap-openmaptiles',
@@ -170,6 +200,8 @@ describe('MapProviderConfiguration', () => {
       esriSatelliteBasemapOrigins: ['https://server.arcgisonline.com'],
       naprOrthophotoId: 'napr-orthophoto',
       naprOrthophotoOrigins: ['https://nt0.napr.gov.ge', 'https://mp.napr.gov.ge'],
+      sovietTopographicMapId: 'soviet-topographic',
+      sovietTopographicMapOrigins: ['https://mp.napr.gov.ge'],
     });
   });
 
@@ -200,6 +232,18 @@ describe('MapProviderConfiguration', () => {
     expect(configuration.naprOrthophoto.sources.kutaisi2020.maxZoom).toBe(20);
   });
 
+  it('defaults Soviet topographic maps for existing schema-v2 external configuration', () => {
+    const input = structuredClone(
+      defaultMapProviderConfigurationInput,
+    ) as unknown as Record<string, unknown>;
+    delete input.sovietTopographicMap;
+
+    const configuration = parseMapProviderConfiguration(input, baseUrl);
+
+    expect(configuration.sovietTopographicMap.sources.nationwide25k.maxZoom).toBe(16);
+    expect(configuration.sovietTopographicMap.sources.detailed10k.maxZoom).toBe(17);
+  });
+
   it('resolves fixture endpoints under a GitHub Pages-style base path', () => {
     const input = structuredClone(defaultMapProviderConfigurationInput) as unknown as {
       vector: {
@@ -213,6 +257,9 @@ describe('MapProviderConfiguration', () => {
       bingSatelliteBasemap: { tileUrls: string[] };
       esriSatelliteBasemap: { tileUrls: string[] };
       naprOrthophoto: {
+        sources: Record<string, { tileUrls: string[] }>;
+      };
+      sovietTopographicMap: {
         sources: Record<string, { tileUrls: string[] }>;
       };
     };
@@ -232,6 +279,9 @@ describe('MapProviderConfiguration', () => {
     input.esriSatelliteBasemap.tileUrls = ['./fixtures/esri/{z}/{y}/{x}.jpg'];
     for (const source of Object.values(input.naprOrthophoto.sources)) {
       source.tileUrls = ['./fixtures/napr/{z}/{x}/{y}.png'];
+    }
+    for (const source of Object.values(input.sovietTopographicMap.sources)) {
+      source.tileUrls = ['./fixtures/soviet-topographic/{z}/{x}/{y}.png'];
     }
 
     const configuration = parseMapProviderConfiguration(input, baseUrl);
@@ -268,6 +318,18 @@ describe('MapProviderConfiguration', () => {
       ['https://example.test/georgia-routing-planner/fixtures/napr/{z}/{x}/{y}.png'],
       ['https://example.test/georgia-routing-planner/fixtures/napr/{z}/{x}/{y}.png'],
       ['https://example.test/georgia-routing-planner/fixtures/napr/{z}/{x}/{y}.png'],
+    ]);
+    expect(
+      Object.values(configuration.sovietTopographicMap.sources).map(
+        (source) => source.tileUrls,
+      ),
+    ).toEqual([
+      [
+        'https://example.test/georgia-routing-planner/fixtures/soviet-topographic/{z}/{x}/{y}.png',
+      ],
+      [
+        'https://example.test/georgia-routing-planner/fixtures/soviet-topographic/{z}/{x}/{y}.png',
+      ],
     ]);
   });
 

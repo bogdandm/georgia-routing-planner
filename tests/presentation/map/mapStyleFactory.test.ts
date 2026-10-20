@@ -18,6 +18,8 @@ import {
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sovietTopographicLayerIds,
+  sovietTopographicSourceIds,
 } from '@/presentation/map/mapIds';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import { englishFirstLabelExpression } from '@/presentation/map/mapStyleFactory';
@@ -98,6 +100,30 @@ describe('createHikingMapStyle', () => {
         paint: { 'raster-fade-duration': 0 },
       });
     }
+    const sovietSourceEntries = [
+      ['nationwide25k', sovietTopographicSourceIds.nationwide25k],
+      ['detailed10k', sovietTopographicSourceIds.detailed10k],
+    ] as const;
+    for (const [name, sourceId] of sovietSourceEntries) {
+      const source = configuration.sovietTopographicMap.sources[name];
+      expect(style.sources[sourceId]).toEqual({
+        type: 'raster',
+        tiles: source.tileUrls,
+        tileSize: source.tileSize,
+        minzoom: source.minZoom,
+        maxzoom: source.maxZoom,
+        bounds: source.bounds,
+        attribution: configuration.sovietTopographicMap.attribution,
+      });
+      expect(
+        style.layers.find((layer) => layer.id === sovietTopographicLayerIds[name]),
+      ).toMatchObject({
+        type: 'raster',
+        source: sourceId,
+        layout: { visibility: 'none' },
+        paint: { 'raster-fade-duration': 0 },
+      });
+    }
     expect(layerIds).toEqual([
       mapLayerIds.background,
       satelliteBasemapLayerIds.imagery,
@@ -107,6 +133,8 @@ describe('createHikingMapStyle', () => {
       naprOrthophotoLayerIds.westernGeorgia2020,
       naprOrthophotoLayerIds.kutaisi2020,
       naprOrthophotoLayerIds.racha2025,
+      sovietTopographicLayerIds.nationwide25k,
+      sovietTopographicLayerIds.detailed10k,
       ...Object.values(mapLayerIds).slice(1),
     ]);
     expect(layerIds.indexOf(naprOrthophotoLayerIds.national2016To2017)).toBeLessThan(
@@ -119,6 +147,12 @@ describe('createHikingMapStyle', () => {
       layerIds.indexOf(naprOrthophotoLayerIds.racha2025),
     );
     expect(layerIds.indexOf(naprOrthophotoLayerIds.racha2025)).toBeLessThan(
+      layerIds.indexOf(mapLayerIds.landcover),
+    );
+    expect(layerIds.indexOf(sovietTopographicLayerIds.nationwide25k)).toBeLessThan(
+      layerIds.indexOf(sovietTopographicLayerIds.detailed10k),
+    );
+    expect(layerIds.indexOf(sovietTopographicLayerIds.detailed10k)).toBeLessThan(
       layerIds.indexOf(mapLayerIds.landcover),
     );
     expect(layerIds.indexOf(mapInsertionPoints.satelliteBeforeLayerId)).toBeLessThan(

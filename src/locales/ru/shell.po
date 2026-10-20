@@ -154,10 +154,10 @@ msgstr "Площади"
 msgid "Back"
 msgstr "Назад"
 
-#. js-lingui-id: LG4DxE
+#. js-lingui-id: BR9WHy
 #: src/presentation/shell/OnboardingTour.tsx
-msgid "Base map: vector map or satellite images from Google, Bing, Esri, or NAPR."
-msgstr "Вид карты: векторная карта или спутниковые снимки Google, Bing, Esri или NAPR."
+msgid "Base map: vector, satellite, orthophoto, or Soviet topographic maps."
+msgstr "Вид карты: векторная карта, спутниковые снимки, ортофотоплан или советские топографические карты."
 
 #. js-lingui-id: ovXmYn
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -1191,6 +1191,11 @@ msgstr "Сортировка меток, в том числе по цвету, �
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Sort tracks, including by distance from the map center."
 msgstr "Сортировка треков, в том числе по расстоянию от центра карты."
+
+#. js-lingui-id: OEGf7O
+#: src/presentation/shell/AboutDialog.tsx
+msgid "Soviet-era topographic map mosaic"
+msgstr "Мозаика советских топографических карт"
 
 #. js-lingui-id: og87nv
 #: src/presentation/shell/formatPlaceSearchCategory.ts

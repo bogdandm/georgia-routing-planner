@@ -176,14 +176,14 @@ instead of scattering MapLibre identifiers. `mapVisualPalette.ts` is the single 
 semantic map colors and vector/satellite contrast paints.
 
 `MapLibreLayerController` attaches to the same native map through the facade. It owns
-the basemap preset (`vector-osm`, Google, Bing, Esri, NAPR, or Sentinel-2), Sentinel
-scene and Mosaic rasters, DEM relief, its loading state, and generated contours, the
-Open-Meteo weather layers and `om://` protocol, track, route-plan, and marker overlays,
-and allowlisted logical visibility commands. It validates and persists layer preferences
-and projects its state into `mapLayerStore`. `ContourTileGenerator` registers the
-contour protocol and adapts the terrain backend to `maplibre-contour`;
-`SatelliteCogTileProvider` registers the `georgia-satellite-cog` protocol. Runtime
-behavior is described in [runtime-flows.md](runtime-flows.md).
+the basemap preset (Vector OSM; Google, Bing, Esri, NAPR orthophoto, Soviet topographic,
+or Sentinel-2), Sentinel scene and Mosaic rasters, DEM relief, its loading state,
+generated contours, Open-Meteo weather layers and the `om://` protocol, track,
+route-plan, and marker overlays, and allowlisted logical visibility commands. It
+validates and persists layer preferences and projects its state into `mapLayerStore`.
+`ContourTileGenerator` registers the contour protocol and adapts the terrain backend to
+`maplibre-contour`; `SatelliteCogTileProvider` registers the `georgia-satellite-cog`
+protocol. Runtime behavior is described in [runtime-flows.md](runtime-flows.md).
 
 `BrowserStorageUsageReader` implements `StorageUsageReader` for Settings; missing
 browser capabilities produce unavailable values rather than failing the dialog.

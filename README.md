@@ -17,8 +17,8 @@ _This project was built 100% with LLMs._
 ## Features
 
 - Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
-- Switch to Google, Bing, Esri, or Georgian NAPR aerial imagery, or apply a recent
-  Sentinel-2 satellite scene.
+- Switch to Google, Bing, Esri, Georgian NAPR aerial imagery, or official Soviet-era
+  topographic scans, or apply a recent Sentinel-2 satellite scene.
 - Search for places or coordinates. Right-click or tap any map point to copy it, share
   it, place a marker, search satellite imagery, or open its weather.
 - Get a seven-day forecast for any point, and view clouds, precipitation, and wind on a
@@ -81,11 +81,12 @@ The map combines hiking-focused OpenStreetMap data with relief shading, elevatio
 contours, and optional 3D terrain. Search moves the map to a place or coordinate, and
 Layers controls map detail, terrain overlays, imagery, weather, and track visibility.
 
-You can use one aerial imagery basemap at a time: Google, Bing, Esri, or the Georgian
-NAPR orthophoto. The Satellite workspace finds recent Sentinel-2 scenes and shows each
-scene's acquisition time, cloud cover, and coverage before you apply it. Mosaic mode
-combines several recent scenes to cover the visible area. Imagery stays aligned with the
-terrain in both 2D and 3D.
+You can use one raster basemap at a time: Google, Bing, Esri, the Georgian NAPR
+orthophoto, or the NAPR/NSDI Soviet topographic mosaic (nationwide 1:25,000 with
+1:10,000 detail where available). The Satellite workspace finds recent Sentinel-2 scenes
+and shows each scene's acquisition time, cloud cover, and coverage before you apply it.
+Mosaic mode combines several recent scenes to cover the visible area. Imagery stays
+aligned with the terrain in both 2D and 3D.
 
 ## Weather
 

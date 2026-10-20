@@ -472,10 +472,11 @@ describe('AppDatabase', () => {
     });
     const preferences = {
       visibility: {
-        'google-satellite': true,
+        'google-satellite': false,
         'bing-satellite': false,
         'esri-satellite': false,
         'napr-orthophoto': false,
+        'soviet-topographic': true,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,

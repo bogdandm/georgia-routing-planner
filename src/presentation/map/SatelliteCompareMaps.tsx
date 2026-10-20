@@ -1,6 +1,8 @@
 import { useLingui } from '@lingui/react/macro';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
-import { Alert, Box, ButtonBase, Popover, Typography } from '@mui/material';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import { Alert, Box, ButtonBase, Popover, Tooltip, Typography } from '@mui/material';
 import lookupTimeZone from '@photostructure/tz-lookup';
 import {
   getMaxParallelImageRequests,
@@ -422,6 +424,9 @@ function SatelliteComparePane({
           }}
           mapStyle={mapStyle}
           maxPitch={0}
+          // A crosshair over every pane, so the grab hand marks only the draggable dates.
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS cursor token.
+          cursor="crosshair"
           attributionControl={false}
           boxZoom={false}
           dragRotate={false}
@@ -490,45 +495,107 @@ function SatelliteComparePane({
           />
         </svg>
       </Box>
-      <ButtonBase
-        aria-label={date === null ? t`Pick image date` : t`Change image date, ${date}`}
-        aria-haspopup="dialog"
+      {/* The whole chip drags; the dotted handle and the hover outline show that. */}
+      <Box
         draggable={label !== null}
         onDragStart={(event) => {
           event.dataTransfer.setData(slotDragType, String(index));
           event.dataTransfer.effectAllowed = 'move';
-        }}
-        onClick={(event) => {
-          openDatePicker(event.currentTarget);
+          event.dataTransfer.setDragImage(event.currentTarget, 16, 16);
         }}
         sx={{
           position: 'absolute',
           top: 8,
           left: 8,
           zIndex: 1,
-          px: 1,
-          py: 0.5,
-          display: 'block',
-          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'stretch',
+          overflow: 'hidden',
           borderRadius: 1,
           bgcolor: 'rgb(0 0 0 / 64%)',
           color: 'common.white',
+          // The grab hand appears only here; the maps themselves show a crosshair.
           cursor: label === null ? 'pointer' : 'grab',
-          '&:hover, &.Mui-focusVisible': { bgcolor: 'rgb(0 0 0 / 80%)' },
+          '&:active': { cursor: label === null ? 'pointer' : 'grabbing' },
+          transition: (theme) =>
+            theme.transitions.create(['background-color', 'box-shadow'], {
+              duration: theme.transitions.duration.shortest,
+            }),
+          '&:hover, &:focus-within': {
+            bgcolor: 'rgb(0 0 0 / 82%)',
+            boxShadow: '0 0 0 1px rgb(255 255 255 / 55%)',
+          },
+          '&:hover .compare-drag-handle': { opacity: 1 },
         }}
       >
-        {label === null ? (
-          <Typography
-            variant="body2"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, lineHeight: 1.3 }}
-          >
-            <CalendarMonthOutlinedIcon sx={{ fontSize: 18 }} />
-            {t`Pick image date`}
-          </Typography>
-        ) : (
-          <SceneLabelText {...label} />
+        {label === null ? null : (
+          <Tooltip title={t`Drag onto another map to swap`} placement="bottom-start">
+            <Box
+              className="compare-drag-handle"
+              aria-hidden
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                pl: 0.25,
+                pr: 0,
+                opacity: 0.7,
+                cursor: 'inherit',
+                '&:hover': { bgcolor: 'rgb(255 255 255 / 12%)' },
+              }}
+            >
+              <DragIndicatorIcon fontSize="small" />
+            </Box>
+          </Tooltip>
         )}
-      </ButtonBase>
+        <ButtonBase
+          aria-label={
+            date === null ? t`Pick image date` : t`Change image date, ${date}`
+          }
+          aria-haspopup="dialog"
+          onClick={(event) => {
+            openDatePicker(event.currentTarget);
+          }}
+          sx={{
+            pl: 1,
+            pr: 0.5,
+            py: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            textAlign: 'left',
+            cursor: 'inherit',
+            '&:hover, &.Mui-focusVisible': { bgcolor: 'rgb(255 255 255 / 10%)' },
+          }}
+        >
+          <Box>
+            {label === null ? (
+              <Typography
+                variant="body2"
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.75,
+                  lineHeight: 1.3,
+                }}
+              >
+                <CalendarMonthOutlinedIcon sx={{ fontSize: 18 }} />
+                {t`Pick image date`}
+              </Typography>
+            ) : (
+              <SceneLabelText {...label} />
+            )}
+          </Box>
+          {/* Shown like a select so the label reads as something that opens a menu. */}
+          <ArrowDropDownIcon
+            aria-hidden
+            sx={{
+              fontSize: 22,
+              opacity: 0.85,
+              transform: datePicker === null ? 'none' : 'rotate(180deg)',
+            }}
+          />
+        </ButtonBase>
+      </Box>
       <Popover
         open={datePicker !== null}
         anchorEl={datePicker?.anchor ?? null}

@@ -154,6 +154,11 @@ msgstr "Поставить метку"
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Текущая погода: {temperature}, осадки {precipitation}"
 
+#. js-lingui-id: SMM_gj
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Drag onto another map to swap"
+msgstr "Перетащите на другую карту, чтобы поменять местами"
+
 #. js-lingui-id: Doe-8p
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Drag to rotate map, click to reset north"

@@ -154,6 +154,11 @@ msgstr "Create marker here"
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
 
+#. js-lingui-id: SMM_gj
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Drag onto another map to swap"
+msgstr "Drag onto another map to swap"
+
 #. js-lingui-id: Doe-8p
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Drag to rotate map, click to reset north"

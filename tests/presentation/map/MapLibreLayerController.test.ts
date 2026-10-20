@@ -2220,6 +2220,72 @@ describe('MapLibreLayerController', () => {
     expect(map.terrainCalls).toHaveLength(2);
   });
 
+  it('reads the current track and terrain overlays for comparison panes', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
+      ],
+    ]);
+    controller.setImportedTrackOpacity(0.4);
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 25,
+        shadeAboveSatellite: false,
+        demTileSize: 256,
+      }),
+    ).toEqual({ status: 'success' });
+    controller.setLayerVisibility('elevation-isolines', false);
+
+    const overlays = controller.createComparisonOverlays();
+
+    expect(overlays.importedTrack).toMatchObject({
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [44, 42],
+            [44.1, 42.1],
+          ],
+        ],
+      },
+      opacity: 0.4,
+      visible: true,
+    });
+    expect(map.sources.get(mapSourceIds.importedTrackEndpoints)).toHaveProperty(
+      'data',
+      overlays.importedTrack.endpoints,
+    );
+    expect(overlays.terrain).toEqual({
+      demSource: expect.objectContaining({
+        type: 'raster-dem',
+        tileSize: 256,
+      }) as unknown,
+      contourSource: expect.objectContaining({
+        tiles: [expect.stringContaining('minor=25&major=200')],
+        minzoom: 11,
+        maxzoom: 12,
+      }) as unknown,
+      contourMinZoom: 11,
+      reliefVisible: true,
+      isolinesVisible: false,
+    });
+    expect(map.sources.get(mapSourceIds.terrainDem)).toMatchObject(
+      overlays.terrain.demSource,
+    );
+
+    controller.setLayerVisibility('imported-tracks', false);
+    expect(controller.createComparisonOverlays().importedTrack.visible).toBe(false);
+  });
+
   it('publishes terrain loading only after sustained DEM loading while relief is in use', () => {
     vi.useFakeTimers();
     const services = createTestServices();

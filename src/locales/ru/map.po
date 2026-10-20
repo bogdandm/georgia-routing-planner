@@ -262,6 +262,11 @@ msgstr "Действия с точкой карты"
 msgid "Map view"
 msgstr "Вид карты"
 
+#. js-lingui-id: wtUfaN
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Map without an image"
+msgstr "Карта без снимка"
+
 #. js-lingui-id: iDuQuY
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Map workspace"
@@ -322,6 +327,11 @@ msgstr "Открыть windy.com"
 #: src/presentation/map/MapViewControls.tsx
 msgid "OSM overlay"
 msgstr "OSM поверх снимков"
+
+#. js-lingui-id: m-QLEF
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Pick image date"
+msgstr "Выбрать дату снимка"
 
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx

@@ -506,7 +506,7 @@ describe('MapWorkspace', () => {
     });
   });
 
-  it('opens the resolvable scenes of a shared comparison chronologically', async () => {
+  it('opens the resolvable scenes of a shared comparison in link order', async () => {
     window.history.replaceState(
       null,
       '',
@@ -540,12 +540,11 @@ describe('MapWorkspace', () => {
     );
 
     await waitFor(() => {
-      expect(satelliteCompareStore.getState().open).toBe(true);
+      expect(satelliteCompareStore.getState().slots).toHaveLength(2);
     });
-    expect(satelliteCompareStore.getState().scenes.map((scene) => scene.id)).toEqual([
-      'earlier',
-      'later',
-    ]);
+    expect(
+      satelliteCompareStore.getState().slots.map((scene) => scene?.id ?? null),
+    ).toEqual(['later', 'earlier']);
     expect(satelliteCompareStore.getState().camera).toEqual({
       center: { longitude: 44.8, latitude: 41.7 },
       zoom: 12,
@@ -581,7 +580,7 @@ describe('MapWorkspace', () => {
         'The shared image comparison could not be opened. The shared map location is still available.',
       ),
     ).toBeVisible();
-    expect(satelliteCompareStore.getState().open).toBe(false);
+    expect(satelliteCompareStore.getState().slots).toEqual([]);
   });
 
   it('switches to a shared satellite basemap after stored layers load on a ready map', async () => {

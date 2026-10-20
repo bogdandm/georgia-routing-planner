@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { StyleSpecification } from 'maplibre-gl';
 import { useEffect, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useStore } from 'zustand';
 
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
@@ -83,7 +84,16 @@ vi.mock('react-map-gl/maplibre', () => ({
       </div>
     );
   },
-  AttributionControl: () => <div data-testid="compare-attribution" />,
+  AttributionControl: ({
+    customAttribution,
+  }: {
+    readonly customAttribution?: readonly string[];
+  }) => (
+    <div
+      data-testid="compare-attribution"
+      data-attributions={customAttribution?.join(' | ') ?? ''}
+    />
+  ),
 }));
 
 function scene(id: string, acquiredAt: string): SatelliteScene {
@@ -137,58 +147,93 @@ beforeEach(() => {
   resetSatelliteCompareStore();
 });
 
-function renderGrid(services: RuntimeServices, count: number) {
+function renderGrid(
+  services: RuntimeServices,
+  slots: readonly (SatelliteScene | null)[],
+  onDirectFallback: () => void = () => undefined,
+) {
   return (
     <RuntimeServicesProvider services={services}>
       <SatelliteCompareMaps
-        scenes={scenes.slice(0, count)}
+        slots={slots}
         initialCamera={camera}
         onCameraSettled={() => undefined}
+        onDirectFallback={onDirectFallback}
       />
     </RuntimeServicesProvider>
   );
 }
 
-describe('SatelliteCompareMaps', () => {
-  it('labels each pane with its local acquisition date, time, and cloud cover', async () => {
-    renderWithI18n(renderGrid(createTestServices(), 3));
+/** The grid as the shell shows it: driven by the comparison store. */
+function StoreGrid() {
+  const slots = useStore(satelliteCompareStore, (state) => state.slots);
+  return (
+    <SatelliteCompareMaps
+      slots={slots}
+      initialCamera={camera}
+      onCameraSettled={() => undefined}
+      onDirectFallback={() => undefined}
+    />
+  );
+}
 
-    const panes = await screen.findAllByRole('region', {
-      name: /^Sentinel-2 image from/,
-    });
+const [scene2019, scene2021, scene2023] = scenes as [
+  SatelliteScene,
+  SatelliteScene,
+  SatelliteScene,
+  SatelliteScene,
+];
+
+describe('SatelliteCompareMaps', () => {
+  it('labels scene panes with their local date, time, and cloud, and plain panes as such', async () => {
+    renderWithI18n(
+      renderGrid(createTestServices(), [scene2019, scene2021, scene2023, null]),
+    );
+
+    const panes = await screen.findAllByRole('region');
     expect(panes.map((pane) => pane.getAttribute('aria-label'))).toEqual([
       'Sentinel-2 image from Aug 14, 2019',
       'Sentinel-2 image from Aug 9, 2021',
       'Sentinel-2 image from Aug 4, 2023',
+      'Map without an image',
     ]);
-    const [first] = panes;
-    if (first === undefined) throw new Error('Missing first pane.');
+    const [first, , , plain] = panes;
+    if (first === undefined || plain === undefined) throw new Error('Missing panes.');
     expect(within(first).getByText('2019')).toBeInTheDocument();
     expect(within(first).getByText(/Aug 14/)).toBeInTheDocument();
     expect(within(first).getByText('11:52 GMT+4 · 4% cloud')).toBeInTheDocument();
-    expect(screen.getAllByTestId('compare-attribution')).toHaveLength(1);
     expect(
-      within(panes[2] ?? first).getByTestId('compare-attribution'),
-    ).toBeInTheDocument();
+      within(plain).getByRole('button', { name: 'Pick image date' }),
+    ).toBeVisible();
+    expect(screen.getAllByTestId('compare-attribution')).toHaveLength(1);
+    const attribution = within(plain).getByTestId('compare-attribution');
+    // The plain last pane also credits the Sentinel imagery shown by the other panes.
+    expect(attribution.dataset.attributions).toMatch(/Sentinel/u);
   });
 
-  it('adds and removes panes without recreating the other maps', async () => {
+  it('restyles position-keyed panes instead of recreating their maps', async () => {
     const services = createTestServices();
-    const view = renderWithI18n(renderGrid(services, 2));
-    await screen.findAllByTestId('compare-map');
-    expect(nativeMaps.created).toBe(2);
+    const view = renderWithI18n(renderGrid(services, [scene2019, scene2021]));
+    const [left] = await screen.findAllByTestId('compare-map');
+    const leftTiles = left?.dataset.sentinelTiles;
 
-    view.rerender(renderGrid(services, 4));
+    view.rerender(renderGrid(services, [scene2021, scene2019]));
+    expect(screen.getAllByTestId('compare-map')[0]?.dataset.sentinelTiles).not.toBe(
+      leftTiles,
+    );
+    view.rerender(renderGrid(services, [scene2021, scene2019, null, null]));
+
     expect(await screen.findAllByTestId('compare-map')).toHaveLength(4);
-    view.rerender(renderGrid(services, 3));
-
-    expect(screen.getAllByTestId('compare-map')).toHaveLength(3);
-    expect(nativeMaps).toEqual({ created: 4, removed: 1 });
+    expect(nativeMaps).toEqual({ created: 4, removed: 0 });
   });
 
-  it('moves only a throttled pane to direct rendering in automatic mode', async () => {
+  it('keeps a throttled scene on direct rendering after it moves to another pane', async () => {
     const user = userEvent.setup();
-    renderWithI18n(renderGrid(createTestServices(), 2));
+    const services = createTestServices();
+    const onDirectFallback = vi.fn();
+    const view = renderWithI18n(
+      renderGrid(services, [scene2019, scene2021], onDirectFallback),
+    );
     const [first, second] = await screen.findAllByTestId('compare-map');
     if (first === undefined || second === undefined) throw new Error('Missing panes.');
     expect(first.dataset.sentinelTiles).not.toMatch(/^test-satellite-cog:/);
@@ -197,34 +242,52 @@ describe('SatelliteCompareMaps', () => {
 
     expect(second.dataset.sentinelTiles).toMatch(/^test-satellite-cog:\/\/tiles\//);
     expect(first.dataset.sentinelTiles).not.toMatch(/^test-satellite-cog:/);
+    expect(onDirectFallback).toHaveBeenCalledOnce();
+
+    view.rerender(renderGrid(services, [scene2021, scene2019], onDirectFallback));
+
+    const [swappedFirst, swappedSecond] = screen.getAllByTestId('compare-map');
+    expect(swappedFirst?.dataset.sentinelTiles).toMatch(
+      /^test-satellite-cog:\/\/tiles\//,
+    );
+    expect(swappedSecond?.dataset.sentinelTiles).not.toMatch(/^test-satellite-cog:/);
   });
 
-  it('hides natural features in every pane while the main map shows them', async () => {
-    renderWithI18n(renderGrid(createTestServices(), 2));
+  it('hides natural features over imagery but keeps them on plain maps', async () => {
+    renderWithI18n(
+      renderGrid(createTestServices(), [scene2019, scene2021, null, null]),
+    );
 
     const panes = await screen.findAllByTestId('compare-map');
     expect(panes.map((pane) => pane.dataset.landcoverVisibility)).toEqual([
       'none',
       'none',
+      'visible',
+      'visible',
+    ]);
+    expect(panes.map((pane) => pane.dataset.sentinelTiles !== '')).toEqual([
+      true,
+      true,
+      false,
+      false,
     ]);
   });
 
-  it('swaps a pane to the best-coverage scene of a day picked in its calendar', async () => {
+  it('shows the best-coverage scene of a day picked in a pane calendar at that position', async () => {
     const user = userEvent.setup();
-    const [first, second] = scenes;
-    if (first === undefined || second === undefined) throw new Error('Missing scenes.');
     const replacement = scene('2019-later', '2019-08-29T07:52:00.000Z');
-    openSharedComparison([first, second], camera);
+    openSharedComparison([scene2019, scene2021], camera);
     renderWithI18n(
-      renderGrid(
-        createTestServices({
+      <RuntimeServicesProvider
+        services={createTestServices({
           satelliteCatalogGateway: catalogGatewayReturning({
             totalMatched: 2,
-            scenes: [first, replacement],
+            scenes: [scene2019, replacement],
           }),
-        }),
-        2,
-      ),
+        })}
+      >
+        <StoreGrid />
+      </RuntimeServicesProvider>,
     );
 
     await user.click(
@@ -238,8 +301,11 @@ describe('SatelliteCompareMaps', () => {
     );
 
     expect(
-      satelliteCompareStore.getState().scenes.map((candidate) => candidate.id),
+      satelliteCompareStore.getState().slots.map((candidate) => candidate?.id ?? null),
     ).toEqual(['2019-later', '2021']);
-    expect(screen.queryByText('Change image date')).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('region', { name: 'Sentinel-2 image from Aug 29, 2019' }),
+    ).toBeInTheDocument();
+    expect(nativeMaps.created).toBe(2);
   });
 });

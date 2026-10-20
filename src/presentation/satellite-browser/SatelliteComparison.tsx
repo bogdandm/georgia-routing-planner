@@ -12,6 +12,7 @@ import {
   IconButton,
   Snackbar,
   Stack,
+  ToggleButton,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -27,6 +28,8 @@ import {
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import type { SatelliteSearchResult } from '@/domain/satellite/SatelliteSearchResult';
 import { createComparisonShareUrl } from '@/presentation/map/mapShareUrl';
+import type { SatelliteCompareCamera } from '@/presentation/map/SatelliteCompareMaps';
+import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
 import {
@@ -37,20 +40,51 @@ import {
 } from '@/presentation/satellite-browser/satelliteCalendarSearch';
 import {
   clearComparedScenes,
+  clearComparisonSlot,
+  clearComparisonSlots,
   closeComparison,
   maximumComparedScenes,
   minimumComparedScenes,
   openComparison,
-  removeComparedScene,
-  replaceComparedScene,
+  openComparisonGrid,
   satelliteCompareStore,
+  setComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 
 /** Zoom used when the main map has no camera yet, roughly one Sentinel tile. */
 const fallbackComparisonZoom = 10;
 
+/** The main map's camera, else the first tray scene, else the Georgia overview. */
+function startingComparisonCamera(
+  camera: MapCamera | undefined,
+  firstScene: SatelliteScene | undefined,
+): SatelliteCompareCamera {
+  if (camera !== undefined) {
+    return {
+      center: { longitude: camera.longitude, latitude: camera.latitude },
+      zoom: camera.zoom,
+    };
+  }
+  if (firstScene !== undefined) {
+    const [west, south, east, north] = satelliteSceneBounds(firstScene);
+    return {
+      center: { longitude: (west + east) / 2, latitude: (south + north) / 2 },
+      zoom: fallbackComparisonZoom,
+    };
+  }
+  return {
+    center: {
+      longitude: defaultGeorgiaCamera.longitude,
+      latitude: defaultGeorgiaCamera.latitude,
+    },
+    zoom: defaultGeorgiaCamera.zoom,
+  };
+}
+
 interface ComparedSceneDatePickerProps {
-  readonly scene: SatelliteScene;
+  readonly slotIndex: number;
+  /** The pane's scene, or null for a plain map whose date is still to be picked. */
+  readonly scene: SatelliteScene | null;
   /** The pane's visible area: it anchors the search and weights day coverage. */
   readonly viewport: SatelliteSearchViewport;
   readonly onClose: () => void;
@@ -64,9 +98,11 @@ interface MonthSearch {
 
 /**
  * The Satellite acquisition calendar for one comparison pane. It opens on the scene's
- * month; a day swaps the pane to that day's best-coverage scene, as in the search.
+ * month, or the current one; a day shows that day's best-coverage scene in the pane, as
+ * in the search.
  */
 export function ComparedSceneDatePicker({
+  slotIndex,
   scene,
   viewport,
   onClose,
@@ -75,7 +111,7 @@ export function ComparedSceneDatePicker({
   const { clock, database, searchSatelliteScenes } = useRuntimeServices();
   const [today] = useState(() => clock.now());
   const latestMonth = toDateInputValue(today).slice(0, 7);
-  const [month, setMonth] = useState(scene.acquiredAt.slice(0, 7));
+  const [month, setMonth] = useState(scene?.acquiredAt.slice(0, 7) ?? latestMonth);
   const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(50);
   const [search, setSearch] = useState<MonthSearch | null>(null);
   const [alreadyCompared, setAlreadyCompared] = useState(false);
@@ -130,12 +166,11 @@ export function ComparedSceneDatePicker({
         ? undefined
         : bestCoverageMatchOn(result, date);
     if (match === undefined) return;
-    const currentKey = satelliteSceneKey(scene);
-    if (satelliteSceneKey(match.scene) === currentKey) {
+    if (scene !== null && satelliteSceneKey(match.scene) === satelliteSceneKey(scene)) {
       onClose();
       return;
     }
-    if (!replaceComparedScene(currentKey, match.scene)) {
+    if (!setComparisonSlot(slotIndex, match.scene)) {
       setAlreadyCompared(true);
       return;
     }
@@ -145,7 +180,11 @@ export function ComparedSceneDatePicker({
   return (
     <Stack spacing={1.5} sx={{ p: 2, width: 388 }}>
       <Typography component="h3" variant="subtitle2">
-        <Trans>Change image date</Trans>
+        {scene === null ? (
+          <Trans>Pick image date</Trans>
+        ) : (
+          <Trans>Change image date</Trans>
+        )}
       </Typography>
       <AcquisitionCalendar
         displayMonth={month}
@@ -188,19 +227,9 @@ export function SatelliteComparisonTray() {
   const count = scenes.length;
   const canCompare = count >= minimumComparedScenes;
   const open = () => {
-    const camera = mapDiagnostics.getSnapshot()?.camera;
-    if (camera !== undefined) {
-      openComparison({
-        center: { longitude: camera.longitude, latitude: camera.latitude },
-        zoom: camera.zoom,
-      });
-      return;
-    }
-    const [west, south, east, north] = satelliteSceneBounds(firstScene);
-    openComparison({
-      center: { longitude: (west + east) / 2, latitude: (south + north) / 2 },
-      zoom: fallbackComparisonZoom,
-    });
+    openComparison(
+      startingComparisonCamera(mapDiagnostics.getSnapshot()?.camera, firstScene),
+    );
   };
 
   return (
@@ -238,6 +267,37 @@ export function SatelliteComparisonTray() {
   );
 }
 
+/**
+ * Satellite header shortcut: a 2×2 grid with the tray's scenes first and plain maps
+ * whose dates are picked from each pane's calendar.
+ */
+export function SatelliteComparisonShortcut() {
+  const { t } = useLingui();
+  const { mapDiagnostics } = useRuntimeServices();
+  return (
+    <Tooltip title={t`Compare images from different dates side by side`}>
+      <ToggleButton
+        size="small"
+        value="compare"
+        selected={false}
+        aria-label={t`Open image comparison`}
+        sx={{ gap: 0.75 }}
+        onClick={() => {
+          openComparisonGrid(
+            startingComparisonCamera(
+              mapDiagnostics.getSnapshot()?.camera,
+              satelliteCompareStore.getState().scenes[0],
+            ),
+          );
+        }}
+      >
+        <CompareOutlinedIcon sx={{ fontSize: 20 }} />
+        <Trans>Compare</Trans>
+      </ToggleButton>
+    </Tooltip>
+  );
+}
+
 function sceneTimeZone(scene: SatelliteScene): string {
   const [west, south, east, north] = satelliteSceneBounds(scene);
   return lookupTimeZone((south + north) / 2, (west + east) / 2);
@@ -246,8 +306,15 @@ function sceneTimeZone(scene: SatelliteScene): string {
 /** Sidebar content while the comparison grid replaces the map. */
 export function SatelliteComparisonPanel() {
   const { i18n, t } = useLingui();
-  const scenes = useStore(satelliteCompareStore, (state) => state.scenes);
-  const sceneCount = scenes.length;
+  const slots = useStore(satelliteCompareStore, (state) => state.slots);
+  const directFallback = useStore(
+    satelliteCompareStore,
+    (state) => state.directFallback,
+  );
+  const filledSlots = slots.flatMap((scene, index) =>
+    scene === null ? [] : [{ scene, index }],
+  );
+  const sceneCount = filledSlots.length;
   const camera = useStore(satelliteCompareStore, (state) => state.camera);
   const [copyLinkStatus, setCopyLinkStatus] = useState<'idle' | 'copied' | 'failed'>(
     // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
@@ -288,7 +355,7 @@ export function SatelliteComparisonPanel() {
           window.location.href,
           camera.center,
           camera.zoom,
-          scenes.map(satelliteSceneKey),
+          filledSlots.map(({ scene }) => satelliteSceneKey(scene)),
         ),
       );
       // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
@@ -317,8 +384,19 @@ export function SatelliteComparisonPanel() {
           other: 'Comparing # images',
         })}`}
       </Typography>
+      {directFallback ? (
+        <Alert severity="warning">
+          {t`TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly.`}
+        </Alert>
+      ) : null}
+      <Typography variant="body2" color="text.secondary">
+        <Trans>
+          Click a date on a map to pick another image. Drag a date onto another map to
+          swap their places.
+        </Trans>
+      </Typography>
       <Stack component="ul" spacing={0} sx={{ m: 0, p: 0, listStyle: 'none' }}>
-        {scenes.map((scene) => {
+        {filledSlots.map(({ scene, index }) => {
           const acquiredAt = new Date(scene.acquiredAt);
           const timeZone = sceneTimeZone(scene);
           const day = formats.day(acquiredAt, timeZone);
@@ -329,7 +407,7 @@ export function SatelliteComparisonPanel() {
           return (
             <Stack
               component="li"
-              key={satelliteSceneKey(scene)}
+              key={index}
               direction="row"
               spacing={1}
               sx={{
@@ -351,7 +429,7 @@ export function SatelliteComparisonPanel() {
                 <IconButton
                   aria-label={t`Remove ${day} from comparison`}
                   onClick={() => {
-                    removeComparedScene(satelliteSceneKey(scene));
+                    clearComparisonSlot(index);
                   }}
                 >
                   <CloseIcon fontSize="small" />
@@ -365,12 +443,12 @@ export function SatelliteComparisonPanel() {
         <Button
           variant="outlined"
           startIcon={<ShareOutlinedIcon />}
-          disabled={camera === null}
+          disabled={camera === null || sceneCount < minimumComparedScenes}
           onClick={() => void copyLink()}
         >
           <Trans>Share link</Trans>
         </Button>
-        <Button color="inherit" onClick={clearComparedScenes}>
+        <Button color="inherit" onClick={clearComparisonSlots}>
           <Trans>Clear</Trans>
         </Button>
       </Stack>

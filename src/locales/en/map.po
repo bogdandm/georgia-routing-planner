@@ -262,6 +262,11 @@ msgstr "Map point actions"
 msgid "Map view"
 msgstr "Map view"
 
+#. js-lingui-id: wtUfaN
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Map without an image"
+msgstr "Map without an image"
+
 #. js-lingui-id: iDuQuY
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Map workspace"
@@ -322,6 +327,11 @@ msgstr "Open windy.com"
 #: src/presentation/map/MapViewControls.tsx
 msgid "OSM overlay"
 msgstr "OSM overlay"
+
+#. js-lingui-id: m-QLEF
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Pick image date"
+msgstr "Pick image date"
 
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx

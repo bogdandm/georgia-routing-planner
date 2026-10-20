@@ -91,15 +91,28 @@ import {
 } from '@/presentation/map/mapVisualPalette';
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
 import { createMarkerIconImage } from '@/presentation/markers/markerCatalog';
-import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import {
+  createContourLabelLayer,
+  createContourLineLayer,
+  createReliefShadeLayer,
+  createTerrainContourSource,
+  createTerrainDemSource,
+  type TerrainOverlaySnapshot,
+} from '@/presentation/map/terrainOverlayStyle';
 import {
   createTrackEndpointIcon,
   trackEndpointIconPixelRatio,
-  type TrackEndpointKind,
 } from '@/presentation/map/trackEndpointIcons';
 import {
+  createImportedTrackEndpointCollection,
+  createImportedTrackEndpointLayer,
+  createImportedTrackLineLayer,
+  importedTrackCasingWidth,
+  importedTrackLineWidth,
   satelliteFootprintPaint,
   sentinelRasterPaint,
+  type ImportedTrackEndpoint,
+  type ImportedTrackOverlaySnapshot,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -293,9 +306,6 @@ const canceledDirectSourceErrorWindowMs = 5_000;
 const terrainQueuePublishIntervalMs = 250;
 // Quick pans load a few DEM tiles from cache; only sustained loading reaches the status.
 const terrainDemLoadingIndicatorDelayMs = 300;
-// Contour vector tiles stop at the DEM's z12 and are overzoomed; line widths keep growing
-// to this display zoom so close-up contours stay as legible as before.
-const contourLineFullWidthZoom = 15;
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
@@ -401,6 +411,12 @@ function releaseWeatherMapProtocol(): void {
 export interface ImportedTrackHighlightSegment {
   readonly coordinates: readonly (readonly [number, number])[];
   readonly color: string;
+}
+
+/** Serializable inputs for comparison panes, read once per pane style. */
+export interface SatelliteComparisonOverlays {
+  readonly importedTrack: ImportedTrackOverlaySnapshot;
+  readonly terrain: TerrainOverlaySnapshot;
 }
 
 function copyImportedTrackHighlightSegments(
@@ -572,8 +588,6 @@ export function baseNativeLayerVisibility(
   return nativeVisibility;
 }
 
-const importedTrackCasingWidth = 7;
-const importedTrackLineWidth = 4;
 /** Opacity multiplier for the track outside a focused climb or descent. */
 const importedTrackDimmedOpacityFactor = 0.15;
 /**
@@ -600,11 +614,6 @@ const importedTrackFocusSlots = [
     ],
   },
 ] as const;
-
-interface ImportedTrackEndpoint {
-  readonly kind: TrackEndpointKind;
-  readonly coordinate: readonly [number, number];
-}
 
 type RasterSlot = (typeof rasterSlots)[number];
 interface RasterTileCoordinate {
@@ -2147,6 +2156,33 @@ export class MapLibreLayerController {
     return { ...this.#terrainOverlayPreferences };
   }
 
+  /**
+   * Reads the imported track and the relief and isolines as the main map draws them,
+   * once per comparison pane style. Focus, highlight, and trace overlays stay here.
+   */
+  public createComparisonOverlays(): SatelliteComparisonOverlays {
+    const { visibility, importedTrackOpacity } = mapLayerStore.getState();
+    const preferences = this.#terrainOverlayPreferences;
+    return {
+      importedTrack: {
+        geometry: this.#importedTrackGeometry,
+        endpoints: createImportedTrackEndpointCollection(this.#importedTrackEndpoints),
+        opacity: importedTrackOpacity,
+        visible: visibility['imported-tracks'],
+      },
+      terrain: {
+        demSource: createTerrainDemSource(this.terrain, preferences.demTileSize),
+        contourSource: createTerrainContourSource(
+          this.terrain,
+          this.contourTiles.createTileUrl(preferences.contourIntervalMeters),
+        ),
+        contourMinZoom: this.terrain.overlays.contourMinZoom,
+        reliefVisible: visibility['terrain-relief'],
+        isolinesVisible: visibility['elevation-isolines'],
+      },
+    };
+  }
+
   public setTerrainOverlayPreferences(
     value: TerrainOverlayPreferences,
   ): TerrainOverlayCommandResult {
@@ -3133,23 +3169,7 @@ export class MapLibreLayerController {
       }
       if (map.getLayer(terrainOverlayLayerIds.reliefShade) === undefined) {
         map.addLayer(
-          {
-            id: terrainOverlayLayerIds.reliefShade,
-            type: 'hillshade',
-            source: mapSourceIds.terrainDem,
-            layout: {
-              visibility: mapLayerStore.getState().visibility['terrain-relief']
-                ? 'visible'
-                : 'none',
-            },
-            paint: {
-              ...mapVisualModePaint.vector[terrainOverlayLayerIds.reliefShade],
-              'hillshade-shadow-color': mapVisualPalette.terrain.shadow,
-              'hillshade-highlight-color': mapVisualPalette.terrain.highlight,
-              'hillshade-accent-color': mapVisualPalette.terrain.accent,
-              'hillshade-illumination-anchor': 'map',
-            },
-          },
+          createReliefShadeLayer(mapLayerStore.getState().visibility['terrain-relief']),
           mapInsertionPoints.terrainOverlaysBeforeLayerId,
         );
         this.logger.log({ level: 'info', name: 'map.relief.initialized' });
@@ -3159,13 +3179,10 @@ export class MapLibreLayerController {
       );
       const existingContourSource = map.getSource(mapSourceIds.terrainContours);
       if (existingContourSource === undefined) {
-        map.addSource(mapSourceIds.terrainContours, {
-          type: 'vector',
-          tiles: [contourTileUrl],
-          minzoom: this.terrain.overlays.contourMinZoom,
-          maxzoom: this.terrain.overlays.contourMaxZoom,
-          attribution: this.terrain.attribution,
-        });
+        map.addSource(
+          mapSourceIds.terrainContours,
+          createTerrainContourSource(this.terrain, contourTileUrl),
+        );
         this.#appliedContourTileUrl = contourTileUrl;
       } else if (this.#appliedContourTileUrl !== contourTileUrl) {
         const source = existingContourSource as {
@@ -3262,97 +3279,22 @@ export class MapLibreLayerController {
 
   private ensureContourLayers(map: MapLibreMap): void {
     const minzoom = this.terrain.overlays.contourMinZoom;
+    const visible = mapLayerStore.getState().visibility['elevation-isolines'];
     if (map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined) {
       map.addLayer(
-        {
-          id: terrainOverlayLayerIds.contourMinor,
-          type: 'line',
-          source: mapSourceIds.terrainContours,
-          'source-layer': 'contours',
-          minzoom,
-          filter: ['==', ['get', 'level'], 0],
-          layout: {
-            visibility: mapLayerStore.getState().visibility['elevation-isolines']
-              ? 'visible'
-              : 'none',
-          },
-          paint: {
-            'line-color': mapVisualPalette.terrain.contourMinor,
-            ...mapVisualModePaint.vector[terrainOverlayLayerIds.contourMinor],
-            'line-width': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              minzoom,
-              0.42,
-              contourLineFullWidthZoom,
-              0.72,
-            ],
-          },
-        },
+        createContourLineLayer('minor', minzoom, visible),
         mapInsertionPoints.contoursBeforeLayerId,
       );
     }
     if (map.getLayer(terrainOverlayLayerIds.contourIndex) === undefined) {
       map.addLayer(
-        {
-          id: terrainOverlayLayerIds.contourIndex,
-          type: 'line',
-          source: mapSourceIds.terrainContours,
-          'source-layer': 'contours',
-          minzoom,
-          filter: ['>', ['get', 'level'], 0],
-          layout: {
-            visibility: mapLayerStore.getState().visibility['elevation-isolines']
-              ? 'visible'
-              : 'none',
-          },
-          paint: {
-            'line-color': mapVisualPalette.terrain.contourIndex,
-            ...mapVisualModePaint.vector[terrainOverlayLayerIds.contourIndex],
-            'line-width': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              minzoom,
-              0.72,
-              contourLineFullWidthZoom,
-              1.15,
-            ],
-          },
-        },
+        createContourLineLayer('index', minzoom, visible),
         mapInsertionPoints.contoursBeforeLayerId,
       );
     }
     if (map.getLayer(terrainOverlayLayerIds.contourLabels) === undefined) {
       map.addLayer(
-        {
-          id: terrainOverlayLayerIds.contourLabels,
-          type: 'symbol',
-          source: mapSourceIds.terrainContours,
-          'source-layer': 'contours',
-          minzoom,
-          filter: ['>', ['get', 'level'], 0],
-          layout: {
-            visibility: mapLayerStore.getState().visibility['elevation-isolines']
-              ? 'visible'
-              : 'none',
-            'symbol-placement': 'line',
-            'symbol-spacing': 360,
-            'text-field': [
-              'concat',
-              ['number-format', ['get', 'ele'], { 'max-fraction-digits': 0 }],
-              ' m',
-            ],
-            'text-font': ['Noto Sans Regular'],
-            'text-size': 10,
-          },
-          paint: {
-            'text-color': mapVisualPalette.terrain.contourLabel,
-            ...mapVisualModePaint.vector[terrainOverlayLayerIds.contourLabels],
-            'text-halo-width': 1.2,
-          },
-        },
+        createContourLabelLayer(minzoom, visible),
         mapInsertionPoints.contourLabelsBeforeLayerId,
       );
     }
@@ -3893,50 +3835,23 @@ export class MapLibreLayerController {
             geometry: this.#importedTrackGeometry,
           }),
         ) &&
-        this.syncGeoJsonSource(
-          map,
-          mapSourceIds.importedTrackEndpoints,
-          (): FeatureCollection<Point, { readonly endpoint: TrackEndpointKind }> => ({
-            type: 'FeatureCollection',
-            features: this.#importedTrackEndpoints.map(({ kind, coordinate }) => ({
-              type: 'Feature',
-              properties: { endpoint: kind },
-              geometry: { type: 'Point', coordinates: [...coordinate] },
-            })),
-          }),
+        this.syncGeoJsonSource(map, mapSourceIds.importedTrackEndpoints, () =>
+          createImportedTrackEndpointCollection(this.#importedTrackEndpoints),
         );
       if (!sourcesAreGeoJson) {
         throw new Error('The imported track source cannot update its data.');
       }
       const { visibility, importedTrackOpacity } = mapLayerStore.getState();
-      const layout = {
-        visibility: visibility['imported-tracks'] ? 'visible' : 'none',
-      } as const;
+      const visible = visibility['imported-tracks'];
       if (map.getLayer(importedTrackLayerIds.casing) === undefined) {
-        map.addLayer({
-          id: importedTrackLayerIds.casing,
-          type: 'line',
-          source: mapSourceIds.importedTrack,
-          layout: { ...layout, 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
-            'line-width': importedTrackCasingWidth,
-            'line-opacity': importedTrackOpacity,
-          },
-        });
+        map.addLayer(
+          createImportedTrackLineLayer('casing', visible, importedTrackOpacity),
+        );
       }
       if (map.getLayer(importedTrackLayerIds.line) === undefined) {
-        map.addLayer({
-          id: importedTrackLayerIds.line,
-          type: 'line',
-          source: mapSourceIds.importedTrack,
-          layout: { ...layout, 'line-cap': 'round', 'line-join': 'round' },
-          paint: {
-            'line-color': mapVisualPalette.userGeometry.gpxTrack,
-            'line-width': importedTrackLineWidth,
-            'line-opacity': importedTrackOpacity,
-          },
-        });
+        map.addLayer(
+          createImportedTrackLineLayer('line', visible, importedTrackOpacity),
+        );
       }
       for (const kind of ['start', 'finish'] as const) {
         const imageId = importedTrackEndpointImageIds[kind];
@@ -3947,26 +3862,7 @@ export class MapLibreLayerController {
         }
       }
       if (map.getLayer(importedTrackLayerIds.endpoints) === undefined) {
-        map.addLayer({
-          id: importedTrackLayerIds.endpoints,
-          type: 'symbol',
-          source: mapSourceIds.importedTrackEndpoints,
-          layout: {
-            ...layout,
-            'icon-image': [
-              'match',
-              ['get', 'endpoint'],
-              'start',
-              importedTrackEndpointImageIds.start,
-              importedTrackEndpointImageIds.finish,
-            ],
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true,
-            // Source order, not screen position, decides which coincident icon is on top.
-            'symbol-z-order': 'source',
-          },
-          paint: { 'icon-opacity': importedTrackOpacity },
-        });
+        map.addLayer(createImportedTrackEndpointLayer(visible, importedTrackOpacity));
       }
       this.applyImportedTrackPaint();
       this.ensureImportedTrackLayerOrder(map);

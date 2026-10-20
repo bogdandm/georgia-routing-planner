@@ -49,8 +49,14 @@ import {
 } from '@/presentation/markers/MarkersWorkspace';
 import { SatelliteBrowser } from '@/presentation/satellite-browser/SatelliteBrowser';
 import { SatelliteMosaicBrowser } from '@/presentation/satellite-browser/SatelliteMosaicBrowser';
-import { SatelliteComparisonPanel } from '@/presentation/satellite-browser/SatelliteComparison';
-import { satelliteCompareStore } from '@/presentation/satellite-browser/satelliteCompareStore';
+import {
+  SatelliteComparisonPanel,
+  SatelliteComparisonShortcut,
+} from '@/presentation/satellite-browser/SatelliteComparison';
+import {
+  isComparisonOpen,
+  satelliteCompareStore,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
 import {
   useSatelliteMode,
   useSatelliteMosaic,
@@ -265,7 +271,7 @@ export function WorkspaceSidebar({
   const satelliteMode = useSatelliteMode();
   const { toggleMosaicMode } = useSatelliteMosaic();
   const comparisonActive =
-    useStore(satelliteCompareStore, (state) => state.open) && !fullWidth;
+    useStore(satelliteCompareStore, isComparisonOpen) && !fullWidth;
   const [weatherHeaderPoint, setWeatherHeaderPoint] =
     useState<WeatherHeaderPoint | null>(null);
   const [weatherForecastMenuAnchor, setWeatherForecastMenuAnchor] =
@@ -311,7 +317,8 @@ export function WorkspaceSidebar({
       aria-label={t`${sidebarTitle} tools`}
       sx={{
         position: 'relative',
-        width: fullWidth ? '100%' : { xs: 420, xl: 464 },
+        // While comparing, the shell narrows the column; the sidebar fills it.
+        width: fullWidth || comparisonActive ? '100%' : { xs: 420, xl: 464 },
         height: '100%',
         flexGrow: fullWidth ? 1 : 0,
         flexShrink: 0,
@@ -487,6 +494,9 @@ export function WorkspaceSidebar({
               )}
             </Menu>
           </>
+        ) : null}
+        {activeTab === 'satellite' && !comparisonActive && !fullWidth ? (
+          <SatelliteComparisonShortcut />
         ) : null}
         {activeTab === 'satellite' && !comparisonActive ? (
           <Tooltip

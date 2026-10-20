@@ -2,7 +2,9 @@ import type { UserEvent } from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import type { SatelliteCompareMapsProps } from '@/presentation/map/SatelliteCompareMaps';
+import { reportComparisonDirectFallback } from '@/presentation/satellite-browser/satelliteCompareStore';
 import {
+  act,
   describe,
   expect,
   it,
@@ -22,12 +24,12 @@ import {
   type SatelliteScene,
 } from '@test/helpers/workspaceShellTestSupport';
 
-// The grid needs WebGL; the shell only decides when and with which scenes it shows.
+// The grid needs WebGL; the shell only decides when and with which slots it shows.
 vi.mock('@/presentation/map/SatelliteCompareMaps', () => ({
-  SatelliteCompareMaps: ({ scenes }: SatelliteCompareMapsProps) => (
+  SatelliteCompareMaps: ({ slots }: SatelliteCompareMapsProps) => (
     <ol aria-label="Comparison grid">
-      {scenes.map((scene) => (
-        <li key={scene.id}>{scene.id}</li>
+      {slots.map((scene, index) => (
+        <li key={index}>{scene?.id ?? 'empty'}</li>
       ))}
     </ol>
   ),
@@ -114,10 +116,27 @@ describe('WorkspaceShell satellite comparison', () => {
     ).toEqual(['early-scene', 'late-scene']);
     expect(screen.getByRole('heading', { name: 'Comparing 2 images' })).toBeVisible();
     expect(screen.getByLabelText('Fake map')).not.toBeVisible();
+    expect(screen.getByRole('tab', { name: 'Tracks', hidden: true })).not.toBeVisible();
     expect(
       screen.queryByRole('complementary', { name: 'Sentinel imagery results' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mosaic' })).not.toBeInTheDocument();
+  });
+
+  it('opens a 2×2 grid from the Satellite header with the tray scenes first', async () => {
+    const user = await showResults();
+    await addToComparison(user, 'Jul 20, 2026');
+
+    await user.click(screen.getByRole('button', { name: 'Open image comparison' }));
+
+    const grid = screen.getByRole('list', { name: 'Comparison grid' });
+    expect(
+      within(grid)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['late-scene', 'empty', 'empty', 'empty']);
+    expect(screen.getByRole('heading', { name: 'Comparing 1 image' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Share link' })).toBeDisabled();
   });
 
   it('returns to the results and the compared area when the grid closes', async () => {
@@ -142,7 +161,7 @@ describe('WorkspaceShell satellite comparison', () => {
     });
   });
 
-  it('closes the grid when a removal leaves one scene', async () => {
+  it('turns a removed scene into a plain map and keeps the grid open', async () => {
     const user = await showResults();
     await openGrid(user);
 
@@ -150,10 +169,30 @@ describe('WorkspaceShell satellite comparison', () => {
       screen.getByRole('button', { name: 'Remove Jul 2, 2026 from comparison' }),
     );
 
+    const grid = screen.getByRole('list', { name: 'Comparison grid' });
     expect(
-      screen.queryByRole('list', { name: 'Comparison grid' }),
-    ).not.toBeInTheDocument();
+      within(grid)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['empty', 'late-scene']);
+    expect(screen.getByRole('heading', { name: 'Comparing 1 image' })).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Back to search' }));
     expect(screen.getByText('Comparison: 1 of 4')).toBeVisible();
+  });
+
+  it('warns in the sidebar when a pane falls back from TiTiler', async () => {
+    const user = await showResults();
+    await openGrid(user);
+    expect(screen.queryByText(/TiTiler is unavailable/u)).not.toBeInTheDocument();
+
+    act(() => {
+      reportComparisonDirectFallback();
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly.',
+    );
   });
 
   it('copies a comparison link with the compared scenes in order', async () => {

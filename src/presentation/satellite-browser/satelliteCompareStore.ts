@@ -10,23 +10,39 @@ import type { SatelliteCompareCamera } from '@/presentation/map/SatelliteCompare
 export const minimumComparedScenes = 2;
 export const maximumComparedScenes = 4;
 
+/** A grid position: a scene, or an empty plain map whose date is still to be picked. */
+export type ComparisonSlot = SatelliteScene | null;
+
 /**
- * Transient Sentinel-2 comparison: the scenes picked from result cards, in acquisition
- * order, and whether the comparison grid replaces the main map. `open` implies at least
- * `minimumComparedScenes` scenes. Never persisted; a compare link carries the keys.
+ * Transient Sentinel-2 comparison. Never persisted; a compare link carries the keys.
+ *
+ * `scenes` is the tray filled from result cards while the grid is closed, in acquisition
+ * order. `slots` are the grid positions while it is open: two side by side, or four in
+ * 2×2. Opening copies the tray into the slots; closing copies the filled slots back.
  */
 interface SatelliteCompareState {
   readonly scenes: readonly SatelliteScene[];
-  readonly open: boolean;
+  readonly slots: readonly ComparisonSlot[];
   /** Last settled grid camera; the main map returns to it when the grid closes. */
   readonly camera: SatelliteCompareCamera | null;
+  /** A pane switched from TiTiler to slower browser-rendered imagery. */
+  readonly directFallback: boolean;
 }
 
-const initialState: SatelliteCompareState = { scenes: [], open: false, camera: null };
+const initialState: SatelliteCompareState = {
+  scenes: [],
+  slots: [],
+  camera: null,
+  directFallback: false,
+};
 
 export const satelliteCompareStore = createStore<SatelliteCompareState>()(
   () => initialState,
 );
+
+export function isComparisonOpen(state: SatelliteCompareState): boolean {
+  return state.slots.length > 0;
+}
 
 function chronological(scenes: readonly SatelliteScene[]): readonly SatelliteScene[] {
   return [...scenes].sort(
@@ -34,14 +50,25 @@ function chronological(scenes: readonly SatelliteScene[]): readonly SatelliteSce
   );
 }
 
-export function isComparedScene(
+/** Two scenes sit side by side unless four positions are requested; otherwise 2×2. */
+function gridSlots(
   scenes: readonly SatelliteScene[],
-  sceneKey: string,
-): boolean {
-  return scenes.some((scene) => satelliteSceneKey(scene) === sceneKey);
+  minimumSlots: 2 | 4,
+): readonly ComparisonSlot[] {
+  const size = minimumSlots === 2 && scenes.length <= 2 ? 2 : maximumComparedScenes;
+  return Array.from({ length: size }, (_, index) => scenes[index] ?? null);
 }
 
-/** Adds a scene unless it is already compared or the comparison is full. */
+export function isComparedScene(
+  scenes: readonly ComparisonSlot[],
+  sceneKey: string,
+): boolean {
+  return scenes.some(
+    (scene) => scene !== null && satelliteSceneKey(scene) === sceneKey,
+  );
+}
+
+/** Adds a scene to the tray unless it is already there or the tray is full. */
 export function addComparedScene(scene: SatelliteScene): void {
   const { scenes } = satelliteCompareStore.getState();
   if (
@@ -53,52 +80,97 @@ export function addComparedScene(scene: SatelliteScene): void {
   satelliteCompareStore.setState({ scenes: chronological([...scenes, scene]) });
 }
 
-/** Removes a scene; an open grid closes when fewer than two scenes remain. */
 export function removeComparedScene(sceneKey: string): void {
-  const scenes = satelliteCompareStore
-    .getState()
-    .scenes.filter((scene) => satelliteSceneKey(scene) !== sceneKey);
-  satelliteCompareStore.setState({ scenes });
-  if (scenes.length < minimumComparedScenes) closeComparison();
-}
-
-/**
- * Swaps one compared scene for another date's scene in place. Returns false, leaving
- * the comparison unchanged, when the new scene is already compared.
- */
-export function replaceComparedScene(sceneKey: string, scene: SatelliteScene): boolean {
-  const { scenes } = satelliteCompareStore.getState();
-  if (isComparedScene(scenes, satelliteSceneKey(scene))) return false;
   satelliteCompareStore.setState({
-    scenes: chronological(
-      scenes.map((candidate) =>
-        satelliteSceneKey(candidate) === sceneKey ? scene : candidate,
-      ),
-    ),
+    scenes: satelliteCompareStore
+      .getState()
+      .scenes.filter((scene) => satelliteSceneKey(scene) !== sceneKey),
   });
-  return true;
 }
 
 export function clearComparedScenes(): void {
-  closeComparison();
   satelliteCompareStore.setState({ scenes: [] });
 }
 
+/** Opens the tray's two to four scenes; two sit side by side. */
 export function openComparison(camera: SatelliteCompareCamera): void {
-  if (satelliteCompareStore.getState().scenes.length < minimumComparedScenes) return;
-  satelliteCompareStore.setState({ open: true, camera });
+  const { scenes } = satelliteCompareStore.getState();
+  if (scenes.length < minimumComparedScenes) return;
+  satelliteCompareStore.setState({
+    slots: gridSlots(scenes, 2),
+    camera,
+    directFallback: false,
+  });
 }
 
-/** Opens a compare link: its scenes replace the current comparison. */
+/** Opens a 2×2 grid with the tray's scenes first and plain maps in the other cells. */
+export function openComparisonGrid(camera: SatelliteCompareCamera): void {
+  satelliteCompareStore.setState({
+    slots: gridSlots(satelliteCompareStore.getState().scenes, 4),
+    camera,
+    directFallback: false,
+  });
+}
+
+/** Opens a compare link: its scenes take the positions in link order. */
 export function openSharedComparison(
   scenes: readonly SatelliteScene[],
   camera: SatelliteCompareCamera,
 ): void {
   if (scenes.length < minimumComparedScenes) return;
   satelliteCompareStore.setState({
-    scenes: chronological(scenes.slice(0, maximumComparedScenes)),
-    open: true,
+    slots: gridSlots(scenes.slice(0, maximumComparedScenes), 2),
     camera,
+    directFallback: false,
+  });
+}
+
+/**
+ * Shows a scene at a grid position. Returns false, leaving the grid unchanged, when the
+ * scene is already shown at another position.
+ */
+export function setComparisonSlot(index: number, scene: SatelliteScene): boolean {
+  const { slots } = satelliteCompareStore.getState();
+  const sceneKey = satelliteSceneKey(scene);
+  if (
+    slots.some(
+      (slot, slotIndex) =>
+        slotIndex !== index && slot !== null && satelliteSceneKey(slot) === sceneKey,
+    )
+  ) {
+    return false;
+  }
+  satelliteCompareStore.setState({
+    slots: slots.map((slot, slotIndex) => (slotIndex === index ? scene : slot)),
+  });
+  return true;
+}
+
+/** Turns a grid position back into a plain map. */
+export function clearComparisonSlot(index: number): void {
+  satelliteCompareStore.setState({
+    slots: satelliteCompareStore
+      .getState()
+      .slots.map((slot, slotIndex) => (slotIndex === index ? null : slot)),
+  });
+}
+
+export function clearComparisonSlots(): void {
+  satelliteCompareStore.setState({
+    slots: satelliteCompareStore.getState().slots.map(() => null),
+  });
+}
+
+/** Exchanges two grid positions, for dragging a date label onto another pane. */
+export function swapComparisonSlots(from: number, to: number): void {
+  const { slots } = satelliteCompareStore.getState();
+  const fromSlot = slots[from];
+  const toSlot = slots[to];
+  if (from === to || fromSlot === undefined || toSlot === undefined) return;
+  satelliteCompareStore.setState({
+    slots: slots.map((slot, index) =>
+      index === from ? toSlot : index === to ? fromSlot : slot,
+    ),
   });
 }
 
@@ -106,11 +178,24 @@ export function setComparisonCamera(camera: SatelliteCompareCamera): void {
   satelliteCompareStore.setState({ camera });
 }
 
-/** Closes the grid and moves the main map to the area that was being compared. */
+export function reportComparisonDirectFallback(): void {
+  if (!satelliteCompareStore.getState().directFallback) {
+    satelliteCompareStore.setState({ directFallback: true });
+  }
+}
+
+/**
+ * Closes the grid, keeps its scenes in the tray, and moves the main map to the area that
+ * was being compared.
+ */
 export function closeComparison(): void {
-  const { open, camera } = satelliteCompareStore.getState();
-  if (!open) return;
-  satelliteCompareStore.setState({ open: false });
+  const { slots, camera } = satelliteCompareStore.getState();
+  if (slots.length === 0) return;
+  satelliteCompareStore.setState({
+    scenes: chronological(slots.filter((slot) => slot !== null)),
+    slots: [],
+    directFallback: false,
+  });
   if (camera !== null) {
     requestMapNavigation({
       longitude: camera.center.longitude,

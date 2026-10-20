@@ -468,36 +468,44 @@ Mosaic state is transient and never shared in URLs. See
 
 #### Comparison
 
-On desktop, **Compare** on an expanded card adds the scene to a comparison of up to four
-scenes; **Compared** removes it, and compared cards show a compare icon. A tray pinned
-to the bottom of the results pane shows the count with **Clear** and **Compare**, which
-needs at least two scenes.
+On desktop, **Compare** on an expanded card adds the scene to a comparison tray of up to
+four scenes; **Compared** removes it, and compared cards show a compare icon. The tray
+pinned to the bottom of the results pane shows the count with **Clear** and **Compare**,
+which needs at least two scenes and opens them in acquisition order: two side by side,
+three or four in a 2×2 grid. **Compare** in the Satellite header always opens a 2×2
+grid, with the tray's scenes first and plain maps in the other cells.
 
-Comparison replaces the map with a grid: two scenes side by side, three or four in a 2×2
-grid with one empty cell for three. Scenes appear in acquisition order. The rail and a
-compact sidebar are laid out beside the grid instead of floating over it, so every pane
-is fully visible; navigation cannot collapse and the results pane is hidden. The sidebar
-lists each scene with its date, local time, and cloud, a remove button, **Share link**,
-**Clear**, and **Back to search**. Removing a scene below two closes the grid.
+Comparison replaces the map with the grid. The rail is hidden and a narrow sidebar sits
+beside the grid instead of floating over it, so every pane is fully visible; the results
+pane is hidden. The sidebar lists the shown scenes with their date, local time, and
+cloud, a remove button that turns that pane back into a plain map, **Share link** (two
+or more scenes), **Clear**, and **Back to search**. When a pane falls back from TiTiler,
+the sidebar shows a warning that direct imagery is active and slower.
 
-Each pane is a 2D, north-up map showing its scene with the default OpenStreetMap overlay
-(labels, roads, and objects) at the saved overlay opacity and layer choices, and the
-scene footprint. Natural features (vegetation, water bodies, glaciers) are always off so
-their fills cannot hide the land cover being compared; tracks, markers, weather, relief,
-and contours are not shown. The panes share one camera; the pointer over one pane shows
-a crosshair at the same point in the others. A label shows the year in bold, the day and
-month, and the local time and cloud, all in the scene's local time zone. Clicking the
-label opens the acquisition calendar for that pane's visible area on the scene's month;
-a day replaces the pane's scene with that day's best-coverage scene, unless it is
-already compared. Panes read the rendering mode and stretch when they open; in Auto, a
-throttled pane alone switches to direct reads. While the grid is open, the page-wide
-MapLibre raster request limit is raised so four panes load in parallel.
+Each pane is a 2D, north-up map. A scene pane shows its scene with the default
+OpenStreetMap overlay (labels, roads, and objects) at the saved overlay opacity and
+layer choices and the scene footprint; natural features (vegetation, water bodies,
+glaciers) are off there so their fills cannot hide the land cover being compared. A pane
+without a scene is the plain vector map with the main map's layer choices, relief
+shading, and isolines. Every pane draws the imported track as the main map does; markers
+and weather are not shown. The panes share one camera; the pointer over one pane shows a
+crosshair at the same point in the others.
 
-Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid and
-moves the main map to the compared area; the tray keeps its scenes until cleared.
-**Share link** copies a 2D link with `compare=<key>,…`; opening it on desktop shows the
-grid once at least two scenes resolve, and otherwise shows a notice and the shared
-location. Comparison state is never persisted.
+A scene pane's label shows the year in bold, the day and month, and the local time and
+cloud, all in the scene's local time zone; a plain pane's label reads **Pick image
+date**. Clicking a label opens the acquisition calendar for that pane's visible area on
+the scene's month or the current one; a day shows that day's best-coverage scene in the
+pane, unless another pane already shows it. Dragging a scene label onto another pane
+swaps the two positions. Panes read the rendering mode and stretch when they open; in
+Auto, a throttled pane alone switches to direct reads. While the grid is open, the
+page-wide MapLibre raster request limit is raised so four panes load in parallel. The
+attribution sits flush with the grid's bottom-right corner, as on the main map.
+
+Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid,
+returns the shown scenes to the tray in acquisition order, and moves the main map to the
+compared area. **Share link** copies a 2D link with `compare=<key>,…` in pane order;
+opening it on desktop shows the grid in that order once at least two scenes resolve, and
+otherwise shows a notice and the shared location. Comparison state is never persisted.
 
 ### Weather
 

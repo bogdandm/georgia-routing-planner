@@ -46,6 +46,8 @@ import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
 import { SatelliteMosaicProvider } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import {
   closeComparison,
+  isComparisonOpen,
+  reportComparisonDirectFallback,
   satelliteCompareStore,
   setComparisonCamera,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
@@ -78,7 +80,8 @@ const hashChangeEvent = 'hashchange';
 const popStateEvent = 'popstate';
 const mobileWorkspaceId = 'mobile-workspace';
 const contextualSidebarWidths = { xs: 420, xl: 464 } as const;
-const railWidth = 64;
+/** While comparing, the rail is hidden and only the short comparison list remains. */
+const comparisonSidebarWidth = 300;
 
 interface WorkspaceShellProps {
   readonly mapSurface?: ReactNode;
@@ -246,8 +249,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   }, [activeTab]);
 
   // The comparison grid replaces the map only in the desktop Satellite section.
-  const comparisonOpen = useStore(satelliteCompareStore, (state) => state.open);
-  const comparisonScenes = useStore(satelliteCompareStore, (state) => state.scenes);
+  const comparisonOpen = useStore(satelliteCompareStore, isComparisonOpen);
+  const comparisonSlots = useStore(satelliteCompareStore, (state) => state.slots);
   const comparisonCamera = useStore(satelliteCompareStore, (state) => state.camera);
   const comparisonActive =
     comparisonOpen && activeTab === 'satellite' && !smartphoneViewport;
@@ -546,16 +549,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             top: 0,
             right: 0,
             bottom: 0,
-            left: {
-              xs: railWidth + contextualSidebarWidths.xs,
-              xl: railWidth + contextualSidebarWidths.xl,
-            },
+            left: comparisonSidebarWidth,
           }}
         >
           <SatelliteCompareMaps
-            scenes={comparisonScenes}
+            slots={comparisonSlots}
             initialCamera={comparisonCamera}
             onCameraSettled={setComparisonCamera}
+            onDirectFallback={reportComparisonDirectFallback}
           />
         </Box>
       ) : null}
@@ -784,7 +785,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         <Box
           aria-hidden={smartphoneViewport && auxiliaryOpen}
           sx={{
-            display: smartphoneViewport && !mobileWorkspaceOpen ? 'none' : 'block',
+            display:
+              (smartphoneViewport && !mobileWorkspaceOpen) || comparisonActive
+                ? 'none'
+                : 'block',
             visibility:
               smartphoneViewport && (!mobileWorkspaceOpen || auxiliaryOpen)
                 ? 'hidden'
@@ -799,7 +803,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             collapsed={desktopNavigationCollapsed}
             collapsedSummary={collapsedTrackSummary}
             collapsedControls={collapsedRoutePlanControls}
-            squareEdges={smartphoneViewport || comparisonActive}
+            squareEdges={smartphoneViewport}
             activeTab={activeTab}
             developerToolsOpen={developerDrawerOpen}
             developerMode={developerMode}
@@ -850,12 +854,18 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           aria-hidden={auxiliaryOverlay && auxiliaryOpen}
           sx={{
             minWidth: 0,
-            width: smartphoneViewport ? 'auto' : contextualSidebarWidths,
+            width: smartphoneViewport
+              ? 'auto'
+              : comparisonActive
+                ? comparisonSidebarWidth
+                : contextualSidebarWidths,
             maxWidth: desktopNavigationCollapsed
               ? 0
               : smartphoneViewport
                 ? 'none'
-                : contextualSidebarWidths,
+                : comparisonActive
+                  ? comparisonSidebarWidth
+                  : contextualSidebarWidths,
             height: '100%',
             flex: smartphoneViewport ? 1 : '0 0 auto',
             opacity: desktopNavigationCollapsed ? 0 : 1,

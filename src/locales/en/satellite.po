@@ -209,6 +209,11 @@ msgstr "Choose the last date to include in the Mosaic."
 msgid "Clear"
 msgstr "Clear"
 
+#. js-lingui-id: h584zm
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
+msgstr "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
+
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
@@ -230,6 +235,11 @@ msgstr "Cloud cover must be between 0 and 100 percent."
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
 msgid "Compare"
 msgstr "Compare"
+
+#. js-lingui-id: lMoJUA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Compare images from different dates side by side"
+msgstr "Compare images from different dates side by side"
 
 #. js-lingui-id: HrBFhl
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -412,6 +422,16 @@ msgstr "No matching images. Increase the cloud limit or move the map."
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "No Sentinel imagery found through the archive."
 msgstr "No Sentinel imagery found through the archive."
+
+#. js-lingui-id: YJQPdw
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Open image comparison"
+msgstr "Open image comparison"
+
+#. js-lingui-id: m-QLEF
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Pick image date"
+msgstr "Pick image date"
 
 #. js-lingui-id: NHlrjI
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -693,6 +713,11 @@ msgstr "This scene has no supported true-color asset."
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Tile {tileId} · Orbit {orbit}"
 msgstr "Tile {tileId} · Orbit {orbit}"
+
+#. js-lingui-id: t6tTnX
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly."
+msgstr "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly."
 
 #. js-lingui-id: 8m2Wwx
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

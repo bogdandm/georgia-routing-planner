@@ -209,6 +209,11 @@ msgstr "Выберите последнюю дату, которую нужно 
 msgid "Clear"
 msgstr "Очистить"
 
+#. js-lingui-id: h584zm
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
+msgstr "Нажмите на дату на карте, чтобы выбрать другой снимок. Перетащите дату на другую карту, чтобы поменять их местами."
+
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
@@ -230,6 +235,11 @@ msgstr "Облачность должна быть от 0 до 100 процен�
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
 msgid "Compare"
 msgstr "Сравнить"
+
+#. js-lingui-id: lMoJUA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Compare images from different dates side by side"
+msgstr "Сравнить снимки за разные даты рядом"
 
 #. js-lingui-id: HrBFhl
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -412,6 +422,16 @@ msgstr "Подходящих снимков нет. Увеличьте поро�
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "No Sentinel imagery found through the archive."
 msgstr "В архиве не найдено снимков Sentinel."
+
+#. js-lingui-id: YJQPdw
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Open image comparison"
+msgstr "Открыть сравнение снимков"
+
+#. js-lingui-id: m-QLEF
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Pick image date"
+msgstr "Выбрать дату снимка"
 
 #. js-lingui-id: NHlrjI
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -693,6 +713,11 @@ msgstr "У этой сцены нет поддерживаемого изобр�
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Tile {tileId} · Orbit {orbit}"
 msgstr "Тайл {tileId} · Орбита {orbit}"
+
+#. js-lingui-id: t6tTnX
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly."
+msgstr "TiTiler недоступен. Используются прямые предварительно отрисованные снимки Sentinel, они загружаются медленнее."
 
 #. js-lingui-id: 8m2Wwx
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

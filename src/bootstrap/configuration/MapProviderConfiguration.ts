@@ -113,6 +113,37 @@ const defaultNaprOrthophoto = {
     'Imagery: <a href="https://maps.gov.ge/" target="_blank">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>',
 };
 
+const defaultSovietTopographicMap = {
+  id: 'soviet-topographic',
+  label: 'Soviet topographic maps',
+  sources: {
+    nationwide25k: {
+      tileUrls: [
+        'https://mp.napr.gov.ge/TOPO_25k_1953-2004/wmts/TOPO_25000_1953-2004/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256 as const,
+      minZoom: 0,
+      maxZoom: 16,
+      bounds: [
+        39.97466826053387, 40.82104762068601, 46.92637978480328, 43.802903144991,
+      ] as [number, number, number, number],
+    },
+    detailed10k: {
+      tileUrls: [
+        'https://mp.napr.gov.ge/TOPO_10k_1952_2007/wmts/TOPO_10000_1952_2007/GLOBAL_MERCATOR/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256 as const,
+      minZoom: 0,
+      maxZoom: 17,
+      bounds: [
+        41.59260724154067, 40.94360901669176, 46.86812724513158, 42.46084232353987,
+      ] as [number, number, number, number],
+    },
+  },
+  attribution:
+    'Topographic maps: <a href="https://nsdi.gov.ge/en/geoportal?layers=1%3A112%2C1%3A113%2C2%3A112%2C2%3A113%2C3%3A112%2C3%3A113" target="_blank">National Agency of Public Registry (NAPR) / NSDI, Soviet-era scans 1:10,000 and 1:25,000</a>',
+};
+
 const sourceLayerMappingSchema = z
   .object({
     landcover: z.string().min(1),
@@ -148,14 +179,14 @@ const detailVectorSchema = z
   })
   .strict();
 
-const naprOrthophotoRasterSourceSchema = z
+const boundedRasterSourceSchema = z
   .object({
     tileUrls: z
       .array(
         endpointSchema.refine(
           (value) =>
             value.includes('{z}') && value.includes('{x}') && value.includes('{y}'),
-          'NAPR orthophoto endpoint must contain {z}, {x}, and {y}.',
+          'Raster tile endpoint must contain {z}, {x}, and {y}.',
         ),
       )
       .min(1)
@@ -175,7 +206,7 @@ const naprOrthophotoRasterSourceSchema = z
     if (orthophoto.maxZoom <= orthophoto.minZoom) {
       context.addIssue({
         code: 'custom',
-        message: 'NAPR orthophoto maxZoom must be greater than minZoom.',
+        message: 'Raster source maxZoom must be greater than minZoom.',
         path: ['maxZoom'],
       });
     }
@@ -184,14 +215,14 @@ const naprOrthophotoRasterSourceSchema = z
     if (west >= east) {
       context.addIssue({
         code: 'custom',
-        message: 'NAPR orthophoto bounds west must be less than east.',
+        message: 'Raster source bounds west must be less than east.',
         path: ['bounds'],
       });
     }
     if (south >= north) {
       context.addIssue({
         code: 'custom',
-        message: 'NAPR orthophoto bounds south must be less than north.',
+        message: 'Raster source bounds south must be less than north.',
         path: ['bounds'],
       });
     }
@@ -333,16 +364,30 @@ const mapProviderConfigurationInputSchema = z
         label: z.string().min(1).max(80),
         sources: z
           .object({
-            national2016To2017: naprOrthophotoRasterSourceSchema,
-            westernGeorgia2020: naprOrthophotoRasterSourceSchema,
-            kutaisi2020: naprOrthophotoRasterSourceSchema,
-            racha2025: naprOrthophotoRasterSourceSchema,
+            national2016To2017: boundedRasterSourceSchema,
+            westernGeorgia2020: boundedRasterSourceSchema,
+            kutaisi2020: boundedRasterSourceSchema,
+            racha2025: boundedRasterSourceSchema,
           })
           .strict(),
         attribution: safeAttributionSchema,
       })
       .strict()
       .default(defaultNaprOrthophoto),
+    sovietTopographicMap: z
+      .object({
+        id: z.string().regex(/^[a-z0-9-]+$/u),
+        label: z.string().min(1).max(80),
+        sources: z
+          .object({
+            nationwide25k: boundedRasterSourceSchema,
+            detailed10k: boundedRasterSourceSchema,
+          })
+          .strict(),
+        attribution: safeAttributionSchema,
+      })
+      .strict()
+      .default(defaultSovietTopographicMap),
     policy: z
       .object({
         requestTimeoutMs: z.number().int().min(1_000).max(30_000),
@@ -352,7 +397,7 @@ const mapProviderConfigurationInputSchema = z
   })
   .strict();
 
-interface NaprOrthophotoRasterSource {
+interface BoundedRasterSource {
   readonly tileUrls: readonly string[];
   readonly tileSize: 256 | 512;
   readonly minZoom: number;
@@ -447,10 +492,19 @@ interface MapProviderConfigurationInput {
     readonly id: string;
     readonly label: string;
     readonly sources: {
-      readonly national2016To2017: NaprOrthophotoRasterSource;
-      readonly westernGeorgia2020: NaprOrthophotoRasterSource;
-      readonly kutaisi2020: NaprOrthophotoRasterSource;
-      readonly racha2025: NaprOrthophotoRasterSource;
+      readonly national2016To2017: BoundedRasterSource;
+      readonly westernGeorgia2020: BoundedRasterSource;
+      readonly kutaisi2020: BoundedRasterSource;
+      readonly racha2025: BoundedRasterSource;
+    };
+    readonly attribution: string;
+  };
+  readonly sovietTopographicMap: {
+    readonly id: string;
+    readonly label: string;
+    readonly sources: {
+      readonly nationwide25k: BoundedRasterSource;
+      readonly detailed10k: BoundedRasterSource;
     };
     readonly attribution: string;
   };
@@ -486,6 +540,8 @@ interface MapProviderConfigurationSummary {
   readonly esriSatelliteBasemapOrigins: readonly string[];
   readonly naprOrthophotoId: string;
   readonly naprOrthophotoOrigins: readonly string[];
+  readonly sovietTopographicMapId: string;
+  readonly sovietTopographicMapOrigins: readonly string[];
 }
 
 /** Anonymous, credential-free provider defaults used when no public override is supplied. */
@@ -569,6 +625,7 @@ export const defaultMapProviderConfigurationInput = {
   bingSatelliteBasemap: defaultBingSatelliteBasemap,
   esriSatelliteBasemap: defaultEsriSatelliteBasemap,
   naprOrthophoto: defaultNaprOrthophoto,
+  sovietTopographicMap: defaultSovietTopographicMap,
   policy: {
     requestTimeoutMs: 15_000,
     equivalentErrorWindowMs: 10_000,
@@ -661,6 +718,23 @@ export function parseMapProviderConfiguration(
         },
       },
     },
+    sovietTopographicMap: {
+      ...parsed.sovietTopographicMap,
+      sources: {
+        nationwide25k: {
+          ...parsed.sovietTopographicMap.sources.nationwide25k,
+          tileUrls: parsed.sovietTopographicMap.sources.nationwide25k.tileUrls.map(
+            (tileUrl) => resolveEndpoint(tileUrl, baseUrl),
+          ),
+        },
+        detailed10k: {
+          ...parsed.sovietTopographicMap.sources.detailed10k,
+          tileUrls: parsed.sovietTopographicMap.sources.detailed10k.tileUrls.map(
+            (tileUrl) => resolveEndpoint(tileUrl, baseUrl),
+          ),
+        },
+      },
+    },
   };
 }
 
@@ -732,6 +806,14 @@ export function summarizeMapProviderConfiguration(
     naprOrthophotoOrigins: [
       ...new Set(
         Object.values(configuration.naprOrthophoto.sources).flatMap((source) =>
+          source.tileUrls.map((tileUrl) => new URL(tileUrl).origin),
+        ),
+      ),
+    ],
+    sovietTopographicMapId: configuration.sovietTopographicMap.id,
+    sovietTopographicMapOrigins: [
+      ...new Set(
+        Object.values(configuration.sovietTopographicMap.sources).flatMap((source) =>
           source.tileUrls.map((tileUrl) => new URL(tileUrl).origin),
         ),
       ),

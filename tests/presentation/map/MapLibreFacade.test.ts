@@ -8,6 +8,7 @@ import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerCo
 import type { MapViewportMovement } from '@/presentation/map/MapFacade';
 import {
   naprOrthophotoSourceIds,
+  sovietTopographicSourceIds,
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
@@ -971,6 +972,10 @@ describe('MapLibreFacade', () => {
     { name: 'Google', sourceId: 'satellite-basemap' },
     ...Object.values(naprOrthophotoSourceIds).map((sourceId) => ({
       name: `NAPR ${sourceId}`,
+      sourceId,
+    })),
+    ...Object.values(sovietTopographicSourceIds).map((sourceId) => ({
+      name: `Soviet topographic ${sourceId}`,
       sourceId,
     })),
   ])(

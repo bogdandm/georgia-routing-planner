@@ -102,14 +102,14 @@ describe('mapShareUrl', () => {
     expect(parseSharedComparison('?compare=s2:a,s2:b,s2:c,s2:d')).toHaveLength(4);
   });
 
-  it('round-trips a 3D camera and a satellite basemap while keeping the tab hash', () => {
+  it('round-trips a 3D camera and the Soviet topographic basemap while keeping the tab hash', () => {
     const url = createMapShareUrl(
       'https://example.test/app/?bearing=99&pitch=70&scene=old%3Ascene#tracks',
       {
         center: { longitude: 44.8, latitude: 41.7 },
         zoom: 12.35,
         orientation: { mode: '3d', bearing: 18.126, pitch: 35.556 },
-        basemap: 'napr-orthophoto',
+        basemap: 'soviet-topographic',
         sceneKey: null,
       },
     );
@@ -119,7 +119,7 @@ describe('mapShareUrl', () => {
       center: { longitude: 44.8, latitude: 41.7 },
       zoom: 12.35,
       orientation: { mode: '3d', bearing: 18.13, pitch: 35.56 },
-      basemap: 'napr-orthophoto',
+      basemap: 'soviet-topographic',
       sceneKey: null,
     });
   });

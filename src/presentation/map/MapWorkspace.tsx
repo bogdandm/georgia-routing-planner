@@ -419,6 +419,10 @@ export function MapWorkspace({
     mapLayerStore,
     (state) => state.visibility['napr-orthophoto'],
   );
+  const sovietTopographicVisible = useStore(
+    mapLayerStore,
+    (state) => state.visibility['soviet-topographic'],
+  );
   const satelliteImagerySelected = useStore(
     mapLayerStore,
     (state) => state.visibility['satellite-imagery'],
@@ -620,6 +624,7 @@ export function MapWorkspace({
     !bingSatelliteVisible &&
     !esriSatelliteVisible &&
     !naprOrthophotoVisible &&
+    !sovietTopographicVisible &&
     !satelliteImageryVisible
   ) {
     /* eslint-disable lingui/no-unlocalized-strings -- Layer preset IDs. */
@@ -632,6 +637,8 @@ export function MapWorkspace({
     activeLayerPreset = 'esri-satellite';
   } else if (naprOrthophotoVisible) {
     activeLayerPreset = 'napr-orthophoto';
+  } else if (sovietTopographicVisible) {
+    activeLayerPreset = 'soviet-topographic';
   } else if (satelliteImagerySelected && satelliteImageryVisible) {
     activeLayerPreset = 'sentinel-2';
     /* eslint-enable lingui/no-unlocalized-strings */

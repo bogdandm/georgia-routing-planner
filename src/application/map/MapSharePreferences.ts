@@ -3,7 +3,7 @@
  * Each flag only applies while the map actually shows that content.
  */
 export interface MapSharePreferences {
-  /** The visible static satellite basemap (Google, Bing, Esri, or NAPR). */
+  /** The visible static raster basemap (Google, Bing, Esri, NAPR, or Soviet maps). */
   readonly includeSatelliteLayer: boolean;
   /** The visible Sentinel-2 scene. */
   readonly includeSentinelImage: boolean;

@@ -65,6 +65,8 @@ import {
   naprOrthophotoLayerIds,
   naprOrthophotoSourceIds,
   satelliteBasemapLayerIds,
+  sovietTopographicLayerIds,
+  sovietTopographicSourceIds,
   savedMarkerImageId,
   savedMarkerLayerIds,
   measurementLayerIds,
@@ -194,6 +196,8 @@ const satelliteBasemapSourceIds = [
   naprOrthophotoSourceIds.westernGeorgia2020,
   naprOrthophotoSourceIds.kutaisi2020,
   naprOrthophotoSourceIds.racha2025,
+  sovietTopographicSourceIds.nationwide25k,
+  sovietTopographicSourceIds.detailed10k,
 ] as const;
 
 const staticSatelliteLayerIds = [
@@ -201,17 +205,19 @@ const staticSatelliteLayerIds = [
   'bing-satellite',
   'esri-satellite',
   'napr-orthophoto',
+  'soviet-topographic',
 ] as const satisfies readonly LogicalMapLayerId[];
 
 type StaticSatelliteLayerId = (typeof staticSatelliteLayerIds)[number];
 
-const staticSatelliteSourceIdsByLayer: Readonly<
+const staticSatelliteReadinessSourceIdsByLayer: Readonly<
   Record<StaticSatelliteLayerId, readonly string[]>
 > = {
   'google-satellite': [mapSourceIds.satelliteBasemap],
   'bing-satellite': [mapSourceIds.bingSatelliteBasemap],
   'esri-satellite': [mapSourceIds.esriSatelliteBasemap],
   'napr-orthophoto': Object.values(naprOrthophotoSourceIds),
+  'soviet-topographic': [sovietTopographicSourceIds.nationwide25k],
 };
 
 function isStaticSatelliteLayerId(
@@ -454,6 +460,10 @@ const logicalNativeLayerGroups: Readonly<
     naprOrthophotoLayerIds.kutaisi2020,
     naprOrthophotoLayerIds.racha2025,
   ],
+  'soviet-topographic': [
+    sovietTopographicLayerIds.nationwide25k,
+    sovietTopographicLayerIds.detailed10k,
+  ],
   'terrain-relief': [terrainOverlayLayerIds.reliefShade],
   'elevation-isolines': [
     terrainOverlayLayerIds.contourMinor,
@@ -549,6 +559,7 @@ const baseLogicalLayerIds = [
   'bing-satellite',
   'esri-satellite',
   'napr-orthophoto',
+  'soviet-topographic',
   'terrain-relief',
   'elevation-isolines',
   'natural-features',
@@ -3197,11 +3208,12 @@ export class MapLibreLayerController {
       this.ensureContourLayers(map);
       this.ensureContourOrder(map);
       const activeRasterLayerId = this.currentVisibleRasterLayerId();
+      const bottomRasterLayerId = this.currentVisibleRasterBottomLayerId();
       const satelliteVisible = activeRasterLayerId !== null;
       const beforeId =
         !this.#terrainOverlayPreferences.shadeAboveSatellite &&
-        activeRasterLayerId !== null
-          ? activeRasterLayerId
+        bottomRasterLayerId !== null
+          ? bottomRasterLayerId
           : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
             ? mapInsertionPoints.terrainOverlaysBeforeLayerId
             : terrainOverlayLayerIds.contourMinor;
@@ -3412,7 +3424,25 @@ export class MapLibreLayerController {
     ) {
       return naprOrthophotoLayerIds.racha2025;
     }
+    if (
+      visibility['soviet-topographic'] &&
+      map.getLayer(sovietTopographicLayerIds.detailed10k) !== undefined
+    ) {
+      return sovietTopographicLayerIds.detailed10k;
+    }
     return null;
+  }
+
+  private currentVisibleRasterBottomLayerId(): string | null {
+    const map = this.#map;
+    if (
+      map !== null &&
+      mapLayerStore.getState().visibility['soviet-topographic'] &&
+      map.getLayer(sovietTopographicLayerIds.nationwide25k) !== undefined
+    ) {
+      return sovietTopographicLayerIds.nationwide25k;
+    }
+    return this.currentVisibleRasterLayerId();
   }
 
   private nativeLayerIds(layerId: LogicalMapLayerId): readonly string[] {
@@ -4119,7 +4149,7 @@ export class MapLibreLayerController {
     const staticBasemapReadyAndVisible = staticSatelliteLayerIds.some(
       (layerId) =>
         state.visibility[layerId] &&
-        staticSatelliteSourceIdsByLayer[layerId].some((sourceId) =>
+        staticSatelliteReadinessSourceIdsByLayer[layerId].some((sourceId) =>
           this.#readySatelliteBasemapSourceIds.has(sourceId),
         ),
     );

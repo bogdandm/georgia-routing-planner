@@ -323,6 +323,11 @@ msgstr "No Sentinel-2 image is shown on the map."
 msgid "Open meteoblue.com"
 msgstr "Open meteoblue.com"
 
+#. js-lingui-id: FuC3Le
+#: src/presentation/map/MapViewControls.tsx
+msgid "Open topographic map symbols (PDF)"
+msgstr "Open topographic map symbols (PDF)"
+
 #. js-lingui-id: PXdouE
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Open windy.com"
@@ -383,6 +388,12 @@ msgstr "Show flat 2D map"
 msgid "Show weather forecast"
 msgstr "Show weather forecast"
 
+#. js-lingui-id: qy1-46
+#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/MapViewControls.tsx
+msgid "Soviet Topographic"
+msgstr "Soviet Topographic"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -439,6 +450,11 @@ msgstr "This scene has no supported true-color asset."
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Toggle attribution"
 msgstr "Toggle attribution"
+
+#. js-lingui-id: gd3dhq
+#: src/presentation/map/MapViewControls.tsx
+msgid "Topographic map symbols (PDF)"
+msgstr "Topographic map symbols (PDF)"
 
 #. js-lingui-id: abY8bC
 #: src/presentation/map/ElevationGradeLegend.tsx

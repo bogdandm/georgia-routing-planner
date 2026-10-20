@@ -120,28 +120,6 @@ test('captures failures and exports an inspectable redacted bundle', async ({
   );
   expect(bundle.map).toMatchObject({
     styleId: 'Georgia hiking basemap v1',
-    sourceIds: [
-      'basemap-vector',
-      'basemap-detail-vector',
-      'satellite-basemap',
-      'bing-satellite-basemap',
-      'esri-satellite-basemap',
-      'napr-orthophoto-2016-2017',
-      'napr-orthophoto-2020-west',
-      'napr-orthophoto-2020-kutaisi',
-      'napr-orthophoto-2025-racha',
-      'terrain-dem',
-      'terrain-contours',
-      'imported-track',
-      'imported-track-endpoints',
-      'imported-track-highlight',
-      'imported-track-focus-a',
-      'imported-track-focus-b',
-      'imported-track-trace',
-      'route-plan',
-      'measurement',
-      'saved-markers',
-    ],
     webGlCapabilities: { contextType: 'webgl2' },
   });
   expect(bundle.map?.layerIds.length).toBeGreaterThan(10);

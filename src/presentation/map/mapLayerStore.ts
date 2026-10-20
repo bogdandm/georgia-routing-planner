@@ -198,6 +198,7 @@ const initialMapLayerState: MapLayerState = {
     'bing-satellite': false,
     'esri-satellite': false,
     'napr-orthophoto': false,
+    'soviet-topographic': false,
     'satellite-imagery': true,
     'scene-footprint': true,
     'terrain-relief': true,

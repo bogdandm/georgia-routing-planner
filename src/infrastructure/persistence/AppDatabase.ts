@@ -565,6 +565,7 @@ const mapLayerPreferencesSchema = z
         'bing-satellite': z.boolean().default(false),
         'esri-satellite': z.boolean().default(false),
         'napr-orthophoto': z.boolean().default(false),
+        'soviet-topographic': z.boolean().default(false),
         'satellite-imagery': z.boolean(),
         'scene-footprint': z.boolean(),
         'terrain-relief': z.boolean().default(true),
@@ -635,6 +636,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'bing-satellite': false,
     'esri-satellite': false,
     'napr-orthophoto': false,
+    'soviet-topographic': false,
     'satellite-imagery': true,
     'scene-footprint': true,
     'terrain-relief': true,
@@ -4026,7 +4028,8 @@ export class AppDatabase
       !Object.hasOwn(storedVisibility, 'google-satellite') ||
       !Object.hasOwn(storedVisibility, 'bing-satellite') ||
       !Object.hasOwn(storedVisibility, 'esri-satellite') ||
-      !Object.hasOwn(storedVisibility, 'napr-orthophoto');
+      !Object.hasOwn(storedVisibility, 'napr-orthophoto') ||
+      !Object.hasOwn(storedVisibility, 'soviet-topographic');
     const missingWeatherMapOpacity =
       storedValue === null || !Object.hasOwn(storedValue, 'weatherMapOpacity');
     const parsed = mapLayerPreferencesSchema.safeParse(

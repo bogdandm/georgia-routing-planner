@@ -2386,7 +2386,7 @@ describe('MapWorkspace', () => {
     expect(setMapLayerPreset).toHaveBeenCalledWith('sentinel-2');
   });
 
-  it('applies NAPR quick presets without opening the Satellite workspace', async () => {
+  it('applies static raster quick presets without opening the Satellite workspace', async () => {
     const user = userEvent.setup();
     const services = createTestServices();
     const mapLayers = services.mapLayers;
@@ -2424,9 +2424,11 @@ describe('MapWorkspace', () => {
     ).toHaveAttribute('aria-checked', 'true');
     await user.click(screen.getByRole('menuitemradio', { name: 'Bing Aerial' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'NAPR Orthophoto' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Soviet Topographic' }));
 
     expect(setMapLayerPreset).toHaveBeenNthCalledWith(1, 'bing-satellite');
     expect(setMapLayerPreset).toHaveBeenNthCalledWith(2, 'napr-orthophoto');
+    expect(setMapLayerPreset).toHaveBeenNthCalledWith(3, 'soviet-topographic');
     expect(useUiStore.getState()).toMatchObject({
       activeTab: 'layers',
       mobileWorkspaceOpen: false,

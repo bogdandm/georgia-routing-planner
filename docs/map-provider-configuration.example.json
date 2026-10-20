@@ -152,6 +152,35 @@
     },
     "attribution": "Imagery: <a href=\"https://maps.gov.ge/\" target=\"_blank\">National Agency of Public Registry (NAPR), orthophotos 2016–2017, 2020, and 2025</a>"
   },
+  "sovietTopographicMap": {
+    "id": "soviet-topographic",
+    "label": "Soviet topographic maps",
+    "sources": {
+      "nationwide25k": {
+        "tileUrls": [
+          "https://mp.napr.gov.ge/TOPO_25k_1953-2004/wmts/TOPO_25000_1953-2004/GLOBAL_MERCATOR/{z}/{x}/{y}.png"
+        ],
+        "tileSize": 256,
+        "minZoom": 0,
+        "maxZoom": 16,
+        "bounds": [
+          39.97466826053387, 40.82104762068601, 46.92637978480328, 43.802903144991
+        ]
+      },
+      "detailed10k": {
+        "tileUrls": [
+          "https://mp.napr.gov.ge/TOPO_10k_1952_2007/wmts/TOPO_10000_1952_2007/GLOBAL_MERCATOR/{z}/{x}/{y}.png"
+        ],
+        "tileSize": 256,
+        "minZoom": 0,
+        "maxZoom": 17,
+        "bounds": [
+          41.59260724154067, 40.94360901669176, 46.86812724513158, 42.46084232353987
+        ]
+      }
+    },
+    "attribution": "Topographic maps: <a href=\"https://nsdi.gov.ge/en/geoportal?layers=1%3A112%2C1%3A113%2C2%3A112%2C2%3A113%2C3%3A112%2C3%3A113\" target=\"_blank\">National Agency of Public Registry (NAPR) / NSDI, Soviet-era scans 1:10,000 and 1:25,000</a>"
+  },
   "policy": {
     "requestTimeoutMs": 15000,
     "equivalentErrorWindowMs": 10000

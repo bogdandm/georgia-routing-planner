@@ -24,6 +24,7 @@ import {
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoSourceIds,
+  sovietTopographicSourceIds,
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
@@ -182,6 +183,9 @@ function categorizeMapError(
     sourceId === mapSourceIds.esriSatelliteBasemap ||
     Object.values(naprOrthophotoSourceIds).includes(
       sourceId as (typeof naprOrthophotoSourceIds)[keyof typeof naprOrthophotoSourceIds],
+    ) ||
+    Object.values(sovietTopographicSourceIds).includes(
+      sourceId as (typeof sovietTopographicSourceIds)[keyof typeof sovietTopographicSourceIds],
     )
   ) {
     return 'satellite-raster';

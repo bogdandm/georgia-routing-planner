@@ -37,6 +37,11 @@ export const naprOrthophotoSourceIds = {
   racha2025: 'napr-orthophoto-2025-racha',
 } as const;
 
+export const sovietTopographicSourceIds = {
+  nationwide25k: 'soviet-topographic-25k',
+  detailed10k: 'soviet-topographic-10k',
+} as const;
+
 export const terrainOverlayLayerIds = {
   reliefShade: 'terrain-relief-shade',
   contourMinor: 'terrain-contour-minor',
@@ -66,6 +71,11 @@ export const naprOrthophotoLayerIds = {
   westernGeorgia2020: 'napr-orthophoto-2020-west-imagery',
   kutaisi2020: 'napr-orthophoto-2020-kutaisi-imagery',
   racha2025: 'napr-orthophoto-2025-racha-imagery',
+} as const;
+
+export const sovietTopographicLayerIds = {
+  nationwide25k: 'soviet-topographic-25k-imagery',
+  detailed10k: 'soviet-topographic-10k-imagery',
 } as const;
 
 export const importedTrackLayerIds = {

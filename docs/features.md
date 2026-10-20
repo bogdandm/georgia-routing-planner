@@ -377,11 +377,12 @@ MapLibre layer IDs; native IDs never reach the UI.
 - **Local GPX:** Imported tracks, the default-on **Elevation gradient**, and one opacity
   for the active preview, saved selection, and gradient.
 - **Satellites:** **Google satellite imagery**, **Bing aerial imagery**, **Esri World
-  Imagery**, **NAPR Orthophoto**, then Sentinel-2 **Satellite imagery** and **Scene
-  footprint**, enabled once a scene is applied. The imagery sources are mutually
-  exclusive and may all be off. NAPR renders the newest available aerial pixels from
-  2025, then 2020, then 2016–2017. Hiding Sentinel imagery keeps the scene, footprint,
-  and results.
+  Imagery**, **NAPR Orthophoto**, **Soviet topographic maps**, then Sentinel-2
+  **Satellite imagery** and **Scene footprint**, enabled once a scene is applied. The
+  raster sources are mutually exclusive and may all be off. NAPR orthophotos render the
+  newest available aerial pixels from 2025, then 2020, then 2016–2017. Soviet
+  topographic maps render 1:10,000 scans where available over a nationwide 1:25,000
+  fallback. Hiding Sentinel imagery keeps the scene, footprint, and results.
 - **Terrain:** relief shading, elevation isolines, and contour spacing.
 - **OpenStreetMap:** **OSM detail**, Hiking paths, Roads, Places and POIs, Natural
   features with its indented **Area patterns** (the GOST forest, swamp, scrub, planting,
@@ -397,14 +398,16 @@ share URL requests a scene. Per-layer opacity, drag ordering, and custom layers 
 offered.
 
 The quick map-layer chooser lists **Vector OSM**, **Google Satellite**, **Bing Aerial**,
-**Esri World Imagery**, and **NAPR Orthophoto**, then **OSM overlay** and **Weather**
-checkboxes, and a final row with **Sentinel-2** (activates the applied scene or opens
-Satellite) and **Layers tab**. Vector OSM shows the vector map at full opacity without
-changing the saved overlay setting. The chooser is non-modal and belongs to the map: it
-stays open while choices are toggled, the layer button, Escape, or any press outside it
-closes it, and that press still reaches the map, so panning or clicking the map works
-immediately. It closes when an entry opens a workspace panel, and workspace panels drawn
-above the map also cover it.
+**Esri World Imagery**, **NAPR Orthophoto**, and **Soviet Topographic** (with an
+adjacent help item that opens a scanned 1966 guide to Soviet topographic map symbols in
+a new tab), then **OSM overlay** and **Weather** checkboxes, and a final row with
+**Sentinel-2** (activates the applied scene or opens Satellite) and **Layers tab**.
+Vector OSM shows the vector map at full opacity without changing the saved overlay
+setting. The chooser is non-modal and belongs to the map: it stays open while choices
+are toggled, the layer button, Escape, or any press outside it closes it, and that press
+still reaches the map, so panning or clicking the map works immediately. It closes when
+an entry opens a workspace panel, and workspace panels drawn above the map also cover
+it.
 
 ### Satellite
 
@@ -602,19 +605,19 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 - **Sharing:** one **Share** dialog builds a link to the current map. The rail **Share**
   action opens it on the map center; **Share…** in the point actions opens it on the
   clicked point with the current zoom. Its **Map view** section always carries the
-  center and zoom, and can also carry the visible static satellite layer (Google, Bing,
-  Esri, or NAPR), the visible Sentinel-2 scene, and in 3D terrain the 3D mode with
-  bearing and pitch. Each part has an **Include in link** checkbox, unavailable while
-  the map does not show it; turning all three off shares coordinates only. The choices
-  persist in this browser, and **Copy link** in the point actions copies a link to the
-  clicked point with them without opening the dialog. **Copy map link** next to the link
-  field confirms the copy in place with **Copied** for two seconds; the map link never
-  includes tracks. Links keep the page's other query parameters and its workspace-tab
-  hash, except that an open shared-track link is reduced to Tracks; a shared Sentinel-2
-  scene opens Satellite. A recipient's map switches to the shared satellite layer,
-  scene, and 3D view, and the shared satellite layer replaces their own layer choice.
-  Below the whole map section, a **Tracks** table lists the tracks drawn on the map (see
-  [public track links](#public-track-links)).
+  center and zoom, and can also carry the visible static raster layer (Google, Bing,
+  Esri, NAPR orthophoto, or Soviet topographic maps), the visible Sentinel-2 scene, and
+  in 3D terrain the 3D mode with bearing and pitch. Each part has an **Include in link**
+  checkbox, unavailable while the map does not show it; turning all three off shares
+  coordinates only. The choices persist in this browser, and **Copy link** in the point
+  actions copies a link to the clicked point with them without opening the dialog.
+  **Copy map link** next to the link field confirms the copy in place with **Copied**
+  for two seconds; the map link never includes tracks. Links keep the page's other query
+  parameters and its workspace-tab hash, except that an open shared-track link is
+  reduced to Tracks; a shared Sentinel-2 scene opens Satellite. A recipient's map
+  switches to the shared satellite layer, scene, and 3D view, and the shared satellite
+  layer replaces their own layer choice. Below the whole map section, a **Tracks** table
+  lists the tracks drawn on the map (see [public track links](#public-track-links)).
 - **Camera:** left drag pans, with an inertia that covers MapLibre's default distance in
   half its time; middle drag or Shift+left drag rotates and pitches in 3D around the
   terrain point under the press, marked by a small pivot ring; Ctrl+left drag in 3D

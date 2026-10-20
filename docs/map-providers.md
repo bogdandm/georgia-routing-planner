@@ -20,10 +20,10 @@ Overrides are JSON validated by strict Zod schemas; see the
 [geocoding](./geocoding-provider-configuration.example.json) examples, which equal the
 defaults. Map endpoints must be HTTPS or application-relative, templates must contain
 their tile tokens, and attribution rejects script markup. The imagery basemap sections
-(`satelliteBasemap`, `bingSatelliteBasemap`, `esriSatelliteBasemap`, `naprOrthophoto`)
-fall back to their defaults when omitted. An invalid override fails closed with a
-message that never echoes URLs or contents; diagnostics record only provider IDs and
-origins.
+(`satelliteBasemap`, `bingSatelliteBasemap`, `esriSatelliteBasemap`, `naprOrthophoto`,
+and `sovietTopographicMap`) fall back to their defaults when omitted. An invalid
+override fails closed with a message that never echoes URLs or contents; diagnostics
+record only provider IDs and origins.
 
 Replacing a provider requires a compatible schema or tile format, updated attribution,
 and a review of the style mapping and limits below, not changes to React workflows.
@@ -237,12 +237,13 @@ and a contour density review.
 
 ## Imagery basemaps
 
-Google, Bing, Esri, and NAPR are optional raster basemaps, disabled by default and
-persisted only after an explicit choice. They are mutually exclusive with each other and
-with applied Sentinel-2 imagery. The vector map stays opaque until the selected raster
-reports content, then uses the separately persisted OpenStreetMap overlay opacity.
-Failures have no retry or fallback; the vector map remains usable. Endpoint evidence
-below is point-in-time, not an availability guarantee.
+Google, Bing, Esri, NAPR orthophotos, and NAPR/NSDI Soviet topographic scans are
+optional raster basemaps, disabled by default and persisted only after an explicit
+choice. They are mutually exclusive with each other and with applied Sentinel-2 imagery.
+The vector map stays opaque until the selected raster reports content, then uses the
+separately persisted OpenStreetMap overlay opacity. Failures have no retry or fallback;
+the vector map remains usable. Endpoint evidence below is point-in-time, not an
+availability guarantee.
 
 ### Google satellite
 
@@ -293,6 +294,25 @@ returned imagery with CORS `*` on 2026-08-09. Capabilities follow
 already covers them without extra requests; `ORTHO_net` is a Bing mirror. The
 attribution credits the National Agency of Public Registry (NAPR) orthophotos 2016–2017,
 2020, and 2025 and links to `https://maps.gov.ge/`.
+
+### NAPR/NSDI Soviet topographic mosaic
+
+The official NSDI catalog identifies the 1:10,000 and 1:25,000 resources as
+high-resolution (300 dpi), georeferenced scans of Soviet-period paper maps. The
+application stacks two anonymous NAPR WMTS Web Mercator sources:
+
+| Source key      | Resource period | Zoom | Coverage and role                             |
+| --------------- | --------------- | ---- | --------------------------------------------- |
+| `nationwide25k` | 1953–2004       | 0–16 | Complete-country 1:25,000 fallback            |
+| `detailed10k`   | 1952–1999       | 0–17 | 1:10,000 detail over about 50% of the country |
+
+The 1:10,000 source is drawn last. Its transparent gaps expose the nationwide 1:25,000
+source, so the selector provides the highest available official Soviet-era scale without
+leaving uncovered areas. WMTS capabilities declare `Fees: none` and
+`AccessConstraints: none`; the [NSDI terms](https://nsdi.gov.ge/en/terms-of-use) still
+make each resource owner's metadata and access conditions authoritative. The application
+performs ordinary interactive viewing only: no download service, bulk retrieval, proxy,
+retry, or offline archive. Attribution credits NAPR/NSDI and links to the catalog layer.
 
 ## Rejected defaults
 

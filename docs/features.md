@@ -227,11 +227,12 @@ valid.
 
 Selecting a track draws it in bright blue with a green Play start and a red Stop finish
 marker, fits its bounds around the open panes, and opens a detail pane with metrics,
-actions, provenance, and an elevation profile. In 3D the fit also turns the camera to a
-45° pitch with the start at the bottom of the screen: a one-way track faces its finish,
-while a loop faces its point farthest from the start, so its finish stays at the bottom
-too. The stats grid shows duration, distance, average speed, **Start time**, and
-**Elevation gain**/**Elevation loss**; tracks with source elevation also list the
+actions, provenance, and an elevation profile. Activating the selected track again
+repeats the same camera fit without reloading the track. In 3D the fit also turns the
+camera to a 45° pitch with the start at the bottom of the screen: a one-way track faces
+its finish, while a loop faces its point farthest from the start, so its finish stays at
+the bottom too. The stats grid shows duration, distance, average speed, **Start time**,
+and **Elevation gain**/**Elevation loss**; tracks with source elevation also list the
 calculated DEM gain and loss. The start time appears only with recorded time, as
 `DD.MM.YYYY HH:mm` in the browser time zone, and wraps between date and time in a narrow
 pane. Without recorded time, duration is an **Estimated time** (`≈`) from DIN 33466

@@ -366,6 +366,7 @@ interface TracksWorkspaceValue {
   readonly savePreview: () => Promise<void>;
   readonly saveRoutePlan: () => Promise<void>;
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
+  readonly refocusActiveTrack: () => void;
   readonly setNextSegmentMode: (mode: RoutePlanSegmentMode) => void;
   readonly startRoutePlan: () => void;
   readonly setActiveName: (name: string) => void;
@@ -1425,15 +1426,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
     if (initiallyRestoredTrackId.current !== trackId) {
-      // In 3D the camera faces along the track so its start sits at the bottom.
-      const direction = trackOutboundDirection(segments);
-      requestMapFitBounds(
-        mapFitBoundsForTrack(metrics.bounds),
-        15,
-        direction === null
-          ? {}
-          : { path: mapTravelPath(direction.from, direction.to, elevatedPoints) },
-      );
+      requestTrackMapFit(segments, elevatedPoints, metrics.bounds);
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 
@@ -2491,6 +2484,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ],
   );
 
+  const refocusActiveTrack = useCallback(() => {
+    if (active?.kind !== 'saved') return;
+    requestTrackMapFit(
+      localTrackSegments(active.content),
+      active.content.trackPoints.flat(),
+      active.summary.metrics.bounds,
+    );
+  }, [active]);
+
   const setActiveName = useCallback((name: string) => {
     if (routePlanSaveInProgress.current) return;
     setActive((current) => {
@@ -2975,6 +2977,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       savePreview,
       saveRoutePlan,
       selectSaved,
+      refocusActiveTrack,
       setNextSegmentMode,
       startRoutePlan,
       setActiveName,
@@ -3027,6 +3030,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       savePreview,
       saveRoutePlan,
       selectSaved,
+      refocusActiveTrack,
       setNextSegmentMode,
       startRoutePlan,
       setActiveName,
@@ -4098,6 +4102,7 @@ export function TracksPanel({
     query,
     reorderFolders,
     selectSaved,
+    refocusActiveTrack,
     setQuery,
     summaries,
     thumbnails,
@@ -4242,6 +4247,7 @@ export function TracksPanel({
       return;
     }
     if (selected) {
+      refocusActiveTrack();
       onOpenActiveDetails();
       return;
     }
@@ -4485,6 +4491,21 @@ export function TracksPanel({
             })}
       />
     </Box>
+  );
+}
+
+function requestTrackMapFit(
+  segments: readonly (readonly TrackCoordinate[])[],
+  elevatedPoints: readonly TrackPoint[],
+  bounds: TrackBounds,
+): void {
+  const direction = trackOutboundDirection(segments);
+  requestMapFitBounds(
+    mapFitBoundsForTrack(bounds),
+    15,
+    direction === null
+      ? {}
+      : { path: mapTravelPath(direction.from, direction.to, elevatedPoints) },
   );
 }
 

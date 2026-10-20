@@ -2945,6 +2945,7 @@ describe('MapLibreLayerController', () => {
         'bing-satellite': false,
         'esri-satellite': false,
         'napr-orthophoto': false,
+        'soviet-topographic': false,
         'satellite-imagery': false,
         'scene-footprint': true,
         'terrain-relief': false,

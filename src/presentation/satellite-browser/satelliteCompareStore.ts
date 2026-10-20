@@ -62,6 +62,23 @@ export function removeComparedScene(sceneKey: string): void {
   if (scenes.length < minimumComparedScenes) closeComparison();
 }
 
+/**
+ * Swaps one compared scene for another date's scene in place. Returns false, leaving
+ * the comparison unchanged, when the new scene is already compared.
+ */
+export function replaceComparedScene(sceneKey: string, scene: SatelliteScene): boolean {
+  const { scenes } = satelliteCompareStore.getState();
+  if (isComparedScene(scenes, satelliteSceneKey(scene))) return false;
+  satelliteCompareStore.setState({
+    scenes: chronological(
+      scenes.map((candidate) =>
+        satelliteSceneKey(candidate) === sceneKey ? scene : candidate,
+      ),
+    ),
+  });
+  return true;
+}
+
 export function clearComparedScenes(): void {
   closeComparison();
   satelliteCompareStore.setState({ scenes: [] });

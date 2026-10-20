@@ -169,6 +169,11 @@ msgstr "Back to search"
 msgid "Cancel search"
 msgstr "Cancel search"
 
+#. js-lingui-id: 7kudva
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Change image date"
+msgstr "Change image date"
+
 #. js-lingui-id: PhApqn
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "Choose {monthName} {yearLabel}"
@@ -317,6 +322,11 @@ msgstr "Imagery tuning values are out of range."
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
 msgstr "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
+
+#. js-lingui-id: QR79kA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Images for this month could not be loaded."
+msgstr "Images for this month could not be loaded."
 
 #. js-lingui-id: 2LlWfy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -593,6 +603,11 @@ msgstr "Show relief shading above satellite imagery"
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Stored locally. Release a slider to replace the active raster; lower ceilings brighten terrain but can clip bright snow."
 msgstr "Stored locally. Release a slider to replace the active raster; lower ceilings brighten terrain but can clip bright snow."
+
+#. js-lingui-id: n65fbt
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "That image is already in the comparison."
+msgstr "That image is already in the comparison."
 
 #. js-lingui-id: sGmQE_
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts

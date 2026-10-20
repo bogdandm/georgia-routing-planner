@@ -113,7 +113,10 @@ the shared camera when at least two resolve, dropping missing or failed keys; ot
 it shows a notice. Smartphones and track-share links ignore `compare`.
 
 While the grid is open, `WorkspaceShell` hides the mounted main map, docks the rail and
-sidebar, and gives `SatelliteCompareMaps` the remaining area. The grid waits for
+sidebar, and gives `SatelliteCompareMaps` the remaining area. MapLibre limits concurrent
+raster requests for the whole page (16) and TiTiler answers each tile in about a second,
+so the grid multiplies that limit by four while mounted and restores it on unmount;
+otherwise four panes queue behind each other for tens of seconds. The grid waits for
 `restorePersistedState` so panes read stored layer choices, overlay opacity, rendering
 mode, and stretch once. `SatelliteCompareSync` copies the moving pane's center and zoom
 to the others with `jumpTo` under a guard, re-projects the crosshair on every move, and

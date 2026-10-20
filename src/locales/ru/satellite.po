@@ -169,6 +169,11 @@ msgstr "Назад к поиску"
 msgid "Cancel search"
 msgstr "Отменить поиск"
 
+#. js-lingui-id: 7kudva
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Change image date"
+msgstr "Сменить дату снимка"
+
 #. js-lingui-id: PhApqn
 #: src/presentation/satellite-browser/AcquisitionCalendar.tsx
 msgid "Choose {monthName} {yearLabel}"
@@ -317,6 +322,11 @@ msgstr "Параметры обработки снимка вне допусти
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
 msgid "Imagery: Copernicus Sentinel data via Element 84 Earth Search."
 msgstr "Снимки: данные Copernicus Sentinel через Element 84 Earth Search."
+
+#. js-lingui-id: QR79kA
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Images for this month could not be loaded."
+msgstr "Не удалось загрузить снимки за этот месяц."
 
 #. js-lingui-id: 2LlWfy
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -593,6 +603,11 @@ msgstr "Показывать отмывку рельефа поверх спут
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Stored locally. Release a slider to replace the active raster; lower ceilings brighten terrain but can clip bright snow."
 msgstr "Сохраняется локально. Отпустите ползунок, чтобы заменить активный растр; более низкий потолок делает рельеф светлее, но может пересветить яркий снег."
+
+#. js-lingui-id: n65fbt
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "That image is already in the comparison."
+msgstr "Этот снимок уже есть в сравнении."
 
 #. js-lingui-id: sGmQE_
 #: src/presentation/satellite-browser/satelliteProblemMessages.ts

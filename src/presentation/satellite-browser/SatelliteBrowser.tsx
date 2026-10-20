@@ -80,6 +80,13 @@ import { appColors } from '@/presentation/theme/appColors';
 import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
 import { SatelliteRenderingControls } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 import { shouldAutoFillResults } from '@/presentation/satellite-browser/shouldAutoFillResults';
+import {
+  bestCoverageMatchOn,
+  catalogCloudCoverCeilingPercent,
+  searchMonthRange,
+  toDateInputValue,
+  type SearchMonthRange,
+} from '@/presentation/satellite-browser/satelliteCalendarSearch';
 import { SatelliteComparisonTray } from '@/presentation/satellite-browser/SatelliteComparison';
 import {
   addComparedScene,
@@ -138,7 +145,6 @@ function SatelliteSearchRequestRunner({
 const firstResultCount = 8;
 const resultPageSize = 8;
 const calendarMonthLoadDelayMs = 300;
-const catalogCloudCoverCeilingPercent = 100;
 const sentinelArchiveFirstMonth = '2015-06';
 const resultSummaryMessage = msg({
   message:
@@ -196,39 +202,10 @@ function createDisplayFormats(locale: string): DisplayFormats {
 }
 /* eslint-enable lingui/no-unlocalized-strings */
 
-function toDateInputValue(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-interface SearchMonthRange {
-  readonly month: string;
-  readonly startDate: string;
-  readonly endDate: string;
-}
-
 interface SubmittedSearch {
   readonly viewport: SatelliteSearchViewport;
   readonly productLevel: SatelliteProductLevel;
   readonly initialMonth: string;
-}
-
-function searchMonthRange(month: string, today: Date): SearchMonthRange {
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- ISO date token.
-  const start = new Date(`${month}-01T00:00:00.000Z`);
-  const currentMonth = `${String(today.getUTCFullYear()).padStart(4, '0')}-${String(
-    today.getUTCMonth() + 1,
-  ).padStart(2, '0')}`;
-  const end =
-    month === currentMonth
-      ? new Date(
-          Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
-        )
-      : new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
-  return {
-    month,
-    startDate: toDateInputValue(start),
-    endDate: toDateInputValue(end),
-  };
 }
 
 function currentSearchMonth(today: Date): SearchMonthRange {
@@ -1468,18 +1445,7 @@ export function SatelliteBrowser({
 
   const selectCalendarDate = (date: string) => {
     if (searchState.status !== 'success') return;
-    const group = searchState.result.groups.find(
-      (candidate) => candidate.date === date,
-    );
-    const bestCoverageMatch = group?.scenes.reduce<SatelliteSceneMatch | undefined>(
-      (best, candidate) =>
-        best === undefined ||
-        candidate.coverage.viewportCoveragePercent >
-          best.coverage.viewportCoveragePercent
-          ? candidate
-          : best,
-      undefined,
-    );
+    const bestCoverageMatch = bestCoverageMatchOn(searchState.result, date);
     if (bestCoverageMatch === undefined) return;
     const matchIndex = flattenMatches(searchState.result).findIndex(
       (candidate) =>

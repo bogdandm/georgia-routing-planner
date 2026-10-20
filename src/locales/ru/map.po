@@ -69,6 +69,11 @@ msgstr "Аэроснимки Bing"
 msgid "Cancel"
 msgstr "Отмена"
 
+#. js-lingui-id: ROXMZ9
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Change image date, {date}"
+msgstr "Сменить дату снимка, {date}"
+
 #. js-lingui-id: WdJ-u8
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Checking nearby map data…"

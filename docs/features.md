@@ -482,11 +482,16 @@ lists each scene with its date, local time, and cloud, a remove button, **Share 
 
 Each pane is a 2D, north-up map showing its scene with the default OpenStreetMap overlay
 (labels, roads, and objects) at the saved overlay opacity and layer choices, and the
-scene footprint. Tracks, markers, weather, relief, and contours are not shown. The panes
-share one camera; the pointer over one pane shows a crosshair at the same point in the
-others. A label shows the year in bold, the day and month, and the local time and cloud,
-all in the scene's local time zone. Panes read the rendering mode and stretch when they
-open; in Auto, a throttled pane alone switches to direct reads.
+scene footprint. Natural features (vegetation, water bodies, glaciers) are always off so
+their fills cannot hide the land cover being compared; tracks, markers, weather, relief,
+and contours are not shown. The panes share one camera; the pointer over one pane shows
+a crosshair at the same point in the others. A label shows the year in bold, the day and
+month, and the local time and cloud, all in the scene's local time zone. Clicking the
+label opens the acquisition calendar for that pane's visible area on the scene's month;
+a day replaces the pane's scene with that day's best-coverage scene, unless it is
+already compared. Panes read the rendering mode and stretch when they open; in Auto, a
+throttled pane alone switches to direct reads. While the grid is open, the page-wide
+MapLibre raster request limit is raised so four panes load in parallel.
 
 Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid and
 moves the main map to the compared area; the tray keeps its scenes until cleared.

@@ -1,7 +1,12 @@
 import { useLingui } from '@lingui/react/macro';
-import { Alert, Box, Typography } from '@mui/material';
+import { Alert, Box, ButtonBase, Popover, Typography } from '@mui/material';
 import lookupTimeZone from '@photostructure/tz-lookup';
-import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'maplibre-gl';
+import {
+  getMaxParallelImageRequests,
+  setMaxParallelImageRequests,
+  type ErrorEvent as MapLibreErrorEvent,
+  type Map as MapLibreMap,
+} from 'maplibre-gl';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Map, { AttributionControl, type MapRef } from 'react-map-gl/maplibre';
 
@@ -12,6 +17,7 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
+import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import { createBasemapImage } from '@/presentation/map/basemapSymbols';
 import {
   baseNativeLayerVisibility,
@@ -24,6 +30,8 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { createSatelliteCompareMapStyle } from '@/presentation/map/mapStyleFactory';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { SatelliteCompareSync } from '@/presentation/map/SatelliteCompareSync';
+import { ComparedSceneDatePicker } from '@/presentation/satellite-browser/SatelliteComparison';
+import { maximumComparedScenes } from '@/presentation/satellite-browser/satelliteCompareStore';
 
 export interface SatelliteCompareCamera {
   readonly center: MapCoordinate;
@@ -65,6 +73,16 @@ export function SatelliteCompareMaps({
       active = false;
     };
   }, [mapLayers]);
+
+  // MapLibre caps concurrent raster tile requests for the whole page (16), so four panes
+  // would queue TiTiler tiles behind each other; each pane gets a single map's budget.
+  useEffect(() => {
+    const pageLimit = getMaxParallelImageRequests();
+    setMaxParallelImageRequests(pageLimit * maximumComparedScenes);
+    return () => {
+      setMaxParallelImageRequests(pageLimit);
+    };
+  }, []);
 
   if (mapProviderConfiguration.status !== 'valid' || mapLayers === null) {
     return (
@@ -134,7 +152,11 @@ function SatelliteComparePane({
       scene: mountedScene,
       key: satelliteSceneKey(mountedScene),
       tiles: mapLayers.createSceneRasterTiles(mountedScene),
-      baseLayerVisibility: baseNativeLayerVisibility(visibility),
+      // Water and vegetation fills would hide exactly the land cover being compared.
+      baseLayerVisibility: baseNativeLayerVisibility({
+        ...visibility,
+        'natural-features': false,
+      }),
       openStreetMapOpacityPaint: openStreetMapOpacityPaint(
         'satellite',
         openStreetMapOpacity,
@@ -205,6 +227,10 @@ function SatelliteComparePane({
 
   const crosshairRef = useRef<HTMLDivElement>(null);
   const attachedMap = useRef<MapLibreMap | null>(null);
+  const [datePicker, setDatePicker] = useState<{
+    readonly anchor: HTMLElement;
+    readonly viewport: SatelliteSearchViewport;
+  } | null>(null);
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
       if (mapRef === null) {
@@ -327,7 +353,27 @@ function SatelliteComparePane({
           />
         </svg>
       </Box>
-      <Box
+      <ButtonBase
+        aria-label={t`Change image date, ${date}`}
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          const map = attachedMap.current;
+          if (map === null) return;
+          const bounds = map.getBounds();
+          const center = map.getCenter();
+          setDatePicker({
+            anchor: event.currentTarget,
+            viewport: {
+              bounds: {
+                west: bounds.getWest(),
+                south: bounds.getSouth(),
+                east: bounds.getEast(),
+                north: bounds.getNorth(),
+              },
+              center: { longitude: center.lng, latitude: center.lat },
+            },
+          });
+        }}
         sx={{
           position: 'absolute',
           top: 8,
@@ -335,10 +381,12 @@ function SatelliteComparePane({
           zIndex: 1,
           px: 1,
           py: 0.5,
+          display: 'block',
+          textAlign: 'left',
           borderRadius: 1,
           bgcolor: 'rgb(0 0 0 / 64%)',
           color: 'common.white',
-          pointerEvents: 'none',
+          '&:hover, &.Mui-focusVisible': { bgcolor: 'rgb(0 0 0 / 80%)' },
         }}
       >
         <Typography variant="body2" sx={{ lineHeight: 1.3 }}>
@@ -350,7 +398,25 @@ function SatelliteComparePane({
         <Typography variant="caption" sx={{ display: 'block', opacity: 0.85 }}>
           {t`${time} · ${cloud} cloud`}
         </Typography>
-      </Box>
+      </ButtonBase>
+      <Popover
+        open={datePicker !== null}
+        anchorEl={datePicker?.anchor ?? null}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        onClose={() => {
+          setDatePicker(null);
+        }}
+      >
+        {datePicker === null ? null : (
+          <ComparedSceneDatePicker
+            scene={scene}
+            viewport={datePicker.viewport}
+            onClose={() => {
+              setDatePicker(null);
+            }}
+          />
+        )}
+      </Popover>
     </Box>
   );
 }

@@ -6,6 +6,7 @@ import CompareOutlinedIcon from '@mui/icons-material/CompareOutlined';
 import ShareOutlinedIcon from '@mui/icons-material/ShareOutlined';
 import lookupTimeZone from '@photostructure/tz-lookup';
 import {
+  Alert,
   Box,
   Button,
   IconButton,
@@ -14,7 +15,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -23,8 +24,17 @@ import {
   satelliteSceneKey,
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
+import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
+import type { SatelliteSearchResult } from '@/domain/satellite/SatelliteSearchResult';
 import { createComparisonShareUrl } from '@/presentation/map/mapShareUrl';
 import { appColors } from '@/presentation/theme/appColors';
+import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
+import {
+  bestCoverageMatchOn,
+  catalogCloudCoverCeilingPercent,
+  searchMonthRange,
+  toDateInputValue,
+} from '@/presentation/satellite-browser/satelliteCalendarSearch';
 import {
   clearComparedScenes,
   closeComparison,
@@ -32,11 +42,137 @@ import {
   minimumComparedScenes,
   openComparison,
   removeComparedScene,
+  replaceComparedScene,
   satelliteCompareStore,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 
 /** Zoom used when the main map has no camera yet, roughly one Sentinel tile. */
 const fallbackComparisonZoom = 10;
+
+interface ComparedSceneDatePickerProps {
+  readonly scene: SatelliteScene;
+  /** The pane's visible area: it anchors the search and weights day coverage. */
+  readonly viewport: SatelliteSearchViewport;
+  readonly onClose: () => void;
+}
+
+interface MonthSearch {
+  readonly month: string;
+  readonly result: SatelliteSearchResult | null;
+  readonly failed: boolean;
+}
+
+/**
+ * The Satellite acquisition calendar for one comparison pane. It opens on the scene's
+ * month; a day swaps the pane to that day's best-coverage scene, as in the search.
+ */
+export function ComparedSceneDatePicker({
+  scene,
+  viewport,
+  onClose,
+}: ComparedSceneDatePickerProps) {
+  const { t } = useLingui();
+  const { clock, database, searchSatelliteScenes } = useRuntimeServices();
+  const [today] = useState(() => clock.now());
+  const latestMonth = toDateInputValue(today).slice(0, 7);
+  const [month, setMonth] = useState(scene.acquiredAt.slice(0, 7));
+  const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(50);
+  const [search, setSearch] = useState<MonthSearch | null>(null);
+  const [alreadyCompared, setAlreadyCompared] = useState(false);
+  const monthSearch = search?.month === month ? search : null;
+
+  useEffect(() => {
+    let active = true;
+    void database.loadMaximumCloudCoverPercent().then(
+      (value) => {
+        if (active) setMaxCloudCoverPercent(value);
+      },
+      () => undefined,
+    );
+    return () => {
+      active = false;
+    };
+  }, [database]);
+
+  useEffect(() => {
+    if (searchSatelliteScenes === null) return undefined;
+    const controller = new AbortController();
+    const range = searchMonthRange(month, today);
+    searchSatelliteScenes
+      .execute(
+        {
+          viewport,
+          startDate: range.startDate,
+          endDate: range.endDate,
+          productLevel: 'L2A',
+          maxCloudCoverPercent: catalogCloudCoverCeilingPercent,
+        },
+        controller.signal,
+      )
+      .then(
+        (result) => {
+          if (!controller.signal.aborted) setSearch({ month, result, failed: false });
+        },
+        () => {
+          if (!controller.signal.aborted)
+            setSearch({ month, result: null, failed: true });
+        },
+      );
+    return () => {
+      controller.abort();
+    };
+  }, [month, searchSatelliteScenes, today, viewport]);
+
+  const selectDate = (date: string) => {
+    const result = monthSearch?.result;
+    const match =
+      result === undefined || result === null
+        ? undefined
+        : bestCoverageMatchOn(result, date);
+    if (match === undefined) return;
+    const currentKey = satelliteSceneKey(scene);
+    if (satelliteSceneKey(match.scene) === currentKey) {
+      onClose();
+      return;
+    }
+    if (!replaceComparedScene(currentKey, match.scene)) {
+      setAlreadyCompared(true);
+      return;
+    }
+    onClose();
+  };
+
+  return (
+    <Stack spacing={1.5} sx={{ p: 2, width: 388 }}>
+      <Typography component="h3" variant="subtitle2">
+        <Trans>Change image date</Trans>
+      </Typography>
+      <AcquisitionCalendar
+        displayMonth={month}
+        maximumMonth={latestMonth}
+        navigationDisabled={false}
+        onMonthChange={(nextMonth) => {
+          setMonth(nextMonth);
+          setAlreadyCompared(false);
+        }}
+        today={today}
+        mode={{
+          kind: 'scene',
+          loadingMonth: monthSearch === null ? month : null,
+          maxCloudCoverPercent,
+          result: monthSearch?.result ?? null,
+          onSelectDate: selectDate,
+        }}
+      />
+      {monthSearch?.failed === true ? (
+        <Alert severity="error">{t`Images for this month could not be loaded.`}</Alert>
+      ) : null}
+      {alreadyCompared ? (
+        <Alert severity="info">{t`That image is already in the comparison.`}</Alert>
+      ) : null}
+    </Stack>
+  );
+}
 
 /**
  * Pinned at the bottom of the results pane once a scene is added: the comparison count,

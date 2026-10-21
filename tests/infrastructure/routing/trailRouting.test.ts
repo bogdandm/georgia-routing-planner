@@ -1047,17 +1047,16 @@ describe('trail graph snapping and routing', () => {
         }
       }
       const graph = graphFromCoordinates(coordinates, pairs);
-      const edgeRelief = new Map(
-        [...graph.edges.values()].map((edge) => {
-          const climb =
-            (elevations.get(edge.nodeB) ?? 0) - (elevations.get(edge.nodeA) ?? 0);
-          return [
-            edge.key,
-            { ascentMeters: Math.max(0, climb), descentMeters: Math.max(0, -climb) },
-          ] as const;
-        }),
+      const edgeProfiles = new Map(
+        [...graph.edges.values()].map(
+          (edge) =>
+            [
+              edge.key,
+              [elevations.get(edge.nodeA) ?? 0, elevations.get(edge.nodeB) ?? 0],
+            ] as const,
+        ),
       );
-      const terrain = { nodeElevationMeters: elevations, edgeRelief };
+      const terrain = { nodeElevationMeters: elevations, edgeProfiles };
       const arcSeconds = (from: string, to: string, distanceMeters: number): number => {
         const climb = (elevations.get(to) ?? 0) - (elevations.get(from) ?? 0);
         return estimateHikingSeconds(
@@ -1149,7 +1148,9 @@ describe('trail graph snapping and routing', () => {
     const terrain = await sampleTrailGraphTerrain(graph, (coordinates) =>
       Promise.resolve(coordinates.map(hillMeters)),
     );
-    expect(terrain?.edgeRelief.get('finish|start')?.ascentMeters).toBeGreaterThan(55);
+    expect(
+      Math.max(...(terrain?.edgeProfiles.get('finish|start') ?? [])),
+    ).toBeGreaterThan(55);
 
     const level = routeTrailGraph(graph, [0, 0], [0.01, 0], distanceOnly);
     const hiking = routeTrailGraph(graph, [0, 0], [0.01, 0], {

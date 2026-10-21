@@ -1844,8 +1844,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           routePlanRequestAbort.current === controller &&
           routePlanRequestOwner.current === owner;
         if (controller.signal.aborted || !ownsRequest) return;
+        // The option may have been turned off while the worker was still searching.
+        const { developerMode: showsSearch, mapDebugOptions: debugOptions } =
+          useUiStore.getState();
         setRoutePlanSearchTrace(
-          result.searchTrace === undefined
+          result.searchTrace === undefined ||
+            !showsSearch ||
+            !debugOptions.showRouteSearch
             ? null
             : { planId: active.id, trace: result.searchTrace },
         );

@@ -85,16 +85,10 @@ export interface EdgeProjection {
   readonly distanceMeters: number;
 }
 
-/** Climb and descent in metres along one walking direction. */
-export interface TrailRelief {
-  readonly ascentMeters: number;
-  readonly descentMeters: number;
-}
-
 export interface TrailGraphTerrain {
   readonly nodeElevationMeters: ReadonlyMap<string, number>;
-  /** Relief along each edge walked from `nodeA` to `nodeB`, including interior samples. */
-  readonly edgeRelief: ReadonlyMap<string, TrailRelief>;
+  /** Elevations evenly spaced along each edge from `nodeA` to `nodeB`, endpoints included. */
+  readonly edgeProfiles: ReadonlyMap<string, readonly number[]>;
 }
 
 export interface TrailGraphRouteOptions {
@@ -162,12 +156,14 @@ interface AssignedSnap extends NearestEdge {
   coordinate: TrackCoordinate;
 }
 
-/** A temporary arc piece of an edge split at snap points; `span` is its share of the edge. */
+/** A temporary arc piece of an edge split at snap points. */
 interface SplitPiece {
   readonly parentEdgeKey: string;
   /** The piece end nearer the parent's `nodeA`. */
   readonly nodeA: string;
-  readonly span: number;
+  /** Piece ends as fractions along the parent edge from its `nodeA`. */
+  readonly fromFraction: number;
+  readonly toFraction: number;
 }
 
 interface QueueEntry {
@@ -1079,7 +1075,8 @@ function assignSnapNodes(
       splitPieces.set(splitEdgeKey, {
         parentEdgeKey: edgeKey,
         nodeA: from,
-        span: (fractions[index] ?? 1) - (fractions[index - 1] ?? 0),
+        fromFraction: fractions[index - 1] ?? 0,
+        toFraction: fractions[index] ?? 1,
       });
       addArc(adjacencyOverrides, graph, from, to, splitEdgeKey, distanceMeters);
       addArc(adjacencyOverrides, graph, to, from, splitEdgeKey, distanceMeters);
@@ -1133,7 +1130,7 @@ export async function sampleTrailGraphTerrain(
     if (elevation === null || elevation === undefined) return null;
     nodeElevationMeters.set(node.key, elevation);
   }
-  const edgeRelief = new Map<string, TrailRelief>();
+  const edgeProfiles = new Map<string, readonly number[]>();
   for (const [position, { edge, firstInterior }] of edges.entries()) {
     const interiorEnd = edges[position + 1]?.firstInterior ?? coordinates.length;
     const profile = [
@@ -1141,25 +1138,55 @@ export async function sampleTrailGraphTerrain(
       ...elevations.slice(firstInterior, interiorEnd),
       nodeElevationMeters.get(edge.nodeB),
     ];
-    let ascentMeters = 0;
-    let descentMeters = 0;
-    for (let index = 1; index < profile.length; index += 1) {
-      const previous = profile[index - 1];
-      const current = profile[index];
-      if (
-        previous === null ||
-        previous === undefined ||
-        current === null ||
-        current === undefined
-      ) {
-        return null;
-      }
-      if (current > previous) ascentMeters += current - previous;
-      else descentMeters += previous - current;
+    if (
+      !profile.every((elevation): elevation is number => typeof elevation === 'number')
+    ) {
+      return null;
     }
-    edgeRelief.set(edge.key, { ascentMeters, descentMeters });
+    edgeProfiles.set(edge.key, profile);
   }
-  return { nodeElevationMeters, edgeRelief };
+  return { nodeElevationMeters, edgeProfiles };
+}
+
+/** Linearly interpolated elevation at `fraction` of an evenly sampled edge profile. */
+function profileElevation(profile: readonly number[], fraction: number): number {
+  const position = fraction * (profile.length - 1);
+  const index = Math.max(0, Math.min(Math.floor(position), profile.length - 2));
+  const start = profile[index] ?? 0;
+  const end = profile[index + 1] ?? start;
+  return start + (end - start) * (position - index);
+}
+
+/**
+ * Climb and descent walking an edge profile from `fromFraction` to `toFraction`. The
+ * walked sub-profile includes its interpolated ends, so the relief always covers the net
+ * elevation change the search heuristics assume.
+ */
+function profileRelief(
+  profile: readonly number[],
+  fromFraction: number,
+  toFraction: number,
+): readonly [ascentMeters: number, descentMeters: number] {
+  const low = Math.min(fromFraction, toFraction);
+  const high = Math.max(fromFraction, toFraction);
+  const lastIndex = profile.length - 1;
+  const walked = [profileElevation(profile, low)];
+  for (
+    let index = Math.floor(low * lastIndex) + 1;
+    index < high * lastIndex;
+    index += 1
+  ) {
+    walked.push(profile[index] ?? 0);
+  }
+  walked.push(profileElevation(profile, high));
+  let climb = 0;
+  let drop = 0;
+  for (let index = 1; index < walked.length; index += 1) {
+    const change = (walked[index] ?? 0) - (walked[index - 1] ?? 0);
+    if (change > 0) climb += change;
+    else drop -= change;
+  }
+  return fromFraction <= toFraction ? [climb, drop] : [drop, climb];
 }
 
 interface SearchSide {
@@ -1229,26 +1256,28 @@ export function routeTrailGraph(
     if (terrain === null) return 0;
     const known = terrain.nodeElevationMeters.get(nodeKey);
     if (known !== undefined) return known;
-    // Temporary snap nodes lie on their edge; interpolating keeps every split piece's
-    // relief at least its net elevation change, which the heuristics rely on.
+    // Temporary snap nodes read their edge's sampled profile, matching the relief of the
+    // split pieces that end at them.
     const snap = nodeKey === startKey ? prepared.start : prepared.destination;
-    const elevationA = terrain.nodeElevationMeters.get(snap.edge.nodeA) ?? 0;
-    const elevationB = terrain.nodeElevationMeters.get(snap.edge.nodeB) ?? 0;
-    return elevationA + (elevationB - elevationA) * snap.projection.fraction;
+    return profileElevation(
+      terrain.edgeProfiles.get(snap.edge.key) ?? [0, 0],
+      snap.projection.fraction,
+    );
   };
   const walkSeconds = (arc: TrailGraphArc, reversed: boolean): number => {
     if (terrain === null) return estimateHikingSeconds(arc.distanceMeters, 0, 0);
     const piece = prepared.splitPieces.get(arc.edgeKey);
     const edgeKey = piece?.parentEdgeKey ?? arc.edgeKey;
-    const relief = terrain.edgeRelief.get(edgeKey);
-    const span = piece?.span ?? 1;
-    const ascentMeters = (relief?.ascentMeters ?? 0) * span;
-    const descentMeters = (relief?.descentMeters ?? 0) * span;
-    const alongRelief =
+    const nearEnd = piece?.fromFraction ?? 0;
+    const farEnd = piece?.toFraction ?? 1;
+    const leavesNearEnd =
       (arc.from === (piece?.nodeA ?? graph.edges.get(edgeKey)?.nodeA)) !== reversed;
-    return alongRelief
-      ? estimateHikingSeconds(arc.distanceMeters, ascentMeters, descentMeters)
-      : estimateHikingSeconds(arc.distanceMeters, descentMeters, ascentMeters);
+    const [ascentMeters, descentMeters] = profileRelief(
+      terrain.edgeProfiles.get(edgeKey) ?? [0, 0],
+      leavesNearEnd ? nearEnd : farEnd,
+      leavesNearEnd ? farEnd : nearEnd,
+    );
+    return estimateHikingSeconds(arc.distanceMeters, ascentMeters, descentMeters);
   };
   const startElevation = elevationForNode(startKey);
   const destinationElevation = elevationForNode(destinationKey);
@@ -1288,8 +1317,19 @@ export function routeTrailGraph(
   let bestSeconds = startKey === destinationKey ? 0 : Number.POSITIVE_INFINITY;
   let meetingNode: string | null = startKey === destinationKey ? startKey : null;
 
+  let lastSide: SearchSide = backward;
   while (forward.queue.size > 0 && backward.queue.size > 0) {
-    const side = forward.queue.size <= backward.queue.size ? forward : backward;
+    // Pijls & Post alternate the two processes every iteration; the smaller frontier
+    // goes first, and ties alternate so a corridor still advances from both ends.
+    const side =
+      forward.queue.size === backward.queue.size
+        ? lastSide === forward
+          ? backward
+          : forward
+        : forward.queue.size < backward.queue.size
+          ? forward
+          : backward;
+    lastSide = side;
     const opposite = side === forward ? backward : forward;
     const nodeKey = side.queue.pop()?.nodeKey;
     if (nodeKey !== undefined && !closed.has(nodeKey)) {

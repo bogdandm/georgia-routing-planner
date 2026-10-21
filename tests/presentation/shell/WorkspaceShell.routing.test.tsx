@@ -533,6 +533,68 @@ describe('WorkspaceShell', () => {
     );
   });
 
+  it('drops a search trace that arrives after the developer option was turned off', async () => {
+    const trace: TrailRouteSearchTrace = {
+      forward: [
+        [
+          [44.64, 42.66],
+          [44.641, 42.661],
+        ],
+      ],
+      backward: [],
+    };
+    // The test TypeScript lib predates Promise.withResolvers.
+    let finishRoute: (result: TrailRouteResult) => void = () => undefined;
+    const route = vi.fn<TrailRouter['route']>(
+      () =>
+        new Promise((resolve) => {
+          finishRoute = resolve;
+        }),
+    );
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const { mapLayers } = services;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    const setRouteSearchTrace = vi.spyOn(mapLayers, 'setRouteSearchTrace');
+    const debugOptions = {
+      showCollisionBoxes: false,
+      showTileBoundaries: false,
+      showRouteSearch: true,
+    };
+    useUiStore.setState({ developerMode: true, mapDebugOptions: debugOptions });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledOnce();
+    });
+
+    act(() => {
+      useUiStore.setState({
+        mapDebugOptions: { ...debugOptions, showRouteSearch: false },
+      });
+    });
+    await act(async () => {
+      finishRoute({
+        status: 'failed',
+        reason: 'no-route',
+        searchTrace: trace,
+      });
+      await Promise.resolve();
+    });
+    expect(await screen.findByText(/No connected route was found/u)).toBeVisible();
+    expect(setRouteSearchTrace).not.toHaveBeenCalledWith(trace);
+  });
+
   it('saves accepted route geometry without waiting for elevation', async () => {
     const sampling = { signal: null as AbortSignal | null };
     const sampleMany = vi.fn(

@@ -17,11 +17,15 @@ import {
 } from '@/infrastructure/routing/trailGraph';
 
 export const ROUTING_ZOOM = 14;
-export const MAX_ROUTING_TILES = 256;
-export const ROUTING_TILE_CACHE_ENTRIES = 128;
+/** About 40 km diagonal or 120 km axis-aligned legs in Georgia with the capped padding. */
+export const MAX_ROUTING_TILES = 512;
+/** Holds a whole maximal area, so the expanded retry reuses the first attempt's tiles. */
+export const ROUTING_TILE_CACHE_ENTRIES = MAX_ROUTING_TILES;
 export const ROUTING_TILE_FETCH_CONCURRENCY = 8;
 
 const minimumRoutingPaddingMeters = 2_000;
+/** Detour room on each side; uncapped, the area grows quadratically with leg length. */
+const maximumRoutingPaddingMeters = 5_000;
 const webMercatorMaximumLatitude = 85.051_128_78;
 
 export interface RoutingBounds {
@@ -134,9 +138,12 @@ export function routingPaddingMeters(
   start: TrackCoordinate,
   destination: TrackCoordinate,
 ): number {
-  return Math.max(
-    minimumRoutingPaddingMeters,
-    geodesicDistanceMeters(start, destination) * 0.25,
+  return Math.min(
+    maximumRoutingPaddingMeters,
+    Math.max(
+      minimumRoutingPaddingMeters,
+      geodesicDistanceMeters(start, destination) * 0.25,
+    ),
   );
 }
 
@@ -325,7 +332,10 @@ export class RoutingTileLoader {
   ) {}
 
   public static async initialize(
-    configuration: RoutingWorkerInitializeRequest,
+    configuration: Pick<
+      RoutingWorkerInitializeRequest,
+      'tileJsonUrl' | 'transportationSourceLayer' | 'requestTimeoutMs'
+    >,
     signal: AbortSignal,
     fetcher: RoutingFetch = fetch,
   ): Promise<RoutingTileLoaderInitialization> {

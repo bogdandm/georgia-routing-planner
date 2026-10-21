@@ -327,6 +327,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       setMapDebugOptions({
         showCollisionBoxes: false,
         showTileBoundaries: false,
+        showRouteSearch: false,
       });
     }
     void persistUiPreferences({

@@ -187,11 +187,14 @@ track geometry. FIT, KML, shared tracks, and route plans do not create track mar
 first click sets the start; each later click adds a leg in the persistent **Next
 segment: Routes | Line** mode. **Routes** snaps both ends to the detail-vector street
 network and searches a walkable connection in a browser worker; **Line** adds a direct
-segment. A pending routed leg reports tile download, graph construction, and search
-progress, disables conflicting controls, and is cancelled by Undo or Clear. Routing has
-a one-minute limit; a failed leg keeps the plan and offers a direct-line fallback
-without changing the mode. Missing provider topology shows an unavailable state; there
-is no backend or fallback routing service. Topology rules are in
+segment. Routed legs prefer the fastest hiking time over the shortest distance, so they
+avoid needless climbs; without terrain data they fall back to distance only. A pending
+routed leg reports tile download, graph construction, route terrain loading, and search
+progress, disables conflicting controls, and is cancelled by Undo or Clear. Ctrl+Z
+(Cmd+Z on macOS) undoes the last point like **Undo**, except while typing in a field.
+Routing has a one-minute limit; a failed leg keeps the plan and offers a direct-line
+fallback without changing the mode. Missing provider topology shows an unavailable
+state; there is no backend or fallback routing service. Topology rules are in
 [runtime flows](./runtime-flows.md#browser-route-planning).
 
 After each accepted edit the browser samples terrain and recomputes metrics, profile,
@@ -680,9 +683,11 @@ Diagnostics are local, bounded, and redacted before storage. The drawer is non-m
 closes only from its header or the Diagnostics rail button. Its tabs are Overview,
 Sentinel query, Map, Logs, and Health. The Map tab shows exact local camera state,
 source and layer IDs, terrain, failures, WebGL capabilities, and temporary debug flags
-that reset when developer mode ends. The Sentinel query tab shows a memory-only timeline
-of the current or last search and render operation with per-step state and duration,
-without payloads, geometry, or URLs.
+that reset when developer mode ends: MapLibre tile boundaries and collision boxes, and
+**Show route search**, which requests each new routed leg's explored search arcs and
+draws them under the route plan, one color per search direction. The Sentinel query tab
+shows a memory-only timeline of the current or last search and render operation with
+per-step state and duration, without payloads, geometry, or URLs.
 
 Exported bundles use schema version 3 with build/runtime data, events, health results,
 notes, and a map snapshot whose coordinates are rounded to 0.1 degree; the inspection

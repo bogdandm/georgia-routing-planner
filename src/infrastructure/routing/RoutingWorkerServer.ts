@@ -1,3 +1,6 @@
+import ky from 'ky';
+
+import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type {
   TrailRouteProgress,
   TrailRouteProgressListener,
@@ -5,6 +8,7 @@ import type {
   TrailRouteResult,
   TrailRouteSuccess,
 } from '@/application/ports/TrailRouter';
+import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import {
   parseRoutingWorkerInitializeRequest,
   parseRoutingWorkerRouteRequest,
@@ -19,7 +23,13 @@ import {
   type RoutingTileLoaderInitialization,
   type RoutingTileLoadResult,
 } from '@/infrastructure/routing/routingTiles';
-import { buildTrailGraph, routeTrailGraph } from '@/infrastructure/routing/trailGraph';
+import {
+  buildTrailGraph,
+  routeTrailGraph,
+  sampleTrailGraphTerrain,
+  type TrailGraph,
+  type TrailGraphTerrain,
+} from '@/infrastructure/routing/trailGraph';
 import {
   type WorkerRpcEndpoint,
   WorkerRpcServer,
@@ -47,8 +57,31 @@ async function yieldForCancellation(signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
 }
 
+/** Terrain failures degrade to distance-only routing; only cancellation propagates. */
+async function loadGraphTerrain(
+  graph: TrailGraph,
+  elevation: Pick<ElevationProvider, 'sampleMany'> | null,
+  signal: AbortSignal,
+): Promise<TrailGraphTerrain | null> {
+  if (elevation === null) return null;
+  try {
+    return await sampleTrailGraphTerrain(graph, async (coordinates) =>
+      (
+        await elevation.sampleMany(
+          coordinates.map(([longitude, latitude]) => ({ longitude, latitude })),
+          signal,
+        )
+      ).map((sample) => (sample.status === 'available' ? sample.meters : null)),
+    );
+  } catch {
+    signal.throwIfAborted();
+    return null;
+  }
+}
+
 export async function executeTrailRoute(
   loader: RoutingAreaLoader,
+  elevation: Pick<ElevationProvider, 'sampleMany'> | null,
   request: TrailRouteRequest,
   signal: AbortSignal,
   onProgress?: TrailRouteProgressListener,
@@ -97,9 +130,15 @@ export async function executeTrailRoute(
       },
     );
     await yieldForCancellation(signal);
+    report('loading-terrain');
+    const terrain = await loadGraphTerrain(graph, elevation, signal);
+    await yieldForCancellation(signal);
     report('searching-route');
     await yieldForCancellation(signal);
-    const route = routeTrailGraph(graph, request.start, request.destination);
+    const route = routeTrailGraph(graph, request.start, request.destination, {
+      terrain,
+      includeSearchTrace: request.includeSearchTrace,
+    });
     await yieldForCancellation(signal);
     if (route.status === 'ready') {
       const result: TrailRouteSuccess = {
@@ -118,6 +157,7 @@ export async function executeTrailRoute(
         graphNodeCount: graph.nodes.size,
         graphEdgeCount: graph.edges.size,
         expandedAreaRetryUsed: attempt === 1,
+        ...(route.searchTrace === undefined ? {} : { searchTrace: route.searchTrace }),
       };
       return result;
     }
@@ -129,7 +169,11 @@ export async function executeTrailRoute(
       };
     }
     if (!route.visitedBoundary || attempt === 1) {
-      return { status: 'failed', reason: 'no-route' };
+      return {
+        status: 'failed',
+        reason: 'no-route',
+        ...(route.searchTrace === undefined ? {} : { searchTrace: route.searchTrace }),
+      };
     }
   }
   return { status: 'failed', reason: 'no-route' };
@@ -139,6 +183,7 @@ export async function executeTrailRoute(
 export class RoutingWorkerServer {
   readonly #rpc: WorkerRpcServer;
   #loader: RoutingTileLoader | null = null;
+  #elevation: RasterDemElevationProvider | null = null;
   #initializationGeneration = 0;
   #disposed = false;
 
@@ -159,6 +204,7 @@ export class RoutingWorkerServer {
           this.#initializationGeneration = generation;
           this.#loader?.dispose();
           this.#loader = null;
+          this.#elevation = null;
           const initialization = await initializeLoader(request, context.signal);
           if (initialization.status === 'failed') {
             return { initialized: false, reason: initialization.reason };
@@ -173,6 +219,11 @@ export class RoutingWorkerServer {
             return { initialized: false, reason: 'routing-data-unavailable' };
           }
           this.#loader = initialization.loader;
+          this.#elevation = new RasterDemElevationProvider(
+            ky.create({ retry: { limit: 0 }, timeout: request.requestTimeoutMs }),
+            request.terrain,
+            { generate: () => crypto.randomUUID() },
+          );
           return { initialized: true };
         },
         [routingWorkerMethods.route]: async (payload, context) => {
@@ -182,6 +233,7 @@ export class RoutingWorkerServer {
           }
           return executeTrailRoute(
             this.#loader,
+            this.#elevation,
             request,
             context.signal,
             (progress) => {
@@ -198,6 +250,7 @@ export class RoutingWorkerServer {
         this.#initializationGeneration += 1;
         this.#loader?.dispose();
         this.#loader = null;
+        this.#elevation = null;
       },
     );
   }

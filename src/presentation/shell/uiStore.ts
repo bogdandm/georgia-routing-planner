@@ -39,7 +39,11 @@ export const useUiStore = create<UiState>()((set) => ({
   developerDrawerOpen: false,
   developerMode: false,
   elevationGradeLegendDismissed: false,
-  mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+  mapDebugOptions: {
+    showCollisionBoxes: false,
+    showTileBoundaries: false,
+    showRouteSearch: false,
+  },
   markerSort: 'created',
   trackSort: 'created',
   mobileWorkspaceOpen: false,

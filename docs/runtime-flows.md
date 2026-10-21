@@ -501,7 +501,7 @@ sequenceDiagram
   alt Routes leg
     Tracks->>Router: route(start, destination, signal)
     Router->>Worker: validated request over WorkerRpc
-    Worker->>Worker: load bounded MVT, build graph, snap, A*
+    Worker->>Worker: load bounded MVT, build graph, sample DEM, snap, bidirectional A*
     Worker-->>Tracks: routed geometry and progress events
   else Line leg
     Tracks->>Tracks: append direct segment
@@ -515,10 +515,19 @@ sequenceDiagram
 The first click creates only a waypoint; each later click uses the currently selected
 mode. The worker filters the detail-vector `streets` layer to road and path lines, nodes
 eligible junctions through a bounded spatial index (layer and bridge/tunnel differences
-prevent inferred connections), snaps both endpoints, and runs A* with geodesic weights.
-A no-path result expands the tile coverage once within the same budgets. Failures are
-explicit — no path, area too large, routing data unavailable, 60 s timeout
-(`ROUTE_CALCULATION_TIMEOUT_MS`), or invalid data — and never become a direct line.
+prevent inferred connections), samples DEM elevation for the graph, snaps both
+endpoints, and runs bidirectional A* (NBA\*, Pijls & Post 2009) whose arc cost is the
+DIN 33466 hiking time of each edge — the walking-time estimate's model applied per edge,
+so climbing never overlaps flat walking elsewhere — and a short climb loses to a
+slightly longer level detour. Each edge keeps an elevation profile from its node
+elevations plus 30 m interior samples; a snap inside an edge splits that profile at the
+snap point. Both search heuristics are DIN times for the straight-line distance and net
+elevation change, which keeps them consistent and the route optimal. Without usable
+terrain the same search minimizes distance. A no-path result expands the tile coverage
+once within the same budgets. Failures are explicit — no path, area too large, routing
+data unavailable, 60 s timeout (`ROUTE_CALCULATION_TIMEOUT_MS`), or invalid data — and
+never become a direct line. A developer flag returns the arcs each search direction
+relaxed for map display.
 
 Every click, mode change, Undo, Clear, close, and unmount aborts work from an older
 route-plan generation, and stale completions are ignored. Routed legs keep the clicked

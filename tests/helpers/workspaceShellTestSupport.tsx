@@ -202,7 +202,11 @@ export function setupWorkspaceShellTest(): void {
       activeTab: 'satellite',
       developerDrawerOpen: false,
       developerMode: false,
-      mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+      mapDebugOptions: {
+        showCollisionBoxes: false,
+        showTileBoundaries: false,
+        showRouteSearch: false,
+      },
       mobileWorkspaceOpen: false,
       navigationCollapsed: false,
       onboardingCompleted: true,

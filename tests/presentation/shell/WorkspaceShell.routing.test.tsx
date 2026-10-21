@@ -29,6 +29,8 @@ import {
   type TrailRouteResult,
 } from '@test/helpers/workspaceShellTestSupport';
 
+import type { TrailRouteSearchTrace } from '@/application/ports/TrailRouter';
+
 describe('WorkspaceShell', () => {
   setupWorkspaceShellTest();
 
@@ -79,7 +81,7 @@ describe('WorkspaceShell', () => {
     });
     expect(await screen.findByText('Loading route tiles…')).toBeVisible();
     expect(route).toHaveBeenCalledWith(
-      { start: A, destination: B },
+      { start: A, destination: B, includeSearchTrace: false },
       expect.any(AbortSignal),
       expect.any(Function),
     );
@@ -104,6 +106,16 @@ describe('WorkspaceShell', () => {
       });
     });
     expect(await screen.findByText('Building route graph… 60%')).toBeVisible();
+    act(() => {
+      reportProgress?.({
+        phase: 'loading-terrain',
+        attempt: 1,
+        loadedTileCount: 16,
+        totalTileCount: 16,
+        graphProgress: 1,
+      });
+    });
+    expect(await screen.findByText('Loading route terrain…')).toBeVisible();
     act(() => {
       reportProgress?.({
         phase: 'searching-route',
@@ -398,6 +410,189 @@ describe('WorkspaceShell', () => {
       'aria-pressed',
       'true',
     );
+  });
+
+  it('undoes the last route point with Ctrl+Z or Cmd+Z outside text fields', async () => {
+    const route = vi.fn<TrailRouter['route']>();
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
+    await user.click(nameInput);
+    await user.keyboard('{Control>}z{/Control}');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    act(() => {
+      nameInput.blur();
+    });
+    await user.keyboard('{Control>}z{/Control}');
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await user.keyboard('{Meta>}z{/Meta}');
+    expect(
+      await screen.findByText('Click the map to choose the route start.'),
+    ).toBeVisible();
+  });
+
+  it('requests and draws the route search only while the developer option is on', async () => {
+    const trace: TrailRouteSearchTrace = {
+      forward: [
+        [
+          [44.64, 42.66],
+          [44.641, 42.661],
+        ],
+      ],
+      backward: [
+        [
+          [44.65, 42.67],
+          [44.649, 42.669],
+        ],
+      ],
+    };
+    const route = vi
+      .fn<TrailRouter['route']>()
+      .mockResolvedValueOnce({
+        status: 'failed',
+        reason: 'no-route',
+        searchTrace: trace,
+      })
+      .mockResolvedValue({ status: 'failed', reason: 'no-route' });
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const { mapLayers } = services;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    const setRouteSearchTrace = vi.spyOn(mapLayers, 'setRouteSearchTrace');
+    useUiStore.setState({
+      developerMode: true,
+      mapDebugOptions: {
+        showCollisionBoxes: false,
+        showTileBoundaries: false,
+        showRouteSearch: true,
+      },
+    });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(setRouteSearchTrace).toHaveBeenLastCalledWith(trace);
+    });
+    expect(route).toHaveBeenLastCalledWith(
+      expect.objectContaining({ includeSearchTrace: true }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+
+    act(() => {
+      useUiStore.setState({
+        mapDebugOptions: {
+          showCollisionBoxes: false,
+          showTileBoundaries: false,
+          showRouteSearch: false,
+        },
+      });
+    });
+    expect(setRouteSearchTrace).toHaveBeenLastCalledWith(null);
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.66, latitude: 42.68 });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledTimes(2);
+    });
+    expect(route).toHaveBeenLastCalledWith(
+      expect.objectContaining({ includeSearchTrace: false }),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+  });
+
+  it('drops a search trace that arrives after the developer option was turned off', async () => {
+    const trace: TrailRouteSearchTrace = {
+      forward: [
+        [
+          [44.64, 42.66],
+          [44.641, 42.661],
+        ],
+      ],
+      backward: [],
+    };
+    // The test TypeScript lib predates Promise.withResolvers.
+    let finishRoute: (result: TrailRouteResult) => void = () => undefined;
+    const route = vi.fn<TrailRouter['route']>(
+      () =>
+        new Promise((resolve) => {
+          finishRoute = resolve;
+        }),
+    );
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const { mapLayers } = services;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    const setRouteSearchTrace = vi.spyOn(mapLayers, 'setRouteSearchTrace');
+    const debugOptions = {
+      showCollisionBoxes: false,
+      showTileBoundaries: false,
+      showRouteSearch: true,
+    };
+    useUiStore.setState({ developerMode: true, mapDebugOptions: debugOptions });
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(route).toHaveBeenCalledOnce();
+    });
+
+    act(() => {
+      useUiStore.setState({
+        mapDebugOptions: { ...debugOptions, showRouteSearch: false },
+      });
+    });
+    await act(async () => {
+      finishRoute({
+        status: 'failed',
+        reason: 'no-route',
+        searchTrace: trace,
+      });
+      await Promise.resolve();
+    });
+    expect(await screen.findByText(/No connected route was found/u)).toBeVisible();
+    expect(setRouteSearchTrace).not.toHaveBeenCalledWith(trace);
   });
 
   it('saves accepted route geometry without waiting for elevation', async () => {

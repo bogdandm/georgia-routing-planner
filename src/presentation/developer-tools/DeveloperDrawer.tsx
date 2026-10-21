@@ -385,6 +385,24 @@ export function DeveloperDrawer({
                   }
                   label="Show collision boxes"
                 />
+                <FormControlLabel
+                  sx={{ m: 0 }}
+                  slotProps={{ typography: { variant: 'body2' } }}
+                  control={
+                    <Checkbox
+                      size="small"
+                      sx={{ p: 0, mr: 1 }}
+                      checked={mapDebugOptions.showRouteSearch}
+                      onChange={(event) => {
+                        setMapDebugOptions({
+                          ...mapDebugOptions,
+                          showRouteSearch: event.target.checked,
+                        });
+                      }}
+                    />
+                  }
+                  label="Show route search"
+                />
               </Stack>
               <Box>
                 <Typography variant="overline">

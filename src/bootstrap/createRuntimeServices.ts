@@ -216,6 +216,12 @@ export function createRuntimeServices(): RuntimeServices {
           transportationSourceLayer:
             mapProviderConfiguration.value.detailVector.sourceLayers.streets,
           requestTimeoutMs: mapProviderConfiguration.value.policy.requestTimeoutMs,
+          terrain: {
+            tileUrl: mapProviderConfiguration.value.terrain.tileUrl,
+            encoding: mapProviderConfiguration.value.terrain.encoding,
+            tileSize: mapProviderConfiguration.value.terrain.tileSize,
+            maxZoom: mapProviderConfiguration.value.terrain.maxZoom,
+          },
         })
       : null;
   const elevationProvider =

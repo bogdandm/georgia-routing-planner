@@ -101,6 +101,9 @@ export const mapVisualPalette = {
     gpxTrackStart: appColors.marker.green,
     gpxTrackFinish: appColors.marker.red,
     satelliteFootprint: '#FF8C1A',
+    /** Developer route-search arcs: dark per-direction colors that stand out from orange roads. */
+    routeSearchForward: '#5E2CA5',
+    routeSearchBackward: '#00796B',
   },
 } as const;
 

@@ -29,6 +29,13 @@ export interface RoutingWorkerInitializeRequest {
   readonly tileJsonUrl: string;
   readonly transportationSourceLayer: string;
   readonly requestTimeoutMs: number;
+  /** Raster DEM the worker samples so routes weigh climbs by hiking time. */
+  readonly terrain: {
+    readonly tileUrl: string;
+    readonly encoding: 'mapbox' | 'terrarium';
+    readonly tileSize: 256 | 512;
+    readonly maxZoom: number;
+  };
 }
 
 export type RoutingWorkerInitializeResult =
@@ -43,12 +50,20 @@ const coordinateSchema = z.tuple([
   z.number().min(-90).max(90),
 ]);
 
+const searchTraceSchema = z
+  .object({
+    forward: z.array(z.tuple([coordinateSchema, coordinateSchema])),
+    backward: z.array(z.tuple([coordinateSchema, coordinateSchema])),
+  })
+  .strict();
+
 const routeRequestSchema = z
   .object({
     request: z
       .object({
         start: coordinateSchema,
         destination: coordinateSchema,
+        includeSearchTrace: z.boolean(),
       })
       .strict(),
     progressToken: z.number().int().positive(),
@@ -60,6 +75,14 @@ const initializeRequestSchema = z
     tileJsonUrl: z.url(),
     transportationSourceLayer: z.string().trim().min(1).max(200),
     requestTimeoutMs: z.number().int().min(1_000).max(30_000),
+    terrain: z
+      .object({
+        tileUrl: z.url(),
+        encoding: z.enum(['mapbox', 'terrarium']),
+        tileSize: z.union([z.literal(256), z.literal(512)]),
+        maxZoom: z.number().int().min(0).max(22),
+      })
+      .strict(),
   })
   .strict();
 
@@ -78,7 +101,12 @@ const progressEventSchema = z
     progressToken: z.number().int().positive(),
     progress: z
       .object({
-        phase: z.enum(['loading-tiles', 'building-graph', 'searching-route']),
+        phase: z.enum([
+          'loading-tiles',
+          'building-graph',
+          'loading-terrain',
+          'searching-route',
+        ]),
         attempt: z.union([z.literal(1), z.literal(2)]),
         loadedTileCount: z.number().int().nonnegative(),
         totalTileCount: z.number().int().nonnegative(),
@@ -100,6 +128,7 @@ const routeFailureSchema = z
       'routing-timeout',
     ]),
     endpoint: z.enum(['start', 'destination', 'both']).optional(),
+    searchTrace: searchTraceSchema.optional(),
   })
   .strict();
 
@@ -119,6 +148,7 @@ const routeSuccessSchema = z
     graphNodeCount: z.number().int().nonnegative(),
     graphEdgeCount: z.number().int().nonnegative(),
     expandedAreaRetryUsed: z.boolean(),
+    searchTrace: searchTraceSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -160,14 +190,7 @@ export function parseRoutingWorkerInitializeResult(
 export function parseRoutingWorkerRouteRequest(
   value: unknown,
 ): RoutingWorkerRouteRequest {
-  const parsed = routeRequestSchema.parse(value);
-  return {
-    request: {
-      start: parsed.request.start,
-      destination: parsed.request.destination,
-    },
-    progressToken: parsed.progressToken,
-  };
+  return routeRequestSchema.parse(value);
 }
 
 export function parseRoutingWorkerProgressEvent(
@@ -178,14 +201,14 @@ export function parseRoutingWorkerProgressEvent(
 
 export function parseTrailRouteResult(value: unknown): TrailRouteResult {
   const parsed = routeResultSchema.parse(value);
+  const searchTrace =
+    parsed.searchTrace === undefined ? {} : { searchTrace: parsed.searchTrace };
   if (parsed.status === 'failed') {
-    if (parsed.endpoint === undefined) {
-      return { status: 'failed', reason: parsed.reason };
-    }
     return {
       status: 'failed',
       reason: parsed.reason,
-      endpoint: parsed.endpoint,
+      ...(parsed.endpoint === undefined ? {} : { endpoint: parsed.endpoint }),
+      ...searchTrace,
     };
   }
   return {
@@ -198,5 +221,6 @@ export function parseTrailRouteResult(value: unknown): TrailRouteResult {
     graphNodeCount: parsed.graphNodeCount,
     graphEdgeCount: parsed.graphEdgeCount,
     expandedAreaRetryUsed: parsed.expandedAreaRetryUsed,
+    ...searchTrace,
   };
 }

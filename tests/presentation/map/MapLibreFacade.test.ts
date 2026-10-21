@@ -327,6 +327,7 @@ describe('MapLibreFacade', () => {
     facade.setDebugOptions({
       showCollisionBoxes: true,
       showTileBoundaries: true,
+      showRouteSearch: false,
     });
     expect(nativeMap.showCollisionBoxes).toBe(true);
     expect(nativeMap.showTileBoundaries).toBe(true);

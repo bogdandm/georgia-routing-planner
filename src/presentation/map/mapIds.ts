@@ -21,6 +21,7 @@ export const mapSourceIds = {
   importedTrackTrace: 'imported-track-trace',
   importedTrackEndpoints: 'imported-track-endpoints',
   routePlan: 'route-plan',
+  routeSearch: 'route-search',
   measurement: 'measurement',
   savedMarkers: 'saved-markers',
 } as const;
@@ -102,6 +103,10 @@ export const routePlanLayerIds = {
   previewLabel: 'route-plan-preview-label',
   waypoints: 'route-plan-waypoints',
   waypointLabels: 'route-plan-waypoint-labels',
+} as const;
+export const routeSearchLayerIds = {
+  casing: 'route-search-casing',
+  arcs: 'route-search-arcs',
 } as const;
 export const measurementLayerIds = {
   routed: 'measurement-routed',

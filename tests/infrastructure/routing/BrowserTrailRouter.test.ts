@@ -18,6 +18,17 @@ const initialization = {
   tileJsonUrl: 'https://routing.test/tilejson.json',
   transportationSourceLayer: 'transportation',
   requestTimeoutMs: 5_000,
+  terrain: {
+    tileUrl: 'https://terrain.test/{z}/{x}/{y}.webp',
+    encoding: 'terrarium',
+    tileSize: 512,
+    maxZoom: 12,
+  },
+} as const;
+const request = {
+  start: [44, 42],
+  destination: [45, 43],
+  includeSearchTrace: false,
 } as const;
 
 function success(startLongitude = 44, destinationLongitude = 45): TrailRouteSuccess {
@@ -72,18 +83,12 @@ describe('BrowserTrailRouter', () => {
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
 
-    await expect(
-      router.route(
-        { start: [44, 42], destination: [45, 43] },
-        new AbortController().signal,
-      ),
-    ).resolves.toEqual(success());
-    await expect(
-      router.route(
-        { start: [44, 42], destination: [45, 43] },
-        new AbortController().signal,
-      ),
-    ).resolves.toEqual(success());
+    await expect(router.route(request, new AbortController().signal)).resolves.toEqual(
+      success(),
+    );
+    await expect(router.route(request, new AbortController().signal)).resolves.toEqual(
+      success(),
+    );
 
     expect(initialize).toHaveBeenCalledOnce();
     expect(initialize).toHaveBeenCalledWith(
@@ -95,10 +100,7 @@ describe('BrowserTrailRouter', () => {
     const clonedRequest = route.mock.calls[0]?.[0];
     expect(structuredClone(clonedInitialization)).toEqual(initialization);
     expect(structuredClone(clonedRequest)).toEqual({
-      request: {
-        start: [44, 42],
-        destination: [45, 43],
-      },
+      request: { start: [44, 42], destination: [45, 43], includeSearchTrace: false },
       progressToken: 1,
     });
     expect(clonedInitialization).not.toHaveProperty('postMessage');
@@ -139,12 +141,9 @@ describe('BrowserTrailRouter', () => {
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
     const firstController = new AbortController();
-    const first = router.route(
-      { start: [44, 42], destination: [45, 43] },
-      firstController.signal,
-    );
+    const first = router.route(request, firstController.signal);
     const second = router.route(
-      { start: [44, 42], destination: [46, 43] },
+      { ...request, destination: [46, 43] },
       new AbortController().signal,
     );
     await Promise.all([firstStarted.promise, secondStarted.promise]);
@@ -177,10 +176,7 @@ describe('BrowserTrailRouter', () => {
       },
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
-    const pending = router.route(
-      { start: [44, 42], destination: [45, 43] },
-      new AbortController().signal,
-    );
+    const pending = router.route(request, new AbortController().signal);
     await routeStarted.promise;
 
     router.dispose();
@@ -198,12 +194,10 @@ describe('BrowserTrailRouter', () => {
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
 
-    await expect(
-      router.route(
-        { start: [44, 42], destination: [45, 43] },
-        new AbortController().signal,
-      ),
-    ).resolves.toEqual({ status: 'failed', reason: 'routing-data-invalid' });
+    await expect(router.route(request, new AbortController().signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'routing-data-invalid',
+    });
 
     router.dispose();
     server.dispose();
@@ -242,13 +236,9 @@ describe('BrowserTrailRouter', () => {
     const progress: TrailRouteProgress[] = [];
 
     await expect(
-      router.route(
-        { start: [44, 42], destination: [45, 43] },
-        new AbortController().signal,
-        (value) => {
-          progress.push(value);
-        },
-      ),
+      router.route(request, new AbortController().signal, (value) => {
+        progress.push(value);
+      }),
     ).resolves.toEqual(success());
     expect(progress).toEqual([
       {
@@ -283,12 +273,10 @@ describe('BrowserTrailRouter', () => {
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint, 10);
 
-    await expect(
-      router.route(
-        { start: [44, 42], destination: [45, 43] },
-        new AbortController().signal,
-      ),
-    ).resolves.toEqual({ status: 'failed', reason: 'routing-timeout' });
+    await expect(router.route(request, new AbortController().signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'routing-timeout',
+    });
     await requestAborted.promise;
 
     router.dispose();
@@ -305,17 +293,12 @@ describe('BrowserTrailRouter', () => {
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint, 10);
 
-    await expect(
-      router.route(
-        { start: [44, 42], destination: [45, 43] },
-        new AbortController().signal,
-      ),
-    ).resolves.toEqual({ status: 'failed', reason: 'routing-timeout' });
+    await expect(router.route(request, new AbortController().signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'routing-timeout',
+    });
     const controller = new AbortController();
-    const canceled = router.route(
-      { start: [44, 42], destination: [45, 43] },
-      controller.signal,
-    );
+    const canceled = router.route(request, controller.signal);
     controller.abort(new DOMException('Canceled.', 'AbortError'));
     await expect(canceled).rejects.toMatchObject({ name: 'AbortError' });
     expect(route).not.toHaveBeenCalled();
@@ -352,10 +335,7 @@ describe('BrowserTrailRouter', () => {
       return initializationPending.promise;
     });
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
-    const route = router.route(
-      { start: [44, 42], destination: [45, 43] },
-      new AbortController().signal,
-    );
+    const route = router.route(request, new AbortController().signal);
     await initializationStarted.promise;
 
     router.dispose();

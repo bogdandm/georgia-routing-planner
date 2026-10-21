@@ -16,7 +16,10 @@ import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 const basemapImagePixelRatio = 2;
 const samplesPerAxis = 4;
 
-/** Raw non-premultiplied RGBA image accepted by `map.addImage`. */
+/**
+ * Raw non-premultiplied RGBA image accepted by `map.addImage`. Generated images are
+ * shared by every map, so their pixels must never be modified.
+ */
 interface RawRgbaImage {
   readonly width: number;
   readonly height: number;
@@ -356,10 +359,28 @@ const patterns: Readonly<
 };
 
 /**
+ * Generated images never change and `map.addImage` copies their pixels, so the main map,
+ * every comparison pane, and the legend share one generation per ID. Large patterns
+ * take hundreds of milliseconds of main-thread time each to rasterize.
+ */
+const generatedImages = new Map<string, Promise<BasemapImage>>();
+
+/**
  * Creates the image for a basemap icon or pattern ID, or returns null for IDs the
  * basemap does not own. Pinhead icons get a white halo so they stay legible on imagery.
  */
 export function createBasemapImage(imageId: string): Promise<BasemapImage> | null {
+  const generated = generatedImages.get(imageId) ?? generateBasemapImage(imageId);
+  if (generated === null || generatedImages.has(imageId)) return generated;
+  generatedImages.set(imageId, generated);
+  // A failed icon decode is retried by the next request instead of being cached.
+  generated.catch(() => {
+    generatedImages.delete(imageId);
+  });
+  return generated;
+}
+
+function generateBasemapImage(imageId: string): Promise<BasemapImage> | null {
   const pattern = patterns[imageId];
   if (pattern !== undefined) {
     return Promise.resolve({
@@ -394,24 +415,96 @@ async function pinheadImage(
   return { image, pixelRatio: basemapImagePixelRatio };
 }
 
+/** One pattern shape: its exact coverage test and a box outside which it covers nothing. */
+interface PatternShape {
+  readonly top: number;
+  readonly bottom: number;
+  readonly left: number;
+  readonly right: number;
+  readonly covers: (x: number, y: number) => boolean;
+}
+
+/** Widens shape boxes so rounding in the exact tests never falls outside them. */
+const boxMarginCss = 1e-6;
+
+function patternShapes(geometry: PatternGeometry): readonly PatternShape[] {
+  const shapes: PatternShape[] = [];
+  const add = (
+    centerX: number,
+    centerY: number,
+    halfWidth: number,
+    halfHeight: number,
+    covers: (x: number, y: number) => boolean,
+  ) => {
+    shapes.push({
+      left: centerX - halfWidth - boxMarginCss,
+      top: centerY - halfHeight - boxMarginCss,
+      right: centerX + halfWidth + boxMarginCss,
+      bottom: centerY + halfHeight + boxMarginCss,
+      covers,
+    });
+  };
+  for (const [left, top, right, bottom] of geometry.rectangles) {
+    add(
+      (left + right) / 2,
+      (top + bottom) / 2,
+      (right - left) / 2,
+      (bottom - top) / 2,
+      (x, y) => x >= left && x < right && y >= top && y < bottom,
+    );
+  }
+  for (const [centerX, centerY, radius] of geometry.discs ?? []) {
+    add(
+      centerX,
+      centerY,
+      radius,
+      radius,
+      (x, y) => Math.hypot(x - centerX, y - centerY) <= radius,
+    );
+  }
+  for (const [centerX, centerY, radius, width] of geometry.rings ?? []) {
+    const outer = radius + width / 2;
+    add(
+      centerX,
+      centerY,
+      outer,
+      outer,
+      (x, y) => Math.abs(Math.hypot(x - centerX, y - centerY) - radius) <= width / 2,
+    );
+  }
+  for (const [x1, y1, x2, y2, width] of geometry.segments ?? []) {
+    add(
+      (x1 + x2) / 2,
+      (y1 + y2) / 2,
+      Math.abs(x2 - x1) / 2 + width / 2,
+      Math.abs(y2 - y1) / 2 + width / 2,
+      (x, y) => distanceToSegment(x, y, x1, y1, x2, y2) <= width / 2,
+    );
+  }
+  return shapes;
+}
+
 function rasterizePattern(geometry: PatternGeometry, color: Rgb): RawRgbaImage {
+  // Testing every shape for every supersample took seconds for the dense forest and
+  // protected-area patterns. Each image row tests only the shapes whose boxes reach it,
+  // and only inside those boxes; the exact tests are unchanged, so the pixels are too.
+  const shapes = patternShapes(geometry);
+  const rowCount = geometry.heightCss * basemapImagePixelRatio;
+  const shapesByRow = Array.from({ length: rowCount }, (_, row) => {
+    const rowTop = row / basemapImagePixelRatio;
+    const rowBottom = (row + 1) / basemapImagePixelRatio;
+    return shapes.filter((shape) => shape.bottom >= rowTop && shape.top <= rowBottom);
+  });
   return rasterize(geometry.widthCss, geometry.heightCss, (x, y) => {
-    const covered =
-      geometry.rectangles.some(
-        ([left, top, right, bottom]) =>
-          x >= left && x < right && y >= top && y < bottom,
-      ) ||
-      (geometry.discs ?? []).some(
-        ([centerX, centerY, radius]) => Math.hypot(x - centerX, y - centerY) <= radius,
-      ) ||
-      (geometry.rings ?? []).some(
-        ([centerX, centerY, radius, width]) =>
-          Math.abs(Math.hypot(x - centerX, y - centerY) - radius) <= width / 2,
-      ) ||
-      (geometry.segments ?? []).some(
-        ([x1, y1, x2, y2, width]) =>
-          distanceToSegment(x, y, x1, y1, x2, y2) <= width / 2,
-      );
+    const row = Math.min(rowCount - 1, Math.floor(y * basemapImagePixelRatio));
+    const covered = (shapesByRow[row] ?? []).some(
+      (shape) =>
+        x >= shape.left &&
+        x <= shape.right &&
+        y >= shape.top &&
+        y <= shape.bottom &&
+        shape.covers(x, y),
+    );
     return covered ? color : null;
   });
 }

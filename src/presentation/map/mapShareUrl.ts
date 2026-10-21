@@ -11,7 +11,6 @@ import type {
   MapLayerPreset,
   TerrainMode,
 } from '@/presentation/map/mapTypes';
-import { comparisonBasemaps } from '@/presentation/satellite-browser/satelliteCompareStore';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 
 const mapShareSchemaVersion = 2;
@@ -143,7 +142,7 @@ export function parseSharedComparison(search: string): readonly string[] {
     imageKeys.every(
       (imageKey) =>
         sceneKeyPattern.test(imageKey) ||
-        comparisonBasemaps.some((basemap) => basemap === imageKey),
+        satelliteBasemaps.some((basemap) => basemap === imageKey),
     )
     ? imageKeys
     : [];

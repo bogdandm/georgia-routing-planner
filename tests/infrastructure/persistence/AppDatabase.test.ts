@@ -462,6 +462,23 @@ describe('AppDatabase', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('persists and repairs the satellite comparison layout', async () => {
+    await expect(database.loadComparisonLayout()).resolves.toBeNull();
+
+    await database.saveComparisonLayout(4);
+    await expect(database.loadComparisonLayout()).resolves.toBe(4);
+
+    await database.settings.put({
+      key: 'satellite.comparison-layout',
+      value: 3,
+      updatedAt: '2026-10-21T00:00:00.000Z',
+    });
+    await expect(database.loadComparisonLayout()).resolves.toBeNull();
+    await expect(
+      database.settings.get('satellite.comparison-layout'),
+    ).resolves.toBeUndefined();
+  });
+
   it('persists one static basemap and imagery presentation choices without scene data', async () => {
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
       visibility: {

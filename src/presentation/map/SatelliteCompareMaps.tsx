@@ -51,26 +51,29 @@ import {
 } from '@/presentation/map/MapLibreLayerController';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
-import { satelliteBasemapLabels } from '@/presentation/map/mapShareUrl';
+import {
+  satelliteBasemapLabels,
+  satelliteBasemaps,
+  type SatelliteBasemap,
+} from '@/presentation/map/mapShareUrl';
 import { createSatelliteCompareMapStyle } from '@/presentation/map/mapStyleFactory';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { SatelliteCompareSync } from '@/presentation/map/SatelliteCompareSync';
 import { ComparedSceneDatePicker } from '@/presentation/satellite-browser/SatelliteComparison';
 import {
-  comparisonBasemaps,
+  clearComparisonSlot,
   isComparisonBasemap,
   maximumComparedScenes,
   setComparisonSlot,
   setComparisonTileProgress,
   swapComparisonSlots,
-  type ComparisonBasemap,
   type ComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 
 function basemapAttribution(
   configuration: MapProviderConfiguration,
-  basemap: ComparisonBasemap,
+  basemap: SatelliteBasemap,
 ): string {
   switch (basemap) {
     case 'google-satellite':
@@ -81,6 +84,8 @@ function basemapAttribution(
       return configuration.esriSatelliteBasemap.attribution;
     case 'napr-orthophoto':
       return configuration.naprOrthophoto.attribution;
+    case 'soviet-topographic':
+      return configuration.sovietTopographicMap.attribution;
   }
 }
 
@@ -284,7 +289,7 @@ interface SatelliteComparePaneProps {
   readonly mapLayers: MapLibreLayerController;
   readonly image: ComparisonSlot;
   /** Basemaps shown by any pane; the imagery menu offers the others. */
-  readonly shownBasemaps: ReadonlySet<ComparisonBasemap>;
+  readonly shownBasemaps: ReadonlySet<SatelliteBasemap>;
   /** The grid's one attribution control, crediting every pane's providers, or null. */
   readonly attributions: readonly string[] | null;
   /** The scene renders from its visual COG because TiTiler failed for it. */
@@ -314,17 +319,12 @@ function SatelliteComparePane({
   // camera are read once: the main map's controls are hidden while the grid is open.
   const [mounted] = useState(() => {
     const { visibility, openStreetMapOpacity } = mapLayerStore.getState();
-    // Static imagery shows only on a pane that picked it, whatever the main map shows.
+    // A static basemap shows only on a pane that picked it, whatever the main map shows.
     const plainVisibility: Record<LogicalMapLayerId, boolean> = { ...visibility };
-    for (const id of comparisonBasemaps) plainVisibility[id] = false;
-    // Water and vegetation fills would hide exactly the land cover being compared, and
-    // the opaque Soviet topographic scans would hide the imagery itself; a plain map
-    // keeps both as the main map shows them.
-    const imageryVisibility = {
-      ...plainVisibility,
-      'natural-features': false,
-      'soviet-topographic': false,
-    };
+    for (const id of satelliteBasemaps) plainVisibility[id] = false;
+    // Water and vegetation fills would hide exactly the land cover being compared;
+    // a plain map keeps them as the main map shows them.
+    const imageryVisibility = { ...plainVisibility, 'natural-features': false };
     return {
       imageryVisibility,
       sceneLayerVisibility: baseNativeLayerVisibility(imageryVisibility),
@@ -764,9 +764,9 @@ function SatelliteComparePane({
             }}
           />
         </ButtonBase>
-        <Tooltip title={t`Static satellite imagery`}>
+        <Tooltip title={t`Choose map layer preset`}>
           <ButtonBase
-            aria-label={t`Choose static satellite imagery`}
+            aria-label={t`Choose map layer preset`}
             aria-haspopup="menu"
             aria-expanded={basemapMenu !== null}
             onClick={(event) => {
@@ -789,9 +789,22 @@ function SatelliteComparePane({
         onClose={() => {
           setBasemapMenu(null);
         }}
-        slotProps={{ list: { 'aria-label': t`Choose static satellite imagery` } }}
+        slotProps={{ list: { 'aria-label': t`Choose map layer preset` } }}
       >
-        {comparisonBasemaps.map((candidate) => (
+        {/* As in the quick layer chooser; here it turns the pane back into a plain map. */}
+        <MenuItem
+          role="menuitemradio"
+          aria-checked={image === null}
+          selected={image === null}
+          onClick={() => {
+            clearComparisonSlot(index);
+            setBasemapMenu(null);
+          }}
+          sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+        >
+          <ListItemText primary={t`Vector OSM`} />
+        </MenuItem>
+        {satelliteBasemaps.map((candidate) => (
           <MenuItem
             key={candidate}
             role="menuitemradio"

@@ -5,7 +5,6 @@ import {
   clearComparisonSlot,
   closeComparison,
   openComparison,
-  openComparisonGrid,
   resetSatelliteCompareStore,
   satelliteCompareStore,
   setComparisonLayout,
@@ -37,11 +36,11 @@ describe('satelliteCompareStore', () => {
     addComparedScene(scene2019);
   });
 
-  it('opens two tray scenes side by side and a 2×2 grid from the shortcut', () => {
-    openComparison(camera, testViewport);
+  it('opens two tray scenes side by side or in a 2×2 grid', () => {
+    openComparison(camera, testViewport, 2);
     expect(slotIds(satelliteCompareStore.getState().slots)).toEqual(['2019', '2023']);
 
-    openComparisonGrid(camera, testViewport);
+    openComparison(camera, testViewport, 4);
     expect(slotIds(satelliteCompareStore.getState().slots)).toEqual([
       '2019',
       '2023',
@@ -51,7 +50,7 @@ describe('satelliteCompareStore', () => {
   });
 
   it('refuses an image already shown at another position', () => {
-    openComparisonGrid(camera, testViewport);
+    openComparison(camera, testViewport, 4);
 
     expect(setComparisonSlot(3, scene2019)).toBe(false);
     expect(setComparisonSlot(3, scene2017)).toBe(true);
@@ -66,7 +65,7 @@ describe('satelliteCompareStore', () => {
   });
 
   it('swaps positions and returns the shown images to the tray, scenes in date order', () => {
-    openComparisonGrid(camera, testViewport);
+    openComparison(camera, testViewport, 4);
     setComparisonSlot(2, scene2017);
     setComparisonSlot(3, 'esri-satellite');
     swapComparisonSlots(0, 3);
@@ -89,11 +88,11 @@ describe('satelliteCompareStore', () => {
   });
 
   it('reopens without the scenes that no longer reach the view but keeps basemaps', () => {
-    openComparisonGrid(camera, testViewport);
+    openComparison(camera, testViewport, 4);
     setComparisonSlot(2, 'bing-satellite');
     closeComparison();
 
-    openComparisonGrid(camera, viewportElsewhere);
+    openComparison(camera, viewportElsewhere, 4);
     expect(slotIds(satelliteCompareStore.getState().slots)).toEqual([
       'bing-satellite',
       null,
@@ -103,7 +102,7 @@ describe('satelliteCompareStore', () => {
 
     closeComparison();
     addComparedScene(scene2019);
-    openComparison(camera, viewportElsewhere);
+    openComparison(camera, viewportElsewhere, 2);
     expect(slotIds(satelliteCompareStore.getState().slots)).toEqual([
       'bing-satellite',
       null,
@@ -111,7 +110,7 @@ describe('satelliteCompareStore', () => {
   });
 
   it('shrinks to 2×1 only with at most two images and grows back with plain maps', () => {
-    openComparisonGrid(camera, testViewport);
+    openComparison(camera, testViewport, 4);
     setComparisonSlot(3, 'napr-orthophoto');
 
     setComparisonLayout(2);

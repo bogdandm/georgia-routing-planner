@@ -556,6 +556,9 @@ function readPersistedView(value: unknown): MapViewState | null {
 }
 
 const maximumCloudCoverPercentSchema = z.number().min(0).max(100);
+const comparisonLayoutKey = 'satellite.comparison-layout';
+/** Panes of the satellite comparison grid: 2 side by side or 4 in a 2×2 grid. */
+const comparisonLayoutSchema = z.union([z.literal(2), z.literal(4)]);
 const defaultMaximumCloudCoverPercent = 50;
 const mapLayerPreferencesSchema = z
   .object({
@@ -675,6 +678,7 @@ const archivedSettingValidators = new Map<string, (value: unknown) => boolean>([
     'satellite.maximum-cloud-cover',
     (value) => maximumCloudCoverPercentSchema.safeParse(value).success,
   ],
+  [comparisonLayoutKey, (value) => comparisonLayoutSchema.safeParse(value).success],
   [
     'weather.interval-preferences',
     (value) => markerWeatherPreferencesSchema.safeParse(value).success,
@@ -4007,6 +4011,31 @@ export class AppDatabase
     await this.settings.put({
       key: 'satellite.maximum-cloud-cover',
       value: parsed,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /** The last comparison layout picked in the sidebar, or null before the first pick. */
+  public async loadComparisonLayout(): Promise<2 | 4 | null> {
+    const record = await this.settings.get(comparisonLayoutKey);
+    if (record === undefined) return null;
+
+    const parsed = comparisonLayoutSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete(comparisonLayoutKey);
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.satellite-preferences.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return null;
+  }
+
+  public async saveComparisonLayout(value: 2 | 4): Promise<void> {
+    await this.settings.put({
+      key: comparisonLayoutKey,
+      value: comparisonLayoutSchema.parse(value),
       updatedAt: new Date().toISOString(),
     });
   }

@@ -214,10 +214,10 @@ msgstr "Выберите последнюю дату, которую нужно 
 msgid "Clear"
 msgstr "Очистить"
 
-#. js-lingui-id: YlgHCY
+#. js-lingui-id: qfnByj
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "Click a date on a map to pick another image, or the layers button next to it for static satellite imagery. Drag a label onto another map to swap their places."
-msgstr "Нажмите на дату на карте, чтобы выбрать другой снимок, или на кнопку слоёв рядом с ней, чтобы выбрать спутниковую подложку. Перетащите подпись на другую карту, чтобы поменять их местами."
+msgid "Click a date on a map to pick another image, or the layers button next to it to pick a map layer. Drag a label onto another map to swap their places."
+msgstr "Нажмите на дату на карте, чтобы выбрать другой снимок, или на кнопку слоёв рядом с ней, чтобы выбрать слой карты. Перетащите подпись на другую карту, чтобы поменять их местами."
 
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

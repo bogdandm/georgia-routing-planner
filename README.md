@@ -87,8 +87,8 @@ orthophoto, or the NAPR/NSDI Soviet topographic mosaic (nationwide 1:25,000 with
 1:10,000 detail where available). The Satellite workspace finds recent Sentinel-2 scenes
 and shows each scene's acquisition time, cloud cover, and coverage before you apply it.
 Mosaic mode combines several recent scenes to cover the visible area. On desktop, up to
-four scenes from any dates, or static satellite basemaps, can be compared side by side
-in synchronized, labeled maps. Imagery stays aligned with the terrain in both 2D and 3D.
+four scenes from any dates, or static basemaps, can be compared side by side in
+synchronized, labeled maps. Imagery stays aligned with the terrain in both 2D and 3D.
 
 ## Weather
 

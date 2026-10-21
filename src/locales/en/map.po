@@ -81,13 +81,9 @@ msgstr "Checking nearby map data…"
 
 #. js-lingui-id: 2uEfCs
 #: src/presentation/map/MapViewControls.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Choose map layer preset"
 msgstr "Choose map layer preset"
-
-#. js-lingui-id: VMw97Q
-#: src/presentation/map/SatelliteCompareMaps.tsx
-msgid "Choose static satellite imagery"
-msgstr "Choose static satellite imagery"
 
 #. js-lingui-id: dLNd3k
 #: src/presentation/map/MapWorkspace.tsx
@@ -399,11 +395,6 @@ msgstr "Show weather forecast"
 msgid "Soviet Topographic"
 msgstr "Soviet Topographic"
 
-#. js-lingui-id: 4v85gW
-#: src/presentation/map/SatelliteCompareMaps.tsx
-msgid "Static satellite imagery"
-msgstr "Static satellite imagery"
-
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -483,6 +474,7 @@ msgstr "Unnamed map feature"
 
 #. js-lingui-id: feai_T
 #: src/presentation/map/MapViewControls.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Vector OSM"
 msgstr "Vector OSM"
 

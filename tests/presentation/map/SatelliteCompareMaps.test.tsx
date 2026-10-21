@@ -380,7 +380,7 @@ describe('SatelliteCompareMaps', () => {
     );
   });
 
-  it('picks static imagery from a pane menu that skips imagery shown elsewhere', async () => {
+  it('picks a layer from a pane menu that skips layers shown elsewhere and clears with Vector OSM', async () => {
     const user = userEvent.setup();
     openSharedComparison([scene2019, 'esri-satellite'], camera);
     renderWithI18n(
@@ -388,25 +388,34 @@ describe('SatelliteCompareMaps', () => {
         <StoreGrid />
       </RuntimeServicesProvider>,
     );
+    const openMenu = async () => {
+      const [firstPane] = await screen.findAllByRole('region');
+      if (firstPane === undefined) throw new Error('Missing pane.');
+      await user.click(
+        within(firstPane).getByRole('button', { name: 'Choose map layer preset' }),
+      );
+    };
 
-    const [scenePane] = await screen.findAllByRole('region');
-    if (scenePane === undefined) throw new Error('Missing pane.');
-    await user.click(
-      within(scenePane).getByRole('button', {
-        name: 'Choose static satellite imagery',
-      }),
-    );
+    await openMenu();
     expect(
       screen.getByRole('menuitemradio', { name: 'Esri World Imagery' }),
     ).toHaveAttribute('aria-disabled', 'true');
-    await user.click(screen.getByRole('menuitemradio', { name: 'Bing Aerial' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Soviet Topographic' }));
 
     expect(satelliteCompareStore.getState().slots).toEqual([
-      'bing-satellite',
+      'soviet-topographic',
       'esri-satellite',
     ]);
     expect(
-      await screen.findByRole('region', { name: 'Bing Aerial' }),
+      await screen.findByRole('region', { name: 'Soviet Topographic' }),
+    ).toBeInTheDocument();
+
+    await openMenu();
+    await user.click(screen.getByRole('menuitemradio', { name: 'Vector OSM' }));
+
+    expect(satelliteCompareStore.getState().slots).toEqual([null, 'esri-satellite']);
+    expect(
+      await screen.findByRole('region', { name: 'Map without an image' }),
     ).toBeInTheDocument();
   });
 

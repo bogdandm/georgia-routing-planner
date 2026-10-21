@@ -7,27 +7,18 @@ import {
 } from '@/domain/satellite/SatelliteScene';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
-import type { MapLayerPreset } from '@/presentation/map/mapTypes';
+import type { SatelliteBasemap } from '@/presentation/map/mapShareUrl';
 import type { SatelliteCompareCamera } from '@/presentation/map/SatelliteCompareMaps';
 
 export const minimumComparedScenes = 2;
 export const maximumComparedScenes = 4;
 
 /**
- * Static imagery a pane can show instead of a dated scene. Each covers all of Georgia,
- * so it never leaves the comparison when the view moves elsewhere.
+ * A compared image: a Sentinel-2 scene or a static basemap (satellite imagery or the
+ * Soviet topographic map). A basemap covers all of Georgia, so it never leaves the
+ * comparison when the view moves elsewhere.
  */
-export const comparisonBasemaps = [
-  'google-satellite',
-  'bing-satellite',
-  'esri-satellite',
-  'napr-orthophoto',
-] as const satisfies readonly MapLayerPreset[];
-
-export type ComparisonBasemap = (typeof comparisonBasemaps)[number];
-
-/** A compared image: a Sentinel-2 scene or a static imagery basemap. */
-export type ComparisonImage = SatelliteScene | ComparisonBasemap;
+export type ComparisonImage = SatelliteScene | SatelliteBasemap;
 
 /** A grid position: an image, or an empty plain map whose image is still to be picked. */
 export type ComparisonSlot = ComparisonImage | null;
@@ -81,9 +72,7 @@ export function isComparisonOpen(state: SatelliteCompareState): boolean {
   return state.slots.length > 0;
 }
 
-export function isComparisonBasemap(
-  image: ComparisonImage,
-): image is ComparisonBasemap {
+export function isComparisonBasemap(image: ComparisonImage): image is SatelliteBasemap {
   return typeof image === 'string';
 }
 
@@ -161,32 +150,19 @@ export function clearComparedImages(): void {
 }
 
 /**
- * Opens the tray's two to four images over the main map's view; two sit side by side.
- * `viewport` is that view, or null before the map has one.
+ * Opens the tray's images over the main map's view, with plain maps in the other
+ * positions. `layout` 2 sits two images side by side and becomes 2×2 for three or four;
+ * `viewport` is the main map's view, or null before the map has one.
  */
 export function openComparison(
   camera: SatelliteCompareCamera,
   viewport: SatelliteSearchViewport | null,
-): void {
-  const { images } = satelliteCompareStore.getState();
-  if (images.length < minimumComparedScenes) return;
-  satelliteCompareStore.setState({
-    slots: gridSlots(imagesInView(images, viewport), 2),
-    camera,
-    directFallback: false,
-    tileProgress: {},
-  });
-}
-
-/** Opens a 2×2 grid with the tray's images in view first and plain maps elsewhere. */
-export function openComparisonGrid(
-  camera: SatelliteCompareCamera,
-  viewport: SatelliteSearchViewport | null,
+  layout: ComparisonLayout,
 ): void {
   satelliteCompareStore.setState({
     slots: gridSlots(
       imagesInView(satelliteCompareStore.getState().images, viewport),
-      4,
+      layout,
     ),
     camera,
     directFallback: false,

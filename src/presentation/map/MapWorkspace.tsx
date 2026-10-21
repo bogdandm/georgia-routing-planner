@@ -90,12 +90,12 @@ import {
   parseSharedMapView,
   parseWeatherMapUrlState,
   readShareableMapState,
+  satelliteBasemaps,
   selectMapShareView,
   updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import {
-  comparisonBasemaps,
   minimumComparedScenes,
   openSharedComparison,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
@@ -1308,7 +1308,7 @@ export function MapWorkspace({
     // open. Basemap IDs need no lookup.
     void Promise.allSettled(
       sharedComparison.map((imageKey) => {
-        const basemap = comparisonBasemaps.find((id) => id === imageKey);
+        const basemap = satelliteBasemaps.find((id) => id === imageKey);
         if (basemap !== undefined) return Promise.resolve(basemap);
         if (getScene === undefined) return Promise.resolve(null);
         const separator = imageKey.indexOf(':');

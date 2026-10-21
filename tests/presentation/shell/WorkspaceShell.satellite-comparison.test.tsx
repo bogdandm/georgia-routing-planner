@@ -91,6 +91,7 @@ async function openGrid(user: UserEvent) {
       { name: 'Compare' },
     ),
   );
+  await screen.findByRole('list', { name: 'Comparison grid' });
 }
 
 describe('WorkspaceShell satellite comparison', () => {
@@ -111,7 +112,7 @@ describe('WorkspaceShell satellite comparison', () => {
     expect(within(tray).getByText('Comparison: 2 of 4')).toBeVisible();
     await user.click(within(tray).getByRole('button', { name: 'Compare' }));
 
-    const grid = screen.getByRole('list', { name: 'Comparison grid' });
+    const grid = await screen.findByRole('list', { name: 'Comparison grid' });
     expect(
       within(grid)
         .getAllByRole('listitem')
@@ -132,7 +133,7 @@ describe('WorkspaceShell satellite comparison', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open image comparison' }));
 
-    const grid = screen.getByRole('list', { name: 'Comparison grid' });
+    const grid = await screen.findByRole('list', { name: 'Comparison grid' });
     expect(
       within(grid)
         .getAllByRole('listitem')
@@ -172,7 +173,7 @@ describe('WorkspaceShell satellite comparison', () => {
       screen.getByRole('button', { name: 'Remove Jul 2, 2026 from comparison' }),
     );
 
-    const grid = screen.getByRole('list', { name: 'Comparison grid' });
+    const grid = await screen.findByRole('list', { name: 'Comparison grid' });
     expect(
       within(grid)
         .getAllByRole('listitem')
@@ -184,7 +185,7 @@ describe('WorkspaceShell satellite comparison', () => {
     expect(screen.getByText('Comparison: 1 of 4')).toBeVisible();
   });
 
-  it('switches between two maps and a 2×2 grid while two images at most are shown', async () => {
+  it('switches between two maps and a 2×2 grid and remembers the pick', async () => {
     const user = await showResults();
     await openGrid(user);
     const gridItems = () =>
@@ -193,6 +194,17 @@ describe('WorkspaceShell satellite comparison', () => {
         .map((item) => item.textContent);
 
     await user.click(screen.getByRole('button', { name: 'Four maps in a 2×2 grid' }));
+    expect(gridItems()).toEqual(['early-scene', 'late-scene', 'empty', 'empty']);
+
+    // The tray's Compare would open two images side by side without the stored pick.
+    await user.click(screen.getByRole('button', { name: 'Back to search' }));
+    await user.click(
+      within(screen.getByRole('region', { name: 'Image comparison' })).getByRole(
+        'button',
+        { name: 'Compare' },
+      ),
+    );
+    await screen.findByRole('list', { name: 'Comparison grid' });
     expect(gridItems()).toEqual(['early-scene', 'late-scene', 'empty', 'empty']);
 
     act(() => {

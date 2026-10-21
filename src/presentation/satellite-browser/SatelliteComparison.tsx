@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import {
   satelliteSceneBounds,
   satelliteSceneKey,
@@ -53,7 +54,6 @@ import {
   maximumComparedScenes,
   minimumComparedScenes,
   openComparison,
-  openComparisonGrid,
   satelliteCompareStore,
   setComparisonCalendarMonth,
   setComparisonLayout,
@@ -241,23 +241,35 @@ export function ComparedSceneDatePicker({
 }
 
 /**
+ * Opens the grid over the main map's current view, in the layout last picked in the
+ * sidebar, else in `defaultLayout`.
+ */
+async function openComparisonFromMap(
+  services: Pick<RuntimeServices, 'database' | 'mapDiagnostics' | 'mapViewport'>,
+  defaultLayout: ComparisonLayout,
+): Promise<void> {
+  // The view is read at the click, before the stored layout arrives.
+  const camera = startingComparisonCamera(
+    services.mapDiagnostics.getSnapshot()?.camera,
+    satelliteCompareStore.getState().images,
+  );
+  const viewport = services.mapViewport.getViewportSnapshot();
+  const layout = await services.database.loadComparisonLayout().catch(() => null);
+  openComparison(camera, viewport, layout ?? defaultLayout);
+}
+
+/**
  * Pinned at the bottom of the results pane once a scene is added: the comparison count,
- * **Compare** (two or more scenes), and **Clear**.
+ * **Compare** (two or more images), and **Clear**.
  */
 export function SatelliteComparisonTray() {
   const { t } = useLingui();
-  const { mapDiagnostics, mapViewport } = useRuntimeServices();
+  const services = useRuntimeServices();
   const images = useStore(satelliteCompareStore, (state) => state.images);
   if (images.length === 0) return null;
 
   const count = images.length;
   const canCompare = count >= minimumComparedScenes;
-  const open = () => {
-    openComparison(
-      startingComparisonCamera(mapDiagnostics.getSnapshot()?.camera, images),
-      mapViewport.getViewportSnapshot(),
-    );
-  };
 
   return (
     <Stack
@@ -285,7 +297,11 @@ export function SatelliteComparisonTray() {
       </Button>
       <Tooltip title={canCompare ? '' : t`Add at least two images`}>
         <span>
-          <Button variant="contained" disabled={!canCompare} onClick={open}>
+          <Button
+            variant="contained"
+            disabled={!canCompare}
+            onClick={() => void openComparisonFromMap(services, 2)}
+          >
             <Trans>Compare</Trans>
           </Button>
         </span>
@@ -295,12 +311,12 @@ export function SatelliteComparisonTray() {
 }
 
 /**
- * Satellite header shortcut: a 2×2 grid with the tray's images first and plain maps
- * whose images are picked from each pane's calendar or imagery menu.
+ * Satellite header shortcut: the tray's images first and plain maps whose images are
+ * picked from each pane's calendar or layer menu, 2×2 unless 2×1 was picked last.
  */
 export function SatelliteComparisonShortcut() {
   const { t } = useLingui();
-  const { mapDiagnostics, mapViewport } = useRuntimeServices();
+  const services = useRuntimeServices();
   return (
     <Tooltip title={t`Compare images from different dates side by side`}>
       <ToggleButton
@@ -309,15 +325,7 @@ export function SatelliteComparisonShortcut() {
         selected={false}
         aria-label={t`Open image comparison`}
         sx={{ gap: 0.75 }}
-        onClick={() => {
-          openComparisonGrid(
-            startingComparisonCamera(
-              mapDiagnostics.getSnapshot()?.camera,
-              satelliteCompareStore.getState().images,
-            ),
-            mapViewport.getViewportSnapshot(),
-          );
-        }}
+        onClick={() => void openComparisonFromMap(services, maximumComparedScenes)}
       >
         <CompareOutlinedIcon sx={{ fontSize: 20 }} />
         <Trans>Compare</Trans>
@@ -370,6 +378,7 @@ function sceneTimeZone(scene: SatelliteScene): string {
 /** Sidebar content while the comparison grid replaces the map. */
 export function SatelliteComparisonPanel() {
   const { i18n, t } = useLingui();
+  const { database } = useRuntimeServices();
   const slots = useStore(satelliteCompareStore, (state) => state.slots);
   const directFallback = useStore(
     satelliteCompareStore,
@@ -457,7 +466,10 @@ export function SatelliteComparisonPanel() {
           aria-label={t`Map layout`}
           value={slots.length}
           onChange={(_event, layout: ComparisonLayout | null) => {
-            if (layout !== null) setComparisonLayout(layout);
+            if (layout === null) return;
+            setComparisonLayout(layout);
+            // Remembered in this browser for the next time the grid opens.
+            void database.saveComparisonLayout(layout).catch(() => undefined);
           }}
         >
           <Tooltip
@@ -497,8 +509,7 @@ export function SatelliteComparisonPanel() {
       <Typography variant="body2" color="text.secondary">
         <Trans>
           Click a date on a map to pick another image, or the layers button next to it
-          for static satellite imagery. Drag a label onto another map to swap their
-          places.
+          to pick a map layer. Drag a label onto another map to swap their places.
         </Trans>
       </Typography>
       <Stack component="ul" spacing={0} sx={{ m: 0, p: 0, listStyle: 'none' }}>

@@ -476,60 +476,62 @@ On desktop, **Compare** on an expanded card adds the scene to a comparison tray 
 four images; **Compared** removes it, and compared cards show a compare icon. The tray
 pinned to the bottom of the results pane shows the count with **Clear** and **Compare**,
 which needs at least two images and opens them with scenes in acquisition order and
-static imagery after them: two side by side, three or four in a 2×2 grid. **Compare** in
-the Satellite header always opens a 2×2 grid, with the tray's images first and plain
-maps in the other cells. Either way, a tray scene whose footprint no longer overlaps the
-main map's view is left out, so after panning elsewhere its pane opens as a plain map;
-static imagery covers all of Georgia and always stays.
+static basemaps after them: two side by side, three or four in a 2×2 grid. **Compare**
+in the Satellite header opens a 2×2 grid, with the tray's images first and plain maps in
+the other cells. Once a layout is picked in the sidebar, both open in that layout
+instead (2×1 still becomes 2×2 for three or four images). Either way, a tray scene whose
+footprint no longer overlaps the main map's view is left out, so after panning elsewhere
+its pane opens as a plain map; static basemaps cover all of Georgia and always stay.
 
 Comparison replaces the map with the grid. The rail is hidden and a narrow sidebar sits
 beside the grid instead of floating over it, so every pane is fully visible; the results
 pane is hidden. The sidebar heading counts the shown images beside a **2×1** | **2×2**
 layout switch; **2×1** is unavailable while three or four images are shown, and
 switching to it moves the shown images, in grid order, into the two remaining maps. The
-sidebar lists the shown images: a scene with its date, local time, and cloud, static
-imagery by its name. Each has a remove button that turns that pane back into a plain
-map; below are **Share link** (two or more images), **Clear**, and **Back to search**.
-Each listed scene with a supported raster has a progress bar for its pane's imagery: it
-waits for the first tile request, then counts settled (loaded or failed) of requested
-tiles in the current view, and reads **Imagery loaded** once the pane is idle. When a
-pane falls back from TiTiler, the sidebar shows a warning that direct imagery is active
-and slower.
+pick is stored in this browser. The sidebar lists the shown images: a scene with its
+date, local time, and cloud, a static basemap by its name. Each has a remove button that
+turns that pane back into a plain map; below are **Share link** (two or more images),
+**Clear**, and **Back to search**. Each listed scene with a supported raster has a
+progress bar for its pane's imagery: it waits for the first tile request, then counts
+settled (loaded or failed) of requested tiles in the current view, and reads **Imagery
+loaded** once the pane is idle. When a pane falls back from TiTiler, the sidebar shows a
+warning that direct imagery is active and slower.
 
 Each pane is a 2D, north-up map. A scene pane shows its scene with the default
 OpenStreetMap overlay (labels, roads, and objects) at the saved overlay opacity and
 layer choices and the scene footprint; natural features (vegetation, water bodies,
-glaciers) and the Soviet topographic map are off there so they cannot hide the land
-cover being compared. A pane without a scene is the plain vector map with the main map's
-layer choices, relief shading, and isolines. A static imagery pane shows Google
-Satellite, Bing Aerial, Esri World Imagery, or the NAPR orthophoto with the same overlay
-and layer choices as a scene pane. Static imagery basemaps chosen on the main map are
-not shown in the grid. Every pane draws the imported track as the main map does; markers
-and weather are not shown. The panes share one camera. Over a pane the pointer is a
-large sky-blue crosshair with a center dot; the other panes show a small white crosshair
-at the same point.
+glaciers) are off there so their fills cannot hide the land cover being compared. A pane
+without an image is the plain vector map with the main map's layer choices, relief
+shading, and isolines. A static basemap pane shows Google Satellite, Bing Aerial, Esri
+World Imagery, the NAPR orthophoto, or the Soviet topographic map with the same overlay
+and layer choices as a scene pane. Static basemaps chosen on the main map are not shown
+in the grid. Every pane draws the imported track as the main map does; markers and
+weather are not shown. The panes share one camera. Over a pane the pointer is a large
+sky-blue crosshair with a center dot; the other panes show a small white crosshair at
+the same point.
 
 A scene pane's label shows the year in bold, the day and month, and the local time and
-cloud, all in the scene's local time zone; a static imagery pane's label shows its name,
+cloud, all in the scene's local time zone; a static basemap pane's label shows its name,
 and a plain pane's label reads **Pick image date**. Clicking a label opens the
 acquisition calendar for that pane's visible area on the month any pane's calendar
 showed last, else the scene's month, else the current one; a day shows that day's
 best-coverage scene in the pane, unless another pane already shows it. Loaded months are
 kept for the page session per visible area, so paging back or reopening a calendar on
 the same view does not query the catalog again. Labels end with a dropdown arrow and a
-layers button whose menu lists the static imagery, as in the quick layer chooser;
-imagery another pane already shows is unavailable there. A scene or static imagery label
-also starts with a dotted drag handle, outlines itself on hover, and shows the grab
-cursor; dragging it onto another pane swaps the two positions. Panes read the rendering
-mode and stretch when they open; in Auto, a throttled pane alone switches to direct
-reads. While the grid is open, the page-wide MapLibre raster request limit is raised so
-four panes load in parallel. The attribution sits flush with the grid's bottom-right
-corner, as on the main map.
+layers button whose menu matches the quick layer chooser: **Vector OSM** turns the pane
+back into a plain map, and each static basemap shows on that pane; a basemap another
+pane already shows is unavailable there. A scene or static basemap label also starts
+with a dotted drag handle, outlines itself on hover, and shows the grab cursor; dragging
+it onto another pane swaps the two positions. Panes read the rendering mode and stretch
+when they open; in Auto, a throttled pane alone switches to direct reads. While the grid
+is open, the page-wide MapLibre raster request limit is raised so four panes load in
+parallel. The attribution sits flush with the grid's bottom-right corner, as on the main
+map.
 
 Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid,
 returns the shown images to the tray, and moves the main map to the compared area.
 **Share link** copies a 2D link with `compare=<key>,…` in pane order, where a key is a
-scene key or a static imagery ID; opening it on desktop shows the grid in that order
+scene key or a static basemap ID; opening it on desktop shows the grid in that order
 once at least two images resolve, and otherwise shows a notice and the shared location.
 Comparison state is never persisted.
 

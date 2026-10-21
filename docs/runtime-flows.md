@@ -106,13 +106,13 @@ link with a scene stays on Tracks instead of opening Satellite.
 The comparison sidebar's **Share link** calls `createComparisonShareUrl`, which writes a
 2D map link without `scene` or `base` plus `compare=<key>,…` and `#satellite`; every
 other map link drops `compare`. `parseSharedComparison` accepts two to four distinct
-keys that each match the scene-key pattern or name a comparison basemap
-(`comparisonBasemaps` in `satelliteCompareStore`) and otherwise returns none. On
-desktop, `MapWorkspace` opens Satellite, resolves every scene key through the same
-allowlisted `getScene` in parallel, keeps basemap IDs as they are, and calls
-`openSharedComparison` with the resolved images in link order and the shared camera when
-at least two resolve, dropping missing or failed keys; otherwise it shows a notice.
-Smartphones and track-share links ignore `compare`.
+keys that each match the scene-key pattern or name a static basemap
+(`satelliteBasemaps`) and otherwise returns none. On desktop, `MapWorkspace` opens
+Satellite, resolves every scene key through the same allowlisted `getScene` in parallel,
+keeps basemap IDs as they are, and calls `openSharedComparison` with the resolved images
+in link order and the shared camera when at least two resolve, dropping missing or
+failed keys; otherwise it shows a notice. Smartphones and track-share links ignore
+`compare`.
 
 While the grid is open, `WorkspaceShell` hides the mounted main map and the rail, docks
 a narrow sidebar, and gives `SatelliteCompareMaps` the remaining area. MapLibre limits

@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TrailRouteProgress } from '@/application/ports/TrailRouter';
 
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
-import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
+import {
+  estimateHikingSeconds,
+  geodesicDistanceMeters,
+} from '@/domain/tracks/trackCalculations';
 import { executeTrailRoute } from '@/infrastructure/routing/RoutingWorkerServer';
 import {
   MAX_ROUTING_TILES,
@@ -24,6 +27,7 @@ import {
   isWalkableTransportation,
   projectCoordinateToEdge,
   routeTrailGraph,
+  sampleTrailGraphTerrain,
   toRoutingLineMetadata,
   type RoutingLineInput,
   type TrailGraph,
@@ -34,6 +38,7 @@ import {
 
 const TILE_JSON_URL = 'https://routing.test/tilejson.json';
 const TILE_TEMPLATE = 'https://routing.test/tiles/{z}/{x}/{y}.pbf';
+const distanceOnly = { terrain: null, includeSearchTrace: false } as const;
 
 function fetchInputUrl(input: Parameters<typeof fetch>[0]): string {
   if (typeof input === 'string') return input;
@@ -554,6 +559,7 @@ describe('routing tile coverage and decoding', () => {
         tileX * MVT_GRAPH_EXTENT + 2_000,
         tileY * MVT_GRAPH_EXTENT + 1_000,
       ),
+      distanceOnly,
     );
     expect(crossingRoute.status).toBe('ready');
 
@@ -583,6 +589,7 @@ describe('routing tile coverage and decoding', () => {
           tileX * MVT_GRAPH_EXTENT + 2_000,
           tileY * MVT_GRAPH_EXTENT + 3_000,
         ),
+        distanceOnly,
       ).status,
     ).toBe('ready');
   });
@@ -624,6 +631,7 @@ describe('routing tile coverage and decoding', () => {
           tileX * MVT_GRAPH_EXTENT + 3_000,
           tileY * MVT_GRAPH_EXTENT + 2_000,
         ),
+        distanceOnly,
       ).status,
     ).toBe('ready');
 
@@ -641,6 +649,7 @@ describe('routing tile coverage and decoding', () => {
           tileX * MVT_GRAPH_EXTENT + 3_000,
           tileY * MVT_GRAPH_EXTENT + 2_000,
         ),
+        distanceOnly,
       ).status,
     ).toBe('failed');
   });
@@ -764,6 +773,7 @@ describe('routing tile coverage and decoding', () => {
           tileX * MVT_GRAPH_EXTENT + 3_000,
           tileY * MVT_GRAPH_EXTENT + 2_000,
         ),
+        distanceOnly,
       ).status,
     ).toBe('ready');
   });
@@ -911,7 +921,7 @@ describe('trail graph snapping and routing', () => {
     expect(projection.coordinate[0]).toBeCloseTo(0, 12);
 
     const graph = graphFromCoordinates({ a: [-0.01, 0], b: [0.01, 0] }, [['a', 'b']]);
-    expect(routeTrailGraph(graph, [0, 0.01], [0.005, 0.01])).toEqual({
+    expect(routeTrailGraph(graph, [0, 0.01], [0.005, 0.01], distanceOnly)).toEqual({
       status: 'failed',
       reason: 'no-nearby-trail',
       endpoint: 'both',
@@ -932,14 +942,19 @@ describe('trail graph snapping and routing', () => {
         ['c', 'd'],
       ],
     );
-    const tied = routeTrailGraph(tieGraph, [-0.005, 0], [0.005, 0]);
+    const tied = routeTrailGraph(tieGraph, [-0.005, 0], [0.005, 0], distanceOnly);
     expect(tied.status).toBe('ready');
     if (tied.status === 'ready') {
       expect(tied.snappedStart[1]).toBeCloseTo(0.001, 12);
     }
 
     const oneEdge = graphFromCoordinates({ a: [0, 0], b: [0.01, 0] }, [['a', 'b']]);
-    const routed = routeTrailGraph(oneEdge, [0.0025, 0.0001], [0.0075, 0.0001]);
+    const routed = routeTrailGraph(
+      oneEdge,
+      [0.0025, 0.0001],
+      [0.0075, 0.0001],
+      distanceOnly,
+    );
     expect(routed.status).toBe('ready');
     if (routed.status === 'ready') {
       expect(routed.coordinates[0]).toEqual(routed.snappedStart);
@@ -954,7 +969,12 @@ describe('trail graph snapping and routing', () => {
       ['a', 'c'],
     ]);
 
-    const routed = routeTrailGraph(graph, [0.005, 0.0001], [0.0001, 0.005]);
+    const routed = routeTrailGraph(
+      graph,
+      [0.005, 0.0001],
+      [0.0001, 0.005],
+      distanceOnly,
+    );
 
     expect(routed.status).toBe('ready');
     if (routed.status === 'ready') {
@@ -972,7 +992,7 @@ describe('trail graph snapping and routing', () => {
         ['c', 'b'],
       ],
     );
-    const shorter = routeTrailGraph(connected, [0, 0], [0.01, 0]);
+    const shorter = routeTrailGraph(connected, [0, 0], [0.01, 0], distanceOnly);
     expect(shorter.status).toBe('ready');
     if (shorter.status === 'ready') expect(shorter.coordinates).toHaveLength(2);
 
@@ -988,11 +1008,169 @@ describe('trail graph snapping and routing', () => {
         ['c', 'd'],
       ],
     );
-    expect(routeTrailGraph(disconnected, [0, 0], [0.011, 0])).toEqual({
+    expect(routeTrailGraph(disconnected, [0, 0], [0.011, 0], distanceOnly)).toEqual({
       status: 'failed',
       reason: 'no-route',
       visitedBoundary: false,
     });
+  });
+
+  it('matches a reference Dijkstra hiking-time optimum on random hilly graphs', () => {
+    let seed = 7;
+    const random = (): number => {
+      seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return seed / 2_147_483_648;
+    };
+    for (let trial = 0; trial < 40; trial += 1) {
+      const size = 9;
+      const coordinates: Record<string, TrackCoordinate> = {};
+      const elevations = new Map<string, number>();
+      const key = (column: number, row: number) => `${String(column)}:${String(row)}`;
+      for (let column = 0; column < size; column += 1) {
+        for (let row = 0; row < size; row += 1) {
+          coordinates[key(column, row)] = [
+            column * 0.001 + random() * 0.0004,
+            row * 0.001 + random() * 0.0004,
+          ];
+          elevations.set(key(column, row), random() * 150);
+        }
+      }
+      const pairs: [string, string][] = [];
+      for (let column = 0; column < size; column += 1) {
+        for (let row = 0; row < size; row += 1) {
+          if (column + 1 < size && random() < 0.7)
+            pairs.push([key(column, row), key(column + 1, row)]);
+          if (row + 1 < size && random() < 0.7)
+            pairs.push([key(column, row), key(column, row + 1)]);
+          if (column + 1 < size && row + 1 < size && random() < 0.2)
+            pairs.push([key(column, row), key(column + 1, row + 1)]);
+        }
+      }
+      const graph = graphFromCoordinates(coordinates, pairs);
+      const edgeRelief = new Map(
+        [...graph.edges.values()].map((edge) => {
+          const climb =
+            (elevations.get(edge.nodeB) ?? 0) - (elevations.get(edge.nodeA) ?? 0);
+          return [
+            edge.key,
+            { ascentMeters: Math.max(0, climb), descentMeters: Math.max(0, -climb) },
+          ] as const;
+        }),
+      );
+      const terrain = { nodeElevationMeters: elevations, edgeRelief };
+      const arcSeconds = (from: string, to: string, distanceMeters: number): number => {
+        const climb = (elevations.get(to) ?? 0) - (elevations.get(from) ?? 0);
+        return estimateHikingSeconds(
+          distanceMeters,
+          Math.max(0, climb),
+          Math.max(0, -climb),
+        );
+      };
+      // Isolated nodes would snap to a neighbouring edge, unlike the reference search.
+      const trailNodes = [...graph.adjacency]
+        .filter(([, arcs]) => arcs.length > 0)
+        .map(([node]) => node);
+      const startKey = trailNodes[Math.floor(random() * trailNodes.length)] ?? '';
+      const destinationKey = trailNodes[Math.floor(random() * trailNodes.length)] ?? '';
+
+      const best = new Map([[startKey, 0]]);
+      const done = new Set<string>();
+      for (;;) {
+        let current: string | undefined;
+        for (const [node, cost] of best) {
+          if (
+            !done.has(node) &&
+            (current === undefined || cost < (best.get(current) ?? 0))
+          )
+            current = node;
+        }
+        if (current === undefined) break;
+        done.add(current);
+        for (const arc of graph.adjacency.get(current) ?? []) {
+          const candidate =
+            (best.get(current) ?? 0) + arcSeconds(arc.from, arc.to, arc.distanceMeters);
+          if (candidate < (best.get(arc.to) ?? Number.POSITIVE_INFINITY))
+            best.set(arc.to, candidate);
+        }
+      }
+
+      const routed = routeTrailGraph(
+        graph,
+        coordinates[startKey] ?? [0, 0],
+        coordinates[destinationKey] ?? [0, 0],
+        { terrain, includeSearchTrace: false },
+      );
+      const expected = best.get(destinationKey);
+      if (expected === undefined) {
+        expect(routed).toMatchObject({ status: 'failed', reason: 'no-route' });
+        continue;
+      }
+      expect(routed.status).toBe('ready');
+      if (routed.status !== 'ready') continue;
+      const nodeAt = new Map(
+        Object.entries(coordinates).map(([node, coordinate]) => [
+          coordinate.join(','),
+          node,
+        ]),
+      );
+      const path = routed.coordinates
+        .map((coordinate) => nodeAt.get(coordinate.join(',')) ?? '')
+        .filter((node, index, nodes) => index === 0 || node !== nodes[index - 1]);
+      expect(path[0]).toBe(startKey);
+      expect(path.at(-1)).toBe(destinationKey);
+      let pathSeconds = 0;
+      for (let index = 1; index < path.length; index += 1) {
+        const from = path[index - 1] ?? '';
+        const to = path[index] ?? '';
+        const arc = graph.adjacency.get(from)?.find((candidate) => candidate.to === to);
+        expect(arc).toBeDefined();
+        pathSeconds += arcSeconds(from, to, arc?.distanceMeters ?? 0);
+      }
+      expect(pathSeconds).toBeCloseTo(expected, 6);
+    }
+  });
+
+  it('samples hills inside long edges and detours around them by hiking time', async () => {
+    const graph = graphFromCoordinates(
+      { start: [0, 0], detour: [0.005, 0.003], finish: [0.01, 0] },
+      [
+        ['start', 'finish'],
+        ['start', 'detour'],
+        ['detour', 'finish'],
+      ],
+    );
+    // A 60 m hill centred on the straight edge, invisible at the edge's endpoints.
+    const hillMeters = ([longitude, latitude]: TrackCoordinate): number =>
+      60 *
+      Math.exp(
+        (-0.5 * (((longitude - 0.005) * 111_320) ** 2 + (latitude * 110_574) ** 2)) /
+          150 ** 2,
+      );
+    const terrain = await sampleTrailGraphTerrain(graph, (coordinates) =>
+      Promise.resolve(coordinates.map(hillMeters)),
+    );
+    expect(terrain?.edgeRelief.get('finish|start')?.ascentMeters).toBeGreaterThan(55);
+
+    const level = routeTrailGraph(graph, [0, 0], [0.01, 0], distanceOnly);
+    const hiking = routeTrailGraph(graph, [0, 0], [0.01, 0], {
+      terrain,
+      includeSearchTrace: false,
+    });
+    expect(level.status === 'ready' && level.coordinates).toEqual([
+      [0, 0],
+      [0.01, 0],
+    ]);
+    expect(hiking.status === 'ready' && hiking.coordinates).toEqual([
+      [0, 0],
+      [0.005, 0.003],
+      [0.01, 0],
+    ]);
+
+    await expect(
+      sampleTrailGraphTerrain(graph, (coordinates) =>
+        Promise.resolve(coordinates.map((_, index) => (index === 0 ? null : 0))),
+      ),
+    ).resolves.toBeNull();
   });
 
   it('retries once only when the disconnected search touches the covered boundary', async () => {
@@ -1025,7 +1203,8 @@ describe('trail graph snapping and routing', () => {
     const progress: TrailRouteProgress[] = [];
     const result = await executeTrailRoute(
       { loadArea },
-      { start, destination },
+      null,
+      { start, destination, includeSearchTrace: false },
       new AbortController().signal,
       (value) => {
         progress.push(value);
@@ -1063,7 +1242,8 @@ describe('trail graph snapping and routing', () => {
     };
     const snapFailure = await executeTrailRoute(
       snapFailureLoader,
-      { start, destination },
+      null,
+      { start, destination, includeSearchTrace: false },
       new AbortController().signal,
     );
     expect(snapFailure).toEqual({
@@ -1082,7 +1262,8 @@ describe('trail graph snapping and routing', () => {
     await expect(
       executeTrailRoute(
         dataFailureLoader,
-        { start, destination },
+        null,
+        { start, destination, includeSearchTrace: false },
         new AbortController().signal,
       ),
     ).resolves.toEqual({ status: 'failed', reason: 'routing-data-unavailable' });
@@ -1112,7 +1293,8 @@ describe('trail graph snapping and routing', () => {
 
     const pending = executeTrailRoute(
       { loadArea },
-      { start, destination },
+      null,
+      { start, destination, includeSearchTrace: false },
       controller.signal,
       (progress) => {
         if (progress.phase === 'building-graph' && progress.graphProgress === 0.15) {
@@ -1158,7 +1340,8 @@ describe('trail graph snapping and routing', () => {
           area: loadedArea(lines, tileX, tileY),
         }),
       },
-      { start, destination },
+      null,
+      { start, destination, includeSearchTrace: false },
       new AbortController().signal,
     );
     expect(result.status).toBe('ready');

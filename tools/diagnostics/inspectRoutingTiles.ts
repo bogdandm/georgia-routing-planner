@@ -252,7 +252,13 @@ async function runRouteStress(
     result = { status: 'failed', reason: initialization.reason };
   } else {
     try {
-      result = await executeTrailRoute(initialization.loader, input, signal);
+      // Node has no image decoder for DEM tiles, so the stress run routes by distance.
+      result = await executeTrailRoute(
+        initialization.loader,
+        null,
+        { ...input, includeSearchTrace: false },
+        signal,
+      );
     } finally {
       initialization.loader.dispose();
     }

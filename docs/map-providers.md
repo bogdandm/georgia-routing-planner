@@ -146,6 +146,10 @@ the visible detail map. Limits:
 - Topology uses one 4,096-unit MVT grid: exact shared vertices connect, and a 512-unit
   spatial index splits crossings, T junctions, overlaps, and gaps of at most two units.
   Inferred junctions require matching layer and bridge/tunnel metadata.
+- Edge costs sample the configured `terrain` DEM at its maximum zoom, at every graph
+  node and every 30 m along longer edges, inside the worker; these requests bypass
+  MapLibre but share the browser HTTP cache. A failed or incomplete DEM sample routes
+  the leg by distance instead of failing it.
 
 `pnpm diagnostics:routing-inspect` inspects the configured TileJSON and layer outside
 MapLibre to detect provider drift (`tools/diagnostics/inspectRoutingTiles.ts`).

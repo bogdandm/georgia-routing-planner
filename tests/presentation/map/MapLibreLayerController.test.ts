@@ -29,6 +29,7 @@ import {
   sovietTopographicSourceIds,
   savedMarkerLayerIds,
   routePlanLayerIds,
+  routeSearchLayerIds,
   sentinelMapLayerIds,
   sentinelMosaicIdPrefixes,
   terrainOverlayLayerIds,
@@ -1799,6 +1800,95 @@ describe('MapLibreLayerController', () => {
       'data.features.length',
       3,
     );
+  });
+
+  it('draws route search arcs per side below the route plan and removes them', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(
+      controller.setRouteSearchTrace({
+        forward: [
+          [
+            [44, 42],
+            [200, 42],
+          ],
+        ],
+        backward: [],
+      }),
+    ).toMatchObject({ status: 'failed' });
+    expect(map.sources.has(mapSourceIds.routeSearch)).toBe(false);
+
+    controller.setRouteSearchTrace({
+      forward: [
+        [
+          [44.64, 42.66],
+          [44.641, 42.661],
+        ],
+        [
+          [44.641, 42.661],
+          [44.642, 42.661],
+        ],
+      ],
+      backward: [
+        [
+          [44.65, 42.67],
+          [44.649, 42.669],
+        ],
+      ],
+    });
+    expect(map.sources.get(mapSourceIds.routeSearch)).toHaveProperty('data.features', [
+      {
+        type: 'Feature',
+        properties: { side: 'forward' },
+        geometry: {
+          type: 'MultiLineString',
+          coordinates: [
+            [
+              [44.64, 42.66],
+              [44.641, 42.661],
+            ],
+            [
+              [44.641, 42.661],
+              [44.642, 42.661],
+            ],
+          ],
+        },
+      },
+      {
+        type: 'Feature',
+        properties: { side: 'backward' },
+        geometry: {
+          type: 'MultiLineString',
+          coordinates: [
+            [
+              [44.65, 42.67],
+              [44.649, 42.669],
+            ],
+          ],
+        },
+      },
+    ]);
+    const layerOrder = map.getLayersOrder();
+    expect(layerOrder.indexOf(routeSearchLayerIds.arcs)).toBeLessThan(
+      layerOrder.indexOf(routePlanLayerIds.routed),
+    );
+
+    map.sources.delete(mapSourceIds.routeSearch);
+    map.layers.delete(routeSearchLayerIds.arcs);
+    map.fire('styledata', {});
+    expect(map.sources.get(mapSourceIds.routeSearch)).toHaveProperty(
+      'data.features.length',
+      2,
+    );
+    expect(map.layers.has(routeSearchLayerIds.arcs)).toBe(true);
+
+    controller.setRouteSearchTrace(null);
+    expect(map.sources.has(mapSourceIds.routeSearch)).toBe(false);
+    expect(map.layers.has(routeSearchLayerIds.arcs)).toBe(false);
   });
 
   it('renders and gates a multicolor imported-track grade zebra', async () => {

@@ -325,7 +325,10 @@ export class RoutingTileLoader {
   ) {}
 
   public static async initialize(
-    configuration: RoutingWorkerInitializeRequest,
+    configuration: Pick<
+      RoutingWorkerInitializeRequest,
+      'tileJsonUrl' | 'transportationSourceLayer' | 'requestTimeoutMs'
+    >,
     signal: AbortSignal,
     fetcher: RoutingFetch = fetch,
   ): Promise<RoutingTileLoaderInitialization> {

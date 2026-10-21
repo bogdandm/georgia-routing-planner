@@ -83,6 +83,8 @@ export type MapPointInspection =
 export interface MapDebugOptions {
   readonly showCollisionBoxes: boolean;
   readonly showTileBoundaries: boolean;
+  /** Draws the arcs explored by the route search; the map facade ignores it. */
+  readonly showRouteSearch: boolean;
 }
 
 type MapLifecycleState = 'loading' | 'ready' | 'degraded' | 'fatal';

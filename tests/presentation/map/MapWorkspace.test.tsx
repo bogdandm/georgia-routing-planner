@@ -1520,6 +1520,7 @@ describe('MapWorkspace', () => {
       mapDebugOptions: {
         showCollisionBoxes: true,
         showTileBoundaries: true,
+        showRouteSearch: true,
       },
     });
     renderWithI18n(
@@ -1531,6 +1532,7 @@ describe('MapWorkspace', () => {
     expect(facade.debugOptions).toEqual({
       showCollisionBoxes: true,
       showTileBoundaries: true,
+      showRouteSearch: true,
     });
 
     act(() => {
@@ -1539,6 +1541,7 @@ describe('MapWorkspace', () => {
     expect(facade.debugOptions).toEqual({
       showCollisionBoxes: false,
       showTileBoundaries: false,
+      showRouteSearch: false,
     });
   });
 

@@ -22,6 +22,7 @@ import type {
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
+import type { TrailRouteSearchTrace } from '@/application/ports/TrailRouter';
 import type {
   LogicalMapLayerId,
   MapLayerPreferencesRepository,
@@ -71,6 +72,7 @@ import {
   savedMarkerLayerIds,
   measurementLayerIds,
   routePlanLayerIds,
+  routeSearchLayerIds,
   sentinelMosaicIdPrefixes,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
@@ -170,6 +172,20 @@ const emptyPlannedLine: PlannedLineState = {
   waypoints: [],
   preview: null,
 };
+
+function isValidMapCoordinate([longitude, latitude]: readonly [
+  number,
+  number,
+]): boolean {
+  return (
+    Number.isFinite(longitude) &&
+    Number.isFinite(latitude) &&
+    longitude >= -180 &&
+    longitude <= 180 &&
+    latitude >= -90 &&
+    latitude <= 90
+  );
+}
 
 interface RasterLayerSlot {
   readonly sourceId: string;
@@ -916,6 +932,7 @@ export class MapLibreLayerController {
     'route-plan': emptyPlannedLine,
     measurement: emptyPlannedLine,
   };
+  #routeSearchTrace: TrailRouteSearchTrace | null = null;
   /** Last opacity written per track layer; a recreated native layer is written again. */
   readonly #importedTrackPaint = new Map<
     string,
@@ -1618,20 +1635,13 @@ export class MapLibreLayerController {
     sections: readonly PlannedLineSection[],
     waypoints: readonly (readonly [number, number])[],
   ): MapLayerVisibilityResult {
-    const validCoordinate = ([longitude, latitude]: readonly [number, number]) =>
-      Number.isFinite(longitude) &&
-      Number.isFinite(latitude) &&
-      longitude >= -180 &&
-      longitude <= 180 &&
-      latitude >= -90 &&
-      latitude <= 90;
     if (
       !sections.every(
         (section) =>
           section.coordinates.length >= 2 &&
-          section.coordinates.every((coordinate) => validCoordinate(coordinate)),
+          section.coordinates.every((coordinate) => isValidMapCoordinate(coordinate)),
       ) ||
-      !waypoints.every((coordinate) => validCoordinate(coordinate))
+      !waypoints.every((coordinate) => isValidMapCoordinate(coordinate))
     ) {
       return this.visibilityFailure({ code: 'planned-line-geometry-invalid' });
     }
@@ -1679,6 +1689,25 @@ export class MapLibreLayerController {
     this.#plannedLines[overlay] = state;
     this.#currentGeoJsonSources.delete(plannedLineStyles[overlay].sourceId);
     return this.reconcilePlannedLine(overlay);
+  }
+
+  /** Developer overlay of the arcs the route search explored; `null` removes it. */
+  public setRouteSearchTrace(
+    trace: TrailRouteSearchTrace | null,
+  ): MapLayerVisibilityResult {
+    if (
+      trace !== null &&
+      ![trace.forward, trace.backward].every((arcs) =>
+        arcs.every(
+          ([from, to]) => isValidMapCoordinate(from) && isValidMapCoordinate(to),
+        ),
+      )
+    ) {
+      return this.visibilityFailure({ code: 'planned-line-geometry-invalid' });
+    }
+    this.#routeSearchTrace = trace;
+    this.#currentGeoJsonSources.delete(mapSourceIds.routeSearch);
+    return this.reconcileRouteSearchTrace();
   }
 
   public setSavedMarkers(markers: readonly SavedMarker[]): void {
@@ -3673,6 +3702,7 @@ export class MapLibreLayerController {
 
   private reconcilePlannedLines(): void {
     for (const overlay of plannedLineOverlays) this.reconcilePlannedLine(overlay);
+    this.reconcileRouteSearchTrace();
   }
 
   private reconcilePlannedLine(overlay: PlannedLineOverlay): MapLayerVisibilityResult {
@@ -3841,6 +3871,91 @@ export class MapLibreLayerController {
           },
           paint: { 'text-color': '#FFFFFF' },
         });
+      }
+      return { status: 'success' };
+    } catch {
+      return this.visibilityFailure({ code: 'planned-line-render-failed' });
+    }
+  }
+
+  private reconcileRouteSearchTrace(): MapLayerVisibilityResult {
+    const map = this.#map;
+    if (map?.getLayer(mapLayerIds.background) === undefined) {
+      return { status: 'success' };
+    }
+    const trace = this.#routeSearchTrace;
+    try {
+      if (trace === null) {
+        for (const layerId of [routeSearchLayerIds.arcs, routeSearchLayerIds.casing]) {
+          if (map.getLayer(layerId) !== undefined) map.removeLayer(layerId);
+        }
+        if (map.getSource(mapSourceIds.routeSearch) !== undefined) {
+          map.removeSource(mapSourceIds.routeSearch);
+        }
+        this.#currentGeoJsonSources.delete(mapSourceIds.routeSearch);
+        return { status: 'success' };
+      }
+      if (
+        !this.syncGeoJsonSource(
+          map,
+          mapSourceIds.routeSearch,
+          (): FeatureCollection<MultiLineString, { readonly side: string }> => ({
+            type: 'FeatureCollection',
+            features: (['forward', 'backward'] as const).map((side) => ({
+              type: 'Feature',
+              properties: { side },
+              geometry: {
+                type: 'MultiLineString',
+                coordinates: trace[side].map(([from, to]) => [[...from], [...to]]),
+              },
+            })),
+          }),
+        )
+      ) {
+        throw new Error('The route search source cannot update its data.');
+      }
+      // Below the route-plan lines so the chosen route stays on top of the search.
+      let beforeLayerId: string | undefined;
+      if (map.getLayer(routePlanLayerIds.routed) !== undefined) {
+        beforeLayerId = routePlanLayerIds.routed;
+      } else if (
+        map.getLayer(mapInsertionPoints.importedTracksBeforeLayerId) !== undefined
+      ) {
+        beforeLayerId = mapInsertionPoints.importedTracksBeforeLayerId;
+      }
+      // A white halo keeps the dark arcs readable over orange roads and relief.
+      if (map.getLayer(routeSearchLayerIds.casing) === undefined) {
+        map.addLayer(
+          {
+            id: routeSearchLayerIds.casing,
+            type: 'line',
+            source: mapSourceIds.routeSearch,
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#FFFFFF', 'line-width': 4, 'line-opacity': 0.85 },
+          },
+          beforeLayerId,
+        );
+      }
+      if (map.getLayer(routeSearchLayerIds.arcs) === undefined) {
+        map.addLayer(
+          {
+            id: routeSearchLayerIds.arcs,
+            type: 'line',
+            source: mapSourceIds.routeSearch,
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: {
+              'line-color': [
+                'match',
+                ['get', 'side'],
+                'forward',
+                mapVisualPalette.userGeometry.routeSearchForward,
+                mapVisualPalette.userGeometry.routeSearchBackward,
+              ],
+              'line-width': 2,
+            },
+          },
+          beforeLayerId,
+        );
       }
       return { status: 'success' };
     } catch {

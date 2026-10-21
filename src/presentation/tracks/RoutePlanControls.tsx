@@ -190,6 +190,8 @@ export function RoutePlanStatus({
         style: 'percent',
       }).format(Math.round(progress.graphProgress * 100) / 100);
       label = t`Building route graph… ${graphProgress}`;
+    } else if (progress?.phase === 'loading-terrain') {
+      label = t`Loading route terrain…`;
     } else if (progress?.phase === 'searching-route') {
       label = t`Searching for a route…`;
     } else {

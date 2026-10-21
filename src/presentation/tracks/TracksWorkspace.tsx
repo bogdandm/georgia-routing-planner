@@ -100,6 +100,10 @@ import {
   type NormalizedMarkerName,
 } from '@/domain/markers/savedMarker';
 import { geodesicDistanceKm } from '@/application/map/expandPlaceSearchBounds';
+import type {
+  TrailRouteResult,
+  TrailRouteSearchTrace,
+} from '@/application/ports/TrailRouter';
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
@@ -632,6 +636,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   /* eslint-enable lingui/no-unlocalized-strings */
   const [elevationProgress, setElevationProgress] =
     useState<TrackElevationPreparationProgress | null>(null);
+  const [routePlanSearchTrace, setRoutePlanSearchTrace] = useState<{
+    readonly planId: string;
+    readonly trace: TrailRouteSearchTrace;
+  } | null>(null);
   const [trackMarkerDraft, setTrackMarkerDraft] =
     useState<TrackMarkerEditorDraft | null>(null);
   useEffect(() => {
@@ -1430,6 +1438,32 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
   }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 
+  // Only the open plan's latest leg is drawn; a closed or replaced plan hides it.
+  const visibleRouteSearchTrace =
+    active?.kind === 'route-plan' && routePlanSearchTrace?.planId === active.id
+      ? routePlanSearchTrace.trace
+      : null;
+  useEffect(() => {
+    mapLayers?.setRouteSearchTrace(visibleRouteSearchTrace);
+  }, [mapLayers, visibleRouteSearchTrace]);
+
+  useEffect(
+    () => () => {
+      mapLayers?.setRouteSearchTrace(null);
+    },
+    [mapLayers],
+  );
+
+  useEffect(
+    () =>
+      useUiStore.subscribe((state) => {
+        if (!state.developerMode || !state.mapDebugOptions.showRouteSearch) {
+          setRoutePlanSearchTrace(null);
+        }
+      }),
+    [],
+  );
+
   const generateName = useCallback(
     async (preview: PreparedPreviewTrack, controller: AbortController) => {
       if (searchPlaces === null) {
@@ -1772,18 +1806,22 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     routePlanRequestAbort.current?.abort();
     routePlanRequestAbort.current = controller;
     routePlanRequestOwner.current = owner;
-    /* eslint-disable lingui/no-unlocalized-strings -- Routing result tokens. */
-    const unavailable = {
+    const unavailable: TrailRouteResult = {
       status: 'failed',
       reason: 'routing-data-unavailable',
-    } as const;
-    /* eslint-enable lingui/no-unlocalized-strings */
+    };
+    // Read at request time so toggling the developer option never restarts a leg.
+    const { developerMode, mapDebugOptions } = useUiStore.getState();
     void (
       trailRouter === null
         ? Promise.resolve(unavailable)
         : trailRouter
             .route(
-              { start: request.start, destination: request.destination },
+              {
+                start: request.start,
+                destination: request.destination,
+                includeSearchTrace: developerMode && mapDebugOptions.showRouteSearch,
+              },
               controller.signal,
               (progress) => {
                 setActive((current) =>
@@ -1806,6 +1844,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           routePlanRequestAbort.current === controller &&
           routePlanRequestOwner.current === owner;
         if (controller.signal.aborted || !ownsRequest) return;
+        setRoutePlanSearchTrace(
+          result.searchTrace === undefined
+            ? null
+            : { planId: active.id, trace: result.searchTrace },
+        );
         setActive((current) => {
           if (
             current?.kind !== 'route-plan' ||
@@ -1864,6 +1907,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     routePlanRequestAbort.current?.abort();
     routePlanElevationAbort.current?.abort();
     setElevationProgress(null);
+    setRoutePlanSearchTrace(null);
     const undone = undoRoutePlanPoint(active);
     setActive((current) =>
       current?.kind === 'route-plan' && current.id === active.id
@@ -1880,6 +1924,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     routePlanRequestAbort.current?.abort();
     routePlanElevationAbort.current?.abort();
     setElevationProgress(null);
+    setRoutePlanSearchTrace(null);
     setActive((current) =>
       current?.kind === 'route-plan' ? clearRoutePlanDraft(current) : current,
     );

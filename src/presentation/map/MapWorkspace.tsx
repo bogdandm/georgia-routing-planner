@@ -1101,12 +1101,17 @@ export function MapWorkspace({
     facade.setDebugOptions(
       developerMode
         ? mapDebugOptions
-        : { showCollisionBoxes: false, showTileBoundaries: false },
+        : {
+            showCollisionBoxes: false,
+            showTileBoundaries: false,
+            showRouteSearch: false,
+          },
     );
     return () => {
       facade.setDebugOptions({
         showCollisionBoxes: false,
         showTileBoundaries: false,
+        showRouteSearch: false,
       });
     };
   }, [developerMode, facade, mapDebugOptions]);

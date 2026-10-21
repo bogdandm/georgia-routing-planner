@@ -1,6 +1,11 @@
+import type {
+  TrailRouteSearchArc,
+  TrailRouteSearchTrace,
+} from '@/application/ports/TrailRouter';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import {
   EARTH_RADIUS_METERS,
+  estimateHikingSeconds,
   geodesicDistanceMeters,
 } from '@/domain/tracks/trackCalculations';
 
@@ -8,10 +13,13 @@ export const MVT_GRAPH_EXTENT = 4_096;
 export const MAX_SNAP_DISTANCE_METERS = 200;
 export const GRAPH_NODE_TOLERANCE_UNITS = 2;
 export const GRAPH_NODE_BUCKET_UNITS = 512;
+/** Longer edges get interior terrain samples so a hill between two vertices still counts. */
+export const TERRAIN_SAMPLE_SPACING_METERS = 30;
 
 const ROUTING_ZOOM = 14;
 const fractionEpsilon = 1e-12;
 const distanceTieEpsilonMeters = 1e-9;
+const costTieEpsilonSeconds = 1e-9;
 
 export interface RoutingLineMetadata {
   readonly class?: string;
@@ -77,6 +85,24 @@ export interface EdgeProjection {
   readonly distanceMeters: number;
 }
 
+/** Climb and descent in metres along one walking direction. */
+export interface TrailRelief {
+  readonly ascentMeters: number;
+  readonly descentMeters: number;
+}
+
+export interface TrailGraphTerrain {
+  readonly nodeElevationMeters: ReadonlyMap<string, number>;
+  /** Relief along each edge walked from `nodeA` to `nodeB`, including interior samples. */
+  readonly edgeRelief: ReadonlyMap<string, TrailRelief>;
+}
+
+export interface TrailGraphRouteOptions {
+  /** Null minimizes walking distance; otherwise DIN 33466 hiking time. */
+  readonly terrain: TrailGraphTerrain | null;
+  readonly includeSearchTrace: boolean;
+}
+
 export type TrailGraphRouteResult =
   | {
       readonly status: 'ready';
@@ -84,7 +110,7 @@ export type TrailGraphRouteResult =
       readonly networkDistanceMeters: number;
       readonly snappedStart: TrackCoordinate;
       readonly snappedDestination: TrackCoordinate;
-      readonly visitedBoundary: boolean;
+      readonly searchTrace?: TrailRouteSearchTrace;
     }
   | {
       readonly status: 'failed';
@@ -95,7 +121,9 @@ export type TrailGraphRouteResult =
   | {
       readonly status: 'failed';
       readonly reason: 'no-route';
+      /** The exhausted search side reached the loaded area's edge, so a larger area may connect. */
       readonly visitedBoundary: boolean;
+      readonly searchTrace?: TrailRouteSearchTrace;
     };
 
 type TransportationProperties = Readonly<Record<string, string | number | boolean>>;
@@ -132,6 +160,14 @@ interface AssignedSnap extends NearestEdge {
   readonly role: 'start' | 'destination';
   nodeKey: string;
   coordinate: TrackCoordinate;
+}
+
+/** A temporary arc piece of an edge split at snap points; `span` is its share of the edge. */
+interface SplitPiece {
+  readonly parentEdgeKey: string;
+  /** The piece end nearer the parent's `nodeA`. */
+  readonly nodeA: string;
+  readonly span: number;
 }
 
 interface QueueEntry {
@@ -875,6 +911,14 @@ function nearestEdge(
 class MinimumQueue {
   readonly #entries: QueueEntry[] = [];
 
+  public get size(): number {
+    return this.#entries.length;
+  }
+
+  public peek(): QueueEntry | undefined {
+    return this.#entries[0];
+  }
+
   public push(entry: QueueEntry): void {
     this.#entries.push(entry);
     let index = this.#entries.length - 1;
@@ -949,6 +993,7 @@ function assignSnapNodes(
   readonly destination: AssignedSnap;
   readonly coordinates: ReadonlyMap<string, TrackCoordinate>;
   readonly adjacency: ReadonlyMap<string, readonly TrailGraphArc[]>;
+  readonly splitPieces: ReadonlyMap<string, SplitPiece>;
 } {
   const assigned: [AssignedSnap, AssignedSnap] = [
     {
@@ -995,6 +1040,7 @@ function assignSnapNodes(
   }
 
   const adjacencyOverrides = new Map<string, TrailGraphArc[]>();
+  const splitPieces = new Map<string, SplitPiece>();
   const splitEdgeKeys = new Set(interiorByEdge.keys());
   for (const edgeKey of splitEdgeKeys) {
     const edge = graph.edges.get(edgeKey);
@@ -1018,6 +1064,7 @@ function assignSnapNodes(
         left.role.localeCompare(right.role),
     );
     const chain = [edge.nodeA, ...snaps.map((snap) => snap.nodeKey), edge.nodeB];
+    const fractions = [0, ...snaps.map((snap) => snap.projection.fraction), 1];
     for (let index = 1; index < chain.length; index += 1) {
       const from = chain[index - 1];
       const to = chain[index];
@@ -1029,6 +1076,11 @@ function assignSnapNodes(
       if (fromCoordinate === undefined || toCoordinate === undefined) continue;
       const distanceMeters = geodesicDistanceMeters(fromCoordinate, toCoordinate);
       const splitEdgeKey = unorderedEdgeKey(from, to);
+      splitPieces.set(splitEdgeKey, {
+        parentEdgeKey: edgeKey,
+        nodeA: from,
+        span: (fractions[index] ?? 1) - (fractions[index - 1] ?? 0),
+      });
       addArc(adjacencyOverrides, graph, from, to, splitEdgeKey, distanceMeters);
       addArc(adjacencyOverrides, graph, to, from, splitEdgeKey, distanceMeters);
     }
@@ -1039,13 +1091,105 @@ function assignSnapNodes(
     destination: assigned[1],
     coordinates: temporaryCoordinates,
     adjacency: adjacencyOverrides,
+    splitPieces,
   };
 }
 
+/**
+ * Samples terrain at every node and at evenly spaced interior points of edges longer than
+ * `TERRAIN_SAMPLE_SPACING_METERS`. Returns null when any sample is unavailable, so one
+ * search never mixes hiking-time and distance-only costs.
+ */
+export async function sampleTrailGraphTerrain(
+  graph: TrailGraph,
+  sampleElevations: (
+    coordinates: readonly TrackCoordinate[],
+  ) => Promise<readonly (number | null)[]>,
+): Promise<TrailGraphTerrain | null> {
+  const nodes = [...graph.nodes.values()];
+  const coordinates: TrackCoordinate[] = nodes.map((node) => node.coordinate);
+  const edges: { readonly edge: TrailGraphEdge; readonly firstInterior: number }[] = [];
+  for (const edge of graph.edges.values()) {
+    const start = graph.nodes.get(edge.nodeA)?.coordinate;
+    const end = graph.nodes.get(edge.nodeB)?.coordinate;
+    if (start === undefined || end === undefined) continue;
+    edges.push({ edge, firstInterior: coordinates.length });
+    const segmentCount = Math.ceil(edge.distanceMeters / TERRAIN_SAMPLE_SPACING_METERS);
+    const longitudeDelta = normalizeLongitude(end[0] - start[0]);
+    for (let index = 1; index < segmentCount; index += 1) {
+      const fraction = index / segmentCount;
+      coordinates.push([
+        normalizeLongitude(start[0] + longitudeDelta * fraction),
+        start[1] + (end[1] - start[1]) * fraction,
+      ]);
+    }
+  }
+
+  const elevations = await sampleElevations(coordinates);
+  if (elevations.length !== coordinates.length) return null;
+  const nodeElevationMeters = new Map<string, number>();
+  for (const [index, node] of nodes.entries()) {
+    const elevation = elevations[index];
+    if (elevation === null || elevation === undefined) return null;
+    nodeElevationMeters.set(node.key, elevation);
+  }
+  const edgeRelief = new Map<string, TrailRelief>();
+  for (const [position, { edge, firstInterior }] of edges.entries()) {
+    const interiorEnd = edges[position + 1]?.firstInterior ?? coordinates.length;
+    const profile = [
+      nodeElevationMeters.get(edge.nodeA),
+      ...elevations.slice(firstInterior, interiorEnd),
+      nodeElevationMeters.get(edge.nodeB),
+    ];
+    let ascentMeters = 0;
+    let descentMeters = 0;
+    for (let index = 1; index < profile.length; index += 1) {
+      const previous = profile[index - 1];
+      const current = profile[index];
+      if (
+        previous === null ||
+        previous === undefined ||
+        current === null ||
+        current === undefined
+      ) {
+        return null;
+      }
+      if (current > previous) ascentMeters += current - previous;
+      else descentMeters += previous - current;
+    }
+    edgeRelief.set(edge.key, { ascentMeters, descentMeters });
+  }
+  return { nodeElevationMeters, edgeRelief };
+}
+
+interface SearchSide {
+  readonly queue: MinimumQueue;
+  readonly costSeconds: Map<string, number>;
+  /** The arc that reached each node; its `from` is one step nearer this side's origin. */
+  readonly previousArc: Map<string, TrailGraphArc>;
+  readonly trace: TrailRouteSearchArc[];
+  /** The backward side walks every adjacency arc in reverse, from `to` toward `from`. */
+  readonly reversed: boolean;
+  /** Lowest queued score; the opposite side prunes with it. */
+  lowestScore: number;
+  touchedBoundary: boolean;
+}
+
+/**
+ * Bidirectional A* (NBA*, Pijls & Post 2009). Arc cost is the DIN 33466 hiking time used
+ * for track estimates, so a short climb loses to a slightly longer level detour; without
+ * terrain every arc is flat and the search minimizes distance.
+ *
+ * Both heuristics are DIN times for the straight-line distance and the net elevation
+ * change to the side's target. DIN time is monotone and subadditive in distance, ascent,
+ * and descent, and every arc covers at least its share of both, so the heuristics are
+ * consistent and the meeting cost is optimal.
+ */
 export function routeTrailGraph(
   graph: TrailGraph,
   startCoordinate: TrackCoordinate,
   destinationCoordinate: TrackCoordinate,
+  options: TrailGraphRouteOptions,
 ): TrailGraphRouteResult {
   const startNearest = nearestEdge(graph, startCoordinate);
   const destinationNearest = nearestEdge(graph, destinationCoordinate);
@@ -1072,83 +1216,171 @@ export function routeTrailGraph(
   const prepared = assignSnapNodes(graph, startNearest, destinationNearest);
   const coordinateForNode = (nodeKey: string): TrackCoordinate | undefined =>
     prepared.coordinates.get(nodeKey) ?? graph.nodes.get(nodeKey)?.coordinate;
-  const destinationSnapCoordinate = coordinateForNode(prepared.destination.nodeKey);
-  const startSnapCoordinate = coordinateForNode(prepared.start.nodeKey);
+  const startKey = prepared.start.nodeKey;
+  const destinationKey = prepared.destination.nodeKey;
+  const destinationSnapCoordinate = coordinateForNode(destinationKey);
+  const startSnapCoordinate = coordinateForNode(startKey);
   if (startSnapCoordinate === undefined || destinationSnapCoordinate === undefined) {
     return { status: 'failed', reason: 'no-route', visitedBoundary: false };
   }
 
-  const queue = new MinimumQueue();
-  const distances = new Map<string, number>([[prepared.start.nodeKey, 0]]);
-  const previous = new Map<string, string>();
-  const visited = new Set<string>();
-  let visitedBoundary = false;
-  queue.push({
-    nodeKey: prepared.start.nodeKey,
-    score: geodesicDistanceMeters(startSnapCoordinate, destinationSnapCoordinate),
-  });
+  const { terrain } = options;
+  const elevationForNode = (nodeKey: string): number => {
+    if (terrain === null) return 0;
+    const known = terrain.nodeElevationMeters.get(nodeKey);
+    if (known !== undefined) return known;
+    // Temporary snap nodes lie on their edge; interpolating keeps every split piece's
+    // relief at least its net elevation change, which the heuristics rely on.
+    const snap = nodeKey === startKey ? prepared.start : prepared.destination;
+    const elevationA = terrain.nodeElevationMeters.get(snap.edge.nodeA) ?? 0;
+    const elevationB = terrain.nodeElevationMeters.get(snap.edge.nodeB) ?? 0;
+    return elevationA + (elevationB - elevationA) * snap.projection.fraction;
+  };
+  const walkSeconds = (arc: TrailGraphArc, reversed: boolean): number => {
+    if (terrain === null) return estimateHikingSeconds(arc.distanceMeters, 0, 0);
+    const piece = prepared.splitPieces.get(arc.edgeKey);
+    const edgeKey = piece?.parentEdgeKey ?? arc.edgeKey;
+    const relief = terrain.edgeRelief.get(edgeKey);
+    const span = piece?.span ?? 1;
+    const ascentMeters = (relief?.ascentMeters ?? 0) * span;
+    const descentMeters = (relief?.descentMeters ?? 0) * span;
+    const alongRelief =
+      (arc.from === (piece?.nodeA ?? graph.edges.get(edgeKey)?.nodeA)) !== reversed;
+    return alongRelief
+      ? estimateHikingSeconds(arc.distanceMeters, ascentMeters, descentMeters)
+      : estimateHikingSeconds(arc.distanceMeters, descentMeters, ascentMeters);
+  };
+  const startElevation = elevationForNode(startKey);
+  const destinationElevation = elevationForNode(destinationKey);
+  const heuristicSeconds = (side: SearchSide, nodeKey: string): number => {
+    const coordinate = coordinateForNode(nodeKey);
+    if (coordinate === undefined) return 0;
+    const climbMeters = side.reversed
+      ? elevationForNode(nodeKey) - startElevation
+      : destinationElevation - elevationForNode(nodeKey);
+    return estimateHikingSeconds(
+      geodesicDistanceMeters(
+        coordinate,
+        side.reversed ? startSnapCoordinate : destinationSnapCoordinate,
+      ),
+      Math.max(0, climbMeters),
+      Math.max(0, -climbMeters),
+    );
+  };
 
-  for (;;) {
-    const currentEntry = queue.pop();
-    if (currentEntry === undefined) break;
-    if (visited.has(currentEntry.nodeKey)) continue;
-    visited.add(currentEntry.nodeKey);
-    if (graph.nodes.get(currentEntry.nodeKey)?.boundary === true)
-      visitedBoundary = true;
-    if (currentEntry.nodeKey === prepared.destination.nodeKey) {
-      const path = [currentEntry.nodeKey];
-      while (path[0] !== prepared.start.nodeKey) {
-        const predecessor = previous.get(path[0] ?? '');
-        if (predecessor === undefined) break;
-        path.unshift(predecessor);
-      }
-      const coordinates = path
-        .map((nodeKey) => coordinateForNode(nodeKey))
-        .filter(
-          (coordinate): coordinate is TrackCoordinate => coordinate !== undefined,
-        );
-      const onlyCoordinate = coordinates[0];
-      if (coordinates.length === 1 && onlyCoordinate !== undefined) {
-        coordinates.push(onlyCoordinate);
-      }
-      return {
-        status: 'ready',
-        coordinates,
-        networkDistanceMeters: distances.get(currentEntry.nodeKey) ?? 0,
-        snappedStart: startSnapCoordinate,
-        snappedDestination: destinationSnapCoordinate,
-        visitedBoundary,
-      };
-    }
+  const createSide = (origin: string, reversed: boolean): SearchSide => {
+    const side: SearchSide = {
+      queue: new MinimumQueue(),
+      costSeconds: new Map([[origin, 0]]),
+      previousArc: new Map(),
+      trace: [],
+      reversed,
+      lowestScore: 0,
+      touchedBoundary: false,
+    };
+    side.lowestScore = heuristicSeconds(side, origin);
+    side.queue.push({ nodeKey: origin, score: side.lowestScore });
+    return side;
+  };
+  const forward = createSide(startKey, false);
+  const backward = createSide(destinationKey, true);
+  const closed = new Set<string>();
+  let bestSeconds = startKey === destinationKey ? 0 : Number.POSITIVE_INFINITY;
+  let meetingNode: string | null = startKey === destinationKey ? startKey : null;
 
-    const currentDistance = distances.get(currentEntry.nodeKey);
-    if (currentDistance === undefined) continue;
-    const arcs =
-      prepared.adjacency.get(currentEntry.nodeKey) ??
-      graph.adjacency.get(currentEntry.nodeKey) ??
-      [];
-    for (const arc of arcs) {
-      if (visited.has(arc.to)) continue;
-      const nextCoordinate = coordinateForNode(arc.to);
-      if (nextCoordinate === undefined) continue;
-      const candidateDistance = currentDistance + arc.distanceMeters;
-      const knownDistance = distances.get(arc.to);
-      if (
-        knownDistance !== undefined &&
-        candidateDistance >= knownDistance - distanceTieEpsilonMeters
-      ) {
-        continue;
+  while (forward.queue.size > 0 && backward.queue.size > 0) {
+    const side = forward.queue.size <= backward.queue.size ? forward : backward;
+    const opposite = side === forward ? backward : forward;
+    const nodeKey = side.queue.pop()?.nodeKey;
+    if (nodeKey !== undefined && !closed.has(nodeKey)) {
+      closed.add(nodeKey);
+      if (graph.nodes.get(nodeKey)?.boundary === true) side.touchedBoundary = true;
+      const nodeCost = side.costSeconds.get(nodeKey) ?? Number.POSITIVE_INFINITY;
+      const nodeCoordinate = coordinateForNode(nodeKey);
+      // NBA* closes a node without expanding it when no path through it can beat the
+      // best meeting found so far.
+      const promising =
+        nodeCost + heuristicSeconds(side, nodeKey) <
+          bestSeconds - costTieEpsilonSeconds &&
+        nodeCost + opposite.lowestScore - heuristicSeconds(opposite, nodeKey) <
+          bestSeconds - costTieEpsilonSeconds;
+      const arcs = promising
+        ? (prepared.adjacency.get(nodeKey) ?? graph.adjacency.get(nodeKey) ?? [])
+        : [];
+      for (const arc of arcs) {
+        if (closed.has(arc.to)) continue;
+        const nextCoordinate = coordinateForNode(arc.to);
+        if (nodeCoordinate === undefined || nextCoordinate === undefined) continue;
+        const candidateCost = nodeCost + walkSeconds(arc, side.reversed);
+        const knownCost = side.costSeconds.get(arc.to);
+        if (
+          knownCost !== undefined &&
+          candidateCost >= knownCost - costTieEpsilonSeconds
+        ) {
+          continue;
+        }
+        side.costSeconds.set(arc.to, candidateCost);
+        side.previousArc.set(arc.to, arc);
+        side.queue.push({
+          nodeKey: arc.to,
+          score: candidateCost + heuristicSeconds(side, arc.to),
+        });
+        if (options.includeSearchTrace)
+          side.trace.push([nodeCoordinate, nextCoordinate]);
+        const oppositeCost = opposite.costSeconds.get(arc.to);
+        if (oppositeCost !== undefined && candidateCost + oppositeCost < bestSeconds) {
+          bestSeconds = candidateCost + oppositeCost;
+          meetingNode = arc.to;
+        }
       }
-      distances.set(arc.to, candidateDistance);
-      previous.set(arc.to, currentEntry.nodeKey);
-      queue.push({
-        nodeKey: arc.to,
-        score:
-          candidateDistance +
-          geodesicDistanceMeters(nextCoordinate, destinationSnapCoordinate),
-      });
     }
+    let top = side.queue.peek();
+    while (top !== undefined && closed.has(top.nodeKey)) {
+      side.queue.pop();
+      top = side.queue.peek();
+    }
+    side.lowestScore = top?.score ?? Number.POSITIVE_INFINITY;
   }
 
-  return { status: 'failed', reason: 'no-route', visitedBoundary };
+  const searchTrace = options.includeSearchTrace
+    ? { searchTrace: { forward: forward.trace, backward: backward.trace } }
+    : {};
+  if (meetingNode === null) {
+    return {
+      status: 'failed',
+      reason: 'no-route',
+      // Only the exhausted side has explored its whole component.
+      visitedBoundary:
+        forward.queue.size === 0 ? forward.touchedBoundary : backward.touchedBoundary,
+      ...searchTrace,
+    };
+  }
+
+  const path = [meetingNode];
+  let networkDistanceMeters = 0;
+  for (let arc = forward.previousArc.get(meetingNode); arc !== undefined;) {
+    path.unshift(arc.from);
+    networkDistanceMeters += arc.distanceMeters;
+    arc = arc.from === startKey ? undefined : forward.previousArc.get(arc.from);
+  }
+  for (let arc = backward.previousArc.get(meetingNode); arc !== undefined;) {
+    path.push(arc.from);
+    networkDistanceMeters += arc.distanceMeters;
+    arc = arc.from === destinationKey ? undefined : backward.previousArc.get(arc.from);
+  }
+  const coordinates = path
+    .map((nodeKey) => coordinateForNode(nodeKey))
+    .filter((coordinate): coordinate is TrackCoordinate => coordinate !== undefined);
+  const onlyCoordinate = coordinates[0];
+  if (coordinates.length === 1 && onlyCoordinate !== undefined) {
+    coordinates.push(onlyCoordinate);
+  }
+  return {
+    status: 'ready',
+    coordinates,
+    networkDistanceMeters,
+    snappedStart: startSnapCoordinate,
+    snappedDestination: destinationSnapCoordinate,
+    ...searchTrace,
+  };
 }

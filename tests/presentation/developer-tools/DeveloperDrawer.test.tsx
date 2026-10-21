@@ -11,7 +11,11 @@ import { FakeMapFacade } from '@test/helpers/FakeMapFacade';
 beforeEach(() => {
   useUiStore.setState({
     developerMode: true,
-    mapDebugOptions: { showCollisionBoxes: false, showTileBoundaries: false },
+    mapDebugOptions: {
+      showCollisionBoxes: false,
+      showTileBoundaries: false,
+      showRouteSearch: false,
+    },
   });
 });
 
@@ -99,6 +103,12 @@ describe('DeveloperDrawer', () => {
 
     await user.click(screen.getByRole('checkbox', { name: 'Show tile boundaries' }));
     expect(useUiStore.getState().mapDebugOptions.showTileBoundaries).toBe(true);
+    await user.click(screen.getByRole('checkbox', { name: 'Show route search' }));
+    expect(useUiStore.getState().mapDebugOptions).toEqual({
+      showCollisionBoxes: false,
+      showTileBoundaries: true,
+      showRouteSearch: true,
+    });
   });
 
   it('shows each Sentinel step with its current status and duration', async () => {

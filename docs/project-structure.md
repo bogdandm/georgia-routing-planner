@@ -152,7 +152,8 @@ Four Vite module workers share the request-correlated `WorkerRpc` transport
 (`infrastructure/runtime/WorkerRpc.ts`):
 
 - `infrastructure/routing` — `BrowserTrailRouter` implements `TrailRouter`; the worker
-  builds a request-local graph from the detail-vector `streets` layer and runs A*.
+  builds a request-local graph from the detail-vector `streets` layer, samples the
+  terrain DEM through `RasterDemElevationProvider`, and runs bidirectional A*.
 - `infrastructure/elevation` — `WorkerTerrainComputeBackend` runs `TerrainComputeEngine`
   (contour DEM fetch and parse, `maplibre-contour`); `InlineTerrainComputeBackend` runs
   the same engine on the window thread after repeated worker failure.

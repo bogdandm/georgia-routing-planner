@@ -656,6 +656,11 @@ msgstr "Loading elevation: {percent}"
 msgid "Loading elevation…"
 msgstr "Loading elevation…"
 
+#. js-lingui-id: zWoXyb
+#: src/presentation/tracks/RoutePlanControls.tsx
+msgid "Loading route terrain…"
+msgstr "Loading route terrain…"
+
 #. js-lingui-id: FuF595
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "Loading route tiles…"

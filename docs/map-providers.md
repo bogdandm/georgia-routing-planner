@@ -134,11 +134,15 @@ In-browser routing (`src/infrastructure/routing`) reads the configured `detailVe
 `streets` layer at z14, the same geometry drawn from z13, so routes do not diverge from
 the visible detail map. Limits:
 
-- Each leg's endpoint bounds expand by the larger of 2,000 m or 25% of the geodesic
-  distance; coverage above 256 tiles is rejected. A disconnected search that reaches the
-  boundary retries once with doubled padding.
-- Tile fetches run at most eight at a time into a worker-owned 128-entry LRU; MapLibre's
-  viewport and tile cache do not participate. A calculation times out after 60 s.
+- Each leg's endpoint bounds expand by 25% of the geodesic distance, clamped to 2–5 km;
+  coverage above 512 tiles is rejected. In Georgia that admits legs of about 40 km
+  diagonally and 120 km along a parallel or meridian. A disconnected search that reaches
+  the boundary retries once with doubled padding; a retry area above 512 tiles reports
+  the segment as too large.
+- Tile fetches run at most eight at a time into a worker-owned 512-entry LRU, so the
+  retry reuses the first area; MapLibre's viewport and tile cache do not participate. A
+  calculation times out after 60 s; a maximal mountain area needs roughly 15–25 s, while
+  a dense city area of that size can exceed the limit.
 - Every street kind participates except construction/proposed, rail, and non-road
   aeroway kinds. Explicit `foot=no` or `foot=private` is rejected when a replacement
   provider supplies it; Shortbread publishes no foot/access values or feature IDs, and

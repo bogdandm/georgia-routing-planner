@@ -235,7 +235,7 @@ function loadedArea(
 }
 
 describe('routing tile coverage and decoding', () => {
-  it('covers half-open sorted XYZ rectangles, expands padding, clamps latitude, and rejects more than 256 tiles', () => {
+  it('covers half-open sorted XYZ rectangles, expands padding, clamps latitude, and rejects areas above the tile budget', () => {
     const tileX = 10_240;
     const tileY = 6_000;
     const northWest = globalMvtVertexToCoordinate(
@@ -294,7 +294,20 @@ describe('routing tile coverage and decoding', () => {
     expect(
       coverRoutingBounds({ west: -180, east: 180, south: -80, north: 80 }),
     ).toEqual({ status: 'failed', reason: 'area-too-large' });
-    expect(MAX_ROUTING_TILES).toBe(256);
+
+    // Long legs keep 5 km of detour room, so a 40 km diagonal leg still fits.
+    const longStart: TrackCoordinate = [43.5, 42.3];
+    const longDestination: TrackCoordinate = [43.84, 42.555];
+    const longPadding = routingPaddingMeters(longStart, longDestination);
+    expect(geodesicDistanceMeters(longStart, longDestination)).toBeGreaterThan(38_000);
+    expect(longPadding).toBe(5_000);
+    const longCoverage = coverRoutingBounds(
+      expandRoutingBounds(longStart, longDestination, longPadding),
+    );
+    expect(longCoverage.status).toBe('ready');
+    if (longCoverage.status === 'ready') {
+      expect(longCoverage.coverage.tiles.length).toBeLessThanOrEqual(MAX_ROUTING_TILES);
+    }
   });
 
   it('keeps dateline-adjacent tiles contiguous in graph coordinates', () => {
@@ -821,9 +834,9 @@ describe('routing tile coverage and decoding', () => {
     );
   });
 
-  it('bounds the decoded access-ordered LRU at 128 entries', async () => {
+  it('bounds the decoded access-ordered LRU at the cache size', async () => {
     const loader = await initializedLoader(Buffer.alloc(0));
-    for (let index = 0; index < 40; index += 1) {
+    for (let index = 0; index < 200; index += 1) {
       const longitude = -10 + index * 0.1;
       const result = await loader.loadArea(
         [longitude, 0],

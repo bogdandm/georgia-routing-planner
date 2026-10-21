@@ -317,9 +317,14 @@ function SatelliteComparePane({
     // Static imagery shows only on a pane that picked it, whatever the main map shows.
     const plainVisibility: Record<LogicalMapLayerId, boolean> = { ...visibility };
     for (const id of comparisonBasemaps) plainVisibility[id] = false;
-    // Water and vegetation fills would hide exactly the land cover being compared;
-    // a plain map keeps them as the main map shows them.
-    const imageryVisibility = { ...plainVisibility, 'natural-features': false };
+    // Water and vegetation fills would hide exactly the land cover being compared, and
+    // the opaque Soviet topographic scans would hide the imagery itself; a plain map
+    // keeps both as the main map shows them.
+    const imageryVisibility = {
+      ...plainVisibility,
+      'natural-features': false,
+      'soviet-topographic': false,
+    };
     return {
       imageryVisibility,
       sceneLayerVisibility: baseNativeLayerVisibility(imageryVisibility),

@@ -499,14 +499,15 @@ and slower.
 Each pane is a 2D, north-up map. A scene pane shows its scene with the default
 OpenStreetMap overlay (labels, roads, and objects) at the saved overlay opacity and
 layer choices and the scene footprint; natural features (vegetation, water bodies,
-glaciers) are off there so their fills cannot hide the land cover being compared. A pane
-without a scene is the plain vector map with the main map's layer choices, relief
-shading, and isolines. A static imagery pane shows Google Satellite, Bing Aerial, Esri
-World Imagery, or the NAPR orthophoto with the same overlay and layer choices as a scene
-pane. Static imagery basemaps chosen on the main map are not shown in the grid. Every
-pane draws the imported track as the main map does; markers and weather are not shown.
-The panes share one camera. Over a pane the pointer is a large sky-blue crosshair with a
-center dot; the other panes show a small white crosshair at the same point.
+glaciers) and the Soviet topographic map are off there so they cannot hide the land
+cover being compared. A pane without a scene is the plain vector map with the main map's
+layer choices, relief shading, and isolines. A static imagery pane shows Google
+Satellite, Bing Aerial, Esri World Imagery, or the NAPR orthophoto with the same overlay
+and layer choices as a scene pane. Static imagery basemaps chosen on the main map are
+not shown in the grid. Every pane draws the imported track as the main map does; markers
+and weather are not shown. The panes share one camera. Over a pane the pointer is a
+large sky-blue crosshair with a center dot; the other panes show a small white crosshair
+at the same point.
 
 A scene pane's label shows the year in bold, the day and month, and the local time and
 cloud, all in the scene's local time zone; a static imagery pane's label shows its name,

@@ -1296,12 +1296,11 @@ export function MapWorkspace({
       sharedMapView === null ||
       sharedComparison.length === 0 ||
       smartphoneViewport ||
-      parseTrackShareLocation(window.location.hash).kind !== 'none' ||
-      satelliteCatalogGateway?.getScene === undefined
+      parseTrackShareLocation(window.location.hash).kind !== 'none'
     ) {
       return;
     }
-    const getScene = satelliteCatalogGateway.getScene.bind(satelliteCatalogGateway);
+    const getScene = satelliteCatalogGateway?.getScene?.bind(satelliteCatalogGateway);
     setActiveTab('satellite');
     setNavigationCollapsed(false);
     const controller = new AbortController();
@@ -1311,6 +1310,7 @@ export function MapWorkspace({
       sharedComparison.map((imageKey) => {
         const basemap = comparisonBasemaps.find((id) => id === imageKey);
         if (basemap !== undefined) return Promise.resolve(basemap);
+        if (getScene === undefined) return Promise.resolve(null);
         const separator = imageKey.indexOf(':');
         return getScene(imageKey.slice(0, separator), imageKey.slice(separator + 1), {
           operationId: idGenerator.generate(),

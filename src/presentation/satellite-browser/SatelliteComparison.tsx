@@ -573,9 +573,11 @@ export function SatelliteComparisonPanel() {
           <Trans>Clear</Trans>
         </Button>
       </Stack>
-      <Typography variant="caption" color="text.secondary">
-        <Trans>Imagery: Copernicus Sentinel data via Element 84 Earth Search.</Trans>
-      </Typography>
+      {filledSlots.some(({ image }) => !isComparisonBasemap(image)) ? (
+        <Typography variant="caption" color="text.secondary">
+          <Trans>Imagery: Copernicus Sentinel data via Element 84 Earth Search.</Trans>
+        </Typography>
+      ) : null}
       <Snackbar
         open={copyLinkStatus !== 'idle'}
         autoHideDuration={copyLinkStatus === 'copied' ? 2_500 : 4_000}

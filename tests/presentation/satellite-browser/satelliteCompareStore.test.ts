@@ -5,6 +5,9 @@ import {
   clearComparisonSlot,
   closeComparison,
   openComparison,
+  openSharedComparison,
+  removeComparedScene,
+  reopenComparison,
   restorePreferredComparisonLayout,
   resetSatelliteCompareStore,
   satelliteCompareStore,
@@ -144,5 +147,35 @@ describe('satelliteCompareStore', () => {
     restorePreferredComparisonLayout(4);
     openComparison(camera, testViewport, 4);
     expect(slotIds(satelliteCompareStore.getState().slots)).toEqual(['2019', '2023']);
+  });
+
+  it('reopens the closed grid as it was until the tray changes', () => {
+    openSharedComparison([scene2023, scene2019], {
+      center: { longitude: 44.5, latitude: 42.5 },
+      zoom: 11,
+    });
+    closeComparison();
+
+    reopenComparison(camera, testViewport, 4);
+    expect(slotIds(satelliteCompareStore.getState().slots)).toEqual(['2023', '2019']);
+
+    closeComparison();
+    removeComparedScene('sentinel-2-l2a:2019');
+    reopenComparison(camera, testViewport, 4);
+    expect(slotIds(satelliteCompareStore.getState().slots)).toEqual([
+      '2023',
+      null,
+      null,
+      null,
+    ]);
+
+    closeComparison();
+    reopenComparison(camera, viewportElsewhere, 2);
+    expect(slotIds(satelliteCompareStore.getState().slots)).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 });

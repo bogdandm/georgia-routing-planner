@@ -537,12 +537,14 @@ map.
 Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid,
 returns the shown images to the tray, and moves the main map to the compared area. The
 URL anchor follows the grid: opening it adds a `#satellite/compare` history entry and
-closing it a `#satellite` one, so browser Back and Forward close and reopen it. On
-desktop, a URL with that anchor opens the grid, as **Compare** in the Satellite header
-does, once the main map is ready. **Share link** copies a 2D link with `compare=<key>,…`
-in pane order, where a key is a scene key or a static basemap ID; opening it on desktop
-shows the grid in that order once at least two images resolve, and otherwise shows a
-notice and the shared location. Comparison state is never persisted.
+closing it a `#satellite` one, so browser Back and Forward close and reopen it; a
+reopened grid keeps its positions and layout unless the tray changed meanwhile, and
+scenes that no longer reach the view still leave empty panes. On desktop, a URL with
+that anchor opens the grid, as **Compare** in the Satellite header does, once the main
+map is ready. **Share link** copies a 2D link with `compare=<key>,…` in pane order,
+where a key is a scene key or a static basemap ID; opening it on desktop shows the grid
+in that order once at least two images resolve, and otherwise shows a notice and the
+shared location. Comparison state is never persisted.
 
 ### Weather
 

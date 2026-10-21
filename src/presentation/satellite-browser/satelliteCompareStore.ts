@@ -57,6 +57,8 @@ interface SatelliteCompareState {
   readonly calendarMonth: string | null;
   /** Layout last picked in the sidebar, kept in the browser; null before any pick. */
   readonly preferredLayout: ComparisonLayout | null;
+  /** Positions of the last closed grid; history navigation reopens it as it was. */
+  readonly closedSlots: readonly ComparisonSlot[] | null;
 }
 
 const initialState: SatelliteCompareState = {
@@ -67,6 +69,7 @@ const initialState: SatelliteCompareState = {
   tileProgress: {},
   calendarMonth: null,
   preferredLayout: null,
+  closedSlots: null,
 };
 
 export const satelliteCompareStore = createStore<SatelliteCompareState>()(
@@ -207,6 +210,37 @@ export function openComparison(
   });
 }
 
+/**
+ * Reopens the grid for browser Back or Forward: the last closed grid with its positions
+ * and layout while the tray still holds exactly its images, else as `openComparison`
+ * does. Either way, a scene that no longer reaches the view leaves an empty pane.
+ */
+export function reopenComparison(
+  mainCamera: MapCamera | undefined,
+  viewport: SatelliteSearchViewport | null,
+  defaultLayout: ComparisonLayout,
+): void {
+  const { images, closedSlots } = satelliteCompareStore.getState();
+  const imageKeys = (slots: readonly ComparisonSlot[]) =>
+    slots
+      .flatMap((slot) => (slot === null ? [] : [comparisonImageKey(slot)]))
+      .sort()
+      .join(',');
+  if (closedSlots === null || imageKeys(closedSlots) !== imageKeys(images)) {
+    openComparison(mainCamera, viewport, defaultLayout);
+    return;
+  }
+  const keysInView = new Set(imagesInView(images, viewport).map(comparisonImageKey));
+  satelliteCompareStore.setState({
+    slots: closedSlots.map((slot) =>
+      slot !== null && keysInView.has(comparisonImageKey(slot)) ? slot : null,
+    ),
+    camera: startingComparisonCamera(mainCamera, images),
+    directFallback: false,
+    tileProgress: {},
+  });
+}
+
 /** Opens a compare link: its images take the positions in link order. */
 export function openSharedComparison(
   images: readonly ComparisonImage[],
@@ -334,6 +368,7 @@ export function closeComparison(): void {
   satelliteCompareStore.setState({
     images: trayOrder(slots.filter((slot) => slot !== null)),
     slots: [],
+    closedSlots: slots,
     directFallback: false,
     tileProgress: {},
   });

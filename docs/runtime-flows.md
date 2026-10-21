@@ -117,9 +117,10 @@ failed keys; otherwise it shows a notice. Smartphones and track-share links igno
 `MapWorkspace` also keeps the grid and the `#satellite/compare` anchor in step. A change
 of `isComparisonOpen` pushes that anchor or `#satellite`, unless the URL already matches
 or the grid closed because another section's anchor was pushed. Once the main map is
-ready on desktop, the initial anchor, `hashchange`, and `popstate` open the grid with
-`openComparison`, as the Satellite header does, or close it when the anchor returns to
-`#satellite`.
+ready on desktop and the stored layout has loaded, the initial anchor, `hashchange`, and
+`popstate` close the grid when the anchor returns to `#satellite`, or open it with
+`reopenComparison`: the last closed grid with its positions and layout while the tray
+still holds exactly its images, else `openComparison` as from the Satellite header.
 
 While the grid is open, `WorkspaceShell` hides the mounted main map and the rail, docks
 a narrow sidebar, and gives `SatelliteCompareMaps` the remaining area. MapLibre limits

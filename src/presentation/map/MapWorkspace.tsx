@@ -102,6 +102,7 @@ import {
   minimumComparedScenes,
   openComparison,
   openSharedComparison,
+  reopenComparison,
   restorePreferredComparisonLayout,
   satelliteCompareStore,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
@@ -1575,14 +1576,20 @@ export function MapWorkspace({
     openWorkspaceTab('layers');
   }, [openWorkspaceTab]);
   // The comparison layout stored in the browser is known before any Compare control is
-  // used: this map control, the Satellite header shortcut, or the tray.
+  // used: this map control, the Satellite header shortcut, the tray, or the URL hash.
+  const [comparisonLayoutLoaded, setComparisonLayoutLoaded] = useState(false);
   useEffect(() => {
-    void database.loadComparisonLayout().then(
-      (layout) => {
-        if (layout !== null) restorePreferredComparisonLayout(layout);
-      },
-      () => undefined,
-    );
+    void database
+      .loadComparisonLayout()
+      .then(
+        (layout) => {
+          if (layout !== null) restorePreferredComparisonLayout(layout);
+        },
+        () => undefined,
+      )
+      .finally(() => {
+        setComparisonLayoutLoaded(true);
+      });
   }, [database]);
   // Opens like the Satellite header shortcut. The tab switch comes first in the same
   // event, so the shell's leave-Satellite cleanup never sees the grid open elsewhere.
@@ -1615,15 +1622,16 @@ export function MapWorkspace({
   }, [comparisonOpen]);
 
   // Loading, Back, Forward, or a typed hash open or close the grid. It opens over the
-  // ready main map, as from the Satellite header, so it starts at the map's camera.
+  // ready main map in the stored layout: as it was closed, else as from the Satellite
+  // header.
   const mapReady = snapshot.lifecycle === 'ready';
   useEffect(() => {
-    if (!mapReady || smartphoneViewport) return undefined;
+    if (!mapReady || !comparisonLayoutLoaded || smartphoneViewport) return undefined;
     const followHash = () => {
       const { hash } = window.location;
       const open = isComparisonOpen(satelliteCompareStore.getState());
       if (isComparisonHash(hash) && !open) {
-        openComparison(
+        reopenComparison(
           mapDiagnostics.getSnapshot()?.camera,
           mapViewport.getViewportSnapshot(),
           maximumComparedScenes,
@@ -1643,7 +1651,13 @@ export function MapWorkspace({
       window.removeEventListener('hashchange', followHash);
       window.removeEventListener('popstate', followHash);
     };
-  }, [mapDiagnostics, mapReady, mapViewport, smartphoneViewport]);
+  }, [
+    comparisonLayoutLoaded,
+    mapDiagnostics,
+    mapReady,
+    mapViewport,
+    smartphoneViewport,
+  ]);
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);

@@ -18,7 +18,7 @@ import {
   testViewport,
 } from '@test/helpers/workspaceShellTestSupport';
 
-const camera = { center: { longitude: 44.5, latitude: 42.5 }, zoom: 11 };
+const camera = { longitude: 44.5, latitude: 42.5, zoom: 11, bearing: 0, pitch: 0 };
 const scene2019 = syntheticSatelliteScene('2019', '2019-08-14T07:52:00.000Z');
 const scene2023 = syntheticSatelliteScene('2023', '2023-08-04T07:56:00.000Z');
 const scene2017 = syntheticSatelliteScene('2017', '2017-08-20T07:50:00.000Z');

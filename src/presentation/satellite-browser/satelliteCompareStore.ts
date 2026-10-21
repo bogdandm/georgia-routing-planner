@@ -3,11 +3,13 @@ import { createStore } from 'zustand/vanilla';
 import { calculateSatelliteCoverage } from '@/domain/satellite/calculateSatelliteCoverage';
 import {
   type SatelliteScene,
+  satelliteSceneBounds,
   satelliteSceneKey,
 } from '@/domain/satellite/SatelliteScene';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
 import type { SatelliteBasemap } from '@/presentation/map/mapShareUrl';
+import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
 import type { SatelliteCompareCamera } from '@/presentation/map/SatelliteCompareMaps';
 
 export const minimumComparedScenes = 2;
@@ -152,21 +154,54 @@ export function clearComparedImages(): void {
   satelliteCompareStore.setState({ images: [] });
 }
 
+/** Zoom used when the main map has no camera yet, roughly one Sentinel tile. */
+const fallbackComparisonZoom = 10;
+
+/** The main map's camera, else the first tray scene, else the Georgia overview. */
+function startingComparisonCamera(
+  mainCamera: MapCamera | undefined,
+  images: readonly ComparisonImage[],
+): SatelliteCompareCamera {
+  if (mainCamera !== undefined) {
+    return {
+      center: { longitude: mainCamera.longitude, latitude: mainCamera.latitude },
+      zoom: mainCamera.zoom,
+    };
+  }
+  const firstScene = images.find(
+    (image): image is SatelliteScene => !isComparisonBasemap(image),
+  );
+  if (firstScene !== undefined) {
+    const [west, south, east, north] = satelliteSceneBounds(firstScene);
+    return {
+      center: { longitude: (west + east) / 2, latitude: (south + north) / 2 },
+      zoom: fallbackComparisonZoom,
+    };
+  }
+  return {
+    center: {
+      longitude: defaultGeorgiaCamera.longitude,
+      latitude: defaultGeorgiaCamera.latitude,
+    },
+    zoom: defaultGeorgiaCamera.zoom,
+  };
+}
+
 /**
  * Opens the tray's images over the main map's view, with plain maps in the other
  * positions, in the preferred layout, else `defaultLayout`. Layout 2 sits two images
- * side by side and becomes 2×2 for three or four; `viewport` is the main map's view, or
- * null before the map has one.
+ * side by side and becomes 2×2 for three or four. `mainCamera` and `viewport` are the
+ * main map's camera and view, absent before the map has them.
  */
 export function openComparison(
-  camera: SatelliteCompareCamera,
+  mainCamera: MapCamera | undefined,
   viewport: SatelliteSearchViewport | null,
   defaultLayout: ComparisonLayout,
 ): void {
   const { images, preferredLayout } = satelliteCompareStore.getState();
   satelliteCompareStore.setState({
     slots: gridSlots(imagesInView(images, viewport), preferredLayout ?? defaultLayout),
-    camera,
+    camera: startingComparisonCamera(mainCamera, images),
     directFallback: false,
     tileProgress: {},
   });

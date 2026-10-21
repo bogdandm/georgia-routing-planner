@@ -96,8 +96,11 @@ import {
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import {
+  maximumComparedScenes,
   minimumComparedScenes,
+  openComparison,
   openSharedComparison,
+  restorePreferredComparisonLayout,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
@@ -1563,6 +1566,26 @@ export function MapWorkspace({
   const handleOpenLayersTab = useCallback(() => {
     openWorkspaceTab('layers');
   }, [openWorkspaceTab]);
+  // The comparison layout stored in the browser is known before any Compare control is
+  // used: this map control, the Satellite header shortcut, or the tray.
+  useEffect(() => {
+    void database.loadComparisonLayout().then(
+      (layout) => {
+        if (layout !== null) restorePreferredComparisonLayout(layout);
+      },
+      () => undefined,
+    );
+  }, [database]);
+  // Opens like the Satellite header shortcut. The tab switch comes first in the same
+  // event, so the shell's leave-Satellite cleanup never sees the grid open elsewhere.
+  const handleOpenComparison = useCallback(() => {
+    openWorkspaceTab('satellite');
+    openComparison(
+      mapDiagnostics.getSnapshot()?.camera,
+      mapViewport.getViewportSnapshot(),
+      maximumComparedScenes,
+    );
+  }, [mapDiagnostics, mapViewport, openWorkspaceTab]);
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);
@@ -1648,6 +1671,7 @@ export function MapWorkspace({
               onLayerPresetChange={handleLayerPresetChange}
               onHybridOverlayChange={handleHybridOverlayChange}
               onOpenLayersTab={handleOpenLayersTab}
+              onOpenComparison={smartphoneViewport ? null : handleOpenComparison}
               onWeatherMapChange={handleWeatherMapChange}
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
@@ -1761,6 +1785,7 @@ export function MapWorkspace({
           onLayerPresetChange={handleLayerPresetChange}
           onHybridOverlayChange={handleHybridOverlayChange}
           onOpenLayersTab={handleOpenLayersTab}
+          onOpenComparison={smartphoneViewport ? null : handleOpenComparison}
           onWeatherMapChange={handleWeatherMapChange}
           onTerrainModeChange={handleTerrainControlChange}
           terrainState={terrainState}

@@ -2486,6 +2486,37 @@ describe('MapWorkspace', () => {
     expect(window.location.hash).toBe('#layers');
   });
 
+  it('opens the image comparison in Satellite, in the stored layout, from the map controls', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    await services.database.saveComparisonLayout(2);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({
+      activeTab: 'tracks',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Tracks map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Tracks map');
+    await waitFor(() => {
+      expect(satelliteCompareStore.getState().preferredLayout).toBe(2);
+    });
+    await user.click(screen.getByRole('button', { name: 'Open image comparison' }));
+
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'satellite',
+      navigationCollapsed: false,
+    });
+    expect(window.location.hash).toBe('#satellite');
+    expect(satelliteCompareStore.getState().slots).toEqual([null, null]);
+  });
+
   it('opens Satellite instead of applying the Sentinel preset without an applied scene', async () => {
     const user = userEvent.setup();
     const services = createTestServices();

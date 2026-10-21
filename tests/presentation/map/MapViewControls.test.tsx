@@ -55,6 +55,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => 'map'}
@@ -86,6 +87,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => 'map'}
@@ -116,6 +118,7 @@ describe('MapViewControls', () => {
         onWeatherMapChange={onWeatherMapChange}
         onLayerPresetChange={() => 'map'}
         onOpenLayersTab={onOpenLayersTab}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onTerrainModeChange={vi.fn()}
@@ -184,6 +187,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={onLayerPresetChange}
@@ -215,6 +219,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => 'navigated'}
@@ -248,6 +253,7 @@ describe('MapViewControls', () => {
           weatherMapDisabled={false}
           onWeatherMapChange={vi.fn()}
           onOpenLayersTab={vi.fn()}
+          onOpenComparison={null}
           measurementActive={false}
           onMeasurementActiveChange={vi.fn()}
           onLayerPresetChange={() => 'map'}
@@ -283,6 +289,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => 'map'}
@@ -318,6 +325,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => 'map'}
@@ -355,6 +363,7 @@ describe('MapViewControls', () => {
         weatherMapDisabled={false}
         onWeatherMapChange={vi.fn()}
         onOpenLayersTab={vi.fn()}
+        onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
         onLayerPresetChange={() => 'map'}

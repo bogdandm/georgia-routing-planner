@@ -3,6 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import CompareOutlinedIcon from '@mui/icons-material/CompareOutlined';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import StraightenIcon from '@mui/icons-material/Straighten';
@@ -45,6 +46,8 @@ interface MapViewControlsProps {
   readonly onHybridOverlayChange: (enabled: boolean) => void;
   readonly onWeatherMapChange: (enabled: boolean) => void;
   readonly onOpenLayersTab: () => void;
+  /** Opens the satellite image comparison; null hides the button where it is unavailable. */
+  readonly onOpenComparison: (() => void) | null;
   readonly onMeasurementActiveChange: (active: boolean) => void;
 }
 
@@ -96,6 +99,7 @@ export function MapViewControls({
   onHybridOverlayChange,
   onWeatherMapChange,
   onOpenLayersTab,
+  onOpenComparison,
   onMeasurementActiveChange,
 }: MapViewControlsProps) {
   const { t } = useLingui();
@@ -215,6 +219,22 @@ export function MapViewControls({
             </ToggleButton>
           </span>
         </Tooltip>
+        {onOpenComparison === null ? null : (
+          <Tooltip
+            disableInteractive
+            title={t`Compare images from different dates side by side`}
+          >
+            <ToggleButton
+              aria-label={t`Open image comparison`}
+              onChange={onOpenComparison}
+              selected={false}
+              sx={{ borderRadius: 0, mt: '-1px', width: 40, height: 36, p: 0 }}
+              value="comparison"
+            >
+              <CompareOutlinedIcon fontSize="small" />
+            </ToggleButton>
+          </Tooltip>
+        )}
         <Tooltip disableInteractive title={t`Measure distance and elevation`}>
           <ToggleButton
             aria-label={t`Measure distance`}

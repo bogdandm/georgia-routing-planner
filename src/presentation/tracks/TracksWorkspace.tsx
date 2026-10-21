@@ -1919,6 +1919,42 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setMobileWorkspaceOpen(false);
   }, [active, setMobileWorkspaceOpen]);
 
+  useEffect(() => {
+    if (
+      active?.kind !== 'route-plan' ||
+      active.status === 'saving' ||
+      active.waypoints.length === 0
+    ) {
+      return undefined;
+    }
+    const undoOnShortcut = (event: KeyboardEvent) => {
+      if (
+        event.code !== 'KeyZ' ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      // Text fields keep their own undo, such as the track name.
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS selector.
+          target.closest('input, textarea, select') !== null)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      undoLastRoutePlanPoint();
+    };
+    window.addEventListener('keydown', undoOnShortcut);
+    return () => {
+      window.removeEventListener('keydown', undoOnShortcut);
+    };
+  }, [active, undoLastRoutePlanPoint]);
+
   const clearRoutePlan = useCallback(() => {
     if (routePlanSaveInProgress.current) return;
     routePlanRequestAbort.current?.abort();

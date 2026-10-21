@@ -190,10 +190,11 @@ network and searches a walkable connection in a browser worker; **Line** adds a 
 segment. Routed legs prefer the fastest hiking time over the shortest distance, so they
 avoid needless climbs; without terrain data they fall back to distance only. A pending
 routed leg reports tile download, graph construction, route terrain loading, and search
-progress, disables conflicting controls, and is cancelled by Undo or Clear. Routing has
-a one-minute limit; a failed leg keeps the plan and offers a direct-line fallback
-without changing the mode. Missing provider topology shows an unavailable state; there
-is no backend or fallback routing service. Topology rules are in
+progress, disables conflicting controls, and is cancelled by Undo or Clear. Ctrl+Z
+(Cmd+Z on macOS) undoes the last point like **Undo**, except while typing in a field.
+Routing has a one-minute limit; a failed leg keeps the plan and offers a direct-line
+fallback without changing the mode. Missing provider topology shows an unavailable
+state; there is no backend or fallback routing service. Topology rules are in
 [runtime flows](./runtime-flows.md#browser-route-planning).
 
 After each accepted edit the browser samples terrain and recomputes metrics, profile,

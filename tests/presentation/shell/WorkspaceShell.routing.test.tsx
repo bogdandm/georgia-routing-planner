@@ -412,6 +412,47 @@ describe('WorkspaceShell', () => {
     );
   });
 
+  it('undoes the last route point with Ctrl+Z or Cmd+Z outside text fields', async () => {
+    const route = vi.fn<TrailRouter['route']>();
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const facade = new FakeMapFacade();
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    await user.click(screen.getByRole('button', { name: 'Plan route' }));
+    await user.click(screen.getByRole('button', { name: 'Line' }));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    const nameInput = screen.getByRole('textbox', { name: 'Track name' });
+    await user.click(nameInput);
+    await user.keyboard('{Control>}z{/Control}');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+    act(() => {
+      nameInput.blur();
+    });
+    await user.keyboard('{Control>}z{/Control}');
+    expect(
+      await screen.findByText('Click the map to choose the next point.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await user.keyboard('{Meta>}z{/Meta}');
+    expect(
+      await screen.findByText('Click the map to choose the route start.'),
+    ).toBeVisible();
+  });
+
   it('requests and draws the route search only while the developer option is on', async () => {
     const trace: TrailRouteSearchTrace = {
       forward: [

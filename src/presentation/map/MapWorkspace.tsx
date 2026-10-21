@@ -90,6 +90,7 @@ import {
   parseSharedMapView,
   parseWeatherMapUrlState,
   readShareableMapState,
+  satelliteBasemaps,
   selectMapShareView,
   updateWeatherMapUrl,
 } from '@/presentation/map/mapShareUrl';
@@ -1293,27 +1294,30 @@ export function MapWorkspace({
     };
   }, [idGenerator, mapLayers, mosaicActive, satelliteCatalogGateway, sharedMapView]);
 
-  // A comparison link opens Satellite with the grid once its scenes resolve; any two
-  // resolved scenes are enough. Phones keep the plain shared camera.
+  // A comparison link opens Satellite with the grid once its images resolve; any two
+  // resolved images are enough. Phones keep the plain shared camera.
   useEffect(() => {
     if (
       sharedMapView === null ||
       sharedComparison.length === 0 ||
       smartphoneViewport ||
-      parseTrackShareLocation(window.location.hash).kind !== 'none' ||
-      satelliteCatalogGateway?.getScene === undefined
+      parseTrackShareLocation(window.location.hash).kind !== 'none'
     ) {
       return;
     }
-    const getScene = satelliteCatalogGateway.getScene.bind(satelliteCatalogGateway);
+    const getScene = satelliteCatalogGateway?.getScene?.bind(satelliteCatalogGateway);
     setActiveTab('satellite');
     setNavigationCollapsed(false);
     const controller = new AbortController();
-    // A failed or missing key only drops that scene; any two resolved scenes still open.
+    // A failed or missing scene only drops that scene; any two resolved images still
+    // open. Basemap IDs need no lookup.
     void Promise.allSettled(
-      sharedComparison.map((sceneKey) => {
-        const separator = sceneKey.indexOf(':');
-        return getScene(sceneKey.slice(0, separator), sceneKey.slice(separator + 1), {
+      sharedComparison.map((imageKey) => {
+        const basemap = satelliteBasemaps.find((id) => id === imageKey);
+        if (basemap !== undefined) return Promise.resolve(basemap);
+        if (getScene === undefined) return Promise.resolve(null);
+        const separator = imageKey.indexOf(':');
+        return getScene(imageKey.slice(0, separator), imageKey.slice(separator + 1), {
           operationId: idGenerator.generate(),
           signal: controller.signal,
         });

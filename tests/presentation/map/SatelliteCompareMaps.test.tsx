@@ -9,13 +9,14 @@ import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
-import { mapLayerIds } from '@/presentation/map/mapIds';
+import { mapLayerIds, satelliteBasemapLayerIds } from '@/presentation/map/mapIds';
 import { resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { SatelliteCompareMaps } from '@/presentation/map/SatelliteCompareMaps';
 import {
   openSharedComparison,
   resetSatelliteCompareStore,
   satelliteCompareStore,
+  type ComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
@@ -63,11 +64,15 @@ vi.mock('react-map-gl/maplibre', () => ({
     const landcover = mapStyle.layers.find(
       (layer) => layer.id === mapLayerIds.landcover,
     );
+    const googleImagery = mapStyle.layers.find(
+      (layer) => layer.id === satelliteBasemapLayerIds.imagery,
+    );
     return (
       <div
         data-testid="compare-map"
         data-sentinel-tiles={source?.type === 'raster' ? source.tiles?.join(' ') : ''}
         data-landcover-visibility={landcover?.layout?.visibility ?? 'visible'}
+        data-google-visibility={googleImagery?.layout?.visibility ?? 'visible'}
       >
         <button
           type="button"
@@ -150,7 +155,7 @@ beforeEach(() => {
 
 function renderGrid(
   services: RuntimeServices,
-  slots: readonly (SatelliteScene | null)[],
+  slots: readonly ComparisonSlot[],
   onDirectFallback: () => void = () => undefined,
 ) {
   return (
@@ -302,7 +307,11 @@ describe('SatelliteCompareMaps', () => {
     );
 
     expect(
-      satelliteCompareStore.getState().slots.map((candidate) => candidate?.id ?? null),
+      satelliteCompareStore
+        .getState()
+        .slots.map((candidate) =>
+          typeof candidate === 'string' ? candidate : (candidate?.id ?? null),
+        ),
     ).toEqual(['2019-later', '2021']);
     expect(
       await screen.findByRole('region', { name: 'Sentinel-2 image from Aug 29, 2019' }),
@@ -344,5 +353,99 @@ describe('SatelliteCompareMaps', () => {
 
     // August once, September once; the return and the reopen are served from memory.
     expect(search).toHaveBeenCalledTimes(2);
+  });
+  it('shows static imagery on the pane that picked it and credits it once', async () => {
+    renderWithI18n(
+      renderGrid(createTestServices(), [scene2019, 'google-satellite', null, null]),
+    );
+
+    const panes = await screen.findAllByTestId('compare-map');
+    expect(panes.map((pane) => pane.dataset.googleVisibility)).toEqual([
+      'none',
+      'visible',
+      'none',
+      'none',
+    ]);
+    expect(panes.map((pane) => pane.dataset.landcoverVisibility)).toEqual([
+      'none',
+      'none',
+      'visible',
+      'visible',
+    ]);
+    expect(
+      screen.getByRole('region', { name: 'Google Satellite' }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('compare-attribution').dataset.attributions).toMatch(
+      /Google/u,
+    );
+  });
+
+  it('picks a layer from a pane menu that skips layers shown elsewhere and clears with Vector OSM', async () => {
+    const user = userEvent.setup();
+    openSharedComparison([scene2019, 'esri-satellite'], camera);
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <StoreGrid />
+      </RuntimeServicesProvider>,
+    );
+    const openMenu = async () => {
+      const [firstPane] = await screen.findAllByRole('region');
+      if (firstPane === undefined) throw new Error('Missing pane.');
+      await user.click(
+        within(firstPane).getByRole('button', { name: 'Choose map layer preset' }),
+      );
+    };
+
+    await openMenu();
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Esri World Imagery' }),
+    ).toHaveAttribute('aria-disabled', 'true');
+    await user.click(screen.getByRole('menuitemradio', { name: 'Soviet Topographic' }));
+
+    expect(satelliteCompareStore.getState().slots).toEqual([
+      'soviet-topographic',
+      'esri-satellite',
+    ]);
+    expect(
+      await screen.findByRole('region', { name: 'Soviet Topographic' }),
+    ).toBeInTheDocument();
+
+    await openMenu();
+    await user.click(screen.getByRole('menuitemradio', { name: 'Vector OSM' }));
+
+    expect(satelliteCompareStore.getState().slots).toEqual([null, 'esri-satellite']);
+    expect(
+      await screen.findByRole('region', { name: 'Map without an image' }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens every pane calendar on the month any pane calendar showed last', async () => {
+    const user = userEvent.setup();
+    openSharedComparison([scene2019, scene2021], camera);
+    renderWithI18n(
+      <RuntimeServicesProvider
+        services={createTestServices({
+          satelliteCatalogGateway: catalogGatewayReturning({
+            totalMatched: 1,
+            scenes: [scene2019],
+          }),
+        })}
+      >
+        <StoreGrid />
+      </RuntimeServicesProvider>,
+    );
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Change image date, Aug 14, 2019' }),
+    );
+    await screen.findByText('August 2019');
+    await user.click(screen.getByRole('button', { name: 'Next acquisition month' }));
+    await screen.findByText('September 2019');
+    await user.keyboard('{Escape}');
+
+    await user.click(
+      screen.getByRole('button', { name: 'Change image date, Aug 9, 2021' }),
+    );
+    expect(await screen.findByText('September 2019')).toBeVisible();
   });
 });

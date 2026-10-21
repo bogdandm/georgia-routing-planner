@@ -934,25 +934,29 @@ describe('createSatelliteCompareMapStyle', () => {
   function compareStyle(
     visibilityChanges: Partial<Record<LogicalMapLayerId, boolean>>,
     openStreetMapOpacity: number,
-    withScene = true,
+    imagery: 'scene' | 'basemap' | null = 'scene',
   ): StyleSpecification {
     const visibility = {
       ...mapLayerStore.getState().visibility,
       ...visibilityChanges,
     };
     return createSatelliteCompareMapStyle(configuration, {
-      sceneRaster: withScene
-        ? {
-            scene,
-            raster: {
-              tileUrl,
-              tileSize: 256,
-              minzoom: 8,
-              maxzoom: 14,
-              attribution: 'Sentinel-2 test attribution',
-            },
-          }
-        : null,
+      imagery:
+        imagery === 'scene'
+          ? {
+              kind: 'scene',
+              scene,
+              raster: {
+                tileUrl,
+                tileSize: 256,
+                minzoom: 8,
+                maxzoom: 14,
+                attribution: 'Sentinel-2 test attribution',
+              },
+            }
+          : imagery === 'basemap'
+            ? { kind: 'basemap' }
+            : null,
       baseLayerVisibility: baseNativeLayerVisibility(visibility),
       openStreetMapOpacityPaint: openStreetMapOpacityPaint(
         'satellite',
@@ -965,7 +969,7 @@ describe('createSatelliteCompareMapStyle', () => {
   function plainStyle(
     visibilityChanges: Partial<Record<LogicalMapLayerId, boolean>> = {},
   ): StyleSpecification {
-    return compareStyle(visibilityChanges, 0.5, false);
+    return compareStyle(visibilityChanges, 0.5, null);
   }
 
   function layer(style: StyleSpecification, layerId: string): LayerSpecification {
@@ -1008,21 +1012,30 @@ describe('createSatelliteCompareMapStyle', () => {
     });
   });
 
-  it('hides static imagery basemaps and the layers the user turned off', () => {
-    const style = compareStyle({ 'google-satellite': true, roads: false }, 1);
+  it('draws a basemap pane as the shown static imagery in the satellite mode', () => {
+    const style = compareStyle(
+      { 'google-satellite': true, roads: false },
+      1,
+      'basemap',
+    );
 
+    expect(style.sources).not.toHaveProperty(mapSourceIds.sentinelRasterA);
+    expect(layer(style, satelliteBasemapLayerIds.imagery)).toHaveProperty(
+      'layout.visibility',
+      'visible',
+    );
     for (const layerId of [
-      satelliteBasemapLayerIds.imagery,
       naprOrthophotoLayerIds.national2016To2017,
       mapLayerIds.roads,
       mapLayerIds.roadLabels,
     ]) {
       expect(layer(style, layerId)).toHaveProperty('layout.visibility', 'none');
     }
-    expect(layer(style, mapLayerIds.hikingPaths)).toHaveProperty(
-      'layout.visibility',
-      'visible',
+    expect(layer(style, mapLayerIds.landcover)).toHaveProperty(
+      ['paint', 'fill-opacity'],
+      0,
     );
+    expect(validateStyleMin(style)).toEqual([]);
   });
 
   it('applies the satellite contrast paint scaled by the OSM overlay opacity', () => {
@@ -1119,70 +1132,76 @@ describe('createSatelliteCompareMapStyle', () => {
   });
 
   it.each([
-    ['satellite', true],
-    ['plain', false],
-  ])('draws the imported track on a %s pane below the first icons', (_, withScene) => {
-    const style = compareStyle({}, 1, withScene);
-    const layerIds = style.layers.map((candidate) => candidate.id);
+    ['satellite', 'scene'],
+    ['basemap', 'basemap'],
+    ['plain', null],
+  ] as const)(
+    'draws the imported track on a %s pane below the first icons',
+    (_, imagery) => {
+      const style = compareStyle({}, 1, imagery);
+      const layerIds = style.layers.map((candidate) => candidate.id);
 
-    expect(style.sources[mapSourceIds.importedTrack]).toHaveProperty(
-      'data.geometry.coordinates',
-      [
+      expect(style.sources[mapSourceIds.importedTrack]).toHaveProperty(
+        'data.geometry.coordinates',
         [
-          [44.2, 42.2],
-          [44.3, 42.3],
+          [
+            [44.2, 42.2],
+            [44.3, 42.3],
+          ],
         ],
-      ],
-    );
-    expect(style.sources[mapSourceIds.importedTrackEndpoints]).toHaveProperty(
-      'data.features',
-      [
-        ['finish', [44.3, 42.3]],
-        ['start', [44.2, 42.2]],
-      ].map(([endpoint, coordinates]) => ({
-        type: 'Feature',
-        properties: { endpoint },
-        geometry: { type: 'Point', coordinates },
-      })),
-    );
-    const fordsIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
-    expect(layerIds.slice(fordsIndex - 3, fordsIndex)).toEqual([
-      importedTrackLayerIds.casing,
-      importedTrackLayerIds.line,
-      importedTrackLayerIds.endpoints,
-    ]);
-    expect(layer(style, importedTrackLayerIds.casing)).toMatchObject({
-      layout: { visibility: 'visible' },
-      paint: {
-        'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
-        'line-width': 7,
-        'line-opacity': 0.6,
-      },
-    });
-    expect(layer(style, importedTrackLayerIds.line)).toMatchObject({
-      layout: { visibility: 'visible' },
-      paint: { 'line-width': 4, 'line-opacity': 0.6 },
-    });
-    expect(layer(style, importedTrackLayerIds.endpoints)).toMatchObject({
-      layout: { visibility: 'visible' },
-      paint: { 'icon-opacity': 0.6 },
-    });
-    for (const layerId of [
-      importedTrackLayerIds.highlight,
-      importedTrackLayerIds.focusLineA,
-      importedTrackLayerIds.trace,
-    ]) {
-      expect(layerIds).not.toContain(layerId);
-    }
-  });
+      );
+      expect(style.sources[mapSourceIds.importedTrackEndpoints]).toHaveProperty(
+        'data.features',
+        [
+          ['finish', [44.3, 42.3]],
+          ['start', [44.2, 42.2]],
+        ].map(([endpoint, coordinates]) => ({
+          type: 'Feature',
+          properties: { endpoint },
+          geometry: { type: 'Point', coordinates },
+        })),
+      );
+      const fordsIndex = layerIds.indexOf(
+        mapInsertionPoints.importedTracksBeforeLayerId,
+      );
+      expect(layerIds.slice(fordsIndex - 3, fordsIndex)).toEqual([
+        importedTrackLayerIds.casing,
+        importedTrackLayerIds.line,
+        importedTrackLayerIds.endpoints,
+      ]);
+      expect(layer(style, importedTrackLayerIds.casing)).toMatchObject({
+        layout: { visibility: 'visible' },
+        paint: {
+          'line-color': mapVisualPalette.userGeometry.gpxTrackCasing,
+          'line-width': 7,
+          'line-opacity': 0.6,
+        },
+      });
+      expect(layer(style, importedTrackLayerIds.line)).toMatchObject({
+        layout: { visibility: 'visible' },
+        paint: { 'line-width': 4, 'line-opacity': 0.6 },
+      });
+      expect(layer(style, importedTrackLayerIds.endpoints)).toMatchObject({
+        layout: { visibility: 'visible' },
+        paint: { 'icon-opacity': 0.6 },
+      });
+      for (const layerId of [
+        importedTrackLayerIds.highlight,
+        importedTrackLayerIds.focusLineA,
+        importedTrackLayerIds.trace,
+      ]) {
+        expect(layerIds).not.toContain(layerId);
+      }
+    },
+  );
 
   it.each([
-    ['satellite', true],
-    ['plain', false],
-  ])(
+    ['satellite', 'scene'],
+    ['plain', null],
+  ] as const)(
     'hides the imported track on a %s pane with imported tracks off',
-    (_, withScene) => {
-      const style = compareStyle({ 'imported-tracks': false }, 1, withScene);
+    (_, imagery) => {
+      const style = compareStyle({ 'imported-tracks': false }, 1, imagery);
 
       for (const layerId of [
         importedTrackLayerIds.casing,

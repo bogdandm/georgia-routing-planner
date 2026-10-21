@@ -75,6 +75,7 @@ upsert.
 | `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, Sentinel rendering mode and tuning, terrain overlay options                                       |
 | `map.share-preferences`         | Whether map share links include the visible satellite layer, the visible Sentinel-2 scene, and the 3D camera (default all)                         |
 | `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                       |
+| `satellite.comparison-layout`   | Comparison grid layout last picked in the sidebar: 2 (2×1) or 4 (2×2); absent until the first pick                                                 |
 | `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                               |
 | `weather.track-preferences`     | Whether the track **Weather forecast** section is expanded and its preferred weekday (default collapsed, Saturday); never uploaded                 |
 | `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                     |
@@ -311,11 +312,11 @@ Unknown setting keys are ignored.
 ## Transient map and satellite state
 
 MapLibre objects, satellite search results, selected scenes, Mosaic selections, compared
-scenes, and applied imagery are runtime state and never enter IndexedDB. A shared map
+images, and applied imagery are runtime state and never enter IndexedDB. A shared map
 URL carries only the camera, optional 3D orientation, one scene key, and weather
-point/time; a comparison link carries a 2D camera and two to four scene keys as
-`compare=<key>,…` (`src/presentation/map/mapShareUrl.ts`). Mosaic state and search
-result lists do not enter URLs or diagnostic exports.
+point/time; a comparison link carries a 2D camera and two to four scene keys or static
+imagery IDs as `compare=<key>,…` (`src/presentation/map/mapShareUrl.ts`). Mosaic state
+and search result lists do not enter URLs or diagnostic exports.
 
 ## Diagnostics
 

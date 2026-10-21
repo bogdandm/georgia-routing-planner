@@ -59,7 +59,7 @@ msgid "3D terrain with bearing {bearing}° and pitch {pitch}°."
 msgstr "3D terrain with bearing {bearing}° and pitch {pitch}°."
 
 #. js-lingui-id: X4GABr
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Bing Aerial"
 msgstr "Bing Aerial"
@@ -81,6 +81,7 @@ msgstr "Checking nearby map data…"
 
 #. js-lingui-id: 2uEfCs
 #: src/presentation/map/MapViewControls.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Choose map layer preset"
 msgstr "Choose map layer preset"
 
@@ -185,7 +186,7 @@ msgid "Elevation is unavailable here."
 msgstr "Elevation is unavailable here."
 
 #. js-lingui-id: bNOfxj
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
@@ -201,7 +202,7 @@ msgid "Flat map"
 msgstr "Flat map"
 
 #. js-lingui-id: ud5TUo
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Google Satellite"
 msgstr "Google Satellite"
@@ -288,7 +289,7 @@ msgid "Measure distance and elevation"
 msgstr "Measure distance and elevation"
 
 #. js-lingui-id: WlrBzh
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "NAPR Orthophoto"
 msgstr "NAPR Orthophoto"
@@ -389,7 +390,7 @@ msgid "Show weather forecast"
 msgstr "Show weather forecast"
 
 #. js-lingui-id: qy1-46
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Soviet Topographic"
 msgstr "Soviet Topographic"
@@ -473,6 +474,7 @@ msgstr "Unnamed map feature"
 
 #. js-lingui-id: feai_T
 #: src/presentation/map/MapViewControls.tsx
+#: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Vector OSM"
 msgstr "Vector OSM"
 

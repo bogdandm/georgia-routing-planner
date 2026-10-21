@@ -14,13 +14,15 @@ import {
   Snackbar,
   Stack,
   ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import {
   satelliteSceneBounds,
   satelliteSceneKey,
@@ -28,7 +30,10 @@ import {
 } from '@/domain/satellite/SatelliteScene';
 import type { SatelliteSearchViewport } from '@/domain/satellite/SatelliteSearchCriteria';
 import type { SatelliteSearchResult } from '@/domain/satellite/SatelliteSearchResult';
-import { createComparisonShareUrl } from '@/presentation/map/mapShareUrl';
+import {
+  createComparisonShareUrl,
+  satelliteBasemapLabels,
+} from '@/presentation/map/mapShareUrl';
 import type { SatelliteCompareCamera } from '@/presentation/map/SatelliteCompareMaps';
 import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
@@ -40,17 +45,23 @@ import {
   toDateInputValue,
 } from '@/presentation/satellite-browser/satelliteCalendarSearch';
 import {
-  clearComparedScenes,
+  clearComparedImages,
   clearComparisonSlot,
   clearComparisonSlots,
   closeComparison,
+  comparisonImageKey,
+  isComparisonBasemap,
   maximumComparedScenes,
   minimumComparedScenes,
   openComparison,
-  openComparisonGrid,
+  restorePreferredComparisonLayout,
   satelliteCompareStore,
-  type ComparisonTileProgress,
+  setComparisonCalendarMonth,
+  setComparisonLayout,
   setComparisonSlot,
+  type ComparisonImage,
+  type ComparisonLayout,
+  type ComparisonTileProgress,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
 
 /** Zoom used when the main map has no camera yet, roughly one Sentinel tile. */
@@ -59,8 +70,11 @@ const fallbackComparisonZoom = 10;
 /** The main map's camera, else the first tray scene, else the Georgia overview. */
 function startingComparisonCamera(
   camera: MapCamera | undefined,
-  firstScene: SatelliteScene | undefined,
+  images: readonly ComparisonImage[],
 ): SatelliteCompareCamera {
+  const firstScene = images.find(
+    (image): image is SatelliteScene => !isComparisonBasemap(image),
+  );
   if (camera !== undefined) {
     return {
       center: { longitude: camera.longitude, latitude: camera.latitude },
@@ -99,9 +113,9 @@ interface MonthSearch {
 }
 
 /**
- * The Satellite acquisition calendar for one comparison pane. It opens on the scene's
- * month, or the current one; a day shows that day's best-coverage scene in the pane, as
- * in the search.
+ * The Satellite acquisition calendar for one comparison pane. It opens on the month any
+ * pane's calendar showed last, else the scene's month, else the current one; a day shows
+ * that day's best-coverage scene in the pane, as in the search.
  */
 export function ComparedSceneDatePicker({
   slotIndex,
@@ -113,7 +127,15 @@ export function ComparedSceneDatePicker({
   const { clock, database, searchSatelliteScenes } = useRuntimeServices();
   const [today] = useState(() => clock.now());
   const latestMonth = toDateInputValue(today).slice(0, 7);
-  const [month, setMonth] = useState(scene?.acquiredAt.slice(0, 7) ?? latestMonth);
+  const [month, setMonth] = useState(
+    () =>
+      satelliteCompareStore.getState().calendarMonth ??
+      scene?.acquiredAt.slice(0, 7) ??
+      latestMonth,
+  );
+  useEffect(() => {
+    setComparisonCalendarMonth(month);
+  }, [month]);
   const [maxCloudCoverPercent, setMaxCloudCoverPercent] = useState(50);
   const [search, setSearch] = useState<MonthSearch | null>(null);
   const [alreadyCompared, setAlreadyCompared] = useState(false);
@@ -219,24 +241,33 @@ export function ComparedSceneDatePicker({
   );
 }
 
+/** Opens the grid over the main map's current view; see `openComparison` for layouts. */
+function openComparisonFromMap(
+  services: Pick<RuntimeServices, 'mapDiagnostics' | 'mapViewport'>,
+  defaultLayout: ComparisonLayout,
+): void {
+  openComparison(
+    startingComparisonCamera(
+      services.mapDiagnostics.getSnapshot()?.camera,
+      satelliteCompareStore.getState().images,
+    ),
+    services.mapViewport.getViewportSnapshot(),
+    defaultLayout,
+  );
+}
+
 /**
  * Pinned at the bottom of the results pane once a scene is added: the comparison count,
- * **Compare** (two or more scenes), and **Clear**.
+ * **Compare** (two or more images), and **Clear**.
  */
 export function SatelliteComparisonTray() {
   const { t } = useLingui();
-  const { mapDiagnostics } = useRuntimeServices();
-  const scenes = useStore(satelliteCompareStore, (state) => state.scenes);
-  const firstScene = scenes[0];
-  if (firstScene === undefined) return null;
+  const services = useRuntimeServices();
+  const images = useStore(satelliteCompareStore, (state) => state.images);
+  if (images.length === 0) return null;
 
-  const count = scenes.length;
+  const count = images.length;
   const canCompare = count >= minimumComparedScenes;
-  const open = () => {
-    openComparison(
-      startingComparisonCamera(mapDiagnostics.getSnapshot()?.camera, firstScene),
-    );
-  };
 
   return (
     <Stack
@@ -259,12 +290,18 @@ export function SatelliteComparisonTray() {
           Comparison: {count} of {maximumComparedScenes}
         </Trans>
       </Typography>
-      <Button color="inherit" onClick={clearComparedScenes}>
+      <Button color="inherit" onClick={clearComparedImages}>
         <Trans>Clear</Trans>
       </Button>
       <Tooltip title={canCompare ? '' : t`Add at least two images`}>
         <span>
-          <Button variant="contained" disabled={!canCompare} onClick={open}>
+          <Button
+            variant="contained"
+            disabled={!canCompare}
+            onClick={() => {
+              openComparisonFromMap(services, 2);
+            }}
+          >
             <Trans>Compare</Trans>
           </Button>
         </span>
@@ -274,12 +311,23 @@ export function SatelliteComparisonTray() {
 }
 
 /**
- * Satellite header shortcut: a 2×2 grid with the tray's scenes first and plain maps
- * whose dates are picked from each pane's calendar.
+ * Satellite header shortcut: the tray's images first and plain maps whose images are
+ * picked from each pane's calendar or layer menu, 2×2 unless 2×1 is preferred.
  */
 export function SatelliteComparisonShortcut() {
   const { t } = useLingui();
-  const { mapDiagnostics } = useRuntimeServices();
+  const services = useRuntimeServices();
+  const { database } = services;
+  // Mounted with the Satellite header, so the layout stored in the browser is known
+  // before the tray's Compare or this shortcut opens the grid.
+  useEffect(() => {
+    void database.loadComparisonLayout().then(
+      (layout) => {
+        if (layout !== null) restorePreferredComparisonLayout(layout);
+      },
+      () => undefined,
+    );
+  }, [database]);
   return (
     <Tooltip title={t`Compare images from different dates side by side`}>
       <ToggleButton
@@ -289,12 +337,7 @@ export function SatelliteComparisonShortcut() {
         aria-label={t`Open image comparison`}
         sx={{ gap: 0.75 }}
         onClick={() => {
-          openComparisonGrid(
-            startingComparisonCamera(
-              mapDiagnostics.getSnapshot()?.camera,
-              satelliteCompareStore.getState().scenes[0],
-            ),
-          );
+          openComparisonFromMap(services, maximumComparedScenes);
         }}
       >
         <CompareOutlinedIcon sx={{ fontSize: 20 }} />
@@ -348,16 +391,18 @@ function sceneTimeZone(scene: SatelliteScene): string {
 /** Sidebar content while the comparison grid replaces the map. */
 export function SatelliteComparisonPanel() {
   const { i18n, t } = useLingui();
+  const { database } = useRuntimeServices();
   const slots = useStore(satelliteCompareStore, (state) => state.slots);
   const directFallback = useStore(
     satelliteCompareStore,
     (state) => state.directFallback,
   );
   const tileProgress = useStore(satelliteCompareStore, (state) => state.tileProgress);
-  const filledSlots = slots.flatMap((scene, index) =>
-    scene === null ? [] : [{ scene, index }],
+  const filledSlots = slots.flatMap((image, index) =>
+    image === null ? [] : [{ image, index }],
   );
-  const sceneCount = filledSlots.length;
+  const imageCount = filledSlots.length;
+  const twoMapsAvailable = imageCount <= 2;
   const camera = useStore(satelliteCompareStore, (state) => state.camera);
   const [copyLinkStatus, setCopyLinkStatus] = useState<'idle' | 'copied' | 'failed'>(
     // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
@@ -398,7 +443,7 @@ export function SatelliteComparisonPanel() {
           window.location.href,
           camera.center,
           camera.zoom,
-          filledSlots.map(({ scene }) => satelliteSceneKey(scene)),
+          filledSlots.map(({ image }) => comparisonImageKey(image)),
         ),
       );
       // eslint-disable-next-line lingui/no-unlocalized-strings -- State token.
@@ -421,12 +466,54 @@ export function SatelliteComparisonPanel() {
           <Trans>Back to search</Trans>
         </Button>
       </Box>
-      <Typography component="h3" variant="subtitle2">
-        {t`${plural(sceneCount, {
-          one: 'Comparing # image',
-          other: 'Comparing # images',
-        })}`}
-      </Typography>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Typography component="h3" variant="subtitle2" sx={{ flex: 1 }}>
+          {t`${plural(imageCount, {
+            one: 'Comparing # image',
+            other: 'Comparing # images',
+          })}`}
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          aria-label={t`Map layout`}
+          value={slots.length}
+          onChange={(_event, layout: ComparisonLayout | null) => {
+            if (layout === null) return;
+            setComparisonLayout(layout);
+            // Remembered in this browser for the next time the grid opens.
+            void database.saveComparisonLayout(layout).catch(() => undefined);
+          }}
+        >
+          <Tooltip
+            title={
+              twoMapsAvailable
+                ? t`Two maps side by side`
+                : t`Remove images until two remain to show two maps`
+            }
+          >
+            <span>
+              <ToggleButton
+                value={2}
+                disabled={!twoMapsAvailable}
+                aria-label={t`Two maps side by side`}
+                sx={{ px: 1.25, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+              >
+                2×1
+              </ToggleButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t`Four maps in a 2×2 grid`}>
+            <ToggleButton
+              value={maximumComparedScenes}
+              aria-label={t`Four maps in a 2×2 grid`}
+              sx={{ px: 1.25 }}
+            >
+              2×2
+            </ToggleButton>
+          </Tooltip>
+        </ToggleButtonGroup>
+      </Stack>
       {directFallback ? (
         <Alert severity="warning">
           {t`TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active and loads more slowly.`}
@@ -434,19 +521,38 @@ export function SatelliteComparisonPanel() {
       ) : null}
       <Typography variant="body2" color="text.secondary">
         <Trans>
-          Click a date on a map to pick another image. Drag a date onto another map to
-          swap their places.
+          Click a date on a map to pick another image, or the layers button next to it
+          to pick a map layer. Drag a label onto another map to swap their places.
         </Trans>
       </Typography>
       <Stack component="ul" spacing={0} sx={{ m: 0, p: 0, listStyle: 'none' }}>
-        {filledSlots.map(({ scene, index }) => {
-          const acquiredAt = new Date(scene.acquiredAt);
-          const timeZone = sceneTimeZone(scene);
-          const day = formats.day(acquiredAt, timeZone);
-          const time = formats.time(acquiredAt, timeZone);
-          const cloud = formats.percent.format(
-            Math.round(scene.cloudCoverPercent) / 100,
-          );
+        {filledSlots.map(({ image, index }) => {
+          let title: string;
+          let details: ReactNode = null;
+          if (isComparisonBasemap(image)) {
+            title = i18n._(satelliteBasemapLabels[image]);
+          } else {
+            const acquiredAt = new Date(image.acquiredAt);
+            const timeZone = sceneTimeZone(image);
+            title = formats.day(acquiredAt, timeZone);
+            const time = formats.time(acquiredAt, timeZone);
+            const cloud = formats.percent.format(
+              Math.round(image.cloudCoverPercent) / 100,
+            );
+            details = (
+              <>
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>
+                    {time} · {cloud} cloud
+                  </Trans>
+                </Typography>
+                {/* A scene without a supported raster shows a warning in its pane. */}
+                {image.visualAsset.kind === 'sentinel-l2a' ? (
+                  <TileProgressBar day={title} progress={tileProgress[index]} />
+                ) : null}
+              </>
+            );
+          }
           return (
             <Stack
               component="li"
@@ -461,20 +567,12 @@ export function SatelliteComparisonPanel() {
               }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="subtitle2">{day}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  <Trans>
-                    {time} · {cloud} cloud
-                  </Trans>
-                </Typography>
-                {/* A scene without a supported raster shows a warning in its pane. */}
-                {scene.visualAsset.kind === 'sentinel-l2a' ? (
-                  <TileProgressBar day={day} progress={tileProgress[index]} />
-                ) : null}
+                <Typography variant="subtitle2">{title}</Typography>
+                {details}
               </Box>
-              <Tooltip title={t`Remove ${day} from comparison`}>
+              <Tooltip title={t`Remove ${title} from comparison`}>
                 <IconButton
-                  aria-label={t`Remove ${day} from comparison`}
+                  aria-label={t`Remove ${title} from comparison`}
                   onClick={() => {
                     clearComparisonSlot(index);
                   }}
@@ -490,7 +588,7 @@ export function SatelliteComparisonPanel() {
         <Button
           variant="outlined"
           startIcon={<ShareOutlinedIcon />}
-          disabled={camera === null || sceneCount < minimumComparedScenes}
+          disabled={camera === null || imageCount < minimumComparedScenes}
           onClick={() => void copyLink()}
         >
           <Trans>Share link</Trans>
@@ -499,9 +597,11 @@ export function SatelliteComparisonPanel() {
           <Trans>Clear</Trans>
         </Button>
       </Stack>
-      <Typography variant="caption" color="text.secondary">
-        <Trans>Imagery: Copernicus Sentinel data via Element 84 Earth Search.</Trans>
-      </Typography>
+      {filledSlots.some(({ image }) => !isComparisonBasemap(image)) ? (
+        <Typography variant="caption" color="text.secondary">
+          <Trans>Imagery: Copernicus Sentinel data via Element 84 Earth Search.</Trans>
+        </Typography>
+      ) : null}
       <Snackbar
         open={copyLinkStatus !== 'idle'}
         autoHideDuration={copyLinkStatus === 'copied' ? 2_500 : 4_000}

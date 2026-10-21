@@ -1,5 +1,3 @@
-import type { MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import CloseIcon from '@mui/icons-material/Close';
 import {
@@ -32,19 +30,10 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
   createMapShareUrl,
   readShareableMapState,
+  satelliteBasemapLabels,
   selectMapShareView,
-  type SatelliteBasemap,
 } from '@/presentation/map/mapShareUrl';
 import { TrackShareTable } from '@/presentation/tracks/TrackShareTable';
-
-// The same names as the quick layer chooser, so both share one catalog entry each.
-const basemapLabels: Readonly<Record<SatelliteBasemap, MessageDescriptor>> = {
-  'google-satellite': msg`Google Satellite`,
-  'bing-satellite': msg`Bing Aerial`,
-  'esri-satellite': msg`Esri World Imagery`,
-  'napr-orthophoto': msg`NAPR Orthophoto`,
-  'soviet-topographic': msg`Soviet Topographic`,
-};
 
 function ShareOption({
   label,
@@ -181,7 +170,7 @@ export function MapShareDialog() {
     locationText = t`${coordinates}, zoom ${zoom}`;
   }
   const basemap = state?.basemap ?? null;
-  const basemapLabel = basemap === null ? null : basemapLabels[basemap];
+  const basemapLabel = basemap === null ? null : satelliteBasemapLabels[basemap];
   const sharedScene = (state?.sceneKey ?? null) === null ? null : selectedScene;
   let sceneText = t`No Sentinel-2 image is shown on the map.`;
   if (sharedScene !== null) {

@@ -53,6 +53,8 @@ interface SatelliteCompareState {
   readonly tileProgress: Readonly<Record<number, ComparisonTileProgress>>;
   /** Month (`YYYY-MM`) last shown by any pane's calendar; the next calendar opens on it. */
   readonly calendarMonth: string | null;
+  /** Layout last picked in the sidebar, kept in the browser; null before any pick. */
+  readonly preferredLayout: ComparisonLayout | null;
 }
 
 const initialState: SatelliteCompareState = {
@@ -62,6 +64,7 @@ const initialState: SatelliteCompareState = {
   directFallback: false,
   tileProgress: {},
   calendarMonth: null,
+  preferredLayout: null,
 };
 
 export const satelliteCompareStore = createStore<SatelliteCompareState>()(
@@ -151,19 +154,18 @@ export function clearComparedImages(): void {
 
 /**
  * Opens the tray's images over the main map's view, with plain maps in the other
- * positions. `layout` 2 sits two images side by side and becomes 2×2 for three or four;
- * `viewport` is the main map's view, or null before the map has one.
+ * positions, in the preferred layout, else `defaultLayout`. Layout 2 sits two images
+ * side by side and becomes 2×2 for three or four; `viewport` is the main map's view, or
+ * null before the map has one.
  */
 export function openComparison(
   camera: SatelliteCompareCamera,
   viewport: SatelliteSearchViewport | null,
-  layout: ComparisonLayout,
+  defaultLayout: ComparisonLayout,
 ): void {
+  const { images, preferredLayout } = satelliteCompareStore.getState();
   satelliteCompareStore.setState({
-    slots: gridSlots(
-      imagesInView(satelliteCompareStore.getState().images, viewport),
-      layout,
-    ),
+    slots: gridSlots(imagesInView(images, viewport), preferredLayout ?? defaultLayout),
     camera,
     directFallback: false,
     tileProgress: {},
@@ -234,9 +236,9 @@ export function swapComparisonSlots(from: number, to: number): void {
 }
 
 /**
- * Switches between 2×1 and 2×2. Growing keeps every position and adds plain maps;
- * shrinking moves the shown images, in grid order, into the two remaining positions and
- * is refused while more than two images are shown.
+ * Switches between 2×1 and 2×2 and makes that the preferred layout. Growing keeps every
+ * position and adds plain maps; shrinking moves the shown images, in grid order, into the
+ * two remaining positions and is refused while more than two images are shown.
  */
 export function setComparisonLayout(layout: ComparisonLayout): void {
   const { slots } = satelliteCompareStore.getState();
@@ -248,7 +250,15 @@ export function setComparisonLayout(layout: ComparisonLayout): void {
       layout === maximumComparedScenes
         ? Array.from({ length: layout }, (_, index) => slots[index] ?? null)
         : gridSlots(images, layout),
+    preferredLayout: layout,
   });
+}
+
+/** The layout stored in the browser; a pick made in this session wins. */
+export function restorePreferredComparisonLayout(layout: ComparisonLayout): void {
+  if (satelliteCompareStore.getState().preferredLayout === null) {
+    satelliteCompareStore.setState({ preferredLayout: layout });
+  }
 }
 
 export function setComparisonCalendarMonth(month: string): void {

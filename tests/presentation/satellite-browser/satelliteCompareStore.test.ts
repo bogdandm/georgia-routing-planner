@@ -5,6 +5,7 @@ import {
   clearComparisonSlot,
   closeComparison,
   openComparison,
+  restorePreferredComparisonLayout,
   resetSatelliteCompareStore,
   satelliteCompareStore,
   setComparisonLayout,
@@ -131,5 +132,17 @@ describe('satelliteCompareStore', () => {
       null,
       null,
     ]);
+  });
+
+  it('opens in the preferred layout, where a pick in this session beats the stored one', () => {
+    restorePreferredComparisonLayout(4);
+    openComparison(camera, testViewport, 2);
+    expect(satelliteCompareStore.getState().slots).toHaveLength(4);
+
+    setComparisonLayout(2);
+    closeComparison();
+    restorePreferredComparisonLayout(4);
+    openComparison(camera, testViewport, 4);
+    expect(slotIds(satelliteCompareStore.getState().slots)).toEqual(['2019', '2023']);
   });
 });

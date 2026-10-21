@@ -54,6 +54,7 @@ import {
   maximumComparedScenes,
   minimumComparedScenes,
   openComparison,
+  restorePreferredComparisonLayout,
   satelliteCompareStore,
   setComparisonCalendarMonth,
   setComparisonLayout,
@@ -240,22 +241,19 @@ export function ComparedSceneDatePicker({
   );
 }
 
-/**
- * Opens the grid over the main map's current view, in the layout last picked in the
- * sidebar, else in `defaultLayout`.
- */
-async function openComparisonFromMap(
-  services: Pick<RuntimeServices, 'database' | 'mapDiagnostics' | 'mapViewport'>,
+/** Opens the grid over the main map's current view; see `openComparison` for layouts. */
+function openComparisonFromMap(
+  services: Pick<RuntimeServices, 'mapDiagnostics' | 'mapViewport'>,
   defaultLayout: ComparisonLayout,
-): Promise<void> {
-  // The view is read at the click, before the stored layout arrives.
-  const camera = startingComparisonCamera(
-    services.mapDiagnostics.getSnapshot()?.camera,
-    satelliteCompareStore.getState().images,
+): void {
+  openComparison(
+    startingComparisonCamera(
+      services.mapDiagnostics.getSnapshot()?.camera,
+      satelliteCompareStore.getState().images,
+    ),
+    services.mapViewport.getViewportSnapshot(),
+    defaultLayout,
   );
-  const viewport = services.mapViewport.getViewportSnapshot();
-  const layout = await services.database.loadComparisonLayout().catch(() => null);
-  openComparison(camera, viewport, layout ?? defaultLayout);
 }
 
 /**
@@ -300,7 +298,9 @@ export function SatelliteComparisonTray() {
           <Button
             variant="contained"
             disabled={!canCompare}
-            onClick={() => void openComparisonFromMap(services, 2)}
+            onClick={() => {
+              openComparisonFromMap(services, 2);
+            }}
           >
             <Trans>Compare</Trans>
           </Button>
@@ -312,11 +312,22 @@ export function SatelliteComparisonTray() {
 
 /**
  * Satellite header shortcut: the tray's images first and plain maps whose images are
- * picked from each pane's calendar or layer menu, 2×2 unless 2×1 was picked last.
+ * picked from each pane's calendar or layer menu, 2×2 unless 2×1 is preferred.
  */
 export function SatelliteComparisonShortcut() {
   const { t } = useLingui();
   const services = useRuntimeServices();
+  const { database } = services;
+  // Mounted with the Satellite header, so the layout stored in the browser is known
+  // before the tray's Compare or this shortcut opens the grid.
+  useEffect(() => {
+    void database.loadComparisonLayout().then(
+      (layout) => {
+        if (layout !== null) restorePreferredComparisonLayout(layout);
+      },
+      () => undefined,
+    );
+  }, [database]);
   return (
     <Tooltip title={t`Compare images from different dates side by side`}>
       <ToggleButton
@@ -325,7 +336,9 @@ export function SatelliteComparisonShortcut() {
         selected={false}
         aria-label={t`Open image comparison`}
         sx={{ gap: 0.75 }}
-        onClick={() => void openComparisonFromMap(services, maximumComparedScenes)}
+        onClick={() => {
+          openComparisonFromMap(services, maximumComparedScenes);
+        }}
       >
         <CompareOutlinedIcon sx={{ fontSize: 20 }} />
         <Trans>Compare</Trans>

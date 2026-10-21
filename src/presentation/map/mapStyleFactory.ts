@@ -1284,42 +1284,47 @@ export function createHikingMapStyle(
 }
 
 export interface SatelliteCompareMapStyleOptions {
-  /** null => plain vector pane with the main map's relief and isolines. */
-  readonly sceneRaster: {
-    readonly scene: SatelliteScene;
-    readonly raster: {
-      readonly tileUrl: string;
-      readonly tileSize: number;
-      readonly minzoom: number;
-      readonly maxzoom: number;
-      readonly attribution: string;
-    };
-  } | null;
-  /** Native base-layer visibility under the pane's logical layer choices. */
+  /**
+   * null => plain vector pane with the main map's relief and isolines. `basemap` => the
+   * static imagery that `baseLayerVisibility` turns on, in the satellite visual mode;
+   * `scene` => the same mode over the scene raster and its footprint.
+   */
+  readonly imagery:
+    | { readonly kind: 'basemap' }
+    | {
+        readonly kind: 'scene';
+        readonly scene: SatelliteScene;
+        readonly raster: {
+          readonly tileUrl: string;
+          readonly tileSize: number;
+          readonly minzoom: number;
+          readonly maxzoom: number;
+          readonly attribution: string;
+        };
+      }
+    | null;
+  /**
+   * Native base-layer visibility under the pane's logical layer choices, including
+   * which static imagery basemap, if any, is shown.
+   */
   readonly baseLayerVisibility: ReadonlyMap<string, boolean>;
-  /** OSM overlay opacity paint in the satellite visual mode; used only with sceneRaster. */
+  /** OSM overlay opacity paint in the satellite visual mode; unused on a plain pane. */
   readonly openStreetMapOpacityPaint: MapVisualModePaint;
   readonly overlays: SatelliteComparisonOverlays;
 }
 
-const staticImageryLayerIds: ReadonlySet<string> = new Set([
-  ...Object.values(satelliteBasemapLayerIds),
-  ...Object.values(naprOrthophotoLayerIds),
-]);
-
 /**
  * Builds a comparison pane style: the hiking basemap as the main map draws it with the
- * imported track, and the user's base-layer visibility baked in. With a scene, the pane
- * shows it in the static satellite visual mode with the OSM overlay opacity; without
- * one, it is the vector map with the main map's relief and isolines. Static imagery
- * basemaps stay hidden.
+ * imported track, and the pane's base-layer visibility baked in. Over imagery (a static
+ * basemap or a scene), the pane uses the satellite visual mode with the OSM overlay
+ * opacity; without, it is the vector map with the main map's relief and isolines.
  */
 export function createSatelliteCompareMapStyle(
   configuration: MapProviderConfiguration,
   options: SatelliteCompareMapStyleOptions,
 ): StyleSpecification {
   const style = createHikingMapStyle(configuration);
-  const { sceneRaster } = options;
+  const { imagery } = options;
   const { importedTrack, terrain } = options.overlays;
   const sources: Record<string, SourceSpecification> = {
     ...style.sources,
@@ -1336,7 +1341,7 @@ export function createSatelliteCompareMapStyle(
   // map's controller settles it.
   const overlayLayers: (readonly [beforeId: string, layer: LayerSpecification])[] = [];
   let paintByLayer: MapVisualModePaint;
-  if (sceneRaster === null) {
+  if (imagery === null) {
     sources[mapSourceIds.terrainDem] = terrain.demSource;
     sources[mapSourceIds.terrainContours] = terrain.contourSource;
     overlayLayers.push(
@@ -1367,40 +1372,42 @@ export function createSatelliteCompareMapStyle(
     );
     paintByLayer = mapVisualModePaint.vector;
   } else {
-    const { scene, raster } = sceneRaster;
-    sources[mapSourceIds.sentinelRasterA] = {
-      type: 'raster',
-      tiles: [raster.tileUrl],
-      tileSize: raster.tileSize,
-      minzoom: raster.minzoom,
-      maxzoom: raster.maxzoom,
-      bounds: satelliteSceneBounds(scene),
-      attribution: raster.attribution,
-    };
-    sources[mapSourceIds.sentinelFootprint] = {
-      type: 'geojson',
-      data: { type: 'Feature', properties: {}, geometry: scene.footprint },
-    };
-    overlayLayers.push(
-      [
-        mapInsertionPoints.satelliteBeforeLayerId,
-        {
-          id: sentinelMapLayerIds.rasterA,
-          type: 'raster',
-          source: mapSourceIds.sentinelRasterA,
-          paint: { ...sentinelRasterPaint },
-        },
-      ],
-      [
-        mapInsertionPoints.satelliteFootprintBeforeLayerId,
-        {
-          id: sentinelMapLayerIds.footprint,
-          type: 'line',
-          source: mapSourceIds.sentinelFootprint,
-          paint: { ...satelliteFootprintPaint },
-        },
-      ],
-    );
+    if (imagery.kind === 'scene') {
+      const { scene, raster } = imagery;
+      sources[mapSourceIds.sentinelRasterA] = {
+        type: 'raster',
+        tiles: [raster.tileUrl],
+        tileSize: raster.tileSize,
+        minzoom: raster.minzoom,
+        maxzoom: raster.maxzoom,
+        bounds: satelliteSceneBounds(scene),
+        attribution: raster.attribution,
+      };
+      sources[mapSourceIds.sentinelFootprint] = {
+        type: 'geojson',
+        data: { type: 'Feature', properties: {}, geometry: scene.footprint },
+      };
+      overlayLayers.push(
+        [
+          mapInsertionPoints.satelliteBeforeLayerId,
+          {
+            id: sentinelMapLayerIds.rasterA,
+            type: 'raster',
+            source: mapSourceIds.sentinelRasterA,
+            paint: { ...sentinelRasterPaint },
+          },
+        ],
+        [
+          mapInsertionPoints.satelliteFootprintBeforeLayerId,
+          {
+            id: sentinelMapLayerIds.footprint,
+            type: 'line',
+            source: mapSourceIds.sentinelFootprint,
+            paint: { ...satelliteFootprintPaint },
+          },
+        ],
+      );
+    }
     const satellitePaint: MapVisualModePaint = mapVisualModePaint.satellite;
     paintByLayer = Object.fromEntries(
       [
@@ -1441,9 +1448,7 @@ export function createSatelliteCompareMapStyle(
     baseLayer,
   ]);
   const layers = orderedLayers.map((layer): LayerSpecification => {
-    const visible = staticImageryLayerIds.has(layer.id)
-      ? false
-      : options.baseLayerVisibility.get(layer.id);
+    const visible = options.baseLayerVisibility.get(layer.id);
     const paint = paintByLayer[layer.id];
     const compareLayer = { ...layer };
     // Layer unions cannot type a per-property spread. The keys are the ones the main map

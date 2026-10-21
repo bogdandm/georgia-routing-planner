@@ -1,3 +1,6 @@
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
+
 import type { MapSharePreferences } from '@/application/map/MapSharePreferences';
 import { satelliteSceneKey } from '@/domain/satellite/SatelliteScene';
 import type { MapLayerState } from '@/presentation/map/mapLayerStore';
@@ -8,6 +11,7 @@ import type {
   MapLayerPreset,
   TerrainMode,
 } from '@/presentation/map/mapTypes';
+import { comparisonBasemaps } from '@/presentation/satellite-browser/satelliteCompareStore';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 
 const mapShareSchemaVersion = 2;
@@ -29,6 +33,17 @@ export const satelliteBasemaps = [
 ] as const satisfies readonly MapLayerPreset[];
 
 export type SatelliteBasemap = (typeof satelliteBasemaps)[number];
+
+// The same names as the quick layer chooser, so both share one catalog entry each.
+export const satelliteBasemapLabels: Readonly<
+  Record<SatelliteBasemap, MessageDescriptor>
+> = {
+  'google-satellite': msg`Google Satellite`,
+  'bing-satellite': msg`Bing Aerial`,
+  'esri-satellite': msg`Esri World Imagery`,
+  'napr-orthophoto': msg`NAPR Orthophoto`,
+  'soviet-topographic': msg`Soviet Topographic`,
+};
 
 export type MapShareOrientation =
   | { readonly mode: '2d' }
@@ -114,19 +129,23 @@ export function parseSharedMapView(search: string): MapShareView | null {
 }
 
 /**
- * Reads the scene keys of a comparison link (`compare=<key>,<key>[,…]`). A link with
- * an invalid key, a duplicate, or fewer than two or more than four keys opens no
- * comparison.
+ * Reads the image keys of a comparison link (`compare=<key>,<key>[,…]`): scene keys and
+ * static imagery basemap IDs. A link with an invalid key, a duplicate, or fewer than two
+ * or more than four keys opens no comparison.
  */
 export function parseSharedComparison(search: string): readonly string[] {
   const candidate = new URLSearchParams(search).get('compare');
   if (candidate === null) return [];
-  const sceneKeys = candidate.split(',');
-  return sceneKeys.length >= minimumComparisonSceneKeys &&
-    sceneKeys.length <= maximumComparisonSceneKeys &&
-    new Set(sceneKeys).size === sceneKeys.length &&
-    sceneKeys.every((sceneKey) => sceneKeyPattern.test(sceneKey))
-    ? sceneKeys
+  const imageKeys = candidate.split(',');
+  return imageKeys.length >= minimumComparisonSceneKeys &&
+    imageKeys.length <= maximumComparisonSceneKeys &&
+    new Set(imageKeys).size === imageKeys.length &&
+    imageKeys.every(
+      (imageKey) =>
+        sceneKeyPattern.test(imageKey) ||
+        comparisonBasemaps.some((basemap) => basemap === imageKey),
+    )
+    ? imageKeys
     : [];
 }
 
@@ -275,12 +294,12 @@ export function createMapShareUrl(currentUrl: string, view: MapShareView): strin
   return url.toString();
 }
 
-/** Creates a 2D link that opens Satellite with these scenes in the comparison grid. */
+/** Creates a 2D link that opens Satellite with these images in the comparison grid. */
 export function createComparisonShareUrl(
   currentUrl: string,
   center: MapCoordinate,
   zoom: number,
-  sceneKeys: readonly string[],
+  imageKeys: readonly string[],
 ): string {
   const url = new URL(
     createMapShareUrl(currentUrl, {
@@ -291,7 +310,7 @@ export function createComparisonShareUrl(
       sceneKey: null,
     }),
   );
-  url.searchParams.set('compare', sceneKeys.join(','));
+  url.searchParams.set('compare', imageKeys.join(','));
   url.hash = '#satellite';
   return url.toString();
 }

@@ -95,6 +95,7 @@ import {
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import {
+  comparisonBasemaps,
   minimumComparedScenes,
   openSharedComparison,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
@@ -1288,8 +1289,8 @@ export function MapWorkspace({
     };
   }, [idGenerator, mapLayers, mosaicActive, satelliteCatalogGateway, sharedMapView]);
 
-  // A comparison link opens Satellite with the grid once its scenes resolve; any two
-  // resolved scenes are enough. Phones keep the plain shared camera.
+  // A comparison link opens Satellite with the grid once its images resolve; any two
+  // resolved images are enough. Phones keep the plain shared camera.
   useEffect(() => {
     if (
       sharedMapView === null ||
@@ -1304,11 +1305,14 @@ export function MapWorkspace({
     setActiveTab('satellite');
     setNavigationCollapsed(false);
     const controller = new AbortController();
-    // A failed or missing key only drops that scene; any two resolved scenes still open.
+    // A failed or missing scene only drops that scene; any two resolved images still
+    // open. Basemap IDs need no lookup.
     void Promise.allSettled(
-      sharedComparison.map((sceneKey) => {
-        const separator = sceneKey.indexOf(':');
-        return getScene(sceneKey.slice(0, separator), sceneKey.slice(separator + 1), {
+      sharedComparison.map((imageKey) => {
+        const basemap = comparisonBasemaps.find((id) => id === imageKey);
+        if (basemap !== undefined) return Promise.resolve(basemap);
+        const separator = imageKey.indexOf(':');
+        return getScene(imageKey.slice(0, separator), imageKey.slice(separator + 1), {
           operationId: idGenerator.generate(),
           signal: controller.signal,
         });

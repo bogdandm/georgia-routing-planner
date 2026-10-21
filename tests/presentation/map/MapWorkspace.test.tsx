@@ -506,11 +506,11 @@ describe('MapWorkspace', () => {
     });
   });
 
-  it('opens the resolvable scenes of a shared comparison in link order', async () => {
+  it('opens the resolvable images of a shared comparison in link order', async () => {
     window.history.replaceState(
       null,
       '',
-      '/?map=2&lat=41.7&lon=44.8&z=12&view=2d&compare=sentinel-2-l2a%3Alater%2Csentinel-2-l2a%3Aunreachable%2Csentinel-2-l2a%3Aearlier#tracks',
+      '/?map=2&lat=41.7&lon=44.8&z=12&view=2d&compare=sentinel-2-l2a%3Alater%2Csentinel-2-l2a%3Aunreachable%2Cesri-satellite%2Csentinel-2-l2a%3Aearlier#tracks',
     );
     useUiStore.setState({ activeTab: 'tracks', navigationCollapsed: true });
     const scenes: Readonly<Record<string, SatelliteScene>> = {
@@ -540,11 +540,13 @@ describe('MapWorkspace', () => {
     );
 
     await waitFor(() => {
-      expect(satelliteCompareStore.getState().slots).toHaveLength(2);
+      expect(satelliteCompareStore.getState().slots).toHaveLength(4);
     });
     expect(
-      satelliteCompareStore.getState().slots.map((scene) => scene?.id ?? null),
-    ).toEqual(['later', 'earlier']);
+      satelliteCompareStore
+        .getState()
+        .slots.map((slot) => (typeof slot === 'string' ? slot : (slot?.id ?? null))),
+    ).toEqual(['later', 'esri-satellite', 'earlier', null]);
     expect(satelliteCompareStore.getState().camera).toEqual({
       center: { longitude: 44.8, latitude: 41.7 },
       zoom: 12,

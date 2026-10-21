@@ -2,7 +2,18 @@ import { useLingui } from '@lingui/react/macro';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import { Alert, Box, ButtonBase, Popover, Tooltip, Typography } from '@mui/material';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import {
+  Alert,
+  Box,
+  ButtonBase,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Popover,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import lookupTimeZone from '@photostructure/tz-lookup';
 import {
   getMaxParallelImageRequests,
@@ -21,6 +32,7 @@ import {
 } from 'react';
 import Map, { AttributionControl, type MapRef } from 'react-map-gl/maplibre';
 
+import type { LogicalMapLayerId } from '@/application/ports/MapLayerPreferencesRepository';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import {
@@ -39,17 +51,38 @@ import {
 } from '@/presentation/map/MapLibreLayerController';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import { satelliteBasemapLabels } from '@/presentation/map/mapShareUrl';
 import { createSatelliteCompareMapStyle } from '@/presentation/map/mapStyleFactory';
 import type { MapCoordinate } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { SatelliteCompareSync } from '@/presentation/map/SatelliteCompareSync';
 import { ComparedSceneDatePicker } from '@/presentation/satellite-browser/SatelliteComparison';
 import {
+  comparisonBasemaps,
+  isComparisonBasemap,
   maximumComparedScenes,
+  setComparisonSlot,
   setComparisonTileProgress,
   swapComparisonSlots,
+  type ComparisonBasemap,
   type ComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
+
+function basemapAttribution(
+  configuration: MapProviderConfiguration,
+  basemap: ComparisonBasemap,
+): string {
+  switch (basemap) {
+    case 'google-satellite':
+      return configuration.satelliteBasemap.attribution;
+    case 'bing-satellite':
+      return configuration.bingSatelliteBasemap.attribution;
+    case 'esri-satellite':
+      return configuration.esriSatelliteBasemap.attribution;
+    case 'napr-orthophoto':
+      return configuration.naprOrthophoto.attribution;
+  }
+}
 
 /* eslint-disable lingui/no-unlocalized-strings -- Drag data type and SVG/CSS tokens. */
 const slotDragType = 'application/x-trail-planner-comparison-slot';
@@ -145,13 +178,22 @@ export function SatelliteCompareMaps({
     );
   }
   // One attribution at the grid's bottom-right also credits what only other panes use:
-  // Sentinel imagery on scene panes and the DEM behind plain panes' relief and isolines.
+  // Sentinel imagery on scene panes, static imagery on basemap panes, and the DEM behind
+  // plain panes' relief and isolines.
   const configuration = mapProviderConfiguration.value;
+  const shownBasemaps = new Set(
+    slots.filter((slot) => slot !== null).filter(isComparisonBasemap),
+  );
   const gridAttributions = [
-    ...(slots.some((slot) => slot !== null)
-      ? [configuration.satellite.renderer.attribution]
-      : []),
-    ...(slots.some((slot) => slot === null) ? [configuration.terrain.attribution] : []),
+    ...new Set(
+      slots.map((slot) =>
+        slot === null
+          ? configuration.terrain.attribution
+          : isComparisonBasemap(slot)
+            ? basemapAttribution(configuration, slot)
+            : configuration.satellite.renderer.attribution,
+      ),
+    ),
   ];
 
   return (
@@ -168,17 +210,20 @@ export function SatelliteCompareMaps({
       }}
     >
       {preferencesRestored
-        ? slots.map((scene, index) => (
+        ? slots.map((image, index) => (
             <SatelliteComparePane
               // Panes are grid positions; a swap restyles them instead of moving maps.
               key={index}
               configuration={configuration}
               index={index}
               mapLayers={mapLayers}
-              scene={scene}
+              image={image}
+              shownBasemaps={shownBasemaps}
               attributions={index === slots.length - 1 ? gridAttributions : null}
               directFallback={
-                scene !== null && directSceneKeys.has(satelliteSceneKey(scene))
+                image !== null &&
+                !isComparisonBasemap(image) &&
+                directSceneKeys.has(satelliteSceneKey(image))
               }
               sync={sync}
               onCameraSettled={onCameraSettled}
@@ -237,7 +282,9 @@ interface SatelliteComparePaneProps {
   readonly configuration: MapProviderConfiguration;
   readonly index: number;
   readonly mapLayers: MapLibreLayerController;
-  readonly scene: SatelliteScene | null;
+  readonly image: ComparisonSlot;
+  /** Basemaps shown by any pane; the imagery menu offers the others. */
+  readonly shownBasemaps: ReadonlySet<ComparisonBasemap>;
   /** The grid's one attribution control, crediting every pane's providers, or null. */
   readonly attributions: readonly string[] | null;
   /** The scene renders from its visual COG because TiTiler failed for it. */
@@ -251,7 +298,8 @@ function SatelliteComparePane({
   configuration,
   index,
   mapLayers,
-  scene,
+  image,
+  shownBasemaps,
   attributions,
   directFallback,
   sync,
@@ -260,18 +308,22 @@ function SatelliteComparePane({
 }: SatelliteComparePaneProps) {
   const { i18n, t } = useLingui();
   const key = String(index);
+  const scene = image === null || isComparisonBasemap(image) ? null : image;
+  const basemap = image !== null && isComparisonBasemap(image) ? image : null;
   // Layer choices, overlay opacity, the drawn track, terrain overlays, and the start
   // camera are read once: the main map's controls are hidden while the grid is open.
   const [mounted] = useState(() => {
     const { visibility, openStreetMapOpacity } = mapLayerStore.getState();
+    // Static imagery shows only on a pane that picked it, whatever the main map shows.
+    const plainVisibility: Record<LogicalMapLayerId, boolean> = { ...visibility };
+    for (const id of comparisonBasemaps) plainVisibility[id] = false;
+    // Water and vegetation fills would hide exactly the land cover being compared;
+    // a plain map keeps them as the main map shows them.
+    const imageryVisibility = { ...plainVisibility, 'natural-features': false };
     return {
-      // Water and vegetation fills would hide exactly the land cover being compared;
-      // a plain map keeps them as the main map shows them.
-      satelliteLayerVisibility: baseNativeLayerVisibility({
-        ...visibility,
-        'natural-features': false,
-      }),
-      plainLayerVisibility: baseNativeLayerVisibility(visibility),
+      imageryVisibility,
+      sceneLayerVisibility: baseNativeLayerVisibility(imageryVisibility),
+      plainLayerVisibility: baseNativeLayerVisibility(plainVisibility),
       openStreetMapOpacityPaint: openStreetMapOpacityPaint(
         'satellite',
         openStreetMapOpacity,
@@ -293,24 +345,32 @@ function SatelliteComparePane({
   const mapStyle = useMemo(
     () =>
       createSatelliteCompareMapStyle(configuration, {
-        sceneRaster:
-          scene === null || tiles === null || tileUrl === null
-            ? null
-            : { scene, raster: { ...tiles, tileUrl } },
+        imagery:
+          basemap !== null
+            ? { kind: 'basemap' }
+            : scene === null || tiles === null || tileUrl === null
+              ? null
+              : { kind: 'scene', scene, raster: { ...tiles, tileUrl } },
         baseLayerVisibility:
-          scene === null
-            ? mounted.plainLayerVisibility
-            : mounted.satelliteLayerVisibility,
+          basemap !== null
+            ? baseNativeLayerVisibility({
+                ...mounted.imageryVisibility,
+                [basemap]: true,
+              })
+            : scene === null
+              ? mounted.plainLayerVisibility
+              : mounted.sceneLayerVisibility,
         openStreetMapOpacityPaint: mounted.openStreetMapOpacityPaint,
         overlays: mounted.overlays,
       }),
-    [configuration, mounted, scene, tileUrl, tiles],
+    [basemap, configuration, mounted, scene, tileUrl, tiles],
   );
   const label = useMemo(
     () => (scene === null ? null : sceneLabel(scene, i18n.locale)),
     [i18n.locale, scene],
   );
   const date = label === null ? null : label.date;
+  const basemapName = basemap === null ? null : i18n._(satelliteBasemapLabels[basemap]);
 
   const mapLibreLocale = useMemo(
     () => ({
@@ -327,6 +387,7 @@ function SatelliteComparePane({
     readonly viewport: SatelliteSearchViewport;
   } | null>(null);
   const [dropTarget, setDropTarget] = useState(false);
+  const [basemapMenu, setBasemapMenu] = useState<HTMLElement | null>(null);
 
   // Sentinel tiles of the current view, for the sidebar's per-map progress bar. A tile
   // counts as finished once loaded or failed; an aborted tile leaves the count.
@@ -476,7 +537,9 @@ function SatelliteComparePane({
     <Box
       component="section"
       aria-label={
-        date === null ? t`Map without an image` : t`Sentinel-2 image from ${date}`
+        date !== null
+          ? t`Sentinel-2 image from ${date}`
+          : (basemapName ?? t`Map without an image`)
       }
       onDragOver={(event) => {
         if (!acceptsSlotDrop(event)) return;
@@ -598,7 +661,7 @@ function SatelliteComparePane({
       </Box>
       {/* The whole chip drags; the dotted handle and the hover outline show that. */}
       <Box
-        draggable={label !== null}
+        draggable={image !== null}
         onDragStart={(event) => {
           event.dataTransfer.setData(slotDragType, String(index));
           event.dataTransfer.effectAllowed = 'move';
@@ -616,8 +679,8 @@ function SatelliteComparePane({
           bgcolor: 'rgb(0 0 0 / 64%)',
           color: 'common.white',
           // The grab hand appears only here; the maps themselves show a crosshair.
-          cursor: label === null ? 'pointer' : 'grab',
-          '&:active': { cursor: label === null ? 'pointer' : 'grabbing' },
+          cursor: image === null ? 'pointer' : 'grab',
+          '&:active': { cursor: image === null ? 'pointer' : 'grabbing' },
           transition: (theme) =>
             theme.transitions.create(['background-color', 'box-shadow'], {
               duration: theme.transitions.duration.shortest,
@@ -629,7 +692,7 @@ function SatelliteComparePane({
           '&:hover .compare-drag-handle': { opacity: 1 },
         }}
       >
-        {label === null ? null : (
+        {image === null ? null : (
           <Tooltip title={t`Drag onto another map to swap`} placement="bottom-start">
             <Box
               className="compare-drag-handle"
@@ -669,7 +732,9 @@ function SatelliteComparePane({
           }}
         >
           <Box>
-            {label === null ? (
+            {label !== null ? (
+              <SceneLabelText {...label} />
+            ) : (
               <Typography
                 variant="body2"
                 sx={{
@@ -680,10 +745,8 @@ function SatelliteComparePane({
                 }}
               >
                 <CalendarMonthOutlinedIcon sx={{ fontSize: 18 }} />
-                {t`Pick image date`}
+                {basemapName ?? t`Pick image date`}
               </Typography>
-            ) : (
-              <SceneLabelText {...label} />
             )}
           </Box>
           {/* Shown like a select so the label reads as something that opens a menu. */}
@@ -696,7 +759,51 @@ function SatelliteComparePane({
             }}
           />
         </ButtonBase>
+        <Tooltip title={t`Static satellite imagery`}>
+          <ButtonBase
+            aria-label={t`Choose static satellite imagery`}
+            aria-haspopup="menu"
+            aria-expanded={basemapMenu !== null}
+            onClick={(event) => {
+              setBasemapMenu(event.currentTarget);
+            }}
+            sx={{
+              px: 0.75,
+              borderLeft: '1px solid rgb(255 255 255 / 24%)',
+              cursor: 'pointer',
+              '&:hover, &.Mui-focusVisible': { bgcolor: 'rgb(255 255 255 / 10%)' },
+            }}
+          >
+            <LayersOutlinedIcon fontSize="small" />
+          </ButtonBase>
+        </Tooltip>
       </Box>
+      <Menu
+        anchorEl={basemapMenu}
+        open={basemapMenu !== null}
+        onClose={() => {
+          setBasemapMenu(null);
+        }}
+        slotProps={{ list: { 'aria-label': t`Choose static satellite imagery` } }}
+      >
+        {comparisonBasemaps.map((candidate) => (
+          <MenuItem
+            key={candidate}
+            role="menuitemradio"
+            aria-checked={candidate === basemap}
+            selected={candidate === basemap}
+            // A basemap shown by another pane would only duplicate it.
+            disabled={candidate !== basemap && shownBasemaps.has(candidate)}
+            onClick={() => {
+              setComparisonSlot(index, candidate);
+              setBasemapMenu(null);
+            }}
+            sx={{ minHeight: 44, minWidth: 240, px: 2 }}
+          >
+            <ListItemText primary={i18n._(satelliteBasemapLabels[candidate])} />
+          </MenuItem>
+        ))}
+      </Menu>
       <Popover
         open={datePicker !== null}
         anchorEl={datePicker?.anchor ?? null}

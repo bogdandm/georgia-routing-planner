@@ -68,15 +68,15 @@ msgstr "{formattedDate}, no loaded imagery"
 msgid "{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}"
 msgstr "{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}"
 
+#. js-lingui-id: OdEYHC
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{imageCount, plural, one {Comparing # image} other {Comparing # images}}"
+msgstr "{imageCount, plural, one {Comparing # image} other {Comparing # images}}"
+
 #. js-lingui-id: PkGcfQ
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "{monthLabel} imagery could not be loaded. Try again."
 msgstr "{monthLabel} imagery could not be loaded. Try again."
-
-#. js-lingui-id: icVXm6
-#: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "{sceneCount, plural, one {Comparing # image} other {Comparing # images}}"
-msgstr "{sceneCount, plural, one {Comparing # image} other {Comparing # images}}"
 
 #. js-lingui-id: WbW5zx
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
@@ -214,10 +214,10 @@ msgstr "Choose the last date to include in the Mosaic."
 msgid "Clear"
 msgstr "Clear"
 
-#. js-lingui-id: h584zm
+#. js-lingui-id: YlgHCY
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
-msgstr "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
+msgid "Click a date on a map to pick another image, or the layers button next to it for static satellite imagery. Drag a label onto another map to swap their places."
+msgstr "Click a date on a map to pick another image, or the layers button next to it for static satellite imagery. Drag a label onto another map to swap their places."
 
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -307,6 +307,11 @@ msgstr "Fill the settled map view with a Mosaic"
 msgid "Fit footprint"
 msgstr "Fit footprint"
 
+#. js-lingui-id: uF8av3
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Four maps in a 2×2 grid"
+msgstr "Four maps in a 2×2 grid"
+
 #. js-lingui-id: uu-bnY
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Gamma"
@@ -392,6 +397,11 @@ msgstr "Loading older images…"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Low viewport coverage: {coveragePercent}"
 msgstr "Low viewport coverage: {coveragePercent}"
+
+#. js-lingui-id: j98Xnj
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Map layout"
+msgstr "Map layout"
 
 #. js-lingui-id: FJqkwn
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -493,15 +503,20 @@ msgstr "Reflectance ceiling"
 msgid "Relief shading could not be updated. Try again."
 msgstr "Relief shading could not be updated. Try again."
 
-#. js-lingui-id: J8e2aG
+#. js-lingui-id: Cj8ku6
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "Remove {day} from comparison"
-msgstr "Remove {day} from comparison"
+msgid "Remove {title} from comparison"
+msgstr "Remove {title} from comparison"
 
 #. js-lingui-id: WIbcl9
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Remove {title} imagery from map"
 msgstr "Remove {title} imagery from map"
+
+#. js-lingui-id: kjbOeF
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Remove images until two remain to show two maps"
+msgstr "Remove images until two remain to show two maps"
 
 #. js-lingui-id: 8B27IS
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
@@ -738,6 +753,11 @@ msgstr "TiTiler is unavailable. Direct pre-rendered Sentinel imagery is active a
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "True-color imagery applied"
 msgstr "True-color imagery applied"
+
+#. js-lingui-id: ddZhPj
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Two maps side by side"
+msgstr "Two maps side by side"
 
 #. js-lingui-id: jqzUyM
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

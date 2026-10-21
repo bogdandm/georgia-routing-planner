@@ -68,15 +68,15 @@ msgstr "{formattedDate}, снимки не загружены"
 msgid "{imageCount, plural, one {# image} other {# images}} · {dayCount, plural, one {# acquisition day} other {# acquisition days}}"
 msgstr "{imageCount, plural, one {# снимок} few {# снимка} many {# снимков} other {# снимка}} · {dayCount, plural, one {# день съёмки} few {# дня съёмки} many {# дней съёмки} other {# дня съёмки}}"
 
+#. js-lingui-id: OdEYHC
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "{imageCount, plural, one {Comparing # image} other {Comparing # images}}"
+msgstr "{imageCount, plural, one {Сравнение # снимка} few {Сравнение # снимков} many {Сравнение # снимков} other {Сравнение # снимка}}"
+
 #. js-lingui-id: PkGcfQ
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "{monthLabel} imagery could not be loaded. Try again."
 msgstr "Не удалось загрузить снимки за {monthLabel}. Повторите попытку."
-
-#. js-lingui-id: icVXm6
-#: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "{sceneCount, plural, one {Comparing # image} other {Comparing # images}}"
-msgstr "{sceneCount, plural, one {Сравнение # снимка} few {Сравнение # снимков} many {Сравнение # снимков} other {Сравнение # снимка}}"
 
 #. js-lingui-id: WbW5zx
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
@@ -214,10 +214,10 @@ msgstr "Выберите последнюю дату, которую нужно 
 msgid "Clear"
 msgstr "Очистить"
 
-#. js-lingui-id: h584zm
+#. js-lingui-id: YlgHCY
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "Click a date on a map to pick another image. Drag a date onto another map to swap their places."
-msgstr "Нажмите на дату на карте, чтобы выбрать другой снимок. Перетащите дату на другую карту, чтобы поменять их местами."
+msgid "Click a date on a map to pick another image, or the layers button next to it for static satellite imagery. Drag a label onto another map to swap their places."
+msgstr "Нажмите на дату на карте, чтобы выбрать другой снимок, или на кнопку слоёв рядом с ней, чтобы выбрать спутниковую подложку. Перетащите подпись на другую карту, чтобы поменять их местами."
 
 #. js-lingui-id: XlShQd
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -307,6 +307,11 @@ msgstr "Заполнить мозаикой видимую область кар
 msgid "Fit footprint"
 msgstr "Показать границы снимка"
 
+#. js-lingui-id: uF8av3
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Four maps in a 2×2 grid"
+msgstr "Четыре карты сеткой 2×2"
+
 #. js-lingui-id: uu-bnY
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Gamma"
@@ -392,6 +397,11 @@ msgstr "Загрузка более ранних снимков…"
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Low viewport coverage: {coveragePercent}"
 msgstr "Низкое покрытие области просмотра: {coveragePercent}"
+
+#. js-lingui-id: j98Xnj
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Map layout"
+msgstr "Расположение карт"
 
 #. js-lingui-id: FJqkwn
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
@@ -493,15 +503,20 @@ msgstr "Потолок отражательной способности"
 msgid "Relief shading could not be updated. Try again."
 msgstr "Не удалось обновить отмывку рельефа. Повторите попытку."
 
-#. js-lingui-id: J8e2aG
+#. js-lingui-id: Cj8ku6
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
-msgid "Remove {day} from comparison"
-msgstr "Убрать {day} из сравнения"
+msgid "Remove {title} from comparison"
+msgstr "Убрать {title} из сравнения"
 
 #. js-lingui-id: WIbcl9
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "Remove {title} imagery from map"
 msgstr "Убрать снимок за {title} с карты"
+
+#. js-lingui-id: kjbOeF
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Remove images until two remain to show two maps"
+msgstr "Чтобы показать две карты, оставьте не больше двух снимков"
 
 #. js-lingui-id: 8B27IS
 #: src/presentation/satellite-browser/SatelliteMosaicBrowser.tsx
@@ -738,6 +753,11 @@ msgstr "TiTiler недоступен. Используются прямые пр
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx
 msgid "True-color imagery applied"
 msgstr "Снимок в естественных цветах применён"
+
+#. js-lingui-id: ddZhPj
+#: src/presentation/satellite-browser/SatelliteComparison.tsx
+msgid "Two maps side by side"
+msgstr "Две карты рядом"
 
 #. js-lingui-id: jqzUyM
 #: src/presentation/satellite-browser/SatelliteBrowser.tsx

@@ -2,7 +2,10 @@ import type { UserEvent } from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import type { SatelliteCompareMapsProps } from '@/presentation/map/SatelliteCompareMaps';
-import { reportComparisonDirectFallback } from '@/presentation/satellite-browser/satelliteCompareStore';
+import {
+  reportComparisonDirectFallback,
+  setComparisonSlot,
+} from '@/presentation/satellite-browser/satelliteCompareStore';
 import {
   act,
   describe,
@@ -28,8 +31,8 @@ import {
 vi.mock('@/presentation/map/SatelliteCompareMaps', () => ({
   SatelliteCompareMaps: ({ slots }: SatelliteCompareMapsProps) => (
     <ol aria-label="Comparison grid">
-      {slots.map((scene, index) => (
-        <li key={index}>{scene?.id ?? 'empty'}</li>
+      {slots.map((slot, index) => (
+        <li key={index}>{typeof slot === 'string' ? slot : (slot?.id ?? 'empty')}</li>
       ))}
     </ol>
   ),
@@ -179,6 +182,32 @@ describe('WorkspaceShell satellite comparison', () => {
 
     await user.click(screen.getByRole('button', { name: 'Back to search' }));
     expect(screen.getByText('Comparison: 1 of 4')).toBeVisible();
+  });
+
+  it('switches between two maps and a 2×2 grid while two images at most are shown', async () => {
+    const user = await showResults();
+    await openGrid(user);
+    const gridItems = () =>
+      within(screen.getByRole('list', { name: 'Comparison grid' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent);
+
+    await user.click(screen.getByRole('button', { name: 'Four maps in a 2×2 grid' }));
+    expect(gridItems()).toEqual(['early-scene', 'late-scene', 'empty', 'empty']);
+
+    act(() => {
+      setComparisonSlot(3, 'google-satellite');
+    });
+    expect(
+      screen.getByRole('button', { name: 'Two maps side by side' }),
+    ).toBeDisabled();
+    expect(screen.getByText('Google Satellite')).toBeVisible();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove Jul 2, 2026 from comparison' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Two maps side by side' }));
+    expect(gridItems()).toEqual(['late-scene', 'google-satellite']);
   });
 
   it('warns in the sidebar when a pane falls back from TiTiler', async () => {

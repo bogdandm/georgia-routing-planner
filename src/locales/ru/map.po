@@ -59,7 +59,7 @@ msgid "3D terrain with bearing {bearing}° and pitch {pitch}°."
 msgstr "3D-рельеф с азимутом {bearing}° и наклоном {pitch}°."
 
 #. js-lingui-id: X4GABr
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Bing Aerial"
 msgstr "Аэроснимки Bing"
@@ -83,6 +83,11 @@ msgstr "Проверка данных карты поблизости…"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Choose map layer preset"
 msgstr "Выбрать набор слоёв карты"
+
+#. js-lingui-id: VMw97Q
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Choose static satellite imagery"
+msgstr "Выбрать спутниковую подложку"
 
 #. js-lingui-id: dLNd3k
 #: src/presentation/map/MapWorkspace.tsx
@@ -185,7 +190,7 @@ msgid "Elevation is unavailable here."
 msgstr "Высота в этой точке недоступна."
 
 #. js-lingui-id: bNOfxj
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Esri World Imagery"
 msgstr "Esri World Imagery"
@@ -201,7 +206,7 @@ msgid "Flat map"
 msgstr "Плоская карта"
 
 #. js-lingui-id: ud5TUo
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Google Satellite"
 msgstr "Снимки Google"
@@ -288,7 +293,7 @@ msgid "Measure distance and elevation"
 msgstr "Измерить расстояние и перепад высоты"
 
 #. js-lingui-id: WlrBzh
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "NAPR Orthophoto"
 msgstr "Ортофотоплан NAPR"
@@ -389,10 +394,15 @@ msgid "Show weather forecast"
 msgstr "Показать прогноз погоды"
 
 #. js-lingui-id: qy1-46
-#: src/presentation/map/MapShareDialog.tsx
+#: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
 msgid "Soviet Topographic"
 msgstr "Топокарта СССР"
+
+#. js-lingui-id: 4v85gW
+#: src/presentation/map/SatelliteCompareMaps.tsx
+msgid "Static satellite imagery"
+msgstr "Спутниковая подложка"
 
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx

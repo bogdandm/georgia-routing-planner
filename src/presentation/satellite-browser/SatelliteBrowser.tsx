@@ -90,7 +90,7 @@ import {
 import { SatelliteComparisonTray } from '@/presentation/satellite-browser/SatelliteComparison';
 import {
   addComparedScene,
-  isComparedScene,
+  isComparedImage,
   maximumComparedScenes,
   removeComparedScene,
   satelliteCompareStore,
@@ -723,8 +723,8 @@ function SatelliteResultsPane({
   const groups = result === null ? [] : visibleGroups(result, visibleCount);
   const shownCount = groups.reduce((count, group) => count + group.scenes.length, 0);
   const scrollViewport = useRef<HTMLDivElement | null>(null);
-  const comparedScenes = useStore(satelliteCompareStore, (state) => state.scenes);
-  const comparisonFull = comparedScenes.length >= maximumComparedScenes;
+  const comparedImages = useStore(satelliteCompareStore, (state) => state.images);
+  const comparisonFull = comparedImages.length >= maximumComparedScenes;
   // Comparison is a desktop feature: the grid needs room for two to four maps.
   const comparisonAvailable = !useMediaQuery('(width < 900px)');
 
@@ -875,7 +875,7 @@ function SatelliteResultsPane({
               ) : null}
               {group.scenes.map((match, sceneIndex) => {
                 const sceneKey = satelliteSceneKey(match.scene);
-                const compared = isComparedScene(comparedScenes, sceneKey);
+                const compared = isComparedImage(comparedImages, sceneKey);
                 return (
                   <SceneCard
                     appliedImagery={appliedImagery}

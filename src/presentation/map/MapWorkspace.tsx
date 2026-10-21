@@ -96,13 +96,21 @@ import {
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import {
+  closeComparison,
+  isComparisonOpen,
   maximumComparedScenes,
   minimumComparedScenes,
   openComparison,
   openSharedComparison,
   restorePreferredComparisonLayout,
+  satelliteCompareStore,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
-import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
+import {
+  comparisonHash,
+  isComparisonHash,
+  workspaceHashForTab,
+  workspaceTabFromHash,
+} from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
 import {
@@ -1586,6 +1594,56 @@ export function MapWorkspace({
       maximumComparedScenes,
     );
   }, [mapDiagnostics, mapViewport, openWorkspaceTab]);
+
+  // The comparison grid and the URL hash follow each other, as the workspace tabs do:
+  // opening the grid pushes `#satellite/compare` and closing it pushes `#satellite`.
+  // Only changes count, so a page that loads on the comparison hash keeps it until the
+  // grid opens below.
+  const comparisonOpen = useStore(satelliteCompareStore, isComparisonOpen);
+  const previousComparisonOpen = useRef(comparisonOpen);
+  useEffect(() => {
+    if (previousComparisonOpen.current === comparisonOpen) return;
+    previousComparisonOpen.current = comparisonOpen;
+    if (isComparisonHash(window.location.hash) === comparisonOpen) return;
+    // A grid closed by leaving Satellite already has that section's hash.
+    if (!comparisonOpen && workspaceTabFromHash(window.location.hash) !== 'satellite') {
+      return;
+    }
+    const nextUrl = new URL(window.location.href);
+    nextUrl.hash = comparisonOpen ? comparisonHash : workspaceHashForTab('satellite');
+    window.history.pushState(window.history.state, '', nextUrl);
+  }, [comparisonOpen]);
+
+  // Loading, Back, Forward, or a typed hash open or close the grid. It opens over the
+  // ready main map, as from the Satellite header, so it starts at the map's camera.
+  const mapReady = snapshot.lifecycle === 'ready';
+  useEffect(() => {
+    if (!mapReady || smartphoneViewport) return undefined;
+    const followHash = () => {
+      const { hash } = window.location;
+      const open = isComparisonOpen(satelliteCompareStore.getState());
+      if (isComparisonHash(hash) && !open) {
+        openComparison(
+          mapDiagnostics.getSnapshot()?.camera,
+          mapViewport.getViewportSnapshot(),
+          maximumComparedScenes,
+        );
+      } else if (
+        !isComparisonHash(hash) &&
+        open &&
+        workspaceTabFromHash(hash) === 'satellite'
+      ) {
+        closeComparison();
+      }
+    };
+    followHash();
+    window.addEventListener('hashchange', followHash);
+    window.addEventListener('popstate', followHash);
+    return () => {
+      window.removeEventListener('hashchange', followHash);
+      window.removeEventListener('popstate', followHash);
+    };
+  }, [mapDiagnostics, mapReady, mapViewport, smartphoneViewport]);
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);

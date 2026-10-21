@@ -28,4 +28,8 @@ describe('workspace tab location', () => {
     expect(workspaceTabFromHash('#tracks/share/1.invalid')).toBe('tracks');
     expect(workspaceTabFromHash('#tracks/share/2.invalid')).toBe('tracks');
   });
+
+  it('selects Satellite for the comparison anchor', () => {
+    expect(workspaceTabFromHash('#satellite/compare')).toBe('satellite');
+  });
 });

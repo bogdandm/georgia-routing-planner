@@ -114,6 +114,13 @@ in link order and the shared camera when at least two resolve, dropping missing 
 failed keys; otherwise it shows a notice. Smartphones and track-share links ignore
 `compare`.
 
+`MapWorkspace` also keeps the grid and the `#satellite/compare` anchor in step. A change
+of `isComparisonOpen` pushes that anchor or `#satellite`, unless the URL already matches
+or the grid closed because another section's anchor was pushed. Once the main map is
+ready on desktop, the initial anchor, `hashchange`, and `popstate` open the grid with
+`openComparison`, as the Satellite header does, or close it when the anchor returns to
+`#satellite`.
+
 While the grid is open, `WorkspaceShell` hides the mounted main map and the rail, docks
 a narrow sidebar, and gives `SatelliteCompareMaps` the remaining area. MapLibre limits
 concurrent raster requests for the whole page (16) and TiTiler answers each tile in

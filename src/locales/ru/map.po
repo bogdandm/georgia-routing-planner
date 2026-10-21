@@ -110,6 +110,11 @@ msgstr "Закрыть сведения о точке"
 msgid "Clouds, precipitation, and wind"
 msgstr "Облака, осадки и ветер"
 
+#. js-lingui-id: lMoJUA
+#: src/presentation/map/MapViewControls.tsx
+msgid "Compare images from different dates side by side"
+msgstr "Сравнить снимки за разные даты рядом"
+
 #. js-lingui-id: EOv8gS
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Coordinates"
@@ -318,6 +323,11 @@ msgstr "На карте не показан спутниковый слой."
 #: src/presentation/map/MapShareDialog.tsx
 msgid "No Sentinel-2 image is shown on the map."
 msgstr "На карте не показан снимок Sentinel-2."
+
+#. js-lingui-id: YJQPdw
+#: src/presentation/map/MapViewControls.tsx
+msgid "Open image comparison"
+msgstr "Открыть сравнение снимков"
 
 #. js-lingui-id: 6plAyV
 #: src/presentation/map/MapPointInspectorContent.tsx

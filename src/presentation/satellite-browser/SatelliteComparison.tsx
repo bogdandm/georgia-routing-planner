@@ -22,7 +22,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 import {
   satelliteSceneBounds,
   satelliteSceneKey,
@@ -34,8 +33,6 @@ import {
   createComparisonShareUrl,
   satelliteBasemapLabels,
 } from '@/presentation/map/mapShareUrl';
-import type { SatelliteCompareCamera } from '@/presentation/map/SatelliteCompareMaps';
-import { defaultGeorgiaCamera, type MapCamera } from '@/presentation/map/mapTypes';
 import { appColors } from '@/presentation/theme/appColors';
 import { AcquisitionCalendar } from '@/presentation/satellite-browser/AcquisitionCalendar';
 import {
@@ -54,48 +51,13 @@ import {
   maximumComparedScenes,
   minimumComparedScenes,
   openComparison,
-  restorePreferredComparisonLayout,
   satelliteCompareStore,
   setComparisonCalendarMonth,
   setComparisonLayout,
   setComparisonSlot,
-  type ComparisonImage,
   type ComparisonLayout,
   type ComparisonTileProgress,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
-
-/** Zoom used when the main map has no camera yet, roughly one Sentinel tile. */
-const fallbackComparisonZoom = 10;
-
-/** The main map's camera, else the first tray scene, else the Georgia overview. */
-function startingComparisonCamera(
-  camera: MapCamera | undefined,
-  images: readonly ComparisonImage[],
-): SatelliteCompareCamera {
-  const firstScene = images.find(
-    (image): image is SatelliteScene => !isComparisonBasemap(image),
-  );
-  if (camera !== undefined) {
-    return {
-      center: { longitude: camera.longitude, latitude: camera.latitude },
-      zoom: camera.zoom,
-    };
-  }
-  if (firstScene !== undefined) {
-    const [west, south, east, north] = satelliteSceneBounds(firstScene);
-    return {
-      center: { longitude: (west + east) / 2, latitude: (south + north) / 2 },
-      zoom: fallbackComparisonZoom,
-    };
-  }
-  return {
-    center: {
-      longitude: defaultGeorgiaCamera.longitude,
-      latitude: defaultGeorgiaCamera.latitude,
-    },
-    zoom: defaultGeorgiaCamera.zoom,
-  };
-}
 
 interface ComparedSceneDatePickerProps {
   readonly slotIndex: number;
@@ -241,28 +203,13 @@ export function ComparedSceneDatePicker({
   );
 }
 
-/** Opens the grid over the main map's current view; see `openComparison` for layouts. */
-function openComparisonFromMap(
-  services: Pick<RuntimeServices, 'mapDiagnostics' | 'mapViewport'>,
-  defaultLayout: ComparisonLayout,
-): void {
-  openComparison(
-    startingComparisonCamera(
-      services.mapDiagnostics.getSnapshot()?.camera,
-      satelliteCompareStore.getState().images,
-    ),
-    services.mapViewport.getViewportSnapshot(),
-    defaultLayout,
-  );
-}
-
 /**
  * Pinned at the bottom of the results pane once a scene is added: the comparison count,
  * **Compare** (two or more images), and **Clear**.
  */
 export function SatelliteComparisonTray() {
   const { t } = useLingui();
-  const services = useRuntimeServices();
+  const { mapDiagnostics, mapViewport } = useRuntimeServices();
   const images = useStore(satelliteCompareStore, (state) => state.images);
   if (images.length === 0) return null;
 
@@ -299,7 +246,11 @@ export function SatelliteComparisonTray() {
             variant="contained"
             disabled={!canCompare}
             onClick={() => {
-              openComparisonFromMap(services, 2);
+              openComparison(
+                mapDiagnostics.getSnapshot()?.camera,
+                mapViewport.getViewportSnapshot(),
+                2,
+              );
             }}
           >
             <Trans>Compare</Trans>
@@ -316,18 +267,7 @@ export function SatelliteComparisonTray() {
  */
 export function SatelliteComparisonShortcut() {
   const { t } = useLingui();
-  const services = useRuntimeServices();
-  const { database } = services;
-  // Mounted with the Satellite header, so the layout stored in the browser is known
-  // before the tray's Compare or this shortcut opens the grid.
-  useEffect(() => {
-    void database.loadComparisonLayout().then(
-      (layout) => {
-        if (layout !== null) restorePreferredComparisonLayout(layout);
-      },
-      () => undefined,
-    );
-  }, [database]);
+  const { mapDiagnostics, mapViewport } = useRuntimeServices();
   return (
     <Tooltip title={t`Compare images from different dates side by side`}>
       <ToggleButton
@@ -337,7 +277,11 @@ export function SatelliteComparisonShortcut() {
         aria-label={t`Open image comparison`}
         sx={{ gap: 0.75 }}
         onClick={() => {
-          openComparisonFromMap(services, maximumComparedScenes);
+          openComparison(
+            mapDiagnostics.getSnapshot()?.camera,
+            mapViewport.getViewportSnapshot(),
+            maximumComparedScenes,
+          );
         }}
       >
         <CompareOutlinedIcon sx={{ fontSize: 20 }} />

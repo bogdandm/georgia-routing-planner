@@ -25,7 +25,8 @@ this document whenever it no longer describes the interface.
 
 Each workspace destination has a URL anchor: `#tracks`, `#markers`, `#layers`,
 `#satellite`, `#weather`, or `#user`. Loading an anchored URL restores that tab, and
-changing tabs updates the anchor.
+changing tabs updates the anchor. The Satellite image comparison has its own anchor,
+`#satellite/compare`, kept in step the same way (see [Comparison](#comparison)).
 
 ## Smartphone workspace
 
@@ -55,7 +56,7 @@ contextual sidebar while the rail stays interactive. At 1900 CSS pixels and abov
 rail, sidebar, and detail pane form one floating surface above the full-viewport map.
 Changing sections or opening a pane never changes the map viewport. One right-side
 control column holds zoom, compass, geolocation, the 2D/3D selector, the quick map-layer
-chooser, and the ruler.
+chooser, the image comparison shortcut (desktop), and the ruler.
 
 Navigation collapses to the clickable Trail Planner logo, which keeps the same size and
 position in both states. With an active track, the collapsed state also shows the
@@ -480,11 +481,13 @@ four images; **Compared** removes it, and compared cards show a compare icon. Th
 pinned to the bottom of the results pane shows the count with **Clear** and **Compare**,
 which needs at least two images and opens them with scenes in acquisition order and
 static basemaps after them: two side by side, three or four in a 2×2 grid. **Compare**
-in the Satellite header opens a 2×2 grid, with the tray's images first and plain maps in
-the other cells. Once a layout is picked in the sidebar, both open in that layout
-instead (2×1 still becomes 2×2 for three or four images). Either way, a tray scene whose
-footprint no longer overlaps the main map's view is left out, so after panning elsewhere
-its pane opens as a plain map; static basemaps cover all of Georgia and always stay.
+in the Satellite header, and the compare button below the map-layer chooser in the
+right-side controls from any section, open Satellite with a 2×2 grid, with the tray's
+images first and plain maps in the other cells. Once a layout is picked in the sidebar,
+all of them open in that layout instead (2×1 still becomes 2×2 for three or four
+images). Either way, a tray scene whose footprint no longer overlaps the main map's view
+is left out, so after panning elsewhere its pane opens as a plain map; static basemaps
+cover all of Georgia and always stay.
 
 Comparison replaces the map with the grid. The rail is hidden and a narrow sidebar sits
 beside the grid instead of floating over it, so every pane is fully visible; the results
@@ -532,11 +535,16 @@ parallel. The attribution sits flush with the grid's bottom-right corner, as on 
 map.
 
 Leaving Satellite, a smartphone-width window, or **Back to search** closes the grid,
-returns the shown images to the tray, and moves the main map to the compared area.
-**Share link** copies a 2D link with `compare=<key>,…` in pane order, where a key is a
-scene key or a static basemap ID; opening it on desktop shows the grid in that order
-once at least two images resolve, and otherwise shows a notice and the shared location.
-Comparison state is never persisted.
+returns the shown images to the tray, and moves the main map to the compared area. The
+URL anchor follows the grid: opening it adds a `#satellite/compare` history entry and
+closing it a `#satellite` one, so browser Back and Forward close and reopen it; a
+reopened grid keeps its positions and layout unless the tray changed meanwhile, and
+scenes that no longer reach the view still leave empty panes. On desktop, a URL with
+that anchor opens the grid, as **Compare** in the Satellite header does, once the main
+map is ready. **Share link** copies a 2D link with `compare=<key>,…` in pane order,
+where a key is a scene key or a static basemap ID; opening it on desktop shows the grid
+in that order once at least two images resolve, and otherwise shows a notice and the
+shared location. Comparison state is never persisted.
 
 ### Weather
 
@@ -603,17 +611,19 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   an anchored popup with coordinates, terrain elevation, and the nearest map feature
   with its distance; named features link to English Wikipedia and Google Search. While
   the popup is visible, the next map click only closes it.
-- **Ruler:** the ruler button below the map-layer chooser toggles a session-only
-  measurement; pressing it again ends and discards the measurement. While it is on,
-  primary map clicks add numbered blue points joined by straight lines; it takes clicks
-  from route planning and an enabled weather map, while marker placement and a one-shot
-  weather pick keep precedence. There is no separate panel: a dashed line follows the
-  cursor from the last point, and a large label below the cursor shows the total
-  distance through the cursor and the terrain elevation difference between the first
-  point and the cursor. On coarse-pointer devices, which have no cursor, the label sits
-  on the last tapped point once there are two points and shows the measured total and
-  the elevation difference from the first point. Route planning uses the same cursor
-  label with the distance of the pending segment only.
+- **Image comparison:** on desktop, the compare button below the map-layer chooser opens
+  the Satellite comparison grid from any section (see [Comparison](#comparison)).
+- **Ruler:** the last button of that group toggles a session-only measurement; pressing
+  it again ends and discards the measurement. While it is on, primary map clicks add
+  numbered blue points joined by straight lines; it takes clicks from route planning and
+  an enabled weather map, while marker placement and a one-shot weather pick keep
+  precedence. There is no separate panel: a dashed line follows the cursor from the last
+  point, and a large label below the cursor shows the total distance through the cursor
+  and the terrain elevation difference between the first point and the cursor. On
+  coarse-pointer devices, which have no cursor, the label sits on the last tapped point
+  once there are two points and shows the measured total and the elevation difference
+  from the first point. Route planning uses the same cursor label with the distance of
+  the pending segment only.
 - **Point actions:** right-click opens copy coordinates, **Copy link**, **Share…**,
   create a marker, search satellite scenes here, show the weather forecast, copy a
   weather-map link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap

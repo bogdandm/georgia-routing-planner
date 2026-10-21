@@ -96,10 +96,22 @@ import {
 } from '@/presentation/map/mapShareUrl';
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import {
+  closeComparison,
+  isComparisonOpen,
+  maximumComparedScenes,
   minimumComparedScenes,
+  openComparison,
   openSharedComparison,
+  reopenComparison,
+  restorePreferredComparisonLayout,
+  satelliteCompareStore,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
-import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
+import {
+  comparisonHash,
+  isComparisonHash,
+  workspaceHashForTab,
+  workspaceTabFromHash,
+} from '@/presentation/shell/workspaceTabLocation';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { ElevationGradeLegend } from '@/presentation/map/ElevationGradeLegend';
 import {
@@ -1563,6 +1575,89 @@ export function MapWorkspace({
   const handleOpenLayersTab = useCallback(() => {
     openWorkspaceTab('layers');
   }, [openWorkspaceTab]);
+  // The comparison layout stored in the browser is known before any Compare control is
+  // used: this map control, the Satellite header shortcut, the tray, or the URL hash.
+  const [comparisonLayoutLoaded, setComparisonLayoutLoaded] = useState(false);
+  useEffect(() => {
+    void database
+      .loadComparisonLayout()
+      .then(
+        (layout) => {
+          if (layout !== null) restorePreferredComparisonLayout(layout);
+        },
+        () => undefined,
+      )
+      .finally(() => {
+        setComparisonLayoutLoaded(true);
+      });
+  }, [database]);
+  // Opens like the Satellite header shortcut. The tab switch comes first in the same
+  // event, so the shell's leave-Satellite cleanup never sees the grid open elsewhere.
+  const handleOpenComparison = useCallback(() => {
+    openWorkspaceTab('satellite');
+    openComparison(
+      mapDiagnostics.getSnapshot()?.camera,
+      mapViewport.getViewportSnapshot(),
+      maximumComparedScenes,
+    );
+  }, [mapDiagnostics, mapViewport, openWorkspaceTab]);
+
+  // The comparison grid and the URL hash follow each other, as the workspace tabs do:
+  // opening the grid pushes `#satellite/compare` and closing it pushes `#satellite`.
+  // Only changes count, so a page that loads on the comparison hash keeps it until the
+  // grid opens below.
+  const comparisonOpen = useStore(satelliteCompareStore, isComparisonOpen);
+  const previousComparisonOpen = useRef(comparisonOpen);
+  useEffect(() => {
+    if (previousComparisonOpen.current === comparisonOpen) return;
+    previousComparisonOpen.current = comparisonOpen;
+    if (isComparisonHash(window.location.hash) === comparisonOpen) return;
+    // A grid closed by leaving Satellite already has that section's hash.
+    if (!comparisonOpen && workspaceTabFromHash(window.location.hash) !== 'satellite') {
+      return;
+    }
+    const nextUrl = new URL(window.location.href);
+    nextUrl.hash = comparisonOpen ? comparisonHash : workspaceHashForTab('satellite');
+    window.history.pushState(window.history.state, '', nextUrl);
+  }, [comparisonOpen]);
+
+  // Loading, Back, Forward, or a typed hash open or close the grid. It opens over the
+  // ready main map in the stored layout: as it was closed, else as from the Satellite
+  // header.
+  const mapReady = snapshot.lifecycle === 'ready';
+  useEffect(() => {
+    if (!mapReady || !comparisonLayoutLoaded || smartphoneViewport) return undefined;
+    const followHash = () => {
+      const { hash } = window.location;
+      const open = isComparisonOpen(satelliteCompareStore.getState());
+      if (isComparisonHash(hash) && !open) {
+        reopenComparison(
+          mapDiagnostics.getSnapshot()?.camera,
+          mapViewport.getViewportSnapshot(),
+          maximumComparedScenes,
+        );
+      } else if (
+        !isComparisonHash(hash) &&
+        open &&
+        workspaceTabFromHash(hash) === 'satellite'
+      ) {
+        closeComparison();
+      }
+    };
+    followHash();
+    window.addEventListener('hashchange', followHash);
+    window.addEventListener('popstate', followHash);
+    return () => {
+      window.removeEventListener('hashchange', followHash);
+      window.removeEventListener('popstate', followHash);
+    };
+  }, [
+    comparisonLayoutLoaded,
+    mapDiagnostics,
+    mapReady,
+    mapViewport,
+    smartphoneViewport,
+  ]);
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);
@@ -1648,6 +1743,7 @@ export function MapWorkspace({
               onLayerPresetChange={handleLayerPresetChange}
               onHybridOverlayChange={handleHybridOverlayChange}
               onOpenLayersTab={handleOpenLayersTab}
+              onOpenComparison={smartphoneViewport ? null : handleOpenComparison}
               onWeatherMapChange={handleWeatherMapChange}
               onTerrainModeChange={handleTerrainControlChange}
               terrainState={terrainState}
@@ -1761,6 +1857,7 @@ export function MapWorkspace({
           onLayerPresetChange={handleLayerPresetChange}
           onHybridOverlayChange={handleHybridOverlayChange}
           onOpenLayersTab={handleOpenLayersTab}
+          onOpenComparison={smartphoneViewport ? null : handleOpenComparison}
           onWeatherMapChange={handleWeatherMapChange}
           onTerrainModeChange={handleTerrainControlChange}
           terrainState={terrainState}

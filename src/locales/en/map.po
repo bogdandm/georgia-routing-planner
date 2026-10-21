@@ -110,6 +110,11 @@ msgstr "Close map point details"
 msgid "Clouds, precipitation, and wind"
 msgstr "Clouds, precipitation, and wind"
 
+#. js-lingui-id: lMoJUA
+#: src/presentation/map/MapViewControls.tsx
+msgid "Compare images from different dates side by side"
+msgstr "Compare images from different dates side by side"
+
 #. js-lingui-id: EOv8gS
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Coordinates"
@@ -318,6 +323,11 @@ msgstr "No satellite layer is shown on the map."
 #: src/presentation/map/MapShareDialog.tsx
 msgid "No Sentinel-2 image is shown on the map."
 msgstr "No Sentinel-2 image is shown on the map."
+
+#. js-lingui-id: YJQPdw
+#: src/presentation/map/MapViewControls.tsx
+msgid "Open image comparison"
+msgstr "Open image comparison"
 
 #. js-lingui-id: 6plAyV
 #: src/presentation/map/MapPointInspectorContent.tsx

@@ -33,6 +33,7 @@ import {
   useSatelliteMosaic,
 } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import {
+  closeComparison,
   resetSatelliteCompareStore,
   satelliteCompareStore,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
@@ -2484,6 +2485,77 @@ describe('MapWorkspace', () => {
       navigationCollapsed: false,
     });
     expect(window.location.hash).toBe('#layers');
+  });
+
+  it('opens the image comparison in Satellite, in the stored layout, from the map controls', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    await services.database.saveComparisonLayout(2);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({
+      activeTab: 'tracks',
+      mobileWorkspaceOpen: false,
+      navigationCollapsed: true,
+    });
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Tracks map</div>} />
+      </RuntimeServicesProvider>,
+    );
+
+    await screen.findByText('Tracks map');
+    await waitFor(() => {
+      expect(satelliteCompareStore.getState().preferredLayout).toBe(2);
+    });
+    await user.click(screen.getByRole('button', { name: 'Open image comparison' }));
+
+    expect(useUiStore.getState()).toMatchObject({
+      activeTab: 'satellite',
+      navigationCollapsed: false,
+    });
+    expect(window.location.hash).toBe('#satellite/compare');
+    expect(satelliteCompareStore.getState().slots).toEqual([null, null]);
+
+    // Back leaves the comparison for the Satellite search; Forward opens it again.
+    act(() => {
+      window.history.replaceState(null, '', '/#satellite');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(satelliteCompareStore.getState().slots).toEqual([]);
+    act(() => {
+      window.history.replaceState(null, '', '/#satellite/compare');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    expect(satelliteCompareStore.getState().slots).toEqual([null, null]);
+  });
+
+  it('opens the comparison from its URL hash once the map is ready and returns to Satellite when it closes', async () => {
+    window.history.replaceState(null, '', '/#satellite/compare');
+    const services = createTestServices();
+    await services.database.saveComparisonLayout(4);
+    const facade = new FakeMapFacade();
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Satellite map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Satellite map');
+    await waitFor(() => {
+      expect(satelliteCompareStore.getState().preferredLayout).toBe(4);
+    });
+    expect(satelliteCompareStore.getState().slots).toEqual([]);
+
+    act(() => {
+      facade.setSnapshot({ lifecycle: 'ready' });
+    });
+    expect(satelliteCompareStore.getState().slots).toHaveLength(4);
+    expect(window.location.hash).toBe('#satellite/compare');
+
+    act(() => {
+      closeComparison();
+    });
+    expect(window.location.hash).toBe('#satellite');
   });
 
   it('opens Satellite instead of applying the Sentinel preset without an applied scene', async () => {

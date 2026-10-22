@@ -147,6 +147,11 @@ interface ElevationProfileChartCallbacks {
   readonly onSegmentSelectionChange?: (index: number | null) => void;
   readonly onTrackGradeLegendDismissedChange?: (dismissed: boolean) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
+  readonly hoveredDistanceMeters?: number;
+  readonly onDistanceRangeSelect?: (range: {
+    readonly startMeters: number;
+    readonly endMeters: number;
+  }) => void;
 }
 
 function renderElevationProfileChart({
@@ -160,6 +165,8 @@ function renderElevationProfileChart({
   onSegmentSelectionChange,
   onTrackGradeLegendDismissedChange,
   onPointClick,
+  hoveredDistanceMeters,
+  onDistanceRangeSelect,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
     profile: ElevationProfile;
@@ -172,6 +179,11 @@ function renderElevationProfileChart({
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
     highlightedDistanceRange?: { startMeters: number; endMeters: number };
+    hoveredDistanceMeters?: number;
+    onDistanceRangeSelect?: (range: {
+      readonly startMeters: number;
+      readonly endMeters: number;
+    }) => void;
   } = {
     profile: chartProfile,
     activeSegmentIndex: activeSegmentIndex ?? null,
@@ -189,6 +201,12 @@ function renderElevationProfileChart({
   }
   if (highlightedDistanceRange !== undefined) {
     chartProps.highlightedDistanceRange = highlightedDistanceRange;
+  }
+  if (hoveredDistanceMeters !== undefined) {
+    chartProps.hoveredDistanceMeters = hoveredDistanceMeters;
+  }
+  if (onDistanceRangeSelect !== undefined) {
+    chartProps.onDistanceRangeSelect = onDistanceRangeSelect;
   }
   return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
@@ -695,6 +713,47 @@ describe('ElevationProfileChart', () => {
         '.elevation-profile-highlight .recharts-reference-line-line',
       ),
     ).not.toBeNull();
+  });
+
+  it('selects a dragged distance span instead of clicking, and marks an outside hover', async () => {
+    observedWidth = 420;
+    const onDistanceRangeSelect = vi.fn();
+    const onActivePointChange = vi.fn();
+    const onPointClick = vi.fn();
+    const { container } = renderElevationProfileChart({
+      hoveredDistanceMeters: 1_400,
+      onActivePointChange,
+      onDistanceRangeSelect,
+      onPointClick,
+    });
+    // Recharts mounts reference dots into their z-index layer after the first commit.
+    await waitFor(() => {
+      expect(
+        container.querySelector('.elevation-profile-hovered-point'),
+      ).not.toBeNull();
+    });
+    const chartSurface = screen
+      .getByRole('img', { name: 'Elevation profile from 1,000 to 1,120 metres' })
+      .querySelector('svg');
+    if (chartSurface === null) throw new Error('Expected the chart surface.');
+
+    // Recharts resolves the hovered sample asynchronously; press once it is known.
+    fireEvent.mouseEnter(chartSurface, { clientX: 80, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 80, clientY: 80 });
+    await waitFor(() => {
+      expect(onActivePointChange).toHaveBeenLastCalledWith(profile.points[0]);
+    });
+    fireEvent.mouseDown(chartSurface, { clientX: 80, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
+    await waitFor(() => {
+      expect(onDistanceRangeSelect).toHaveBeenLastCalledWith({
+        startMeters: profile.points[0]?.distanceMeters,
+        endMeters: profile.points[2]?.distanceMeters,
+      });
+    });
+    fireEvent.mouseUp(chartSurface, { clientX: 390, clientY: 80 });
+    fireEvent.click(chartSurface, { clientX: 390, clientY: 80 });
+    expect(onPointClick).not.toHaveBeenCalled();
   });
 
   describe('with recorded time', () => {

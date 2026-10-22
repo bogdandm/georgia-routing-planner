@@ -20,12 +20,20 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { useCallback, useId, useMemo, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import {
   Area,
   AreaChart,
   CartesianGrid,
   ReferenceArea,
+  ReferenceDot,
   ReferenceLine,
   Tooltip,
   XAxis,
@@ -181,11 +189,21 @@ interface ElevationProfileChartProps {
     readonly startMeters: number;
     readonly endMeters: number;
   } | null;
+  /** Track distance hovered elsewhere, such as a Points list row; drawn as a marker. */
+  readonly hoveredDistanceMeters?: number | null;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onSegmentHoverChange: (index: number | null) => void;
   readonly onSegmentSelectionChange: (index: number | null) => void;
   readonly onTrackGradeLegendDismissedChange: (dismissed: boolean) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
+  /**
+   * Dragging across the chart reports the spanned distance live; a drag never counts as
+   * a click. Without it the chart has no drag behavior.
+   */
+  readonly onDistanceRangeSelect?: (range: {
+    readonly startMeters: number;
+    readonly endMeters: number;
+  }) => void;
 }
 
 /** Index of the profile point nearest `distanceMeters`; points ascend by distance. */
@@ -614,12 +632,19 @@ export function ElevationProfileChart({
   selectedSegmentIndex,
   trackGradeLegendDismissed,
   highlightedDistanceRange = null,
+  hoveredDistanceMeters = null,
   onActivePointChange,
   onSegmentHoverChange,
   onSegmentSelectionChange,
   onTrackGradeLegendDismissedChange,
   onPointClick,
+  onDistanceRangeSelect,
 }: ElevationProfileChartProps): ReactElement {
+  /** Distance where a range drag started, and whether the pointer has moved since. */
+  const rangeDrag = useRef<{ readonly startMeters: number; moved: boolean } | null>(
+    null,
+  );
+  const suppressClick = useRef(false);
   const { i18n, t } = useLingui();
   const theme = useTheme();
   const sampledPoints = useMemo(() => sampleElevationProfilePoints(profile), [profile]);
@@ -720,8 +745,21 @@ export function ElevationProfileChart({
         ? null
         : elevationSegmentIndexForSample(profile, point.sampleIndex),
     );
+    const drag = rangeDrag.current;
+    if (drag !== null && point !== null && point.distanceMeters !== drag.startMeters) {
+      drag.moved = true;
+      onDistanceRangeSelect?.({
+        startMeters: Math.min(drag.startMeters, point.distanceMeters),
+        endMeters: Math.max(drag.startMeters, point.distanceMeters),
+      });
+    }
     return point;
   }
+
+  const hoveredSample =
+    hoveredDistanceMeters === null || metric !== 'elevation'
+      ? undefined
+      : profile.points[nearestPointIndex(profile.points, hoveredDistanceMeters)];
 
   return (
     <Stack spacing={1.5} useFlexGap data-tour="track-profile">
@@ -755,7 +793,11 @@ export function ElevationProfileChart({
           ) : null}
         </Box>
       ) : null}
-      <Box role="img" aria-label={profileLabel} sx={{ height: 264, mx: -1 }}>
+      <Box
+        role="img"
+        aria-label={profileLabel}
+        sx={{ height: 264, mx: -1, userSelect: 'none' }}
+      >
         <AreaChart<ProfileChartRow>
           aria-hidden
           accessibilityLayer={false}
@@ -764,7 +806,22 @@ export function ElevationProfileChart({
           margin={{ top: 12, right: 16, bottom: 6, left: 4 }}
           style={{ width: '100%', height: '100%' }}
           onMouseMove={publishActivePoint}
+          onMouseDown={(mouseHandlerData) => {
+            const point = activeProfilePoint(mouseHandlerData, rows);
+            rangeDrag.current =
+              onDistanceRangeSelect === undefined || point === null
+                ? null
+                : { startMeters: point.distanceMeters, moved: false };
+          }}
+          onMouseUp={() => {
+            suppressClick.current = rangeDrag.current?.moved ?? false;
+            rangeDrag.current = null;
+          }}
           onClick={(mouseHandlerData) => {
+            if (suppressClick.current) {
+              suppressClick.current = false;
+              return;
+            }
             const point = activeProfilePoint(mouseHandlerData, rows);
             if (point === null) return;
             const segmentIndex = elevationSegmentIndexForSample(
@@ -784,6 +841,7 @@ export function ElevationProfileChart({
             onPointClick?.(point);
           }}
           onMouseLeave={() => {
+            rangeDrag.current = null;
             onActivePointChange?.(null);
             onSegmentHoverChange(null);
           }}
@@ -857,6 +915,18 @@ export function ElevationProfileChart({
             metric={metric}
             xOfSample={xOfSample}
           />
+          {hoveredSample === undefined ? null : (
+            <ReferenceDot
+              className="elevation-profile-hovered-point"
+              x={xOfSample(hoveredSample.sampleIndex)}
+              y={hoveredSample.elevationMeters}
+              r={5}
+              fill={appColors.brand.amber}
+              stroke={theme.palette.common.white}
+              strokeWidth={2}
+              ifOverflow="hidden"
+            />
+          )}
         </AreaChart>
       </Box>
       {showHeading && timeline !== null ? (

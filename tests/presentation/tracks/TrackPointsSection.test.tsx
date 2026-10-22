@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +10,11 @@ import {
   type TrackPointsLegView,
   type TrackPointsSectionProps,
 } from '@/presentation/tracks/TrackPointsSection';
+import {
+  clearHoveredTrackPoint,
+  setHoveredTrackPoint,
+  trackPointHoverStore,
+} from '@/presentation/tracks/trackPointHoverStore';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
@@ -82,6 +87,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  clearHoveredTrackPoint();
 });
 
 describe('TrackPointsSection', () => {
@@ -371,5 +377,24 @@ describe('TrackPointsSection', () => {
       'true',
     );
     expect(pointButton('3')).toBeInTheDocument();
+  });
+
+  it('shares the hovered point between list rows and other views', () => {
+    renderSection();
+    const row = (number: string) => pointButton(number).closest('[role="listitem"]');
+
+    fireEvent.pointerEnter(row('2') ?? document.body);
+    expect(trackPointHoverStore.getState()).toEqual({ index: 1, source: 'list' });
+    expect(row('2')).toHaveAttribute('data-hovered', 'true');
+
+    // The map hovering another point moves the row highlight; leaving the list later
+    // must not clear the map's hover.
+    act(() => {
+      setHoveredTrackPoint(2, 'map');
+    });
+    expect(row('3')).toHaveAttribute('data-hovered', 'true');
+    expect(row('2')).toHaveAttribute('data-hovered', 'false');
+    fireEvent.pointerLeave(row('2') ?? document.body);
+    expect(trackPointHoverStore.getState()).toEqual({ index: 2, source: 'map' });
   });
 });

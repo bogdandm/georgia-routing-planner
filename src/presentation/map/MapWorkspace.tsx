@@ -469,6 +469,7 @@ export function MapWorkspace({
     weatherPointSelectionActive || (weatherMap.enabled && !measurementActive);
   const placePathPoint = tracksWorkspace?.placePathPoint;
   const selectPathPointNear = tracksWorkspace?.selectPathPointNear;
+  const hoverPathPointNear = tracksWorkspace?.hoverPathPointNear;
   const insertionAnchorId = editablePath?.insertion?.afterAnchorId ?? null;
   const routePlanPreviewAnchor =
     editablePath === null ||
@@ -907,6 +908,15 @@ export function MapWorkspace({
     if (!trackEditingActive || selectPathPointNear === undefined) return undefined;
     return facade.subscribeTrackPointClicks(selectPathPointNear);
   }, [facade, selectPathPointNear, trackEditingActive]);
+
+  useEffect(() => {
+    if (!trackEditingActive || hoverPathPointNear === undefined) return undefined;
+    const unsubscribe = facade.subscribeTrackPointHover(hoverPathPointNear);
+    return () => {
+      unsubscribe();
+      hoverPathPointNear(null);
+    };
+  }, [facade, hoverPathPointNear, trackEditingActive]);
 
   useEffect(() => {
     if (!measurementActive) return undefined;

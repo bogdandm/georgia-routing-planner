@@ -4330,8 +4330,9 @@ export class MapLibreLayerController {
             ? 'visible'
             : 'none',
         },
+        // The hovered point is orange with a white ring; selected points ring in blue.
         paint: {
-          'circle-color': mapVisualPalette.userGeometry.gpxTrack,
+          'circle-color': mapVisualPalette.userGeometry.gpxTrackHighlight,
           'circle-radius': 6,
           'circle-stroke-color': '#FFFFFF',
           'circle-stroke-width': 2,

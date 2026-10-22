@@ -19,7 +19,8 @@ import type {
 
 /**
  * `track-editing` keeps the normal cursor, never opens point inspection, and publishes
- * primary clicks through `subscribeTrackPointClicks` instead of planning clicks.
+ * primary clicks and pointer hover through `subscribeTrackPointClicks` and
+ * `subscribeTrackPointHover` instead of planning clicks.
  */
 export type MapInteractionMode =
   | 'default'
@@ -29,11 +30,15 @@ export type MapInteractionMode =
   | 'track-editing'
   | 'weather-point-selection';
 
-/** Primary map click while editing track points. */
-export interface TrackPointClick {
+/** Pointer position over the map while editing track points. */
+export interface TrackPointPointer {
   readonly coordinate: MapCoordinate;
-  /** Ground distance of 12 CSS px at the click, for nearest-point hit tolerance. */
+  /** Ground distance of 12 CSS px at the pointer, for nearest-point hit tolerance. */
   readonly toleranceMeters: number;
+}
+
+/** Primary map click while editing track points. */
+export interface TrackPointClick extends TrackPointPointer {
   readonly shiftKey: boolean;
 }
 
@@ -63,6 +68,10 @@ export interface MapFacade {
   subscribePlanningClicks(listener: (coordinate: MapCoordinate) => void): () => void;
   /** Primary clicks while editing track points; other modes never publish them. */
   subscribeTrackPointClicks(listener: (click: TrackPointClick) => void): () => void;
+  /** Pointer moves while editing track points; null once the pointer leaves the map. */
+  subscribeTrackPointHover(
+    listener: (pointer: TrackPointPointer | null) => void,
+  ): () => void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;

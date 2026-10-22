@@ -104,7 +104,12 @@ import type {
   TrailRouteResult,
   TrailRouteSearchTrace,
 } from '@/application/ports/TrailRouter';
-import type { TrackPointClick } from '@/presentation/map/MapFacade';
+import type { TrackPointClick, TrackPointPointer } from '@/presentation/map/MapFacade';
+import {
+  clearHoveredTrackPoint,
+  setHoveredTrackPoint,
+  trackPointHoverStore,
+} from '@/presentation/tracks/trackPointHoverStore';
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
@@ -427,6 +432,11 @@ interface TracksWorkspaceValue {
   /** Changes identity when a map click selects a point the list must scroll to. */
   readonly pointRevealRequest: { readonly index: number } | null;
   readonly selectPathPointNear: (click: TrackPointClick) => void;
+  readonly hoverPathPointNear: (pointer: TrackPointPointer | null) => void;
+  readonly selectPathPointsInDistanceRange: (range: {
+    readonly startMeters: number;
+    readonly endMeters: number;
+  }) => void;
   readonly placePathPoint: (coordinate: TrackCoordinate) => void;
   /** Applies a `trackPathEditor` edit to `activePath`; ignored while saving. */
   readonly editActivePath: (update: PathDraftUpdate) => void;
@@ -3271,6 +3281,63 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     },
     [listedPath, pointSelection, setPointSelection],
   );
+  /** Map pointer moves while editing: hover the nearest listed point, as list rows do. */
+  const hoverPathPointNear = useCallback(
+    (pointer: TrackPointPointer | null) => {
+      setHoveredTrackPoint(
+        pointer === null || listedPath === null
+          ? null
+          : nearestTrackPathAnchor(
+              listedPath,
+              [pointer.coordinate.longitude, pointer.coordinate.latitude],
+              pointer.toleranceMeters,
+            ),
+        'map',
+      );
+    },
+    [listedPath],
+  );
+  // A point hovered in the list or on the map shares the profile's orange trace marker;
+  // the profile draws that marker at its own exact sample. A new listed path renumbers
+  // its points, so the hover starts over.
+  useEffect(() => {
+    clearHoveredTrackPoint();
+    if (listedPath === null) return undefined;
+    let drawn = false;
+    const unsubscribe = trackPointHoverStore.subscribe(({ index, source }) => {
+      if (source === 'profile') {
+        drawn = false;
+        return;
+      }
+      const coordinate =
+        index === null ? null : (listedPath.anchors[index]?.point.coordinate ?? null);
+      if (coordinate === null && !drawn) return;
+      drawn = coordinate !== null;
+      mapLayers?.setImportedTrackTracePoint(coordinate);
+    });
+    return () => {
+      unsubscribe();
+      if (drawn) mapLayers?.setImportedTrackTracePoint(null);
+    };
+  }, [listedPath, mapLayers]);
+  /** Profile drag: selects the points whose distance lies inside the dragged span. */
+  const selectPathPointsInDistanceRange = useCallback(
+    (range: { readonly startMeters: number; readonly endMeters: number }) => {
+      const anchors = pointsList?.anchors ?? [];
+      let first = -1;
+      let last = -1;
+      for (const [index, anchor] of anchors.entries()) {
+        if (anchor.distanceMeters > range.endMeters) break;
+        if (anchor.distanceMeters < range.startMeters) continue;
+        if (first < 0) first = index;
+        last = index;
+      }
+      if (first < 0) return;
+      setPointSelection({ first, last, anchor: first });
+      setPointRevealRequest({ index: first });
+    },
+    [pointsList, setPointSelection],
+  );
   /** Deleting points selects the two points that now meet, so the joined leg is found. */
   const deletePathSelection = useCallback(
     (selection: TrackPointsSelection) => {
@@ -3372,6 +3439,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setPointSelection,
       pointRevealRequest,
       selectPathPointNear,
+      hoverPathPointNear,
+      selectPathPointsInDistanceRange,
       placePathPoint,
       editActivePath,
       deletePathSelection,
@@ -3437,6 +3506,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setPointSelection,
       pointRevealRequest,
       selectPathPointNear,
+      hoverPathPointNear,
+      selectPathPointsInDistanceRange,
       placePathPoint,
       editActivePath,
       deletePathSelection,
@@ -4986,6 +5057,28 @@ function mapFitBoundsForTrack(bounds: TrackBounds): MapViewportBounds {
   };
 }
 
+/** Listed point nearest a profile distance; anchors ascend by distance. */
+function nearestAnchorAtDistance(
+  anchors: readonly TrackPointsAnchorView[],
+  distanceMeters: number,
+): number | null {
+  if (anchors.length === 0) return null;
+  let low = 0;
+  let high = anchors.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((anchors[middle]?.distanceMeters ?? 0) < distanceMeters) low = middle + 1;
+    else high = middle;
+  }
+  const before = anchors[low - 1];
+  const after = anchors[low];
+  return before !== undefined &&
+    after !== undefined &&
+    distanceMeters - before.distanceMeters < after.distanceMeters - distanceMeters
+    ? low - 1
+    : low;
+}
+
 interface InteractiveElevationProfileProps {
   readonly profile: ElevationProfile;
   readonly showHeading?: boolean;
@@ -5003,6 +5096,7 @@ function InteractiveElevationProfile({
     pointsList,
     recalculateElevation,
     recalculationState,
+    selectPathPointsInDistanceRange,
   } = useTracksWorkspace();
   const selectionStart =
     pointSelection === null ? undefined : pointsList?.anchors[pointSelection.first];
@@ -5015,6 +5109,14 @@ function InteractiveElevationProfile({
           startMeters: selectionStart.distanceMeters,
           endMeters: selectionEnd.distanceMeters,
         };
+  // A point hovered in the list or on the map is marked on the profile too.
+  const hoveredAnchorIndex = useStore(trackPointHoverStore, (state) =>
+    state.source === 'profile' ? null : state.index,
+  );
+  const hoveredDistanceMeters =
+    hoveredAnchorIndex === null
+      ? null
+      : (pointsList?.anchors[hoveredAnchorIndex]?.distanceMeters ?? null);
   const { database, logger, mapLayers } = useRuntimeServices();
   const trackGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
@@ -5125,11 +5227,21 @@ function InteractiveElevationProfile({
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
           highlightedDistanceRange={highlightedDistanceRange}
+          hoveredDistanceMeters={hoveredDistanceMeters}
           onActivePointChange={(point) => {
             if (point === tracedPoint.current) return;
             tracedPoint.current = point;
             mapLayers?.setImportedTrackTracePoint(point?.coordinate ?? null);
+            setHoveredTrackPoint(
+              point === null || pointsList === null
+                ? null
+                : nearestAnchorAtDistance(pointsList.anchors, point.distanceMeters),
+              'profile',
+            );
           }}
+          {...(pointsList === null
+            ? {}
+            : { onDistanceRangeSelect: selectPathPointsInDistanceRange })}
           onSegmentHoverChange={onSegmentHoverChange}
           onSegmentSelectionChange={onSegmentSelectionChange}
           onPointClick={(point) => {
@@ -5969,7 +6081,7 @@ export function TrackDetailsPane({
         ) : null}
       </Stack>
       <Box sx={{ minHeight: 0, flex: 1, overflowY: 'auto', p: 2 }}>
-        <Stack spacing={2}>
+        <Stack spacing={2} sx={{ minHeight: '100%' }}>
           {active.kind === 'route-plan' ? (
             <RoutePlanControls
               draft={active}
@@ -6139,7 +6251,9 @@ export function TrackDetailsPane({
               onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
             />
           )}
-          {pointsList === null ? null : (
+          {/* Editing a saved track's points is desktop-only; phones list plan points. */}
+          {pointsList === null ||
+          (mode === 'mobile' && active.kind !== 'route-plan') ? null : (
             <TrackPointsSection
               key={`points:${active.kind === 'saved' ? active.summary.id : active.id}`}
               variant={active.kind === 'route-plan' ? 'plan' : 'track'}

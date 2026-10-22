@@ -20,6 +20,7 @@ import type {
   MapViewportMovement,
   PlanningPreview,
   TrackPointClick,
+  TrackPointPointer,
 } from '@/presentation/map/MapFacade';
 import {
   mapLayerIds,
@@ -256,6 +257,9 @@ export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
   readonly #trackPointClickListeners = new Set<(click: TrackPointClick) => void>();
+  readonly #trackPointHoverListeners = new Set<
+    (pointer: TrackPointPointer | null) => void
+  >();
   readonly #viewportMovementListeners = new Set<(event: MapViewportMovement) => void>();
   #map: MapLibreMap | null = null;
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
@@ -405,6 +409,15 @@ export class MapLibreFacade implements MapFacade {
     this.#trackPointClickListeners.add(listener);
     return () => {
       this.#trackPointClickListeners.delete(listener);
+    };
+  }
+
+  public subscribeTrackPointHover(
+    listener: (pointer: TrackPointPointer | null) => void,
+  ): () => void {
+    this.#trackPointHoverListeners.add(listener);
+    return () => {
+      this.#trackPointHoverListeners.delete(listener);
     };
   }
 
@@ -821,6 +834,9 @@ export class MapLibreFacade implements MapFacade {
 
   public setInteractionMode(mode: MapInteractionMode): void {
     if (this.#interactionMode === mode) return;
+    if (this.#interactionMode === 'track-editing') {
+      for (const listener of this.#trackPointHoverListeners) listener(null);
+    }
     this.#interactionMode = mode;
     if (mode === 'track-editing') this.closePointInspection();
     this.clearPlanningPreview();
@@ -861,6 +877,7 @@ export class MapLibreFacade implements MapFacade {
     this.#viewportMovementListeners.clear();
     this.#planningClickListeners.clear();
     this.#trackPointClickListeners.clear();
+    this.#trackPointHoverListeners.clear();
     this.#cursorElevationAbort?.abort();
   }
 
@@ -994,12 +1011,23 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
-    if (!this.#cursorPreviewEnabled || this.#map === null) return;
-    const cursor = this.#map.unproject(event.point);
+    const map = this.#map;
+    if (map === null) return;
+    if (this.#interactionMode === 'track-editing') {
+      const pointer = this.trackPointPointer(map, event.point, {
+        longitude: event.lngLat.lng,
+        latitude: event.lngLat.lat,
+      });
+      for (const listener of this.#trackPointHoverListeners) listener(pointer);
+      return;
+    }
+    if (!this.#cursorPreviewEnabled) return;
+    const cursor = map.unproject(event.point);
     this.showPlanningPreviewAt({ longitude: cursor.lng, latitude: cursor.lat });
   };
 
   private readonly handleCanvasMouseLeave = (): void => {
+    for (const listener of this.#trackPointHoverListeners) listener(null);
     if (this.#cursorPreviewEnabled) this.clearPlanningPreview();
   };
 
@@ -1108,16 +1136,26 @@ export class MapLibreFacade implements MapFacade {
     coordinate: MapCoordinate,
     shiftKey: boolean,
   ): void {
-    const offset = map.unproject([point.x + trackPointHitPixels, point.y]);
     const click: TrackPointClick = {
+      ...this.trackPointPointer(map, point, coordinate),
+      shiftKey,
+    };
+    for (const listener of this.#trackPointClickListeners) listener(click);
+  }
+
+  private trackPointPointer(
+    map: MapLibreMap,
+    point: { readonly x: number; readonly y: number },
+    coordinate: MapCoordinate,
+  ): TrackPointPointer {
+    const offset = map.unproject([point.x + trackPointHitPixels, point.y]);
+    return {
       coordinate,
       toleranceMeters: geodesicDistanceMeters(coordinate, {
         longitude: offset.lng,
         latitude: offset.lat,
       }),
-      shiftKey,
     };
-    for (const listener of this.#trackPointClickListeners) listener(click);
   }
 
   private queryNearestPoi(

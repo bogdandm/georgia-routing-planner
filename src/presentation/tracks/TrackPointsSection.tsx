@@ -31,7 +31,13 @@ import {
   type ReactElement,
 } from 'react';
 
+import { useStore } from 'zustand';
+
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
+import {
+  setHoveredTrackPoint,
+  trackPointHoverStore,
+} from '@/presentation/tracks/trackPointHoverStore';
 import {
   formatTrackDistance,
   formatTrackElevation,
@@ -122,10 +128,13 @@ const classes = {
   elevation: 'TrackPoints-elevation',
   connector: 'TrackPoints-connector',
   pending: 'TrackPoints-pending',
+  routed: 'TrackPoints-routed',
 } as const;
 /* eslint-enable lingui/no-unlocalized-strings */
 
 const pathColor = mapVisualPalette.userGeometry.gpxTrack;
+/** Legs that follow trails, so routed stretches stand out from straight lines. */
+const routedPathColor = mapVisualPalette.userGeometry.gpxTrackHighlight;
 const pendingPulse = keyframes`
   from { opacity: 0.25; }
   to { opacity: 0.7; }
@@ -231,23 +240,26 @@ interface RowActions {
   readonly legModeChange: (legIndex: number, mode: TrackPointsLegMode) => void;
 }
 
-/** A track-styled line half or whole across a leg row. */
+/** A track-styled line half or whole across a leg row; orange where it follows trails. */
 function LegConnector({
+  routed,
   pending,
   toPrevious,
   toNext,
 }: {
+  readonly routed: boolean;
   readonly pending: boolean;
   /** Add stubs draw only the half that touches their neighbouring point. */
   readonly toPrevious: boolean;
   readonly toNext: boolean;
 }): ReactElement {
+  let className: string = classes.connector;
+  if (routed) className += ` ${classes.routed}`;
+  if (pending) className += ` ${classes.pending}`;
   return (
     <span
       aria-hidden
-      className={
-        pending ? `${classes.connector} ${classes.pending}` : classes.connector
-      }
+      className={className}
       style={{ top: toPrevious ? 0 : '50%', bottom: toNext ? 0 : '50%' }}
     />
   );
@@ -340,6 +352,8 @@ const PointRow = memo(function PointRow({
   readonly actions: RowActions;
 }): ReactElement {
   const { t } = useLingui();
+  // Only the rows entering and leaving the hover re-render on a pointer move.
+  const hovered = useStore(trackPointHoverStore, (state) => state.index === index);
   const moveLabel = t`Move point ${number}`;
   const deleteLabel = t`Delete point ${number}`;
   return (
@@ -348,7 +362,14 @@ const PointRow = memo(function PointRow({
       className={`${classes.row} ${classes.point}`}
       data-point-index={index}
       data-selected={selected}
+      data-hovered={hovered}
       style={{ top, height: POINT_ROW_HEIGHT }}
+      onPointerEnter={() => {
+        setHoveredTrackPoint(index, 'list');
+      }}
+      onPointerLeave={() => {
+        setHoveredTrackPoint(null, 'list');
+      }}
     >
       <div
         role="button"
@@ -465,7 +486,12 @@ const LegRow = memo(function LegRow({
         </Typography>
       ) : (
         <>
-          <LegConnector pending={leg.pending} toPrevious toNext />
+          <LegConnector
+            routed={leg.mode === 'routes'}
+            pending={leg.pending}
+            toPrevious
+            toNext
+          />
           <LegModeToggle
             label={t`Segment between points ${fromNumber} and ${toNumber}`}
             mode={leg.mode}
@@ -511,6 +537,8 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
   const [observedEditing, setObservedEditing] = useState(editing);
   const [observedReveal, setObservedReveal] = useState(revealRequest);
   const [scrollTop, setScrollTop] = useState(0);
+  /** Height the list grows to below the pane's other sections; 0 until measured. */
+  const [measuredHeight, setMeasuredHeight] = useState(0);
   /** Scroll position the viewport must adopt after the next commit. */
   const [scrollCommand, setScrollCommand] = useState<{ readonly top: number } | null>(
     null,
@@ -558,7 +586,11 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
   const anchorCount = anchors.length;
   const layout = createRowLayout(editing, anchorCount, insertion);
   const totalHeight = rowOffset(layout, layout.rowCount);
-  const viewportHeight = Math.min(totalHeight, MAX_LIST_HEIGHT);
+  const minimumViewportHeight = Math.min(totalHeight, MAX_LIST_HEIGHT);
+  const viewportHeight = Math.min(
+    totalHeight,
+    Math.max(minimumViewportHeight, measuredHeight),
+  );
 
   if (editing !== observedEditing) {
     setObservedEditing(editing);
@@ -597,6 +629,20 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
   }, []);
 
   const open = variant === 'plan' || expanded;
+  const hasRows = layout.rowCount > 0;
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!open || !hasRows || viewport === null || !('ResizeObserver' in globalThis)) {
+      return undefined;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry !== undefined) setMeasuredHeight(entry.contentRect.height);
+    });
+    observer.observe(viewport);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasRows, open]);
   const numberFormat = new Intl.NumberFormat(i18n.locale);
   const pointNumber = (index: number): string => numberFormat.format(index + 1);
 
@@ -763,6 +809,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
       >
         {anchorCount === 0 ? null : (
           <LegConnector
+            routed={activeInsertion.mode === 'routes'}
             pending={false}
             toPrevious={afterIndex >= 0}
             toNext={afterIndex < anchorCount - 1}
@@ -801,6 +848,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
     >
       {anchorCount === 0 ? null : (
         <LegConnector
+          routed={false}
           pending={false}
           toPrevious={afterIndex >= 0}
           toNext={afterIndex < anchorCount - 1}
@@ -878,7 +926,11 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
   );
 
   return (
-    <Box component="section">
+    // Grows into the free pane height so a long list does not end above empty space.
+    <Box
+      component="section"
+      sx={{ flex: '1 0 auto', display: 'flex', flexDirection: 'column' }}
+    >
       <Box
         sx={{
           minHeight: 44,
@@ -937,7 +989,11 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
         ) : null}
       </Box>
       {open ? (
-        <Box id={detailsId} sx={{ px: 1 }} onKeyDown={handleListKeyDown}>
+        <Box
+          id={detailsId}
+          sx={{ px: 1, flex: '1 0 auto', display: 'flex', flexDirection: 'column' }}
+          onKeyDown={handleListKeyDown}
+        >
           {selection === null ? null : (
             <Stack
               direction="row"
@@ -1000,7 +1056,11 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
               onClick={() => {
                 pointerSelectedRef.current = false;
               }}
-              style={{ height: viewportHeight }}
+              style={{
+                flex: '1 1 0',
+                minHeight: minimumViewportHeight,
+                maxHeight: totalHeight,
+              }}
               sx={(theme) => ({
                 position: 'relative',
                 overflowY: 'auto',
@@ -1074,6 +1134,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
                   bgcolor: pathColor,
                   boxShadow: `0 0 0 1.5px ${theme.palette.common.white}, 0 1px 3px 1.5px rgba(0, 0, 0, 0.25)`,
                 },
+                [`& .${classes.routed}`]: { bgcolor: routedPathColor },
                 [`& .${classes.pending}`]: {
                   animation: `${pendingPulse} 900ms ease-in-out infinite alternate`,
                   '@media (prefers-reduced-motion: reduce)': {
@@ -1090,8 +1151,9 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
                   [`& .${REVEAL_CLASS}`]: { opacity: 0, pointerEvents: 'none' },
                   [`& [role="listitem"]:hover .${REVEAL_CLASS}, & [role="listitem"]:focus-within .${REVEAL_CLASS}`]:
                     { opacity: 1, pointerEvents: 'auto' },
-                  '& [data-point-index]:hover': { bgcolor: 'action.hover' },
                 },
+                // List, map, and profile share one hovered point.
+                '& [data-hovered="true"]': { bgcolor: 'action.hover' },
                 '& [data-selected="true"], & [data-selected="true"]:hover': {
                   bgcolor: 'action.selected',
                 },

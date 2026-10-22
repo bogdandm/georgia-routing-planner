@@ -234,7 +234,7 @@ describe('MapPointerGestureControl', () => {
     });
     control.attach(container, map);
     control.setTerrainOrbitEnabled(true);
-    const press = (releaseX: number) => {
+    const press = (releaseX: number, travelX?: number) => {
       container.dispatchEvent(
         new MouseEvent('mousedown', {
           bubbles: true,
@@ -246,6 +246,17 @@ describe('MapPointerGestureControl', () => {
           clientY: 40,
         }),
       );
+      if (travelX !== undefined) {
+        window.dispatchEvent(
+          new MouseEvent('mousemove', {
+            bubbles: true,
+            cancelable: true,
+            buttons: 1,
+            clientX: travelX,
+            clientY: 40,
+          }),
+        );
+      }
       window.dispatchEvent(
         new MouseEvent('mouseup', {
           bubbles: true,
@@ -263,6 +274,8 @@ describe('MapPointerGestureControl', () => {
     expect(easeTo).not.toHaveBeenCalled();
 
     press(60);
+    // An orbit that returns to where it started is still a drag.
+    press(41, 90);
     expect(onShiftClick).toHaveBeenCalledOnce();
     control.detach();
     container.remove();

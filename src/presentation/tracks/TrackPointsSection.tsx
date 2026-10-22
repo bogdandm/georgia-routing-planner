@@ -33,6 +33,7 @@ import {
 
 import { useStore } from 'zustand';
 
+import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 import {
   setHoveredTrackPoint,
@@ -48,8 +49,13 @@ export type TrackPointsLegMode = 'routes' | 'line';
 export interface TrackPointsAnchorView {
   /** Stable anchor id used as the React key. */
   readonly key: number;
-  /** Cumulative distance along the path. */
+  /**
+   * Cumulative distance along the path. Independent segments add no distance, so a
+   * segment's last point and the next segment's first point share it; the coordinate
+   * tells them apart.
+   */
   readonly distanceMeters: number;
+  readonly coordinate: TrackCoordinate;
   readonly elevationMeters: number | null;
 }
 

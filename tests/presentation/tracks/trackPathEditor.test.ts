@@ -315,4 +315,37 @@ describe('track path editor', () => {
     expect(elevation?.profile.points).toHaveLength(5);
     expect(elevation?.calculated?.trackPoints).toEqual([dem]);
   });
+
+  it('fills DEM elevation in covered segments when another segment has none', () => {
+    const uncovered: TrackPoint[] = [{ coordinate: E }, { coordinate: A }];
+    const covered: TrackPoint[] = [
+      { coordinate: B, elevationMeters: 1_050 },
+      { coordinate: P },
+      { coordinate: C, elevationMeters: 1_200 },
+    ];
+    const dem: TrackPoint[] = covered.map((point, index) => ({
+      coordinate: point.coordinate,
+      elevationMeters: 1_040 + index * 80,
+    }));
+    const demProfile = storedTrackElevationProfile([dem], undefined);
+    if (demProfile === null) throw new Error('Expected a DEM profile.');
+
+    // The DEM projection omits the uncovered first segment.
+    const elevation = trackPathElevationFromPrepared('track', {
+      sourceSegments: [{ points: uncovered }, { points: covered }],
+      sourceProfile: storedTrackElevationProfile([uncovered, covered], undefined),
+      sourceMetrics: calculateTrackMetrics([
+        { points: uncovered },
+        { points: covered },
+      ]),
+      calculatedSegments: [{ points: dem }],
+      calculatedProfile: demProfile,
+      calculatedMetrics: calculateTrackMetrics([{ points: dem }], 'dem-assisted'),
+    });
+
+    expect(elevation?.trackPoints[0]).toEqual(uncovered);
+    expect(elevation?.trackPoints[1]?.map((point) => point.elevationMeters)).toEqual([
+      1_050, 1_120, 1_200,
+    ]);
+  });
 });

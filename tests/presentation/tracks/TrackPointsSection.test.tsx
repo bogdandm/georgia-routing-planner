@@ -24,6 +24,7 @@ function anchorsOf(count: number): TrackPointsAnchorView[] {
   return Array.from({ length: count }, (_, index) => ({
     key: index + 100,
     distanceMeters: index * 250,
+    coordinate: [44.6 + index / 1_000, 42.6] as const,
     elevationMeters: index === 1 ? null : 500 + index,
   }));
 }

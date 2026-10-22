@@ -160,14 +160,18 @@ set state = 'ready', revision = 3, reservation_expires_at = null
 where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   and content_hash = repeat('f', 64);
 select is(
-  public.resolve_track_share(repeat('9', 64)) ->> 'content_hash', repeat('f', 64),
-  'the share moves to the ready replacement and keeps its token'
+  public.resolve_track_share(repeat('9', 64)) ->> 'content_hash', repeat('e', 64),
+  'the share stays on the predecessor until it is deleted'
 );
 delete from public.track_records where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and content_hash = repeat('e', 64);
 select is(
+  public.resolve_track_share(repeat('9', 64)) ->> 'content_hash', repeat('f', 64),
+  'deleting the replaced record moves its share to the ready replacement'
+);
+select is(
   public.read_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('f', 64)) ->> 'token_nonce',
   'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE',
-  'deleting the replaced record keeps the moved share'
+  'the moved share keeps its token'
 );
 
 select * from finish();

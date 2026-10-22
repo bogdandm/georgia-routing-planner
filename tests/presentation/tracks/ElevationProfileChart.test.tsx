@@ -147,7 +147,7 @@ interface ElevationProfileChartCallbacks {
   readonly onSegmentSelectionChange?: (index: number | null) => void;
   readonly onTrackGradeLegendDismissedChange?: (dismissed: boolean) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
-  readonly hoveredDistanceMeters?: number;
+  readonly hoveredPoint?: ElevationProfilePoint;
   readonly onDistanceRangeSelect?: (range: {
     readonly startMeters: number;
     readonly endMeters: number;
@@ -165,7 +165,7 @@ function renderElevationProfileChart({
   onSegmentSelectionChange,
   onTrackGradeLegendDismissedChange,
   onPointClick,
-  hoveredDistanceMeters,
+  hoveredPoint,
   onDistanceRangeSelect,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
@@ -179,7 +179,7 @@ function renderElevationProfileChart({
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
     highlightedDistanceRange?: { startMeters: number; endMeters: number };
-    hoveredDistanceMeters?: number;
+    hoveredPoint?: ElevationProfilePoint;
     onDistanceRangeSelect?: (range: {
       readonly startMeters: number;
       readonly endMeters: number;
@@ -202,8 +202,8 @@ function renderElevationProfileChart({
   if (highlightedDistanceRange !== undefined) {
     chartProps.highlightedDistanceRange = highlightedDistanceRange;
   }
-  if (hoveredDistanceMeters !== undefined) {
-    chartProps.hoveredDistanceMeters = hoveredDistanceMeters;
+  if (hoveredPoint !== undefined) {
+    chartProps.hoveredPoint = hoveredPoint;
   }
   if (onDistanceRangeSelect !== undefined) {
     chartProps.onDistanceRangeSelect = onDistanceRangeSelect;
@@ -720,8 +720,10 @@ describe('ElevationProfileChart', () => {
     const onDistanceRangeSelect = vi.fn();
     const onActivePointChange = vi.fn();
     const onPointClick = vi.fn();
+    const hoveredPoint = profile.points[1];
+    if (hoveredPoint === undefined) throw new Error('Expected a middle profile point.');
     const { container } = renderElevationProfileChart({
-      hoveredDistanceMeters: 1_400,
+      hoveredPoint,
       onActivePointChange,
       onDistanceRangeSelect,
       onPointClick,

@@ -868,6 +868,8 @@ export class MapLibreFacade implements MapFacade {
   public detachMap(): void {
     this.#cancelTerrainWait?.();
     this.detach();
+    // The detached map sends no more pointer events, so its hover ends here.
+    for (const listener of this.#trackPointHoverListeners) listener(null);
   }
 
   public destroy(): void {

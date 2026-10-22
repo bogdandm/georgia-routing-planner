@@ -256,10 +256,12 @@ A share can be enabled, read, or resolved only while its ready record has string
 and `updatedAt`, a `gpx | fit | kml` source format, and a `track | route` geometry kind.
 Resolution returns only the content hash, byte count, object path, and that public
 name/format/kind/updated-at projection; it never changes usage or private access. A
-share names one content hash. When a record becomes ready (or its metadata changes) and
-its `replacesContentHashes` names a shared predecessor, a trigger moves the newest such
-share onto it with the same token, unless the record already has a share; the
-predecessor's deletion then cascades nothing, so an edited track keeps its public link.
+share names one content hash. Deleting a shared record does not cascade its share when a
+ready record of the same user names it in `replacesContentHashes`: a trigger first moves
+the share, with the same token, to the highest-revision such replacement that has no
+share yet, so an edited track keeps its public link. Because the browser deletes
+predecessors only after the replacement is ready, and the deletion waits on the row lock
+that enabling a share takes, a share enabled during the upload moves too.
 
 ## Canonical GRPT geometry
 

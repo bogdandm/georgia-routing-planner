@@ -161,6 +161,7 @@ export class MapPointerGestureControl {
   #gesture: Gesture = null;
   #gestureButton: 0 | 1 | null = null;
   #orbitAnchor: LngLat | null = null;
+  /** Press position, cleared once the pointer travels far enough to make a drag. */
   #pressStart: { readonly x: number; readonly y: number } | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
   /** Pointer travel not yet applied; the camera moves at most once per frame. */
@@ -318,6 +319,14 @@ export class MapPointerGestureControl {
       x: event.clientX - previous.x,
       y: event.clientY - previous.y,
     };
+    const start = this.#pressStart;
+    if (
+      start !== null &&
+      Math.hypot(event.clientX - start.x, event.clientY - start.y) >=
+        stationaryPressPixels
+    ) {
+      this.#pressStart = null;
+    }
     // Mice report moves faster than the display refreshes, and every camera update runs
     // MapLibre's full camera pipeline, so moves only accumulate until the next frame.
     this.#pendingDelta = {

@@ -870,25 +870,25 @@ export function trackPathElevationFromPrepared(
       calculated: null,
     };
   }
-  if (
-    prepared.sourceProfile === null &&
-    prepared.calculatedSegments !== null &&
-    prepared.calculatedProfile !== null &&
-    prepared.calculatedMetrics !== null
-  ) {
-    return {
-      profile: prepared.calculatedProfile,
-      trackPoints: prepared.calculatedSegments.map((segment) => segment.points),
-      metrics: prepared.calculatedMetrics,
-      calculated: null,
-    };
-  }
   const calculated = prepared.calculatedSegments;
-  // The DEM projection keeps the geometry point for point when every segment is routable.
-  const aligned = calculated?.length === prepared.sourceSegments.length;
-  const trackPoints = prepared.sourceSegments.map((segment, segmentIndex) => {
-    const demPoints = aligned ? calculated[segmentIndex]?.points : undefined;
-    if (demPoints?.length !== segment.points.length) return segment.points;
+  // The DEM projection keeps each routable segment's geometry point for point and its
+  // order; segments without DEM coverage are absent, so match them by geometry.
+  let nextCalculated = 0;
+  const trackPoints = prepared.sourceSegments.map((segment) => {
+    const demPoints = calculated?.[nextCalculated]?.points;
+    if (
+      demPoints?.length !== segment.points.length ||
+      !segment.points.every((point, pointIndex) => {
+        const demCoordinate = demPoints[pointIndex]?.coordinate;
+        return (
+          demCoordinate !== undefined &&
+          coordinatesEqual(demCoordinate, point.coordinate)
+        );
+      })
+    ) {
+      return segment.points;
+    }
+    nextCalculated += 1;
     return segment.points.map((point, pointIndex): TrackPoint => {
       const demElevation = demPoints[pointIndex]?.elevationMeters;
       return point.elevationMeters !== undefined || demElevation === undefined
@@ -896,6 +896,21 @@ export function trackPathElevationFromPrepared(
         : { ...point, elevationMeters: demElevation };
     });
   });
+  const segments = trackPoints.map((points) => ({ points }));
+  // Without a recorded profile the DEM-filled points become canonical, and segments
+  // without coverage stay in the geometry. The profile and metrics are then those of
+  // the stored points, as when the saved track is opened again.
+  if (prepared.sourceProfile === null) {
+    const profile =
+      storedTrackElevationProfile(trackPoints, undefined) ?? prepared.calculatedProfile;
+    if (profile === null) return null;
+    return {
+      profile,
+      trackPoints,
+      metrics: calculateTrackMetrics(segments, 'dem-assisted'),
+      calculated: null,
+    };
+  }
   const calculatedTrackPoints = calculated?.map((segment) => segment.points);
   const profile =
     storedTrackElevationProfile(trackPoints, calculatedTrackPoints) ??
@@ -904,7 +919,7 @@ export function trackPathElevationFromPrepared(
   return {
     profile,
     trackPoints,
-    metrics: calculateTrackMetrics(trackPoints.map((points) => ({ points }))),
+    metrics: calculateTrackMetrics(segments),
     calculated:
       calculatedTrackPoints === undefined || prepared.calculatedMetrics === null
         ? null
@@ -1030,15 +1045,35 @@ export function trackPathSelectionGeometry(
   };
 }
 
+/** Just under one degree of latitude, so the search box never drops a nearby anchor. */
+const METERS_PER_DEGREE_LOWER_BOUND = 110_000;
+
 /** Index of the anchor nearest to `coordinate` within `toleranceMeters`, or null. */
 export function nearestTrackPathAnchor(
   path: TrackPath,
   coordinate: TrackCoordinate,
   toleranceMeters: number,
 ): number | null {
+  // Map hover runs this on every pointer move over tracks of up to 100,000 points, so
+  // a degree box around the tolerance skips the geodesic distance for far anchors.
+  const latitudeSpan = toleranceMeters / METERS_PER_DEGREE_LOWER_BOUND;
+  const widestLatitude = Math.abs(coordinate[1]) + latitudeSpan;
+  // Near a pole every longitude is close, so the box spans all of them.
+  const longitudeSpan =
+    widestLatitude >= 89
+      ? Number.POSITIVE_INFINITY
+      : latitudeSpan / Math.cos((widestLatitude * Math.PI) / 180);
   let nearest: number | null = null;
   let nearestDistance = toleranceMeters;
   for (const [index, anchor] of path.anchors.entries()) {
+    const [longitude, latitude] = anchor.point.coordinate;
+    const longitudeDelta = Math.abs(longitude - coordinate[0]);
+    if (
+      Math.abs(latitude - coordinate[1]) > latitudeSpan ||
+      Math.min(longitudeDelta, 360 - longitudeDelta) > longitudeSpan
+    ) {
+      continue;
+    }
     const distance = geodesicDistanceMeters(anchor.point.coordinate, coordinate);
     if (distance <= nearestDistance) {
       nearest = index;

@@ -391,7 +391,12 @@ function trackPointsList(
         elevationMeters = after?.elevationMeters ?? null;
       }
     }
-    return { key: anchor.id, distanceMeters, elevationMeters };
+    return {
+      key: anchor.id,
+      distanceMeters,
+      coordinate: anchor.point.coordinate,
+      elevationMeters,
+    };
   });
   const legs = path.legs.map((leg): TrackPointsLegView =>
     leg.kind === 'gap'
@@ -3324,15 +3329,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const selectPathPointsInDistanceRange = useCallback(
     (range: { readonly startMeters: number; readonly endMeters: number }) => {
       const anchors = pointsList?.anchors ?? [];
-      let first = -1;
-      let last = -1;
-      for (const [index, anchor] of anchors.entries()) {
-        if (anchor.distanceMeters > range.endMeters) break;
-        if (anchor.distanceMeters < range.startMeters) continue;
-        if (first < 0) first = index;
-        last = index;
-      }
-      if (first < 0) return;
+      const first = anchorsBeforeDistance(anchors, range.startMeters);
+      const last = anchorsBeforeDistance(anchors, range.endMeters, true) - 1;
+      if (last < first) return;
       setPointSelection({ first, last, anchor: first });
       setPointRevealRequest({ index: first });
     },
@@ -5057,23 +5056,49 @@ function mapFitBoundsForTrack(bounds: TrackBounds): MapViewportBounds {
   };
 }
 
-/** Listed point nearest a profile distance; anchors ascend by distance. */
+/**
+ * Number of listed points before `distanceMeters`, or also at it with `includeEqual`;
+ * anchors ascend by distance.
+ */
+function anchorsBeforeDistance(
+  anchors: readonly TrackPointsAnchorView[],
+  distanceMeters: number,
+  includeEqual = false,
+): number {
+  let low = 0;
+  let high = anchors.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const distance = anchors[middle]?.distanceMeters ?? 0;
+    if (distance < distanceMeters || (includeEqual && distance === distanceMeters)) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
+}
+
+/**
+ * Listed point nearest a profile sample. Segment boundaries put two points at one
+ * distance, so the sample's coordinate picks between them.
+ */
 function nearestAnchorAtDistance(
   anchors: readonly TrackPointsAnchorView[],
   distanceMeters: number,
+  coordinate: TrackCoordinate,
 ): number | null {
   if (anchors.length === 0) return null;
-  let low = 0;
-  let high = anchors.length - 1;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((anchors[middle]?.distanceMeters ?? 0) < distanceMeters) low = middle + 1;
-    else high = middle;
+  const low = anchorsBeforeDistance(anchors, distanceMeters);
+  for (let index = low; anchors[index]?.distanceMeters === distanceMeters; index += 1) {
+    const candidate = anchors[index]?.coordinate;
+    if (candidate?.[0] === coordinate[0] && candidate[1] === coordinate[1])
+      return index;
   }
   const before = anchors[low - 1];
   const after = anchors[low];
+  if (after === undefined) return low - 1;
   return before !== undefined &&
-    after !== undefined &&
     distanceMeters - before.distanceMeters < after.distanceMeters - distanceMeters
     ? low - 1
     : low;
@@ -5109,14 +5134,15 @@ function InteractiveElevationProfile({
           startMeters: selectionStart.distanceMeters,
           endMeters: selectionEnd.distanceMeters,
         };
-  // A point hovered in the list or on the map is marked on the profile too.
+  // A point hovered in the list or on the map is marked on the profile too; the
+  // profile's own hover is Recharts' active dot.
   const hoveredAnchorIndex = useStore(trackPointHoverStore, (state) =>
     state.source === 'profile' ? null : state.index,
   );
-  const hoveredDistanceMeters =
+  const hoveredPoint =
     hoveredAnchorIndex === null
       ? null
-      : (pointsList?.anchors[hoveredAnchorIndex]?.distanceMeters ?? null);
+      : (pointsList?.anchors[hoveredAnchorIndex] ?? null);
   const { database, logger, mapLayers } = useRuntimeServices();
   const trackGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
@@ -5142,15 +5168,23 @@ function InteractiveElevationProfile({
     () => () => {
       mapLayers?.setImportedTrackTracePoint(null);
       mapLayers?.setImportedTrackFocus(null);
+      setHoveredTrackPoint(null, 'profile');
     },
     [mapLayers],
   );
   // Recharts reports the active sample on every mousemove; publish only real changes.
   const tracedPoint = useRef<ElevationProfilePoint | null>(null);
+  const showsPreparation = showHeading && recalculationState === 'recalculating';
+  // A new profile, or the preparation chart replacing it, ends the profile's own hover
+  // without a mouseleave. A list or map hover keeps its marker.
   useEffect(() => {
+    if (tracedPoint.current === null) return;
     tracedPoint.current = null;
-    mapLayers?.setImportedTrackTracePoint(null);
-  }, [mapLayers, profile]);
+    const owner = trackPointHoverStore.getState().source;
+    if (owner !== 'list' && owner !== 'map')
+      mapLayers?.setImportedTrackTracePoint(null);
+    setHoveredTrackPoint(null, 'profile');
+  }, [mapLayers, profile, showsPreparation]);
   const hoveredSegmentIndex =
     hoveredSegment?.profile === profile ? hoveredSegment.index : null;
   const mapFocusSegmentIndex =
@@ -5215,7 +5249,7 @@ function InteractiveElevationProfile({
   };
   return (
     <Stack spacing={1.5}>
-      {showHeading && recalculationState === 'recalculating' ? (
+      {showsPreparation ? (
         <ElevationPreparationChart
           progress={elevationProgress}
           showProgressStatus={activePath === null}
@@ -5227,7 +5261,7 @@ function InteractiveElevationProfile({
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
           highlightedDistanceRange={highlightedDistanceRange}
-          hoveredDistanceMeters={hoveredDistanceMeters}
+          hoveredPoint={hoveredPoint}
           onActivePointChange={(point) => {
             if (point === tracedPoint.current) return;
             tracedPoint.current = point;
@@ -5235,7 +5269,11 @@ function InteractiveElevationProfile({
             setHoveredTrackPoint(
               point === null || pointsList === null
                 ? null
-                : nearestAnchorAtDistance(pointsList.anchors, point.distanceMeters),
+                : nearestAnchorAtDistance(
+                    pointsList.anchors,
+                    point.distanceMeters,
+                    point.coordinate,
+                  ),
               'profile',
             );
           }}

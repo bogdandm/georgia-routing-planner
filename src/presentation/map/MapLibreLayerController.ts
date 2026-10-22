@@ -13,6 +13,7 @@ import type {
   GeoJSON,
   LineString,
   MultiLineString,
+  MultiPoint,
   Point,
 } from 'geojson';
 import type {
@@ -73,6 +74,7 @@ import {
   measurementLayerIds,
   routePlanLayerIds,
   routeSearchLayerIds,
+  trackPointSelectionLayerIds,
   sentinelMosaicIdPrefixes,
   sentinelMapLayerIds,
   terrainOverlayLayerIds,
@@ -135,8 +137,16 @@ interface PlannedLineSection {
   readonly coordinates: readonly (readonly [number, number])[];
 }
 
+/**
+ * `numbered` draws route-plan waypoints as numbered circles; `dots` draws every anchor
+ * of an edited saved track as one small unlabelled dot, so tracks with many thousands of
+ * anchors stay one MultiPoint feature without symbol placement.
+ */
+export type PlannedLineWaypointStyle = 'numbered' | 'dots';
+
 interface PlannedLineFeatureProperties {
-  readonly kind: 'routed' | 'direct' | 'waypoint' | 'preview' | 'preview-label';
+  readonly kind:
+    'routed' | 'direct' | 'waypoint' | 'anchor' | 'preview' | 'preview-label';
   readonly number?: string;
   readonly distanceLabel?: string;
 }
@@ -144,11 +154,18 @@ interface PlannedLineFeatureProperties {
 interface PlannedLineState {
   readonly sections: readonly PlannedLineSection[];
   readonly waypoints: readonly (readonly [number, number])[];
+  readonly waypointStyle: PlannedLineWaypointStyle;
   readonly preview: {
     readonly start: readonly [number, number];
     readonly cursor: readonly [number, number];
     readonly distanceLabel: string;
   } | null;
+}
+
+/** Map coordinates of the selected track points and the track runs between them. */
+export interface TrackPointSelectionGeometry {
+  readonly lines: readonly (readonly (readonly [number, number])[])[];
+  readonly points: readonly (readonly [number, number])[];
 }
 
 /**
@@ -170,8 +187,58 @@ const plannedLineOverlays: readonly PlannedLineOverlay[] = [
 const emptyPlannedLine: PlannedLineState = {
   sections: [],
   waypoints: [],
+  waypointStyle: 'numbered',
   preview: null,
 };
+
+function plannedWaypointFeatures(
+  waypoints: readonly (readonly [number, number])[],
+  style: PlannedLineWaypointStyle,
+): Feature<Point | MultiPoint, PlannedLineFeatureProperties>[] {
+  if (style === 'numbered') {
+    return waypoints.map((coordinate, index) => ({
+      type: 'Feature',
+      properties: { kind: 'waypoint', number: String(index + 1) },
+      geometry: { type: 'Point', coordinates: [...coordinate] },
+    }));
+  }
+  if (waypoints.length === 0) return [];
+  return [
+    {
+      type: 'Feature',
+      properties: { kind: 'anchor' },
+      geometry: {
+        type: 'MultiPoint',
+        coordinates: waypoints.map((coordinate) => [...coordinate]),
+      },
+    },
+  ];
+}
+
+function sameCoordinates(
+  left: readonly (readonly [number, number])[],
+  right: readonly (readonly [number, number])[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((coordinate, index) => {
+      const other = right[index];
+      return coordinate[0] === other?.[0] && coordinate[1] === other[1];
+    })
+  );
+}
+
+function sameTrackPointSelection(
+  left: TrackPointSelectionGeometry | null,
+  right: TrackPointSelectionGeometry | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+  return (
+    sameCoordinates(left.points, right.points) &&
+    left.lines.length === right.lines.length &&
+    left.lines.every((line, index) => sameCoordinates(line, right.lines[index] ?? []))
+  );
+}
 
 function isValidMapCoordinate([longitude, latitude]: readonly [
   number,
@@ -933,6 +1000,7 @@ export class MapLibreLayerController {
     measurement: emptyPlannedLine,
   };
   #routeSearchTrace: TrailRouteSearchTrace | null = null;
+  #trackPointSelection: TrackPointSelectionGeometry | null = null;
   /** Last opacity written per track layer; a recreated native layer is written again. */
   readonly #importedTrackPaint = new Map<
     string,
@@ -1020,6 +1088,7 @@ export class MapLibreLayerController {
       this.reconcileImportedTrackHighlight();
       this.reconcileImportedTrackTrace();
       this.reconcilePlannedLines();
+      this.reconcileTrackPointSelection();
       this.reconcileSavedMarkers();
       return;
     }
@@ -1050,6 +1119,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
     this.reconcilePlannedLines();
+    this.reconcileTrackPointSelection();
     this.reconcileSavedMarkers();
   }
 
@@ -1630,10 +1700,12 @@ export class MapLibreLayerController {
     this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTrace);
     this.reconcileImportedTrackTrace();
   }
+  /** `waypointStyle` picks numbered route-plan waypoints or plain saved-track anchors. */
   public setPlannedLineGeometry(
     overlay: PlannedLineOverlay,
     sections: readonly PlannedLineSection[],
     waypoints: readonly (readonly [number, number])[],
+    waypointStyle: PlannedLineWaypointStyle = 'numbered',
   ): MapLayerVisibilityResult {
     if (
       !sections.every(
@@ -1654,6 +1726,7 @@ export class MapLibreLayerController {
         ]),
       })),
       waypoints: waypoints.map(([longitude, latitude]) => [longitude, latitude]),
+      waypointStyle,
       preview: this.#plannedLines[overlay].preview,
     });
   }
@@ -1708,6 +1781,28 @@ export class MapLibreLayerController {
     this.#routeSearchTrace = trace;
     this.#currentGeoJsonSources.delete(mapSourceIds.routeSearch);
     return this.reconcileRouteSearchTrace();
+  }
+
+  /**
+   * Highlights the selected track points and the runs between them above every track
+   * and route-plan layer; `null` clears it. Drag selection calls this per pointer move,
+   * so an identical selection pushes nothing and only this source is rebuilt.
+   */
+  public setTrackPointSelection(selection: TrackPointSelectionGeometry | null): void {
+    if (sameTrackPointSelection(selection, this.#trackPointSelection)) return;
+    this.#trackPointSelection =
+      selection === null
+        ? null
+        : {
+            lines: selection.lines.map((line) =>
+              line.map(([longitude, latitude]) => [longitude, latitude] as const),
+            ),
+            points: selection.points.map(
+              ([longitude, latitude]) => [longitude, latitude] as const,
+            ),
+          };
+    this.#currentGeoJsonSources.delete(mapSourceIds.trackPointSelection);
+    this.reconcileTrackPointSelection();
   }
 
   public setSavedMarkers(markers: readonly SavedMarker[]): void {
@@ -3051,6 +3146,7 @@ export class MapLibreLayerController {
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
     this.reconcilePlannedLines();
+    this.reconcileTrackPointSelection();
     this.reconcileSavedMarkers();
   };
 
@@ -3622,14 +3718,22 @@ export class MapLibreLayerController {
         },
       });
     }
-    this.ensureSavedMarkerLayerOrder(map);
+    this.ensureTopLayerOrder(map);
   }
 
-  private ensureSavedMarkerLayerOrder(map: MapLibreMap): void {
-    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) return;
-    if (map.getLayersOrder().at(-1) !== savedMarkerLayerIds.symbols) {
-      map.moveLayer(savedMarkerLayerIds.symbols);
-    }
+  /**
+   * Point overlays above every other layer, bottom to top: selected track points, the
+   * elevation hover point, then saved markers.
+   */
+  private ensureTopLayerOrder(map: MapLibreMap): void {
+    const topLayerIds = [
+      trackPointSelectionLayerIds.points,
+      importedTrackLayerIds.trace,
+      savedMarkerLayerIds.symbols,
+    ].filter((layerId) => map.getLayer(layerId) !== undefined);
+    const tail = map.getLayersOrder().slice(-topLayerIds.length);
+    if (topLayerIds.every((layerId, index) => tail[index] === layerId)) return;
+    for (const layerId of topLayerIds) map.moveLayer(layerId);
   }
 
   /** Loads missing icons as one batch so they cost one data push instead of one each. */
@@ -3712,14 +3816,14 @@ export class MapLibreLayerController {
     }
     const { sourceId, layerIds } = plannedLineStyles[overlay];
     const color = mapVisualPalette.userGeometry.gpxTrack;
-    const { sections, waypoints, preview } = this.#plannedLines[overlay];
+    const { sections, waypoints, waypointStyle, preview } = this.#plannedLines[overlay];
     const beforeLayerId =
       map.getLayer(mapInsertionPoints.importedTracksBeforeLayerId) === undefined
         ? undefined
         : mapInsertionPoints.importedTracksBeforeLayerId;
     try {
       const createLineData = (): FeatureCollection<
-        LineString | Point,
+        LineString | Point | MultiPoint,
         PlannedLineFeatureProperties
       > => ({
         type: 'FeatureCollection',
@@ -3734,13 +3838,7 @@ export class MapLibreLayerController {
               },
             }),
           ),
-          ...waypoints.map(
-            (coordinate, index): Feature<Point, PlannedLineFeatureProperties> => ({
-              type: 'Feature',
-              properties: { kind: 'waypoint', number: String(index + 1) },
-              geometry: { type: 'Point', coordinates: [...coordinate] },
-            }),
-          ),
+          ...plannedWaypointFeatures(waypoints, waypointStyle),
           ...(preview === null
             ? []
             : [
@@ -3844,17 +3942,20 @@ export class MapLibreLayerController {
           },
         });
       }
-      if (map.getLayer(layerIds.waypoints) === undefined) {
+      const createdLayers = map.getLayer(layerIds.waypoints) === undefined;
+      if (createdLayers) {
+        // Numbered waypoints are large labelled circles; saved-track anchors are one
+        // MultiPoint of small dots.
         map.addLayer({
           id: layerIds.waypoints,
           type: 'circle',
           source: sourceId,
-          filter: ['==', ['get', 'kind'], 'waypoint'],
+          filter: ['match', ['get', 'kind'], ['waypoint', 'anchor'], true, false],
           paint: {
             'circle-color': color,
-            'circle-radius': 10,
+            'circle-radius': ['match', ['get', 'kind'], 'anchor', 4.5, 10],
             'circle-stroke-color': '#FFFFFF',
-            'circle-stroke-width': 2,
+            'circle-stroke-width': ['match', ['get', 'kind'], 'anchor', 1.5, 2],
           },
         });
       }
@@ -3872,6 +3973,9 @@ export class MapLibreLayerController {
           paint: { 'text-color': '#FFFFFF' },
         });
       }
+      // New planned-line layers land on top or before the first icons; keep the track
+      // point selection, hover trace, and saved markers above them.
+      if (createdLayers) this.ensureImportedTrackLayerOrder(map);
       return { status: 'success' };
     } catch {
       return this.visibilityFailure({ code: 'planned-line-render-failed' });
@@ -4119,6 +4223,80 @@ export class MapLibreLayerController {
     this.applyImportedTrackPaint();
   }
 
+  private reconcileTrackPointSelection(): void {
+    const map = this.#map;
+    if (map?.getLayer(mapLayerIds.background) === undefined) return;
+    const selection = this.#trackPointSelection;
+    this.syncGeoJsonSource(
+      map,
+      mapSourceIds.trackPointSelection,
+      (): FeatureCollection<
+        MultiLineString | MultiPoint,
+        { readonly kind: 'line' | 'points' }
+      > => ({
+        type: 'FeatureCollection',
+        features:
+          selection === null
+            ? []
+            : [
+                {
+                  type: 'Feature',
+                  properties: { kind: 'line' },
+                  geometry: {
+                    type: 'MultiLineString',
+                    coordinates: selection.lines
+                      .filter((line) => line.length >= 2)
+                      .map((line) => line.map((coordinate) => [...coordinate])),
+                  },
+                },
+                {
+                  type: 'Feature',
+                  properties: { kind: 'points' },
+                  geometry: {
+                    type: 'MultiPoint',
+                    coordinates: selection.points.map((coordinate) => [...coordinate]),
+                  },
+                },
+              ],
+      }),
+    );
+    const color = mapVisualPalette.userGeometry.gpxTrackHighlight;
+    let created = false;
+    if (map.getLayer(trackPointSelectionLayerIds.line) === undefined) {
+      map.addLayer({
+        id: trackPointSelectionLayerIds.line,
+        type: 'line',
+        source: mapSourceIds.trackPointSelection,
+        filter: ['==', ['get', 'kind'], 'line'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': color,
+          'line-width': importedTrackCasingWidth + 3,
+          'line-opacity': 0.8,
+        },
+      });
+      created = true;
+    }
+    if (map.getLayer(trackPointSelectionLayerIds.points) === undefined) {
+      map.addLayer({
+        id: trackPointSelectionLayerIds.points,
+        type: 'circle',
+        source: mapSourceIds.trackPointSelection,
+        filter: ['==', ['get', 'kind'], 'points'],
+        paint: {
+          'circle-color': color,
+          'circle-radius': 6,
+          'circle-stroke-color': mapVisualPalette.userGeometry.gpxTrack,
+          'circle-stroke-width': 2,
+        },
+      });
+      created = true;
+    }
+    // Drag selection updates only the source; new layers need ordering once, and
+    // styledata re-checks order through reconcileImportedTrack.
+    if (created) this.ensureImportedTrackLayerOrder(map);
+  }
+
   private reconcileImportedTrackTrace(): void {
     const map = this.#map;
     if (map?.getLayer(mapLayerIds.background) === undefined) return;
@@ -4165,12 +4343,18 @@ export class MapLibreLayerController {
     }
   }
 
+  /**
+   * Keeps the imported-track lines, then the track-point selection line, as the last
+   * lines before the first basemap icons, so they draw above route-plan and ruler lines;
+   * then restores the point overlays drawn above everything.
+   */
   private ensureImportedTrackLayerOrder(map: MapLibreMap): void {
     const orderedTrackLayerIds = [
       importedTrackLayerIds.casing,
       importedTrackLayerIds.line,
       importedTrackLayerIds.highlight,
       ...importedTrackFocusSlots.flatMap(({ layerIds }) => layerIds),
+      trackPointSelectionLayerIds.line,
       importedTrackLayerIds.endpoints,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getLayersOrder();
@@ -4186,14 +4370,7 @@ export class MapLibreLayerController {
         map.moveLayer(layerId, mapInsertionPoints.importedTracksBeforeLayerId);
       }
     }
-
-    if (map.getLayer(savedMarkerLayerIds.symbols) === undefined) {
-      const traceIndex = layerIds.indexOf(importedTrackLayerIds.trace);
-      if (traceIndex >= 0 && traceIndex < layerIds.length - 1) {
-        map.moveLayer(importedTrackLayerIds.trace);
-      }
-    }
-    this.ensureSavedMarkerLayerOrder(map);
+    this.ensureTopLayerOrder(map);
   }
 
   /**

@@ -19,6 +19,7 @@ import type {
   MapInteractionMode,
   MapViewportMovement,
   PlanningPreview,
+  TrackPointClick,
 } from '@/presentation/map/MapFacade';
 import {
   mapLayerIds,
@@ -76,6 +77,9 @@ const directedFitPitchDegrees = 45;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
+
+/** Screen radius around a track-editing click that still hits a track point. */
+const trackPointHitPixels = 12;
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -251,6 +255,7 @@ function recoverableMessage(
 export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
+  readonly #trackPointClickListeners = new Set<(click: TrackPointClick) => void>();
   readonly #viewportMovementListeners = new Set<(event: MapViewportMovement) => void>();
   #map: MapLibreMap | null = null;
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
@@ -388,6 +393,15 @@ export class MapLibreFacade implements MapFacade {
     this.#planningClickListeners.add(listener);
     return () => {
       this.#planningClickListeners.delete(listener);
+    };
+  }
+
+  public subscribeTrackPointClicks(
+    listener: (click: TrackPointClick) => void,
+  ): () => void {
+    this.#trackPointClickListeners.add(listener);
+    return () => {
+      this.#trackPointClickListeners.delete(listener);
     };
   }
 
@@ -805,6 +819,7 @@ export class MapLibreFacade implements MapFacade {
   public setInteractionMode(mode: MapInteractionMode): void {
     if (this.#interactionMode === mode) return;
     this.#interactionMode = mode;
+    if (mode === 'track-editing') this.closePointInspection();
     this.clearPlanningPreview();
     this.applyInteractionCursor();
     this.showAnchoredMeasurement();
@@ -842,6 +857,7 @@ export class MapLibreFacade implements MapFacade {
     this.#listeners.clear();
     this.#viewportMovementListeners.clear();
     this.#planningClickListeners.clear();
+    this.#trackPointClickListeners.clear();
     this.#cursorElevationAbort?.abort();
   }
 
@@ -1050,6 +1066,16 @@ export class MapLibreFacade implements MapFacade {
       for (const listener of this.#planningClickListeners) listener(coordinate);
       return;
     }
+    if (this.#interactionMode === 'track-editing') {
+      if (event.originalEvent.button !== 0) return;
+      const click: TrackPointClick = {
+        coordinate,
+        toleranceMeters: this.groundDistanceOfPixels(map, event, trackPointHitPixels),
+        shiftKey: event.originalEvent.shiftKey,
+      };
+      for (const listener of this.#trackPointClickListeners) listener(click);
+      return;
+    }
     if (this.#pointInspection.status === 'open') {
       const visible = this.#pointInspector.isVisible();
       this.closePointInspection();
@@ -1057,6 +1083,19 @@ export class MapLibreFacade implements MapFacade {
     }
     this.openPointInspection(coordinate);
   };
+
+  /** Ground distance spanned by `pixels` CSS px to the right of the event point. */
+  private groundDistanceOfPixels(
+    map: MapLibreMap,
+    event: MapMouseEvent,
+    pixels: number,
+  ): number {
+    const offset = map.unproject([event.point.x + pixels, event.point.y]);
+    return geodesicDistanceMeters(
+      { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
+      { longitude: offset.lng, latitude: offset.lat },
+    );
+  }
 
   private queryNearestPoi(
     map: MapLibreMap,
@@ -1719,7 +1758,9 @@ export class MapLibreFacade implements MapFacade {
     const map = this.#map;
     if (map === null) return;
     map.getCanvas().style.cursor =
-      this.#interactionMode === 'default' ? '' : 'crosshair';
+      this.#interactionMode === 'default' || this.#interactionMode === 'track-editing'
+        ? ''
+        : 'crosshair';
   }
 
   /** Route planning and the ruler both build lines from primary map clicks. */

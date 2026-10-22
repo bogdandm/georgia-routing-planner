@@ -25,6 +25,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceArea,
   ReferenceLine,
   Tooltip,
   XAxis,
@@ -175,11 +176,40 @@ interface ElevationProfileChartProps {
   readonly activeSegmentIndex: number | null;
   readonly selectedSegmentIndex: number | null;
   readonly trackGradeLegendDismissed: boolean;
+  /** Track distance shaded on the chart, such as the selected track points. */
+  readonly highlightedDistanceRange?: {
+    readonly startMeters: number;
+    readonly endMeters: number;
+  } | null;
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onSegmentHoverChange: (index: number | null) => void;
   readonly onSegmentSelectionChange: (index: number | null) => void;
   readonly onTrackGradeLegendDismissedChange: (dismissed: boolean) => void;
   readonly onPointClick?: (point: ElevationProfilePoint) => void;
+}
+
+/** Index of the profile point nearest `distanceMeters`; points ascend by distance. */
+function nearestPointIndex(
+  points: readonly ElevationProfilePoint[],
+  distanceMeters: number,
+): number {
+  let low = 0;
+  let high = points.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((points[middle]?.distanceMeters ?? 0) < distanceMeters) low = middle + 1;
+    else high = middle;
+  }
+  const previous = points[low - 1];
+  const next = points[low];
+  if (
+    previous !== undefined &&
+    (next === undefined ||
+      distanceMeters - previous.distanceMeters < next.distanceMeters - distanceMeters)
+  ) {
+    return low - 1;
+  }
+  return low;
 }
 
 function activeChartRow(
@@ -583,6 +613,7 @@ export function ElevationProfileChart({
   activeSegmentIndex,
   selectedSegmentIndex,
   trackGradeLegendDismissed,
+  highlightedDistanceRange = null,
   onActivePointChange,
   onSegmentHoverChange,
   onSegmentSelectionChange,
@@ -613,6 +644,19 @@ export function ElevationProfileChart({
         : elapsedSeconds[sampleIndex]) ?? 0,
     [elapsedSeconds, profile],
   );
+  let highlight: { readonly startX: number; readonly endX: number } | null = null;
+  if (highlightedDistanceRange !== null) {
+    // The time axis places each highlighted distance at its nearest profile point.
+    const [startX = 0, endX = 0] = [
+      highlightedDistanceRange.startMeters,
+      highlightedDistanceRange.endMeters,
+    ].map((distanceMeters) =>
+      elapsedSeconds === null
+        ? distanceMeters
+        : xOfSample(nearestPointIndex(profile.points, distanceMeters)),
+    );
+    highlight = { startX, endX };
+  }
   const timeTicks = useMemo(
     () => (elapsedSeconds === null ? null : timeAxisTicks(elapsedSeconds.at(-1) ?? 0)),
     [elapsedSeconds],
@@ -787,6 +831,25 @@ export function ElevationProfileChart({
               strokeWidth={1}
             />
           ))}
+          {highlight !== null && highlight.startX !== highlight.endX ? (
+            <ReferenceArea
+              className="elevation-profile-highlight"
+              x1={highlight.startX}
+              x2={highlight.endX}
+              ifOverflow="hidden"
+              fill={appColors.brand.amber}
+              fillOpacity={0.28}
+            />
+          ) : null}
+          {highlight !== null && highlight.startX === highlight.endX ? (
+            <ReferenceLine
+              className="elevation-profile-highlight"
+              x={highlight.startX}
+              ifOverflow="hidden"
+              stroke={appColors.brand.amber}
+              strokeWidth={2}
+            />
+          ) : null}
           <ElevationProfileArea
             profile={profile}
             gradientId={gradientId}

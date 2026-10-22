@@ -97,6 +97,7 @@ export const mapVisualPalette = {
     /** Reserved for imported and user-created GPX tracks. */
     gpxTrack: '#168BFF',
     gpxTrackCasing: 'rgba(255, 255, 255, 0.78)',
+    /** Selected track points and the run between them, over blue tracks and route plans. */
     gpxTrackHighlight: appColors.brand.amber,
     gpxTrackStart: appColors.marker.green,
     gpxTrackFinish: appColors.marker.red,

@@ -138,6 +138,10 @@ interface ElevationProfileChartCallbacks {
   readonly selectedSegmentIndex?: number | null;
   readonly profile?: ElevationProfile;
   readonly trackGradeLegendDismissed?: boolean;
+  readonly highlightedDistanceRange?: {
+    readonly startMeters: number;
+    readonly endMeters: number;
+  };
   readonly onActivePointChange?: (point: ElevationProfilePoint | null) => void;
   readonly onSegmentHoverChange?: (index: number | null) => void;
   readonly onSegmentSelectionChange?: (index: number | null) => void;
@@ -150,6 +154,7 @@ function renderElevationProfileChart({
   activeSegmentIndex,
   selectedSegmentIndex,
   trackGradeLegendDismissed = false,
+  highlightedDistanceRange,
   onActivePointChange,
   onSegmentHoverChange,
   onSegmentSelectionChange,
@@ -166,6 +171,7 @@ function renderElevationProfileChart({
     onTrackGradeLegendDismissedChange: (dismissed: boolean) => void;
     onActivePointChange?: (point: ElevationProfilePoint | null) => void;
     onPointClick?: (point: ElevationProfilePoint) => void;
+    highlightedDistanceRange?: { startMeters: number; endMeters: number };
   } = {
     profile: chartProfile,
     activeSegmentIndex: activeSegmentIndex ?? null,
@@ -180,6 +186,9 @@ function renderElevationProfileChart({
   }
   if (onPointClick !== undefined) {
     chartProps.onPointClick = onPointClick;
+  }
+  if (highlightedDistanceRange !== undefined) {
+    chartProps.highlightedDistanceRange = highlightedDistanceRange;
   }
   return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
@@ -646,6 +655,48 @@ describe('ElevationProfileChart', () => {
     expect(container.querySelector('.recharts-cartesian-axis-line')).toBeNull();
   });
 
+  it('shades a highlighted distance range without blocking segment hover', async () => {
+    observedWidth = 420;
+    const onSegmentHoverChange = vi.fn();
+    const { container, unmount } = renderElevationProfileChart({
+      highlightedDistanceRange: { startMeters: 700, endMeters: 2_100 },
+      onSegmentHoverChange,
+    });
+
+    // 0–2.8 km spans the 68–404 px plot area.
+    const band = container.querySelector(
+      '.elevation-profile-highlight .recharts-reference-area-rect',
+    );
+    expect(band).not.toBeNull();
+    expect(Number(band?.getAttribute('x'))).toBeCloseTo(152);
+    expect(Number(band?.getAttribute('width'))).toBeCloseTo(168);
+    expect(container.querySelectorAll('.elevation-profile-highlight')).toHaveLength(1);
+    const chartSurface = screen
+      .getByRole('img', { name: 'Elevation profile from 1,000 to 1,120 metres' })
+      .querySelector('svg');
+    if (chartSurface === null) throw new Error('Expected the chart surface.');
+    fireEvent.mouseEnter(chartSurface, { clientX: 200, clientY: 80 });
+    fireEvent.mouseMove(chartSurface, { clientX: 200, clientY: 80 });
+    await waitFor(() => {
+      expect(onSegmentHoverChange).toHaveBeenLastCalledWith(0);
+    });
+    unmount();
+
+    const single = renderElevationProfileChart({
+      highlightedDistanceRange: { startMeters: 1_400, endMeters: 1_400 },
+    });
+    expect(
+      single.container.querySelector(
+        '.elevation-profile-highlight .recharts-reference-area',
+      ),
+    ).toBeNull();
+    expect(
+      single.container.querySelector(
+        '.elevation-profile-highlight .recharts-reference-line-line',
+      ),
+    ).not.toBeNull();
+  });
+
   describe('with recorded time', () => {
     // The climb takes 30 minutes and the descent 10, so time and distance diverge.
     const recordedTimes = [
@@ -698,6 +749,24 @@ describe('ElevationProfileChart', () => {
       fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
       expect(await screen.findByText('0h 40m')).toBeVisible();
       expect(screen.getByText('8.4 km/h')).toBeVisible();
+    });
+
+    it('places a highlighted distance range at its elapsed time', async () => {
+      const user = userEvent.setup();
+      observedWidth = 420;
+      const { container } = renderElevationProfileChart({
+        profile: timedProfile,
+        highlightedDistanceRange: { startMeters: 1_300, endMeters: 2_800 },
+      });
+
+      await user.click(screen.getByRole('button', { name: 'Time' }));
+
+      // 1.3 km snaps to the 30-minute point; the plot spans 40 minutes over 68–404 px.
+      const band = container.querySelector(
+        '.elevation-profile-highlight .recharts-reference-area-rect',
+      );
+      expect(Number(band?.getAttribute('x'))).toBeCloseTo(320);
+      expect(Number(band?.getAttribute('width'))).toBeCloseTo(84);
     });
 
     it('plots smoothed speed and falls back to elevation for an untimed track', async () => {

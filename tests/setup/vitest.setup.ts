@@ -47,3 +47,10 @@ Object.defineProperty(URL, 'revokeObjectURL', {
   configurable: true,
   value: vi.fn(),
 });
+
+// JSDOM lacks pointer capture, which drag selection in lists relies on.
+Object.defineProperties(HTMLElement.prototype, {
+  setPointerCapture: { configurable: true, value: () => undefined },
+  hasPointerCapture: { configurable: true, value: () => false },
+  releasePointerCapture: { configurable: true, value: () => undefined },
+});

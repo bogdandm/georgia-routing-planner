@@ -26,24 +26,30 @@ const initialization = {
   },
 } as const;
 const request = {
-  start: [44, 42],
-  destination: [45, 43],
+  waypoints: [
+    [44, 42],
+    [45, 43],
+  ],
   includeSearchTrace: false,
 } as const;
 
 function success(startLongitude = 44, destinationLongitude = 45): TrailRouteSuccess {
   return {
     status: 'ready',
-    geometry: {
-      type: 'LineString',
-      coordinates: [
-        [startLongitude, 42],
-        [destinationLongitude, 43],
-      ],
-    },
-    networkDistanceMeters: 12_345,
-    snappedStart: [startLongitude, 42],
-    snappedDestination: [destinationLongitude, 43],
+    legs: [
+      {
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [startLongitude, 42],
+            [destinationLongitude, 43],
+          ],
+        },
+        networkDistanceMeters: 12_345,
+        snappedStart: [startLongitude, 42],
+        snappedDestination: [destinationLongitude, 43],
+      },
+    ],
     loadedTileCount: 9,
     graphNodeCount: 120,
     graphEdgeCount: 130,
@@ -100,7 +106,13 @@ describe('BrowserTrailRouter', () => {
     const clonedRequest = route.mock.calls[0]?.[0];
     expect(structuredClone(clonedInitialization)).toEqual(initialization);
     expect(structuredClone(clonedRequest)).toEqual({
-      request: { start: [44, 42], destination: [45, 43], includeSearchTrace: false },
+      request: {
+        waypoints: [
+          [44, 42],
+          [45, 43],
+        ],
+        includeSearchTrace: false,
+      },
       progressToken: 1,
     });
     expect(clonedInitialization).not.toHaveProperty('postMessage');
@@ -120,10 +132,10 @@ describe('BrowserTrailRouter', () => {
       [routingWorkerMethods.route]: (payload, context): Promise<TrailRouteSuccess> => {
         const { request } = payload as {
           readonly request: {
-            readonly destination: readonly [number, number];
+            readonly waypoints: readonly (readonly [number, number])[];
           };
         };
-        if (request.destination[0] === 45) {
+        if (request.waypoints.at(-1)?.[0] === 45) {
           firstStarted.resolve(undefined);
           return new Promise<TrailRouteSuccess>((_resolve, reject) => {
             context.signal.addEventListener(
@@ -143,7 +155,13 @@ describe('BrowserTrailRouter', () => {
     const firstController = new AbortController();
     const first = router.route(request, firstController.signal);
     const second = router.route(
-      { ...request, destination: [46, 43] },
+      {
+        ...request,
+        waypoints: [
+          [44, 42],
+          [46, 43],
+        ],
+      },
       new AbortController().signal,
     );
     await Promise.all([firstStarted.promise, secondStarted.promise]);
@@ -195,6 +213,112 @@ describe('BrowserTrailRouter', () => {
     const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
 
     await expect(router.route(request, new AbortController().signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'routing-data-invalid',
+    });
+
+    router.dispose();
+    server.dispose();
+  });
+
+  it('rejects worker results whose legs do not join or do not match the waypoints', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const twoLegs = (secondStartLongitude: number): TrailRouteSuccess => {
+      const first = success(44, 45).legs[0];
+      if (first === undefined) throw new Error('Missing leg.');
+      const secondStart = [secondStartLongitude, 43] as const;
+      return {
+        ...success(),
+        legs: [
+          first,
+          {
+            geometry: { type: 'LineString', coordinates: [[...secondStart], [46, 43]] },
+            networkDistanceMeters: 1_000,
+            snappedStart: secondStart,
+            snappedDestination: [46, 43],
+          },
+        ],
+      };
+    };
+    const route = vi
+      .fn<(payload: unknown) => TrailRouteSuccess>()
+      .mockReturnValueOnce(twoLegs(45))
+      .mockReturnValueOnce(twoLegs(45))
+      .mockReturnValueOnce(twoLegs(45.5));
+    const server = new WorkerRpcServer(serverEndpoint, {
+      [routingWorkerMethods.initialize]: () => ({ initialized: true }),
+      [routingWorkerMethods.route]: route,
+    });
+    const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
+    const threeWaypoints = {
+      waypoints: [
+        [44, 42],
+        [45, 43],
+        [46, 43],
+      ],
+      includeSearchTrace: false,
+    } as const;
+
+    const joined = await router.route(threeWaypoints, new AbortController().signal);
+    expect(joined.status).toBe('ready');
+    if (joined.status === 'ready') {
+      expect(joined.legs).toHaveLength(2);
+      expect(joined.legs[0]?.snappedDestination).toEqual(joined.legs[1]?.snappedStart);
+    }
+    await expect(router.route(request, new AbortController().signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'routing-data-invalid',
+    });
+    await expect(
+      router.route(threeWaypoints, new AbortController().signal),
+    ).resolves.toEqual({ status: 'failed', reason: 'routing-data-invalid' });
+
+    router.dispose();
+    server.dispose();
+  });
+
+  it('copies validated failure details and rejects details for other reasons', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const route = vi
+      .fn<(payload: unknown) => unknown>()
+      .mockReturnValueOnce({
+        status: 'failed',
+        reason: 'no-nearby-trail',
+        waypointIndexes: [0, 2],
+      })
+      .mockReturnValueOnce({ status: 'failed', reason: 'no-route', legIndex: 1 })
+      .mockReturnValueOnce({
+        status: 'failed',
+        reason: 'no-route',
+        waypointIndexes: [1],
+      })
+      .mockReturnValueOnce({
+        status: 'failed',
+        reason: 'no-nearby-trail',
+        waypointIndexes: [2, 1],
+      });
+    const server = new WorkerRpcServer(serverEndpoint, {
+      [routingWorkerMethods.initialize]: () => ({ initialized: true }),
+      [routingWorkerMethods.route]: route,
+    });
+    const router = new BrowserTrailRouter(initialization, () => clientEndpoint);
+    const signal = new AbortController().signal;
+
+    await expect(router.route(request, signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'no-nearby-trail',
+      waypointIndexes: [0, 2],
+    });
+    await expect(router.route(request, signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'no-route',
+      legIndex: 1,
+    });
+    await expect(router.route(request, signal)).resolves.toEqual({
+      status: 'failed',
+      reason: 'routing-data-invalid',
+    });
+    await expect(router.route(request, signal)).resolves.toEqual({
       status: 'failed',
       reason: 'routing-data-invalid',
     });

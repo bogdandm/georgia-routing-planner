@@ -1021,10 +1021,14 @@ describe('WorkspaceShell', () => {
       .fn<TrailRouter['route']>()
       .mockResolvedValueOnce({
         status: 'ready',
-        geometry: { type: 'LineString', coordinates: [A, B] },
-        networkDistanceMeters: 1_200,
-        snappedStart: A,
-        snappedDestination: B,
+        legs: [
+          {
+            geometry: { type: 'LineString', coordinates: [A, B] },
+            networkDistanceMeters: 1_200,
+            snappedStart: A,
+            snappedDestination: B,
+          },
+        ],
         loadedTileCount: 1,
         graphNodeCount: 2,
         graphEdgeCount: 1,
@@ -1132,10 +1136,14 @@ describe('WorkspaceShell', () => {
     act(() => {
       secondRoute.resolve({
         status: 'ready',
-        geometry: { type: 'LineString', coordinates: [B, C] },
-        networkDistanceMeters: 1_200,
-        snappedStart: B,
-        snappedDestination: C,
+        legs: [
+          {
+            geometry: { type: 'LineString', coordinates: [B, C] },
+            networkDistanceMeters: 1_200,
+            snappedStart: B,
+            snappedDestination: C,
+          },
+        ],
         loadedTileCount: 1,
         graphNodeCount: 2,
         graphEdgeCount: 1,

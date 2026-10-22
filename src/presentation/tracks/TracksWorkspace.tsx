@@ -104,6 +104,7 @@ import type {
   TrailRouteResult,
   TrailRouteSearchTrace,
 } from '@/application/ports/TrailRouter';
+import type { TrackPointClick } from '@/presentation/map/MapFacade';
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
@@ -171,7 +172,10 @@ import {
   ElevationPreparationChart,
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
-import { RoutePlanControls } from '@/presentation/tracks/RoutePlanControls';
+import {
+  RoutePlanControls,
+  TrackEditControls,
+} from '@/presentation/tracks/RoutePlanControls';
 import { TrackShareError } from '@/application/tracks/TrackShareService';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import {
@@ -197,20 +201,44 @@ import {
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
 import {
-  beginRoutePlanElevation,
-  canSaveRoutePlan,
-  clearRoutePlan as clearRoutePlanDraft,
-  completeRoutePlanPoint,
-  enqueueRoutePlanPoint,
-  setNextSegmentMode as setRoutePlanSegmentMode,
-  finishRoutePlanElevation,
+  cancelTrackPathMove,
+  cancelTrackPathSave,
+  beginTrackPathSave,
+  canSaveTrackPath,
+  clearTrackPath,
+  completeTrackPathRequest,
+  deleteTrackPathAnchors,
+  endTrackPathInsertion,
+  finishTrackPathElevation,
+  trackPathAnchorDistances,
+  nearestTrackPathAnchor,
+  placeTrackPathPoint,
   setRoutePlanName,
+  setTrackPathInsertionMode,
+  setTrackPathLegMode,
   startRoutePlan as createRoutePlanDraft,
-  undoLastRoutePlanPoint as undoRoutePlanPoint,
-  updateRoutePlanProgress,
+  startTrackPathEdit,
+  startTrackPathInsertion,
+  startTrackPathMove,
+  trackPathElevationFromPrepared,
+  trackPathFromSegments,
+  trackPathMapSections,
+  trackPathMetrics,
+  trackPathSaveContent,
+  trackPathSelectionGeometry,
+  undoTrackPathEdit,
+  updateTrackPathProgress,
+  type PendingPathRequest,
   type RoutePlanDraft,
-  type RoutePlanSegmentMode,
-} from '@/presentation/tracks/routePlan';
+  type TrackPath,
+  type TrackPathDraft,
+} from '@/presentation/tracks/trackPathEditor';
+import {
+  TrackPointsSection,
+  type TrackPointsAnchorView,
+  type TrackPointsLegView,
+  type TrackPointsSelection,
+} from '@/presentation/tracks/TrackPointsSection';
 import {
   cancelMarkerPlacement,
   consumeMarkerCreationCommand,
@@ -278,6 +306,8 @@ interface SavedTrackSelection {
   readonly summary: LocalTrackSummary;
   readonly content: LocalTrackContent;
   readonly draftName: string;
+  /** Point editing session; null while the track is only viewed. */
+  readonly edit: TrackPathDraft | null;
 }
 
 interface TrackMarkerEditorDraft {
@@ -288,6 +318,67 @@ interface TrackMarkerEditorDraft {
 
 type ActiveTrack =
   PreviewTrack | SharedTrackSelection | SavedTrackSelection | RoutePlanDraft;
+
+interface TrackPointsList {
+  readonly path: TrackPath;
+  readonly anchors: readonly TrackPointsAnchorView[];
+  readonly legs: readonly TrackPointsLegView[];
+}
+
+const GAP_LEG_VIEW: TrackPointsLegView = { kind: 'gap' };
+
+/** Edits keep the concrete draft type: a route plan stays a route plan. */
+type PathDraftUpdate = <D extends TrackPathDraft>(draft: D) => D;
+
+/** A preview, a plan with points, or point edits would be lost by leaving the track. */
+function hasUnsavedTrackWork(active: ActiveTrack | null): boolean {
+  if (active?.kind === 'preview') return true;
+  if (active?.kind === 'route-plan') return active.path.anchors.length > 0;
+  return active?.kind === 'saved' && (active.edit?.history.length ?? 0) > 0;
+}
+
+/** Identifies whose point editor an async routing or elevation result belongs to. */
+function pathOwnerKey(active: ActiveTrack | null): string | null {
+  if (active?.kind === 'route-plan') return active.id;
+  if (active?.kind === 'saved' && active.edit !== null) {
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Owner key prefix.
+    return `edit:${active.summary.id}`;
+  }
+  return null;
+}
+
+/** Anchors without their own elevation read the profile at their distance. */
+function trackPointsList(
+  path: TrackPath,
+  profile: ElevationProfile | null,
+): TrackPointsList {
+  const distances = trackPathAnchorDistances(path);
+  const profilePoints = profile?.points ?? [];
+  const anchors = path.anchors.map((anchor, index): TrackPointsAnchorView => {
+    const distanceMeters = distances[index] ?? 0;
+    let elevationMeters = anchor.point.elevationMeters ?? null;
+    if (elevationMeters === null && profilePoints.length > 0) {
+      let low = 0;
+      let high = profilePoints.length - 1;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if ((profilePoints[middle]?.distanceMeters ?? 0) < distanceMeters) {
+          low = middle + 1;
+        } else {
+          high = middle;
+        }
+      }
+      elevationMeters = profilePoints[low]?.elevationMeters ?? null;
+    }
+    return { key: anchor.id, distanceMeters, elevationMeters };
+  });
+  const legs = path.legs.map((leg): TrackPointsLegView =>
+    leg.kind === 'gap'
+      ? GAP_LEG_VIEW
+      : { kind: 'leg', mode: leg.mode, pending: leg.sections === null },
+  );
+  return { path, anchors, legs };
+}
 type MultiTrackSelection =
   | {
       readonly status: 'loading';
@@ -310,6 +401,23 @@ type ReadyMultiTrackSelection = Extract<
 interface TracksWorkspaceValue {
   readonly active: ActiveTrack | null;
   readonly activeProfile: ElevationProfile | null;
+  /** The point editor of a route plan or of a saved track being edited. */
+  readonly activePath: TrackPathDraft | null;
+  /** Points listed in the detail pane: the editor's path, or the stored points. */
+  readonly pointsList: TrackPointsList | null;
+  /** Inclusive anchor range of `pointsList`, shown on the map and the profile. */
+  readonly pointSelection: TrackPointsSelection | null;
+  readonly setPointSelection: (selection: TrackPointsSelection | null) => void;
+  /** Changes identity when a map click selects a point the list must scroll to. */
+  readonly pointRevealRequest: { readonly index: number } | null;
+  readonly selectPathPointNear: (click: TrackPointClick) => void;
+  readonly placePathPoint: (coordinate: TrackCoordinate) => void;
+  /** Applies a `trackPathEditor` edit to `activePath`; ignored while saving. */
+  readonly editActivePath: (update: PathDraftUpdate) => void;
+  readonly undoPathEdit: () => void;
+  readonly startTrackEdit: () => void;
+  readonly cancelTrackEdit: () => void;
+  readonly saveTrackEdit: () => Promise<void>;
   readonly activeStatsMetrics: TrackStatsMetrics | null;
   readonly elevationProgress: TrackElevationPreparationProgress | null;
   readonly error: string | null;
@@ -352,7 +460,6 @@ interface TracksWorkspaceValue {
   readonly multiTrackStatsMetrics: TrackStatsMetrics | null;
   readonly toggleMultiTrackMode: () => Promise<void>;
   readonly toggleMultiTrackSelection: (summary: LocalTrackSummary) => Promise<void>;
-  readonly addRoutePlanPoint: (coordinate: TrackCoordinate) => void;
   readonly clearRoutePlan: () => void;
   readonly importState: 'idle' | 'preparing';
   readonly recalculationState: 'idle' | 'recalculating';
@@ -371,11 +478,9 @@ interface TracksWorkspaceValue {
   readonly saveRoutePlan: () => Promise<void>;
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly refocusActiveTrack: () => void;
-  readonly setNextSegmentMode: (mode: RoutePlanSegmentMode) => void;
   readonly startRoutePlan: () => void;
   readonly setActiveName: (name: string) => void;
   readonly setQuery: (query: string) => void;
-  readonly undoLastRoutePlanPoint: () => void;
   readonly renameActive: () => Promise<boolean>;
   /** Saves the active saved track walked the other way as a new track and opens it. */
   readonly createReversedTrack: () => Promise<void>;
@@ -611,6 +716,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
+  const activePath: TrackPathDraft | null =
+    active?.kind === 'route-plan'
+      ? active
+      : active?.kind === 'saved'
+        ? active.edit
+        : null;
+  const activePathOwner = pathOwnerKey(active);
+  // Selection belongs to the listed path; any edit makes a new path and clears it.
+  const [pointSelectionState, setPointSelectionState] = useState<{
+    readonly path: TrackPath;
+    readonly selection: TrackPointsSelection;
+  } | null>(null);
+  const [pointRevealRequest, setPointRevealRequest] = useState<{
+    readonly index: number;
+  } | null>(null);
   const editableTrackId =
     active?.kind === 'saved'
       ? active.summary.id
@@ -716,7 +836,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const preparationAbort = useRef<AbortController | null>(null);
   const recalculationAbort = useRef<AbortController | null>(null);
   const routePlanRequestAbort = useRef<AbortController | null>(null);
-  const routePlanRequestOwner = useRef<string | null>(null);
+  const routePlanRequest = useRef<PendingPathRequest | null>(null);
   const routePlanElevationAbort = useRef<AbortController | null>(null);
   const routePlanElevationOwner = useRef<string | null>(null);
   const previewSaveInProgress = useRef(false);
@@ -728,6 +848,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const latestOpenedTrackId = useRef<string | null>(null);
   const latestOpenedTrackWrite = useRef<Promise<void>>(Promise.resolve());
   const renderedTrackId = useRef<string | null>(null);
+  const renderedPath = useRef<TrackPath | null>(null);
   const initiallyRestoredTrackId = useRef<string | null>(null);
   const shareResolutionAbort = useRef<AbortController | null>(null);
   const sharedIntent = useRef(parseTrackShareLocation(window.location.hash));
@@ -878,6 +999,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                 summary: latestSummary,
                 content,
                 draftName: latestSummary.name,
+                edit: null,
               });
             } catch {
               await database.saveLatestOpenedTrackId(null);
@@ -1234,7 +1356,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             const content = await database.loadLocalTrackContent(summary.id);
             setActive((current) =>
               current?.kind === 'saved' && current.summary.id === summary.id
-                ? { kind: 'saved', summary, content, draftName: summary.name }
+                ? {
+                    kind: 'saved',
+                    summary,
+                    content,
+                    draftName: summary.name,
+                    // A sync run started by another edit must not end point editing.
+                    edit: current.edit,
+                  }
                 : current,
             );
           })().catch(() => {
@@ -1328,9 +1457,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
-    const hasUnsavedWork =
-      active?.kind === 'preview' ||
-      (active?.kind === 'route-plan' && active.waypoints.length > 0);
+    const hasUnsavedWork = hasUnsavedTrackWork(active);
     if (!hasUnsavedWork) return undefined;
     const preventUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -1354,6 +1481,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (multiTrackMode) {
       renderedTrackId.current = null;
+      renderedPath.current = null;
       mapLayers?.clearPlannedLineGeometry('route-plan');
       if (readyMultiTrackSelections.length === 0) {
         mapLayers?.clearImportedTrackGeometry();
@@ -1375,20 +1503,28 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
     if (active === null) {
       renderedTrackId.current = null;
+      renderedPath.current = null;
       mapLayers?.clearImportedTrackGeometry();
       mapLayers?.clearPlannedLineGeometry('route-plan');
       return;
     }
-    if (active.kind === 'route-plan') {
-      renderedTrackId.current = null;
+    if (active.kind === 'route-plan' || activePath !== null) {
+      renderedTrackId.current =
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
+        active.kind === 'saved' ? `${active.summary.id}:edit` : null;
+      if (activePath === null || renderedPath.current === activePath.path) return;
+      renderedPath.current = activePath.path;
       mapLayers?.clearImportedTrackGeometry();
       mapLayers?.setPlannedLineGeometry(
         'route-plan',
-        active.legs.flatMap((leg) => leg.sections),
-        [...active.waypoints, ...active.queuedWaypoints],
+        trackPathMapSections(activePath.path),
+        activePath.path.anchors.map((anchor) => anchor.point.coordinate),
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Waypoint style tokens.
+        activePath.variant === 'plan' ? 'numbered' : 'dots',
       );
       return;
     }
+    renderedPath.current = null;
     mapLayers?.clearPlannedLineGeometry('route-plan');
     // Tracks without source elevation fit again once their DEM samples arrive, so the
     // 3D fit can see their relief.
@@ -1402,6 +1538,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
           `${active.id}:${active.preparationStatus}${demRelief ? ':dem' : ''}`
         : active.summary.id;
+    // Leaving point editing redraws the stored track without moving the camera.
+    const returningFromEdit = renderedTrackId.current === `${trackId}:edit`;
     if (renderedTrackId.current === trackId) return;
     const segments =
       active.kind === 'saved'
@@ -1433,14 +1571,14 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     const result = mapLayers?.setImportedTrackGeometry([segments]);
     if (result?.status === 'failed') return;
     renderedTrackId.current = trackId;
-    if (initiallyRestoredTrackId.current !== trackId) {
+    if (initiallyRestoredTrackId.current !== trackId && !returningFromEdit) {
       requestTrackMapFit(segments, elevatedPoints, metrics.bounds);
     }
-  }, [active, mapLayers, multiTrackMode, readyMultiTrackSelections]);
+  }, [active, activePath, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 
   // Only the open plan's latest leg is drawn; a closed or replaced plan hides it.
   const visibleRouteSearchTrace =
-    active?.kind === 'route-plan' && routePlanSearchTrace?.planId === active.id
+    activePathOwner !== null && routePlanSearchTrace?.planId === activePathOwner
       ? routePlanSearchTrace.trace
       : null;
   useEffect(() => {
@@ -1530,9 +1668,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         reportImportError(msg`Choose a file with a .gpx, .fit, or .kml extension.`);
         return;
       }
-      const replacingUnsavedTrack =
-        active?.kind === 'preview' ||
-        (active?.kind === 'route-plan' && active.waypoints.length > 0);
+      const replacingUnsavedTrack = hasUnsavedTrackWork(active);
       if (
         replacingUnsavedTrack &&
         !window.confirm(t`Discard the current unsaved track and import another file?`)
@@ -1668,7 +1804,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (trailRouter === null) return;
     const replacingUnsavedTrack =
       active?.kind === 'preview' ||
-      (active?.kind === 'route-plan' && active.waypoints.length > 0);
+      (active?.kind === 'route-plan' && active.path.anchors.length > 0) ||
+      (active?.kind === 'saved' && (active.edit?.history.length ?? 0) > 0);
     if (
       replacingUnsavedTrack &&
       !window.confirm(t`Discard the current unsaved track and start a new route?`)
@@ -1696,116 +1833,96 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setMobileWorkspaceOpen(false);
   }, [active, idGenerator, setMobileWorkspaceOpen, t, trailRouter]);
 
-  const enrichRoutePlan = useCallback(
-    (draft: RoutePlanDraft) => {
-      if (
-        draft.status !== 'elevation-enriching' ||
-        draft.segment === null ||
-        draft.pendingRequest !== null ||
-        draft.queuedWaypoints.length > 0
-      ) {
-        return;
+  /** Applies `update` to the open point editor, if it still belongs to `owner`. */
+  const updateActivePath = useCallback(
+    (owner: string | null, update: PathDraftUpdate) => {
+      setActive((current) => {
+        if (owner !== null && pathOwnerKey(current) !== owner) return current;
+        if (current?.kind === 'route-plan') return update(current);
+        if (current?.kind === 'saved' && current.edit !== null) {
+          return { ...current, edit: update(current.edit) };
+        }
+        return current;
+      });
+    },
+    [],
+  );
+  const editActivePath = useCallback(
+    (update: PathDraftUpdate) => {
+      if (routePlanSaveInProgress.current) return;
+      updateActivePath(null, update);
+    },
+    [updateActivePath],
+  );
+
+  useEffect(() => {
+    const owner = activePathOwner;
+    const draft = activePath;
+    if (
+      owner === null ||
+      draft?.status !== 'elevation-enriching' ||
+      draft.geometry === null
+    ) {
+      if (routePlanElevationAbort.current !== null) {
+        routePlanElevationAbort.current.abort();
+        routePlanElevationAbort.current = null;
+        routePlanElevationOwner.current = null;
+        setElevationProgress(null);
       }
-      const planId = draft.id;
-      const requestGeneration = draft.requestGeneration;
-      const owner = `${planId}:${String(requestGeneration)}`;
-      if (
-        routePlanElevationOwner.current === owner &&
-        routePlanElevationAbort.current !== null
-      ) {
-        return;
-      }
-      const controller = new AbortController();
-      routePlanElevationAbort.current?.abort();
-      routePlanElevationAbort.current = controller;
-      routePlanElevationOwner.current = owner;
-      void prepareImportedTrack([draft.segment], elevationProvider, controller.signal, {
+      return;
+    }
+    const generation = draft.requestGeneration;
+    const elevationOwner = `${owner}:${String(generation)}`;
+    if (routePlanElevationOwner.current === elevationOwner) return;
+    const controller = new AbortController();
+    routePlanElevationAbort.current?.abort();
+    routePlanElevationAbort.current = controller;
+    routePlanElevationOwner.current = elevationOwner;
+    const owns = () =>
+      routePlanElevationAbort.current === controller && !controller.signal.aborted;
+    const variant = draft.variant;
+    void prepareImportedTrack(
+      draft.geometry.segments,
+      elevationProvider,
+      controller.signal,
+      {
         preserveGeometry: true,
         sampleIntervalMeters: 30,
         maximumElevationSamples: 5_000,
         onProgress: (progress) => {
-          if (
-            !controller.signal.aborted &&
-            routePlanElevationAbort.current === controller &&
-            routePlanElevationOwner.current === owner
-          ) {
-            setElevationProgress(progress);
-          }
+          if (owns()) setElevationProgress(progress);
         },
+      },
+    )
+      .then((prepared) => trackPathElevationFromPrepared(variant, prepared))
+      .catch(() => null)
+      .then((elevation) => {
+        if (!owns()) return;
+        updateActivePath(owner, (current) =>
+          finishTrackPathElevation(current, generation, elevation),
+        );
       })
-        .then((prepared) => {
-          const ownsElevation =
-            routePlanElevationAbort.current === controller &&
-            routePlanElevationOwner.current === owner;
-          if (controller.signal.aborted || !ownsElevation) return;
-          const segment =
-            prepared.calculatedSegments?.[0] ?? prepared.sourceSegments[0];
-          const profile = prepared.calculatedProfile ?? prepared.sourceProfile;
-          if (segment === undefined || profile === null) {
-            throw new Error('Elevation data is unavailable for this route.');
-          }
-          setActive((current) =>
-            current?.kind === 'route-plan' &&
-            current.id === planId &&
-            current.requestGeneration === requestGeneration &&
-            current.status === 'elevation-enriching' &&
-            current.pendingRequest === null &&
-            current.queuedWaypoints.length === 0
-              ? finishRoutePlanElevation(current, segment, profile)
-              : current,
-          );
-        })
-        .catch(() => {
-          const ownsElevation =
-            routePlanElevationAbort.current === controller &&
-            routePlanElevationOwner.current === owner;
-          if (controller.signal.aborted || !ownsElevation) return;
-          setActive((current) =>
-            current?.kind === 'route-plan' &&
-            current.id === planId &&
-            current.requestGeneration === requestGeneration &&
-            current.status === 'elevation-enriching' &&
-            current.pendingRequest === null &&
-            current.queuedWaypoints.length === 0
-              ? finishRoutePlanElevation(current, null, null)
-              : current,
-          );
-        })
-        .finally(() => {
-          if (
-            routePlanElevationAbort.current === controller &&
-            routePlanElevationOwner.current === owner
-          ) {
-            routePlanElevationAbort.current = null;
-            routePlanElevationOwner.current = null;
-            setElevationProgress(null);
-          }
-        });
-    },
-    [elevationProvider],
-  );
+      .finally(() => {
+        if (routePlanElevationAbort.current === controller) {
+          routePlanElevationAbort.current = null;
+          routePlanElevationOwner.current = null;
+          setElevationProgress(null);
+        }
+      });
+  }, [activePath, activePathOwner, elevationProvider, updateActivePath]);
 
   useEffect(() => {
-    if (
-      active?.kind === 'route-plan' &&
-      active.status === 'elevation-enriching' &&
-      active.pendingRequest === null &&
-      active.queuedWaypoints.length === 0
-    ) {
-      enrichRoutePlan(active);
-    }
-  }, [active, enrichRoutePlan]);
-
-  useEffect(() => {
-    if (active?.kind !== 'route-plan' || active.pendingRequest === null) return;
-    const request = active.pendingRequest;
-    const owner = `${active.id}:${String(request.generation)}`;
-    if (routePlanRequestOwner.current === owner) return;
-
-    const controller = new AbortController();
+    const owner = activePathOwner;
+    const request = activePath?.pendingRequest ?? null;
+    if (request === routePlanRequest.current) return;
     routePlanRequestAbort.current?.abort();
+    routePlanRequestAbort.current = null;
+    routePlanRequest.current = request;
+    if (request === null || owner === null) return;
+    const controller = new AbortController();
     routePlanRequestAbort.current = controller;
-    routePlanRequestOwner.current = owner;
+    const owns = () =>
+      routePlanRequest.current === request && !controller.signal.aborted;
     const unavailable: TrailRouteResult = {
       status: 'failed',
       reason: 'routing-data-unavailable',
@@ -1818,32 +1935,21 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         : trailRouter
             .route(
               {
-                start: request.start,
-                destination: request.destination,
+                waypoints: request.waypoints,
                 includeSearchTrace: developerMode && mapDebugOptions.showRouteSearch,
               },
               controller.signal,
               (progress) => {
-                setActive((current) =>
-                  current?.kind === 'route-plan' &&
-                  current.id === active.id &&
-                  current.status === 'calculating' &&
-                  current.pendingRequest === request &&
-                  current.requestGeneration === request.generation &&
-                  routePlanRequestAbort.current === controller &&
-                  routePlanRequestOwner.current === owner
-                    ? updateRoutePlanProgress(current, request.generation, progress)
-                    : current,
+                if (!owns()) return;
+                updateActivePath(owner, (current) =>
+                  updateTrackPathProgress(current, request, progress),
                 );
               },
             )
             .catch(() => unavailable)
     )
       .then((result) => {
-        const ownsRequest =
-          routePlanRequestAbort.current === controller &&
-          routePlanRequestOwner.current === owner;
-        if (controller.signal.aborted || !ownsRequest) return;
+        if (!owns()) return;
         // The option may have been turned off while the worker was still searching.
         const { developerMode: showsSearch, mapDebugOptions: debugOptions } =
           useUiStore.getState();
@@ -1852,96 +1958,38 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             !showsSearch ||
             !debugOptions.showRouteSearch
             ? null
-            : { planId: active.id, trace: result.searchTrace },
+            : { planId: owner, trace: result.searchTrace },
         );
-        setActive((current) => {
-          if (
-            current?.kind !== 'route-plan' ||
-            current.id !== active.id ||
-            current.status !== 'calculating' ||
-            current.pendingRequest !== request ||
-            current.requestGeneration !== request.generation
-          ) {
-            return current;
-          }
-          const completed = completeRoutePlanPoint(current, request, result);
-          return completed.pendingRequest === null &&
-            completed.queuedWaypoints.length === 0 &&
-            completed.status === 'route-ready'
-            ? beginRoutePlanElevation(completed)
-            : completed;
-        });
+        updateActivePath(owner, (current) =>
+          completeTrackPathRequest(current, request, result),
+        );
       })
       .finally(() => {
-        if (
-          routePlanRequestAbort.current === controller &&
-          routePlanRequestOwner.current === owner
-        ) {
+        if (routePlanRequestAbort.current === controller) {
           routePlanRequestAbort.current = null;
-          routePlanRequestOwner.current = null;
         }
       });
-  }, [active, trailRouter]);
+  }, [activePath, activePathOwner, trailRouter, updateActivePath]);
 
-  const addRoutePlanPoint = useCallback((coordinate: TrackCoordinate) => {
-    if (routePlanSaveInProgress.current) return;
-    routePlanElevationAbort.current?.abort();
-    routePlanElevationOwner.current = null;
-    setElevationProgress(null);
-    setActive((current) => {
-      if (current?.kind !== 'route-plan') return current;
-      const next = enqueueRoutePlanPoint(current, coordinate);
-      return next.status === 'route-ready' &&
-        next.pendingRequest === null &&
-        next.queuedWaypoints.length === 0
-        ? beginRoutePlanElevation(next)
-        : next;
-    });
-  }, []);
+  const placePathPoint = useCallback(
+    (coordinate: TrackCoordinate) => {
+      editActivePath((draft) => placeTrackPathPoint(draft, coordinate));
+    },
+    [editActivePath],
+  );
 
-  const setNextSegmentMode = useCallback((mode: RoutePlanSegmentMode) => {
+  const undoPathEdit = useCallback(() => {
     if (routePlanSaveInProgress.current) return;
-    setActive((current) =>
-      current?.kind === 'route-plan' ? setRoutePlanSegmentMode(current, mode) : current,
-    );
-  }, []);
-
-  const undoLastRoutePlanPoint = useCallback(() => {
-    if (routePlanSaveInProgress.current) return;
-    if (active?.kind !== 'route-plan') return;
-    routePlanRequestAbort.current?.abort();
-    routePlanElevationAbort.current?.abort();
-    setElevationProgress(null);
     setRoutePlanSearchTrace(null);
-    const undone = undoRoutePlanPoint(active);
-    setActive((current) =>
-      current?.kind === 'route-plan' && current.id === active.id
-        ? undone.status === 'route-ready'
-          ? beginRoutePlanElevation(undone)
-          : undone
-        : current,
-    );
+    updateActivePath(null, undoTrackPathEdit);
     setMobileWorkspaceOpen(false);
-  }, [active, setMobileWorkspaceOpen]);
+  }, [setMobileWorkspaceOpen, updateActivePath]);
 
+  const pathShortcutsActive = activePath !== null && activePath.status !== 'saving';
   useEffect(() => {
-    if (
-      active?.kind !== 'route-plan' ||
-      active.status === 'saving' ||
-      active.waypoints.length === 0
-    ) {
-      return undefined;
-    }
-    const undoOnShortcut = (event: KeyboardEvent) => {
-      if (
-        event.code !== 'KeyZ' ||
-        !(event.ctrlKey || event.metaKey) ||
-        event.shiftKey ||
-        event.altKey
-      ) {
-        return;
-      }
-      // Text fields keep their own undo, such as the track name.
+    if (!pathShortcutsActive) return undefined;
+    const handleShortcut = (event: KeyboardEvent) => {
+      // Text fields keep their own undo and Escape, such as the track name.
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -1951,23 +1999,36 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       ) {
         return;
       }
+      if (event.key === 'Escape') {
+        editActivePath((draft) =>
+          draft.movingAnchorId !== null
+            ? cancelTrackPathMove(draft)
+            : endTrackPathInsertion(draft),
+        );
+        return;
+      }
+      if (
+        event.code !== 'KeyZ' ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
       event.preventDefault();
-      undoLastRoutePlanPoint();
+      undoPathEdit();
     };
-    window.addEventListener('keydown', undoOnShortcut);
+    window.addEventListener('keydown', handleShortcut);
     return () => {
-      window.removeEventListener('keydown', undoOnShortcut);
+      window.removeEventListener('keydown', handleShortcut);
     };
-  }, [active, undoLastRoutePlanPoint]);
+  }, [editActivePath, pathShortcutsActive, undoPathEdit]);
 
   const clearRoutePlan = useCallback(() => {
     if (routePlanSaveInProgress.current) return;
-    routePlanRequestAbort.current?.abort();
-    routePlanElevationAbort.current?.abort();
-    setElevationProgress(null);
     setRoutePlanSearchTrace(null);
     setActive((current) =>
-      current?.kind === 'route-plan' ? clearRoutePlanDraft(current) : current,
+      current?.kind === 'route-plan' ? clearTrackPath(current) : current,
     );
     setMobileWorkspaceOpen(false);
   }, [setMobileWorkspaceOpen]);
@@ -1976,7 +2037,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (routePlanSaveInProgress.current) return;
     if (
       active?.kind === 'route-plan' &&
-      active.waypoints.length > 0 &&
+      active.path.anchors.length > 0 &&
       !window.confirm(t`Discard this unsaved track?`)
     ) {
       return;
@@ -1992,26 +2053,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const saveRoutePlan = useCallback(async () => {
     if (
       active?.kind !== 'route-plan' ||
-      !canSaveRoutePlan(active) ||
-      active.segment === null ||
-      active.metrics === null ||
+      !canSaveTrackPath(active) ||
       routePlanSaveInProgress.current
     ) {
       return;
     }
+    const stored = trackPathSaveContent(active);
+    if (stored === null) return;
     routePlanSaveInProgress.current = true;
-    routePlanRequestAbort.current?.abort();
-    routePlanElevationAbort.current?.abort();
-    routePlanElevationAbort.current = null;
-    routePlanElevationOwner.current = null;
-    setElevationProgress(null);
     const planId = active.id;
-    const previousStatus = active.status;
-    const segment = active.segment;
-    const metrics = active.metrics;
     setActive((current) =>
       current?.kind === 'route-plan' && current.id === planId
-        ? { ...current, status: 'saving' }
+        ? beginTrackPathSave(current)
         : current,
     );
     const generation = importGeneration.current;
@@ -2021,7 +2074,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       const content: LocalTrackContent = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         trackId: planId,
-        trackPoints: [segment.points],
+        trackPoints: stored.trackPoints,
         markers: [],
       };
       const summary: LocalTrackSummary = {
@@ -2036,9 +2089,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         favorite: false,
         geometryKind: 'route',
         folderId: null,
-        pointCount: segment.points.length,
-        segmentCount: 1,
-        metrics,
+        pointCount: stored.trackPoints.reduce(
+          (count, points) => count + points.length,
+          0,
+        ),
+        segmentCount: stored.trackPoints.length,
+        metrics: stored.metrics,
         metadata: {
           version: '1.1',
           name: normalizedName.name,
@@ -2057,7 +2113,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         current.id === planId &&
         current.status === 'saving' &&
         generation === importGeneration.current
-          ? { kind: 'saved', summary, content, draftName: summary.name }
+          ? { kind: 'saved', summary, content, draftName: summary.name, edit: null }
           : current,
       );
       await reloadSummaries();
@@ -2067,10 +2123,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       .catch((error: unknown) => {
         if (generation !== importGeneration.current) return;
         setActive((current) =>
-          current?.kind === 'route-plan' &&
-          current.id === planId &&
-          current.status === 'saving'
-            ? { ...current, status: previousStatus }
+          current?.kind === 'route-plan' && current.id === planId
+            ? cancelTrackPathSave(current)
             : current,
         );
         setError(trackNameFailureMessage(error, msg`The route could not be saved.`));
@@ -2174,7 +2228,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         current.preparationStatus === 'ready' &&
         current.id === previewId &&
         generation === importGeneration.current
-          ? { kind: 'saved', summary, content, draftName: summary.name }
+          ? { kind: 'saved', summary, content, draftName: summary.name, edit: null }
           : current,
       );
       if (unsavedTrackTimeline?.trackId === previewId) {
@@ -2383,9 +2437,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const closeActive = useCallback(async () => {
     if (routePlanSaveInProgress.current) return false;
-    const closingUnsavedTrack =
-      active?.kind === 'preview' ||
-      (active?.kind === 'route-plan' && active.waypoints.length > 0);
+    const closingUnsavedTrack = hasUnsavedTrackWork(active);
     if (closingUnsavedTrack && !window.confirm(t`Discard this unsaved track?`)) {
       return false;
     }
@@ -2512,9 +2564,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const selectSaved = useCallback(
     async (summary: LocalTrackSummary) => {
       if (routePlanSaveInProgress.current) return;
-      const replacingUnsavedTrack =
-        active?.kind === 'preview' ||
-        (active?.kind === 'route-plan' && active.waypoints.length > 0);
+      const replacingUnsavedTrack = hasUnsavedTrackWork(active);
       if (
         replacingUnsavedTrack &&
         !window.confirm(t`Discard the current unsaved track and open the saved track?`)
@@ -2542,7 +2592,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         if (generation !== importGeneration.current) return;
         setActive((current) =>
           generation === importGeneration.current
-            ? { kind: 'saved', summary, content, draftName: summary.name }
+            ? { kind: 'saved', summary, content, draftName: summary.name, edit: null }
             : current,
         );
         setError(null);
@@ -2687,7 +2737,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         current?.kind === 'saved' &&
         current.summary.id === source.id &&
         generation === importGeneration.current
-          ? { kind: 'saved', summary, content, draftName: summary.name }
+          ? { kind: 'saved', summary, content, draftName: summary.name, edit: null }
           : current,
       );
       setError(null);
@@ -2947,25 +2997,219 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [savedTrackContent],
   );
   const activeProfile =
-    active === null
-      ? null
-      : active.kind === 'saved'
-        ? savedTrackProfile
-        : active.kind === 'route-plan'
-          ? active.profile
+    activePath !== null
+      ? (activePath.elevation?.profile ?? null)
+      : active === null || active.kind === 'route-plan'
+        ? null
+        : active.kind === 'saved'
+          ? savedTrackProfile
           : active.preparationStatus === 'ready'
             ? (active.sourceProfile ?? active.calculatedProfile)
             : null;
   const activeStatsMetrics = useMemo<TrackStatsMetrics | null>(() => {
-    if (active === null) return null;
-    if (active.kind === 'route-plan') return active.metrics;
+    if (activePath !== null) return trackPathMetrics(activePath);
+    if (active === null || active.kind === 'route-plan') return null;
     if (active.kind === 'saved') return active.summary.metrics;
     if (active.preparationStatus !== 'ready') return null;
     if (active.sourceProfile === null && active.calculatedMetrics !== null) {
       return active.calculatedMetrics;
     }
     return active.sourceMetrics;
-  }, [active]);
+  }, [active, activePath]);
+
+  const startTrackEdit = useCallback(() => {
+    if (active?.kind !== 'saved' || active.edit !== null || multiTrackMode) return;
+    const { content, summary } = active;
+    // DEM-promoted elevation is recomputed after edits, so it never counts as recorded.
+    const path = trackPathFromSegments(content.trackPoints, {
+      stripElevation: summary.metrics.elevationSource === 'dem-assisted',
+    });
+    const calculatedPoints = content.calculatedTrackPoints;
+    const calculatedMetrics = summary.calculatedMetrics;
+    const edit = startTrackPathEdit(
+      path,
+      savedTrackProfile === null
+        ? null
+        : {
+            profile: savedTrackProfile,
+            trackPoints: content.trackPoints,
+            metrics: summary.metrics,
+            calculated:
+              calculatedPoints === undefined || calculatedMetrics === undefined
+                ? null
+                : { trackPoints: calculatedPoints, metrics: calculatedMetrics },
+          },
+    );
+    cancelMarkerPlacement();
+    setActive((current) =>
+      current?.kind === 'saved' &&
+      current.summary.id === summary.id &&
+      current.edit === null
+        ? { ...current, edit }
+        : current,
+    );
+  }, [active, multiTrackMode, savedTrackProfile]);
+
+  const cancelTrackEdit = useCallback(() => {
+    if (active?.kind !== 'saved' || active.edit === null) return;
+    if (active.edit.status === 'saving') return;
+    if (
+      active.edit.history.length > 0 &&
+      !window.confirm(t`Discard your point edits?`)
+    ) {
+      return;
+    }
+    const trackId = active.summary.id;
+    setRoutePlanSearchTrace(null);
+    setActive((current) =>
+      current?.kind === 'saved' && current.summary.id === trackId
+        ? { ...current, edit: null }
+        : current,
+    );
+  }, [active, t]);
+
+  const saveTrackEdit = useCallback(async () => {
+    if (
+      active?.kind !== 'saved' ||
+      active.edit === null ||
+      !canSaveTrackPath(active.edit) ||
+      routePlanSaveInProgress.current
+    ) {
+      return;
+    }
+    const stored = trackPathSaveContent(active.edit);
+    if (stored === null) return;
+    routePlanSaveInProgress.current = true;
+    const trackId = active.summary.id;
+    setActive((current) =>
+      current?.kind === 'saved' &&
+      current.summary.id === trackId &&
+      current.edit !== null
+        ? { ...current, edit: beginTrackPathSave(current.edit) }
+        : current,
+    );
+    const generation = importGeneration.current;
+    const saveEdit = async () => {
+      const content: LocalTrackContentBuilder = {
+        schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+        trackId,
+        trackPoints: stored.trackPoints,
+        markers: active.content.markers,
+      };
+      if (stored.calculated !== null) {
+        content.calculatedTrackPoints = stored.calculated.trackPoints;
+      }
+      const summary: LocalTrackSummaryBuilder = {
+        ...active.summary,
+        updatedAt: clock.now().toISOString(),
+        contentHash: await trackContentHasher.hash(content),
+        pointCount: stored.trackPoints.reduce(
+          (count, points) => count + points.length,
+          0,
+        ),
+        segmentCount: stored.trackPoints.length,
+        metrics: stored.metrics,
+      };
+      delete summary.calculatedMetrics;
+      if (stored.calculated !== null)
+        summary.calculatedMetrics = stored.calculated.metrics;
+      await database.replaceLocalTrackGeometry(summary, content);
+      void userData.trackSaved(trackId);
+      if (generation !== importGeneration.current) return;
+      setActive((current) =>
+        current?.kind === 'saved' && current.summary.id === trackId
+          ? { ...current, summary, content, edit: null }
+          : current,
+      );
+      await reloadSummaries();
+      setError(null);
+    };
+    await saveEdit()
+      .catch(() => {
+        if (generation !== importGeneration.current) return;
+        setActive((current) =>
+          current?.kind === 'saved' &&
+          current.summary.id === trackId &&
+          current.edit !== null
+            ? { ...current, edit: cancelTrackPathSave(current.edit) }
+            : current,
+        );
+        setError(msg`The track could not be saved.`);
+      })
+      .finally(() => {
+        routePlanSaveInProgress.current = false;
+      });
+  }, [active, clock, database, reloadSummaries, trackContentHasher, userData]);
+
+  const storedPointsPath = useMemo(
+    () =>
+      savedTrackContent === null
+        ? null
+        : trackPathFromSegments(savedTrackContent.trackPoints, {
+            stripElevation: false,
+          }),
+    [savedTrackContent],
+  );
+  const listedPath = multiTrackMode ? null : (activePath?.path ?? storedPointsPath);
+  const pointsList = useMemo(
+    () => (listedPath === null ? null : trackPointsList(listedPath, activeProfile)),
+    [activeProfile, listedPath],
+  );
+  const pointSelection =
+    pointSelectionState !== null && pointSelectionState.path === listedPath
+      ? pointSelectionState.selection
+      : null;
+  const setPointSelection = useCallback(
+    (selection: TrackPointsSelection | null) => {
+      setPointSelectionState(
+        selection === null || listedPath === null
+          ? null
+          : { path: listedPath, selection },
+      );
+    },
+    [listedPath],
+  );
+  const selectPathPointNear = useCallback(
+    (click: TrackPointClick) => {
+      if (listedPath === null) return;
+      const index = nearestTrackPathAnchor(
+        listedPath,
+        [click.coordinate.longitude, click.coordinate.latitude],
+        click.toleranceMeters,
+      );
+      if (index === null) {
+        setPointSelectionState(null);
+        return;
+      }
+      const selection =
+        click.shiftKey && pointSelection !== null
+          ? {
+              first: Math.min(pointSelection.first, index),
+              last: Math.max(pointSelection.last, index),
+            }
+          : { first: index, last: index };
+      setPointSelectionState({ path: listedPath, selection });
+      setPointRevealRequest({ index });
+    },
+    [listedPath, pointSelection],
+  );
+  useEffect(() => {
+    mapLayers?.setTrackPointSelection(
+      listedPath === null || pointSelection === null
+        ? null
+        : trackPathSelectionGeometry(
+            listedPath,
+            pointSelection.first,
+            pointSelection.last,
+          ),
+    );
+  }, [listedPath, mapLayers, pointSelection]);
+  useEffect(
+    () => () => {
+      mapLayers?.setTrackPointSelection(null);
+    },
+    [mapLayers],
+  );
   const multiTrackStatsMetrics = useMemo(
     () =>
       multiTrackMode &&
@@ -2996,7 +3240,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             color: appColors.elevationGrade[gradeSubsegment.band],
           }));
         })
-      : active?.kind === 'route-plan' || activeProfile === null
+      : activePathOwner !== null || activeProfile === null
         ? null
         : activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
             coordinates: activeProfile.points
@@ -3009,7 +3253,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           }));
     mapLayers?.setImportedTrackHighlight(highlightSegments);
   }, [
-    active?.kind,
+    activePathOwner,
     activeProfile,
     mapLayers,
     multiTrackMode,
@@ -3022,8 +3266,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () => ({
       active,
       activeProfile,
+      activePath,
+      pointsList,
+      pointSelection,
+      setPointSelection,
+      pointRevealRequest,
+      selectPathPointNear,
+      placePathPoint,
+      editActivePath,
+      undoPathEdit,
+      startTrackEdit,
+      cancelTrackEdit,
+      saveTrackEdit,
       activeStatsMetrics,
-      addRoutePlanPoint,
       clearRoutePlan,
       elevationProgress,
       error: errorMessage,
@@ -3064,11 +3319,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       saveRoutePlan,
       selectSaved,
       refocusActiveTrack,
-      setNextSegmentMode,
       startRoutePlan,
       setActiveName,
       setQuery,
-      undoLastRoutePlanPoint,
       toggleMultiTrackMode,
       toggleMultiTrackSelection,
       toggleFavorite,
@@ -3076,8 +3329,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }),
     [
       active,
-      addRoutePlanPoint,
       activeProfile,
+      activePath,
+      pointsList,
+      pointSelection,
+      setPointSelection,
+      pointRevealRequest,
+      selectPathPointNear,
+      placePathPoint,
+      editActivePath,
+      undoPathEdit,
+      startTrackEdit,
+      cancelTrackEdit,
+      saveTrackEdit,
       activeStatsMetrics,
       applyGeneratedName,
       elevationProgress,
@@ -3117,11 +3381,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       saveRoutePlan,
       selectSaved,
       refocusActiveTrack,
-      setNextSegmentMode,
       startRoutePlan,
       setActiveName,
       setQuery,
-      undoLastRoutePlanPoint,
       thumbnails,
       summaries,
       updateFolder,
@@ -4671,8 +4933,26 @@ function InteractiveElevationProfile({
   profile,
   showHeading = true,
 }: InteractiveElevationProfileProps): ReactElement {
-  const { active, elevationProgress, recalculateElevation, recalculationState } =
-    useTracksWorkspace();
+  const {
+    active,
+    activePath,
+    elevationProgress,
+    pointSelection,
+    pointsList,
+    recalculateElevation,
+    recalculationState,
+  } = useTracksWorkspace();
+  const selectionStart =
+    pointSelection === null ? undefined : pointsList?.anchors[pointSelection.first];
+  const selectionEnd =
+    pointSelection === null ? undefined : pointsList?.anchors[pointSelection.last];
+  const highlightedDistanceRange =
+    selectionStart === undefined || selectionEnd === undefined
+      ? null
+      : {
+          startMeters: selectionStart.distanceMeters,
+          endMeters: selectionEnd.distanceMeters,
+        };
   const { database, logger, mapLayers } = useRuntimeServices();
   const trackGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
@@ -4774,7 +5054,7 @@ function InteractiveElevationProfile({
       {showHeading && recalculationState === 'recalculating' ? (
         <ElevationPreparationChart
           progress={elevationProgress}
-          showProgressStatus={active?.kind !== 'route-plan'}
+          showProgressStatus={activePath === null}
         />
       ) : (
         <ElevationProfileChart
@@ -4782,6 +5062,7 @@ function InteractiveElevationProfile({
           showHeading={showHeading}
           activeSegmentIndex={activeSegmentIndex}
           selectedSegmentIndex={selectedSegmentIndex}
+          highlightedDistanceRange={highlightedDistanceRange}
           onActivePointChange={(point) => {
             if (point === tracedPoint.current) return;
             tracedPoint.current = point;
@@ -4805,7 +5086,7 @@ function InteractiveElevationProfile({
           }}
         />
       )}
-      {showHeading && active?.kind !== 'route-plan' ? (
+      {showHeading && activePath === null ? (
         <ClimbsDescentsSection
           recalculating={
             recalculationState === 'recalculating' ||
@@ -4832,6 +5113,7 @@ function InteractiveElevationProfile({
 function TrackElevationAnalysis() {
   const {
     active,
+    activePath,
     activeProfile: profile,
     elevationProgress,
     recalculateElevation,
@@ -4839,7 +5121,7 @@ function TrackElevationAnalysis() {
   } = useTracksWorkspace();
   if (active === null) return null;
   const preparing =
-    (active.kind === 'route-plan' && active.status === 'elevation-enriching') ||
+    activePath?.status === 'elevation-enriching' ||
     (active.kind === 'preview' && active.preparationStatus === 'preparing');
   const emptyOrPreparing =
     preparing || profile === null ? (
@@ -4847,7 +5129,7 @@ function TrackElevationAnalysis() {
         {preparing ? (
           <ElevationPreparationChart
             progress={elevationProgress}
-            showProgressStatus={active.kind !== 'route-plan'}
+            showProgressStatus={activePath === null}
           />
         ) : (
           <Stack spacing={1.5}>
@@ -4879,7 +5161,7 @@ function TrackElevationAnalysis() {
             </Box>
           </Stack>
         )}
-        {active.kind === 'route-plan' ? null : (
+        {activePath !== null ? null : (
           <ClimbsDescentsSection
             recalculating={
               recalculationState === 'recalculating' ||
@@ -5075,11 +5357,19 @@ export function TrackDetailsPane({
     recalculationState,
     elevationProgress,
     setActiveName,
-    setNextSegmentMode,
+    activePath,
+    pointsList,
+    pointSelection,
+    setPointSelection,
+    pointRevealRequest,
+    editActivePath,
+    undoPathEdit,
+    startTrackEdit,
+    cancelTrackEdit,
+    saveTrackEdit,
     toggleFavorite,
     toggleMultiTrackMode,
     trackWeatherPreferences,
-    undoLastRoutePlanPoint,
     updateActiveTrackWeatherTimeline,
     updateTrackWeatherPreferences,
   } = useTracksWorkspace();
@@ -5103,6 +5393,8 @@ export function TrackDetailsPane({
   );
   const [deletingTrackId, setDeletingTrackId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  // Move and Add hand the next click to the map, so a smartphone reveals it.
+  const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   if (multiTrackMode && multiTrackSelections.length > 0) {
     return (
       <Box
@@ -5284,7 +5576,7 @@ export function TrackDetailsPane({
           : null;
   const pointCount =
     active.kind === 'route-plan'
-      ? (active.segment?.points.length ?? active.waypoints.length)
+      ? active.path.anchors.length
       : active.kind === 'saved'
         ? active.summary.pointCount
         : active.preparationStatus === 'ready'
@@ -5296,9 +5588,7 @@ export function TrackDetailsPane({
   const savedAt = active.kind === 'saved' ? active.summary.savedAt : undefined;
   const segmentCount =
     active.kind === 'route-plan'
-      ? active.segment === null
-        ? 0
-        : 1
+      ? (active.geometry?.segments.length ?? 0)
       : active.kind === 'saved'
         ? active.summary.segmentCount
         : active.preparationStatus === 'ready'
@@ -5324,6 +5614,12 @@ export function TrackDetailsPane({
         : active.parsed.warnings;
   const warningCount = warnings.length;
   const savedTrackId = active.kind === 'saved' ? active.summary.id : null;
+  const pathInsertion = activePath?.insertion ?? null;
+  const movingAnchorId = activePath?.movingAnchorId ?? null;
+  const movingIndex =
+    movingAnchorId === null || pointsList === null
+      ? -1
+      : pointsList.path.anchors.findIndex((anchor) => anchor.id === movingAnchorId);
   const renaming = savedTrackId !== null && renamingTrackId === savedTrackId;
   const confirmingDelete =
     savedTrackId !== null && confirmingDeleteTrackId === savedTrackId;
@@ -5446,7 +5742,7 @@ export function TrackDetailsPane({
             </span>
           </Tooltip>
         ) : null}
-        {active.kind === 'saved' ? (
+        {active.kind === 'saved' && active.edit === null ? (
           <ClickAwayListener
             onClickAway={() => {
               if (confirmingDelete && !deleting) setConfirmingDeleteTrackId(null);
@@ -5618,9 +5914,17 @@ export function TrackDetailsPane({
               onClear={clearRoutePlan}
               onDiscard={discardRoutePlan}
               onNameChange={setActiveName}
-              onNextSegmentModeChange={setNextSegmentMode}
               onSave={() => void saveRoutePlan()}
-              onUndo={undoLastRoutePlanPoint}
+              onUndo={undoPathEdit}
+            />
+          ) : null}
+          {active.kind === 'saved' && active.edit !== null ? (
+            <TrackEditControls
+              draft={active.edit}
+              elevationProgress={elevationProgress}
+              onCancel={cancelTrackEdit}
+              onSave={() => void saveTrackEdit()}
+              onUndo={undoPathEdit}
             />
           ) : null}
           {active.kind === 'preview' ? (
@@ -5754,7 +6058,7 @@ export function TrackDetailsPane({
           <TrackElevationAnalysis
             key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
           />
-          {trackMarkers === null ? null : (
+          {trackMarkers === null || activePath !== null ? null : (
             <TrackMarkersSection
               key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
               elevationProvider={elevationProvider}
@@ -5764,9 +6068,7 @@ export function TrackDetailsPane({
               onDelete={deleteTrackMarker}
             />
           )}
-          {active.kind === 'route-plan' ||
-          activeProfile === null ||
-          metrics === null ? null : (
+          {activePath !== null || activeProfile === null || metrics === null ? null : (
             <TrackWeatherSection
               key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
               profile={activeProfile}
@@ -5777,7 +6079,62 @@ export function TrackDetailsPane({
               onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
             />
           )}
-          {active.kind === 'route-plan' ? null : (
+          {pointsList === null ? null : (
+            <TrackPointsSection
+              key={`points:${active.kind === 'saved' ? active.summary.id : active.id}`}
+              variant={active.kind === 'route-plan' ? 'plan' : 'track'}
+              editing={activePath !== null}
+              anchors={pointsList.anchors}
+              legs={pointsList.legs}
+              insertion={
+                pathInsertion === null
+                  ? null
+                  : {
+                      afterIndex:
+                        pathInsertion.afterAnchorId === null
+                          ? -1
+                          : pointsList.path.anchors.findIndex(
+                              (anchor) => anchor.id === pathInsertion.afterAnchorId,
+                            ),
+                      mode: pathInsertion.mode,
+                    }
+              }
+              movingIndex={movingIndex < 0 ? null : movingIndex}
+              selection={pointSelection}
+              revealRequest={pointRevealRequest}
+              disabled={activePath?.status === 'saving'}
+              {...(active.kind === 'saved' && activePath === null
+                ? { onStartEditing: startTrackEdit }
+                : {})}
+              onSelectionChange={setPointSelection}
+              onDeleteSelection={(selection) => {
+                editActivePath((draft) =>
+                  deleteTrackPathAnchors(draft, selection.first, selection.last),
+                );
+              }}
+              onMoveStart={(index) => {
+                editActivePath((draft) => startTrackPathMove(draft, index));
+                setMobileWorkspaceOpen(false);
+              }}
+              onMoveCancel={() => {
+                editActivePath(cancelTrackPathMove);
+              }}
+              onInsertionStart={(afterIndex) => {
+                editActivePath((draft) => startTrackPathInsertion(draft, afterIndex));
+                setMobileWorkspaceOpen(false);
+              }}
+              onInsertionModeChange={(mode) => {
+                editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
+              }}
+              onInsertionEnd={() => {
+                editActivePath(endTrackPathInsertion);
+              }}
+              onLegModeChange={(legIndex, mode) => {
+                editActivePath((draft) => setTrackPathLegMode(draft, legIndex, mode));
+              }}
+            />
+          )}
+          {active.kind === 'route-plan' || activePath !== null ? null : (
             <TrackMetadata
               calculatedMetrics={calculatedMetrics}
               pointCount={pointCount}
@@ -5787,12 +6144,12 @@ export function TrackDetailsPane({
               sourceFormat={sourceFormat}
             />
           )}
-          {segmentCount > 1 ? (
+          {segmentCount > 1 && activePath === null ? (
             <Alert severity="info">
               <Trans>Independent segments are not joined; totals exclude gaps.</Trans>
             </Alert>
           ) : null}
-          {warnings.length > 0 ? (
+          {warnings.length > 0 && activePath === null ? (
             <Alert severity="warning">
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 <Plural

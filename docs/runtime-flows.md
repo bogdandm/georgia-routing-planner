@@ -508,11 +508,12 @@ sequenceDiagram
   participant Storage as AppDatabase
 
   User->>Tracks: Plan route, then click waypoints
-  alt Routes leg
-    Tracks->>Router: route(start, destination, signal)
+  alt Routed legs
+    Tracks->>Router: route(waypoints, signal)
     Router->>Worker: validated request over WorkerRpc
-    Worker->>Worker: load bounded MVT, build graph, sample DEM, snap, bidirectional A*
-    Worker-->>Tracks: routed geometry and progress events
+    Worker->>Worker: load union of per-leg MVT areas once, build graph, snap every waypoint
+    Worker->>Worker: sample DEM, bidirectional A* per consecutive waypoint pair
+    Worker-->>Tracks: joined per-leg geometry and progress events
   else Line leg
     Tracks->>Tracks: append direct segment
   end
@@ -523,21 +524,34 @@ sequenceDiagram
 ```
 
 The first click creates only a waypoint; each later click uses the currently selected
-mode. The worker filters the detail-vector `streets` layer to road and path lines, nodes
-eligible junctions through a bounded spatial index (layer and bridge/tunnel differences
-prevent inferred connections), samples DEM elevation for the graph, snaps both
-endpoints, and runs bidirectional A* (NBA\*, Pijls & Post 2009) whose arc cost is the
-DIN 33466 hiking time of each edge — the walking-time estimate's model applied per edge,
-so climbing never overlaps flat walking elsewhere — and a short climb loses to a
-slightly longer level detour. Each edge keeps an elevation profile from its node
-elevations plus 30 m interior samples; a snap inside an edge splits that profile at the
-snap point. Both search heuristics are DIN times for the straight-line distance and net
-elevation change, which keeps them consistent and the route optimal. Without usable
-terrain the same search minimizes distance. A no-path result expands the tile coverage
-once within the same budgets. Failures are explicit — no path, area too large, routing
-data unavailable, 60 s timeout (`ROUTE_CALCULATION_TIMEOUT_MS`), or invalid data — and
-never become a direct line. A developer flag returns the arcs each search direction
-relaxed for map display.
+mode. One router request carries an ordered list of 2 to `MAXIMUM_TRAIL_ROUTE_WAYPOINTS`
+(16) waypoints and returns one leg per consecutive pair. Each leg gets its own padded
+area — a quarter of its length, 2 to 5 km — and the worker loads the union of those
+tiles once per attempt, so an L-shaped request is not charged for its bounding box; the
+512-tile budget applies to the union. Longitudes unwrap along the waypoint chain, which
+keeps every area in one tile frame across the antimeridian. The worker filters the
+detail-vector `streets` layer to road and path lines, nodes eligible junctions through a
+bounded spatial index (layer and bridge/tunnel differences prevent inferred
+connections), and snaps every waypoint to the nearest edge within 200 m; any waypoint
+without one fails the request with all such waypoint indexes. It samples DEM elevation
+for the graph once and runs bidirectional A* (NBA\*, Pijls & Post 2009) for each leg,
+with an arc cost of the DIN 33466 hiking time of each edge — the walking-time estimate's
+model applied per edge, so climbing never overlaps flat walking elsewhere — and a short
+climb loses to a slightly longer level detour. Each edge keeps an elevation profile from
+its node elevations plus 30 m interior samples; a snap inside an edge splits that
+profile at the snap point. Both search heuristics are DIN times for the straight-line
+distance and net elevation change, which keeps them consistent and the route optimal.
+Without usable terrain the same search minimizes distance. A waypoint snaps to one point
+for the whole request, so each leg ends exactly where the next one begins.
+
+When a leg's exhausted search reached a node on the edge of the covered tile set — a
+tile edge whose neighbour is not loaded, or geometry outside the set — the request
+retries once with every leg's padding doubled; otherwise the failure names the first leg
+without a connection. Failures are explicit — no nearby trail, no path, area too large,
+routing data unavailable, 60 s timeout for the whole request
+(`ROUTE_CALCULATION_TIMEOUT_MS`), or invalid data, including a leg count that does not
+match the waypoints — and never become a direct line. A developer flag returns the arcs
+each search direction relaxed, concatenated over legs, for map display.
 
 Every click, mode change, Undo, Clear, close, and unmount aborts work from an older
 route-plan generation, and stale completions are ignored. Routed legs keep the clicked
@@ -630,6 +644,25 @@ Each snapshot is grouped by lineage. A ready GRPT v2 member is the lineage head 
 over a higher-revision v1 predecessor. A browser holding source elevation for a v1
 lineage uploads a v2 replacement under the same local track ID, then deletes the
 predecessor at its observed revision. Quota exhaustion leaves both objects intact.
+
+A point edit replaces a saved track's geometry under the same local ID (record rules in
+[data-model.md](data-model.md#browser-synchronization-state)). Its upload carries the
+acknowledged predecessors, plus any unconfirmed predecessor an interrupted run left in
+the account, as metadata `replacesContentHashes`. Only after the server applies that
+upload does the worker delete the predecessors still in the first snapshot at their
+observed revisions, skipping records another local track holds or an upload reserves; a
+quota or network failure before then leaves the predecessor intact. Deleting an edited
+track also deletes its predecessors. Every later metadata write repeats the hint, and
+downloads store it in local sync state.
+
+Other browsers resolve hints among ready lineage heads: the newest claim on a content or
+lineage hash wins, a mutual pair left by an undo keeps the higher revision, and chains
+resolve to their last head. A clean or metadata-pending copy of a named geometry
+downloads the replacement into its own local ID, dropping that pending metadata change,
+and is never offered in `RemoteDeletionDialog`, whether the predecessor still exists or
+not. Named records and the browser's own predecessors, such as an upload a further edit
+overtook, are never downloaded as separate tracks. Concurrent geometry edits on two
+browsers stay two tracks.
 
 The worker validates remote records and private GZIP objects, performs pending deletes
 first, and merges a second full snapshot atomically. A known same-account revision

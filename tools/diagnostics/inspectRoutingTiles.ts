@@ -217,19 +217,22 @@ function routeStressReport(
     return {
       ...base,
       reason: result.reason,
-      endpoint: result.endpoint ?? null,
+      waypointIndexes: result.waypointIndexes ?? null,
+      legIndex: result.legIndex ?? null,
     };
   }
   return {
     ...base,
-    snappedStart: result.snappedStart,
-    snappedDestination: result.snappedDestination,
-    networkDistanceMeters: result.networkDistanceMeters,
+    legs: result.legs.map((leg) => ({
+      snappedStart: leg.snappedStart,
+      snappedDestination: leg.snappedDestination,
+      networkDistanceMeters: leg.networkDistanceMeters,
+      geometryPointCount: leg.geometry.coordinates.length,
+    })),
     loadedTileCount: result.loadedTileCount,
     graphNodeCount: result.graphNodeCount,
     graphEdgeCount: result.graphEdgeCount,
     expandedAreaRetryUsed: result.expandedAreaRetryUsed,
-    geometryPointCount: result.geometry.coordinates.length,
   };
 }
 
@@ -256,7 +259,10 @@ async function runRouteStress(
       result = await executeTrailRoute(
         initialization.loader,
         null,
-        { ...input, includeSearchTrace: false },
+        {
+          waypoints: [input.start, input.destination],
+          includeSearchTrace: false,
+        },
         signal,
       );
     } finally {

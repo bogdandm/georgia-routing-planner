@@ -31,6 +31,14 @@ import {
 
 import type { TrailRouteSearchTrace } from '@/application/ports/TrailRouter';
 
+/** The Points list's insertion row owns the mode of new points while planning. */
+function newPointsMode(name: 'Line' | 'Routes'): HTMLElement {
+  return within(screen.getByRole('group', { name: 'New points mode' })).getByRole(
+    'button',
+    { name },
+  );
+}
+
 describe('WorkspaceShell', () => {
   setupWorkspaceShellTest();
 
@@ -81,7 +89,7 @@ describe('WorkspaceShell', () => {
     });
     expect(await screen.findByText('Loading route tiles…')).toBeVisible();
     expect(route).toHaveBeenCalledWith(
-      { start: A, destination: B, includeSearchTrace: false },
+      { waypoints: [A, B], includeSearchTrace: false },
       expect.any(AbortSignal),
       expect.any(Function),
     );
@@ -129,27 +137,31 @@ describe('WorkspaceShell', () => {
 
     routePending.resolve({
       status: 'ready',
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [snappedA[0], snappedA[1]],
-          [routedMiddle[0], routedMiddle[1]],
-          [snappedB[0], snappedB[1]],
-        ],
-      },
-      networkDistanceMeters: 1_200,
-      snappedStart: snappedA,
-      snappedDestination: snappedB,
+      legs: [
+        {
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [snappedA[0], snappedA[1]],
+              [routedMiddle[0], routedMiddle[1]],
+              [snappedB[0], snappedB[1]],
+            ],
+          },
+          networkDistanceMeters: 1_200,
+          snappedStart: snappedA,
+          snappedDestination: snappedB,
+        },
+      ],
       loadedTileCount: 9,
       graphNodeCount: 100,
       graphEdgeCount: 120,
       expandedAreaRetryUsed: false,
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Line' })).toBeEnabled();
+      expect(newPointsMode('Line')).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     });
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(newPointsMode('Line'));
     act(() => {
       facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
     });
@@ -160,10 +172,7 @@ describe('WorkspaceShell', () => {
 
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
-        'aria-pressed',
-        'true',
-      );
+      expect(newPointsMode('Line')).toHaveAttribute('aria-pressed', 'true');
     });
     act(() => {
       facade.emitPlanningClick({ longitude: C[0], latitude: C[1] });
@@ -216,12 +225,12 @@ describe('WorkspaceShell', () => {
     });
     expect(
       await screen.findByText(
-        'No connected route was found. Add a closer point or use Line for the next segment.',
+        'No connected route was found. Add a closer point or use Line for this segment.',
       ),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(newPointsMode('Line'));
     act(() => {
       facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
     });
@@ -233,10 +242,7 @@ describe('WorkspaceShell', () => {
       await screen.findByText('Click the map to choose the route start.'),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(newPointsMode('Line')).toHaveAttribute('aria-pressed', 'true');
 
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
@@ -290,7 +296,7 @@ describe('WorkspaceShell', () => {
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     await user.click(screen.getByRole('button', { name: 'Plan route' }));
     expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(newPointsMode('Line'));
 
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
@@ -406,10 +412,7 @@ describe('WorkspaceShell', () => {
       screen.queryByRole('toolbar', { name: 'Route planning' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Click the map to choose the next point.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(newPointsMode('Line')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('undoes the last route point with Ctrl+Z or Cmd+Z outside text fields', async () => {
@@ -422,7 +425,7 @@ describe('WorkspaceShell', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     await user.click(screen.getByRole('button', { name: 'Plan route' }));
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(newPointsMode('Line'));
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });
@@ -627,7 +630,7 @@ describe('WorkspaceShell', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     await user.click(screen.getByRole('button', { name: 'Plan route' }));
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(newPointsMode('Line'));
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });
@@ -685,7 +688,7 @@ describe('WorkspaceShell', () => {
     );
     await user.click(screen.getByRole('tab', { name: 'Tracks' }));
     await user.click(screen.getByRole('button', { name: 'Plan route' }));
-    await user.click(screen.getByRole('button', { name: 'Line' }));
+    await user.click(newPointsMode('Line'));
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });

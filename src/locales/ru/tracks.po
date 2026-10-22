@@ -101,6 +101,11 @@ msgstr "{name} (в обратную сторону)"
 msgid "{pointCount, plural, one {# point} other {# points}} · {segmentCount, plural, one {# segment} other {# segments}}"
 msgstr "{pointCount, plural, one {# точка} few {# точки} many {# точек} other {# точки}} · {segmentCount, plural, one {# сегмент} few {# сегмента} many {# сегментов} other {# сегмента}}"
 
+#. js-lingui-id: JbXNdO
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "{selectedCount, plural, one {# point selected} other {# points selected}}"
+msgstr "{selectedCount, plural, one {Выбрана # точка} few {Выбрано # точки} many {Выбрано # точек} other {Выбрано # точки}}"
+
 #. js-lingui-id: l1OB5S
 #: src/presentation/tracks/trackFormatters.ts
 msgid "{speed} km/h"
@@ -146,6 +151,11 @@ msgstr "Сегмент, в котором меньше двух корректн
 msgid "A waypoint with invalid coordinates was skipped."
 msgstr "Путевая точка с некорректными координатами пропущена."
 
+#. js-lingui-id: m16xKo
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Add"
+msgstr "Добавить"
+
 #. js-lingui-id: kCoVTh
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Add at least two route points to see the elevation profile."
@@ -155,6 +165,28 @@ msgstr "Добавьте хотя бы две точки маршрута, чт�
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Add at least two route points to see track details."
 msgstr "Добавьте хотя бы две точки маршрута, чтобы увидеть сведения о треке."
+
+#. js-lingui-id: D7zLnj
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Add points"
+msgstr "Добавить точки"
+
+#. js-lingui-id: P1uw31
+#. placeholder {0}: pointNumber(afterIndex)
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Add points after point {0}"
+msgstr "Добавить точки после точки {0}"
+
+#. js-lingui-id: zbXiTY
+#. placeholder {0}: pointNumber(0)
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Add points before point {0}"
+msgstr "Добавить точки перед точкой {0}"
+
+#. js-lingui-id: 5_RmmP
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Add points between points {from} and {to}"
+msgstr "Добавить точки между точками {from} и {to}"
 
 #. js-lingui-id: pBsoKL
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -232,8 +264,10 @@ msgid "By elevation"
 msgstr "По высоте"
 
 #. js-lingui-id: dEgA5A
+#: src/presentation/tracks/RoutePlanControls.tsx
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx
 #: src/presentation/tracks/TrackMarkersSection.tsx
+#: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Cancel"
 msgstr "Отмена"
 
@@ -257,6 +291,21 @@ msgstr "Выбрать значок папки"
 msgid "Clear"
 msgstr "Очистить"
 
+#. js-lingui-id: FBIuPX
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Clear selection"
+msgstr "Снять выделение"
+
+#. js-lingui-id: SrFkSB
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Click the map to add points"
+msgstr "Нажмите на карту, чтобы добавить точки"
+
+#. js-lingui-id: 1cxc33
+#: src/presentation/tracks/RoutePlanControls.tsx
+msgid "Click the map to add points."
+msgstr "Нажмите на карту, чтобы добавить точки."
+
 #. js-lingui-id: XWJtTP
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "Click the map to choose the next point."
@@ -266,6 +315,16 @@ msgstr "Нажмите на карту, чтобы выбрать следующ
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "Click the map to choose the route start."
 msgstr "Нажмите на карту, чтобы выбрать начало маршрута."
+
+#. js-lingui-id: CvFBNF
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Click the map to move point {number}"
+msgstr "Нажмите на карту, чтобы переместить точку {number}"
+
+#. js-lingui-id: HNR6op
+#: src/presentation/tracks/RoutePlanControls.tsx
+msgid "Click the map to move the point."
+msgstr "Нажмите на карту, чтобы переместить точку."
 
 #. js-lingui-id: EEa1Qu
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
@@ -353,6 +412,11 @@ msgstr "Создать трек в обратную сторону"
 msgid "Day"
 msgstr "День"
 
+#. js-lingui-id: cnGeoo
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Delete"
+msgstr "Удалить"
+
 #. js-lingui-id: Y2tU6I
 #. placeholder {0}: summary.name
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -373,6 +437,11 @@ msgstr "Удалить папку"
 #: src/presentation/tracks/TrackMarkersSection.tsx
 msgid "Delete marker"
 msgstr "Удалить метку"
+
+#. js-lingui-id: tmYaDG
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Delete point {number}"
+msgstr "Удалить точку {number}"
 
 #. js-lingui-id: 0mPUcN
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -416,6 +485,11 @@ msgstr "Сбросить текущий несохранённый трек и �
 msgid "Discard this unsaved track?"
 msgstr "Сбросить этот несохранённый трек?"
 
+#. js-lingui-id: nneRKj
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Discard your point edits?"
+msgstr "Отменить изменения точек?"
+
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
 #: src/presentation/tracks/ElevationProfileChart.tsx
@@ -428,6 +502,11 @@ msgstr "Расстояние"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Distance from map center"
 msgstr "По расстоянию от центра карты"
+
+#. js-lingui-id: DPfwMq
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Done"
+msgstr "Готово"
 
 #. js-lingui-id: VbJKn0
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -474,6 +553,11 @@ msgstr "Редактировать {0}"
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx
 msgid "Edit folder"
 msgstr "Редактировать папку"
+
+#. js-lingui-id: Wm7go4
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Edit points"
+msgstr "Редактировать точки"
 
 #. js-lingui-id: fkcYqc
 #: src/presentation/tracks/ElevationProfileChart.tsx
@@ -642,6 +726,7 @@ msgstr "Элемент перемещён."
 
 #. js-lingui-id: rjuFFw
 #: src/presentation/tracks/RoutePlanControls.tsx
+#: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Line"
 msgstr "Прямая"
 
@@ -732,6 +817,11 @@ msgstr "Переместить {0}"
 msgid "Move cancelled."
 msgstr "Перемещение отменено."
 
+#. js-lingui-id: DCIVh_
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Move point {number}"
+msgstr "Переместить точку {number}"
+
 #. js-lingui-id: RSjgBr
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Multiple track details"
@@ -772,6 +862,11 @@ msgstr "Сервис поиска ближайших ориентиров не �
 msgid "Nearby landmark lookup was rate-limited by the provider (HTTP 429); wait a minute and import the track again."
 msgstr "Сервис ограничил поиск ближайших ориентиров (HTTP 429); подождите минуту и импортируйте трек снова."
 
+#. js-lingui-id: A5vcao
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "New points mode"
+msgstr "Режим новых точек"
+
 #. js-lingui-id: E6zZ7b
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "New route"
@@ -793,10 +888,10 @@ msgstr "Сначала новые"
 msgid "Next segment"
 msgstr "Следующий участок"
 
-#. js-lingui-id: 6X7FFe
+#. js-lingui-id: ANszNw
 #: src/presentation/tracks/RoutePlanControls.tsx
-msgid "No connected route was found. Add a closer point or use Line for the next segment."
-msgstr "Связный маршрут не найден. Добавьте точку ближе или постройте следующий участок в режиме «Прямая»."
+msgid "No connected route was found. Add a closer point or use Line for this segment."
+msgstr "Связный маршрут не найден. Добавьте точку ближе или выберите «Прямая» для этого участка."
 
 #. js-lingui-id: 15C5dj
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -818,25 +913,25 @@ msgstr "Не удалось подобрать название. На сохра
 msgid "No markers for this track."
 msgstr "У этого трека нет меток."
 
-#. js-lingui-id: j_87cK
+#. js-lingui-id: dm55Zp
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "No points in this track."
+msgstr "В этом треке нет точек."
+
+#. js-lingui-id: _b_J83
 #: src/presentation/tracks/RoutePlanControls.tsx
-msgid "No routable trail or road was found within 200 m of the destination point."
-msgstr "В радиусе 200 м от конечной точки не найдено троп или дорог, пригодных для маршрута."
+msgid "No routable trail or road was found within 200 m of point {point}."
+msgstr "В радиусе 200 м от точки {point} не найдено троп или дорог, пригодных для маршрута."
+
+#. js-lingui-id: RsdaRD
+#: src/presentation/tracks/RoutePlanControls.tsx
+msgid "No routable trail or road was found within 200 m of points {points}."
+msgstr "В радиусе 200 м от точек {points} не найдено троп или дорог, пригодных для маршрута."
 
 #. js-lingui-id: Y06z93
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "No routable trail or road was found within 200 m of the selected point."
 msgstr "В радиусе 200 м от выбранной точки не найдено троп или дорог, пригодных для маршрута."
-
-#. js-lingui-id: IDMNkm
-#: src/presentation/tracks/RoutePlanControls.tsx
-msgid "No routable trail or road was found within 200 m of the start and destination points."
-msgstr "В радиусе 200 м от начальной и конечной точек не найдено троп или дорог, пригодных для маршрута."
-
-#. js-lingui-id: D-Ws8T
-#: src/presentation/tracks/RoutePlanControls.tsx
-msgid "No routable trail or road was found within 200 m of the start point."
-msgstr "В радиусе 200 м от начальной точки не найдено троп или дорог, пригодных для маршрута."
 
 #. js-lingui-id: HWGZtY
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -884,6 +979,21 @@ msgstr "Элемент взят."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Picked up track {0}."
 msgstr "Взят трек «{0}»."
+
+#. js-lingui-id: bd2MAa
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Point {number}, {distance}, {elevation}"
+msgstr "Точка {number}, {distance}, {elevation}"
+
+#. js-lingui-id: COUcFd
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Points"
+msgstr "Точки"
+
+#. js-lingui-id: cnsRKg
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Points ({countLabel})"
+msgstr "Точки ({countLabel})"
 
 #. js-lingui-id: RefI49
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -977,6 +1087,7 @@ msgstr "Старт маршрута"
 
 #. js-lingui-id: kKayYU
 #: src/presentation/tracks/RoutePlanControls.tsx
+#: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Routes"
 msgstr "По дорогам"
 
@@ -1028,6 +1139,11 @@ msgstr "Не удалось загрузить сохранённые треки
 msgid "Saving route…"
 msgstr "Сохранение маршрута…"
 
+#. js-lingui-id: yAPngR
+#: src/presentation/tracks/RoutePlanControls.tsx
+msgid "Saving track…"
+msgstr "Сохранение трека…"
+
 #. js-lingui-id: Ekds9Z
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Search saved tracks"
@@ -1038,10 +1154,25 @@ msgstr "Поиск по сохранённым трекам"
 msgid "Searching for a route…"
 msgstr "Поиск маршрута…"
 
+#. js-lingui-id: 6QRiaf
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Segment between points {fromNumber} and {toNumber}"
+msgstr "Участок между точками {fromNumber} и {toNumber}"
+
+#. js-lingui-id: Os1Hqk
+#: src/presentation/tracks/RoutePlanControls.tsx
+msgid "Select points in the list or on the map."
+msgstr "Выберите точки в списке или на карте."
+
 #. js-lingui-id: jGHUWA
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Selected tracks"
 msgstr "Выбранные треки"
+
+#. js-lingui-id: WHczic
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Separate segment"
+msgstr "Отдельный сегмент"
 
 #. js-lingui-id: qu-1YC
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1383,6 +1514,11 @@ msgstr "Введите название трека."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Track name must be 200 characters or fewer."
 msgstr "Название трека должно быть не длиннее 200 символов."
+
+#. js-lingui-id: ZV-vA6
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Track points"
+msgstr "Точки трека"
 
 #. js-lingui-id: 2eFlmt
 #: src/presentation/tracks/TrackShareTable.tsx

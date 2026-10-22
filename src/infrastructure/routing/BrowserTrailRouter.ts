@@ -141,7 +141,14 @@ export class BrowserTrailRouter implements TrailRouter {
         { request, progressToken },
         routeSignal,
       );
-      return parseTrailRouteResult(result);
+      const parsed = parseTrailRouteResult(result);
+      if (
+        parsed.status === 'ready' &&
+        parsed.legs.length !== request.waypoints.length - 1
+      ) {
+        return { status: 'failed', reason: 'routing-data-invalid' };
+      }
+      return parsed;
     } catch (error) {
       return this.routeFailure(error, signal, timeoutSignal);
     } finally {

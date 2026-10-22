@@ -16,6 +16,7 @@ import {
   RoutingTileLoader,
   coverRoutingBounds,
   expandRoutingBounds,
+  routingLegBounds,
   routingPaddingMeters,
   type LoadedRoutingArea,
 } from '@/infrastructure/routing/routingTiles';
@@ -224,12 +225,6 @@ function loadedArea(
         key: [ROUTING_ZOOM, tileX, tileY].join('/'),
       },
     ],
-    rectangle: {
-      minTileX: tileX,
-      maxTileX: tileX,
-      minTileY: tileY,
-      maxTileY: tileY,
-    },
     lines,
   };
 }
@@ -246,12 +241,14 @@ describe('routing tile coverage and decoding', () => {
       (tileX + 1) * MVT_GRAPH_EXTENT,
       (tileY + 1) * MVT_GRAPH_EXTENT,
     );
-    const oneTile = coverRoutingBounds({
-      west: northWest[0],
-      north: northWest[1],
-      east: southEast[0],
-      south: southEast[1],
-    });
+    const oneTile = coverRoutingBounds([
+      {
+        west: northWest[0],
+        north: northWest[1],
+        east: southEast[0],
+        south: southEast[1],
+      },
+    ]);
     expect(oneTile).toEqual({
       status: 'ready',
       coverage: {
@@ -264,12 +261,6 @@ describe('routing tile coverage and decoding', () => {
             key: [ROUTING_ZOOM, tileX, tileY].join('/'),
           },
         ],
-        rectangle: {
-          minTileX: tileX,
-          maxTileX: tileX,
-          minTileY: tileY,
-          maxTileY: tileY,
-        },
       },
     });
 
@@ -283,7 +274,7 @@ describe('routing tile coverage and decoding', () => {
     expect(expanded.south).toBeLessThan(start[1]);
     expect(expanded.north).toBeGreaterThan(destination[1]);
 
-    const polar = coverRoutingBounds({ west: 0, east: 0.01, south: 85, north: 90 });
+    const polar = coverRoutingBounds([{ west: 0, east: 0.01, south: 85, north: 90 }]);
     expect(polar.status).toBe('ready');
     if (polar.status === 'ready') {
       expect(polar.coverage.tiles.every((tile) => tile.y >= 0)).toBe(true);
@@ -292,7 +283,7 @@ describe('routing tile coverage and decoding', () => {
       );
     }
     expect(
-      coverRoutingBounds({ west: -180, east: 180, south: -80, north: 80 }),
+      coverRoutingBounds([{ west: -180, east: 180, south: -80, north: 80 }]),
     ).toEqual({ status: 'failed', reason: 'area-too-large' });
 
     // Long legs keep 5 km of detour room, so a 40 km diagonal leg still fits.
@@ -301,9 +292,9 @@ describe('routing tile coverage and decoding', () => {
     const longPadding = routingPaddingMeters(longStart, longDestination);
     expect(geodesicDistanceMeters(longStart, longDestination)).toBeGreaterThan(38_000);
     expect(longPadding).toBe(5_000);
-    const longCoverage = coverRoutingBounds(
+    const longCoverage = coverRoutingBounds([
       expandRoutingBounds(longStart, longDestination, longPadding),
-    );
+    ]);
     expect(longCoverage.status).toBe('ready');
     if (longCoverage.status === 'ready') {
       expect(longCoverage.coverage.tiles.length).toBeLessThanOrEqual(MAX_ROUTING_TILES);
@@ -311,12 +302,14 @@ describe('routing tile coverage and decoding', () => {
   });
 
   it('keeps dateline-adjacent tiles contiguous in graph coordinates', () => {
-    const coverage = coverRoutingBounds({
-      west: 179.99,
-      east: 180.01,
-      south: -0.001,
-      north: 0.001,
-    });
+    const coverage = coverRoutingBounds([
+      {
+        west: 179.99,
+        east: 180.01,
+        south: -0.001,
+        north: 0.001,
+      },
+    ]);
     expect(coverage.status).toBe('ready');
     if (coverage.status === 'failed') return;
 
@@ -326,16 +319,122 @@ describe('routing tile coverage and decoding', () => {
     expect(new Set(coverage.coverage.tiles.map((tile) => tile.graphX))).toEqual(
       new Set([2 ** ROUTING_ZOOM - 1, 2 ** ROUTING_ZOOM]),
     );
-    expect(
-      coverage.coverage.rectangle.maxTileX - coverage.coverage.rectangle.minTileX,
-    ).toBe(1);
+
+    // Waypoints unwrap along the chain, so every leg shares one contiguous tile frame.
+    const chained = coverRoutingBounds(
+      routingLegBounds(
+        [
+          [179.99, 0],
+          [-179.99, 0],
+          [-179.98, 0.01],
+        ],
+        1,
+      ),
+    );
+    expect(chained.status).toBe('ready');
+    if (chained.status === 'failed') return;
+    const graphXs = chained.coverage.tiles.map((tile) => tile.graphX);
+    expect(Math.max(...graphXs) - Math.min(...graphXs) + 1).toBe(new Set(graphXs).size);
+    expect(graphXs).toContain(2 ** ROUTING_ZOOM);
+    expect(graphXs).not.toContain(0);
   });
+
+  it('budgets the union of per-leg areas rather than their bounding box', () => {
+    // About 40 km east, then 40 km north: an L whose hull would need ~800 tiles.
+    const waypoints: readonly TrackCoordinate[] = [
+      [43.5, 42.3],
+      [43.985, 42.3],
+      [43.985, 42.66],
+    ];
+    const legAreas = routingLegBounds(waypoints, 1);
+    expect(legAreas).toHaveLength(2);
+    const union = coverRoutingBounds(legAreas);
+    expect(union.status).toBe('ready');
+    if (union.status === 'failed') return;
+    const keys = union.coverage.tiles.map((tile) => tile.key);
+    expect(keys).toEqual(
+      [...new Set(keys)].sort((left, right) => left.localeCompare(right)),
+    );
+    expect(union.coverage.tiles.length).toBeLessThanOrEqual(MAX_ROUTING_TILES);
+    for (const area of legAreas) {
+      const single = coverRoutingBounds([area]);
+      if (single.status === 'failed') throw new Error(single.reason);
+      expect(keys).toEqual(
+        expect.arrayContaining(single.coverage.tiles.map((tile) => tile.key)),
+      );
+    }
+
+    const hull = {
+      west: Math.min(...legAreas.map((area) => area.west)),
+      south: Math.min(...legAreas.map((area) => area.south)),
+      east: Math.max(...legAreas.map((area) => area.east)),
+      north: Math.max(...legAreas.map((area) => area.north)),
+    };
+    expect(coverRoutingBounds([hull])).toEqual({
+      status: 'failed',
+      reason: 'area-too-large',
+    });
+
+    // Doubling the padding scales every leg's own padding.
+    const expanded = routingLegBounds(waypoints, 2);
+    expect(expanded[0]?.west).toBeLessThan(legAreas[0]?.west ?? Number.NaN);
+    expect(expanded[1]?.north).toBeGreaterThan(legAreas[1]?.north ?? Number.NaN);
+  });
+
+  it('flags graph nodes on the edge of a non-rectangular covered tile set', async () => {
+    // Covered: (x, y), (x + 1, y), (x, y + 1). The tile (x + 1, y + 1) is missing.
+    const tileX = 100;
+    const tileY = 200;
+    const graph = await buildTrailGraph(
+      [
+        line(tileX, tileY, [
+          [2_000, 2_000],
+          [4_096, 2_000],
+        ]),
+        line(tileX + 1, tileY, [
+          [2_000, 2_000],
+          [2_000, 4_096],
+        ]),
+        line(tileX, tileY + 1, [
+          [2_000, 2_000],
+          [4_096, 0],
+        ]),
+        line(tileX, tileY + 1, [
+          [3_000, 3_000],
+          [5_000, 3_000],
+        ]),
+      ],
+      [
+        { graphX: tileX, y: tileY },
+        { graphX: tileX + 1, y: tileY },
+        { graphX: tileX, y: tileY + 1 },
+      ],
+    );
+    const boundaryAt = (globalX: number, globalY: number): boolean | undefined =>
+      graph.nodes.get(`${String(globalX)},${String(globalY)}`)?.boundary;
+    const left = tileX * MVT_GRAPH_EXTENT;
+    const top = tileY * MVT_GRAPH_EXTENT;
+    const extent = MVT_GRAPH_EXTENT;
+
+    expect(graph.nodes.size).toBe(8);
+    expect(boundaryAt(left + 2_000, top + 2_000)).toBe(false);
+    // On the seam between two covered tiles.
+    expect(boundaryAt(left + extent, top + 2_000)).toBe(false);
+    expect(boundaryAt(left + extent + 2_000, top + 2_000)).toBe(false);
+    // On the edge shared with the missing tile, inside the covered hull.
+    expect(boundaryAt(left + extent + 2_000, top + extent)).toBe(true);
+    expect(boundaryAt(left + 2_000, top + extent + 2_000)).toBe(false);
+    // The inner corner touches the missing tile.
+    expect(boundaryAt(left + extent, top + extent)).toBe(true);
+    expect(boundaryAt(left + 3_000, top + extent + 3_000)).toBe(false);
+    // Tile-buffer geometry reaching into the missing tile.
+    expect(boundaryAt(left + extent + 904, top + extent + 3_000)).toBe(true);
+  });
+
   it('decodes valid line parts while skipping polygons and malformed geometry', async () => {
     const loader = await initializedLoader();
     const result = await loader.loadArea(
-      [44.64, 42.66],
-      [44.64, 42.66],
-      10,
+      [expandRoutingBounds([44.64, 42.66], [44.64, 42.66], 10)],
       new AbortController().signal,
     );
     expect(result.status).toBe('ready');
@@ -380,9 +479,7 @@ describe('routing tile coverage and decoding', () => {
     const progress = vi.fn();
 
     const pending = initialized.loader.loadArea(
-      [44.64, 42.66],
-      [44.64, 42.66],
-      8_000,
+      [expandRoutingBounds([44.64, 42.66], [44.64, 42.66], 8_000)],
       new AbortController().signal,
       progress,
     );
@@ -482,7 +579,7 @@ describe('routing tile coverage and decoding', () => {
           2_048,
         ),
       ],
-      { minTileX: tileX, maxTileX: tileX, minTileY: tileY, maxTileY: tileY },
+      [{ graphX: tileX, y: tileY }],
     );
     const centerKey = `${String(tileX * MVT_GRAPH_EXTENT + 2_048)},${String(tileY * MVT_GRAPH_EXTENT + 2_048)}`;
     expect(graph.nodes.has(centerKey)).toBe(true);
@@ -524,12 +621,10 @@ describe('routing tile coverage and decoding', () => {
           [500, 2_500],
         ]),
       ],
-      {
-        minTileX: tileX,
-        maxTileX: tileX + 1,
-        minTileY: tileY,
-        maxTileY: tileY,
-      },
+      [
+        { graphX: tileX, y: tileY },
+        { graphX: tileX + 1, y: tileY },
+      ],
     );
     expect(graph.nodes.size).toBe(3);
     expect(graph.edges.size).toBe(2);
@@ -541,12 +636,7 @@ describe('routing tile coverage and decoding', () => {
   it('nodes X crossings and endpoint-on-interior T junctions', async () => {
     const tileX = 100;
     const tileY = 200;
-    const boundary = {
-      minTileX: tileX,
-      maxTileX: tileX,
-      minTileY: tileY,
-      maxTileY: tileY,
-    };
+    const tiles = [{ graphX: tileX, y: tileY }];
     const crossing = await buildTrailGraph(
       [
         line(tileX, tileY, [
@@ -558,7 +648,7 @@ describe('routing tile coverage and decoding', () => {
           [2_000, 3_000],
         ]),
       ],
-      boundary,
+      tiles,
     );
     expect(crossing.nodes.size).toBe(5);
     expect(crossing.edges.size).toBe(4);
@@ -587,7 +677,7 @@ describe('routing tile coverage and decoding', () => {
           [2_000, 3_000],
         ]),
       ],
-      boundary,
+      tiles,
     );
     expect(tee.nodes.size).toBe(4);
     expect(tee.edges.size).toBe(3);
@@ -610,12 +700,7 @@ describe('routing tile coverage and decoding', () => {
   it('merges endpoint gaps up to two graph units and leaves larger gaps disconnected', async () => {
     const tileX = 100;
     const tileY = 200;
-    const boundary = {
-      minTileX: tileX,
-      maxTileX: tileX,
-      minTileY: tileY,
-      maxTileY: tileY,
-    };
+    const tiles = [{ graphX: tileX, y: tileY }];
     const graphForGap = async (gap: number) =>
       await buildTrailGraph(
         [
@@ -628,7 +713,7 @@ describe('routing tile coverage and decoding', () => {
             [3_000, 2_000],
           ]),
         ],
-        boundary,
+        tiles,
       );
     const merged = await graphForGap(2);
     expect(merged.nodes.size).toBe(3);
@@ -681,12 +766,7 @@ describe('routing tile coverage and decoding', () => {
           [4_000, 2_000],
         ]),
       ],
-      {
-        minTileX: tileX,
-        maxTileX: tileX,
-        minTileY: tileY,
-        maxTileY: tileY,
-      },
+      [{ graphX: tileX, y: tileY }],
     );
     expect(graph.nodes.size).toBe(4);
     expect(graph.edges.size).toBe(3);
@@ -698,12 +778,7 @@ describe('routing tile coverage and decoding', () => {
   it('keeps inferred interior crossings separated by explicit layer or brunnel', async () => {
     const tileX = 100;
     const tileY = 200;
-    const boundary = {
-      minTileX: tileX,
-      maxTileX: tileX,
-      minTileY: tileY,
-      maxTileY: tileY,
-    };
+    const tiles = [{ graphX: tileX, y: tileY }];
     const crossingLines = (
       horizontalMetadata: RoutingLineInput['metadata'],
       verticalMetadata: RoutingLineInput['metadata'],
@@ -731,7 +806,7 @@ describe('routing tile coverage and decoding', () => {
     ];
     const defaultLayer = await buildTrailGraph(
       crossingLines({ class: 'path' }, { class: 'path', layer: '0' }),
-      boundary,
+      tiles,
     );
     expect(defaultLayer.nodes.size).toBe(5);
     expect(defaultLayer.edges.size).toBe(4);
@@ -743,7 +818,7 @@ describe('routing tile coverage and decoding', () => {
         { class: 'path', brunnel: 'tunnel' },
       ),
     ]) {
-      const separated = await buildTrailGraph(separatedLines, boundary);
+      const separated = await buildTrailGraph(separatedLines, tiles);
       expect(separated.nodes.size).toBe(4);
       expect(separated.edges.size).toBe(2);
     }
@@ -771,7 +846,7 @@ describe('routing tile coverage and decoding', () => {
           { class: 'path' },
         ),
       ],
-      boundary,
+      tiles,
     );
     expect(sharedEndpoint.nodes.size).toBe(3);
     expect(sharedEndpoint.edges.size).toBe(2);
@@ -806,12 +881,7 @@ describe('routing tile coverage and decoding', () => {
       [2_000, 1_000],
       [2_000, 3_000],
     ]);
-    const boundary = {
-      minTileX: tileX,
-      maxTileX: tileX,
-      minTileY: tileY,
-      maxTileY: tileY,
-    };
+    const tiles = [{ graphX: tileX, y: tileY }];
     const signature = (graph: TrailGraph) => ({
       nodes: [...graph.nodes.keys()],
       edges: [...graph.edges.keys()],
@@ -822,11 +892,11 @@ describe('routing tile coverage and decoding', () => {
     });
     const first = await buildTrailGraph(
       [horizontal, vertical, horizontalReversed],
-      boundary,
+      tiles,
     );
     const second = await buildTrailGraph(
       [horizontalReversed, horizontal, vertical].reverse(),
-      boundary,
+      tiles,
     );
     expect(signature(second)).toEqual(signature(first));
     expect([...first.edges.values()].every((edge) => edge.distanceMeters > 0)).toBe(
@@ -839,9 +909,7 @@ describe('routing tile coverage and decoding', () => {
     for (let index = 0; index < 200; index += 1) {
       const longitude = -10 + index * 0.1;
       const result = await loader.loadArea(
-        [longitude, 0],
-        [longitude, 0],
-        2_000,
+        [expandRoutingBounds([longitude, 0], [longitude, 0], 2_000)],
         new AbortController().signal,
       );
       expect(result.status).toBe('ready');
@@ -881,9 +949,7 @@ describe('routing tile coverage and decoding', () => {
 
     const loader = await initializedLoader(Buffer.from([255]));
     const invalidPbf = await loader.loadArea(
-      [44.64, 42.66],
-      [44.64, 42.66],
-      2_000,
+      [expandRoutingBounds([44.64, 42.66], [44.64, 42.66], 2_000)],
       new AbortController().signal,
     );
     expect(invalidPbf).toEqual({ status: 'failed', reason: 'routing-data-invalid' });
@@ -916,9 +982,7 @@ describe('routing tile coverage and decoding', () => {
     if (initialized.status === 'failed') throw new Error(initialized.reason);
     const controller = new AbortController();
     const pending = initialized.loader.loadArea(
-      [44.64, 42.66],
-      [44.65, 42.67],
-      2_000,
+      [expandRoutingBounds([44.64, 42.66], [44.65, 42.67], 2_000)],
       controller.signal,
     );
     await Promise.resolve();
@@ -1218,7 +1282,7 @@ describe('trail graph snapping and routing', () => {
     const result = await executeTrailRoute(
       { loadArea },
       null,
-      { start, destination, includeSearchTrace: false },
+      { waypoints: [start, destination], includeSearchTrace: false },
       new AbortController().signal,
       (value) => {
         progress.push(value);
@@ -1228,8 +1292,13 @@ describe('trail graph snapping and routing', () => {
     expect(result.status).toBe('ready');
     if (result.status === 'ready') {
       expect(result.expandedAreaRetryUsed).toBe(true);
-      expect(result.geometry.coordinates[0]).toEqual(result.snappedStart);
-      expect(result.geometry.coordinates.at(-1)).toEqual(result.snappedDestination);
+      expect(result.legs).toHaveLength(1);
+      expect(result.legs[0]?.geometry.coordinates[0]).toEqual(
+        result.legs[0]?.snappedStart,
+      );
+      expect(result.legs[0]?.geometry.coordinates.at(-1)).toEqual(
+        result.legs[0]?.snappedDestination,
+      );
     }
     for (const attempt of [1, 2] as const) {
       const attemptProgress = progress.filter((value) => value.attempt === attempt);
@@ -1257,13 +1326,13 @@ describe('trail graph snapping and routing', () => {
     const snapFailure = await executeTrailRoute(
       snapFailureLoader,
       null,
-      { start, destination, includeSearchTrace: false },
+      { waypoints: [start, destination], includeSearchTrace: false },
       new AbortController().signal,
     );
     expect(snapFailure).toEqual({
       status: 'failed',
       reason: 'no-nearby-trail',
-      endpoint: 'both',
+      waypointIndexes: [0, 1],
     });
     expect(snapFailureLoader.loadArea).toHaveBeenCalledOnce();
 
@@ -1277,7 +1346,7 @@ describe('trail graph snapping and routing', () => {
       executeTrailRoute(
         dataFailureLoader,
         null,
-        { start, destination, includeSearchTrace: false },
+        { waypoints: [start, destination], includeSearchTrace: false },
         new AbortController().signal,
       ),
     ).resolves.toEqual({ status: 'failed', reason: 'routing-data-unavailable' });
@@ -1308,7 +1377,7 @@ describe('trail graph snapping and routing', () => {
     const pending = executeTrailRoute(
       { loadArea },
       null,
-      { start, destination, includeSearchTrace: false },
+      { waypoints: [start, destination], includeSearchTrace: false },
       controller.signal,
       (progress) => {
         if (progress.phase === 'building-graph' && progress.graphProgress === 0.15) {
@@ -1355,15 +1424,143 @@ describe('trail graph snapping and routing', () => {
         }),
       },
       null,
-      { start, destination, includeSearchTrace: false },
+      { waypoints: [start, destination], includeSearchTrace: false },
       new AbortController().signal,
     );
     expect(result.status).toBe('ready');
     if (result.status === 'ready') {
       expect(result.graphNodeCount).toBe(7);
       expect(result.graphEdgeCount).toBe(6);
-      expect(result.geometry.coordinates[0]).toEqual(result.snappedStart);
-      expect(result.geometry.coordinates.at(-1)).toEqual(result.snappedDestination);
+      expect(result.legs[0]?.geometry.coordinates[0]).toEqual(
+        result.legs[0]?.snappedStart,
+      );
+      expect(result.legs[0]?.geometry.coordinates.at(-1)).toEqual(
+        result.legs[0]?.snappedDestination,
+      );
     }
+  });
+
+  describe('multi-waypoint requests', () => {
+    const tileX = 10_000;
+    const tileY = 6_000;
+    const at = (x: number, y: number): TrackCoordinate =>
+      globalMvtVertexToCoordinate(
+        tileX * MVT_GRAPH_EXTENT + x,
+        tileY * MVT_GRAPH_EXTENT + y,
+      );
+    const loaderFor = (lines: readonly RoutingLineInput[]) => ({
+      loadArea: vi.fn().mockResolvedValue({
+        status: 'ready',
+        area: loadedArea(lines, tileX, tileY),
+      }),
+    });
+
+    it('routes every leg on one tile load and joins legs at the shared snapped waypoint', async () => {
+      const routeWaypoints = async (waypoints: readonly TrackCoordinate[]) => {
+        const loader = loaderFor([
+          line(tileX, tileY, [
+            [500, 2_000],
+            [3_500, 2_000],
+          ]),
+        ]);
+        const result = await executeTrailRoute(
+          loader,
+          null,
+          { waypoints, includeSearchTrace: true },
+          new AbortController().signal,
+        );
+        expect(loader.loadArea).toHaveBeenCalledOnce();
+        expect(loader.loadArea.mock.calls[0]?.[0]).toHaveLength(waypoints.length - 1);
+        if (result.status !== 'ready') throw new Error(result.reason);
+        expect(result.legs).toHaveLength(waypoints.length - 1);
+        for (const [index, leg] of result.legs.entries()) {
+          expect(leg.geometry.coordinates[0]).toEqual(leg.snappedStart);
+          expect(leg.geometry.coordinates.at(-1)).toEqual(leg.snappedDestination);
+          const next = result.legs[index + 1];
+          if (next !== undefined)
+            expect(next.snappedStart).toEqual(leg.snappedDestination);
+        }
+        return result;
+      };
+
+      const threeWaypoints = await routeWaypoints([
+        at(1_000, 2_010),
+        at(2_000, 1_990),
+        at(3_000, 2_000),
+      ]);
+      expect(threeWaypoints.legs.map((leg) => leg.networkDistanceMeters > 0)).toEqual([
+        true,
+        true,
+      ]);
+      expect(threeWaypoints.searchTrace?.forward.length).toBeGreaterThan(0);
+
+      const repeatedWaypoint = await routeWaypoints([
+        at(1_000, 2_000),
+        at(2_000, 1_990),
+        at(2_000, 1_990),
+        at(3_000, 2_000),
+      ]);
+      expect(repeatedWaypoint.legs[1]?.networkDistanceMeters).toBe(0);
+    });
+
+    it('reports every waypoint without a nearby trail, including middle ones', async () => {
+      const loader = loaderFor([
+        line(tileX, tileY, [
+          [500, 2_000],
+          [3_500, 2_000],
+        ]),
+      ]);
+      const result = await executeTrailRoute(
+        loader,
+        null,
+        {
+          waypoints: [
+            at(1_000, 2_000),
+            at(2_000, 3_500),
+            at(3_000, 2_000),
+            at(3_000, 500),
+          ],
+          includeSearchTrace: false,
+        },
+        new AbortController().signal,
+      );
+
+      expect(result).toEqual({
+        status: 'failed',
+        reason: 'no-nearby-trail',
+        waypointIndexes: [1, 3],
+      });
+      expect(loader.loadArea).toHaveBeenCalledOnce();
+    });
+
+    it('names the first disconnected leg without retrying an interior dead end', async () => {
+      const loader = loaderFor([
+        line(tileX, tileY, [
+          [500, 1_000],
+          [3_500, 1_000],
+        ]),
+        line(tileX, tileY, [
+          [500, 3_000],
+          [3_500, 3_000],
+        ]),
+      ]);
+      const result = await executeTrailRoute(
+        loader,
+        null,
+        {
+          waypoints: [at(1_000, 1_000), at(3_000, 1_000), at(2_000, 3_000)],
+          includeSearchTrace: true,
+        },
+        new AbortController().signal,
+      );
+
+      expect(result.status).toBe('failed');
+      if (result.status !== 'failed') return;
+      expect(result.reason).toBe('no-route');
+      expect(result.legIndex).toBe(1);
+      expect(result.waypointIndexes).toBeUndefined();
+      expect(result.searchTrace?.forward.length).toBeGreaterThan(0);
+      expect(loader.loadArea).toHaveBeenCalledOnce();
+    });
   });
 });

@@ -28,6 +28,7 @@ const A = [44.64, 42.66] as const;
 const B = [44.65, 42.67] as const;
 const C = [44.66, 42.68] as const;
 const D = [44.67, 42.69] as const;
+const E = [44.68, 42.7] as const;
 const P = [44.655, 42.69] as const;
 
 function leg(start: TrackCoordinate, end: TrackCoordinate): TrailRouteLeg {
@@ -70,9 +71,12 @@ function recordedTrack(): TrackPathDraft {
     { coordinate: C, elevationMeters: 1_200, recordedAt: '2025-06-01T08:20:00Z' },
   ];
   return startTrackPathEdit(
-    trackPathFromSegments([points, [{ coordinate: D, elevationMeters: 900 }]], {
-      stripElevation: false,
-    }),
+    trackPathFromSegments(
+      [points, [{ coordinate: D, elevationMeters: 900 }, { coordinate: E }]],
+      {
+        stripElevation: false,
+      },
+    ),
     null,
   );
 }
@@ -114,6 +118,7 @@ describe('track path editor', () => {
       B,
       C,
       D,
+      E,
     ]);
     // The cursor follows the new point, so the next click continues the run.
     draft = placeTrackPathPoint(draft, C);
@@ -142,6 +147,44 @@ describe('track path editor', () => {
     expect(placeTrackPathPoint(failed, D).failure).toBeNull();
   });
 
+  it('keeps a leg routed during a later queued edit when that edit fails or is undone', () => {
+    let plan = placeTrackPathPoint(startRoutePlan('plan', 'New route'), A);
+    plan = placeTrackPathPoint(plan, B);
+    const first = plan.pendingRequest;
+    if (first === null) throw new Error('Expected the A to B request.');
+    plan = placeTrackPathPoint(plan, C);
+    plan = completeTrackPathRequest(plan, first, success(first.waypoints));
+    const second = plan.pendingRequest;
+    if (second === null) throw new Error('Expected the B to C request.');
+
+    const failed = completeTrackPathRequest(plan, second, {
+      status: 'failed',
+      reason: 'no-route',
+      legIndex: 0,
+    });
+    expect(failed.path.anchors.map((anchor) => anchor.point.coordinate)).toEqual([
+      A,
+      B,
+    ]);
+    expect(failed.pendingRequest).toBeNull();
+
+    const routed = completeTrackPathRequest(plan, second, success(second.waypoints));
+    const undone = undoTrackPathEdit(routed);
+    expect(undone.path.anchors).toHaveLength(2);
+    expect(undone.pendingRequest).toBeNull();
+    expect(canSaveTrackPath(undone)).toBe(true);
+  });
+
+  it('blocks saving while a lone point remains between segment gaps', () => {
+    const lone = deleteTrackPathAnchors(recordedTrack(), 0, 1);
+    expect(lone.path.anchors.map((anchor) => anchor.point.coordinate)).toEqual([
+      C,
+      D,
+      E,
+    ]);
+    expect(lone.path.legs[0]).toEqual({ kind: 'gap' });
+    expect(canSaveTrackPath(lone)).toBe(false);
+  });
   it('ignores a route result for a request superseded by an undo', () => {
     let plan = placeTrackPathPoint(startRoutePlan('plan', 'New route'), A);
     plan = placeTrackPathPoint(plan, B);
@@ -162,6 +205,7 @@ describe('track path editor', () => {
       A,
       C,
       D,
+      E,
     ]);
     expect(joined.path.legs[0]).toEqual({
       kind: 'leg',
@@ -171,10 +215,10 @@ describe('track path editor', () => {
     expect(joined.path.legs[1]).toEqual({ kind: 'gap' });
 
     const acrossGap = deleteTrackPathAnchors(track, 1, 2);
-    expect(acrossGap.path.legs).toEqual([{ kind: 'gap' }]);
+    expect(acrossGap.path.legs[0]).toEqual({ kind: 'gap' });
     expect(trackPathSaveContent(acrossGap)).toBeNull();
 
-    expect(deleteTrackPathAnchors(track, 0, 3).path.anchors).toEqual([]);
+    expect(deleteTrackPathAnchors(track, 0, 4).path.anchors).toEqual([]);
   });
 
   it('moves a point, drops its elevation but keeps its time, and redraws both legs', () => {
@@ -188,6 +232,7 @@ describe('track path editor', () => {
     expect(moved.movingAnchorId).toBeNull();
     expect(trackPathMapSections(moved.path)).toEqual([
       { kind: 'direct', coordinates: [A, P, C] },
+      { kind: 'routed', coordinates: [D, E] },
     ]);
     expect(trackPathSaveContent(moved)?.trackPoints).toEqual([
       [
@@ -195,6 +240,7 @@ describe('track path editor', () => {
         { coordinate: P, recordedAt: '2025-06-01T08:10:00Z' },
         { coordinate: C, elevationMeters: 1_200, recordedAt: '2025-06-01T08:20:00Z' },
       ],
+      [{ coordinate: D, elevationMeters: 900 }, { coordinate: E }],
     ]);
   });
 

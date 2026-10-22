@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LOCAL_TRACK_SCHEMA_VERSION } from '@/domain/tracks/localTrack';
 import { decodeTrackSyncGeometry } from '@/domain/tracks/trackSyncGeometry';
-import type { LocalTrackSyncPair } from '@/infrastructure/persistence/AppDatabase';
+import {
+  MAXIMUM_REPLACED_CONTENT_HASHES,
+  type LocalTrackSyncPair,
+} from '@/infrastructure/persistence/AppDatabase';
 
 import { FetchRemoteGateway } from '@/infrastructure/supabase/TrackSyncWorkerServer';
 
@@ -306,7 +309,9 @@ describe('FetchRemoteGateway', () => {
     for (const replacesContentHashes of [
       'c'.repeat(64),
       ['C'.repeat(64)],
-      Array.from({ length: 17 }, (_, index) => String(index).padStart(64, '0')),
+      Array.from({ length: MAXIMUM_REPLACED_CONTENT_HASHES + 1 }, (_, index) =>
+        String(index).padStart(64, '0'),
+      ),
     ]) {
       vi.stubGlobal(
         'fetch',

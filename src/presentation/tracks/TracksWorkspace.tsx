@@ -368,7 +368,24 @@ function trackPointsList(
           high = middle;
         }
       }
-      elevationMeters = profilePoints[low]?.elevationMeters ?? null;
+      // Interpolate between the samples around the anchor; DEM samples are spaced out.
+      const after = profilePoints[low];
+      const before = profilePoints[low - 1];
+      if (
+        after !== undefined &&
+        before !== undefined &&
+        after.distanceMeters > before.distanceMeters &&
+        after.distanceMeters > distanceMeters
+      ) {
+        const fraction =
+          (distanceMeters - before.distanceMeters) /
+          (after.distanceMeters - before.distanceMeters);
+        elevationMeters =
+          before.elevationMeters +
+          (after.elevationMeters - before.elevationMeters) * fraction;
+      } else {
+        elevationMeters = after?.elevationMeters ?? null;
+      }
     }
     return { key: anchor.id, distanceMeters, elevationMeters };
   });
@@ -1511,7 +1528,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (active.kind === 'route-plan' || activePath !== null) {
       renderedTrackId.current =
         // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
-        active.kind === 'saved' ? `${active.summary.id}:edit` : null;
+        active.kind === 'saved' ? `saved:${active.summary.id}:edit` : null;
       if (activePath === null || renderedPath.current === activePath.path) return;
       renderedPath.current = activePath.path;
       mapLayers?.clearImportedTrackGeometry();
@@ -1538,9 +1555,18 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
           `${active.id}:${active.preparationStatus}${demRelief ? ':dem' : ''}`
         : active.summary.id;
-    // Leaving point editing redraws the stored track without moving the camera.
-    const returningFromEdit = renderedTrackId.current === `${trackId}:edit`;
-    if (renderedTrackId.current === trackId) return;
+    // Saved geometry replaced in place (an edit, or a synchronized edit from another
+    // device) redraws the open track without moving the camera.
+    /* eslint-disable lingui/no-unlocalized-strings -- Render key tokens. */
+    const renderKey =
+      active.kind === 'saved'
+        ? `saved:${active.summary.id}:${active.summary.contentHash ?? ''}`
+        : trackId;
+    if (renderedTrackId.current === renderKey) return;
+    const redrawingSavedTrack =
+      active.kind === 'saved' &&
+      (renderedTrackId.current?.startsWith(`saved:${active.summary.id}:`) ?? false);
+    /* eslint-enable lingui/no-unlocalized-strings */
     const segments =
       active.kind === 'saved'
         ? localTrackSegments(active.content)
@@ -1570,8 +1596,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : calculateTrackMetrics(active.parsed.segments);
     const result = mapLayers?.setImportedTrackGeometry([segments]);
     if (result?.status === 'failed') return;
-    renderedTrackId.current = trackId;
-    if (initiallyRestoredTrackId.current !== trackId && !returningFromEdit) {
+    renderedTrackId.current = renderKey;
+    if (initiallyRestoredTrackId.current !== trackId && !redrawingSavedTrack) {
       requestTrackMapFit(segments, elevatedPoints, metrics.bounds);
     }
   }, [active, activePath, mapLayers, multiTrackMode, readyMultiTrackSelections]);

@@ -185,7 +185,7 @@ Replacing a saved track's geometry in place (point editing) keeps its ID and rew
 summary, content, and sync state in one transaction; a changed content hash becomes a
 null-revision pending upsert. The track's sync state also carries predecessor lists: the
 previous content hash joins `replacesContentHashes` when it was acknowledged and
-`unconfirmedContentHashes` otherwise. Both are newest first, hold at most 16 hashes,
+`unconfirmedContentHashes` otherwise. Both are newest first, hold at most 256 hashes,
 never contain the track's own hash, and are omitted when empty, so undoing an edit
 before synchronization names nothing it would delete. Delete records keep both lists.
 Before synchronization, preparation removes every live local track's hash from them and
@@ -213,9 +213,9 @@ next per-user revision.
 Uploaded metadata is the local summary without POI coordinates and without elevation
 metrics, plus `lineageHash`, `geometryVersion`, track-owned `markers`, nullable
 `folderId`, distance/elapsed-time metrics, and the optional `replacesContentHashes`
-replacement hint (at most 16 lowercase SHA-256 hashes, validated by the browser). The
-function caps it at 64 KiB and rejects a `lineageHash` or `geometryVersion` that does
-not match the uploaded geometry.
+replacement hint (at most 256 lowercase SHA-256 hashes). The function caps it at 64 KiB,
+rejects a malformed replacement hint, and rejects a `lineageHash` or `geometryVersion`
+that does not match the uploaded geometry.
 
 The RPCs reserve, finalize, and release uploads, apply metadata, and hard-delete one
 track. Every mutation locks the user's usage row, and

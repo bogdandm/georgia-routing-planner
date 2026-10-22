@@ -229,14 +229,18 @@ function sectionsCoordinates(
   return coordinates;
 }
 
-/** Null until the path has a segment with two points and every leg is resolved. */
+/**
+ * Null until every leg is resolved and every segment has two points: a lone point
+ * between gaps cannot be stored, so it blocks Save until it is joined or deleted.
+ */
 export function flattenTrackPath(path: TrackPath): TrackPathGeometry | null {
   const segments: TrackSegment[] = [];
   let points: TrackPoint[] = [];
   for (const [index, anchor] of path.anchors.entries()) {
     const leg = index === 0 ? undefined : path.legs[index - 1];
     if (leg?.kind === 'gap') {
-      if (points.length >= 2) segments.push({ points });
+      if (points.length < 2) return null;
+      segments.push({ points });
       points = [];
     } else if (leg !== undefined) {
       if (leg.sections === null) return null;
@@ -245,8 +249,8 @@ export function flattenTrackPath(path: TrackPath): TrackPathGeometry | null {
     }
     points.push(anchor.point);
   }
-  if (points.length >= 2) segments.push({ points });
-  if (segments.length === 0) return null;
+  if (points.length < 2) return null;
+  segments.push({ points });
   return { path, segments, metrics: calculateTrackMetrics(segments) };
 }
 
@@ -769,23 +773,43 @@ export function completeTrackPathRequest<D extends TrackPathDraft>(
       reason: 'routing-data-invalid',
     });
   }
-  const first = anchorIndex(draft.path, request.anchorIds[0] ?? null);
-  const legs = draft.path.legs.map((leg, legIndex) => {
-    const routed = result.legs[legIndex - first];
-    if (routed === undefined) return leg;
+  // Checkpoints taken while this request ran get its legs too, so undoing a later
+  // edit or failing a later request never drops a leg that was already routed.
+  const withRoutedLegs = (path: TrackPath): TrackPath => {
+    if (!requestIsCurrent(path, request)) return path;
+    const first = anchorIndex(path, request.anchorIds[0] ?? null);
+    const legs = path.legs.map((leg, legIndex) => {
+      const routed = result.legs[legIndex - first];
+      if (routed === undefined) return leg;
+      return {
+        kind: 'leg' as const,
+        mode: 'routes' as const,
+        sections: routedLegSections(
+          requiredAnchor(path, legIndex).point.coordinate,
+          requiredAnchor(path, legIndex + 1).point.coordinate,
+          routed,
+        ),
+      };
+    });
+    return { anchors: path.anchors, legs };
+  };
+  const history = draft.history.map((checkpoint): TrackPathCheckpoint => {
+    const path = withRoutedLegs(checkpoint.path);
+    if (path === checkpoint.path) return checkpoint;
+    if (path.legs.some(isUnresolved)) return { ...checkpoint, path };
+    const geometry = flattenTrackPath(path);
     return {
-      kind: 'leg' as const,
-      mode: 'routes' as const,
-      sections: routedLegSections(
-        requiredAnchor(draft.path, legIndex).point.coordinate,
-        requiredAnchor(draft.path, legIndex + 1).point.coordinate,
-        routed,
-      ),
+      ...checkpoint,
+      path,
+      geometry,
+      elevation: null,
+      status: resolvedStatus(path, geometry),
     };
   });
   return resolve({
     ...draft,
-    path: { anchors: draft.path.anchors, legs },
+    path: withRoutedLegs(draft.path),
+    history,
     pendingRequest: null,
   });
 }

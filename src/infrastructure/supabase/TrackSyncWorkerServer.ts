@@ -19,9 +19,12 @@ import type {
   RemoteTrackDeletionCandidate,
 } from '@/application/user/UserDataService';
 import {
+  MAXIMUM_REPLACED_CONTENT_HASHES,
+  equalTrackSyncStates,
   validateLocalTrackSyncPair,
   validateSavedMarkerRecord,
   validateTrackFolderRecord,
+  withReplacedContentHashes,
   type AppDatabase,
   type FolderSyncState,
   type LocalTrackSyncPair,
@@ -57,6 +60,10 @@ const usageSchema = z.object({
 const errorResponseSchema = z.object({
   error: z.object({ code: z.string().regex(/^[a-z0-9_]{1,64}$/) }),
 });
+/** Untrusted `replacesContentHashes` metadata naming records a geometry edit replaced. */
+const replacedContentHashesSchema = z
+  .array(z.string().regex(hashPattern))
+  .max(MAXIMUM_REPLACED_CONTENT_HASHES);
 const remoteRecordSchema = z
   .object({
     content_hash: z.string().regex(hashPattern),
@@ -94,6 +101,16 @@ const remoteRecordSchema = z
       context.addIssue({
         code: 'custom',
         message: 'Track lineage metadata is invalid.',
+      });
+    }
+    if (
+      Object.hasOwn(record.metadata, 'replacesContentHashes') &&
+      !replacedContentHashesSchema.safeParse(record.metadata.replacesContentHashes)
+        .success
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Track replacement metadata is invalid.',
       });
     }
   });
@@ -233,6 +250,62 @@ function readyLineages(records: readonly RemoteRecord[]): readonly RemoteLineage
   });
 }
 
+/** Content hashes of the account records that `record` replaced by a geometry edit. */
+function replacedContentHashes(record: RemoteRecord): readonly string[] {
+  if (!Object.hasOwn(record.metadata, 'replacesContentHashes')) return [];
+  const parsed = replacedContentHashesSchema.safeParse(
+    record.metadata.replacesContentHashes,
+  );
+  if (!parsed.success) {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid track records.',
+      'invalid-remote',
+    );
+  }
+  return parsed.data;
+}
+
+/** Finds the ready head that replaced a local geometry, by content or lineage hash. */
+type ReplacementLookup = (
+  contentHash: string,
+  lineageHash: string,
+) => RemoteRecord | undefined;
+
+/**
+ * Resolves geometry-edit replacement hints among ready lineage heads. A predecessor maps
+ * to the newest head naming it; a mutual pair (an undo racing its predecessor's
+ * deletion) keeps the higher revision's claim, and chains resolve to their last head.
+ */
+function replacementLookup(lineages: readonly RemoteLineage[]): ReplacementLookup {
+  const heads = lineages
+    .map((lineage) => lineage.head)
+    .sort((left, right) => right.revision - left.revision);
+  const successors = new Map<string, RemoteRecord>();
+  const successorOf = (record: RemoteRecord): RemoteRecord | undefined => {
+    const successor =
+      successors.get(record.content_hash) ??
+      successors.get(remoteIdentity(record).lineageHash);
+    return successor === record ? undefined : successor;
+  };
+  for (const head of heads) {
+    for (const hash of replacedContentHashes(head)) {
+      if (successors.has(hash) || successorOf(head)?.content_hash === hash) continue;
+      successors.set(hash, head);
+    }
+  }
+  return (contentHash, lineageHash) => {
+    let replacement = successors.get(contentHash) ?? successors.get(lineageHash);
+    const visited = new Set([contentHash]);
+    while (replacement !== undefined && !visited.has(replacement.content_hash)) {
+      visited.add(replacement.content_hash);
+      const next = successorOf(replacement);
+      if (next === undefined) return replacement;
+      replacement = next;
+    }
+    return undefined;
+  };
+}
+
 interface RemoteGateway {
   status(signal: AbortSignal): Promise<TrackSyncUsage>;
   snapshot(signal: AbortSignal): Promise<readonly RemoteRecord[]>;
@@ -276,17 +349,6 @@ interface ServerErrorBudget {
 
 type RemoteGatewayFactory = (accessToken: string) => RemoteGateway;
 
-function syncStatesEqual(left: TrackSyncState, right: TrackSyncState): boolean {
-  return (
-    left.trackId === right.trackId &&
-    left.contentHash === right.contentHash &&
-    left.lineageHash === right.lineageHash &&
-    left.geometryVersion === right.geometryVersion &&
-    left.remoteRevision === right.remoteRevision &&
-    left.pendingKind === right.pendingKind
-  );
-}
-
 function markerStatesEqual(left: MarkerSyncState, right: MarkerSyncState): boolean {
   return (
     left.markerId === right.markerId &&
@@ -316,6 +378,22 @@ function editedAfter(remoteUpdatedAt: unknown, localUpdatedAt: string): boolean 
     typeof remoteUpdatedAt === 'string' &&
     Date.parse(remoteUpdatedAt) > Date.parse(localUpdatedAt)
   );
+}
+
+/** Deletes one account record at its observed revision, retrying once on a conflict. */
+async function deleteAtObservedRevision(
+  record: RemoteRecord,
+  gateway: RemoteGateway,
+  signal: AbortSignal,
+): Promise<RemoteMutation['outcome']> {
+  const first = await gateway.deleteRemoteRecord(
+    record.content_hash,
+    record.revision,
+    signal,
+  );
+  if (first.outcome !== 'conflict') return first.outcome;
+  return (await gateway.deleteRemoteRecord(record.content_hash, first.revision, signal))
+    .outcome;
 }
 
 function bytesToHex(bytes: Uint8Array): string {
@@ -562,10 +640,7 @@ export class FetchRemoteGateway implements RemoteGateway {
       form.set('contentHash', state.contentHash);
       form.set('baseRevision', String(state.remoteRevision ?? 0));
       form.set('compressedBytes', String(geometry.byteLength));
-      form.set(
-        'metadata',
-        JSON.stringify(remoteMetadata(pair, state.lineageHash, state.geometryVersion)),
-      );
+      form.set('metadata', JSON.stringify(remoteMetadata(pair, state)));
       form.set(
         'geometry',
         new Blob([Uint8Array.from(geometry)], { type: 'application/gzip' }),
@@ -584,7 +659,7 @@ export class FetchRemoteGateway implements RemoteGateway {
           action: 'metadata',
           contentHash: state.contentHash,
           baseRevision: state.remoteRevision,
-          metadata: remoteMetadata(pair, state.lineageHash, state.geometryVersion),
+          metadata: remoteMetadata(pair, state),
         }),
         signal,
       });
@@ -841,8 +916,7 @@ export class FetchRemoteGateway implements RemoteGateway {
 
 function remoteMetadata(
   pair: LocalTrackSyncPair,
-  lineageHash: string,
-  geometryVersion: 1 | 2,
+  state: TrackSyncState,
 ): Record<string, unknown> {
   const { summary } = pair;
   const {
@@ -855,8 +929,8 @@ function remoteMetadata(
   } = summary;
   const result: Record<string, unknown> = {
     ...metadata,
-    lineageHash,
-    geometryVersion,
+    lineageHash: state.lineageHash,
+    geometryVersion: state.geometryVersion,
     markers: pair.content.markers,
     metrics: {
       distanceMeters: summary.metrics.distanceMeters,
@@ -872,6 +946,11 @@ function remoteMetadata(
   ] as const;
   for (const [key, poi] of poiFields) {
     if (poi !== undefined) result[key] = { label: poi.label, kind: poi.kind };
+  }
+  // Every metadata rewrite keeps the hint, so a browser that still holds a replaced
+  // geometry moves onto this record whenever it synchronizes next.
+  if (state.replacesContentHashes !== undefined) {
+    result.replacesContentHashes = state.replacesContentHashes;
   }
   return result;
 }
@@ -1072,15 +1151,34 @@ export class TrackSyncWorkerServer {
     const remoteDeletionCandidates = new Map<string, RemoteTrackDeletionCandidate>();
     const mutationStates = new Map<string, TrackSyncState | null>();
     const adoptedTrackIds = new Set<string>();
+    const firstReplacementOf = replacementLookup(firstLineages);
+    const liveContentHashes = new Set(
+      local.flatMap((entry) =>
+        entry.pair !== null && entry.state.pendingKind !== 'delete'
+          ? [entry.state.contentHash]
+          : [],
+      ),
+    );
     for (const entry of [...local].sort(
       (left, right) =>
         Number(right.state.pendingKind === 'delete') -
         Number(left.state.pendingKind === 'delete'),
     )) {
       if (entry.state.pendingKind === null) continue;
+      if (
+        entry.state.pendingKind === 'metadata' &&
+        firstReplacementOf(entry.state.contentHash, entry.state.lineageHash) !==
+          undefined
+      ) {
+        // Another browser replaced this geometry; the merge adopts the replacement
+        // instead of rewriting a predecessor that its editor deletes.
+        completedItems += 1;
+        publishProgress();
+        continue;
+      }
       const outcome = await this.applyPending(
         entry,
-        firstRemoteByHash.get(entry.state.contentHash),
+        firstRemoteByHash,
         gateway,
         signal,
       );
@@ -1092,12 +1190,28 @@ export class TrackSyncWorkerServer {
           outcome.remoteTrackDeletion,
         );
       }
+      // Predecessors go only after the replacement (or the track's deletion) is applied,
+      // so no browser ever observes neither the old nor the new geometry.
+      if (
+        entry.state.pendingKind === 'upsert'
+          ? outcome.state?.pendingKind === null
+          : entry.state.pendingKind === 'delete' && outcome.state === null
+      ) {
+        await this.deleteReplacedRecords(
+          entry.state,
+          firstRemoteByHash,
+          liveContentHashes,
+          gateway,
+          signal,
+        );
+      }
       completedItems += 1;
       publishProgress();
     }
     if (mutationStates.size > 0) usage = await gateway.status(signal);
     const secondSnapshot = await gateway.snapshot(signal);
     const lineages = readyLineages(secondSnapshot);
+    const replacementOf = replacementLookup(lineages);
     const lineageByHash = new Map(
       lineages.map((lineage) => [lineage.identity.lineageHash, lineage]),
     );
@@ -1125,7 +1239,7 @@ export class TrackSyncWorkerServer {
       const hasMutation = mutationStates.has(entry.state.trackId);
       const mutationState = mutationStates.get(entry.state.trackId);
       const stateUnchangedSinceScan =
-        initial !== undefined && syncStatesEqual(initial.state, entry.state);
+        initial !== undefined && equalTrackSyncStates(initial.state, entry.state);
       const pairUnchangedSinceScan =
         initial?.pair?.summary.updatedAt === entry.pair?.summary.updatedAt &&
         initial?.pair?.summary.name === entry.pair?.summary.name &&
@@ -1153,6 +1267,26 @@ export class TrackSyncWorkerServer {
         continue;
       }
 
+      // A copy of a geometry another browser replaced moves onto the replacement in
+      // place, before and after the editor deletes the predecessor record. Fresh local
+      // uploads and geometry edits keep their own record.
+      const replacement =
+        entry.pair !== null &&
+        initial?.state.pendingKind !== 'upsert' &&
+        (effective.pendingKind === null || effective.pendingKind === 'metadata')
+          ? replacementOf(effective.contentHash, effective.lineageHash)
+          : undefined;
+      if (replacement !== undefined) {
+        handledLineages.add(effective.lineageHash);
+        handledLineages.add(remoteIdentity(replacement).lineageHash);
+        downloads.push({
+          kind: 'existing',
+          localId: effective.trackId,
+          remote: replacement,
+        });
+        continue;
+      }
+
       const lineage = lineageByHash.get(effective.lineageHash);
       if (lineage !== undefined) {
         handledLineages.add(lineage.identity.lineageHash);
@@ -1166,7 +1300,7 @@ export class TrackSyncWorkerServer {
           effective.pendingKind !== null ||
           (matchesHead && entry.pair !== null && !adoptRemote)
         ) {
-          if (!syncStatesEqual(effective, entry.state)) states.push(effective);
+          if (!equalTrackSyncStates(effective, entry.state)) states.push(effective);
           continue;
         }
         if (entry.pair === null) {
@@ -1198,12 +1332,12 @@ export class TrackSyncWorkerServer {
         remote.state === 'reserved' ||
         effective.pendingKind !== null
       ) {
-        if (!syncStatesEqual(effective, entry.state)) states.push(effective);
+        if (!equalTrackSyncStates(effective, entry.state)) states.push(effective);
         continue;
       }
       handledLineages.add(remoteIdentity(remote).lineageHash);
       if (effective.remoteRevision === remote.revision && !adoptRemote) {
-        if (!syncStatesEqual(effective, entry.state)) states.push(effective);
+        if (!equalTrackSyncStates(effective, entry.state)) states.push(effective);
         continue;
       }
       downloads.push({
@@ -1212,8 +1346,24 @@ export class TrackSyncWorkerServer {
         remote,
       });
     }
+    // A replaced geometry is never a separate track; its editor deletes the record. That
+    // includes this browser's own predecessors, such as an upload that a further edit
+    // overtook during this run, which the next upload names and deletes.
+    const localPredecessors = new Set(
+      current.flatMap((entry) => [
+        ...(entry.state.replacesContentHashes ?? []),
+        ...(entry.state.unconfirmedContentHashes ?? []),
+      ]),
+    );
     for (const lineage of lineages) {
-      if (handledLineages.has(lineage.identity.lineageHash)) continue;
+      if (
+        handledLineages.has(lineage.identity.lineageHash) ||
+        localPredecessors.has(lineage.head.content_hash) ||
+        replacementOf(lineage.head.content_hash, lineage.identity.lineageHash) !==
+          undefined
+      ) {
+        continue;
+      }
       downloads.push({ kind: 'new', remote: lineage.head });
     }
     const reconciledTotalTracks = completedItems + downloads.length;
@@ -1231,14 +1381,22 @@ export class TrackSyncWorkerServer {
       );
       const identity = remoteIdentity(download.remote);
       put.push(pair);
-      states.push({
-        trackId: pair.summary.id,
-        contentHash: download.remote.content_hash,
-        lineageHash: identity.lineageHash,
-        geometryVersion: identity.geometryVersion,
-        remoteRevision: download.remote.revision,
-        pendingKind: null,
-      });
+      // The replacement hint stays in local state so this browser's metadata rewrites
+      // keep it for browsers that still hold a predecessor.
+      states.push(
+        withReplacedContentHashes(
+          {
+            trackId: pair.summary.id,
+            contentHash: download.remote.content_hash,
+            lineageHash: identity.lineageHash,
+            geometryVersion: identity.geometryVersion,
+            remoteRevision: download.remote.revision,
+            pendingKind: null,
+          },
+          replacedContentHashes(download.remote),
+          [],
+        ),
+      );
       if (download.kind === 'existing' && pair.summary.id !== download.localId) {
         deleted.add(download.localId);
       }
@@ -1758,30 +1916,40 @@ export class TrackSyncWorkerServer {
   ): Promise<void> {
     for (const lineage of lineages) {
       for (const record of lineage.members.slice(1)) {
-        let revision = record.revision;
-        let removed = false;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          const result = await gateway.deleteRemoteRecord(
-            record.content_hash,
-            revision,
-            signal,
-          );
-          if (result.outcome === 'applied' || result.outcome === 'missing') {
-            removed = true;
-            break;
-          }
-          if (result.outcome === 'conflict' && attempt === 0) {
-            revision = result.revision;
-            continue;
-          }
-          break;
-        }
-        if (!removed) {
+        const outcome = await deleteAtObservedRevision(record, gateway, signal);
+        if (outcome !== 'applied' && outcome !== 'missing') {
           throw new TrackSyncWorkerError(
             'Cloud synchronization could not remove a superseded track.',
             'network',
           );
         }
+      }
+    }
+  }
+
+  /**
+   * Deletes the account records that an applied geometry replacement or track deletion
+   * supersedes. Records another local track holds and in-progress uploads stay.
+   */
+  private async deleteReplacedRecords(
+    state: TrackSyncState,
+    firstRemoteByHash: ReadonlyMap<string, RemoteRecord>,
+    liveContentHashes: ReadonlySet<string>,
+    gateway: RemoteGateway,
+    signal: AbortSignal,
+  ): Promise<void> {
+    for (const hash of [
+      ...(state.unconfirmedContentHashes ?? []),
+      ...(state.replacesContentHashes ?? []),
+    ]) {
+      const record = firstRemoteByHash.get(hash);
+      if (record?.state !== 'ready' || liveContentHashes.has(hash)) continue;
+      const outcome = await deleteAtObservedRevision(record, gateway, signal);
+      if (outcome !== 'applied' && outcome !== 'missing' && outcome !== 'reserved') {
+        throw new TrackSyncWorkerError(
+          'Cloud synchronization could not remove a replaced track.',
+          'network',
+        );
       }
     }
   }
@@ -1871,7 +2039,7 @@ export class TrackSyncWorkerServer {
 
   private async applyPending(
     entry: { readonly pair: LocalTrackSyncPair | null; readonly state: TrackSyncState },
-    firstRemote: RemoteRecord | undefined,
+    firstRemoteByHash: ReadonlyMap<string, RemoteRecord>,
     gateway: RemoteGateway,
     signal: AbortSignal,
   ): Promise<{
@@ -1881,7 +2049,22 @@ export class TrackSyncWorkerServer {
     /** The account record is newer; the merge downloads it instead of uploading. */
     readonly adoptRemote: boolean;
   }> {
-    let state = entry.state;
+    const firstRemote = firstRemoteByHash.get(entry.state.contentHash);
+    // An upload's hint names its acknowledged predecessors plus the unconfirmed ones an
+    // interrupted run left in the account; the other unconfirmed ones never arrived.
+    let state =
+      entry.state.pendingKind === 'upsert'
+        ? withReplacedContentHashes(
+            entry.state,
+            [
+              ...(entry.state.unconfirmedContentHashes ?? []).filter((hash) =>
+                firstRemoteByHash.has(hash),
+              ),
+              ...(entry.state.replacesContentHashes ?? []),
+            ],
+            [],
+          )
+        : entry.state;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = await gateway.mutate(state, entry.pair, signal);
       if (result.outcome === 'missing') {

@@ -118,17 +118,78 @@ export interface TrackSyncState {
   readonly geometryVersion: 1 | 2;
   readonly remoteRevision: number | null;
   readonly pendingKind: 'upsert' | 'metadata' | 'delete' | null;
+  /**
+   * Account records this geometry replaced in place, newest first. Uploads carry them as
+   * metadata `replacesContentHashes`, so other browsers move their copy onto this record.
+   */
+  readonly replacesContentHashes?: readonly string[];
+  /**
+   * Earlier geometries saved after the last acknowledged one, newest first. An
+   * interrupted run may have uploaded them; the next upload replaces any it finds.
+   */
+  readonly unconfirmedContentHashes?: readonly string[];
 }
 
-function equalTrackSyncStates(left: TrackSyncState, right: TrackSyncState): boolean {
+/** Bound on each predecessor list in a track sync state and in uploaded metadata. */
+export const MAXIMUM_REPLACED_CONTENT_HASHES = 16;
+
+export function equalTrackSyncStates(
+  left: TrackSyncState,
+  right: TrackSyncState,
+): boolean {
   return (
     left.trackId === right.trackId &&
     left.contentHash === right.contentHash &&
     left.lineageHash === right.lineageHash &&
     left.geometryVersion === right.geometryVersion &&
     left.remoteRevision === right.remoteRevision &&
-    left.pendingKind === right.pendingKind
+    left.pendingKind === right.pendingKind &&
+    JSON.stringify(left.replacesContentHashes ?? []) ===
+      JSON.stringify(right.replacesContentHashes ?? []) &&
+    JSON.stringify(left.unconfirmedContentHashes ?? []) ===
+      JSON.stringify(right.unconfirmedContentHashes ?? [])
   );
+}
+
+function boundedContentHashes(
+  hashes: readonly string[],
+  excluded: ReadonlySet<string>,
+): string[] {
+  const result: string[] = [];
+  for (const hash of hashes) {
+    if (result.length === MAXIMUM_REPLACED_CONTENT_HASHES) break;
+    if (!excluded.has(hash) && !result.includes(hash)) result.push(hash);
+  }
+  return result;
+}
+
+/**
+ * Returns `state` with the given predecessor lists deduplicated, without its own content
+ * hash, capped, and omitted when empty; a hash in both lists stays only in the replaces list.
+ */
+export function withReplacedContentHashes(
+  state: TrackSyncState,
+  replaces: readonly string[],
+  unconfirmed: readonly string[],
+): TrackSyncState {
+  const {
+    replacesContentHashes: _replaces,
+    unconfirmedContentHashes: _unconfirmed,
+    ...identity
+  } = state;
+  const replacesContentHashes = boundedContentHashes(
+    replaces,
+    new Set([state.contentHash]),
+  );
+  const unconfirmedContentHashes = boundedContentHashes(
+    unconfirmed,
+    new Set([state.contentHash, ...replacesContentHashes]),
+  );
+  return {
+    ...identity,
+    ...(replacesContentHashes.length === 0 ? {} : { replacesContentHashes }),
+    ...(unconfirmedContentHashes.length === 0 ? {} : { unconfirmedContentHashes }),
+  };
 }
 
 export interface MarkerSyncState {
@@ -1241,13 +1302,28 @@ const trackSyncStateSchema: z.ZodType<TrackSyncState> = z
     geometryVersion: z.union([z.literal(1), z.literal(2)]).optional(),
     remoteRevision: z.number().int().positive().nullable(),
     pendingKind: z.enum(['upsert', 'metadata', 'delete']).nullable(),
+    replacesContentHashes: z
+      .array(z.string().regex(/^[0-9a-f]{64}$/))
+      .max(MAXIMUM_REPLACED_CONTENT_HASHES)
+      .optional(),
+    unconfirmedContentHashes: z
+      .array(z.string().regex(/^[0-9a-f]{64}$/))
+      .max(MAXIMUM_REPLACED_CONTENT_HASHES)
+      .optional(),
   })
   .strict()
-  .transform((value): TrackSyncState => ({
-    ...value,
-    lineageHash: value.lineageHash ?? value.contentHash,
-    geometryVersion: value.geometryVersion ?? 1,
-  }));
+  .transform(
+    ({ replacesContentHashes, unconfirmedContentHashes, ...value }): TrackSyncState =>
+      withReplacedContentHashes(
+        {
+          ...value,
+          lineageHash: value.lineageHash ?? value.contentHash,
+          geometryVersion: value.geometryVersion ?? 1,
+        },
+        replacesContentHashes ?? [],
+        unconfirmedContentHashes ?? [],
+      ),
+  );
 
 function pendingKindWithHighestPrecedence(
   states: readonly TrackSyncState[],
@@ -1621,6 +1697,71 @@ export class AppDatabase
       this.localTrackContents,
       this.trackSyncStates,
       async () => {
+        await this.localTracks.put(validSummary);
+        await this.localTrackContents.put(validContent);
+        await this.trackSyncStates.put(state);
+      },
+    );
+  }
+
+  public async replaceLocalTrackGeometry(
+    summary: LocalTrackSummary,
+    content: LocalTrackContent,
+  ): Promise<void> {
+    const validSummary = parseLocalTrackSummary(summary);
+    const validContent = parseLocalTrackContent(content);
+    const idsMatch = validSummary?.id === validContent?.trackId;
+    if (validSummary?.contentHash === undefined || validContent === null || !idsMatch) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The local track record is invalid.',
+      );
+    }
+    const trackId = validSummary.id;
+    const contentHash = validSummary.contentHash;
+    await this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackContents,
+      this.trackSyncStates,
+      async () => {
+        if (parseLocalTrackSummary(await this.localTracks.get(trackId)) === null) {
+          throw new LocalTrackStorageError(
+            'not-found',
+            'The saved track was not found.',
+          );
+        }
+        const previous = parseTrackSyncState(await this.trackSyncStates.get(trackId));
+        let state: TrackSyncState = {
+          trackId,
+          contentHash,
+          lineageHash: contentHash,
+          geometryVersion: 2,
+          remoteRevision: null,
+          pendingKind: 'upsert',
+        };
+        if (previous?.contentHash === contentHash) {
+          state = {
+            ...previous,
+            pendingKind: previous.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+          };
+        } else if (previous !== null) {
+          // Every earlier geometry the account may hold becomes a predecessor that the
+          // next upload replaces; only acknowledged ones are known to exist remotely.
+          const replaces = previous.replacesContentHashes ?? [];
+          const unconfirmed = previous.unconfirmedContentHashes ?? [];
+          state =
+            previous.remoteRevision === null
+              ? withReplacedContentHashes(state, replaces, [
+                  previous.contentHash,
+                  ...unconfirmed,
+                ])
+              : withReplacedContentHashes(
+                  state,
+                  [previous.contentHash, ...replaces],
+                  unconfirmed,
+                );
+        }
         await this.localTracks.put(validSummary);
         await this.localTrackContents.put(validContent);
         await this.trackSyncStates.put(state);
@@ -2510,14 +2651,8 @@ export class AppDatabase
         await this.localTrackThumbnails.delete(trackId);
         await this.localTracks.delete(trackId);
         if (state !== null) {
-          await this.trackSyncStates.put({
-            trackId,
-            contentHash: state.contentHash,
-            lineageHash: state.lineageHash,
-            geometryVersion: state.geometryVersion,
-            remoteRevision: state.remoteRevision,
-            pendingKind: 'delete',
-          });
+          // Predecessor lists stay so the deletion also removes replaced account records.
+          await this.trackSyncStates.put({ ...state, pendingKind: 'delete' });
         } else {
           await this.trackSyncStates.delete(trackId);
         }
@@ -2686,13 +2821,20 @@ export class AppDatabase
                   : state.lineageHash,
               geometryVersion: 2,
             };
-            stateByTrackId.set(summary.id, {
-              trackId: summary.id,
-              contentHash,
-              ...identity,
-              remoteRevision: null,
-              pendingKind: 'upsert',
-            });
+            stateByTrackId.set(
+              summary.id,
+              withReplacedContentHashes(
+                {
+                  trackId: summary.id,
+                  contentHash,
+                  ...identity,
+                  remoteRevision: null,
+                  pendingKind: 'upsert',
+                },
+                state?.replacesContentHashes ?? [],
+                state?.unconfirmedContentHashes ?? [],
+              ),
+            );
           } else {
             identity = {
               lineageHash: state?.remoteRevision
@@ -2756,14 +2898,20 @@ export class AppDatabase
                 state.remoteRevision === null ? [] : [state.remoteRevision],
               ),
             );
-            nextStates.push({
-              trackId: deletion.trackId,
-              contentHash,
-              lineageHash: deletion.lineageHash,
-              geometryVersion: deletion.geometryVersion,
-              remoteRevision,
-              pendingKind: 'delete',
-            });
+            nextStates.push(
+              withReplacedContentHashes(
+                {
+                  trackId: deletion.trackId,
+                  contentHash,
+                  lineageHash: deletion.lineageHash,
+                  geometryVersion: deletion.geometryVersion,
+                  remoteRevision,
+                  pendingKind: 'delete',
+                },
+                deletion.replacesContentHashes ?? [],
+                deletion.unconfirmedContentHashes ?? [],
+              ),
+            );
             if (
               latestOpenedTrackId === deletion.trackId ||
               group.pairs.some((pair) => pair.summary.id === latestOpenedTrackId)
@@ -2811,19 +2959,26 @@ export class AppDatabase
             ),
           };
           nextPairs.push({ summary, content: canonical.content });
-          nextStates.push({
-            trackId: canonical.summary.id,
-            contentHash,
-            lineageHash: identity.lineageHash,
-            geometryVersion: identity.geometryVersion,
-            remoteRevision: sameAccount && remoteRevision !== 0 ? remoteRevision : null,
-            pendingKind:
-              !sameAccount ||
-              group.states.length === 0 ||
-              (remoteRevision === 0 && pendingKind === null)
-                ? 'upsert'
-                : pendingKind,
-          });
+          nextStates.push(
+            withReplacedContentHashes(
+              {
+                trackId: canonical.summary.id,
+                contentHash,
+                lineageHash: identity.lineageHash,
+                geometryVersion: identity.geometryVersion,
+                remoteRevision:
+                  sameAccount && remoteRevision !== 0 ? remoteRevision : null,
+                pendingKind:
+                  !sameAccount ||
+                  group.states.length === 0 ||
+                  (remoteRevision === 0 && pendingKind === null)
+                    ? 'upsert'
+                    : pendingKind,
+              },
+              group.states.flatMap((state) => state.replacesContentHashes ?? []),
+              group.states.flatMap((state) => state.unconfirmedContentHashes ?? []),
+            ),
+          );
           for (const pair of group.pairs) {
             if (pair.summary.id !== canonical.summary.id) {
               deleteTrackIds.add(pair.summary.id);
@@ -2857,7 +3012,29 @@ export class AppDatabase
           await this.localTracks.put(pair.summary);
           await this.localTrackContents.put(pair.content);
         }
-        for (const state of nextStates) await this.trackSyncStates.put(state);
+        // A live local track is never another track's predecessor, so re-importing an
+        // edited track's original keeps both; a synchronized hint naming it is rewritten.
+        const liveContentHashes = new Set(
+          nextPairs.map((pair) => pair.summary.contentHash),
+        );
+        for (const state of nextStates) {
+          const replaces = state.replacesContentHashes ?? [];
+          const keptReplaces = replaces.filter((hash) => !liveContentHashes.has(hash));
+          const next = withReplacedContentHashes(
+            state,
+            keptReplaces,
+            (state.unconfirmedContentHashes ?? []).filter(
+              (hash) => !liveContentHashes.has(hash),
+            ),
+          );
+          await this.trackSyncStates.put(
+            keptReplaces.length !== replaces.length &&
+              next.pendingKind === null &&
+              next.remoteRevision !== null
+              ? { ...next, pendingKind: 'metadata' }
+              : next,
+          );
+        }
         const markers = (await this.savedMarkers.toArray())
           .map(parseSavedMarker)
           .filter((marker): marker is SavedMarker => marker !== null);

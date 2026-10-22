@@ -279,6 +279,84 @@ describe('FetchRemoteGateway', () => {
     }
   });
 
+  it('accepts a bounded replacement hint and rejects malformed ones in snapshots', async () => {
+    const record = (replacesContentHashes: unknown) => ({
+      content_hash: contentHash,
+      revision: 1,
+      state: 'ready',
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: {
+        lineageHash: 'b'.repeat(64),
+        geometryVersion: 2,
+        replacesContentHashes,
+      },
+    });
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json([record(['c'.repeat(64)])])),
+    );
+    await expect(gateway.snapshot(signal)).resolves.toHaveLength(1);
+
+    for (const replacesContentHashes of [
+      'c'.repeat(64),
+      ['C'.repeat(64)],
+      Array.from({ length: 17 }, (_, index) => String(index).padStart(64, '0')),
+    ]) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(Response.json([record(replacesContentHashes)])),
+      );
+      await expect(gateway.snapshot(signal)).rejects.toMatchObject({
+        code: 'invalid-remote',
+      });
+    }
+  });
+
+  it('sends the replacement hint but never unconfirmed predecessors', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        outcome: 'applied',
+        record: { contentHash, revision: 5, state: 'ready' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+
+    await gateway.mutate(
+      {
+        trackId: pair.summary.id,
+        contentHash,
+        lineageHash: 'b'.repeat(64),
+        geometryVersion: 2,
+        remoteRevision: 4,
+        pendingKind: 'metadata',
+        replacesContentHashes: ['c'.repeat(64)],
+        unconfirmedContentHashes: ['d'.repeat(64)],
+      },
+      pair,
+      signal,
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    if (typeof request.body !== 'string')
+      throw new Error('Expected a JSON request body.');
+    const body = JSON.parse(request.body) as {
+      readonly metadata: Record<string, unknown>;
+    };
+    expect(body.metadata.replacesContentHashes).toEqual(['c'.repeat(64)]);
+    expect(body.metadata).not.toHaveProperty('unconfirmedContentHashes');
+  });
+
   it('returns the authoritative revision for a remote-only delete conflict', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({

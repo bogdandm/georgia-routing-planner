@@ -996,6 +996,139 @@ describe('local track persistence', () => {
     });
   });
 
+  it('replaces saved geometry in place and records its predecessors for synchronization', async () => {
+    const original = summary('local:1', 'Track');
+    await database.saveLocalTrack(original, content('local:1'));
+    await database.saveTrackSyncState({
+      trackId: 'local:1',
+      contentHash: 'a'.repeat(64),
+      lineageHash: 'e'.repeat(64),
+      geometryVersion: 2,
+      remoteRevision: 4,
+      pendingKind: null,
+    });
+    const editedContent: LocalTrackContent = {
+      ...content('local:1'),
+      trackPoints: [[{ coordinate: [44, 42] }, { coordinate: [44.02, 42.02] }]],
+    };
+
+    await database.replaceLocalTrackGeometry(
+      {
+        ...original,
+        contentHash: 'b'.repeat(64),
+        updatedAt: '2026-07-22T11:00:00.000Z',
+      },
+      editedContent,
+    );
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'local:1',
+        contentHash: 'b'.repeat(64),
+        updatedAt: '2026-07-22T11:00:00.000Z',
+        folderId: IMPORTS_FOLDER_ID,
+      }),
+    ]);
+    await expect(database.loadLocalTrackContent('local:1')).resolves.toMatchObject({
+      trackPoints: editedContent.trackPoints,
+    });
+    await expect(database.loadTrackSyncState('local:1')).resolves.toEqual({
+      trackId: 'local:1',
+      contentHash: 'b'.repeat(64),
+      lineageHash: 'b'.repeat(64),
+      geometryVersion: 2,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+      replacesContentHashes: ['a'.repeat(64)],
+    });
+
+    await database.replaceLocalTrackGeometry(
+      { ...original, contentHash: 'c'.repeat(64) },
+      editedContent,
+    );
+    await expect(database.loadTrackSyncState('local:1')).resolves.toMatchObject({
+      contentHash: 'c'.repeat(64),
+      replacesContentHashes: ['a'.repeat(64)],
+      unconfirmedContentHashes: ['b'.repeat(64)],
+    });
+
+    // Undoing back to the synchronized geometry never names that geometry a predecessor.
+    await database.replaceLocalTrackGeometry(original, content('local:1'));
+    await database.deleteLocalTrack('local:1');
+    await expect(database.loadTrackSyncState('local:1')).resolves.toEqual({
+      trackId: 'local:1',
+      contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
+      remoteRevision: null,
+      pendingKind: 'delete',
+      unconfirmedContentHashes: ['c'.repeat(64), 'b'.repeat(64)],
+    });
+  });
+
+  it('rejects replacing the geometry of a missing track without writing', async () => {
+    const replacement = database.replaceLocalTrackGeometry(
+      summary('local:missing', 'Missing'),
+      content('local:missing'),
+    );
+
+    await expect(replacement).rejects.toBeInstanceOf(LocalTrackStorageError);
+    await expect(replacement).rejects.toMatchObject({ code: 'not-found' });
+    await expect(
+      database.localTrackContents.get('local:missing'),
+    ).resolves.toBeUndefined();
+    await expect(database.loadTrackSyncState('local:missing')).resolves.toBeNull();
+  });
+
+  it('keeps a live track out of predecessor hints before synchronization', async () => {
+    await database.saveLocalTrack(
+      { ...summary('local:edited', 'Edited'), contentHash: 'b'.repeat(64) },
+      content('local:edited'),
+    );
+    await database.saveLocalTrack(
+      summary('local:original', 'Original'),
+      content('local:original'),
+    );
+    await database.saveTrackSyncState({
+      trackId: 'local:edited',
+      contentHash: 'b'.repeat(64),
+      lineageHash: 'e'.repeat(64),
+      geometryVersion: 2,
+      remoteRevision: 6,
+      pendingKind: null,
+      replacesContentHashes: ['a'.repeat(64), 'c'.repeat(64)],
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+
+    await database.prepareUserDataSync('user-id', [
+      {
+        trackId: 'local:edited',
+        contentHash: 'b'.repeat(64),
+        legacyContentHash: 'e'.repeat(64),
+      },
+      {
+        trackId: 'local:original',
+        contentHash: 'a'.repeat(64),
+        legacyContentHash: 'f'.repeat(64),
+      },
+    ]);
+
+    await expect(database.listLocalTracks()).resolves.toHaveLength(2);
+    await expect(database.loadTrackSyncState('local:edited')).resolves.toEqual({
+      trackId: 'local:edited',
+      contentHash: 'b'.repeat(64),
+      lineageHash: 'e'.repeat(64),
+      geometryVersion: 2,
+      remoteRevision: 6,
+      pendingKind: 'metadata',
+      replacesContentHashes: ['c'.repeat(64)],
+    });
+  });
+
   it('restores and clears the latest opened track identifier', async () => {
     await database.saveLocalTrack(summary('local:1', 'Track'), content('local:1'));
     await database.saveLatestOpenedTrackId('local:1');

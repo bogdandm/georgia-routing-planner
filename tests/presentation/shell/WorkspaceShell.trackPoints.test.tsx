@@ -91,6 +91,15 @@ describe('WorkspaceShell track points', () => {
     await waitFor(() => {
       expect(within(details).getByRole('button', { name: 'Save' })).toBeEnabled();
     });
+    // The two points that now meet stay selected, so the joined leg is easy to find.
+    expect(within(details).getByRole('button', { name: /^Point 1,/u })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(details).getByRole('button', { name: /^Point 2,/u })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await user.click(within(details).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {

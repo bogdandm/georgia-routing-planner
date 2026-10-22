@@ -301,11 +301,6 @@ msgstr "Clear selection"
 msgid "Click the map to add points"
 msgstr "Click the map to add points"
 
-#. js-lingui-id: 1cxc33
-#: src/presentation/tracks/RoutePlanControls.tsx
-msgid "Click the map to add points."
-msgstr "Click the map to add points."
-
 #. js-lingui-id: XWJtTP
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "Click the map to choose the next point."
@@ -1158,11 +1153,6 @@ msgstr "Searching for a route…"
 #: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Segment between points {fromNumber} and {toNumber}"
 msgstr "Segment between points {fromNumber} and {toNumber}"
-
-#. js-lingui-id: Os1Hqk
-#: src/presentation/tracks/RoutePlanControls.tsx
-msgid "Select points in the list or on the map."
-msgstr "Select points in the list or on the map."
 
 #. js-lingui-id: jGHUWA
 #: src/presentation/tracks/TracksWorkspace.tsx

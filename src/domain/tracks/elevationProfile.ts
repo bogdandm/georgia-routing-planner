@@ -1,5 +1,5 @@
 import { medianInPlace } from '@/domain/elevation/robustElevationStatistics';
-import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 
 export const ELEVATION_ALGORITHM_VERSION = 3;
@@ -833,4 +833,50 @@ export function calculateElevationProfile(
     maximumMeters,
     algorithmVersion: ELEVATION_ALGORITHM_VERSION,
   };
+}
+
+/** Runs of points that carry elevation; a point without it splits the run. */
+function elevationRuns(
+  segments: readonly (readonly TrackPoint[])[],
+): readonly (readonly ElevationProfileInputPoint[])[] {
+  const runs: ElevationProfileInputPoint[][] = [];
+  for (const [sourceSegmentIndex, segment] of segments.entries()) {
+    let run: ElevationProfileInputPoint[] = [];
+    for (const point of segment) {
+      if (point.elevationMeters === undefined) {
+        if (run.length > 0) runs.push(run);
+        run = [];
+        continue;
+      }
+      run.push({
+        coordinate: point.coordinate,
+        rawElevationMeters: point.elevationMeters,
+        elevationMeters: point.elevationMeters,
+        sourceSegmentIndex,
+        ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
+      });
+    }
+    if (run.length > 0) runs.push(run);
+  }
+  return runs;
+}
+
+/**
+ * Profile of stored track points: median-filtered recorded elevation when it forms a
+ * profile, otherwise the stored DEM projection.
+ */
+export function storedTrackElevationProfile(
+  trackPoints: readonly (readonly TrackPoint[])[],
+  calculatedTrackPoints: readonly (readonly TrackPoint[])[] | undefined,
+): ElevationProfile | null {
+  const recorded = elevationRuns(trackPoints);
+  const recordedProfile =
+    recorded.length === 0
+      ? null
+      : calculateElevationProfile(medianFilterElevationSamples(recorded));
+  if (recordedProfile !== null || calculatedTrackPoints === undefined) {
+    return recordedProfile;
+  }
+  const calculated = elevationRuns(calculatedTrackPoints);
+  return calculated.length === 0 ? null : calculateElevationProfile(calculated);
 }

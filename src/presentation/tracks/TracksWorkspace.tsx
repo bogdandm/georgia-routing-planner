@@ -158,10 +158,8 @@ import {
   safeTrackFilename,
 } from '@/domain/tracks/trackExport';
 import {
-  calculateElevationProfile,
-  medianFilterElevationSamples,
+  storedTrackElevationProfile,
   type ElevationProfile,
-  type ElevationProfileInputPoint,
   type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import { downloadFile } from '@/presentation/downloadFile';
@@ -174,6 +172,7 @@ import {
 } from '@/presentation/tracks/ElevationProfileChart';
 import {
   RoutePlanControls,
+  RoutePlanStatus,
   TrackEditControls,
 } from '@/presentation/tracks/RoutePlanControls';
 import { TrackShareError } from '@/application/tracks/TrackShareService';
@@ -431,6 +430,8 @@ interface TracksWorkspaceValue {
   readonly placePathPoint: (coordinate: TrackCoordinate) => void;
   /** Applies a `trackPathEditor` edit to `activePath`; ignored while saving. */
   readonly editActivePath: (update: PathDraftUpdate) => void;
+  /** Deletes the points and selects the two that now meet across the joined leg. */
+  readonly deletePathSelection: (selection: TrackPointsSelection) => void;
   readonly undoPathEdit: () => void;
   readonly startTrackEdit: () => void;
   readonly cancelTrackEdit: () => void;
@@ -740,10 +741,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ? active.edit
         : null;
   const activePathOwner = pathOwnerKey(active);
-  // Selection belongs to the listed path; any edit makes a new path and clears it.
+  // Selection names anchor ids of one track, so it survives edits that keep those
+  // points (routing results, moves elsewhere) and drops when they are deleted.
   const [pointSelectionState, setPointSelectionState] = useState<{
-    readonly path: TrackPath;
-    readonly selection: TrackPointsSelection;
+    readonly trackKey: string;
+    readonly first: number;
+    readonly last: number;
+    readonly anchor: number;
   } | null>(null);
   const [pointRevealRequest, setPointRevealRequest] = useState<{
     readonly index: number;
@@ -1429,7 +1433,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               throw new Error('The selected track no longer exists.');
             }
             const content = await database.loadLocalTrackContent(summary.id);
-            const profile = elevationProfileForSavedTrack(content);
+            const profile = storedTrackElevationProfile(
+              content.trackPoints,
+              content.calculatedTrackPoints,
+            );
             if (
               multiTrackSelectionRequests.current.get(summary.id) !== refresh.requestId
             ) {
@@ -2518,7 +2525,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           requestId,
           summary: active.summary,
           content: active.content,
-          profile: elevationProfileForSavedTrack(active.content),
+          profile: storedTrackElevationProfile(
+            active.content.trackPoints,
+            active.content.calculatedTrackPoints,
+          ),
         },
       ]);
     } else {
@@ -2564,7 +2574,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
                   requestId,
                   summary,
                   content,
-                  profile: elevationProfileForSavedTrack(content),
+                  profile: storedTrackElevationProfile(
+                    content.trackPoints,
+                    content.calculatedTrackPoints,
+                  ),
                 }
               : selection,
           ),
@@ -3019,7 +3032,10 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () =>
       savedTrackContent === null
         ? null
-        : elevationProfileForSavedTrack(savedTrackContent),
+        : storedTrackElevationProfile(
+            savedTrackContent.trackPoints,
+            savedTrackContent.calculatedTrackPoints,
+          ),
     [savedTrackContent],
   );
   const activeProfile =
@@ -3147,6 +3163,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           ? { ...current, summary, content, edit: null }
           : current,
       );
+      // Stored points are renumbered from the saved geometry; edit ids no longer apply.
+      setPointSelectionState(null);
       await reloadSummaries();
       setError(null);
     };
@@ -3177,23 +3195,58 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [savedTrackContent],
   );
   const listedPath = multiTrackMode ? null : (activePath?.path ?? storedPointsPath);
+  const listedTrackKey =
+    active?.kind === 'route-plan'
+      ? active.id
+      : active?.kind === 'saved'
+        ? active.summary.id
+        : null;
   const pointsList = useMemo(
     () => (listedPath === null ? null : trackPointsList(listedPath, activeProfile)),
     [activeProfile, listedPath],
   );
-  const pointSelection =
-    pointSelectionState !== null && pointSelectionState.path === listedPath
-      ? pointSelectionState.selection
-      : null;
+  const pointSelection = useMemo((): TrackPointsSelection | null => {
+    if (
+      pointSelectionState === null ||
+      listedPath === null ||
+      pointSelectionState.trackKey !== listedTrackKey
+    ) {
+      return null;
+    }
+    const { anchors } = listedPath;
+    const first = anchors.findIndex(
+      (anchor) => anchor.id === pointSelectionState.first,
+    );
+    const last = anchors.findIndex((anchor) => anchor.id === pointSelectionState.last);
+    if (first < 0 || last < 0) return null;
+    const anchor = anchors.findIndex(
+      (candidate) => candidate.id === pointSelectionState.anchor,
+    );
+    return {
+      first: Math.min(first, last),
+      last: Math.max(first, last),
+      anchor: anchor < 0 ? first : anchor,
+    };
+  }, [listedPath, listedTrackKey, pointSelectionState]);
   const setPointSelection = useCallback(
     (selection: TrackPointsSelection | null) => {
+      const first =
+        selection === null ? undefined : listedPath?.anchors[selection.first];
+      const last = selection === null ? undefined : listedPath?.anchors[selection.last];
+      const anchor =
+        selection === null ? undefined : listedPath?.anchors[selection.anchor];
       setPointSelectionState(
-        selection === null || listedPath === null
+        first === undefined || last === undefined || listedTrackKey === null
           ? null
-          : { path: listedPath, selection },
+          : {
+              trackKey: listedTrackKey,
+              first: first.id,
+              last: last.id,
+              anchor: anchor?.id ?? first.id,
+            },
       );
     },
-    [listedPath],
+    [listedPath, listedTrackKey],
   );
   const selectPathPointNear = useCallback(
     (click: TrackPointClick) => {
@@ -3204,20 +3257,41 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         click.toleranceMeters,
       );
       if (index === null) {
+        setPointSelection(null);
+        return;
+      }
+      const anchor =
+        click.shiftKey && pointSelection !== null ? pointSelection.anchor : index;
+      setPointSelection({
+        first: Math.min(anchor, index),
+        last: Math.max(anchor, index),
+        anchor,
+      });
+      setPointRevealRequest({ index });
+    },
+    [listedPath, pointSelection, setPointSelection],
+  );
+  /** Deleting points selects the two points that now meet, so the joined leg is found. */
+  const deletePathSelection = useCallback(
+    (selection: TrackPointsSelection) => {
+      const before = listedPath?.anchors[selection.first - 1];
+      const after = listedPath?.anchors[selection.last + 1];
+      editActivePath((draft) =>
+        deleteTrackPathAnchors(draft, selection.first, selection.last),
+      );
+      if (before === undefined || after === undefined || listedTrackKey === null) {
         setPointSelectionState(null);
         return;
       }
-      const selection =
-        click.shiftKey && pointSelection !== null
-          ? {
-              first: Math.min(pointSelection.first, index),
-              last: Math.max(pointSelection.last, index),
-            }
-          : { first: index, last: index };
-      setPointSelectionState({ path: listedPath, selection });
-      setPointRevealRequest({ index });
+      setPointSelectionState({
+        trackKey: listedTrackKey,
+        first: before.id,
+        last: after.id,
+        anchor: before.id,
+      });
+      setPointRevealRequest({ index: selection.first - 1 });
     },
-    [listedPath, pointSelection],
+    [editActivePath, listedPath, listedTrackKey],
   );
   useEffect(() => {
     mapLayers?.setTrackPointSelection(
@@ -3300,6 +3374,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       selectPathPointNear,
       placePathPoint,
       editActivePath,
+      deletePathSelection,
       undoPathEdit,
       startTrackEdit,
       cancelTrackEdit,
@@ -3364,6 +3439,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       selectPathPointNear,
       placePathPoint,
       editActivePath,
+      deletePathSelection,
       undoPathEdit,
       startTrackEdit,
       cancelTrackEdit,
@@ -4910,46 +4986,6 @@ function mapFitBoundsForTrack(bounds: TrackBounds): MapViewportBounds {
   };
 }
 
-function elevationProfileInputSegments(
-  segments: readonly (readonly TrackPoint[])[],
-): readonly (readonly ElevationProfileInputPoint[])[] | null {
-  const inputs: ElevationProfileInputPoint[][] = [];
-  for (const [sourceSegmentIndex, segment] of segments.entries()) {
-    let preparedSegment: ElevationProfileInputPoint[] = [];
-    for (const point of segment) {
-      if (point.elevationMeters === undefined) {
-        if (preparedSegment.length > 0) inputs.push(preparedSegment);
-        preparedSegment = [];
-        continue;
-      }
-      preparedSegment.push({
-        coordinate: point.coordinate,
-        rawElevationMeters: point.elevationMeters,
-        elevationMeters: point.elevationMeters,
-        sourceSegmentIndex,
-        ...(point.recordedAt === undefined ? {} : { recordedAt: point.recordedAt }),
-      });
-    }
-    if (preparedSegment.length > 0) inputs.push(preparedSegment);
-  }
-  return inputs.length === 0 ? null : inputs;
-}
-function elevationProfileForSavedTrack(
-  content: LocalTrackContent,
-): ElevationProfile | null {
-  const sourceInputs = elevationProfileInputSegments(content.trackPoints);
-  const sourceProfile =
-    sourceInputs === null
-      ? null
-      : calculateElevationProfile(medianFilterElevationSamples(sourceInputs));
-  if (sourceProfile !== null) return sourceProfile;
-  const calculatedInputs =
-    content.calculatedTrackPoints === undefined
-      ? null
-      : elevationProfileInputSegments(content.calculatedTrackPoints);
-  return calculatedInputs === null ? null : calculateElevationProfile(calculatedInputs);
-}
-
 interface InteractiveElevationProfileProps {
   readonly profile: ElevationProfile;
   readonly showHeading?: boolean;
@@ -5389,6 +5425,7 @@ export function TrackDetailsPane({
     setPointSelection,
     pointRevealRequest,
     editActivePath,
+    deletePathSelection,
     undoPathEdit,
     startTrackEdit,
     cancelTrackEdit,
@@ -5945,12 +5982,9 @@ export function TrackDetailsPane({
             />
           ) : null}
           {active.kind === 'saved' && active.edit !== null ? (
-            <TrackEditControls
+            <RoutePlanStatus
               draft={active.edit}
               elevationProgress={elevationProgress}
-              onCancel={cancelTrackEdit}
-              onSave={() => void saveTrackEdit()}
-              onUndo={undoPathEdit}
             />
           ) : null}
           {active.kind === 'preview' ? (
@@ -6133,11 +6167,7 @@ export function TrackDetailsPane({
                 ? { onStartEditing: startTrackEdit }
                 : {})}
               onSelectionChange={setPointSelection}
-              onDeleteSelection={(selection) => {
-                editActivePath((draft) =>
-                  deleteTrackPathAnchors(draft, selection.first, selection.last),
-                );
-              }}
+              onDeleteSelection={deletePathSelection}
               onMoveStart={(index) => {
                 editActivePath((draft) => startTrackPathMove(draft, index));
                 setMobileWorkspaceOpen(false);
@@ -6203,6 +6233,16 @@ export function TrackDetailsPane({
           ) : null}
         </Stack>
       </Box>
+      {active.kind === 'saved' && active.edit !== null ? (
+        <Box sx={{ px: 2, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
+          <TrackEditControls
+            draft={active.edit}
+            onCancel={cancelTrackEdit}
+            onSave={() => void saveTrackEdit()}
+            onUndo={undoPathEdit}
+          />
+        </Box>
+      ) : null}
     </Box>
   );
 }

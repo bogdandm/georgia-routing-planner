@@ -137,14 +137,11 @@ function failureMessage(failure: TrackPathFailure, i18n: I18n): string {
   return i18n._(msg`Routing data could not be decoded.`);
 }
 
-function instruction(draft: TrackPathDraft, i18n: I18n): string {
+/** Saved-track editing needs no idle hint: the Points list shows move and add hints. */
+function instruction(draft: TrackPathDraft, i18n: I18n): string | null {
+  if (draft.variant === 'track') return null;
   if (draft.movingAnchorId !== null) {
     return i18n._(msg`Click the map to move the point.`);
-  }
-  if (draft.variant === 'track') {
-    return draft.insertion === null
-      ? i18n._(msg`Select points in the list or on the map.`)
-      : i18n._(msg`Click the map to add points.`);
   }
   if (draft.status === 'selecting-start') {
     return i18n._(msg`Click the map to choose the route start.`);
@@ -155,14 +152,17 @@ function instruction(draft: TrackPathDraft, i18n: I18n): string {
   return i18n._(msg`Route ready. Click the map to add another point.`);
 }
 
-/** One fixed slot for routing, elevation, saving, failures, and the next action. */
+/**
+ * One fixed slot for routing, elevation, saving, failures, and the next action; empty
+ * while a saved track is edited without work in progress.
+ */
 export function RoutePlanStatus({
   draft,
   elevationProgress,
 }: {
   readonly draft: TrackPathDraft;
   readonly elevationProgress: TrackElevationPreparationProgress | null;
-}): ReactElement {
+}): ReactElement | null {
   const { i18n, t } = useLingui();
   let content: ReactElement;
   if (draft.status === 'calculating') {
@@ -247,9 +247,11 @@ export function RoutePlanStatus({
       </Alert>
     );
   } else {
+    const text = instruction(draft, i18n);
+    if (text === null) return null;
     content = (
       <Typography variant="body2" color="text.secondary">
-        {instruction(draft, i18n)}
+        {text}
       </Typography>
     );
   }
@@ -321,46 +323,41 @@ export function RoutePlanControls({
   );
 }
 
-/** Point editing of a saved track: replaces the stored geometry on Save. */
+/** Point editing of a saved track, pinned below the scrolling pane. */
 export function TrackEditControls({
   draft,
-  elevationProgress,
   onCancel,
   onSave,
   onUndo,
 }: {
   readonly draft: TrackPathDraft;
-  readonly elevationProgress: TrackElevationPreparationProgress | null;
   readonly onCancel: () => void;
   readonly onSave: () => void;
   readonly onUndo: () => void;
 }): ReactElement {
   const saving = draft.status === 'saving';
   return (
-    <Stack spacing={2}>
-      <RoutePlanStatus draft={draft} elevationProgress={elevationProgress} />
-      <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+    <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+      <Button
+        size="small"
+        color="inherit"
+        disabled={!canUndoTrackPath(draft)}
+        onClick={onUndo}
+      >
+        <Trans>Undo</Trans>
+      </Button>
+      <Stack direction="row" spacing={1}>
+        <Button size="small" color="inherit" disabled={saving} onClick={onCancel}>
+          <Trans>Cancel</Trans>
+        </Button>
         <Button
           size="small"
-          color="inherit"
-          disabled={!canUndoTrackPath(draft)}
-          onClick={onUndo}
+          variant="contained"
+          disabled={!canSaveTrackPath(draft)}
+          onClick={onSave}
         >
-          <Trans>Undo</Trans>
+          <Trans>Save</Trans>
         </Button>
-        <Stack direction="row" spacing={1}>
-          <Button size="small" color="inherit" disabled={saving} onClick={onCancel}>
-            <Trans>Cancel</Trans>
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            disabled={!canSaveTrackPath(draft)}
-            onClick={onSave}
-          >
-            <Trans>Save</Trans>
-          </Button>
-        </Stack>
       </Stack>
     </Stack>
   );

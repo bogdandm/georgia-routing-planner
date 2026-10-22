@@ -319,34 +319,38 @@ retry automatically as in Weather when the app becomes visible again.
 #### Track points
 
 Saved tracks end with a collapsed **Points** section after Weather; route plans show it
-expanded below the profile. Each row shows a blue point marker, the point number, its
-distance along the track, and its elevation; rows are windowed, so tracks with many
-thousands of points stay responsive. Between rows a vertical line stands for the leg to
-the next point, dashed for a straight line; boundaries between independent segments show
-no line. Clicking a row selects the point, Shift+click extends the selection, and
+expanded below the profile. Each row shows a blue point marker, the point number, and
+its distance along the track with its elevation beside it; rows are windowed and
+memoized, so tracks with many thousands of points scroll smoothly. Clicking a row
+selects the point, Shift+click extends the selection from the last clicked point, and
 dragging over rows selects a run live. The selection is highlighted on the map and as a
-band on the elevation profile, and **Delete** removes it while editing.
+band on the elevation profile.
 
 The pencil beside the heading starts editing a saved track. Editing hides every section
-except the stats, the elevation profile, and Points, replaces the header actions with
-**Undo**, **Cancel**, and **Save**, and draws every stored point as a small dot. A left
-map click then selects the nearest point within a few pixels instead of opening point
-details; Shift+click extends the selection. Hovering a row offers **Move** and
-**Delete**; Move hands the next map click to the point, which keeps its recorded time
-but drops its elevation. Hovering a leg offers **+ Add** and a **Routes | Line** switch,
-and short legs before the first and after the last point add points at either end. While
-adding, an insertion row in the list chooses Routes or Line, each map click inserts a
-point after the previous one, and **Done** or Escape stops. Route plans use the same
-list with the switch always visible on every leg; only their clicked points are listed,
-never the router's intermediate points.
+except the stats, the elevation profile, and Points, pins **Undo**, **Cancel**, and
+**Save** to the bottom of the pane, and draws every stored point as a small dot. Between
+rows a vertical line styled like the map track stands for the leg to the next point;
+boundaries between independent segments show no line. A left map click selects the
+nearest point within a few pixels instead of opening point details, and Shift+click on
+the map (also in 3D, where a moved Shift drag still orbits) extends the selection from
+the same anchor as the list. Hovering a row offers **Move** and **Delete**; Move hands
+the next map click to the point, which keeps its recorded time. Hovering a leg offers
+**+ Add** and a **Routes | Line** switch, and short legs before the first and after the
+last point add points at either end. While adding, an insertion row in the list chooses
+Routes or Line, each map click inserts a point after the previous one, and **Done** or
+Escape stops. **Delete** removes the selection and selects the two points that now meet,
+scrolling the list to them, so the joined leg's mode is easy to change. Route plans use
+the same list with the switch always visible on every leg; only their clicked points are
+listed, never the router's intermediate points.
 
-After each edit the browser recomputes terrain, metrics, and the profile as in planning.
-Save replaces the stored geometry of the same track, keeping its name, folder, favorite,
-and markers; recorded elevation stays canonical when it still forms a profile, otherwise
-the calculated DEM elevation is stored. A synchronized track is replaced in place on
-every device, and a public link to the previous geometry stops working, so the edited
-track needs a new share link. Cancel discards the edits after confirmation, and unsaved
-edits activate the leave-site guard.
+After each edit the browser recomputes terrain, metrics, the profile, and climbs as in
+planning; moved and added points take the calculated DEM elevation, so the profile spans
+the edited stretch. Save replaces the stored geometry of the same track, keeping its
+name, folder, favorite, and markers; recorded elevation stays canonical when it still
+forms a profile, otherwise the calculated DEM elevation is stored. A synchronized track
+is replaced in place on every device, and its public link keeps working and shows the
+edited geometry once the edit is synchronized. Cancel discards the edits after
+confirmation, and unsaved edits activate the leave-site guard.
 
 #### Multi-track view
 

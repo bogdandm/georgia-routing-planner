@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TrailRouteLeg, TrailRouteSuccess } from '@/application/ports/TrailRouter';
+import { storedTrackElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
+import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 import {
   canSaveTrackPath,
   completeTrackPathRequest,
@@ -19,6 +21,7 @@ import {
   trackPathFromSegments,
   trackPathMapSections,
   trackPathSaveContent,
+  trackPathElevationFromPrepared,
   trackPathSelectionGeometry,
   undoTrackPathEdit,
   type TrackPathDraft,
@@ -279,5 +282,37 @@ describe('track path editor', () => {
     });
     expect(nearestTrackPathAnchor(path, [C[0] + 0.0001, C[1]], 50)).toBe(2);
     expect(nearestTrackPathAnchor(path, P, 50)).toBeNull();
+  });
+
+  it('gives moved and added points DEM elevation so the profile spans the edit', () => {
+    const source: TrackPoint[] = [
+      { coordinate: A, elevationMeters: 1_000 },
+      { coordinate: B, elevationMeters: 1_050 },
+      { coordinate: P },
+      { coordinate: C, elevationMeters: 1_200 },
+      { coordinate: D, elevationMeters: 1_250 },
+    ];
+    const dem: TrackPoint[] = source.map((point, index) => ({
+      coordinate: point.coordinate,
+      elevationMeters: 990 + index * 60,
+    }));
+    const partialProfile = storedTrackElevationProfile([source], undefined);
+    const demProfile = storedTrackElevationProfile([dem], undefined);
+    if (demProfile === null) throw new Error('Expected a DEM profile.');
+
+    const elevation = trackPathElevationFromPrepared('track', {
+      sourceSegments: [{ points: source }],
+      sourceProfile: partialProfile,
+      sourceMetrics: calculateTrackMetrics([{ points: source }]),
+      calculatedSegments: [{ points: dem }],
+      calculatedProfile: demProfile,
+      calculatedMetrics: calculateTrackMetrics([{ points: dem }], 'dem-assisted'),
+    });
+
+    expect(elevation?.trackPoints[0]?.map((point) => point.elevationMeters)).toEqual([
+      1_000, 1_050, 1_110, 1_200, 1_250,
+    ]);
+    expect(elevation?.profile.points).toHaveLength(5);
+    expect(elevation?.calculated?.trackPoints).toEqual([dem]);
   });
 });

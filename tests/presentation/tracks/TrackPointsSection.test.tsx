@@ -120,32 +120,53 @@ describe('TrackPointsSection', () => {
     expect(pointButton('3')).toHaveTextContent('502 m');
   });
 
-  it('selects a clicked point and extends the range with shift-click', async () => {
+  it('selects a clicked point and extends the range from its anchor with shift-click', async () => {
     const user = userEvent.setup();
-    const { props } = renderSection({ editing: false });
+    const { props, rerender } = renderSection({ editing: false });
     await user.click(screen.getByRole('button', { name: 'Points' }));
 
     await user.click(pointButton('2'));
-    expect(props.onSelectionChange).toHaveBeenLastCalledWith({ first: 1, last: 1 });
+    expect(props.onSelectionChange).toHaveBeenLastCalledWith({
+      first: 1,
+      last: 1,
+      anchor: 1,
+    });
 
+    // The anchor comes from the owner, so a map click also sets where Shift extends from.
+    rerender({ selection: { first: 3, last: 3, anchor: 3 } });
     await user.keyboard('{Shift>}');
-    await user.click(pointButton('4'));
+    await user.click(pointButton('2'));
     await user.keyboard('{/Shift}');
-    expect(props.onSelectionChange).toHaveBeenLastCalledWith({ first: 1, last: 3 });
+    expect(props.onSelectionChange).toHaveBeenLastCalledWith({
+      first: 1,
+      last: 3,
+      anchor: 3,
+    });
     expect(props.onSelectionChange).toHaveBeenCalledTimes(2);
   });
 
   it('selects with Enter and extends with Shift+Enter, and Escape clears', async () => {
     const user = userEvent.setup();
-    const { props } = renderSection({ selection: { first: 0, last: 0 } });
+    const { props, rerender } = renderSection({
+      selection: { first: 0, last: 0, anchor: 0 },
+    });
 
     pointButton('3').focus();
     await user.keyboard('{Enter}');
-    expect(props.onSelectionChange).toHaveBeenLastCalledWith({ first: 2, last: 2 });
+    expect(props.onSelectionChange).toHaveBeenLastCalledWith({
+      first: 2,
+      last: 2,
+      anchor: 2,
+    });
 
+    rerender({ selection: { first: 2, last: 2, anchor: 2 } });
     pointButton('1').focus();
     await user.keyboard('{Shift>}{Enter}{/Shift}');
-    expect(props.onSelectionChange).toHaveBeenLastCalledWith({ first: 0, last: 2 });
+    expect(props.onSelectionChange).toHaveBeenLastCalledWith({
+      first: 0,
+      last: 2,
+      anchor: 2,
+    });
 
     await user.keyboard('{Escape}');
     expect(props.onSelectionChange).toHaveBeenLastCalledWith(null);
@@ -167,9 +188,17 @@ describe('TrackPointsSection', () => {
       pointerType: 'mouse',
       button: 0,
     });
-    expect(props.onSelectionChange).toHaveBeenLastCalledWith({ first: 0, last: 0 });
+    expect(props.onSelectionChange).toHaveBeenLastCalledWith({
+      first: 0,
+      last: 0,
+      anchor: 0,
+    });
     fireEvent.pointerMove(viewport, { pointerId: 3, pointerType: 'mouse' });
-    expect(props.onSelectionChange).toHaveBeenLastCalledWith({ first: 0, last: 2 });
+    expect(props.onSelectionChange).toHaveBeenLastCalledWith({
+      first: 0,
+      last: 2,
+      anchor: 0,
+    });
     fireEvent.pointerUp(viewport, { pointerId: 3, pointerType: 'mouse' });
     fireEvent.pointerMove(viewport, { pointerId: 3, pointerType: 'mouse' });
     expect(props.onSelectionChange).toHaveBeenCalledTimes(2);
@@ -179,7 +208,7 @@ describe('TrackPointsSection', () => {
 
   it('deletes the selected range only while editing', async () => {
     const user = userEvent.setup();
-    const selection = { first: 1, last: 2 };
+    const selection = { first: 1, last: 2, anchor: 1 };
     const { props, rerender } = renderSection({ editing: false, selection });
     await user.click(screen.getByRole('button', { name: 'Points' }));
 
@@ -214,7 +243,11 @@ describe('TrackPointsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Move point 2' }));
     expect(props.onMoveStart).toHaveBeenCalledWith(1);
     await user.click(screen.getByRole('button', { name: 'Delete point 3' }));
-    expect(props.onDeleteSelection).toHaveBeenCalledWith({ first: 2, last: 2 });
+    expect(props.onDeleteSelection).toHaveBeenCalledWith({
+      first: 2,
+      last: 2,
+      anchor: 2,
+    });
     expect(props.onSelectionChange).not.toHaveBeenCalled();
 
     rerender({ movingIndex: 1 });

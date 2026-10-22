@@ -301,11 +301,6 @@ msgstr "Снять выделение"
 msgid "Click the map to add points"
 msgstr "Нажмите на карту, чтобы добавить точки"
 
-#. js-lingui-id: 1cxc33
-#: src/presentation/tracks/RoutePlanControls.tsx
-msgid "Click the map to add points."
-msgstr "Нажмите на карту, чтобы добавить точки."
-
 #. js-lingui-id: XWJtTP
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "Click the map to choose the next point."
@@ -1158,11 +1153,6 @@ msgstr "Поиск маршрута…"
 #: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Segment between points {fromNumber} and {toNumber}"
 msgstr "Участок между точками {fromNumber} и {toNumber}"
-
-#. js-lingui-id: Os1Hqk
-#: src/presentation/tracks/RoutePlanControls.tsx
-msgid "Select points in the list or on the map."
-msgstr "Выберите точки в списке или на карте."
 
 #. js-lingui-id: jGHUWA
 #: src/presentation/tracks/TracksWorkspace.tsx

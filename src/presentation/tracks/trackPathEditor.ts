@@ -6,7 +6,10 @@ import {
   type TrailRouteResult,
 } from '@/application/ports/TrailRouter';
 import type { PreparedImportedTrack } from '@/application/tracks/prepareImportedTrack';
-import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
+import {
+  storedTrackElevationProfile,
+  type ElevationProfile,
+} from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 import {
   calculateTrackMetrics,
@@ -848,7 +851,9 @@ export function finishTrackPathElevation<D extends TrackPathDraft>(
 /**
  * Plans keep the DEM elevation on their own points. Saved tracks keep recorded
  * elevation canonical when it forms a profile and store the DEM projection beside it;
- * otherwise the DEM projection becomes canonical, as on import.
+ * otherwise the DEM projection becomes canonical, as on import. Moved and added points
+ * have no recorded elevation, so they take the DEM value: the profile, gain, and climbs
+ * then cover the edited stretch instead of breaking around it.
  */
 export function trackPathElevationFromPrepared(
   variant: TrackPathVariant,
@@ -878,19 +883,32 @@ export function trackPathElevationFromPrepared(
       calculated: null,
     };
   }
-  const profile = prepared.sourceProfile ?? prepared.calculatedProfile;
+  const calculated = prepared.calculatedSegments;
+  // The DEM projection keeps the geometry point for point when every segment is routable.
+  const aligned = calculated?.length === prepared.sourceSegments.length;
+  const trackPoints = prepared.sourceSegments.map((segment, segmentIndex) => {
+    const demPoints = aligned ? calculated[segmentIndex]?.points : undefined;
+    if (demPoints?.length !== segment.points.length) return segment.points;
+    return segment.points.map((point, pointIndex): TrackPoint => {
+      const demElevation = demPoints[pointIndex]?.elevationMeters;
+      return point.elevationMeters !== undefined || demElevation === undefined
+        ? point
+        : { ...point, elevationMeters: demElevation };
+    });
+  });
+  const calculatedTrackPoints = calculated?.map((segment) => segment.points);
+  const profile =
+    storedTrackElevationProfile(trackPoints, calculatedTrackPoints) ??
+    prepared.calculatedProfile;
   if (profile === null) return null;
   return {
     profile,
-    trackPoints: prepared.sourceSegments.map((segment) => segment.points),
-    metrics: prepared.sourceMetrics,
+    trackPoints,
+    metrics: calculateTrackMetrics(trackPoints.map((points) => ({ points }))),
     calculated:
-      prepared.calculatedSegments === null || prepared.calculatedMetrics === null
+      calculatedTrackPoints === undefined || prepared.calculatedMetrics === null
         ? null
-        : {
-            trackPoints: prepared.calculatedSegments.map((segment) => segment.points),
-            metrics: prepared.calculatedMetrics,
-          },
+        : { trackPoints: calculatedTrackPoints, metrics: prepared.calculatedMetrics },
   };
 }
 

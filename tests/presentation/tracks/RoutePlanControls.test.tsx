@@ -149,7 +149,7 @@ describe('TrackEditControls', () => {
       null,
     );
     const { rerender } = renderWithI18n(
-      <TrackEditControls draft={opened} elevationProgress={null} {...handlers} />,
+      <TrackEditControls draft={opened} {...handlers} />,
     );
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
@@ -157,11 +157,7 @@ describe('TrackEditControls', () => {
     expect(handlers.onCancel).toHaveBeenCalledOnce();
 
     rerender(
-      <TrackEditControls
-        draft={deleteTrackPathAnchors(opened, 1, 1)}
-        elevationProgress={null}
-        {...handlers}
-      />,
+      <TrackEditControls draft={deleteTrackPathAnchors(opened, 1, 1)} {...handlers} />,
     );
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(handlers.onSave).toHaveBeenCalledOnce();

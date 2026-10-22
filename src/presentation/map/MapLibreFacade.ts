@@ -292,6 +292,9 @@ export class MapLibreFacade implements MapFacade {
     onCameraGestureEnd: () => {
       this.handleMoveEnd();
     },
+    onShiftClick: (event) => {
+      this.handleShiftClick(event);
+    },
   });
   #interactionMode: MapInteractionMode = 'default';
   #planningPreview: PlanningPreview | null = null;
@@ -1068,12 +1071,12 @@ export class MapLibreFacade implements MapFacade {
     }
     if (this.#interactionMode === 'track-editing') {
       if (event.originalEvent.button !== 0) return;
-      const click: TrackPointClick = {
+      this.publishTrackPointClick(
+        map,
+        event.point,
         coordinate,
-        toleranceMeters: this.groundDistanceOfPixels(map, event, trackPointHitPixels),
-        shiftKey: event.originalEvent.shiftKey,
-      };
-      for (const listener of this.#trackPointClickListeners) listener(click);
+        event.originalEvent.shiftKey,
+      );
       return;
     }
     if (this.#pointInspection.status === 'open') {
@@ -1084,17 +1087,37 @@ export class MapLibreFacade implements MapFacade {
     this.openPointInspection(coordinate);
   };
 
-  /** Ground distance spanned by `pixels` CSS px to the right of the event point. */
-  private groundDistanceOfPixels(
-    map: MapLibreMap,
-    event: MapMouseEvent,
-    pixels: number,
-  ): number {
-    const offset = map.unproject([event.point.x + pixels, event.point.y]);
-    return geodesicDistanceMeters(
-      { longitude: event.lngLat.lng, latitude: event.lngLat.lat },
-      { longitude: offset.lng, latitude: offset.lat },
+  /** In 3D Shift+left presses orbit; one released in place extends a point selection. */
+  private handleShiftClick(event: MouseEvent): void {
+    const map = this.#map;
+    if (map === null || this.#interactionMode !== 'track-editing') return;
+    const bounds = map.getCanvasContainer().getBoundingClientRect();
+    const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    const clicked = map.unproject([point.x, point.y]);
+    this.publishTrackPointClick(
+      map,
+      point,
+      { longitude: clicked.lng, latitude: clicked.lat },
+      true,
     );
+  }
+
+  private publishTrackPointClick(
+    map: MapLibreMap,
+    point: { readonly x: number; readonly y: number },
+    coordinate: MapCoordinate,
+    shiftKey: boolean,
+  ): void {
+    const offset = map.unproject([point.x + trackPointHitPixels, point.y]);
+    const click: TrackPointClick = {
+      coordinate,
+      toleranceMeters: geodesicDistanceMeters(coordinate, {
+        longitude: offset.lng,
+        latitude: offset.lat,
+      }),
+      shiftKey,
+    };
+    for (const listener of this.#trackPointClickListeners) listener(click);
   }
 
   private queryNearestPoi(

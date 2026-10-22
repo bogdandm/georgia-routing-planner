@@ -19,9 +19,11 @@ import {
 } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 import {
+  memo,
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -54,10 +56,12 @@ export type TrackPointsLegView =
       readonly pending: boolean;
     };
 
-/** Inclusive anchor indexes with `first <= last`. */
+/** Inclusive anchor indexes with `first <= last`, grown from `anchor` by Shift. */
 export interface TrackPointsSelection {
   readonly first: number;
   readonly last: number;
+  /** The point a Shift+click extends from, in the list or on the map. */
+  readonly anchor: number;
 }
 
 export interface TrackPointsInsertion {
@@ -97,25 +101,41 @@ const LEG_ROW_HEIGHT = 32;
 const INSERTION_ROW_HEIGHT = 72;
 const MAX_LIST_HEIGHT = 420;
 const OVERSCAN_PX = 240;
+/** The rendered window moves in steps, so scrolling mounts rows only every few rows. */
+const WINDOW_STEP_ROWS = 8;
 const AUTO_SCROLL_EDGE_PX = 32;
 const AUTO_SCROLL_MAX_STEP_PX = 18;
 const DOT_COLUMN_WIDTH = 28;
-const CONNECTOR_WIDTH = 3;
+const CONNECTOR_WIDTH = 4;
+
+/* eslint-disable lingui/no-unlocalized-strings -- CSS class names. */
 /** Hidden until row hover or focus on fine pointers; always shown on touch screens. */
-// eslint-disable-next-line lingui/no-unlocalized-strings -- CSS class name.
 const REVEAL_CLASS = 'TrackPoints-reveal';
+const classes = {
+  row: 'TrackPoints-row',
+  point: 'TrackPoints-point',
+  pointButton: 'TrackPoints-pointButton',
+  dotColumn: 'TrackPoints-dotColumn',
+  dot: 'TrackPoints-dot',
+  number: 'TrackPoints-number',
+  distance: 'TrackPoints-distance',
+  elevation: 'TrackPoints-elevation',
+  connector: 'TrackPoints-connector',
+  pending: 'TrackPoints-pending',
+} as const;
+/* eslint-enable lingui/no-unlocalized-strings */
 
 const pathColor = mapVisualPalette.userGeometry.gpxTrack;
 const pendingPulse = keyframes`
-  from { opacity: 0.2; }
-  to { opacity: 0.6; }
+  from { opacity: 0.25; }
+  to { opacity: 0.7; }
 `;
 
 /**
- * Rows alternate between anchors and the legs joining them. While editing, the list
- * also starts and ends with an add stub, so the row count is `2n + 1`; read-only lists
- * have `2n - 1` rows. Every row has a fixed height, which lets the list window rows
- * with arithmetic instead of measuring the DOM.
+ * While editing, rows alternate between anchors and the legs joining them, and the list
+ * starts and ends with an add stub: `2n + 1` rows. Read-only lists show the points only.
+ * Every row has a fixed height, which lets the list window rows with arithmetic instead
+ * of measuring the DOM.
  */
 interface RowLayout {
   readonly editing: boolean;
@@ -129,7 +149,7 @@ function createRowLayout(
   anchorCount: number,
   insertion: TrackPointsInsertion | null,
 ): RowLayout {
-  const rowCount = editing ? 2 * anchorCount + 1 : Math.max(0, 2 * anchorCount - 1);
+  const rowCount = editing ? 2 * anchorCount + 1 : anchorCount;
   const insertionRow =
     editing &&
     insertion !== null &&
@@ -141,7 +161,8 @@ function createRowLayout(
 }
 
 function rowOffset(layout: RowLayout, row: number): number {
-  const pointsBefore = layout.editing ? Math.floor(row / 2) : Math.ceil(row / 2);
+  if (!layout.editing) return row * POINT_ROW_HEIGHT;
+  const pointsBefore = Math.floor(row / 2);
   const legsBefore = row - pointsBefore;
   const insertionExtra =
     layout.insertionRow !== null && layout.insertionRow < row
@@ -153,13 +174,17 @@ function rowOffset(layout: RowLayout, row: number): number {
 /** Last row starting at or above `offset`. */
 function rowAtOffset(layout: RowLayout, offset: number): number {
   let low = 0;
-  let high = layout.rowCount - 1;
+  let high = Math.max(0, layout.rowCount - 1);
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
     if (rowOffset(layout, middle) <= offset) low = middle;
     else high = middle - 1;
   }
   return low;
+}
+
+function pointRow(layout: RowLayout, index: number): number {
+  return layout.editing ? 2 * index + 1 : index;
 }
 
 /** Keeps a visible anchor in place and centers a hidden one. */
@@ -169,7 +194,7 @@ function revealScrollTop(
   scrollTop: number,
   viewportHeight: number,
 ): number {
-  const top = rowOffset(layout, layout.editing ? 2 * index + 1 : 2 * index);
+  const top = rowOffset(layout, pointRow(layout, index));
   const bottom = top + POINT_ROW_HEIGHT;
   if (top >= scrollTop && bottom <= scrollTop + viewportHeight) return scrollTop;
   const maximum = Math.max(0, rowOffset(layout, layout.rowCount) - viewportHeight);
@@ -177,8 +202,8 @@ function revealScrollTop(
   return Math.min(maximum, Math.max(0, centered));
 }
 
-function selectionRange(from: number, to: number): TrackPointsSelection {
-  return { first: Math.min(from, to), last: Math.max(from, to) };
+function selectionRange(anchor: number, to: number): TrackPointsSelection {
+  return { first: Math.min(anchor, to), last: Math.max(anchor, to), anchor };
 }
 
 function closestPointIndex(element: Element | null): number | null {
@@ -196,35 +221,34 @@ interface DragSelection {
   clientY: number;
 }
 
+/** Row callbacks with a stable identity, so memoized rows skip unchanged renders. */
+interface RowActions {
+  readonly select: (index: number, extend: boolean) => void;
+  readonly moveStart: (index: number) => void;
+  readonly moveCancel: () => void;
+  readonly deletePoint: (index: number) => void;
+  readonly insertionStart: (afterIndex: number) => void;
+  readonly legModeChange: (legIndex: number, mode: TrackPointsLegMode) => void;
+}
+
+/** A track-styled line half or whole across a leg row. */
 function LegConnector({
-  mode,
   pending,
   toPrevious,
   toNext,
 }: {
-  readonly mode: TrackPointsLegMode;
   readonly pending: boolean;
   /** Add stubs draw only the half that touches their neighbouring point. */
   readonly toPrevious: boolean;
   readonly toNext: boolean;
 }): ReactElement {
   return (
-    <Box
+    <span
       aria-hidden
-      sx={{
-        position: 'absolute',
-        left: (DOT_COLUMN_WIDTH - CONNECTOR_WIDTH) / 2,
-        top: toPrevious ? 0 : '50%',
-        bottom: toNext ? 0 : '50%',
-        borderLeftWidth: CONNECTOR_WIDTH,
-        borderLeftStyle: mode === 'routes' ? 'solid' : 'dashed',
-        borderLeftColor: pathColor,
-        opacity: pending ? 0.4 : 1,
-        animation: pending
-          ? `${pendingPulse} 900ms ease-in-out infinite alternate`
-          : 'none',
-        '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-      }}
+      className={
+        pending ? `${classes.connector} ${classes.pending}` : classes.connector
+      }
+      style={{ top: toPrevious ? 0 : '50%', bottom: toNext ? 0 : '50%' }}
     />
   );
 }
@@ -264,38 +288,222 @@ function LegModeToggle({
   );
 }
 
-const rowSx = {
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  display: 'flex',
-  alignItems: 'center',
-  columnGap: 0.5,
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS length.
-  pl: `${String(DOT_COLUMN_WIDTH)}px`,
-  pr: 0.5,
-} as const;
-
-export function TrackPointsSection({
-  variant,
-  editing,
-  anchors,
-  legs,
-  insertion,
-  movingIndex,
-  selection,
-  revealRequest,
+const AddButton = memo(function AddButton({
+  afterIndex,
+  label,
   disabled,
-  onStartEditing,
-  onSelectionChange,
-  onDeleteSelection,
-  onMoveStart,
-  onMoveCancel,
-  onInsertionStart,
-  onInsertionModeChange,
-  onInsertionEnd,
-  onLegModeChange,
-}: TrackPointsSectionProps): ReactElement {
+  actions,
+}: {
+  readonly afterIndex: number;
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly actions: RowActions;
+}): ReactElement {
+  return (
+    <Button
+      className={REVEAL_CLASS}
+      size="small"
+      startIcon={<AddIcon />}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => {
+        actions.insertionStart(afterIndex);
+      }}
+      sx={{ minHeight: 24, py: 0 }}
+    >
+      <Trans>Add</Trans>
+    </Button>
+  );
+});
+
+const PointRow = memo(function PointRow({
+  index,
+  top,
+  number,
+  distance,
+  elevation,
+  selected,
+  moving,
+  editing,
+  disabled,
+  actions,
+}: {
+  readonly index: number;
+  readonly top: number;
+  readonly number: string;
+  readonly distance: string;
+  readonly elevation: string;
+  readonly selected: boolean;
+  readonly moving: boolean;
+  readonly editing: boolean;
+  readonly disabled: boolean;
+  readonly actions: RowActions;
+}): ReactElement {
+  const { t } = useLingui();
+  const moveLabel = t`Move point ${number}`;
+  const deleteLabel = t`Delete point ${number}`;
+  return (
+    <div
+      role="listitem"
+      className={`${classes.row} ${classes.point}`}
+      data-point-index={index}
+      data-selected={selected}
+      style={{ top, height: POINT_ROW_HEIGHT }}
+    >
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={selected}
+        aria-label={t`Point ${number}, ${distance}, ${elevation}`}
+        className={classes.pointButton}
+        onClick={() => {
+          actions.select(index, false);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          actions.select(index, event.shiftKey);
+        }}
+      >
+        <span aria-hidden className={classes.dotColumn}>
+          <span className={classes.dot} />
+        </span>
+        <span aria-hidden className={classes.number}>
+          {number}
+        </span>
+        {moving ? null : (
+          <>
+            <span aria-hidden className={classes.distance}>
+              {distance}
+            </span>
+            <span aria-hidden className={classes.elevation}>
+              {elevation}
+            </span>
+          </>
+        )}
+      </div>
+      {moving ? (
+        <>
+          <Typography
+            role="status"
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            sx={{ flex: 1, minWidth: 0 }}
+          >
+            <Trans>Click the map to move point {number}</Trans>
+          </Typography>
+          <Button size="small" onClick={actions.moveCancel}>
+            <Trans>Cancel</Trans>
+          </Button>
+        </>
+      ) : null}
+      {editing && !moving ? (
+        <Stack className={REVEAL_CLASS} direction="row" spacing={0.25}>
+          <IconButton
+            size="small"
+            title={moveLabel}
+            aria-label={moveLabel}
+            disabled={disabled}
+            onClick={() => {
+              actions.moveStart(index);
+            }}
+          >
+            <OpenWithIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            title={deleteLabel}
+            aria-label={deleteLabel}
+            disabled={disabled}
+            onClick={() => {
+              actions.deletePoint(index);
+            }}
+          >
+            <DeleteOutlineIcon fontSize="small" />
+          </IconButton>
+        </Stack>
+      ) : null}
+    </div>
+  );
+});
+
+const LegRow = memo(function LegRow({
+  legIndex,
+  top,
+  leg,
+  fromNumber,
+  toNumber,
+  selected,
+  revealToggle,
+  disabled,
+  addLabel,
+  actions,
+}: {
+  readonly legIndex: number;
+  readonly top: number;
+  readonly leg: TrackPointsLegView;
+  readonly fromNumber: string;
+  readonly toNumber: string;
+  readonly selected: boolean;
+  readonly revealToggle: boolean;
+  readonly disabled: boolean;
+  readonly addLabel: string;
+  readonly actions: RowActions;
+}): ReactElement {
+  const { t } = useLingui();
+  return (
+    <div
+      role="listitem"
+      className={classes.row}
+      data-selected={selected}
+      style={{ top, height: LEG_ROW_HEIGHT }}
+    >
+      {leg.kind === 'gap' ? (
+        <Typography variant="caption" color="text.secondary" noWrap>
+          <Trans>Separate segment</Trans>
+        </Typography>
+      ) : (
+        <>
+          <LegConnector pending={leg.pending} toPrevious toNext />
+          <LegModeToggle
+            label={t`Segment between points ${fromNumber} and ${toNumber}`}
+            mode={leg.mode}
+            disabled={disabled}
+            reveal={revealToggle}
+            onChange={(mode) => {
+              actions.legModeChange(legIndex, mode);
+            }}
+          />
+          <AddButton
+            afterIndex={legIndex}
+            label={addLabel}
+            disabled={disabled}
+            actions={actions}
+          />
+        </>
+      )}
+    </div>
+  );
+});
+
+export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement {
+  const {
+    variant,
+    editing,
+    anchors,
+    legs,
+    insertion,
+    movingIndex,
+    selection,
+    revealRequest,
+    disabled,
+    onStartEditing,
+    onSelectionChange,
+    onDeleteSelection,
+    onInsertionModeChange,
+    onInsertionEnd,
+  } = props;
   const { i18n, t } = useLingui();
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `track-points-${useId().replaceAll(':', '')}`;
@@ -308,11 +516,44 @@ export function TrackPointsSection({
     null,
   );
   const viewportRef = useRef<HTMLDivElement>(null);
-  const selectionAnchorRef = useRef<number | null>(null);
   const dragRef = useRef<DragSelection | null>(null);
   const autoScrollFrameRef = useRef<number | null>(null);
   /** A mouse or pen press already selected; the click that follows must not repeat it. */
   const pointerSelectedRef = useRef(false);
+  const latestProps = useRef(props);
+  useLayoutEffect(() => {
+    latestProps.current = props;
+  });
+  const actions = useMemo<RowActions>(
+    () => ({
+      select: (index, extend) => {
+        if (pointerSelectedRef.current) return;
+        const current = latestProps.current;
+        const anchor = current.selection?.anchor;
+        current.onSelectionChange(
+          extend && anchor !== undefined && anchor < current.anchors.length
+            ? selectionRange(anchor, index)
+            : selectionRange(index, index),
+        );
+      },
+      moveStart: (index) => {
+        latestProps.current.onMoveStart(index);
+      },
+      moveCancel: () => {
+        latestProps.current.onMoveCancel();
+      },
+      deletePoint: (index) => {
+        latestProps.current.onDeleteSelection(selectionRange(index, index));
+      },
+      insertionStart: (afterIndex) => {
+        latestProps.current.onInsertionStart(afterIndex);
+      },
+      legModeChange: (legIndex, mode) => {
+        latestProps.current.onLegModeChange(legIndex, mode);
+      },
+    }),
+    [],
+  );
 
   const anchorCount = anchors.length;
   const layout = createRowLayout(editing, anchorCount, insertion);
@@ -358,16 +599,6 @@ export function TrackPointsSection({
   const open = variant === 'plan' || expanded;
   const numberFormat = new Intl.NumberFormat(i18n.locale);
   const pointNumber = (index: number): string => numberFormat.format(index + 1);
-
-  const selectPoint = (index: number, extend: boolean) => {
-    const anchor = selectionAnchorRef.current;
-    if (extend && anchor !== null && anchor < anchorCount) {
-      onSelectionChange(selectionRange(anchor, index));
-      return;
-    }
-    selectionAnchorRef.current = index;
-    onSelectionChange({ first: index, last: index });
-  };
 
   const updateDragSelection = (viewport: HTMLDivElement, drag: DragSelection) => {
     const bounds = viewport.getBoundingClientRect();
@@ -430,12 +661,11 @@ export function TrackPointsSection({
     const index = closestPointIndex(target);
     if (index === null) return;
     pointerSelectedRef.current = true;
-    const previousAnchor = selectionAnchorRef.current;
+    const previousAnchor = selection?.anchor;
     const anchor =
-      event.shiftKey && previousAnchor !== null && previousAnchor < anchorCount
+      event.shiftKey && previousAnchor !== undefined && previousAnchor < anchorCount
         ? previousAnchor
         : index;
-    selectionAnchorRef.current = anchor;
     const current = selectionRange(anchor, index);
     onSelectionChange(current);
     dragRef.current = {
@@ -482,162 +712,6 @@ export function TrackPointsSection({
   const isSelected = (index: number): boolean =>
     selection !== null && index >= selection.first && index <= selection.last;
 
-  const renderPointRow = (index: number, top: number): ReactElement | null => {
-    const anchor = anchors[index];
-    if (anchor === undefined) return null;
-    const number = pointNumber(index);
-    const distance = formatTrackDistance(anchor.distanceMeters, i18n);
-    const elevation =
-      anchor.elevationMeters === null
-        ? '—'
-        : formatTrackElevation(anchor.elevationMeters, i18n);
-    const moving = movingIndex === index;
-    const selected = isSelected(index);
-    return (
-      <Box
-        key={`point-${String(anchor.key)}`}
-        role="listitem"
-        data-point-index={index}
-        data-selected={selected}
-        style={{ top, height: POINT_ROW_HEIGHT }}
-        sx={{ ...rowSx, pl: 0 }}
-      >
-        <Box
-          role="button"
-          tabIndex={0}
-          aria-pressed={selected}
-          aria-label={t`Point ${number}, ${distance}, ${elevation}`}
-          onClick={() => {
-            if (!pointerSelectedRef.current) selectPoint(index, false);
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            selectPoint(index, event.shiftKey);
-          }}
-          sx={{
-            flex: moving ? '0 0 auto' : '1 1 auto',
-            minWidth: 0,
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            columnGap: 1,
-            pr: 1,
-            cursor: 'pointer',
-            borderRadius: 1,
-            outline: 'none',
-            '&:focus-visible': {
-              boxShadow: (theme) => `inset 0 0 0 2px ${theme.palette.primary.main}`,
-            },
-          }}
-        >
-          <Box
-            aria-hidden
-            sx={{
-              width: DOT_COLUMN_WIDTH,
-              flex: '0 0 auto',
-              display: 'flex',
-              justifyContent: 'center',
-            }}
-          >
-            <Box
-              sx={{
-                width: 16,
-                height: 16,
-                boxSizing: 'border-box',
-                borderRadius: '50%',
-                border: '2px solid',
-                borderColor: 'common.white',
-                bgcolor: pathColor,
-                boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.24)',
-              }}
-            />
-          </Box>
-          <Typography
-            aria-hidden
-            variant="body2"
-            sx={{
-              minWidth: '6ch',
-              fontWeight: 600,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {number}
-          </Typography>
-          {moving ? null : (
-            <>
-              <Typography
-                aria-hidden
-                variant="body2"
-                noWrap
-                sx={{ flex: 1, fontVariantNumeric: 'tabular-nums' }}
-              >
-                {distance}
-              </Typography>
-              <Typography
-                aria-hidden
-                variant="body2"
-                color="text.secondary"
-                noWrap
-                sx={{ fontVariantNumeric: 'tabular-nums' }}
-              >
-                {elevation}
-              </Typography>
-            </>
-          )}
-        </Box>
-        {moving ? (
-          <>
-            <Typography
-              role="status"
-              variant="caption"
-              color="text.secondary"
-              noWrap
-              sx={{ flex: 1, minWidth: 0 }}
-            >
-              <Trans>Click the map to move point {number}</Trans>
-            </Typography>
-            <Button size="small" onClick={onMoveCancel}>
-              <Trans>Cancel</Trans>
-            </Button>
-          </>
-        ) : null}
-        {editing && !moving ? (
-          <Stack className={REVEAL_CLASS} direction="row" spacing={0.25}>
-            <Tooltip title={t`Move point ${number}`}>
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label={t`Move point ${number}`}
-                  disabled={disabled}
-                  onClick={() => {
-                    onMoveStart(index);
-                  }}
-                >
-                  <OpenWithIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={t`Delete point ${number}`}>
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label={t`Delete point ${number}`}
-                  disabled={disabled}
-                  onClick={() => {
-                    onDeleteSelection({ first: index, last: index });
-                  }}
-                >
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Stack>
-        ) : null}
-      </Box>
-    );
-  };
-
   /** `afterIndex` follows the insertion contract: -1 before the first point. */
   const addButtonLabel = (afterIndex: number): string => {
     if (anchorCount === 0) return t`Add points`;
@@ -650,6 +724,30 @@ export function TrackPointsSection({
     return t`Add points between points ${from} and ${to}`;
   };
 
+  const renderPointRow = (index: number, top: number): ReactElement | null => {
+    const anchor = anchors[index];
+    if (anchor === undefined) return null;
+    return (
+      <PointRow
+        key={`point-${String(anchor.key)}`}
+        index={index}
+        top={top}
+        number={pointNumber(index)}
+        distance={formatTrackDistance(anchor.distanceMeters, i18n)}
+        elevation={
+          anchor.elevationMeters === null
+            ? '—'
+            : formatTrackElevation(anchor.elevationMeters, i18n)
+        }
+        selected={isSelected(index)}
+        moving={movingIndex === index}
+        editing={editing}
+        disabled={disabled}
+        actions={actions}
+      />
+    );
+  };
+
   const renderInsertionRow = (
     activeInsertion: TrackPointsInsertion,
     top: number,
@@ -657,15 +755,14 @@ export function TrackPointsSection({
     const { afterIndex } = activeInsertion;
     const showDone = !(variant === 'plan' && afterIndex === anchorCount - 1);
     return (
-      <Box
+      <div
         key="insertion"
         role="listitem"
-        style={{ top, height: INSERTION_ROW_HEIGHT }}
-        sx={{ ...rowSx, display: 'block' }}
+        className={classes.row}
+        style={{ top, height: INSERTION_ROW_HEIGHT, display: 'block' }}
       >
         {anchorCount === 0 ? null : (
           <LegConnector
-            mode={activeInsertion.mode}
             pending={false}
             toPrevious={afterIndex >= 0}
             toNext={afterIndex < anchorCount - 1}
@@ -691,97 +788,56 @@ export function TrackPointsSection({
             <Trans>Click the map to add points</Trans>
           </Typography>
         </Stack>
-      </Box>
+      </div>
     );
   };
 
-  const renderAddButton = (afterIndex: number): ReactElement => (
-    <Button
-      className={REVEAL_CLASS}
-      size="small"
-      startIcon={<AddIcon />}
-      aria-label={addButtonLabel(afterIndex)}
-      disabled={disabled}
-      onClick={() => {
-        onInsertionStart(afterIndex);
-      }}
-      sx={{ minHeight: 24, py: 0 }}
+  const renderStubRow = (afterIndex: number, top: number): ReactElement => (
+    <div
+      key={afterIndex === -1 ? 'stub-before' : 'stub-after'}
+      role="listitem"
+      className={classes.row}
+      style={{ top, height: LEG_ROW_HEIGHT }}
     >
-      <Trans>Add</Trans>
-    </Button>
-  );
-
-  const renderStubRow = (afterIndex: number, top: number): ReactElement => {
-    const connector =
-      anchorCount === 0 ? null : (
+      {anchorCount === 0 ? null : (
         <LegConnector
-          mode="routes"
           pending={false}
           toPrevious={afterIndex >= 0}
           toNext={afterIndex < anchorCount - 1}
         />
-      );
-    return (
-      <Box
-        key={afterIndex === -1 ? 'stub-before' : 'stub-after'}
-        role="listitem"
-        style={{ top, height: LEG_ROW_HEIGHT }}
-        sx={rowSx}
-      >
-        {connector}
-        {renderAddButton(afterIndex)}
-      </Box>
-    );
-  };
+      )}
+      <AddButton
+        afterIndex={afterIndex}
+        label={addButtonLabel(afterIndex)}
+        disabled={disabled}
+        actions={actions}
+      />
+    </div>
+  );
 
   const renderLegRow = (legIndex: number, top: number): ReactElement | null => {
     const leg = legs[legIndex];
     const from = anchors[legIndex];
     if (leg === undefined || from === undefined) return null;
-    const selected = isSelected(legIndex) && isSelected(legIndex + 1);
-    const fromNumber = pointNumber(legIndex);
-    const toNumber = pointNumber(legIndex + 1);
     return (
-      <Box
+      <LegRow
         key={`leg-${String(from.key)}`}
-        role="listitem"
-        data-selected={selected}
-        style={{ top, height: LEG_ROW_HEIGHT }}
-        sx={rowSx}
-      >
-        {leg.kind === 'gap' ? (
-          <Typography variant="caption" color="text.secondary" noWrap>
-            <Trans>Separate segment</Trans>
-          </Typography>
-        ) : (
-          <>
-            <LegConnector mode={leg.mode} pending={leg.pending} toPrevious toNext />
-            {editing ? (
-              <>
-                <LegModeToggle
-                  label={t`Segment between points ${fromNumber} and ${toNumber}`}
-                  mode={leg.mode}
-                  disabled={disabled}
-                  reveal={variant === 'track'}
-                  onChange={(mode) => {
-                    onLegModeChange(legIndex, mode);
-                  }}
-                />
-                {renderAddButton(legIndex)}
-              </>
-            ) : null}
-          </>
-        )}
-      </Box>
+        legIndex={legIndex}
+        top={top}
+        leg={leg}
+        fromNumber={pointNumber(legIndex)}
+        toNumber={pointNumber(legIndex + 1)}
+        selected={isSelected(legIndex) && isSelected(legIndex + 1)}
+        revealToggle={variant === 'track'}
+        disabled={disabled}
+        addLabel={addButtonLabel(legIndex)}
+        actions={actions}
+      />
     );
   };
 
   const renderRow = (row: number, top: number): ReactElement | null => {
-    if (!editing) {
-      return row % 2 === 0
-        ? renderPointRow(row / 2, top)
-        : renderLegRow((row - 1) / 2, top);
-    }
+    if (!editing) return renderPointRow(row, top);
     if (row % 2 === 1) return renderPointRow((row - 1) / 2, top);
     if (row === layout.insertionRow && insertion !== null) {
       return renderInsertionRow(insertion, top);
@@ -795,10 +851,16 @@ export function TrackPointsSection({
 
   const rows: ReactElement[] = [];
   if (open && layout.rowCount > 0) {
-    const visibleTop = Math.min(scrollTop, totalHeight - viewportHeight);
-    const windowBottom = visibleTop + viewportHeight + OVERSCAN_PX;
+    const visibleTop = Math.max(0, Math.min(scrollTop, totalHeight - viewportHeight));
+    const firstRow = rowAtOffset(layout, Math.max(0, visibleTop - OVERSCAN_PX));
+    const windowStart = firstRow - (firstRow % WINDOW_STEP_ROWS);
+    const windowBottom =
+      rowOffset(layout, windowStart) +
+      viewportHeight +
+      2 * OVERSCAN_PX +
+      WINDOW_STEP_ROWS * POINT_ROW_HEIGHT;
     for (
-      let row = rowAtOffset(layout, Math.max(0, visibleTop - OVERSCAN_PX));
+      let row = windowStart;
       row < layout.rowCount && rowOffset(layout, row) < windowBottom;
       row += 1
     ) {
@@ -939,16 +1001,90 @@ export function TrackPointsSection({
                 pointerSelectedRef.current = false;
               }}
               style={{ height: viewportHeight }}
-              sx={{
+              sx={(theme) => ({
                 position: 'relative',
                 overflowY: 'auto',
                 overscrollBehavior: 'contain',
                 userSelect: 'none',
+                ...theme.typography.body2,
+                [`& .${classes.row}`]: {
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  alignItems: 'center',
+                  columnGap: theme.spacing(0.5),
+                  pl: `${String(DOT_COLUMN_WIDTH)}px`,
+                  pr: 0.5,
+                },
+                [`& .${classes.point}`]: { pl: 0 },
+                [`& .${classes.pointButton}`]: {
+                  flex: '1 1 auto',
+                  minWidth: 0,
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  columnGap: theme.spacing(1),
+                  pr: 1,
+                  cursor: 'pointer',
+                  borderRadius: `${String(theme.shape.borderRadius)}px`,
+                  outline: 'none',
+                  '&:focus-visible': {
+                    boxShadow: `inset 0 0 0 2px ${theme.palette.primary.main}`,
+                  },
+                },
+                [`& .${classes.dotColumn}`]: {
+                  width: DOT_COLUMN_WIDTH,
+                  flex: '0 0 auto',
+                  display: 'flex',
+                  justifyContent: 'center',
+                },
+                [`& .${classes.dot}`]: {
+                  width: 16,
+                  height: 16,
+                  boxSizing: 'border-box',
+                  borderRadius: '50%',
+                  border: `2px solid ${theme.palette.common.white}`,
+                  bgcolor: pathColor,
+                  boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.24)',
+                },
+                [`& .${classes.number}`]: {
+                  minWidth: '5ch',
+                  fontWeight: 600,
+                  fontVariantNumeric: 'tabular-nums',
+                },
+                [`& .${classes.distance}`]: {
+                  minWidth: '8ch',
+                  whiteSpace: 'nowrap',
+                  fontVariantNumeric: 'tabular-nums',
+                },
+                [`& .${classes.elevation}`]: {
+                  flex: 1,
+                  minWidth: 0,
+                  whiteSpace: 'nowrap',
+                  color: theme.palette.text.secondary,
+                  fontVariantNumeric: 'tabular-nums',
+                },
+                // The leg line matches the map track: solid blue, white casing, soft shadow.
+                [`& .${classes.connector}`]: {
+                  position: 'absolute',
+                  left: (DOT_COLUMN_WIDTH - CONNECTOR_WIDTH) / 2,
+                  width: CONNECTOR_WIDTH,
+                  bgcolor: pathColor,
+                  boxShadow: `0 0 0 1.5px ${theme.palette.common.white}, 0 1px 3px 1.5px rgba(0, 0, 0, 0.25)`,
+                },
+                [`& .${classes.pending}`]: {
+                  animation: `${pendingPulse} 900ms ease-in-out infinite alternate`,
+                  '@media (prefers-reduced-motion: reduce)': {
+                    animation: 'none',
+                    opacity: 0.4,
+                  },
+                },
                 [`& .${REVEAL_CLASS}`]: {
-                  transition: (theme) =>
-                    theme.transitions.create('opacity', {
-                      duration: theme.transitions.duration.shortest,
-                    }),
+                  transition: theme.transitions.create('opacity', {
+                    duration: theme.transitions.duration.shortest,
+                  }),
                 },
                 '@media (hover: hover) and (pointer: fine)': {
                   [`& .${REVEAL_CLASS}`]: { opacity: 0, pointerEvents: 'none' },
@@ -959,7 +1095,7 @@ export function TrackPointsSection({
                 '& [data-selected="true"], & [data-selected="true"]:hover': {
                   bgcolor: 'action.selected',
                 },
-              }}
+              })}
             >
               <Box
                 role="list"

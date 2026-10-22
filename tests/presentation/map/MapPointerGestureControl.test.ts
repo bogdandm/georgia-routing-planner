@@ -223,6 +223,51 @@ describe('MapPointerGestureControl', () => {
     container.remove();
   });
 
+  it('reports a Shift+left press released in place as a Shift+click in 3D', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const { easeTo, map } = createMapDouble();
+    const onShiftClick = vi.fn();
+    const control = new MapPointerGestureControl({
+      pivotIndicator: createPivotDouble(),
+      onShiftClick,
+    });
+    control.attach(container, map);
+    control.setTerrainOrbitEnabled(true);
+    const press = (releaseX: number) => {
+      container.dispatchEvent(
+        new MouseEvent('mousedown', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          buttons: 1,
+          shiftKey: true,
+          clientX: 40,
+          clientY: 40,
+        }),
+      );
+      window.dispatchEvent(
+        new MouseEvent('mouseup', {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: releaseX,
+          clientY: 40,
+        }),
+      );
+    };
+
+    press(42);
+    expect(onShiftClick).toHaveBeenCalledOnce();
+    expect(onShiftClick.mock.calls[0]?.[0]).toMatchObject({ clientX: 42, clientY: 40 });
+    expect(easeTo).not.toHaveBeenCalled();
+
+    press(60);
+    expect(onShiftClick).toHaveBeenCalledOnce();
+    control.detach();
+    container.remove();
+  });
+
   it('turns the 3D camera in place with Ctrl+left, without a pivot, and suppresses click', () => {
     const container = document.createElement('div');
     document.body.append(container);

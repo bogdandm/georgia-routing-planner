@@ -69,6 +69,7 @@ import {
   RoutePlanQuickControls,
   RoutePlanStatus,
 } from '@/presentation/tracks/RoutePlanControls';
+import { setTrackPathInsertionMode } from '@/presentation/tracks/trackPathEditor';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
 
@@ -206,8 +207,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     recalculationState,
     savePreview,
     setActiveName,
-    setNextSegmentMode,
-    undoLastRoutePlanPoint,
+    editActivePath,
+    undoPathEdit,
   } = useTracksWorkspace();
   useEffect(() => {
     void mapLayers?.restorePersistedState();
@@ -508,8 +509,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       <Paper elevation={0} sx={{ p: 0.75, borderRadius: 1.25 }}>
         <RoutePlanQuickControls
           draft={activeRoutePlan}
-          onNextSegmentModeChange={setNextSegmentMode}
-          onUndo={undoLastRoutePlanPoint}
+          onNextSegmentModeChange={(mode) => {
+            editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
+          }}
+          onUndo={undoPathEdit}
         />
       </Paper>
     ) : null;
@@ -638,8 +641,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
               <RoutePlanQuickControls
                 fullWidth
                 draft={activeRoutePlan}
-                onNextSegmentModeChange={setNextSegmentMode}
-                onUndo={undoLastRoutePlanPoint}
+                onNextSegmentModeChange={(mode) => {
+                  editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
+                }}
+                onUndo={undoPathEdit}
               />
             </Stack>
           ) : null}
@@ -695,7 +700,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
                 />
               </Box>
             ) : activeTrack?.kind === 'route-plan' &&
-              (activeTrack.waypoints.length < 2 || activeTrack.metrics === null) ? (
+              (activeTrack.path.anchors.length < 2 || activeTrackMetrics === null) ? (
               <Stack
                 direction="row"
                 sx={{

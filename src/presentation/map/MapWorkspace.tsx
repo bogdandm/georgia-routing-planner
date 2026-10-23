@@ -451,20 +451,35 @@ export function MapWorkspace({
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
-  const routePlanningActive =
+  const editablePath =
     activeTab === 'tracks' &&
-    tracksWorkspace?.active?.kind === 'route-plan' &&
-    tracksWorkspace.active.status !== 'saving';
+    tracksWorkspace !== null &&
+    tracksWorkspace.activePath !== null &&
+    tracksWorkspace.activePath.status !== 'saving'
+      ? tracksWorkspace.activePath
+      : null;
+  // Clicks place points while a plan is open or a saved track moves or adds a point;
+  // otherwise an edited track's clicks select its nearest point.
+  const routePlanningActive =
+    editablePath !== null &&
+    (editablePath.movingAnchorId !== null || editablePath.insertion !== null);
+  const trackEditingActive = editablePath !== null && !routePlanningActive;
   // An enabled weather map yields clicks to the ruler; a one-shot weather pick does not.
   const weatherOwnsMapClicks =
     weatherPointSelectionActive || (weatherMap.enabled && !measurementActive);
-  const addRoutePlanPoint = tracksWorkspace?.addRoutePlanPoint;
+  const placePathPoint = tracksWorkspace?.placePathPoint;
+  const selectPathPointNear = tracksWorkspace?.selectPathPointNear;
+  const hoverPathPointNear = tracksWorkspace?.hoverPathPointNear;
+  const insertionAnchorId = editablePath?.insertion?.afterAnchorId ?? null;
   const routePlanPreviewAnchor =
-    tracksWorkspace?.active?.kind === 'route-plan' && routePlanningActive
-      ? (tracksWorkspace.active.queuedWaypoints.at(-1) ??
-        tracksWorkspace.active.waypoints.at(-1) ??
-        null)
-      : null;
+    editablePath === null ||
+    !routePlanningActive ||
+    editablePath.movingAnchorId !== null
+      ? null
+      : ((insertionAnchorId === null
+          ? editablePath.path.anchors[0]
+          : editablePath.path.anchors.find((anchor) => anchor.id === insertionAnchorId)
+        )?.point.coordinate ?? null);
   const planningPreview = useMemo((): PlanningPreview | null => {
     if (measurementPoints === null) {
       return routePlanPreviewAnchor === null
@@ -850,7 +865,9 @@ export function MapWorkspace({
             ? 'measurement'
             : routePlanningActive
               ? 'route-planning'
-              : 'default';
+              : trackEditingActive
+                ? 'track-editing'
+                : 'default';
     facade.setInteractionMode(mode);
     if (mode !== 'default' && mode !== 'marker-placement') {
       facade.closePointInspection();
@@ -863,6 +880,7 @@ export function MapWorkspace({
     markerPlacement,
     measurementActive,
     routePlanningActive,
+    trackEditingActive,
     weatherOwnsMapClicks,
   ]);
 
@@ -871,20 +889,34 @@ export function MapWorkspace({
       !routePlanningActive ||
       weatherOwnsMapClicks ||
       measurementActive ||
-      addRoutePlanPoint === undefined
+      placePathPoint === undefined
     ) {
       return undefined;
     }
     return facade.subscribePlanningClicks((coordinate) => {
-      addRoutePlanPoint([coordinate.longitude, coordinate.latitude]);
+      placePathPoint([coordinate.longitude, coordinate.latitude]);
     });
   }, [
-    addRoutePlanPoint,
     facade,
     measurementActive,
+    placePathPoint,
     routePlanningActive,
     weatherOwnsMapClicks,
   ]);
+
+  useEffect(() => {
+    if (!trackEditingActive || selectPathPointNear === undefined) return undefined;
+    return facade.subscribeTrackPointClicks(selectPathPointNear);
+  }, [facade, selectPathPointNear, trackEditingActive]);
+
+  useEffect(() => {
+    if (!trackEditingActive || hoverPathPointNear === undefined) return undefined;
+    const unsubscribe = facade.subscribeTrackPointHover(hoverPathPointNear);
+    return () => {
+      unsubscribe();
+      hoverPathPointNear(null);
+    };
+  }, [facade, hoverPathPointNear, trackEditingActive]);
 
   useEffect(() => {
     if (!measurementActive) return undefined;

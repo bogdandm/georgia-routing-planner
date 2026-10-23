@@ -13,11 +13,13 @@ import {
   isWalkableTransportation,
   toRoutingLineMetadata,
   type RoutingLineInput,
-  type RoutingTileRectangle,
 } from '@/infrastructure/routing/trailGraph';
 
 export const ROUTING_ZOOM = 14;
-/** About 40 km diagonal or 120 km axis-aligned legs in Georgia with the capped padding. */
+/**
+ * Budget for the union of every leg's padded area; one leg alone fits about 40 km
+ * diagonally or 120 km axis-aligned in Georgia with the capped padding.
+ */
 export const MAX_ROUTING_TILES = 512;
 /** Holds a whole maximal area, so the expanded retry reuses the first attempt's tiles. */
 export const ROUTING_TILE_CACHE_ENTRIES = MAX_ROUTING_TILES;
@@ -44,8 +46,8 @@ export interface RoutingTileCoordinate {
 }
 
 export interface RoutingTileCoverage {
+  /** Sorted by `key`; `graphX` is unwrapped along the waypoint chain. */
   readonly tiles: readonly RoutingTileCoordinate[];
-  readonly rectangle: RoutingTileRectangle;
 }
 
 export interface LoadedRoutingArea extends RoutingTileCoverage {
@@ -177,6 +179,36 @@ export function expandRoutingBounds(
   };
 }
 
+/**
+ * One padded area per consecutive waypoint pair, each padded by its own leg length times
+ * `paddingMultiplier`. Longitudes are unwrapped along the chain so every area shares one
+ * tile frame across the antimeridian.
+ */
+export function routingLegBounds(
+  waypoints: readonly TrackCoordinate[],
+  paddingMultiplier: number,
+): readonly RoutingBounds[] {
+  const areas: RoutingBounds[] = [];
+  let previous: TrackCoordinate | undefined;
+  for (const waypoint of waypoints) {
+    const unwrapped: TrackCoordinate =
+      previous === undefined
+        ? waypoint
+        : [unwrapLongitude(waypoint[0], previous[0]), waypoint[1]];
+    if (previous !== undefined) {
+      areas.push(
+        expandRoutingBounds(
+          previous,
+          unwrapped,
+          routingPaddingMeters(previous, unwrapped) * paddingMultiplier,
+        ),
+      );
+    }
+    previous = unwrapped;
+  }
+  return areas;
+}
+
 function longitudeToTileX(longitude: number, zoom: number): number {
   return ((longitude + 180) / 360) * 2 ** zoom;
 }
@@ -186,52 +218,41 @@ function latitudeToTileY(latitude: number, zoom: number): number {
   return ((1 - Math.asinh(Math.tan(latitudeRadians)) / Math.PI) / 2) * 2 ** zoom;
 }
 
+/** Covers the union of `areas`; the tile budget applies to the union, not its hull. */
 export function coverRoutingBounds(
-  bounds: RoutingBounds,
+  areas: readonly RoutingBounds[],
   zoom = ROUTING_ZOOM,
 ): RoutingTileCoverageResult {
   const tileCount = 2 ** zoom;
-  const rawMinimumX = Math.floor(longitudeToTileX(bounds.west, zoom));
-  const rawMaximumXExclusive = Math.ceil(longitudeToTileX(bounds.east, zoom));
-  const minimumY = Math.max(0, Math.floor(latitudeToTileY(bounds.north, zoom)));
-  const maximumYExclusive = Math.min(
-    tileCount,
-    Math.ceil(latitudeToTileY(bounds.south, zoom)),
-  );
-  const xCount = Math.max(0, rawMaximumXExclusive - rawMinimumX);
-  const yCount = Math.max(0, maximumYExclusive - minimumY);
-  if (xCount * yCount > MAX_ROUTING_TILES) {
-    return { status: 'failed', reason: 'area-too-large' };
-  }
-
   const byKey = new Map<string, RoutingTileCoordinate>();
-  for (let rawX = rawMinimumX; rawX < rawMaximumXExclusive; rawX += 1) {
-    const x = ((rawX % tileCount) + tileCount) % tileCount;
-    for (let y = minimumY; y < maximumYExclusive; y += 1) {
-      const key = `${String(zoom)}/${String(x)}/${String(y)}`;
-      byKey.set(key, { z: zoom, x, graphX: rawX, y, key });
+  for (const bounds of areas) {
+    const rawMinimumX = Math.floor(longitudeToTileX(bounds.west, zoom));
+    const rawMaximumXExclusive = Math.ceil(longitudeToTileX(bounds.east, zoom));
+    const minimumY = Math.max(0, Math.floor(latitudeToTileY(bounds.north, zoom)));
+    const maximumYExclusive = Math.min(
+      tileCount,
+      Math.ceil(latitudeToTileY(bounds.south, zoom)),
+    );
+    const xCount = Math.max(0, rawMaximumXExclusive - rawMinimumX);
+    const yCount = Math.max(0, maximumYExclusive - minimumY);
+    if (xCount * yCount > MAX_ROUTING_TILES) {
+      return { status: 'failed', reason: 'area-too-large' };
+    }
+    for (let rawX = rawMinimumX; rawX < rawMaximumXExclusive; rawX += 1) {
+      const x = ((rawX % tileCount) + tileCount) % tileCount;
+      for (let y = minimumY; y < maximumYExclusive; y += 1) {
+        const key = `${String(zoom)}/${String(x)}/${String(y)}`;
+        if (!byKey.has(key)) byKey.set(key, { z: zoom, x, graphX: rawX, y, key });
+      }
+    }
+    if (byKey.size > MAX_ROUTING_TILES) {
+      return { status: 'failed', reason: 'area-too-large' };
     }
   }
   const tiles = [...byKey.values()].sort((left, right) =>
     left.key.localeCompare(right.key),
   );
-  if (tiles.length > MAX_ROUTING_TILES) {
-    return { status: 'failed', reason: 'area-too-large' };
-  }
-  const xValues = tiles.map((tile) => tile.graphX);
-  const yValues = tiles.map((tile) => tile.y);
-  return {
-    status: 'ready',
-    coverage: {
-      tiles,
-      rectangle: {
-        minTileX: Math.min(...xValues),
-        maxTileX: Math.max(...xValues),
-        minTileY: Math.min(...yValues),
-        maxTileY: Math.max(...yValues),
-      },
-    },
-  };
+  return { status: 'ready', coverage: { tiles } };
 }
 
 export function resolveRoutingTileUrl(
@@ -406,16 +427,13 @@ export class RoutingTileLoader {
     return [...this.#cache.keys()];
   }
 
+  /** Loads every tile in the union of `areas` once; see `routingLegBounds`. */
   public async loadArea(
-    start: TrackCoordinate,
-    destination: TrackCoordinate,
-    paddingMeters: number,
+    areas: readonly RoutingBounds[],
     signal: AbortSignal,
     onProgress?: (loadedTileCount: number, totalTileCount: number) => void,
   ): Promise<RoutingTileLoadResult> {
-    const coverageResult = coverRoutingBounds(
-      expandRoutingBounds(start, destination, paddingMeters),
-    );
+    const coverageResult = coverRoutingBounds(areas);
     if (coverageResult.status === 'failed') return coverageResult;
     try {
       const decoded = await this.loadTiles(

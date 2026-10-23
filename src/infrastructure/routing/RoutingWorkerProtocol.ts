@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
-import type {
-  TrailRouteProgress,
-  TrailRouteRequest,
-  TrailRouteResult,
+import {
+  MAXIMUM_TRAIL_ROUTE_WAYPOINTS,
+  type TrailRouteFailure,
+  type TrailRouteProgress,
+  type TrailRouteRequest,
+  type TrailRouteResult,
+  type TrailRouteSuccess,
 } from '@/application/ports/TrailRouter';
 
 export const routingWorkerMethods = {
@@ -61,8 +64,7 @@ const routeRequestSchema = z
   .object({
     request: z
       .object({
-        start: coordinateSchema,
-        destination: coordinateSchema,
+        waypoints: z.array(coordinateSchema).min(2).max(MAXIMUM_TRAIL_ROUTE_WAYPOINTS),
         includeSearchTrace: z.boolean(),
       })
       .strict(),
@@ -127,14 +129,58 @@ const routeFailureSchema = z
       'routing-data-invalid',
       'routing-timeout',
     ]),
-    endpoint: z.enum(['start', 'destination', 'both']).optional(),
+    waypointIndexes: z
+      .array(
+        z
+          .number()
+          .int()
+          .min(0)
+          .max(MAXIMUM_TRAIL_ROUTE_WAYPOINTS - 1),
+      )
+      .min(1)
+      .optional(),
+    legIndex: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAXIMUM_TRAIL_ROUTE_WAYPOINTS - 2)
+      .optional(),
     searchTrace: searchTraceSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.waypointIndexes !== undefined) {
+      if (value.reason !== 'no-nearby-trail') {
+        context.addIssue({
+          code: 'custom',
+          path: ['waypointIndexes'],
+          message: 'Waypoint indexes describe only no-nearby-trail failures.',
+        });
+      }
+      const indexes = value.waypointIndexes;
+      if (
+        indexes.some(
+          (index, position) => position > 0 && index <= (indexes[position - 1] ?? -1),
+        )
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['waypointIndexes'],
+          message: 'Waypoint indexes must be strictly ascending.',
+        });
+      }
+    }
+    if (value.legIndex !== undefined && value.reason !== 'no-route') {
+      context.addIssue({
+        code: 'custom',
+        path: ['legIndex'],
+        message: 'A leg index describes only no-route failures.',
+      });
+    }
+  });
 
-const routeSuccessSchema = z
+const routeLegSchema = z
   .object({
-    status: z.literal('ready'),
     geometry: z
       .object({
         type: z.literal('LineString'),
@@ -144,11 +190,6 @@ const routeSuccessSchema = z
     networkDistanceMeters: z.number().nonnegative(),
     snappedStart: coordinateSchema,
     snappedDestination: coordinateSchema,
-    loadedTileCount: z.number().int().nonnegative(),
-    graphNodeCount: z.number().int().nonnegative(),
-    graphEdgeCount: z.number().int().nonnegative(),
-    expandedAreaRetryUsed: z.boolean(),
-    searchTrace: searchTraceSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -158,7 +199,7 @@ const routeSuccessSchema = z
       context.addIssue({
         code: 'custom',
         path: ['geometry', 'coordinates', 0],
-        message: 'Route geometry must begin at snappedStart.',
+        message: 'Leg geometry must begin at snappedStart.',
       });
     }
     if (
@@ -168,8 +209,39 @@ const routeSuccessSchema = z
       context.addIssue({
         code: 'custom',
         path: ['geometry', 'coordinates', value.geometry.coordinates.length - 1],
-        message: 'Route geometry must end at snappedDestination.',
+        message: 'Leg geometry must end at snappedDestination.',
       });
+    }
+  });
+
+const routeSuccessSchema = z
+  .object({
+    status: z.literal('ready'),
+    legs: z
+      .array(routeLegSchema)
+      .min(1)
+      .max(MAXIMUM_TRAIL_ROUTE_WAYPOINTS - 1),
+    loadedTileCount: z.number().int().nonnegative(),
+    graphNodeCount: z.number().int().nonnegative(),
+    graphEdgeCount: z.number().int().nonnegative(),
+    expandedAreaRetryUsed: z.boolean(),
+    searchTrace: searchTraceSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    for (const [index, leg] of value.legs.entries()) {
+      const previous = value.legs[index - 1];
+      if (
+        previous !== undefined &&
+        (previous.snappedDestination[0] !== leg.snappedStart[0] ||
+          previous.snappedDestination[1] !== leg.snappedStart[1])
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['legs', index, 'snappedStart'],
+          message: 'Each leg must begin where the previous leg ends.',
+        });
+      }
     }
   });
 
@@ -201,26 +273,32 @@ export function parseRoutingWorkerProgressEvent(
 
 export function parseTrailRouteResult(value: unknown): TrailRouteResult {
   const parsed = routeResultSchema.parse(value);
-  const searchTrace =
-    parsed.searchTrace === undefined ? {} : { searchTrace: parsed.searchTrace };
   if (parsed.status === 'failed') {
-    return {
-      status: 'failed',
-      reason: parsed.reason,
-      ...(parsed.endpoint === undefined ? {} : { endpoint: parsed.endpoint }),
-      ...searchTrace,
-    };
+    const failure: {
+      -readonly [Key in keyof TrailRouteFailure]: TrailRouteFailure[Key];
+    } = { status: 'failed', reason: parsed.reason };
+    if (parsed.waypointIndexes !== undefined) {
+      failure.waypointIndexes = parsed.waypointIndexes;
+    }
+    if (parsed.legIndex !== undefined) failure.legIndex = parsed.legIndex;
+    if (parsed.searchTrace !== undefined) failure.searchTrace = parsed.searchTrace;
+    return failure;
   }
-  return {
+  const success: {
+    -readonly [Key in keyof TrailRouteSuccess]: TrailRouteSuccess[Key];
+  } = {
     status: 'ready',
-    geometry: parsed.geometry,
-    networkDistanceMeters: parsed.networkDistanceMeters,
-    snappedStart: parsed.snappedStart,
-    snappedDestination: parsed.snappedDestination,
+    legs: parsed.legs.map((leg) => ({
+      geometry: leg.geometry,
+      networkDistanceMeters: leg.networkDistanceMeters,
+      snappedStart: leg.snappedStart,
+      snappedDestination: leg.snappedDestination,
+    })),
     loadedTileCount: parsed.loadedTileCount,
     graphNodeCount: parsed.graphNodeCount,
     graphEdgeCount: parsed.graphEdgeCount,
     expandedAreaRetryUsed: parsed.expandedAreaRetryUsed,
-    ...searchTrace,
   };
+  if (parsed.searchTrace !== undefined) success.searchTrace = parsed.searchTrace;
+  return success;
 }

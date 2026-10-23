@@ -185,23 +185,30 @@ track geometry. FIT, KML, shared tracks, and route plans do not create track mar
 #### Route planning
 
 **Plan route** opens a new unsaved-track pane and takes ownership of map clicks. The
-first click sets the start; each later click adds a leg in the persistent **Next
-segment: Routes | Line** mode. **Routes** snaps both ends to the detail-vector street
-network and searches a walkable connection in a browser worker; **Line** adds a direct
-segment. Routed legs prefer the fastest hiking time over the shortest distance, so they
-avoid needless climbs; without terrain data they fall back to distance only. A pending
-routed leg reports tile download, graph construction, route terrain loading, and search
-progress, disables conflicting controls, and is cancelled by Undo or Clear. Ctrl+Z
-(Cmd+Z on macOS) undoes the last point like **Undo**, except while typing in a field.
-Routing has a one-minute limit; a failed leg keeps the plan and offers a direct-line
-fallback without changing the mode. Missing provider topology shows an unavailable
-state; there is no backend or fallback routing service. Topology rules are in
+first click sets the start; each later click adds a point after the insertion point,
+which starts at the end of the plan. The pane lists the plan's points in a **Points**
+section (see [Track points](#track-points)); its insertion row chooses **Routes** or
+**Line** for new legs, and every leg between points keeps its own visible **Routes |
+Line** switch. **Routes** snaps the points to the detail-vector street network and
+searches a walkable connection in a browser worker; **Line** draws a direct segment.
+Routed legs prefer the fastest hiking time over the shortest distance, so they avoid
+needless climbs; without terrain data they fall back to distance only. Consecutive legs
+waiting for the router, such as both sides of an inserted point, are routed in one
+request on one graph. A pending routed leg reports tile download, graph construction,
+route terrain loading, and search progress while further clicks queue behind it.
+**Undo** and Ctrl+Z (Cmd+Z on macOS, except while typing in a field) undo the last edit,
+including an insertion, move, deletion, mode switch, or **Clear**. Routing has a
+one-minute limit; a failed request undoes the edit that needed it and names the points
+without a nearby trail. Missing provider topology shows an unavailable state; there is
+no backend or fallback routing service. Topology rules are in
 [runtime flows](./runtime-flows.md#browser-route-planning).
 
-After each accepted edit the browser samples terrain and recomputes metrics, profile,
-grades, and climbs/descents. A terrain failure keeps geometry and distance and still
-allows saving. Save locks editing while it writes through the local-track repository;
-the result behaves like any saved track. Unsaved plans activate the leave-site guard.
+After each accepted edit the browser samples terrain and recomputes metrics and the
+profile. A terrain failure keeps geometry and distance and still allows saving. Save
+locks editing while it writes through the local-track repository; the result behaves
+like any saved track. Unsaved plans activate the leave-site guard. On desktop with the
+navigation collapsed and in the smartphone disclosure, compact controls offer Undo and
+the mode of new points.
 
 #### Library and folders
 
@@ -308,6 +315,47 @@ reuse the 7-day forecast rows from Weather and request each location with its pr
 elevation. Clicking a loaded forecast row opens Weather with the full forecast at that
 location and elevation, labelled with the card's point or time. Failed track forecasts
 retry automatically as in Weather when the app becomes visible again.
+
+#### Track points
+
+Saved tracks end with a collapsed **Points** section after Weather on desktop and
+tablet; smartphones show it only for route plans, which list it expanded below the
+profile. Each row shows a blue point marker, the point number, and its distance along
+the track with its elevation beside it; the list fills the rest of the pane, and rows
+are windowed and memoized, so tracks with many thousands of points scroll smoothly.
+Clicking a row selects the point, Shift+click extends the selection from the last
+clicked point, and dragging over rows or across the elevation profile selects a run
+live. The selection is highlighted on the map and as a band on the elevation profile.
+The point under the pointer is shared by the list, the map, and the profile: a hovered
+row, map point, or profile position is drawn as an orange marker with a white ring on
+the map and on the profile, while selected points ring in blue.
+
+The pencil beside the heading starts editing a saved track. Editing hides every section
+except the stats, the elevation profile, and Points, pins **Undo**, **Cancel**, and
+**Save** to the bottom of the pane, and draws every stored point as a small dot. A
+caption under the compact Points heading names the range-selection gestures. Between
+rows a vertical line styled like the map track stands for the leg to the next point,
+orange where it follows trails; boundaries between independent segments show no line. A
+left map click selects the nearest point within a few pixels instead of opening point
+details, and Shift+click on the map (also in 3D, where a moved Shift drag still orbits)
+extends the selection from the same anchor as the list. Hovering a row offers **Move**
+and **Delete**; Move hands the next map click to the point, which keeps its recorded
+time. Hovering a leg offers **+ Add** and a **Routes | Line** switch, and short legs
+before the first and after the last point add points at either end. While adding, an
+insertion row in the list chooses Routes or Line, each map click inserts a point after
+the previous one, and **Done** or Escape stops. **Delete** removes the selection and
+selects the two points that now meet, scrolling the list to them, so the joined leg's
+mode is easy to change. Route plans use the same list with the switch always visible on
+every leg; only their clicked points are listed, never the router's intermediate points.
+
+After each edit the browser recomputes terrain, metrics, the profile, and climbs as in
+planning; moved and added points take the calculated DEM elevation, so the profile spans
+the edited stretch. Save replaces the stored geometry of the same track, keeping its
+name, folder, favorite, and markers; recorded elevation stays canonical when it still
+forms a profile, otherwise the calculated DEM elevation is stored. A synchronized track
+is replaced in place on every device, and its public link keeps working and shows the
+edited geometry once the edit is synchronized. Cancel discards the edits after
+confirmation, and unsaved edits activate the leave-site guard.
 
 #### Multi-track view
 

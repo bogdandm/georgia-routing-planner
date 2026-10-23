@@ -2,6 +2,8 @@ import { Blob as NodeBlob } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 
+import Dexie from 'dexie';
+import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
@@ -1981,5 +1983,543 @@ describe('TrackSyncWorkerServer', () => {
       ]);
     });
     client.dispose();
+  });
+});
+
+describe('in-place track geometry replacement', () => {
+  interface CloudRecord {
+    readonly content_hash: string;
+    readonly revision: number;
+    readonly state: 'ready';
+    readonly object_path: string;
+    readonly compressed_bytes: number;
+    readonly metadata: Record<string, unknown>;
+  }
+  type CloudMutation =
+    | { readonly outcome: 'applied' | 'existing'; readonly revision: number }
+    | { readonly outcome: 'conflict'; readonly revision: number }
+    | { readonly outcome: 'missing' };
+
+  const clients: WorkerRpcClient[] = [];
+  const deviceDatabases: AppDatabase[] = [];
+
+  beforeEach(() => {
+    vi.stubGlobal('Blob', NodeBlob);
+  });
+
+  afterEach(() => {
+    for (const client of clients.splice(0)) client.dispose();
+    for (const deviceDatabase of deviceDatabases.splice(0)) deviceDatabase.close();
+  });
+
+  async function sha256Hex(bytes: Uint8Array): Promise<string> {
+    const digest = await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes));
+    return Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+  }
+
+  /** A three-point track whose last longitude distinguishes edited geometries. */
+  async function trackPair(
+    trackId: string,
+    endLongitude: number,
+    updatedAt: string,
+  ): Promise<LocalTrackSyncPair> {
+    const trackContent: LocalTrackContent = {
+      schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
+      trackId,
+      trackPoints: [
+        [
+          { coordinate: [44, 42] },
+          { coordinate: [44.01, 42.01] },
+          { coordinate: [endLongitude, 42.02] },
+        ],
+      ],
+      markers: [],
+    };
+    return {
+      summary: {
+        ...summary(trackId),
+        updatedAt,
+        contentHash: await sha256Hex(encodeTrackSyncGeometry(trackContent)),
+        pointCount: 3,
+        metrics: calculateTrackMetrics(
+          trackContent.trackPoints.map((points) => ({ points })),
+        ),
+      },
+      content: trackContent,
+    };
+  }
+
+  /** An in-memory account with per-user revisions that applies the server's outcomes. */
+  function createCloud() {
+    const records = new Map<
+      string,
+      { readonly record: CloudRecord; readonly compressed: Uint8Array }
+    >();
+    const events: string[] = [];
+    const options = { rejectUploads: false };
+    let nextRevision = 1;
+    const write = (
+      hash: string,
+      compressed: Uint8Array,
+      objectPath: string,
+      metadata: Record<string, unknown>,
+    ): number => {
+      const revision = nextRevision;
+      nextRevision += 1;
+      records.set(hash, {
+        record: {
+          content_hash: hash,
+          revision,
+          state: 'ready',
+          object_path: objectPath,
+          compressed_bytes: compressed.byteLength,
+          metadata,
+        },
+        compressed,
+      });
+      return revision;
+    };
+    const deleteRecord = (hash: string, revision: number): Promise<CloudMutation> => {
+      const stored = records.get(hash);
+      if (stored === undefined) return Promise.resolve({ outcome: 'missing' });
+      if (stored.record.revision !== revision) {
+        return Promise.resolve({
+          outcome: 'conflict',
+          revision: stored.record.revision,
+        });
+      }
+      records.delete(hash);
+      events.push(`delete ${hash}`);
+      return Promise.resolve({ outcome: 'applied', revision: 0 });
+    };
+    const mutate = async (
+      state: TrackSyncState,
+      pair: LocalTrackSyncPair | null,
+    ): Promise<CloudMutation> => {
+      if (state.pendingKind === 'delete') {
+        if (state.remoteRevision === null) return { outcome: 'applied', revision: 0 };
+        return await deleteRecord(state.contentHash, state.remoteRevision);
+      }
+      if (pair === null) throw new Error('A track mutation needs its local pair.');
+      const metadata: Record<string, unknown> = {
+        name: pair.summary.name,
+        savedAt: pair.summary.savedAt,
+        updatedAt: pair.summary.updatedAt,
+        sourceFilename: pair.summary.sourceFilename,
+        sourceFormat: pair.summary.sourceFormat,
+        favorite: pair.summary.favorite,
+        geometryKind: pair.summary.geometryKind,
+        folderId: pair.summary.folderId,
+        metadata: pair.summary.metadata,
+        warnings: pair.summary.warnings,
+        markers: pair.content.markers,
+        lineageHash: state.lineageHash,
+        geometryVersion: state.geometryVersion,
+      };
+      if (state.replacesContentHashes !== undefined) {
+        metadata.replacesContentHashes = state.replacesContentHashes;
+      }
+      const stored = records.get(state.contentHash);
+      const baseRevision = state.remoteRevision ?? 0;
+      if (stored === undefined) {
+        if (state.pendingKind === 'metadata') return { outcome: 'missing' };
+        if (options.rejectUploads) {
+          throw new TrackSyncWorkerError('Track geometry quota exceeded.', 'quota');
+        }
+        if (
+          state.lineageHash !==
+          (await sha256Hex(encodeLegacyTrackSyncGeometry(pair.content)))
+        ) {
+          throw new Error('The uploaded lineage does not match its geometry.');
+        }
+        events.push(`upload ${state.contentHash}`);
+        const compressed = Uint8Array.from(
+          gzipSync(encodeTrackSyncGeometry(pair.content)),
+        );
+        const objectPath = `user-id/${state.contentHash}/${String(nextRevision)}.grpt.gz`;
+        return {
+          outcome: 'applied',
+          revision: write(state.contentHash, compressed, objectPath, metadata),
+        };
+      }
+      if (baseRevision === 0) {
+        return { outcome: 'existing', revision: stored.record.revision };
+      }
+      if (baseRevision !== stored.record.revision) {
+        return { outcome: 'conflict', revision: stored.record.revision };
+      }
+      events.push(`metadata ${state.contentHash}`);
+      return {
+        outcome: 'applied',
+        revision: write(
+          state.contentHash,
+          stored.compressed,
+          stored.record.object_path,
+          metadata,
+        ),
+      };
+    };
+    /** Connects one browser's worker; `beforeDelete` can hold its record deletions. */
+    const connect = (
+      deviceDatabase: AppDatabase,
+      beforeDelete?: () => Promise<void>,
+    ) => {
+      const gateway = {
+        status: () =>
+          Promise.resolve({
+            usedBytes: [...records.values()].reduce(
+              (total, { compressed }) => total + compressed.byteLength,
+              0,
+            ),
+            reservedBytes: 0,
+            limitBytes: 8_388_608 as const,
+          }),
+        snapshot: () =>
+          Promise.resolve([...records.values()].map(({ record }) => record)),
+        mutate,
+        deleteRemoteRecord: async (hash: string, revision: number) => {
+          await beforeDelete?.();
+          return await deleteRecord(hash, revision);
+        },
+        download: (path: string) => {
+          const found = [...records.values()].find(
+            ({ record }) => record.object_path === path,
+          );
+          if (found === undefined) throw new Error('Missing cloud geometry.');
+          return Promise.resolve(found.compressed);
+        },
+      };
+      const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+      new TrackSyncWorkerServer(serverEndpoint, deviceDatabase, () => gateway);
+      const client = new WorkerRpcClient(clientEndpoint);
+      clients.push(client);
+      return () =>
+        client.request(trackSyncWorkerMethods.synchronize, {
+          accessToken: 'access-token',
+          userId: 'user-id',
+          sessionRevision: 0,
+        });
+    };
+    return { records, events, options, connect };
+  }
+
+  /** A second browser profile: its own IndexedDB factory, so both stay open at once. */
+  function openDeviceDatabase(): AppDatabase {
+    const sharedIndexedDb = Dexie.dependencies.indexedDB;
+    Dexie.dependencies.indexedDB = new IDBFactory();
+    try {
+      const deviceDatabase = new AppDatabase(services.logger);
+      deviceDatabases.push(deviceDatabase);
+      return deviceDatabase;
+    } finally {
+      Dexie.dependencies.indexedDB = sharedIndexedDb;
+    }
+  }
+
+  async function localTracks(deviceDatabase: AppDatabase) {
+    return (await deviceDatabase.listLocalTracks()).map(
+      ({ id, name, contentHash }) => ({
+        id,
+        name,
+        contentHash,
+      }),
+    );
+  }
+
+  it('replaces the account record in place on the editing browser', async () => {
+    const cloud = createCloud();
+    const original = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const edited = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const originalHash = original.summary.contentHash ?? '';
+    const editedHash = edited.summary.contentHash ?? '';
+    const synchronize = cloud.connect(database);
+    await database.saveLocalTrack(original.summary, original.content);
+    await synchronize();
+
+    await database.replaceLocalTrackGeometry(edited.summary, edited.content);
+    const result = await synchronize();
+
+    expect(result).toMatchObject({ remoteTrackDeletions: [] });
+    expect(cloud.events).toEqual([
+      `upload ${originalHash}`,
+      `upload ${editedHash}`,
+      `delete ${originalHash}`,
+    ]);
+    expect([...cloud.records.keys()]).toEqual([editedHash]);
+    expect(cloud.records.get(editedHash)?.record.metadata).toMatchObject({
+      replacesContentHashes: [originalHash],
+    });
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: editedHash },
+    ]);
+    await expect(database.loadTrackSyncState('local:edited')).resolves.toEqual({
+      trackId: 'local:edited',
+      contentHash: editedHash,
+      lineageHash: await sha256Hex(encodeLegacyTrackSyncGeometry(edited.content)),
+      geometryVersion: 2,
+      remoteRevision: cloud.records.get(editedHash)?.record.revision,
+      pendingKind: null,
+      replacesContentHashes: [originalHash],
+    });
+
+    await expect(synchronize()).resolves.toMatchObject({ remoteTrackDeletions: [] });
+    expect(cloud.events).toHaveLength(3);
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: editedHash },
+    ]);
+  });
+
+  it('moves other browsers onto the edit before and after its predecessor is deleted', async () => {
+    const cloud = createCloud();
+    const original = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const edited = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const originalHash = original.summary.contentHash ?? '';
+    const editedHash = edited.summary.contentHash ?? '';
+    const copyId = `local:sync:${originalHash}`;
+    let deletionGate: Promise<undefined> | null = null;
+    const heldDeletion = deferred<undefined>();
+    const deletionRequested = deferred<undefined>();
+    const synchronizeEditor = cloud.connect(database, async () => {
+      if (deletionGate === null) return;
+      deletionRequested.resolve(undefined);
+      await deletionGate;
+    });
+    await database.saveLocalTrack(original.summary, original.content);
+    await synchronizeEditor();
+    const between = openDeviceDatabase();
+    const synchronizeBetween = cloud.connect(between);
+    await synchronizeBetween();
+    const after = openDeviceDatabase();
+    const synchronizeAfter = cloud.connect(after);
+    await synchronizeAfter();
+    await expect(localTracks(between)).resolves.toEqual([
+      { id: copyId, name: 'Track', contentHash: originalHash },
+    ]);
+
+    await database.replaceLocalTrackGeometry(edited.summary, edited.content);
+    deletionGate = heldDeletion.promise;
+    const editorRun = synchronizeEditor();
+    await deletionRequested.promise;
+    expect([...cloud.records.keys()].sort()).toEqual([originalHash, editedHash].sort());
+
+    await expect(synchronizeBetween()).resolves.toMatchObject({
+      remoteTrackDeletions: [],
+    });
+    await expect(localTracks(between)).resolves.toEqual([
+      { id: copyId, name: 'Track', contentHash: editedHash },
+    ]);
+    await expect(synchronizeBetween()).resolves.toMatchObject({
+      remoteTrackDeletions: [],
+    });
+    await expect(localTracks(between)).resolves.toEqual([
+      { id: copyId, name: 'Track', contentHash: editedHash },
+    ]);
+    const joining = openDeviceDatabase();
+    await cloud.connect(joining)();
+    await expect(localTracks(joining)).resolves.toEqual([
+      { id: `local:sync:${editedHash}`, name: 'Track', contentHash: editedHash },
+    ]);
+
+    heldDeletion.resolve(undefined);
+    await expect(editorRun).resolves.toMatchObject({ remoteTrackDeletions: [] });
+    expect([...cloud.records.keys()]).toEqual([editedHash]);
+
+    // A pending rename of the replaced geometry neither writes to the deleted record nor
+    // asks about its deletion; the edited account copy wins.
+    await after.renameLocalTrack(copyId, 'Renamed after');
+    await expect(synchronizeAfter()).resolves.toMatchObject({
+      remoteTrackDeletions: [],
+    });
+    await expect(localTracks(after)).resolves.toEqual([
+      { id: copyId, name: 'Track', contentHash: editedHash },
+    ]);
+    await expect(after.loadTrackSyncState(copyId)).resolves.toMatchObject({
+      contentHash: editedHash,
+      pendingKind: null,
+      replacesContentHashes: [originalHash],
+    });
+    await expect(synchronizeBetween()).resolves.toMatchObject({
+      remoteTrackDeletions: [],
+    });
+    await expect(localTracks(between)).resolves.toEqual([
+      { id: copyId, name: 'Track', contentHash: editedHash },
+    ]);
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: editedHash },
+    ]);
+    expect(cloud.events.filter((event) => event.startsWith('metadata'))).toEqual([]);
+  });
+
+  it('resolves chained edits in place and keeps the hint through metadata rewrites', async () => {
+    const cloud = createCloud();
+    const first = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const second = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const third = await trackPair('local:edited', 44.04, '2026-07-22T12:00:00.000Z');
+    const firstHash = first.summary.contentHash ?? '';
+    const secondHash = second.summary.contentHash ?? '';
+    const thirdHash = third.summary.contentHash ?? '';
+    const synchronizeEditor = cloud.connect(database);
+    await database.saveLocalTrack(first.summary, first.content);
+    await synchronizeEditor();
+    const stale = openDeviceDatabase();
+    const synchronizeStale = cloud.connect(stale);
+    await synchronizeStale();
+
+    await database.replaceLocalTrackGeometry(second.summary, second.content);
+    await synchronizeEditor();
+    await database.replaceLocalTrackGeometry(third.summary, third.content);
+    await synchronizeEditor();
+    await database.renameLocalTrack('local:edited', 'Renamed');
+    await synchronizeEditor();
+
+    expect([...cloud.records.keys()]).toEqual([thirdHash]);
+    expect(cloud.records.get(thirdHash)?.record.metadata).toMatchObject({
+      name: 'Renamed',
+      replacesContentHashes: [secondHash, firstHash],
+    });
+    await expect(synchronizeStale()).resolves.toMatchObject({
+      remoteTrackDeletions: [],
+    });
+    await expect(localTracks(stale)).resolves.toEqual([
+      { id: `local:sync:${firstHash}`, name: 'Renamed', contentHash: thirdHash },
+    ]);
+    await expect(
+      stale.loadTrackSyncState(`local:sync:${firstHash}`),
+    ).resolves.toMatchObject({
+      contentHash: thirdHash,
+      pendingKind: null,
+      replacesContentHashes: [secondHash, firstHash],
+    });
+  });
+
+  it('keeps the track when an edit is undone before synchronization', async () => {
+    const cloud = createCloud();
+    const original = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const edited = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const originalHash = original.summary.contentHash ?? '';
+    const editedHash = edited.summary.contentHash ?? '';
+    const synchronize = cloud.connect(database);
+    await database.saveLocalTrack(original.summary, original.content);
+    await synchronize();
+
+    await database.replaceLocalTrackGeometry(edited.summary, edited.content);
+    await database.replaceLocalTrackGeometry(
+      { ...original.summary, updatedAt: '2026-07-22T12:00:00.000Z' },
+      original.content,
+    );
+    await expect(database.loadTrackSyncState('local:edited')).resolves.toMatchObject({
+      contentHash: originalHash,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+      unconfirmedContentHashes: [editedHash],
+    });
+
+    await expect(synchronize()).resolves.toMatchObject({ remoteTrackDeletions: [] });
+    expect(cloud.events).toEqual([
+      `upload ${originalHash}`,
+      `metadata ${originalHash}`,
+    ]);
+    expect([...cloud.records.keys()]).toEqual([originalHash]);
+    expect(cloud.records.get(originalHash)?.record.metadata).not.toHaveProperty(
+      'replacesContentHashes',
+    );
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: originalHash },
+    ]);
+  });
+
+  it('keeps the predecessor when the replacement exceeds quota', async () => {
+    const cloud = createCloud();
+    const original = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const edited = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const originalHash = original.summary.contentHash ?? '';
+    const editedHash = edited.summary.contentHash ?? '';
+    const synchronize = cloud.connect(database);
+    await database.saveLocalTrack(original.summary, original.content);
+    await synchronize();
+    await database.replaceLocalTrackGeometry(edited.summary, edited.content);
+    cloud.options.rejectUploads = true;
+
+    await expect(synchronize()).rejects.toMatchObject({ code: 'quota' });
+
+    expect([...cloud.records.keys()]).toEqual([originalHash]);
+    expect(cloud.events).toEqual([`upload ${originalHash}`]);
+    await expect(database.loadTrackSyncState('local:edited')).resolves.toMatchObject({
+      contentHash: editedHash,
+      remoteRevision: null,
+      pendingKind: 'upsert',
+      replacesContentHashes: [originalHash],
+    });
+
+    cloud.options.rejectUploads = false;
+    await synchronize();
+    expect([...cloud.records.keys()]).toEqual([editedHash]);
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: editedHash },
+    ]);
+  });
+
+  it('never downloads its own upload that a further edit overtook mid-run', async () => {
+    const cloud = createCloud();
+    const first = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const second = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const third = await trackPair('local:edited', 44.04, '2026-07-22T12:00:00.000Z');
+    const firstHash = first.summary.contentHash ?? '';
+    const secondHash = second.summary.contentHash ?? '';
+    const thirdHash = third.summary.contentHash ?? '';
+    let editBeforeDeletion = false;
+    const synchronize = cloud.connect(database, async () => {
+      if (!editBeforeDeletion) return;
+      editBeforeDeletion = false;
+      await database.replaceLocalTrackGeometry(third.summary, third.content);
+    });
+    await database.saveLocalTrack(first.summary, first.content);
+    await synchronize();
+    await database.replaceLocalTrackGeometry(second.summary, second.content);
+    editBeforeDeletion = true;
+
+    await synchronize();
+
+    expect([...cloud.records.keys()]).toEqual([secondHash]);
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: thirdHash },
+    ]);
+
+    await synchronize();
+
+    expect(cloud.events).toEqual([
+      `upload ${firstHash}`,
+      `upload ${secondHash}`,
+      `delete ${firstHash}`,
+      `upload ${thirdHash}`,
+      `delete ${secondHash}`,
+    ]);
+    expect(cloud.records.get(thirdHash)?.record.metadata).toMatchObject({
+      replacesContentHashes: [secondHash, firstHash],
+    });
+    await expect(localTracks(database)).resolves.toEqual([
+      { id: 'local:edited', name: 'Track', contentHash: thirdHash },
+    ]);
+  });
+
+  it('removes the replaced record when an edited track is deleted before upload', async () => {
+    const cloud = createCloud();
+    const original = await trackPair('local:edited', 44.02, '2026-07-22T10:00:00.000Z');
+    const edited = await trackPair('local:edited', 44.03, '2026-07-22T11:00:00.000Z');
+    const originalHash = original.summary.contentHash ?? '';
+    const synchronize = cloud.connect(database);
+    await database.saveLocalTrack(original.summary, original.content);
+    await synchronize();
+    await database.replaceLocalTrackGeometry(edited.summary, edited.content);
+    await database.deleteLocalTrack('local:edited');
+
+    await synchronize();
+    await synchronize();
+
+    expect(cloud.events).toEqual([`upload ${originalHash}`, `delete ${originalHash}`]);
+    expect(cloud.records.size).toBe(0);
+    await expect(localTracks(database)).resolves.toEqual([]);
   });
 });

@@ -181,6 +181,16 @@ minimal delete retry record. `sync.usage` is written only after a validated remo
 merge. The synchronization flow itself is in
 [runtime-flows.md](./runtime-flows.md#explicit-cross-device-synchronization).
 
+Replacing a saved track's geometry in place (point editing) keeps its ID and rewrites
+summary, content, and sync state in one transaction; a changed content hash becomes a
+null-revision pending upsert. The track's sync state also carries predecessor lists: the
+previous content hash joins `replacesContentHashes` when it was acknowledged and
+`unconfirmedContentHashes` otherwise. Both are newest first, hold at most 256 hashes,
+never contain the track's own hash, and are omitted when empty, so undoing an edit
+before synchronization names nothing it would delete. Delete records keep both lists.
+Before synchronization, preparation removes every live local track's hash from them and
+queues a metadata write for a synchronized track whose hint changed.
+
 ## Supabase backend
 
 Browser roles receive only owner-scoped `SELECT` (`auth.uid() = user_id`) on
@@ -202,8 +212,10 @@ next per-user revision.
 
 Uploaded metadata is the local summary without POI coordinates and without elevation
 metrics, plus `lineageHash`, `geometryVersion`, track-owned `markers`, nullable
-`folderId`, and distance/elapsed-time metrics. The function caps it at 64 KiB and
-rejects a `lineageHash` or `geometryVersion` that does not match the uploaded geometry.
+`folderId`, distance/elapsed-time metrics, and the optional `replacesContentHashes`
+replacement hint (at most 256 lowercase SHA-256 hashes). The function caps it at 64 KiB,
+rejects a malformed replacement hint, and rejects a `lineageHash` or `geometryVersion`
+that does not match the uploaded geometry.
 
 The RPCs reserve, finalize, and release uploads, apply metadata, and hard-delete one
 track. Every mutation locks the user's usage row, and
@@ -243,7 +255,13 @@ the per-environment `TRACK_SHARE_TOKEN_SECRET`. The table has RLS enabled and no
 A share can be enabled, read, or resolved only while its ready record has string `name`
 and `updatedAt`, a `gpx | fit | kml` source format, and a `track | route` geometry kind.
 Resolution returns only the content hash, byte count, object path, and that public
-name/format/kind/updated-at projection; it never changes usage or private access.
+name/format/kind/updated-at projection; it never changes usage or private access. A
+share names one content hash. Deleting a shared record does not cascade its share when a
+ready record of the same user names it in `replacesContentHashes`: a trigger first moves
+the share, with the same token, to the highest-revision such replacement that has no
+share yet, so an edited track keeps its public link. Because the browser deletes
+predecessors only after the replacement is ready, and the deletion waits on the row lock
+that enabling a share takes, a share enabled during the upload moves too.
 
 ## Canonical GRPT geometry
 

@@ -122,5 +122,57 @@ select public.enable_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat(
 delete from public.track_records where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and content_hash = repeat('a', 64);
 select is((select count(*) from public.track_shares), 0::bigint, 'track deletion cascades to the share row');
 
+insert into public.track_records (
+  user_id, content_hash, metadata, revision, state, object_path, compressed_bytes
+) values (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  repeat('e', 64),
+  '{"name":"Edited ridge","sourceFormat":"gpx","geometryKind":"track","updatedAt":"2026-08-11T00:00:00.000Z"}'::jsonb,
+  2,
+  'ready',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/' || repeat('e', 64) || '/44444444-4444-4444-8444-444444444444.grpt.gz',
+  17
+);
+select public.enable_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('e', 64), repeat('9', 64), 'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE');
+insert into public.track_records (
+  user_id, content_hash, metadata, revision, state, object_path, compressed_bytes,
+  reservation_expires_at
+) values (
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  repeat('f', 64),
+  jsonb_build_object(
+    'name', 'Edited ridge', 'sourceFormat', 'gpx', 'geometryKind', 'track',
+    'updatedAt', '2026-08-12T00:00:00.000Z',
+    'replacesContentHashes', jsonb_build_array(repeat('e', 64))
+  ),
+  0,
+  'reserved',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/' || repeat('f', 64) || '/55555555-5555-4555-8555-555555555555.grpt.gz',
+  17,
+  now() + interval '10 minutes'
+);
+select is(
+  public.resolve_track_share(repeat('9', 64)) ->> 'content_hash', repeat('e', 64),
+  'a reserved replacement leaves the share on the predecessor'
+);
+update public.track_records
+set state = 'ready', revision = 3, reservation_expires_at = null
+where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  and content_hash = repeat('f', 64);
+select is(
+  public.resolve_track_share(repeat('9', 64)) ->> 'content_hash', repeat('e', 64),
+  'the share stays on the predecessor until it is deleted'
+);
+delete from public.track_records where user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' and content_hash = repeat('e', 64);
+select is(
+  public.resolve_track_share(repeat('9', 64)) ->> 'content_hash', repeat('f', 64),
+  'deleting the replaced record moves its share to the ready replacement'
+);
+select is(
+  public.read_track_share('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', repeat('f', 64)) ->> 'token_nonce',
+  'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE',
+  'the moved share keeps its token'
+);
+
 select * from finish();
 rollback;

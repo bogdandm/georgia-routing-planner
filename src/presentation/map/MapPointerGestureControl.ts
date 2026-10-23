@@ -22,6 +22,8 @@ const intentDominance = 1.5;
 const rotationIntentPixels = 25;
 /** Minimum twist angle before a touch may rotate, so wide finger spans need a real turn. */
 const rotationIntentDegrees = 15;
+/** A Shift press that travels less than this is a Shift+click, not an orbit. */
+const stationaryPressPixels = 4;
 
 type TwoFingerIntent = 'zoom-or-pan' | 'rotate';
 
@@ -159,6 +161,8 @@ export class MapPointerGestureControl {
   #gesture: Gesture = null;
   #gestureButton: 0 | 1 | null = null;
   #orbitAnchor: LngLat | null = null;
+  /** Press position, cleared once the pointer travels far enough to make a drag. */
+  #pressStart: { readonly x: number; readonly y: number } | null = null;
   #lastPointer: { readonly x: number; readonly y: number } | null = null;
   /** Pointer travel not yet applied; the camera moves at most once per frame. */
   #pendingDelta = { x: 0, y: 0 };
@@ -176,6 +180,7 @@ export class MapPointerGestureControl {
   #restoreRotationThreshold: (() => void) | null = null;
   readonly #pivotIndicator: OrbitPivotIndicator;
   readonly #onCameraGestureEnd: () => void;
+  readonly #onShiftClick: (event: MouseEvent) => void;
 
   /**
    * Every gesture step is its own zero-duration MapLibre move with its own `moveend`.
@@ -185,16 +190,22 @@ export class MapPointerGestureControl {
    * on another press or wheel during the coast, when 3D turns off, or on detach. A
    * keyboard or programmatic movement replacing the coast settles through its own
    * `moveend` instead.
+   *
+   * In 3D a Shift+left press starts an orbit, so MapLibre never sees its click; a press
+   * released in place is reported through `onShiftClick` instead.
    */
   public constructor({
     pivotIndicator = createOrbitPivotIndicator(),
     onCameraGestureEnd = () => undefined,
+    onShiftClick = () => undefined,
   }: {
     readonly pivotIndicator?: OrbitPivotIndicator;
     readonly onCameraGestureEnd?: () => void;
+    readonly onShiftClick?: (event: MouseEvent) => void;
   } = {}) {
     this.#pivotIndicator = pivotIndicator;
     this.#onCameraGestureEnd = onCameraGestureEnd;
+    this.#onShiftClick = onShiftClick;
   }
 
   /** True only while a gesture step synchronously moves the camera. */
@@ -281,6 +292,7 @@ export class MapPointerGestureControl {
     this.#gesture = gesture;
     this.#gestureButton = event.button === 0 ? 0 : 1;
     this.#lastPointer = { x: event.clientX, y: event.clientY };
+    this.#pressStart = this.#lastPointer;
     window.addEventListener('mousemove', this.handleMouseMove, true);
     window.addEventListener('mouseup', this.handleMouseUp, true);
     // Without focus the release never arrives, so the gesture ends here instead.
@@ -307,6 +319,14 @@ export class MapPointerGestureControl {
       x: event.clientX - previous.x,
       y: event.clientY - previous.y,
     };
+    const start = this.#pressStart;
+    if (
+      start !== null &&
+      Math.hypot(event.clientX - start.x, event.clientY - start.y) >=
+        stationaryPressPixels
+    ) {
+      this.#pressStart = null;
+    }
     // Mice report moves faster than the display refreshes, and every camera update runs
     // MapLibre's full camera pipeline, so moves only accumulate until the next frame.
     this.#pendingDelta = {
@@ -416,8 +436,16 @@ export class MapPointerGestureControl {
     if (gesture === null || event.button !== this.#gestureButton) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    const start = this.#pressStart;
+    const shiftClick =
+      gesture === 'orbit' &&
+      event.button === 0 &&
+      start !== null &&
+      Math.hypot(event.clientX - start.x, event.clientY - start.y) <
+        stationaryPressPixels;
     if (gesture !== 'pan' && event.button === 0) this.suppressNextClick();
     this.releaseGesture(event.timeStamp);
+    if (shiftClick) this.#onShiftClick(event);
   };
 
   private readonly handleWindowBlur = (): void => {

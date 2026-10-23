@@ -19,6 +19,8 @@ import type {
   MapInteractionMode,
   MapViewportMovement,
   PlanningPreview,
+  TrackPointClick,
+  TrackPointPointer,
 } from '@/presentation/map/MapFacade';
 import {
   mapLayerIds,
@@ -76,6 +78,9 @@ const directedFitPitchDegrees = 45;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
+
+/** Screen radius around a track-editing click that still hits a track point. */
+const trackPointHitPixels = 12;
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -251,6 +256,10 @@ function recoverableMessage(
 export class MapLibreFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
+  readonly #trackPointClickListeners = new Set<(click: TrackPointClick) => void>();
+  readonly #trackPointHoverListeners = new Set<
+    (pointer: TrackPointPointer | null) => void
+  >();
   readonly #viewportMovementListeners = new Set<(event: MapViewportMovement) => void>();
   #map: MapLibreMap | null = null;
   #snapshot: MapDiagnosticsSnapshot = initialSnapshot;
@@ -286,6 +295,9 @@ export class MapLibreFacade implements MapFacade {
   readonly #pointerGestures = new MapPointerGestureControl({
     onCameraGestureEnd: () => {
       this.handleMoveEnd();
+    },
+    onShiftClick: (event) => {
+      this.handleShiftClick(event);
     },
   });
   #interactionMode: MapInteractionMode = 'default';
@@ -388,6 +400,24 @@ export class MapLibreFacade implements MapFacade {
     this.#planningClickListeners.add(listener);
     return () => {
       this.#planningClickListeners.delete(listener);
+    };
+  }
+
+  public subscribeTrackPointClicks(
+    listener: (click: TrackPointClick) => void,
+  ): () => void {
+    this.#trackPointClickListeners.add(listener);
+    return () => {
+      this.#trackPointClickListeners.delete(listener);
+    };
+  }
+
+  public subscribeTrackPointHover(
+    listener: (pointer: TrackPointPointer | null) => void,
+  ): () => void {
+    this.#trackPointHoverListeners.add(listener);
+    return () => {
+      this.#trackPointHoverListeners.delete(listener);
     };
   }
 
@@ -804,7 +834,11 @@ export class MapLibreFacade implements MapFacade {
 
   public setInteractionMode(mode: MapInteractionMode): void {
     if (this.#interactionMode === mode) return;
+    if (this.#interactionMode === 'track-editing') {
+      for (const listener of this.#trackPointHoverListeners) listener(null);
+    }
     this.#interactionMode = mode;
+    if (mode === 'track-editing') this.closePointInspection();
     this.clearPlanningPreview();
     this.applyInteractionCursor();
     this.showAnchoredMeasurement();
@@ -834,6 +868,8 @@ export class MapLibreFacade implements MapFacade {
   public detachMap(): void {
     this.#cancelTerrainWait?.();
     this.detach();
+    // The detached map sends no more pointer events, so its hover ends here.
+    for (const listener of this.#trackPointHoverListeners) listener(null);
   }
 
   public destroy(): void {
@@ -842,6 +878,8 @@ export class MapLibreFacade implements MapFacade {
     this.#listeners.clear();
     this.#viewportMovementListeners.clear();
     this.#planningClickListeners.clear();
+    this.#trackPointClickListeners.clear();
+    this.#trackPointHoverListeners.clear();
     this.#cursorElevationAbort?.abort();
   }
 
@@ -975,12 +1013,23 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
-    if (!this.#cursorPreviewEnabled || this.#map === null) return;
-    const cursor = this.#map.unproject(event.point);
+    const map = this.#map;
+    if (map === null) return;
+    if (this.#interactionMode === 'track-editing') {
+      const pointer = this.trackPointPointer(map, event.point, {
+        longitude: event.lngLat.lng,
+        latitude: event.lngLat.lat,
+      });
+      for (const listener of this.#trackPointHoverListeners) listener(pointer);
+      return;
+    }
+    if (!this.#cursorPreviewEnabled) return;
+    const cursor = map.unproject(event.point);
     this.showPlanningPreviewAt({ longitude: cursor.lng, latitude: cursor.lat });
   };
 
   private readonly handleCanvasMouseLeave = (): void => {
+    for (const listener of this.#trackPointHoverListeners) listener(null);
     if (this.#cursorPreviewEnabled) this.clearPlanningPreview();
   };
 
@@ -1050,6 +1099,16 @@ export class MapLibreFacade implements MapFacade {
       for (const listener of this.#planningClickListeners) listener(coordinate);
       return;
     }
+    if (this.#interactionMode === 'track-editing') {
+      if (event.originalEvent.button !== 0) return;
+      this.publishTrackPointClick(
+        map,
+        event.point,
+        coordinate,
+        event.originalEvent.shiftKey,
+      );
+      return;
+    }
     if (this.#pointInspection.status === 'open') {
       const visible = this.#pointInspector.isVisible();
       this.closePointInspection();
@@ -1057,6 +1116,49 @@ export class MapLibreFacade implements MapFacade {
     }
     this.openPointInspection(coordinate);
   };
+
+  /** In 3D Shift+left presses orbit; one released in place extends a point selection. */
+  private handleShiftClick(event: MouseEvent): void {
+    const map = this.#map;
+    if (map === null || this.#interactionMode !== 'track-editing') return;
+    const bounds = map.getCanvasContainer().getBoundingClientRect();
+    const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    const clicked = map.unproject([point.x, point.y]);
+    this.publishTrackPointClick(
+      map,
+      point,
+      { longitude: clicked.lng, latitude: clicked.lat },
+      true,
+    );
+  }
+
+  private publishTrackPointClick(
+    map: MapLibreMap,
+    point: { readonly x: number; readonly y: number },
+    coordinate: MapCoordinate,
+    shiftKey: boolean,
+  ): void {
+    const click: TrackPointClick = {
+      ...this.trackPointPointer(map, point, coordinate),
+      shiftKey,
+    };
+    for (const listener of this.#trackPointClickListeners) listener(click);
+  }
+
+  private trackPointPointer(
+    map: MapLibreMap,
+    point: { readonly x: number; readonly y: number },
+    coordinate: MapCoordinate,
+  ): TrackPointPointer {
+    const offset = map.unproject([point.x + trackPointHitPixels, point.y]);
+    return {
+      coordinate,
+      toleranceMeters: geodesicDistanceMeters(coordinate, {
+        longitude: offset.lng,
+        latitude: offset.lat,
+      }),
+    };
+  }
 
   private queryNearestPoi(
     map: MapLibreMap,
@@ -1719,7 +1821,9 @@ export class MapLibreFacade implements MapFacade {
     const map = this.#map;
     if (map === null) return;
     map.getCanvas().style.cursor =
-      this.#interactionMode === 'default' ? '' : 'crosshair';
+      this.#interactionMode === 'default' || this.#interactionMode === 'track-editing'
+        ? ''
+        : 'crosshair';
   }
 
   /** Route planning and the ruler both build lines from primary map clicks. */

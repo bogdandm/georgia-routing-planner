@@ -18,10 +18,13 @@ import type { ReactElement } from 'react';
 import type { TrackElevationPreparationProgress } from '@/application/tracks/prepareImportedTrack';
 
 import {
-  canSaveRoutePlan,
+  canSaveTrackPath,
+  canUndoTrackPath,
+  type PathLegMode,
   type RoutePlanDraft,
-  type RoutePlanSegmentMode,
-} from '@/presentation/tracks/routePlan';
+  type TrackPathDraft,
+  type TrackPathFailure,
+} from '@/presentation/tracks/trackPathEditor';
 
 interface RoutePlanControlsProps {
   readonly draft: RoutePlanDraft;
@@ -29,56 +32,13 @@ interface RoutePlanControlsProps {
   readonly onClear: () => void;
   readonly onDiscard: () => void;
   readonly onNameChange: (name: string) => void;
-  readonly onNextSegmentModeChange: (mode: RoutePlanSegmentMode) => void;
   readonly onSave: () => void;
   readonly onUndo: () => void;
 }
 
-/** Mode changes wait for the pending leg and queued points, and nothing edits during save. */
-function isRoutePlanLocked(draft: RoutePlanDraft): boolean {
-  return (
-    draft.status === 'calculating' ||
-    draft.status === 'saving' ||
-    draft.pendingRequest !== null ||
-    draft.queuedWaypoints.length > 0
-  );
-}
-
-function NextSegmentModeToggle({
-  draft,
-  fullWidth,
-  onChange,
-}: {
-  readonly draft: RoutePlanDraft;
-  readonly fullWidth: boolean;
-  readonly onChange: (mode: RoutePlanSegmentMode) => void;
-}): ReactElement {
-  const { t } = useLingui();
-  const locked = isRoutePlanLocked(draft);
-  return (
-    <ToggleButtonGroup
-      exclusive
-      fullWidth={fullWidth}
-      size="small"
-      aria-label={t`Next segment`}
-      value={draft.nextSegmentMode}
-      onChange={(_event, value: RoutePlanSegmentMode | null) => {
-        if (value !== null) onChange(value);
-      }}
-    >
-      <ToggleButton value="routes" disabled={locked}>
-        <Trans>Routes</Trans>
-      </ToggleButton>
-      <ToggleButton value="line" disabled={locked}>
-        <Trans>Line</Trans>
-      </ToggleButton>
-    </ToggleButtonGroup>
-  );
-}
-
 /**
- * Undo and Next segment for planning while the editor is hidden: under the collapsed
- * desktop navigation and inside the smartphone track disclosure.
+ * Undo and the mode of new points for planning while the editor is hidden: under the
+ * collapsed desktop navigation and inside the smartphone track disclosure.
  */
 export function RoutePlanQuickControls({
   draft,
@@ -88,11 +48,10 @@ export function RoutePlanQuickControls({
 }: {
   readonly draft: RoutePlanDraft;
   readonly fullWidth?: boolean;
-  readonly onNextSegmentModeChange: (mode: RoutePlanSegmentMode) => void;
+  readonly onNextSegmentModeChange: (mode: PathLegMode) => void;
   readonly onUndo: () => void;
 }): ReactElement {
   const { t } = useLingui();
-  const undoDisabled = draft.status === 'saving' || draft.waypoints.length === 0;
   return (
     <Stack
       direction="row"
@@ -106,60 +65,71 @@ export function RoutePlanQuickControls({
           <IconButton
             color="inherit"
             aria-label={t`Undo`}
-            disabled={undoDisabled}
+            disabled={!canUndoTrackPath(draft)}
             onClick={onUndo}
           >
             <UndoOutlinedIcon />
           </IconButton>
         </span>
       </Tooltip>
-      <NextSegmentModeToggle
-        draft={draft}
+      <ToggleButtonGroup
+        exclusive
         fullWidth={fullWidth}
-        onChange={onNextSegmentModeChange}
-      />
+        size="small"
+        aria-label={t`Next segment`}
+        value={draft.insertion?.mode ?? null}
+        onChange={(_event, value: PathLegMode | null) => {
+          if (value !== null) onNextSegmentModeChange(value);
+        }}
+      >
+        <ToggleButton value="routes" disabled={draft.status === 'saving'}>
+          <Trans>Routes</Trans>
+        </ToggleButton>
+        <ToggleButton value="line" disabled={draft.status === 'saving'}>
+          <Trans>Line</Trans>
+        </ToggleButton>
+      </ToggleButtonGroup>
     </Stack>
   );
 }
 
-function failureMessage(
-  failure: NonNullable<RoutePlanDraft['failure']>,
-  i18n: I18n,
-): string {
-  if (failure.reason === 'no-nearby-trail') {
-    if (failure.endpoint === 'both') {
+function failureMessage(failure: TrackPathFailure, i18n: I18n): string {
+  const { result, pointNumbers } = failure;
+  if (result.reason === 'no-nearby-trail') {
+    const [onlyPoint] = pointNumbers;
+    if (onlyPoint !== undefined && pointNumbers.length === 1) {
+      const point = new Intl.NumberFormat(i18n.locale).format(onlyPoint);
       return i18n._(
-        msg`No routable trail or road was found within 200 m of the start and destination points.`,
+        msg`No routable trail or road was found within 200 m of point ${point}.`,
       );
     }
-    if (failure.endpoint === 'start') {
-      return i18n._(
-        msg`No routable trail or road was found within 200 m of the start point.`,
+    if (pointNumbers.length > 1) {
+      const numberFormat = new Intl.NumberFormat(i18n.locale);
+      const points = new Intl.ListFormat(i18n.locale).format(
+        pointNumbers.map((pointNumber) => numberFormat.format(pointNumber)),
       );
-    }
-    if (failure.endpoint === 'destination') {
       return i18n._(
-        msg`No routable trail or road was found within 200 m of the destination point.`,
+        msg`No routable trail or road was found within 200 m of points ${points}.`,
       );
     }
     return i18n._(
       msg`No routable trail or road was found within 200 m of the selected point.`,
     );
   }
-  if (failure.reason === 'no-route') {
+  if (result.reason === 'no-route') {
     return i18n._(
-      msg`No connected route was found. Add a closer point or use Line for the next segment.`,
+      msg`No connected route was found. Add a closer point or use Line for this segment.`,
     );
   }
-  if (failure.reason === 'area-too-large') {
+  if (result.reason === 'area-too-large') {
     return i18n._(
       msg`This segment covers too large an area. Add an intermediate point.`,
     );
   }
-  if (failure.reason === 'routing-data-unavailable') {
+  if (result.reason === 'routing-data-unavailable') {
     return i18n._(msg`Routing data is unavailable. Try again when you are online.`);
   }
-  if (failure.reason === 'routing-timeout') {
+  if (result.reason === 'routing-timeout') {
     return i18n._(
       msg`Route calculation exceeded one minute. Add a closer point or try again.`,
     );
@@ -167,13 +137,32 @@ function failureMessage(
   return i18n._(msg`Routing data could not be decoded.`);
 }
 
+/** Saved-track editing needs no idle hint: the Points list shows move and add hints. */
+function instruction(draft: TrackPathDraft, i18n: I18n): string | null {
+  if (draft.variant === 'track') return null;
+  if (draft.movingAnchorId !== null) {
+    return i18n._(msg`Click the map to move the point.`);
+  }
+  if (draft.status === 'selecting-start') {
+    return i18n._(msg`Click the map to choose the route start.`);
+  }
+  if (draft.status === 'selecting-destination') {
+    return i18n._(msg`Click the map to choose the next point.`);
+  }
+  return i18n._(msg`Route ready. Click the map to add another point.`);
+}
+
+/**
+ * One fixed slot for routing, elevation, saving, failures, and the next action; empty
+ * while a saved track is edited without work in progress.
+ */
 export function RoutePlanStatus({
   draft,
   elevationProgress,
 }: {
-  readonly draft: RoutePlanDraft;
+  readonly draft: TrackPathDraft;
   readonly elevationProgress: TrackElevationPreparationProgress | null;
-}): ReactElement {
+}): ReactElement | null {
   const { i18n, t } = useLingui();
   let content: ReactElement;
   if (draft.status === 'calculating') {
@@ -214,12 +203,11 @@ export function RoutePlanStatus({
       </Stack>
     );
   } else if (draft.status === 'saving') {
+    const label = draft.variant === 'plan' ? t`Saving route…` : t`Saving track…`;
     content = (
       <Stack spacing={0.75}>
-        <Typography variant="body2">
-          <Trans>Saving route…</Trans>
-        </Typography>
-        <LinearProgress aria-label={t`Saving route…`} />
+        <Typography variant="body2">{label}</Typography>
+        <LinearProgress aria-label={label} />
       </Stack>
     );
   } else if (draft.status === 'elevation-enriching') {
@@ -248,7 +236,7 @@ export function RoutePlanStatus({
         />
       </Stack>
     );
-  } else if (draft.status === 'failed' && draft.failure !== null) {
+  } else if (draft.failure !== null) {
     content = <Alert severity="warning">{failureMessage(draft.failure, i18n)}</Alert>;
   } else if (draft.status === 'elevation-failed') {
     content = (
@@ -259,15 +247,11 @@ export function RoutePlanStatus({
       </Alert>
     );
   } else {
-    const instruction =
-      draft.status === 'selecting-start'
-        ? t`Click the map to choose the route start.`
-        : draft.status === 'selecting-destination'
-          ? t`Click the map to choose the next point.`
-          : t`Route ready. Click the map to add another point.`;
+    const text = instruction(draft, i18n);
+    if (text === null) return null;
     content = (
       <Typography variant="body2" color="text.secondary">
-        {instruction}
+        {text}
       </Typography>
     );
   }
@@ -284,41 +268,30 @@ export function RoutePlanControls({
   onClear,
   onDiscard,
   onNameChange,
-  onNextSegmentModeChange,
   onSave,
   onUndo,
 }: RoutePlanControlsProps): ReactElement {
   const { t } = useLingui();
-  const locked = isRoutePlanLocked(draft);
+  const saving = draft.status === 'saving';
   return (
     <Stack spacing={2}>
       <TextField
         size="small"
         label={t`Track name`}
         value={draft.name}
-        disabled={locked}
+        disabled={saving}
         onChange={(event) => {
           onNameChange(event.target.value);
         }}
         slotProps={{ htmlInput: { maxLength: 200 } }}
       />
-      <Stack spacing={0.75}>
-        <Typography variant="caption" color="text.secondary">
-          <Trans>Next segment</Trans>
-        </Typography>
-        <NextSegmentModeToggle
-          fullWidth
-          draft={draft}
-          onChange={onNextSegmentModeChange}
-        />
-      </Stack>
       <RoutePlanStatus draft={draft} elevationProgress={elevationProgress} />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1}>
           <Button
             size="small"
             color="inherit"
-            disabled={draft.status === 'saving' || draft.waypoints.length === 0}
+            disabled={!canUndoTrackPath(draft)}
             onClick={onUndo}
           >
             <Trans>Undo</Trans>
@@ -326,30 +299,65 @@ export function RoutePlanControls({
           <Button
             size="small"
             color="inherit"
-            disabled={draft.status === 'saving' || draft.waypoints.length === 0}
+            disabled={saving || draft.path.anchors.length === 0}
             onClick={onClear}
           >
             <Trans>Clear</Trans>
           </Button>
         </Stack>
         <Stack direction="row" spacing={1}>
-          <Button
-            size="small"
-            color="inherit"
-            disabled={draft.status === 'saving'}
-            onClick={onDiscard}
-          >
+          <Button size="small" color="inherit" disabled={saving} onClick={onDiscard}>
             <Trans>Discard</Trans>
           </Button>
           <Button
             size="small"
             variant="contained"
-            disabled={!canSaveRoutePlan(draft)}
+            disabled={!canSaveTrackPath(draft)}
             onClick={onSave}
           >
             <Trans>Save</Trans>
           </Button>
         </Stack>
+      </Stack>
+    </Stack>
+  );
+}
+
+/** Point editing of a saved track, pinned below the scrolling pane. */
+export function TrackEditControls({
+  draft,
+  onCancel,
+  onSave,
+  onUndo,
+}: {
+  readonly draft: TrackPathDraft;
+  readonly onCancel: () => void;
+  readonly onSave: () => void;
+  readonly onUndo: () => void;
+}): ReactElement {
+  const saving = draft.status === 'saving';
+  return (
+    <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
+      <Button
+        size="small"
+        color="inherit"
+        disabled={!canUndoTrackPath(draft)}
+        onClick={onUndo}
+      >
+        <Trans>Undo</Trans>
+      </Button>
+      <Stack direction="row" spacing={1}>
+        <Button size="small" color="inherit" disabled={saving} onClick={onCancel}>
+          <Trans>Cancel</Trans>
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
+          disabled={!canSaveTrackPath(draft)}
+          onClick={onSave}
+        >
+          <Trans>Save</Trans>
+        </Button>
       </Stack>
     </Stack>
   );

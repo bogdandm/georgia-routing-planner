@@ -45,11 +45,31 @@ export interface RoutingLineInput {
   readonly metadata: RoutingLineMetadata;
 }
 
-export interface RoutingTileRectangle {
-  readonly minTileX: number;
-  readonly maxTileX: number;
-  readonly minTileY: number;
-  readonly maxTileY: number;
+/** A loaded tile in the graph's unwrapped tile frame; `graphX` may leave `[0, 2^z)`. */
+export interface RoutingGraphTile {
+  readonly graphX: number;
+  readonly y: number;
+}
+
+/** A node is on the boundary when it touches, or lies in, a tile outside the set. */
+function isOnTileSetBoundary(
+  coveredTileKeys: ReadonlySet<string>,
+  globalX: number,
+  globalY: number,
+): boolean {
+  const touchedIndexes = (global: number): readonly number[] => {
+    const index = Math.floor(global / MVT_GRAPH_EXTENT);
+    return global === index * MVT_GRAPH_EXTENT ? [index - 1, index] : [index];
+  };
+  const touchedYs = touchedIndexes(globalY);
+  return touchedIndexes(globalX).some((tileX) =>
+    touchedYs.some((tileY) => !coveredTileKeys.has(routingGraphTileKey(tileX, tileY))),
+  );
+}
+
+/** Shared by the covered set and its lookups so both use one key format. */
+function routingGraphTileKey(graphX: number, y: number): string {
+  return `${String(graphX)}/${String(y)}`;
 }
 
 export interface TrailGraphNode {
@@ -741,7 +761,7 @@ export function coordinateToGlobalMvtVertex(
 
 export async function buildTrailGraph(
   lines: readonly RoutingLineInput[],
-  boundary: RoutingTileRectangle,
+  tiles: readonly RoutingGraphTile[],
   onProgress?: TrailGraphBuildProgressListener,
 ): Promise<TrailGraph> {
   let reportedPercentage = -1;
@@ -789,10 +809,9 @@ export async function buildTrailGraph(
   }
   await reportProgress(0.9);
 
-  const minimumGlobalX = boundary.minTileX * MVT_GRAPH_EXTENT;
-  const maximumGlobalX = (boundary.maxTileX + 1) * MVT_GRAPH_EXTENT;
-  const minimumGlobalY = boundary.minTileY * MVT_GRAPH_EXTENT;
-  const maximumGlobalY = (boundary.maxTileY + 1) * MVT_GRAPH_EXTENT;
+  const coveredTileKeys = new Set(
+    tiles.map((tile) => routingGraphTileKey(tile.graphX, tile.y)),
+  );
   const nodes = new Map<string, TrailGraphNode>();
   for (const [key, global] of [...nodeCoordinates].sort(([left], [right]) =>
     left.localeCompare(right),
@@ -800,11 +819,7 @@ export async function buildTrailGraph(
     nodes.set(key, {
       key,
       coordinate: globalMvtVertexToCoordinate(global[0], global[1]),
-      boundary:
-        global[0] <= minimumGlobalX ||
-        global[0] >= maximumGlobalX ||
-        global[1] <= minimumGlobalY ||
-        global[1] >= maximumGlobalY,
+      boundary: isOnTileSetBoundary(coveredTileKeys, global[0], global[1]),
     });
   }
   await reportProgress(0.95);
@@ -902,6 +917,36 @@ function nearestEdge(
     }
   }
   return nearest;
+}
+
+/**
+ * The coordinate `routeTrailGraph` snaps `coordinate` to, or null beyond
+ * `MAX_SNAP_DISTANCE_METERS`. Deterministic for one graph, so consecutive legs that share
+ * a waypoint join exactly.
+ */
+export function snapCoordinateToTrailGraph(
+  graph: TrailGraph,
+  coordinate: TrackCoordinate,
+): TrackCoordinate | null {
+  const nearest = nearestEdge(graph, coordinate);
+  if (
+    nearest === null ||
+    nearest.projection.distanceMeters > MAX_SNAP_DISTANCE_METERS
+  ) {
+    return null;
+  }
+  const { fraction } = nearest.projection;
+  if (fraction <= fractionEpsilon) {
+    return (
+      graph.nodes.get(nearest.edge.nodeA)?.coordinate ?? nearest.projection.coordinate
+    );
+  }
+  if (fraction >= 1 - fractionEpsilon) {
+    return (
+      graph.nodes.get(nearest.edge.nodeB)?.coordinate ?? nearest.projection.coordinate
+    );
+  }
+  return nearest.projection.coordinate;
 }
 
 class MinimumQueue {

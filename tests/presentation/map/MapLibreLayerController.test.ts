@@ -33,11 +33,15 @@ import {
   sentinelMapLayerIds,
   sentinelMosaicIdPrefixes,
   terrainOverlayLayerIds,
+  trackPointSelectionLayerIds,
   weatherMapLayerIds,
 } from '@/presentation/map/mapIds';
 import * as markerCatalog from '@/presentation/markers/markerCatalog';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
-import { mapVisualModePaint } from '@/presentation/map/mapVisualPalette';
+import {
+  mapVisualModePaint,
+  mapVisualPalette,
+} from '@/presentation/map/mapVisualPalette';
 import { createTestServices } from '@test/helpers/createTestServices';
 
 type Listener = (event: never) => void;
@@ -1650,7 +1654,7 @@ describe('MapLibreLayerController', () => {
     expect(map.layers.get(routePlanLayerIds.waypoints)).toMatchObject({
       type: 'circle',
       source: mapSourceIds.routePlan,
-      filter: ['==', ['get', 'kind'], 'waypoint'],
+      filter: ['match', ['get', 'kind'], ['waypoint', 'anchor'], true, false],
     });
     expect(map.layers.get(routePlanLayerIds.waypointLabels)).toMatchObject({
       type: 'symbol',
@@ -1800,6 +1804,198 @@ describe('MapLibreLayerController', () => {
       'data.features.length',
       3,
     );
+  });
+
+  it('draws saved-track anchors as one unlabelled dot feature', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const anchors = [
+      [44.64, 42.66],
+      [44.645, 42.665],
+      [44.65, 42.67],
+    ] as const;
+
+    expect(
+      controller.setPlannedLineGeometry(
+        'route-plan',
+        [{ kind: 'direct', coordinates: anchors }],
+        anchors,
+        'dots',
+      ),
+    ).toEqual({ status: 'success' });
+    const routePlanSource = map.sources.get(mapSourceIds.routePlan);
+    expect(routePlanSource).toHaveProperty('data.features.length', 2);
+    expect(routePlanSource).toHaveProperty('data.features.1', {
+      type: 'Feature',
+      properties: { kind: 'anchor' },
+      geometry: { type: 'MultiPoint', coordinates: anchors },
+    });
+    expect(JSON.stringify(routePlanSource)).not.toContain('"number"');
+    // The label layer only matches numbered waypoints, so dots never get numbers.
+    expect(map.layers.get(routePlanLayerIds.waypointLabels)).toMatchObject({
+      filter: ['==', ['get', 'kind'], 'waypoint'],
+    });
+    expect(map.layers.get(routePlanLayerIds.waypoints)).toMatchObject({
+      paint: {
+        'circle-radius': ['match', ['get', 'kind'], 'anchor', 4.5, 10],
+        'circle-color': '#168BFF',
+      },
+    });
+
+    controller.setPlannedLinePreview('route-plan', anchors[2], [44.66, 42.68], '1 km');
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features.1.properties.kind',
+      'anchor',
+    );
+    controller.setPlannedLineGeometry('route-plan', [], anchors);
+    expect(map.sources.get(mapSourceIds.routePlan)).toHaveProperty(
+      'data.features.0.properties',
+      { kind: 'waypoint', number: '1' },
+    );
+  });
+
+  it('highlights selected track points above tracks and route plans and clears them', () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [44, 42],
+          [44.1, 42.1],
+          [44.2, 42.2],
+        ],
+      ],
+    ]);
+    const selection = {
+      lines: [
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
+        [[44.2, 42.2]],
+      ],
+      points: [
+        [44, 42],
+        [44.1, 42.1],
+      ],
+    } as const;
+    controller.setTrackPointSelection(selection);
+    // Route-plan layers created after the selection must still draw below it.
+    controller.setPlannedLineGeometry(
+      'route-plan',
+      [
+        {
+          kind: 'routed',
+          coordinates: [
+            [44, 42],
+            [44.2, 42.2],
+          ],
+        },
+      ],
+      [
+        [44, 42],
+        [44.2, 42.2],
+      ],
+      'dots',
+    );
+    controller.setPlannedLineGeometry(
+      'measurement',
+      [],
+      [
+        [44.3, 42.3],
+        [44.4, 42.4],
+      ],
+    );
+
+    expect(map.sources.get(mapSourceIds.trackPointSelection)).toHaveProperty(
+      'data.features',
+      [
+        {
+          type: 'Feature',
+          properties: { kind: 'line' },
+          geometry: { type: 'MultiLineString', coordinates: [selection.lines[0]] },
+        },
+        {
+          type: 'Feature',
+          properties: { kind: 'points' },
+          geometry: { type: 'MultiPoint', coordinates: selection.points },
+        },
+      ],
+    );
+    expect(map.layers.get(trackPointSelectionLayerIds.line)).toMatchObject({
+      type: 'line',
+      filter: ['==', ['get', 'kind'], 'line'],
+      paint: { 'line-color': mapVisualPalette.userGeometry.gpxTrackHighlight },
+    });
+    expect(map.layers.get(trackPointSelectionLayerIds.points)).toMatchObject({
+      type: 'circle',
+      filter: ['==', ['get', 'kind'], 'points'],
+      paint: { 'circle-color': mapVisualPalette.userGeometry.gpxTrackHighlight },
+    });
+
+    const expectSelectionOnTop = () => {
+      const order = map.getLayersOrder();
+      const lineIndex = order.indexOf(trackPointSelectionLayerIds.line);
+      const pointsIndex = order.indexOf(trackPointSelectionLayerIds.points);
+      for (const layerId of [
+        importedTrackLayerIds.casing,
+        importedTrackLayerIds.line,
+        importedTrackLayerIds.highlight,
+        routePlanLayerIds.routed,
+        routePlanLayerIds.direct,
+        measurementLayerIds.direct,
+      ]) {
+        expect(order.indexOf(layerId)).toBeGreaterThanOrEqual(0);
+        expect(order.indexOf(layerId)).toBeLessThan(lineIndex);
+      }
+      // Lines stay below the first basemap icons for the 3D terrain draping batch.
+      expect(lineIndex).toBeLessThan(order.indexOf(mapLayerIds.fords));
+      for (const layerId of [
+        importedTrackLayerIds.endpoints,
+        routePlanLayerIds.waypoints,
+        routePlanLayerIds.waypointLabels,
+        measurementLayerIds.waypoints,
+        measurementLayerIds.waypointLabels,
+      ]) {
+        expect(order.indexOf(layerId)).toBeLessThan(pointsIndex);
+      }
+    };
+    expectSelectionOnTop();
+    map.fire('styledata', {});
+    expectSelectionOnTop();
+    map.moves.splice(0);
+    map.fire('styledata', {});
+    expect(map.moves).toEqual([]);
+
+    map.setDataSourceIds.splice(0);
+    controller.setTrackPointSelection({
+      lines: selection.lines.map((line) => [...line]),
+      points: [...selection.points],
+    });
+    expect(map.setDataSourceIds).toEqual([]);
+    controller.setTrackPointSelection({ lines: [], points: [[44.2, 42.2]] });
+    expect(map.setDataSourceIds).toEqual([mapSourceIds.trackPointSelection]);
+    expect(map.moves).toEqual([]);
+    expect(map.sources.get(mapSourceIds.trackPointSelection)).toHaveProperty(
+      'data.features.1.geometry.coordinates',
+      [[44.2, 42.2]],
+    );
+
+    controller.setTrackPointSelection(null);
+    expect(map.sources.get(mapSourceIds.trackPointSelection)).toHaveProperty(
+      'data.features',
+      [],
+    );
+    expect(map.setDataSourceIds).toEqual([
+      mapSourceIds.trackPointSelection,
+      mapSourceIds.trackPointSelection,
+    ]);
   });
 
   it('draws route search arcs per side below the route plan and removes them', () => {

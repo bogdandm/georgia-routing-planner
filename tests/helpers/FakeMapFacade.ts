@@ -3,6 +3,8 @@ import type {
   MapInteractionMode,
   MapViewportMovement,
   PlanningPreview,
+  TrackPointClick,
+  TrackPointPointer,
 } from '@/presentation/map/MapFacade';
 import {
   defaultGeorgiaCamera,
@@ -27,6 +29,10 @@ import type {
 export class FakeMapFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
   readonly #planningClickListeners = new Set<(coordinate: MapCoordinate) => void>();
+  readonly #trackPointClickListeners = new Set<(click: TrackPointClick) => void>();
+  readonly #trackPointHoverListeners = new Set<
+    (pointer: TrackPointPointer | null) => void
+  >();
   readonly #movementListeners = new Set<(event: MapViewportMovement) => void>();
   public destroyed = false;
   public debugOptions: MapDebugOptions | null = null;
@@ -109,6 +115,32 @@ export class FakeMapFacade implements MapFacade {
 
   public emitPlanningClick(coordinate: MapCoordinate): void {
     for (const listener of this.#planningClickListeners) listener(coordinate);
+  }
+
+  public subscribeTrackPointClicks(
+    listener: (click: TrackPointClick) => void,
+  ): () => void {
+    this.#trackPointClickListeners.add(listener);
+    return () => {
+      this.#trackPointClickListeners.delete(listener);
+    };
+  }
+
+  public emitTrackPointClick(click: TrackPointClick): void {
+    for (const listener of this.#trackPointClickListeners) listener(click);
+  }
+
+  public subscribeTrackPointHover(
+    listener: (pointer: TrackPointPointer | null) => void,
+  ): () => void {
+    this.#trackPointHoverListeners.add(listener);
+    return () => {
+      this.#trackPointHoverListeners.delete(listener);
+    };
+  }
+
+  public emitTrackPointHover(pointer: TrackPointPointer | null): void {
+    for (const listener of this.#trackPointHoverListeners) listener(pointer);
   }
 
   public getCamera(): MapCamera {
@@ -227,6 +259,7 @@ export class FakeMapFacade implements MapFacade {
     this.destroyed = true;
     this.#listeners.clear();
     this.#planningClickListeners.clear();
+    this.#trackPointClickListeners.clear();
     this.#movementListeners.clear();
   }
 

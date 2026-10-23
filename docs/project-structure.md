@@ -151,9 +151,10 @@ live in `appColors.ts` for both the MUI theme and the MapLibre style.
 Four Vite module workers share the request-correlated `WorkerRpc` transport
 (`infrastructure/runtime/WorkerRpc.ts`):
 
-- `infrastructure/routing` — `BrowserTrailRouter` implements `TrailRouter`; the worker
-  builds a request-local graph from the detail-vector `streets` layer, samples the
-  terrain DEM through `RasterDemElevationProvider`, and runs bidirectional A*.
+- `infrastructure/routing` — `BrowserTrailRouter` implements `TrailRouter`; per request
+  the worker builds one graph from the union of per-leg detail-vector `streets` tiles,
+  samples the terrain DEM through `RasterDemElevationProvider`, and runs bidirectional
+  A* for each consecutive waypoint pair.
 - `infrastructure/elevation` — `WorkerTerrainComputeBackend` runs `TerrainComputeEngine`
   (contour DEM fetch and parse, `maplibre-contour`); `InlineTerrainComputeBackend` runs
   the same engine on the window thread after repeated worker failure.

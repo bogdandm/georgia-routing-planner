@@ -8,6 +8,18 @@ import type { TrackThumbnail } from '@/domain/tracks/trackThumbnail';
 
 export interface LocalTrackRepository {
   saveLocalTrack(summary: LocalTrackSummary, content: LocalTrackContent): Promise<void>;
+  /**
+   * Replaces an existing saved track's geometry in place (point editing): same id, the
+   * given summary/content (caller keeps folder, favorite, markers, names). Synchronization
+   * replaces the account copy in place on every device instead of creating a second
+   * track. `summary.contentHash` must be the new content's sync hash and
+   * `summary.updatedAt` the edit time. Throws LocalTrackStorageError('not-found') when
+   * absent.
+   */
+  replaceLocalTrackGeometry(
+    summary: LocalTrackSummary,
+    content: LocalTrackContent,
+  ): Promise<void>;
   replaceCalculatedTrackElevation(
     trackId: string,
     calculatedMetrics: TrackMetrics | null,

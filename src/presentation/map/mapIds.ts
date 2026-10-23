@@ -23,6 +23,7 @@ export const mapSourceIds = {
   routePlan: 'route-plan',
   routeSearch: 'route-search',
   measurement: 'measurement',
+  trackPointSelection: 'track-point-selection',
   savedMarkers: 'saved-markers',
 } as const;
 
@@ -116,6 +117,11 @@ export const measurementLayerIds = {
   waypoints: 'measurement-waypoints',
   waypointLabels: 'measurement-waypoint-labels',
 } as const satisfies Record<keyof typeof routePlanLayerIds, string>;
+/** The selected track-point run and anchors, drawn above tracks and route plans. */
+export const trackPointSelectionLayerIds = {
+  line: 'track-point-selection-line',
+  points: 'track-point-selection-points',
+} as const;
 
 export const savedMarkerLayerIds = {
   symbols: 'saved-marker-symbols',

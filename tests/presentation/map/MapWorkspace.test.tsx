@@ -13,6 +13,11 @@ import {
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { SAVED_MARKER_SCHEMA_VERSION } from '@/domain/markers/savedMarker';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
+import {
+  placeTrackPathPoint,
+  startRoutePlan,
+  type TrackPathDraft,
+} from '@/presentation/tracks/trackPathEditor';
 import { MapShareDialog } from '@/presentation/map/MapShareDialog';
 import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
@@ -143,18 +148,15 @@ vi.mock('react-map-gl/maplibre', () => ({
 
 const tracksWorkspaceMock = vi.hoisted(() => ({
   activeProfile: null as ElevationProfile | null,
-  active: null as {
-    readonly kind: 'route-plan';
-    readonly status: 'selecting-start';
-    readonly queuedWaypoints: readonly (readonly [number, number])[];
-    readonly waypoints: readonly (readonly [number, number])[];
-  } | null,
-  addRoutePlanPoint: vi.fn(),
+  activePath: null as TrackPathDraft | null,
+  placePathPoint: vi.fn(),
+  selectPathPointNear: vi.fn(),
 }));
 
 vi.mock('@/presentation/tracks/TracksWorkspace', () => ({
   useOptionalTracksWorkspace: () =>
-    tracksWorkspaceMock.activeProfile === null && tracksWorkspaceMock.active === null
+    tracksWorkspaceMock.activeProfile === null &&
+    tracksWorkspaceMock.activePath === null
       ? null
       : tracksWorkspaceMock,
 }));
@@ -250,8 +252,8 @@ describe('MapWorkspace', () => {
     mapClickCoordinate.latitude = 41.7;
     window.history.replaceState(null, '', '/');
     tracksWorkspaceMock.activeProfile = null;
-    tracksWorkspaceMock.active = null;
-    tracksWorkspaceMock.addRoutePlanPoint.mockReset();
+    tracksWorkspaceMock.activePath = null;
+    tracksWorkspaceMock.placePathPoint.mockReset();
     mockMatchingMediaQueries();
     useUiStore.setState({
       activeTab: 'satellite',
@@ -1935,12 +1937,7 @@ describe('MapWorkspace', () => {
 
   it('forwards facade clicks only while route planning owns map interaction', async () => {
     const facade = new FakeMapFacade();
-    tracksWorkspaceMock.active = {
-      kind: 'route-plan',
-      status: 'selecting-start',
-      queuedWaypoints: [],
-      waypoints: [],
-    };
+    tracksWorkspaceMock.activePath = startRoutePlan('plan', 'New route');
     useUiStore.setState({ activeTab: 'tracks' });
     renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
@@ -1955,7 +1952,7 @@ describe('MapWorkspace', () => {
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });
-    expect(tracksWorkspaceMock.addRoutePlanPoint).toHaveBeenCalledWith([44.64, 42.66]);
+    expect(tracksWorkspaceMock.placePathPoint).toHaveBeenCalledWith([44.64, 42.66]);
   });
 
   it('lets the ruler take map clicks from route planning and an enabled weather map', async () => {
@@ -1966,12 +1963,10 @@ describe('MapWorkspace', () => {
     if (mapLayers === null) throw new Error('Expected map layer services.');
     const setPlannedLineGeometry = vi.spyOn(mapLayers, 'setPlannedLineGeometry');
     const clearPlannedLineGeometry = vi.spyOn(mapLayers, 'clearPlannedLineGeometry');
-    tracksWorkspaceMock.active = {
-      kind: 'route-plan',
-      status: 'selecting-start',
-      queuedWaypoints: [],
-      waypoints: [[44.5, 42.5]],
-    };
+    tracksWorkspaceMock.activePath = placeTrackPathPoint(
+      startRoutePlan('plan', 'New route'),
+      [44.5, 42.5],
+    );
     useUiStore.setState({ activeTab: 'tracks' });
     const weatherMap = mapLayerStore.getState().weatherMap;
     mapLayerStore.setState({ weatherMap: { ...weatherMap, enabled: true } });
@@ -2000,7 +1995,7 @@ describe('MapWorkspace', () => {
       facade.emitPlanningClick({ longitude: 44, latitude: 42.01 });
       facade.emitPlanningClick({ longitude: 44, latitude: 42.02 });
     });
-    expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
+    expect(tracksWorkspaceMock.placePathPoint).not.toHaveBeenCalled();
     expect(setPlannedLineGeometry).toHaveBeenLastCalledWith(
       'measurement',
       [
@@ -2039,12 +2034,7 @@ describe('MapWorkspace', () => {
   it('uses the one-shot Weather point mode while the forecast map is disabled', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });
-    tracksWorkspaceMock.active = {
-      kind: 'route-plan',
-      status: 'selecting-start',
-      queuedWaypoints: [],
-      waypoints: [],
-    };
+    tracksWorkspaceMock.activePath = startRoutePlan('plan', 'New route');
     useUiStore.setState({ activeTab: 'weather' });
     renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
@@ -2117,12 +2107,7 @@ describe('MapWorkspace', () => {
   it('gives enabled weather maps primary clicks instead of route planning or inspection', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({ lifecycle: 'ready' });
-    tracksWorkspaceMock.active = {
-      kind: 'route-plan',
-      status: 'selecting-start',
-      queuedWaypoints: [],
-      waypoints: [],
-    };
+    tracksWorkspaceMock.activePath = startRoutePlan('plan', 'New route');
     useUiStore.setState({ activeTab: 'tracks' });
     const weatherMap = mapLayerStore.getState().weatherMap;
     mapLayerStore.setState({
@@ -2151,7 +2136,7 @@ describe('MapWorkspace', () => {
     act(() => {
       facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
     });
-    expect(tracksWorkspaceMock.addRoutePlanPoint).not.toHaveBeenCalled();
+    expect(tracksWorkspaceMock.placePathPoint).not.toHaveBeenCalled();
 
     fireEvent.click(nativeMap, { button: 0 });
     expect(mapInteractionStore.getState().weatherForecastRequest).toMatchObject({

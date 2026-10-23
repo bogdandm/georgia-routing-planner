@@ -2,12 +2,16 @@ import ky from 'ky';
 
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import type {
+  TrailRouteFailure,
+  TrailRouteLeg,
   TrailRouteProgress,
   TrailRouteProgressListener,
   TrailRouteRequest,
   TrailRouteResult,
+  TrailRouteSearchArc,
   TrailRouteSuccess,
 } from '@/application/ports/TrailRouter';
+import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
 import {
   parseRoutingWorkerInitializeRequest,
@@ -19,7 +23,8 @@ import {
 } from '@/infrastructure/routing/RoutingWorkerProtocol';
 import {
   RoutingTileLoader,
-  routingPaddingMeters,
+  routingLegBounds,
+  type RoutingBounds,
   type RoutingTileLoaderInitialization,
   type RoutingTileLoadResult,
 } from '@/infrastructure/routing/routingTiles';
@@ -27,6 +32,7 @@ import {
   buildTrailGraph,
   routeTrailGraph,
   sampleTrailGraphTerrain,
+  snapCoordinateToTrailGraph,
   type TrailGraph,
   type TrailGraphTerrain,
 } from '@/infrastructure/routing/trailGraph';
@@ -42,9 +48,7 @@ type RoutingTileLoaderInitializer = (
 
 export interface RoutingAreaLoader {
   loadArea(
-    start: TrailRouteRequest['start'],
-    destination: TrailRouteRequest['destination'],
-    paddingMeters: number,
+    areas: readonly RoutingBounds[],
     signal: AbortSignal,
     onProgress?: (loadedTileCount: number, totalTileCount: number) => void,
   ): Promise<RoutingTileLoadResult>;
@@ -79,6 +83,18 @@ async function loadGraphTerrain(
   }
 }
 
+type TrailRouteSuccessBuilder = {
+  -readonly [Key in keyof TrailRouteSuccess]: TrailRouteSuccess[Key];
+};
+type TrailRouteFailureBuilder = {
+  -readonly [Key in keyof TrailRouteFailure]: TrailRouteFailure[Key];
+};
+
+/**
+ * Routes every consecutive waypoint pair on one graph per attempt: tiles, graph, and
+ * terrain load once, then each leg runs its own search. The second attempt doubles every
+ * leg's padding when a leg's exhausted search reached the covered tiles' edge.
+ */
 export async function executeTrailRoute(
   loader: RoutingAreaLoader,
   elevation: Pick<ElevationProvider, 'sampleMany'> | null,
@@ -86,7 +102,7 @@ export async function executeTrailRoute(
   signal: AbortSignal,
   onProgress?: TrailRouteProgressListener,
 ): Promise<TrailRouteResult> {
-  const initialPaddingMeters = routingPaddingMeters(request.start, request.destination);
+  const { waypoints, includeSearchTrace } = request;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let loadedTileCount = 0;
     let totalTileCount = 0;
@@ -102,9 +118,7 @@ export async function executeTrailRoute(
     };
     report('loading-tiles');
     const areaResult = await loader.loadArea(
-      request.start,
-      request.destination,
-      initialPaddingMeters * (attempt + 1),
+      routingLegBounds(waypoints, attempt + 1),
       signal,
       (loaded, total) => {
         loadedTileCount = loaded;
@@ -122,7 +136,7 @@ export async function executeTrailRoute(
 
     const graph = await buildTrailGraph(
       areaResult.area.lines,
-      areaResult.area.rectangle,
+      areaResult.area.tiles,
       async (progress) => {
         graphProgress = progress;
         report('building-graph');
@@ -130,51 +144,113 @@ export async function executeTrailRoute(
       },
     );
     await yieldForCancellation(signal);
+
+    // Each waypoint snaps once, so a leg ends exactly where the next one begins.
+    const snapped: TrackCoordinate[] = [];
+    const unsnappableIndexes: number[] = [];
+    for (const [index, waypoint] of waypoints.entries()) {
+      const snap = snapCoordinateToTrailGraph(graph, waypoint);
+      if (snap === null) unsnappableIndexes.push(index);
+      else snapped.push(snap);
+    }
+    if (unsnappableIndexes.length > 0) {
+      return {
+        status: 'failed',
+        reason: 'no-nearby-trail',
+        waypointIndexes: unsnappableIndexes,
+      };
+    }
+
     report('loading-terrain');
     const terrain = await loadGraphTerrain(graph, elevation, signal);
     await yieldForCancellation(signal);
-    report('searching-route');
-    await yieldForCancellation(signal);
-    const route = routeTrailGraph(graph, request.start, request.destination, {
-      terrain,
-      includeSearchTrace: request.includeSearchTrace,
-    });
-    await yieldForCancellation(signal);
-    if (route.status === 'ready') {
-      const result: TrailRouteSuccess = {
-        status: 'ready',
+
+    const legs: TrailRouteLeg[] = [];
+    const forwardTrace: TrailRouteSearchArc[] = [];
+    const backwardTrace: TrailRouteSearchArc[] = [];
+    let retryWithExpandedArea = false;
+    for (let legIndex = 0; legIndex + 1 < waypoints.length; legIndex += 1) {
+      const start = waypoints[legIndex];
+      const destination = waypoints[legIndex + 1];
+      const snappedStart = snapped[legIndex];
+      const snappedDestination = snapped[legIndex + 1];
+      if (
+        start === undefined ||
+        destination === undefined ||
+        snappedStart === undefined ||
+        snappedDestination === undefined
+      ) {
+        throw new Error('Route waypoints and their snaps are misaligned.');
+      }
+      report('searching-route');
+      await yieldForCancellation(signal);
+      const route = routeTrailGraph(graph, start, destination, {
+        terrain,
+        includeSearchTrace,
+      });
+      if (route.status === 'failed' && route.reason === 'no-nearby-trail') {
+        // Unreachable after the snap check above; kept exhaustive for the graph API.
+        return {
+          status: 'failed',
+          reason: 'no-nearby-trail',
+          waypointIndexes:
+            route.endpoint === 'both'
+              ? [legIndex, legIndex + 1]
+              : [route.endpoint === 'start' ? legIndex : legIndex + 1],
+        };
+      }
+      if (route.searchTrace !== undefined) {
+        for (const arc of route.searchTrace.forward) forwardTrace.push(arc);
+        for (const arc of route.searchTrace.backward) backwardTrace.push(arc);
+      }
+      if (route.status === 'failed') {
+        if (route.visitedBoundary && attempt === 0) {
+          retryWithExpandedArea = true;
+          break;
+        }
+        const failure: TrailRouteFailureBuilder = {
+          status: 'failed',
+          reason: 'no-route',
+          legIndex,
+        };
+        if (includeSearchTrace) {
+          failure.searchTrace = { forward: forwardTrace, backward: backwardTrace };
+        }
+        return failure;
+      }
+      // The graph search snaps identically; pinning the ends to the shared snaps also
+      // covers a destination merged onto a colocated start snap.
+      legs.push({
         geometry: {
           type: 'LineString',
-          coordinates: route.coordinates.map((coordinate) => [
-            coordinate[0],
-            coordinate[1],
-          ]),
+          coordinates: [
+            [snappedStart[0], snappedStart[1]],
+            ...route.coordinates
+              .slice(1, -1)
+              .map((coordinate) => [coordinate[0], coordinate[1]]),
+            [snappedDestination[0], snappedDestination[1]],
+          ],
         },
         networkDistanceMeters: route.networkDistanceMeters,
-        snappedStart: route.snappedStart,
-        snappedDestination: route.snappedDestination,
-        loadedTileCount: areaResult.area.tiles.length,
-        graphNodeCount: graph.nodes.size,
-        graphEdgeCount: graph.edges.size,
-        expandedAreaRetryUsed: attempt === 1,
-        ...(route.searchTrace === undefined ? {} : { searchTrace: route.searchTrace }),
-      };
-      return result;
+        snappedStart,
+        snappedDestination,
+      });
     }
-    if (route.reason === 'no-nearby-trail') {
-      return {
-        status: 'failed',
-        reason: route.reason,
-        endpoint: route.endpoint,
-      };
+    if (retryWithExpandedArea) continue;
+    await yieldForCancellation(signal);
+
+    const result: TrailRouteSuccessBuilder = {
+      status: 'ready',
+      legs,
+      loadedTileCount: areaResult.area.tiles.length,
+      graphNodeCount: graph.nodes.size,
+      graphEdgeCount: graph.edges.size,
+      expandedAreaRetryUsed: attempt === 1,
+    };
+    if (includeSearchTrace) {
+      result.searchTrace = { forward: forwardTrace, backward: backwardTrace };
     }
-    if (!route.visitedBoundary || attempt === 1) {
-      return {
-        status: 'failed',
-        reason: 'no-route',
-        ...(route.searchTrace === undefined ? {} : { searchTrace: route.searchTrace }),
-      };
-    }
+    return result;
   }
   return { status: 'failed', reason: 'no-route' };
 }

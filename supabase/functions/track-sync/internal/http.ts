@@ -169,6 +169,11 @@ const markerColorKeys = [
   'red',
 ] as const;
 
+/** Predecessor content hashes a geometry edit replaced; browsers adopt the new record. */
+const replacedContentHashesSchema = z
+  .array(z.string().regex(CONTENT_HASH_PATTERN))
+  .max(256);
+
 const trackMarkersSchema = z
   .array(
     z
@@ -443,6 +448,16 @@ function requireMetadata(value: unknown): Record<string, unknown> {
       400,
       'invalid_metadata',
       'metadata folderId must be null or a bounded folder identifier.',
+    );
+  }
+  if (
+    Object.hasOwn(value, 'replacesContentHashes') &&
+    !replacedContentHashesSchema.safeParse(value.replacesContentHashes).success
+  ) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_metadata',
+      'metadata replacesContentHashes must list at most 256 lowercase SHA-256 hashes.',
     );
   }
   const encoded = new TextEncoder().encode(JSON.stringify(value));

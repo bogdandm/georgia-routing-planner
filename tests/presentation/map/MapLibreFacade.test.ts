@@ -5,7 +5,10 @@ import type { ElevationProvider } from '@/application/ports/ElevationProvider';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
-import type { MapViewportMovement } from '@/presentation/map/MapFacade';
+import type {
+  MapViewportMovement,
+  TrackPointClick,
+} from '@/presentation/map/MapFacade';
 import {
   naprOrthophotoSourceIds,
   sovietTopographicSourceIds,
@@ -1786,6 +1789,71 @@ describe('MapLibreFacade', () => {
     facade.detachMap();
     expect(nativeMap.getCanvas().style.cursor).toBe('');
   });
+
+  it('publishes primary track-point clicks with a hit tolerance while editing a track', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const popup = {
+      content: document.createElement('div'),
+      attach: vi.fn(),
+      show: vi.fn(),
+      setPopupEnabled: vi.fn(),
+      isVisible: vi.fn().mockReturnValue(true),
+      close: vi.fn(),
+      destroy: vi.fn(),
+    };
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      popup,
+    );
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    const trackPointListener = vi.fn<(click: TrackPointClick) => void>();
+    const planningListener = vi.fn();
+    facade.subscribeTrackPointClicks(trackPointListener);
+    facade.subscribePlanningClicks(planningListener);
+    nativeMap.fire('click', { lngLat: { lng: 44.8, lat: 41.7 } });
+    expect(facade.getPointInspection()).toMatchObject({ status: 'open' });
+
+    facade.setInteractionMode('track-editing');
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+    expect(nativeMap.getCanvas().style.cursor).toBe('');
+    nativeMap.fire('click', {
+      lngLat: { lng: 44.64, lat: 42.66 },
+      point: { x: 100, y: 100 },
+      originalEvent: { button: 1, shiftKey: false },
+    });
+    expect(trackPointListener).not.toHaveBeenCalled();
+    nativeMap.fire('click', {
+      lngLat: { lng: 44.64, lat: 42.66 },
+      point: { x: 100, y: 100 },
+      originalEvent: { button: 0, shiftKey: true },
+    });
+    expect(trackPointListener).toHaveBeenCalledOnce();
+    const click = trackPointListener.mock.lastCall?.[0];
+    expect(click).toMatchObject({
+      coordinate: { longitude: 44.64, latitude: 42.66 },
+      shiftKey: true,
+    });
+    expect(click?.toleranceMeters).toBeGreaterThan(0);
+    expect(planningListener).not.toHaveBeenCalled();
+    expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+
+    facade.setInteractionMode('route-planning');
+    nativeMap.fire('click', {
+      lngLat: { lng: 44.64, lat: 42.66 },
+      point: { x: 100, y: 100 },
+      originalEvent: { button: 0, shiftKey: false },
+    });
+    expect(planningListener).toHaveBeenCalledOnce();
+    expect(trackPointListener).toHaveBeenCalledOnce();
+    facade.destroy();
+  });
+
   it('publishes primary planning clicks and labels the cursor for the active mode', async () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

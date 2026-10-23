@@ -457,6 +457,21 @@ Deno.test(
         gzipHex: fixtureV2.gzipHex,
         metadata: { lineageHash: 'b'.repeat(64), geometryVersion: 2 },
       }),
+      ...[
+        ['C'.repeat(64)],
+        'c'.repeat(64),
+        Array.from({ length: 257 }, () => CONTENT_HASH),
+      ].map((replacesContentHashes) =>
+        uploadRequest({
+          contentHash: fixtureV2.sha256,
+          gzipHex: fixtureV2.gzipHex,
+          metadata: {
+            lineageHash: fixtureV2.lineageSha256,
+            geometryVersion: 2,
+            replacesContentHashes,
+          },
+        }),
+      ),
     ];
 
     for (const request of invalidUploads) {

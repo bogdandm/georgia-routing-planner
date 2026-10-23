@@ -1154,6 +1154,11 @@ msgstr "Searching for a route…"
 msgid "Segment between points {fromNumber} and {toNumber}"
 msgstr "Segment between points {fromNumber} and {toNumber}"
 
+#. js-lingui-id: M5ZZd4
+#: src/presentation/tracks/TrackPointsSection.tsx
+msgid "Select a range of points with Shift+click on the map or in the list, or by dragging in the list or across the elevation profile."
+msgstr "Select a range of points with Shift+click on the map or in the list, or by dragging in the list or across the elevation profile."
+
 #. js-lingui-id: jGHUWA
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Selected tracks"

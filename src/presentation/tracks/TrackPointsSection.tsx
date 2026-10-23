@@ -939,7 +939,9 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
     >
       <Box
         sx={{
-          minHeight: 44,
+          // Editing sits the list right under the profile, so the heading is compact.
+          minHeight: editing ? 32 : 44,
+          mt: editing ? -1 : 0,
           display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr) auto',
           alignItems: 'center',
@@ -959,7 +961,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
             }}
             sx={{
               minWidth: 0,
-              minHeight: 44,
+              minHeight: editing ? 32 : 44,
               justifyContent: 'space-between',
               px: 1,
               textAlign: 'left',
@@ -994,6 +996,18 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
           </Tooltip>
         ) : null}
       </Box>
+      {variant === 'track' && editing ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', px: 1, mb: 1 }}
+        >
+          <Trans>
+            Select a range of points with Shift+click on the map or in the list, or by
+            dragging in the list or across the elevation profile.
+          </Trans>
+        </Typography>
+      ) : null}
       {open ? (
         <Box
           id={detailsId}

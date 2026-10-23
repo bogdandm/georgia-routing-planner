@@ -332,7 +332,8 @@ the map and on the profile, while selected points ring in blue.
 
 The pencil beside the heading starts editing a saved track. Editing hides every section
 except the stats, the elevation profile, and Points, pins **Undo**, **Cancel**, and
-**Save** to the bottom of the pane, and draws every stored point as a small dot. Between
+**Save** to the bottom of the pane, and draws every stored point as a small dot. A
+caption under the compact Points heading names the range-selection gestures. Between
 rows a vertical line styled like the map track stands for the leg to the next point,
 orange where it follows trails; boundaries between independent segments show no line. A
 left map click selects the nearest point within a few pixels instead of opening point

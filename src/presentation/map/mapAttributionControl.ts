@@ -7,8 +7,10 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 export function collapseInitialMapAttribution(
   map: Pick<MapLibreMap, 'getContainer'>,
 ): void {
-  map
+  const control = map
     .getContainer()
-    .querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show')
-    ?.classList.remove('maplibregl-compact-show');
+    .querySelector('.maplibregl-ctrl-attrib.maplibregl-compact-show');
+  if (control === null) return;
+  control.classList.remove('maplibregl-compact-show');
+  control.removeAttribute('open');
 }

@@ -21,10 +21,18 @@ describe('collapseInitialMapAttribution', () => {
     mapContainer.append(control.onAdd(map));
     expect(mapContainer.querySelector('.maplibregl-compact-show')).not.toBeNull();
 
+    const details = mapContainer.querySelector('details');
+    expect(details?.open).toBe(true);
     collapseInitialMapAttribution(map);
+    expect(details?.open).toBe(false);
 
     expect(mapContainer.querySelector('.maplibregl-compact-show')).toBeNull();
     expect(mapContainer.querySelector('.maplibregl-compact')).not.toBeNull();
+    mapContainer
+      .querySelector<HTMLButtonElement>('.maplibregl-ctrl-attrib-button')
+      ?.click();
+    expect(mapContainer.querySelector('.maplibregl-compact-show')).not.toBeNull();
+    expect(details?.open).toBe(true);
     expect(mapContainer.textContent).toContain('Provider credits');
     control.onRemove();
   });

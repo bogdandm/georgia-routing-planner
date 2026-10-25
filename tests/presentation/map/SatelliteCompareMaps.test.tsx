@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { StyleSpecification } from 'maplibre-gl';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStore } from 'zustand';
 
@@ -36,6 +36,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     readonly onError?: (event: unknown) => void;
     readonly ref?: (handle: { getMap: () => unknown } | null) => void;
   }) {
+    const mapContainer = useRef<HTMLDivElement>(null);
     useEffect(() => {
       nativeMaps.created += 1;
       // Just enough of the native map for the pane: sync, rotation lock, tile progress,
@@ -46,6 +47,7 @@ vi.mock('react-map-gl/maplibre', () => ({
         setMissingStyleImageResolver: () => undefined,
         on: () => ({ unsubscribe: () => undefined }),
         jumpTo: () => undefined,
+        getContainer: () => mapContainer.current ?? document.body,
         getCenter: () => ({ lng: 44.5, lat: 42.5 }),
         getBounds: () => ({
           getWest: () => 44,
@@ -69,6 +71,7 @@ vi.mock('react-map-gl/maplibre', () => ({
     );
     return (
       <div
+        ref={mapContainer}
         data-testid="compare-map"
         data-sentinel-tiles={source?.type === 'raster' ? source.tiles?.join(' ') : ''}
         data-landcover-visibility={landcover?.layout?.visibility ?? 'visible'}
@@ -95,10 +98,14 @@ vi.mock('react-map-gl/maplibre', () => ({
   }: {
     readonly customAttribution?: readonly string[];
   }) => (
-    <div
+    <details
+      className="maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show"
       data-testid="compare-attribution"
       data-attributions={customAttribution?.join(' | ') ?? ''}
-    />
+      open
+    >
+      <summary className="maplibregl-ctrl-attrib-button" />
+    </details>
   ),
 }));
 
@@ -215,6 +222,8 @@ describe('SatelliteCompareMaps', () => {
     const attribution = within(plain).getByTestId('compare-attribution');
     // The plain last pane also credits the Sentinel imagery shown by the other panes.
     expect(attribution.dataset.attributions).toMatch(/Sentinel/u);
+    expect(attribution).not.toHaveClass('maplibregl-compact-show');
+    expect(attribution).not.toHaveAttribute('open');
   });
 
   it('restyles position-keyed panes instead of recreating their maps', async () => {
@@ -409,6 +418,10 @@ describe('SatelliteCompareMaps', () => {
     expect(
       await screen.findByRole('region', { name: 'Soviet Topographic' }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId('compare-attribution')).not.toHaveClass(
+      'maplibregl-compact-show',
+    );
+    expect(screen.getByTestId('compare-attribution')).not.toHaveAttribute('open');
 
     await openMenu();
     await user.click(screen.getByRole('menuitemradio', { name: 'Vector OSM' }));

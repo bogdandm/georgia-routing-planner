@@ -200,7 +200,7 @@ export function SatelliteCompareMaps({
             : configuration.satellite.renderer.attribution,
       ),
     ),
-  ];
+  ].sort();
 
   return (
     <Box

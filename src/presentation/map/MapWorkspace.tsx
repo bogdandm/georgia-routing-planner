@@ -1029,13 +1029,15 @@ export function MapWorkspace({
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
-      nativeMap.current = mapRef?.getMap() ?? null;
+      const map = mapRef?.getMap() ?? null;
+      nativeMap.current = map;
+      if (map !== null) collapseInitialMapAttribution(map);
       if (!(facade instanceof MapLibreFacade)) return;
-      if (mapRef === null) {
+      if (map === null) {
         facade.detachMap();
         return;
       }
-      facade.attach(mapRef.getMap());
+      facade.attach(map);
     },
     [facade],
   );
@@ -1738,9 +1740,6 @@ export function MapWorkspace({
             mapStyle={mapStyle}
             maxPitch={75}
             onContextMenu={handleContextMenu}
-            onLoad={(event) => {
-              collapseInitialMapAttribution(event.target);
-            }}
             onClick={handleMapClick}
             boxZoom={false}
             doubleClickZoom

@@ -394,6 +394,22 @@ describe('SatelliteCompareMaps', () => {
     );
   });
 
+  it('keeps opened credits expanded when panes reorder the same providers', async () => {
+    const services = createTestServices();
+    const view = renderWithI18n(
+      renderGrid(services, ['google-satellite', 'esri-satellite']),
+    );
+    const attribution = await screen.findByTestId('compare-attribution');
+    attribution.classList.add('maplibregl-compact-show');
+    attribution.setAttribute('open', '');
+
+    view.rerender(renderGrid(services, ['esri-satellite', 'google-satellite']));
+
+    expect(screen.getByTestId('compare-attribution')).toBe(attribution);
+    expect(attribution).toHaveClass('maplibregl-compact-show');
+    expect(attribution).toHaveAttribute('open');
+  });
+
   it('picks a layer from a pane menu that skips layers shown elsewhere and clears with Vector OSM', async () => {
     const user = userEvent.setup();
     openSharedComparison([scene2019, 'esri-satellite'], camera);

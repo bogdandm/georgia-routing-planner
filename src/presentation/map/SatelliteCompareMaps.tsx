@@ -49,6 +49,7 @@ import {
   openStreetMapOpacityPaint,
   type MapLibreLayerController,
 } from '@/presentation/map/MapLibreLayerController';
+import { collapseInitialMapAttribution } from '@/presentation/map/mapAttributionControl';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -604,6 +605,9 @@ function SatelliteComparePane({
           reuseMaps={false}
           style={{ width: '100%', height: '100%' }}
           onError={handleError}
+          onLoad={(event) => {
+            collapseInitialMapAttribution(event.target);
+          }}
           onMove={() => {
             sync.handleMove(key);
           }}

@@ -47,6 +47,7 @@ import type {
   MapViewportMovement,
   PlanningPreview,
 } from '@/presentation/map/MapFacade';
+import { collapseInitialMapAttribution } from '@/presentation/map/mapAttributionControl';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
@@ -1737,6 +1738,9 @@ export function MapWorkspace({
             mapStyle={mapStyle}
             maxPitch={75}
             onContextMenu={handleContextMenu}
+            onLoad={(event) => {
+              collapseInitialMapAttribution(event.target);
+            }}
             onClick={handleMapClick}
             boxZoom={false}
             doubleClickZoom

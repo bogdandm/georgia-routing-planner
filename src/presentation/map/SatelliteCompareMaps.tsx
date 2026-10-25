@@ -49,7 +49,7 @@ import {
   openStreetMapOpacityPaint,
   type MapLibreLayerController,
 } from '@/presentation/map/MapLibreLayerController';
-import { collapseInitialMapAttributionWhenAvailable } from '@/presentation/map/mapAttributionControl';
+import { synchronizeMapAttributionDisclosure } from '@/presentation/map/mapAttributionControl';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -388,15 +388,12 @@ function SatelliteComparePane({
 
   const crosshairRef = useRef<HTMLDivElement>(null);
   const attachedMap = useRef<MapLibreMap | null>(null);
-  const stopInitialAttributionCollapse = useRef<() => void>(() => undefined);
+  const [attributionMap, setAttributionMap] = useState<MapLibreMap | null>(null);
   const attributionKey = attributions?.join('\n');
   useEffect(() => {
-    const map = attachedMap.current;
-    if (map === null || attributionKey === undefined) return;
-    stopInitialAttributionCollapse.current();
-    stopInitialAttributionCollapse.current =
-      collapseInitialMapAttributionWhenAvailable(map);
-  }, [attributionKey]);
+    if (attributionMap === null || attributionKey === undefined) return;
+    return synchronizeMapAttributionDisclosure(attributionMap);
+  }, [attributionKey, attributionMap]);
   const [datePicker, setDatePicker] = useState<{
     readonly anchor: HTMLElement;
     readonly viewport: SatelliteSearchViewport;
@@ -437,10 +434,9 @@ function SatelliteComparePane({
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
-      stopInitialAttributionCollapse.current();
-      stopInitialAttributionCollapse.current = () => undefined;
       if (mapRef === null) {
         attachedMap.current = null;
+        setAttributionMap(null);
         sync.detach(key);
         for (const listener of tileListeners.current) listener.unsubscribe();
         tileListeners.current = [];
@@ -448,8 +444,7 @@ function SatelliteComparePane({
       }
       const map = mapRef.getMap();
       attachedMap.current = map;
-      stopInitialAttributionCollapse.current =
-        collapseInitialMapAttributionWhenAvailable(map);
+      setAttributionMap(map);
       // Only center and zoom are shared, so every pane stays north-up and flat.
       map.keyboard.disableRotation();
       map.touchZoomRotate.disableRotation();

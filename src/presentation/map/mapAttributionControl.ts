@@ -17,19 +17,37 @@ export function collapseInitialMapAttribution(
 }
 
 /**
- * Starts before a deferred MapLibre control or its first credits may exist, then
- * disconnects after collapsing that initial expansion so later user toggles are untouched.
+ * Starts before a deferred MapLibre control or its first credits may exist. It keeps
+ * native disclosure state aligned when MapLibre later collapses the control on drag.
  */
-export function collapseInitialMapAttributionWhenAvailable(
+export function synchronizeMapAttributionDisclosure(
   map: Pick<MapLibreMap, 'getContainer'>,
 ): () => void {
-  if (collapseInitialMapAttribution(map)) return () => undefined;
   const container = map.getContainer();
+  let control: Element | null = null;
+  const synchronize = () => {
+    const nextControl = container.querySelector(
+      '.maplibregl-ctrl-attrib.maplibregl-compact',
+    );
+    if (nextControl === null) {
+      control = null;
+      return;
+    }
+    if (nextControl !== control) {
+      control = nextControl;
+      nextControl.classList.remove('maplibregl-compact-show');
+      nextControl.removeAttribute('open');
+      return;
+    }
+    nextControl.toggleAttribute(
+      'open',
+      nextControl.classList.contains('maplibregl-compact-show'),
+    );
+  };
+  synchronize();
   const Observer = container.ownerDocument.defaultView?.MutationObserver;
   if (Observer === undefined) return () => undefined;
-  const observer = new Observer(() => {
-    if (collapseInitialMapAttribution(map)) observer.disconnect();
-  });
+  const observer = new Observer(synchronize);
   observer.observe(container, {
     attributes: true,
     attributeFilter: ['class'],

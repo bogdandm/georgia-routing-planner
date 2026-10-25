@@ -618,12 +618,13 @@ function SatelliteComparePane({
             sync.hidePointer();
           }}
         >
-          {/* Flush with the bottom edge, as on the main map. */}
+          {/* Full provider credits stay available behind the compact control without
+              covering the comparison panes. */}
           {attributions === null ? null : (
             <AttributionControl
               // The control reads its custom attribution once, so a new set remounts it.
               key={attributions.join('\n')}
-              compact={false}
+              compact
               position="bottom-right"
               customAttribution={[...attributions]}
             />

@@ -1742,7 +1742,7 @@ export function MapWorkspace({
             doubleClickZoom
             dragPan={dragPanInertia}
             dragRotate={false}
-            attributionControl={smartphoneViewport ? false : { compact: false }}
+            attributionControl={smartphoneViewport ? false : { compact: true }}
             keyboard
             reuseMaps={false}
             scrollZoom

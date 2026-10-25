@@ -117,13 +117,14 @@ user-triggered bounded route and has no proxy, retry, or fallback provider.
 
 ### Attribution and licensing
 
-Desktop MapLibre attribution shows:
+Desktop MapLibre attribution is collapsed into its standard information control. Opening
+the control shows the complete credits, including:
 
 > OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors
 
 The OpenFreeMap source credits OpenFreeMap and OpenMapTiles; the Shortbread source
-credits OSM contributors once. The smartphone map omits the attribution control to keep
-the map-first surface (`MapWorkspace.tsx`). OpenFreeMap's
+credits OSM contributors once. The smartphone map omits the control to keep the
+map-first surface (`MapWorkspace.tsx`). OpenFreeMap's
 [attribution section](https://openfreemap.org/#attribution) requires OpenMapTiles and
 OpenStreetMap credit. The OpenMapTiles schema is CC-BY, its implementation BSD; OSM data
 is ODbL.

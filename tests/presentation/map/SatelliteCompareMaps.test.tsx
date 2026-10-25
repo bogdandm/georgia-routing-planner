@@ -231,11 +231,16 @@ describe('SatelliteCompareMaps', () => {
     const view = renderWithI18n(renderGrid(services, [scene2019, scene2021]));
     const [left] = await screen.findAllByTestId('compare-map');
     const leftTiles = left?.dataset.sentinelTiles;
+    const attribution = screen.getByTestId('compare-attribution');
+    attribution.classList.add('maplibregl-compact-show');
+    attribution.setAttribute('open', '');
 
     view.rerender(renderGrid(services, [scene2021, scene2019]));
     expect(screen.getAllByTestId('compare-map')[0]?.dataset.sentinelTiles).not.toBe(
       leftTiles,
     );
+    expect(attribution).toHaveClass('maplibregl-compact-show');
+    expect(attribution).toHaveAttribute('open');
     view.rerender(renderGrid(services, [scene2021, scene2019, null, null]));
 
     expect(await screen.findAllByTestId('compare-map')).toHaveLength(4);

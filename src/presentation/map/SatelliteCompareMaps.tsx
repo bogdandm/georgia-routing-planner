@@ -388,13 +388,14 @@ function SatelliteComparePane({
 
   const crosshairRef = useRef<HTMLDivElement>(null);
   const attachedMap = useRef<MapLibreMap | null>(null);
+  const attributionKey = attributions?.join('\n');
   // Changing the credit set remounts the keyed control. This parent effect runs after
   // the child's control-add effect, so every replacement starts collapsed as well.
   useEffect(() => {
-    if (attributions === null) return;
+    if (attributionKey === undefined) return;
     const map = attachedMap.current;
     if (map !== null) collapseInitialMapAttribution(map);
-  }, [attributions]);
+  }, [attributionKey]);
   const [datePicker, setDatePicker] = useState<{
     readonly anchor: HTMLElement;
     readonly viewport: SatelliteSearchViewport;
@@ -631,7 +632,7 @@ function SatelliteComparePane({
           {attributions === null ? null : (
             <AttributionControl
               // The control reads its custom attribution once, so a new set remounts it.
-              key={attributions.join('\n')}
+              key={attributionKey}
               compact
               position="bottom-right"
               customAttribution={[...attributions]}

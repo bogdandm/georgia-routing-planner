@@ -49,7 +49,7 @@ import {
   openStreetMapOpacityPaint,
   type MapLibreLayerController,
 } from '@/presentation/map/MapLibreLayerController';
-import { collapseInitialMapAttribution } from '@/presentation/map/mapAttributionControl';
+import { collapseInitialMapAttributionWhenAvailable } from '@/presentation/map/mapAttributionControl';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -388,13 +388,14 @@ function SatelliteComparePane({
 
   const crosshairRef = useRef<HTMLDivElement>(null);
   const attachedMap = useRef<MapLibreMap | null>(null);
+  const stopInitialAttributionCollapse = useRef<() => void>(() => undefined);
   const attributionKey = attributions?.join('\n');
-  // Changing the credit set remounts the keyed control. This parent effect runs after
-  // the child's control-add effect, so every replacement starts collapsed as well.
   useEffect(() => {
-    if (attributionKey === undefined) return;
     const map = attachedMap.current;
-    if (map !== null) collapseInitialMapAttribution(map);
+    if (map === null || attributionKey === undefined) return;
+    stopInitialAttributionCollapse.current();
+    stopInitialAttributionCollapse.current =
+      collapseInitialMapAttributionWhenAvailable(map);
   }, [attributionKey]);
   const [datePicker, setDatePicker] = useState<{
     readonly anchor: HTMLElement;
@@ -436,6 +437,8 @@ function SatelliteComparePane({
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
+      stopInitialAttributionCollapse.current();
+      stopInitialAttributionCollapse.current = () => undefined;
       if (mapRef === null) {
         attachedMap.current = null;
         sync.detach(key);
@@ -445,6 +448,8 @@ function SatelliteComparePane({
       }
       const map = mapRef.getMap();
       attachedMap.current = map;
+      stopInitialAttributionCollapse.current =
+        collapseInitialMapAttributionWhenAvailable(map);
       // Only center and zoom are shared, so every pane stays north-up and flat.
       map.keyboard.disableRotation();
       map.touchZoomRotate.disableRotation();

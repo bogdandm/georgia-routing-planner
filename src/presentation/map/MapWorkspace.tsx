@@ -47,7 +47,7 @@ import type {
   MapViewportMovement,
   PlanningPreview,
 } from '@/presentation/map/MapFacade';
-import { collapseInitialMapAttribution } from '@/presentation/map/mapAttributionControl';
+import { collapseInitialMapAttributionWhenAvailable } from '@/presentation/map/mapAttributionControl';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
@@ -981,6 +981,7 @@ export function MapWorkspace({
   // table (read again on later geolocation state changes) and relabels the existing
   // controls in place, so they keep their state, such as the shown user location.
   const nativeMap = useRef<MapLibreMap | null>(null);
+  const stopInitialAttributionCollapse = useRef<() => void>(() => undefined);
   const mapLibreLocale = useMemo(
     () => ({
       'AttributionControl.ToggleAttribution': t`Toggle attribution`,
@@ -1029,9 +1030,13 @@ export function MapWorkspace({
 
   const handleMapRef = useCallback(
     (mapRef: MapRef | null) => {
+      stopInitialAttributionCollapse.current();
       const map = mapRef?.getMap() ?? null;
       nativeMap.current = map;
-      if (map !== null) collapseInitialMapAttribution(map);
+      stopInitialAttributionCollapse.current =
+        map === null
+          ? () => undefined
+          : collapseInitialMapAttributionWhenAvailable(map);
       if (!(facade instanceof MapLibreFacade)) return;
       if (map === null) {
         facade.detachMap();

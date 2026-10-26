@@ -141,6 +141,7 @@ test('applies and hides a Sentinel scene without restoring it after reload', asy
   expect(rendererRequests[0]).toContain(
     'assets=red&assets=green&assets=blue&asset_as_band=true',
   );
+  await page.getByTestId('map-workspace').getByTitle('Toggle attribution').click();
   await expect(
     page.getByTestId('map-workspace').getByText(/Earth Search \/ Element 84/u),
   ).toBeVisible();

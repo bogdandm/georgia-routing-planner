@@ -425,20 +425,26 @@ After final verification:
 1. Commit only cleanup caused by final verification or documentation corrections.
 2. Remove branch-local `PLAN.md`, if present, and commit its removal. It must not appear
    in the final pull-request state or on `main`.
-3. Push the branch and open a ready-for-review pull request, or update the existing pull
-   request for that branch.
-4. Immediately after PR creation or update, and again after the final push, run
-   `gh pr view --json mergeable,mergeStateStatus,url`. Do not hand off while `mergeable`
-   is `CONFLICTING` or `mergeStateStatus` is `DIRTY`. Merge the latest `origin/main`
-   into the feature branch without rebasing, resolve every conflict, rerun only
-   invalidated checks, push, and query the PR again. If GitHub reports `UNKNOWN`, first
-   inspect whether the referenced pull request is already merged or closed. For an
-   already merged or closed pull request, `UNKNOWN` means that pull request cannot
-   deliver commits pushed afterward: immediately open a new pull request targeting
-   `main` (the same branch may be reused when the maintainer requests it). Only for an
-   open pull request, wait for mergeability calculation and query it once more rather
+3. Before deciding that an existing pull request can deliver the current branch, run
+   `gh pr view --json state,mergedAt,closedAt,mergeable,mergeStateStatus,url`. Evaluate
+   `state` before interpreting either mergeability field. A `MERGED` or `CLOSED` pull
+   request is historical and can never deliver commits pushed afterward, even when
+   `mergeable` or `mergeStateStatus` is `UNKNOWN`. Do not update it, do not report the
+   branch as delivered through it, and do not query it again. If the branch contains
+   commits absent from `origin/main`, immediately open a new ready-for-review pull
+   request targeting `main`; reuse the same branch only when the maintainer requests it.
+   Use that new pull request for every remaining finalization check.
+4. Push the branch and open a ready-for-review pull request, or update the existing pull
+   request only when step 3 confirmed that it is still `OPEN`.
+5. Immediately after PR creation or update, and again after the final push, query the
+   current open PR's `mergeable` and `mergeStateStatus`. Do not hand off while
+   `mergeable` is `CONFLICTING` or `mergeStateStatus` is `DIRTY`. Merge the latest
+   `origin/main` into the feature branch without rebasing, resolve every conflict, rerun
+   only invalidated checks, push, and query the current PR again. Only when step 3
+   confirmed that the PR is `OPEN` may `UNKNOWN` be treated as a pending GitHub
+   calculation: wait for the calculation and query that same open PR once more rather
    than assuming it is conflict-free.
-5. Give the user the pull-request link and report the active branch, commits, checks
+6. Give the user the pull-request link and report the active branch, commits, checks
    run, checks skipped as not applicable, and whether the branch is awaiting approval.
 
 This standing instruction authorizes feature-completion push and pull-request creation

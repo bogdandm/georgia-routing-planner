@@ -49,6 +49,7 @@ import {
   openStreetMapOpacityPaint,
   type MapLibreLayerController,
 } from '@/presentation/map/MapLibreLayerController';
+import { synchronizeMapAttributionDisclosure } from '@/presentation/map/mapAttributionControl';
 import { mapSourceIds } from '@/presentation/map/mapIds';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
@@ -199,7 +200,7 @@ export function SatelliteCompareMaps({
             : configuration.satellite.renderer.attribution,
       ),
     ),
-  ];
+  ].sort();
 
   return (
     <Box
@@ -387,6 +388,12 @@ function SatelliteComparePane({
 
   const crosshairRef = useRef<HTMLDivElement>(null);
   const attachedMap = useRef<MapLibreMap | null>(null);
+  const [attributionMap, setAttributionMap] = useState<MapLibreMap | null>(null);
+  const attributionKey = attributions?.join('\n');
+  useEffect(() => {
+    if (attributionMap === null || attributionKey === undefined) return;
+    return synchronizeMapAttributionDisclosure(attributionMap);
+  }, [attributionKey, attributionMap]);
   const [datePicker, setDatePicker] = useState<{
     readonly anchor: HTMLElement;
     readonly viewport: SatelliteSearchViewport;
@@ -429,6 +436,7 @@ function SatelliteComparePane({
     (mapRef: MapRef | null) => {
       if (mapRef === null) {
         attachedMap.current = null;
+        setAttributionMap(null);
         sync.detach(key);
         for (const listener of tileListeners.current) listener.unsubscribe();
         tileListeners.current = [];
@@ -436,6 +444,7 @@ function SatelliteComparePane({
       }
       const map = mapRef.getMap();
       attachedMap.current = map;
+      setAttributionMap(map);
       // Only center and zoom are shared, so every pane stays north-up and flat.
       map.keyboard.disableRotation();
       map.touchZoomRotate.disableRotation();
@@ -623,7 +632,7 @@ function SatelliteComparePane({
           {attributions === null ? null : (
             <AttributionControl
               // The control reads its custom attribution once, so a new set remounts it.
-              key={attributions.join('\n')}
+              key={attributionKey}
               compact
               position="bottom-right"
               customAttribution={[...attributions]}

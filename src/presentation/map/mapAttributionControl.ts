@@ -24,29 +24,40 @@ export function synchronizeMapAttributionDisclosure(
   map: Pick<MapLibreMap, 'getContainer'>,
 ): () => void {
   const container = map.getContainer();
-  let control: Element | null = null;
+  let control: HTMLDetailsElement | null = null;
+  const synchronizeDisclosureState = () => {
+    if (control === null) return;
+    control.toggleAttribute(
+      'open',
+      control.classList.contains('maplibregl-compact-show'),
+    );
+  };
   const synchronize = () => {
-    const nextControl = container.querySelector(
-      '.maplibregl-ctrl-attrib.maplibregl-compact',
+    const nextControl = container.querySelector<HTMLDetailsElement>(
+      'details.maplibregl-ctrl-attrib.maplibregl-compact',
     );
     if (nextControl === null) {
+      control?.removeEventListener('toggle', synchronizeDisclosureState);
       control = null;
       return;
     }
     if (nextControl !== control) {
+      control?.removeEventListener('toggle', synchronizeDisclosureState);
       control = nextControl;
-      nextControl.classList.remove('maplibregl-compact-show');
-      nextControl.removeAttribute('open');
+      control.addEventListener('toggle', synchronizeDisclosureState);
+      control.classList.remove('maplibregl-compact-show');
+      control.removeAttribute('open');
       return;
     }
-    nextControl.toggleAttribute(
-      'open',
-      nextControl.classList.contains('maplibregl-compact-show'),
-    );
+    synchronizeDisclosureState();
   };
   synchronize();
   const Observer = container.ownerDocument.defaultView?.MutationObserver;
-  if (Observer === undefined) return () => undefined;
+  if (Observer === undefined) {
+    return () => {
+      control?.removeEventListener('toggle', synchronizeDisclosureState);
+    };
+  }
   const observer = new Observer(synchronize);
   observer.observe(container, {
     attributes: true,
@@ -56,5 +67,6 @@ export function synchronizeMapAttributionDisclosure(
   });
   return () => {
     observer.disconnect();
+    control?.removeEventListener('toggle', synchronizeDisclosureState);
   };
 }

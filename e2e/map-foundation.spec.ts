@@ -325,6 +325,7 @@ test('switches between 2D and synthetic 3D terrain on the same map', async ({
   await expect(terrainButton).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => terrainRequests.length).toBeGreaterThan(0);
   await expect(terrainButton).toBeEnabled({ timeout: terrainPersistenceTimeoutMs });
+  await page.getByTestId('map-workspace').getByTitle('Toggle attribution').click();
   await expect(page.getByRole('link', { name: '© Mapterhorn' }).first()).toBeVisible();
   await flatButton.click();
   await expect(flatButton).toHaveAttribute('aria-pressed', 'true');

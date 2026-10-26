@@ -30,13 +30,13 @@ test('loads the production map style and reloads under a repository subpath', as
   await expect(
     page.getByRole('heading', { name: 'Satellite imagery', level: 1 }),
   ).toBeVisible();
-  await expect(page.getByTestId('map-workspace')).toBeVisible();
-  await expect(page.getByTestId('map-workspace')).toHaveAttribute(
-    'data-map-state',
-    'ready',
-    { timeout: 15_000 },
-  );
-  const attributionLink = page.getByRole('link', { name: 'OpenFreeMap' });
+  const mapWorkspace = page.getByTestId('map-workspace');
+  await expect(mapWorkspace).toBeVisible();
+  await expect(mapWorkspace).toHaveAttribute('data-map-state', 'ready', {
+    timeout: 15_000,
+  });
+  await mapWorkspace.getByTitle('Toggle attribution').click();
+  const attributionLink = mapWorkspace.getByRole('link', { name: 'OpenFreeMap' });
   await expect(attributionLink).toBeVisible();
   await attributionLink.focus();
   await expect(attributionLink).toBeFocused();

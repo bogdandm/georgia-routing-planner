@@ -1811,12 +1811,17 @@ describe('MapWorkspace', () => {
     );
     fireEvent.contextMenu(await screen.findByTestId('native-map'));
 
-    const keycapText = (name: string) =>
-      screen.getByRole('menuitem', { name }).querySelector('kbd')?.textContent ?? null;
+    const keycapText = (name: string) => {
+      const keys = screen.getByRole('menuitem', { name }).querySelectorAll('kbd');
+      return keys.length === 0
+        ? null
+        : Array.from(keys, (key) => key.textContent).join(' ');
+    };
+    expect(keycapText('Copy link')).toBe('Ctrl C');
     expect(keycapText('Create marker here')).toBe('P');
     expect(keycapText('Search satellite scenes here')).toBe('S');
     expect(keycapText('Show weather forecast')).toBe('W');
-    expect(keycapText('Copy link')).toBeNull();
+    expect(keycapText('Copy coordinates')).toBeNull();
     unmount();
 
     mockMatchingMediaQueries('(pointer: coarse)');

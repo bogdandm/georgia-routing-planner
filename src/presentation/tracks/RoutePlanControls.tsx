@@ -291,14 +291,22 @@ export function RoutePlanControls({
       <RoutePlanStatus draft={draft} elevationProgress={elevationProgress} />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1}>
-          <Button
-            size="small"
-            color="inherit"
-            disabled={!canUndoTrackPath(draft)}
-            onClick={onUndo}
+          <Tooltip
+            title={
+              <ShortcutTooltipTitle label={t`Undo`} shortcut={{ action: 'undo' }} />
+            }
           >
-            <Trans>Undo</Trans>
-          </Button>
+            <span>
+              <Button
+                size="small"
+                color="inherit"
+                disabled={!canUndoTrackPath(draft)}
+                onClick={onUndo}
+              >
+                <Trans>Undo</Trans>
+              </Button>
+            </span>
+          </Tooltip>
           <Button
             size="small"
             color="inherit"
@@ -312,14 +320,22 @@ export function RoutePlanControls({
           <Button size="small" color="inherit" disabled={saving} onClick={onDiscard}>
             <Trans>Discard</Trans>
           </Button>
-          <Button
-            size="small"
-            variant="contained"
-            disabled={!canSaveTrackPath(draft)}
-            onClick={onSave}
+          <Tooltip
+            title={
+              <ShortcutTooltipTitle label={t`Save`} shortcut={{ action: 'save' }} />
+            }
           >
-            <Trans>Save</Trans>
-          </Button>
+            <span>
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!canSaveTrackPath(draft)}
+                onClick={onSave}
+              >
+                <Trans>Save</Trans>
+              </Button>
+            </span>
+          </Tooltip>
         </Stack>
       </Stack>
     </Stack>
@@ -338,29 +354,42 @@ export function TrackEditControls({
   readonly onSave: () => void;
   readonly onUndo: () => void;
 }): ReactElement {
+  const { t } = useLingui();
   const saving = draft.status === 'saving';
   return (
     <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
-      <Button
-        size="small"
-        color="inherit"
-        disabled={!canUndoTrackPath(draft)}
-        onClick={onUndo}
+      <Tooltip
+        title={<ShortcutTooltipTitle label={t`Undo`} shortcut={{ action: 'undo' }} />}
       >
-        <Trans>Undo</Trans>
-      </Button>
+        <span>
+          <Button
+            size="small"
+            color="inherit"
+            disabled={!canUndoTrackPath(draft)}
+            onClick={onUndo}
+          >
+            <Trans>Undo</Trans>
+          </Button>
+        </span>
+      </Tooltip>
       <Stack direction="row" spacing={1}>
         <Button size="small" color="inherit" disabled={saving} onClick={onCancel}>
           <Trans>Cancel</Trans>
         </Button>
-        <Button
-          size="small"
-          variant="contained"
-          disabled={!canSaveTrackPath(draft)}
-          onClick={onSave}
+        <Tooltip
+          title={<ShortcutTooltipTitle label={t`Save`} shortcut={{ action: 'save' }} />}
         >
-          <Trans>Save</Trans>
-        </Button>
+          <span>
+            <Button
+              size="small"
+              variant="contained"
+              disabled={!canSaveTrackPath(draft)}
+              onClick={onSave}
+            >
+              <Trans>Save</Trans>
+            </Button>
+          </span>
+        </Tooltip>
       </Stack>
     </Stack>
   );

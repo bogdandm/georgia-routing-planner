@@ -150,6 +150,7 @@ export function MapPointActionList({
       action: 'copy-point-link',
       icon: <LinkOutlinedIcon />,
       label: t`Copy link`,
+      shortcut: { action: 'copy-map-link' },
     },
     {
       action: 'share-point',

@@ -46,13 +46,15 @@ opens the browser's **Save page**, even where shortcuts are inactive.
 
 Buttons with a shortcut show its keys as keycaps in their tooltip: 2D and 3D, the layer
 chooser, the ruler, **Plan route**, **New marker**, forecast-point selection, **Undo**,
-**Download GPX**, and the navigation collapse and restore buttons. The layer-chooser
-menu shows each row's key in one column at its right edge, and the empty map search
-shows Ctrl/⌘+F. The map's right-click menu hints P, S, and W beside **Create marker
+**Save** and **Save a copy**, **Browse track file**, **Download GPX**, and the
+navigation collapse and restore buttons. The layer-chooser menu shows each row's key in
+one column at its right edge, and the empty map search shows Ctrl/⌘+F. The map's
+right-click menu hints Ctrl/⌘+C, P, S, and W beside **Copy link**, **Create marker
 here**, **Search satellite scenes here**, and **Show weather forecast**; these are
-reminders of the related global shortcuts, which act through the next map click or at
-the map center, not keys of the menu. Devices whose primary pointer is coarse, such as
-phones and tablets, usually have no keyboard and show no keycaps.
+reminders of the related global shortcuts, which act on the current view, through the
+next map click, or at the map center, not keys of the menu. Devices whose primary
+pointer is coarse, such as phones and tablets, usually have no keyboard and show no
+keycaps.
 
 ## Map controls
 

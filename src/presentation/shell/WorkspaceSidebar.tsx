@@ -31,6 +31,7 @@ import { useStore } from 'zustand';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
 import type { TrackSort } from '@/domain/tracks/localTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
 import { LayersPanel } from '@/presentation/layers/LayersPanel';
 import {
   cancelWeatherPointSelection,
@@ -406,9 +407,14 @@ export function WorkspaceSidebar({
           <>
             <Tooltip
               title={
-                weatherPointSelectionActive
-                  ? t`Cancel forecast point selection`
-                  : t`Select a forecast point on the map`
+                <ShortcutTooltipTitle
+                  label={
+                    weatherPointSelectionActive
+                      ? t`Cancel forecast point selection`
+                      : t`Select a forecast point on the map`
+                  }
+                  shortcut={{ action: 'select-forecast-point' }}
+                />
               }
             >
               <ToggleButton
@@ -593,7 +599,14 @@ export function WorkspaceSidebar({
             {compactMarkersHeader ? <Box aria-hidden sx={{ flex: 1 }} /> : null}
             <Tooltip
               title={
-                canCreateMarkers ? t`Place a marker on the map` : markerCreationMessage
+                canCreateMarkers ? (
+                  <ShortcutTooltipTitle
+                    label={t`Place a marker on the map`}
+                    shortcut={{ action: 'place-marker' }}
+                  />
+                ) : (
+                  markerCreationMessage
+                )
               }
             >
               <span>
@@ -634,9 +647,14 @@ export function WorkspaceSidebar({
             </Tooltip>
             <Tooltip
               title={
-                trailRouter === null
-                  ? t`Route planning is unavailable because map routing data is not configured`
-                  : t`Plan a route on the map`
+                trailRouter === null ? (
+                  t`Route planning is unavailable because map routing data is not configured`
+                ) : (
+                  <ShortcutTooltipTitle
+                    label={t`Plan a route on the map`}
+                    shortcut={{ action: 'new-track' }}
+                  />
+                )
               }
             >
               <span data-tour="plan-route">

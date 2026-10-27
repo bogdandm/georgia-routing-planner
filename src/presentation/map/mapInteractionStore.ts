@@ -199,10 +199,11 @@ export function setSatelliteSearchAnchor(anchor: MapCoordinate | null): void {
   });
 }
 
-export function requestSatelliteSearch(anchor: MapCoordinate): void {
+/** Queues a satellite search; a null anchor searches the current viewport center. */
+export function requestSatelliteSearch(anchor: MapCoordinate | null): void {
   nextSatelliteSearchRequestId += 1;
   mapInteractionStore.setState({
-    satelliteSearchAnchor: { ...anchor },
+    satelliteSearchAnchor: anchor === null ? null : { ...anchor },
     satelliteSearchRequest: { id: nextSatelliteSearchRequestId },
   });
 }

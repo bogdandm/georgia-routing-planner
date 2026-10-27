@@ -168,6 +168,8 @@ import {
   type ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import { downloadFile } from '@/presentation/downloadFile';
+import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
+import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import { SelectableIconGlyph } from '@/presentation/markers/MarkerIconPicker';
 import { TrackFolderEditorDialog } from '@/presentation/tracks/TrackFolderEditorDialog';
 import { formatDateTime } from '@/presentation/formatDateTime';
@@ -262,6 +264,11 @@ import { TrackThumbnailImage } from '@/presentation/tracks/TrackThumbnailImage';
 import { useUiStore } from '@/presentation/shell/uiStore';
 
 const EMPTY_TRACK_MARKERS: readonly TrackMarker[] = [];
+
+/** File types offered by the track picker and the Mod+O shortcut. */
+export const trackFileAccept =
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- File extensions and MIME types.
+  '.gpx,.fit,.kml,application/gpx+xml,application/vnd.ant.fit,application/vnd.google-earth.kml+xml';
 
 interface PreviewTrackBase {
   readonly kind: 'preview';
@@ -510,6 +517,8 @@ interface TracksWorkspaceValue {
   readonly savePreview: () => Promise<void>;
   readonly saveRoutePlan: () => Promise<void>;
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
+  /** Downloads the open saved track as GPX; false when no saved track is open unedited. */
+  readonly downloadActiveTrackGpx: () => boolean;
   readonly refocusActiveTrack: () => void;
   readonly startRoutePlan: () => void;
   readonly setActiveName: (name: string) => void;
@@ -1532,12 +1541,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ),
       );
       if (result?.status === 'failed') return;
-      const metrics = calculateTrackMetrics(
-        readyMultiTrackSelections.flatMap((selection) =>
-          selection.content.trackPoints.map((points) => ({ points })),
-        ),
-      );
-      requestMapFitBounds(mapFitBoundsForTrack(metrics.bounds), 15);
+      requestMultiTrackMapFit(readyMultiTrackSelections);
       return;
     }
     if (active === null) {
@@ -1567,11 +1571,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     mapLayers?.clearPlannedLineGeometry('route-plan');
     // Tracks without source elevation fit again once their DEM samples arrive, so the
     // 3D fit can see their relief.
-    const awaitsDemRelief =
+    const demRelief =
       active.kind !== 'saved' &&
       active.preparationStatus === 'ready' &&
-      active.sourceProfile === null;
-    const demRelief = awaitsDemRelief && active.calculatedSegments !== null;
+      active.sourceProfile === null &&
+      active.calculatedSegments !== null;
     const trackId =
       active.kind === 'preview' || active.kind === 'shared'
         ? // eslint-disable-next-line lingui/no-unlocalized-strings -- Render key token.
@@ -1589,38 +1593,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       active.kind === 'saved' &&
       (renderedTrackId.current?.startsWith(`saved:${active.summary.id}:`) ?? false);
     /* eslint-enable lingui/no-unlocalized-strings */
-    const segments =
-      active.kind === 'saved'
-        ? localTrackSegments(active.content)
-        : (active.preparationStatus === 'ready'
-            ? active.sourceSegments
-            : active.parsed.segments
-          ).map((segment) => segment.points.map((point) => point.coordinate));
-    // The 3D fit needs relief. Saving promotes DEM samples to the primary points; before
-    // that, DEM samples join the drawn source points, which keep any span the DEM missed.
-    const elevatedPoints =
-      active.kind === 'saved'
-        ? active.content.trackPoints.flat()
-        : [
-            ...(active.preparationStatus === 'ready'
-              ? active.sourceSegments
-              : active.parsed.segments
-            ).flatMap((segment) => segment.points),
-            ...(awaitsDemRelief && active.calculatedSegments !== null
-              ? active.calculatedSegments.flatMap((segment) => segment.points)
-              : []),
-          ];
-    const metrics =
-      active.kind === 'saved'
-        ? active.summary.metrics
-        : active.preparationStatus === 'ready'
-          ? active.sourceMetrics
-          : calculateTrackMetrics(active.parsed.segments);
-    const result = mapLayers?.setImportedTrackGeometry([segments]);
+    const fit = trackFitInput(active);
+    const result = mapLayers?.setImportedTrackGeometry([fit.segments]);
     if (result?.status === 'failed') return;
     renderedTrackId.current = renderKey;
     if (initiallyRestoredTrackId.current !== trackId && !redrawingSavedTrack) {
-      requestTrackMapFit(segments, elevatedPoints, metrics.bounds);
+      requestTrackMapFit(fit.segments, fit.elevatedPoints, fit.bounds);
     }
   }, [active, activePath, mapLayers, multiTrackMode, readyMultiTrackSelections]);
 
@@ -2055,14 +2033,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         );
         return;
       }
-      if (
-        event.code !== 'KeyZ' ||
-        !(event.ctrlKey || event.metaKey) ||
-        event.shiftKey ||
-        event.altKey
-      ) {
-        return;
-      }
+      if (matchKeyboardShortcut(event)?.action !== 'undo') return;
       event.preventDefault();
       undoPathEdit();
     };
@@ -2674,13 +2645,51 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ],
   );
 
+  /** Fits the camera to the open track, the multi-track selection, or the path draft. */
   const refocusActiveTrack = useCallback(() => {
-    if (active?.kind !== 'saved') return;
-    requestTrackMapFit(
-      localTrackSegments(active.content),
-      active.content.trackPoints.flat(),
-      active.summary.metrics.bounds,
+    if (multiTrackMode) {
+      if (readyMultiTrackSelections.length > 0) {
+        requestMultiTrackMapFit(readyMultiTrackSelections);
+      }
+      return;
+    }
+    if (activePath !== null) {
+      const geometry = activePath.geometry;
+      if (geometry !== null) {
+        requestTrackMapFit(
+          geometry.segments.map((segment) =>
+            segment.points.map((point) => point.coordinate),
+          ),
+          geometry.segments.flatMap((segment) => segment.points),
+          geometry.metrics.bounds,
+        );
+      } else if (activePath.path.anchors.length > 0) {
+        // A lone first point has no geometry yet.
+        requestMapFitBounds(
+          mapFitBoundsForTrack(
+            calculateTrackMetrics([
+              { points: activePath.path.anchors.map((anchor) => anchor.point) },
+            ]).bounds,
+          ),
+          15,
+        );
+      }
+      return;
+    }
+    if (active === null || active.kind === 'route-plan') return;
+    const fit = trackFitInput(active);
+    requestTrackMapFit(fit.segments, fit.elevatedPoints, fit.bounds);
+  }, [active, activePath, multiTrackMode, readyMultiTrackSelections]);
+
+  const downloadActiveTrackGpx = useCallback(() => {
+    if (active?.kind !== 'saved' || active.edit !== null) return false;
+    downloadFile(
+      safeTrackFilename(active.summary.name, 'gpx'),
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- MIME type.
+      'application/gpx+xml',
+      exportTrackAsGpx(active.summary, active.content),
     );
+    return true;
   }, [active]);
 
   const setActiveName = useCallback((name: string) => {
@@ -3477,6 +3486,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       createReversedTrack,
       deleteSaved,
       discardPreview,
+      downloadActiveTrackGpx,
       discardRoutePlan,
       startTrackMarkerPlacement,
       renameTrackMarker,
@@ -3542,6 +3552,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       importState,
       multiTrackMode,
       multiTrackSelections,
+      downloadActiveTrackGpx,
       multiTrackStatsMetrics,
       moveTrackToFolder,
       query,
@@ -3797,7 +3808,7 @@ function TrackImportZone() {
           ref={inputRef}
           hidden
           type="file"
-          accept=".gpx,.fit,.kml,application/gpx+xml,application/vnd.ant.fit,application/vnd.google-earth.kml+xml"
+          accept={trackFileAccept}
           onChange={(event) => {
             if (event.target.files !== null) void importFiles(event.target.files);
             event.target.value = '';
@@ -5014,6 +5025,59 @@ export function TracksPanel({
   );
 }
 
+function requestMultiTrackMapFit(
+  selections: readonly ReadyMultiTrackSelection[],
+): void {
+  const metrics = calculateTrackMetrics(
+    selections.flatMap((selection) =>
+      selection.content.trackPoints.map((points) => ({ points })),
+    ),
+  );
+  requestMapFitBounds(mapFitBoundsForTrack(metrics.bounds), 15);
+}
+
+/** Drawn segments, 3D-fit points, and bounds of an open track outside the path editor. */
+function trackFitInput(
+  active: PreviewTrack | SharedTrackSelection | SavedTrackSelection,
+): {
+  readonly segments: readonly (readonly TrackCoordinate[])[];
+  readonly elevatedPoints: readonly TrackPoint[];
+  readonly bounds: TrackBounds;
+} {
+  if (active.kind === 'saved') {
+    return {
+      segments: localTrackSegments(active.content),
+      elevatedPoints: active.content.trackPoints.flat(),
+      bounds: active.summary.metrics.bounds,
+    };
+  }
+  const sourceSegments =
+    active.preparationStatus === 'ready'
+      ? active.sourceSegments
+      : active.parsed.segments;
+  // The 3D fit needs relief. Saving promotes DEM samples to the primary points; before
+  // that, DEM samples join the drawn source points, which keep any span the DEM missed.
+  const demSegments =
+    active.preparationStatus === 'ready' &&
+    active.sourceProfile === null &&
+    active.calculatedSegments !== null
+      ? active.calculatedSegments
+      : [];
+  return {
+    segments: sourceSegments.map((segment) =>
+      segment.points.map((point) => point.coordinate),
+    ),
+    elevatedPoints: [
+      ...sourceSegments.flatMap((segment) => segment.points),
+      ...demSegments.flatMap((segment) => segment.points),
+    ],
+    bounds:
+      active.preparationStatus === 'ready'
+        ? active.sourceMetrics.bounds
+        : calculateTrackMetrics(active.parsed.segments).bounds,
+  };
+}
+
 function requestTrackMapFit(
   segments: readonly (readonly TrackCoordinate[])[],
   elevatedPoints: readonly TrackPoint[],
@@ -5580,6 +5644,7 @@ export function TrackDetailsPane({
     startTrackEdit,
     cancelTrackEdit,
     saveTrackEdit,
+    downloadActiveTrackGpx,
     toggleFavorite,
     toggleMultiTrackMode,
     trackWeatherPreferences,
@@ -5992,17 +6057,19 @@ export function TrackDetailsPane({
                 </Button>
               ) : (
                 <>
-                  <Tooltip title={t`Download GPX`}>
+                  <Tooltip
+                    title={
+                      <ShortcutTooltipTitle
+                        label={t`Download GPX`}
+                        shortcut={{ action: 'download-gpx' }}
+                      />
+                    }
+                  >
                     <IconButton
                       size="small"
                       aria-label={t`Download GPX`}
                       onClick={() => {
-                        downloadFile(
-                          safeTrackFilename(active.summary.name, 'gpx'),
-                          // eslint-disable-next-line lingui/no-unlocalized-strings -- MIME type.
-                          'application/gpx+xml',
-                          exportTrackAsGpx(active.summary, active.content),
-                        );
+                        downloadActiveTrackGpx();
                       }}
                     >
                       <DownloadOutlinedIcon

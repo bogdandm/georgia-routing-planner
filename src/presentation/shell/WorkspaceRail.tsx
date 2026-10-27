@@ -32,6 +32,7 @@ import {
 
 import type { WorkspaceTab } from '@/presentation/shell/uiStore';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
 import { appColors } from '@/presentation/theme/appColors';
 
 // Trail Planner is the invariant product name.
@@ -285,7 +286,15 @@ export function WorkspaceRail({
               {collapsedSummary}
             </ButtonBase>
           )}
-          <Tooltip title={t`Show navigation`} placement="right">
+          <Tooltip
+            title={
+              <ShortcutTooltipTitle
+                label={t`Show navigation`}
+                shortcut={{ action: 'toggle-navigation' }}
+              />
+            }
+            placement="right"
+          >
             <ButtonBase
               aria-label={t`Show navigation`}
               className="collapsed-navigation-segment"

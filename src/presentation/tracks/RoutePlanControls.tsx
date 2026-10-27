@@ -17,6 +17,7 @@ import {
 import type { ReactElement } from 'react';
 import type { TrackElevationPreparationProgress } from '@/application/tracks/prepareImportedTrack';
 
+import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
 import {
   canSaveTrackPath,
   canUndoTrackPath,
@@ -60,7 +61,9 @@ export function RoutePlanQuickControls({
       aria-label={t`Route planning`}
       sx={{ width: fullWidth ? '100%' : undefined, alignItems: 'center' }}
     >
-      <Tooltip title={t`Undo`}>
+      <Tooltip
+        title={<ShortcutTooltipTitle label={t`Undo`} shortcut={{ action: 'undo' }} />}
+      >
         <span>
           <IconButton
             color="inherit"

@@ -51,11 +51,12 @@ import {
 import { useUiStore, type WorkspaceTab } from '@/presentation/shell/uiStore';
 import { appColors } from '@/presentation/theme/appColors';
 import { useTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
-import { OnboardingMapLegend } from '@/presentation/shell/OnboardingMapLegend';
+import { HelpPanel } from '@/presentation/shell/HelpScreen';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 
 export type OnboardingTourStepId =
   | 'overview'
+  | 'help'
   | 'library'
   | 'track'
   | 'markers'
@@ -154,11 +155,15 @@ const tourSteps: readonly TourStep[] = [
             text: msg`Account and sync between devices. The dot shows sync status.`,
           },
           { icon: SettingsOutlinedIcon, text: msg`Language and storage.` },
-          { icon: HelpOutlineOutlinedIcon, text: msg`Show this tour again.` },
+          {
+            icon: HelpOutlineOutlinedIcon,
+            text: msg`Help: the map legend, keyboard shortcuts, and this tour.`,
+          },
         ],
       },
     ],
   },
+  { id: 'help', tab: null, title: msg`Help`, hints: [] },
   {
     id: 'library',
     tab: 'tracks',
@@ -698,11 +703,11 @@ export function OnboardingTour({
             </Popper>
           );
         })}
-        {currentStep.id === 'overview' ? (
-          // The legend and the map hint share one centred column that ends above the tour
-          // card; on short viewports the column scrolls instead of running under the card.
+        {currentStep.id === 'overview' || currentStep.id === 'help' ? (
+          // The overview's map hint and the help panel are centred in a column that ends
+          // above the tour card; on short viewports the column scrolls instead of running
+          // under the card.
           <Stack
-            spacing={2}
             sx={{
               position: 'absolute',
               top: 16,
@@ -714,10 +719,18 @@ export function OnboardingTour({
               overflowY: 'auto',
             }}
           >
-            <OnboardingMapLegend />
-            <Box sx={{ maxWidth: 380, flexShrink: 0 }}>
-              <TourHintCard rows={mapContextMenuHintRows} />
-            </Box>
+            {currentStep.id === 'overview' ? (
+              <Box sx={{ maxWidth: 380, flexShrink: 0 }}>
+                <TourHintCard rows={mapContextMenuHintRows} />
+              </Box>
+            ) : (
+              <Paper
+                elevation={8}
+                sx={{ px: 3, py: 2, flexShrink: 0, maxWidth: '100%' }}
+              >
+                <HelpPanel />
+              </Paper>
+            )}
           </Stack>
         ) : null}
         <Paper
@@ -756,6 +769,11 @@ export function OnboardingTour({
                 A short tour of controls that are easy to miss. Each step shows one
                 section.
               </Trans>
+            </Typography>
+          ) : null}
+          {currentStep.id === 'help' ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              <Trans>Help in the rail opens this screen at any time.</Trans>
             </Typography>
           ) : null}
           <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'flex-end' }}>

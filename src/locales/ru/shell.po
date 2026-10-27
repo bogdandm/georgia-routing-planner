@@ -119,6 +119,11 @@ msgstr "Добавляйте на трек свои метки."
 msgid "Administrative area"
 msgstr "Административная территория"
 
+#. js-lingui-id: 2eNzep
+#: src/presentation/shell/HelpScreen.tsx
+msgid "After you click the map."
+msgstr "После щелчка по карте."
+
 #. js-lingui-id: GXUlVd
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "All map layers, grouped by data source. Your choices are saved in this browser."
@@ -145,7 +150,7 @@ msgid "Approximate JavaScript memory"
 msgstr "Примерное использование памяти JavaScript"
 
 #. js-lingui-id: tBjguD
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Areas"
 msgstr "Площади"
 
@@ -170,7 +175,7 @@ msgid "Browser storage usage could not be measured."
 msgstr "Не удалось измерить использование хранилища браузера."
 
 #. js-lingui-id: QKoEdQ
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Cable car or ski lift"
 msgstr "Канатная дорога или подъёмник"
 
@@ -180,7 +185,7 @@ msgid "Cache Storage"
 msgstr "Кеши (Cache Storage)"
 
 #. js-lingui-id: SPC1sw
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Camp site"
 msgstr "Кемпинг"
 
@@ -194,13 +199,18 @@ msgstr "Канал"
 msgid "Cancel forecast point selection"
 msgstr "Отменить выбор точки прогноза"
 
+#. js-lingui-id: 6pnL3d
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Cancel placing, point selection, or the ruler"
+msgstr "Отменить размещение, выбор точки или линейку"
+
 #. js-lingui-id: zeLLr5
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Castle or fortress"
 msgstr "Замок или крепость"
 
 #. js-lingui-id: 9sT6Sd
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Cemetery"
 msgstr "Кладбище"
 
@@ -208,6 +218,16 @@ msgstr "Кладбище"
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Center map on forecast location"
 msgstr "Центрировать карту по месту прогноза"
+
+#. js-lingui-id: WB7uOq
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Choose a base map"
+msgstr "Выбрать вид карты"
+
+#. js-lingui-id: -GrqAy
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Choose a forecast point"
+msgstr "Выбрать точку прогноза"
 
 #. js-lingui-id: r-A1tM
 #: src/presentation/shell/OnboardingTour.tsx
@@ -235,9 +255,14 @@ msgid "Click the map to choose the route start and destination."
 msgstr "Нажмите на карту, чтобы выбрать начало и конец маршрута."
 
 #. js-lingui-id: CO3NnK
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Cliff, teeth point downhill"
 msgstr "Обрыв, зубцы направлены вниз по склону"
+
+#. js-lingui-id: yz7wBu
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Close"
+msgstr "Закрыть"
 
 #. js-lingui-id: TjLF4m
 #: src/presentation/shell/AboutDialog.tsx
@@ -274,8 +299,13 @@ msgstr "Изолинии · перезапуск обработчика"
 msgid "Coordinates are outside valid map bounds."
 msgstr "Координаты выходят за допустимые границы карты."
 
+#. js-lingui-id: QSk3H8
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Copy a link to this map view"
+msgstr "Копировать ссылку на этот вид карты"
+
 #. js-lingui-id: ummHkM
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Country border"
 msgstr "Государственная граница"
 
@@ -310,7 +340,7 @@ msgid "Developer diagnostics"
 msgstr "Диагностика для разработчиков"
 
 #. js-lingui-id: -1nBD_
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Disputed territory line"
 msgstr "Линия спорной территории"
 
@@ -325,8 +355,13 @@ msgstr "Готово"
 msgid "Download diagnostics"
 msgstr "Скачать диагностику"
 
+#. js-lingui-id: Cn8u8Y
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Download the track as GPX"
+msgstr "Скачать трек в GPX"
+
 #. js-lingui-id: XzAuUz
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Drinking water"
 msgstr "Питьевая вода"
 
@@ -395,13 +430,23 @@ msgstr "Показывает локальные журналы, проверки
 msgid "Finalizing the selected Sentinel scene…"
 msgstr "Завершение обработки выбранной сцены Sentinel…"
 
+#. js-lingui-id: 2RZDBQ
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Find my location"
+msgstr "Показать моё местоположение"
+
+#. js-lingui-id: 0WxxAN
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Fit the map to the track"
+msgstr "Показать весь трек"
+
 #. js-lingui-id: udBlLU
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Ford"
 msgstr "Брод"
 
 #. js-lingui-id: kFLJqR
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Forest"
 msgstr "Лес"
 
@@ -426,12 +471,12 @@ msgid "GitHub repository"
 msgstr "Репозиторий GitHub"
 
 #. js-lingui-id: 9K7x0L
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Glacier"
 msgstr "Ледник"
 
 #. js-lingui-id: Nhbhp7
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Guidepost"
 msgstr "Указатель"
 
@@ -444,6 +489,23 @@ msgstr "Посёлок"
 #: src/presentation/shell/StorageUsagePanel.tsx
 msgid "Heap limit"
 msgstr "Лимит кучи"
+
+#. js-lingui-id: c3XJ18
+#: src/presentation/shell/HelpScreen.tsx
+#: src/presentation/shell/OnboardingTour.tsx
+#: src/presentation/shell/WorkspaceRail.tsx
+msgid "Help"
+msgstr "Справка"
+
+#. js-lingui-id: xhxA51
+#: src/presentation/shell/OnboardingTour.tsx
+msgid "Help in the rail opens this screen at any time."
+msgstr "Кнопка «Справка» на панели навигации открывает этот экран в любой момент."
+
+#. js-lingui-id: bCyixS
+#: src/presentation/shell/OnboardingTour.tsx
+msgid "Help: the map legend, keyboard shortcuts, and this tour."
+msgstr "Справка: условные обозначения, сочетания клавиш и этот тур."
 
 #. js-lingui-id: T7ZWsE
 #: src/presentation/shell/WorkspaceShell.tsx
@@ -485,6 +547,11 @@ msgstr "Снимки подбираются для центра карты. Чт
 msgid "Isolated dwelling"
 msgstr "Отдельный дом"
 
+#. js-lingui-id: 77Emn0
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Keyboard shortcuts"
+msgstr "Сочетания клавиш"
+
 #. js-lingui-id: g9-BQD
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Lagoon"
@@ -513,7 +580,7 @@ msgid "Layers"
 msgstr "Слои"
 
 #. js-lingui-id: Ce6Hrg
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Lines"
 msgstr "Линии"
 
@@ -562,10 +629,20 @@ msgstr "Результаты поиска по локальным трекам"
 msgid "localStorage"
 msgstr "Хранилище localStorage"
 
+#. js-lingui-id: 4HBFYh
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Map"
+msgstr "Карта"
+
 #. js-lingui-id: D7O_ME
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Map and controls"
 msgstr "Карта и управление"
+
+#. js-lingui-id: 1W4Th7
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Map camera"
+msgstr "Камера карты"
 
 #. js-lingui-id: NK17ah
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -573,7 +650,7 @@ msgid "Map is unavailable"
 msgstr "Карта недоступна"
 
 #. js-lingui-id: 1W80Gh
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Map legend"
 msgstr "Условные обозначения"
 
@@ -630,7 +707,7 @@ msgid "Measuring browser storage…"
 msgstr "Измерение хранилища браузера…"
 
 #. js-lingui-id: _5yqwd
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Military area"
 msgstr "Военная зона"
 
@@ -650,13 +727,13 @@ msgid "Mosaic fills the whole view with the newest clear images."
 msgstr "Мозаика заполняет весь экран свежими снимками без облаков."
 
 #. js-lingui-id: VSXxxV
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Mountain hut"
 msgstr "Горный приют"
 
 #. js-lingui-id: psYNdw
 #: src/presentation/shell/formatPlaceSearchCategory.ts
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Mountain pass"
 msgstr "Горный перевал"
 
@@ -674,6 +751,11 @@ msgstr "Горный гребень"
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Mountain saddle"
 msgstr "Горная седловина"
+
+#. js-lingui-id: O0r946
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Move the map"
+msgstr "Сдвинуть карту"
 
 #. js-lingui-id: 19ClrL
 #: src/presentation/shell/AboutDialog.tsx
@@ -695,6 +777,11 @@ msgstr "Новая метка"
 msgid "Next"
 msgstr "Далее"
 
+#. js-lingui-id: 8akHBr
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Next or previous base map"
+msgstr "Следующий или предыдущий вид карты"
+
 #. js-lingui-id: 19XTPe
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "No geographic matches found."
@@ -709,6 +796,11 @@ msgstr "В радиусе примерно {exhaustedDistance} подходящ�
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "No matching places were found."
 msgstr "Подходящие места не найдены."
+
+#. js-lingui-id: eFe3eR
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Open a track file"
+msgstr "Открыть файл трека"
 
 #. js-lingui-id: 6plAyV
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -740,8 +832,13 @@ msgstr "Открыть windy.com"
 msgid "Open workspace"
 msgstr "Открыть рабочую область"
 
+#. js-lingui-id: BzEFor
+#: src/presentation/shell/HelpScreen.tsx
+msgid "or"
+msgstr "или"
+
 #. js-lingui-id: GcjmF4
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Orchards, vineyards, plantings"
 msgstr "Сады, виноградники, посадки"
 
@@ -751,7 +848,7 @@ msgid "Origin quota"
 msgstr "Квота хранилища сайта"
 
 #. js-lingui-id: XDdz5j
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Other attraction"
 msgstr "Прочая достопримечательность"
 
@@ -766,13 +863,13 @@ msgid "Other place"
 msgstr "Другое место"
 
 #. js-lingui-id: K2-Eko
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Path or track"
 msgstr "Тропа или грунтовка"
 
 #. js-lingui-id: kp_IdV
 #: src/presentation/shell/formatPlaceSearchCategory.ts
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Peak"
 msgstr "Вершина"
 
@@ -780,6 +877,11 @@ msgstr "Вершина"
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Pick a point on the map to get its forecast."
 msgstr "Выберите точку на карте, чтобы получить прогноз."
+
+#. js-lingui-id: VqQZS9
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Place a marker"
+msgstr "Поставить метку"
 
 #. js-lingui-id: -sDbe3
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -826,6 +928,11 @@ msgstr "Результаты поиска мест"
 msgid "Place search timed out. Try again."
 msgstr "Сервис поиска мест не ответил вовремя. Повторите попытку."
 
+#. js-lingui-id: 1p922J
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Plan a route"
+msgstr "Построить маршрут"
+
 #. js-lingui-id: jiQuHZ
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Plan a route on the map"
@@ -857,7 +964,7 @@ msgid "Point weather forecast."
 msgstr "Прогноз погоды для точки."
 
 #. js-lingui-id: COUcFd
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Points"
 msgstr "Точки"
 
@@ -877,7 +984,7 @@ msgid "Preparing the selected Sentinel scene…"
 msgstr "Подготовка выбранной сцены Sentinel…"
 
 #. js-lingui-id: kCRgce
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Protected area"
 msgstr "Охраняемая территория"
 
@@ -937,7 +1044,7 @@ msgid "Return to individual Sentinel scenes"
 msgstr "Вернуться к отдельным сценам Sentinel"
 
 #. js-lingui-id: c34YpN
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Ridge"
 msgstr "Хребет"
 
@@ -952,14 +1059,19 @@ msgid "River"
 msgstr "Река"
 
 #. js-lingui-id: 9HDg7_
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "River or stream"
 msgstr "Река или ручей"
 
 #. js-lingui-id: ijDmbQ
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Road"
 msgstr "Дорога"
+
+#. js-lingui-id: BulyBf
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Rotate"
+msgstr "Повернуть"
 
 #. js-lingui-id: dN_PDN
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -967,7 +1079,7 @@ msgid "Route planning is unavailable because map routing data is not configured"
 msgstr "Построение маршрута недоступно: данные маршрутизации карты не настроены"
 
 #. js-lingui-id: 2mX_wb
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Ruins"
 msgstr "Руины"
 
@@ -1021,6 +1133,11 @@ msgstr "Поиск спутниковых сцен недоступен из-з�
 msgid "Save"
 msgstr "Сохранить"
 
+#. js-lingui-id: rZBFUL
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Save the track"
+msgstr "Сохранить трек"
+
 #. js-lingui-id: Ht8qdB
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "Saved local track"
@@ -1037,7 +1154,7 @@ msgid "Saved markers are unavailable"
 msgstr "Сохранённые метки недоступны"
 
 #. js-lingui-id: uNxNc9
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Scree"
 msgstr "Осыпь"
 
@@ -1061,10 +1178,20 @@ msgstr "Искать на карте"
 msgid "Search places or coordinates"
 msgstr "Искать места или координаты"
 
+#. js-lingui-id: Vbx563
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Search places, coordinates, and tracks"
+msgstr "Искать места, координаты и треки"
+
 #. js-lingui-id: Ugswaw
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Search places, coordinates, and your saved tracks."
 msgstr "Поиск мест, координат и ваших сохранённых треков."
+
+#. js-lingui-id: acV8WM
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Search satellite scenes at the map centre"
+msgstr "Найти спутниковые снимки в центре карты"
 
 #. js-lingui-id: kaDhS6
 #: src/presentation/shell/MapSearchPlaceholder.tsx
@@ -1082,7 +1209,7 @@ msgid "Searching the Earth Search Sentinel catalog…"
 msgstr "Поиск в каталоге Sentinel сервиса Earth Search…"
 
 #. js-lingui-id: c4PXEU
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Seasonal stream"
 msgstr "Пересыхающий ручей"
 
@@ -1138,7 +1265,7 @@ msgid "Share"
 msgstr "Поделиться"
 
 #. js-lingui-id: Gd8EbX
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Shelter"
 msgstr "Укрытие"
 
@@ -1162,15 +1289,15 @@ msgstr "Показать навигацию"
 msgid "Show navigation from Trail Planner logo"
 msgstr "Логотип Trail Planner: показать навигацию"
 
-#. js-lingui-id: hnt53v
-#: src/presentation/shell/OnboardingTour.tsx
-msgid "Show this tour again."
-msgstr "Показать этот тур снова."
+#. js-lingui-id: iUVhAJ
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Show or hide the navigation"
+msgstr "Показать или скрыть навигацию"
 
-#. js-lingui-id: fOJVzK
-#: src/presentation/shell/WorkspaceRail.tsx
-msgid "Show tour"
-msgstr "Показать тур"
+#. js-lingui-id: 9aOBeu
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Show Sentinel-2 imagery"
+msgstr "Показать снимки Sentinel-2"
 
 #. js-lingui-id: 5HHzPM
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -1183,7 +1310,7 @@ msgid "Show your location."
 msgstr "Показать ваше местоположение."
 
 #. js-lingui-id: 1RgOFJ
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Shrubs and heath"
 msgstr "Кустарник и пустошь"
 
@@ -1238,14 +1365,24 @@ msgid "Stream"
 msgstr "Ручей"
 
 #. js-lingui-id: SMpAF6
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Swamp"
 msgstr "Болото"
+
+#. js-lingui-id: mbLxqp
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Switch between 2D and 3D"
+msgstr "Переключить 2D и 3D"
 
 #. js-lingui-id: lbWqJN
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Switch to Sentinel Mosaic"
 msgstr "Переключиться на мозаику Sentinel"
+
+#. js-lingui-id: _8p4GB
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Take a tour!"
+msgstr "Пройти тур!"
 
 #. js-lingui-id: WMkqRc
 #: src/presentation/shell/WorkspaceErrorBoundary.tsx
@@ -1271,6 +1408,11 @@ msgstr "Карта работает с ограниченной функцион
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "This is an example track. It is not saved and will be removed after the tour."
 msgstr "Это пример трека. Он не сохранён и будет удалён после тура."
+
+#. js-lingui-id: UxBCVM
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Tilt"
+msgstr "Наклонить"
 
 #. js-lingui-id: m4CMLN
 #: src/presentation/shell/OperationalStatus.tsx
@@ -1303,11 +1445,32 @@ msgid "Track name"
 msgstr "Название трека"
 
 #. js-lingui-id: 2eFlmt
+#: src/presentation/shell/HelpScreen.tsx
 #: src/presentation/shell/OnboardingTour.tsx
 #: src/presentation/shell/WorkspaceRail.tsx
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Tracks"
 msgstr "Треки"
+
+#. js-lingui-id: TgfW9j
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Turn the map north"
+msgstr "Повернуть карту на север"
+
+#. js-lingui-id: J7N2qS
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Turn the OSM overlay on or off"
+msgstr "Включить или выключить OSM поверх снимков"
+
+#. js-lingui-id: LmxoRn
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Turn the ruler on or off"
+msgstr "Включить или выключить линейку"
+
+#. js-lingui-id: oYjqAY
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Undo the last edit"
+msgstr "Отменить последнее изменение"
 
 #. js-lingui-id: 5f0wUC
 #: src/presentation/shell/MapSearchPlaceholder.tsx
@@ -1351,7 +1514,7 @@ msgid "Vector map"
 msgstr "Векторная карта"
 
 #. js-lingui-id: 0o7JLj
-#: src/presentation/shell/OnboardingMapLegend.tsx
+#: src/presentation/shell/MapLegend.tsx
 msgid "Viewpoint"
 msgstr "Смотровая площадка"
 
@@ -1407,6 +1570,11 @@ msgstr "Карта погоды недоступна"
 msgid "Weather map: clouds, rain, and wind."
 msgstr "Карта погоды: облака, осадки и ветер."
 
+#. js-lingui-id: pmUArF
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Workspace"
+msgstr "Рабочая область"
+
 #. js-lingui-id: V6AIOn
 #: src/presentation/shell/WorkspaceRail.tsx
 msgid "Workspace navigation"
@@ -1421,6 +1589,11 @@ msgstr "Разделы рабочей области"
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "You can drop a GPX, FIT, or KML file anywhere on the page."
 msgstr "Файл GPX, FIT или KML можно перетащить в любое место страницы."
+
+#. js-lingui-id: liG8e7
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Zoom in or out"
+msgstr "Приблизить или отдалить"
 
 #. js-lingui-id: FX4c9a
 #: src/presentation/shell/SettingsDialog.tsx

@@ -54,7 +54,8 @@ here**, **Search satellite scenes here**, and **Show weather forecast**; these a
 reminders of the related global shortcuts, which act on the current view, through the
 next map click, or at the map center, not keys of the menu. Devices whose primary
 pointer is coarse, such as phones and tablets, usually have no keyboard and show no
-keycaps.
+keycaps. The [help screen](./features.md#help-screen) lists every shortcut with its
+keys.
 
 ## Map controls
 

@@ -156,23 +156,37 @@ export function matchKeyboardShortcut(event: KeyboardEvent): KeyboardShortcut | 
   return binding.shortcut;
 }
 
+/** Shift keycap label, using the macOS symbol on Apple platforms. */
+export function shiftKeyLabel(): string {
+  return isMacPlatform() ? '⇧' : 'Shift';
+}
+
+/** Keycap labels for every binding of a shortcut, in binding order. */
+export function keyboardShortcutKeyCombinations(
+  shortcut: KeyboardShortcut,
+): readonly (readonly string[])[] {
+  const mac = isMacPlatform();
+  return bindings
+    .filter((candidate) =>
+      shortcut.action === 'select-basemap'
+        ? candidate.shortcut.action === 'select-basemap' &&
+          candidate.shortcut.preset === shortcut.preset
+        : candidate.shortcut.action === shortcut.action,
+    )
+    .map((binding) => {
+      switch (binding.modifier) {
+        case 'mod':
+          return [mac ? '⌘' : 'Ctrl', binding.key];
+        case 'shift':
+          return [shiftKeyLabel(), binding.key];
+        case 'none':
+          return [binding.key];
+      }
+    });
+}
+
 /** Keycap labels for a shortcut's first binding, using macOS symbols on Apple platforms. */
 export function keyboardShortcutKeys(shortcut: KeyboardShortcut): readonly string[] {
-  const binding = bindings.find((candidate) =>
-    shortcut.action === 'select-basemap'
-      ? candidate.shortcut.action === 'select-basemap' &&
-        candidate.shortcut.preset === shortcut.preset
-      : candidate.shortcut.action === shortcut.action,
-  );
-  if (binding === undefined) return [];
-  const mac = isMacPlatform();
-  switch (binding.modifier) {
-    case 'mod':
-      return [mac ? '⌘' : 'Ctrl', binding.key];
-    case 'shift':
-      return [mac ? '⇧' : 'Shift', binding.key];
-    case 'none':
-      return [binding.key];
-  }
+  return keyboardShortcutKeyCombinations(shortcut)[0] ?? [];
 }
 /* eslint-enable */

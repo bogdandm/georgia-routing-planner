@@ -58,6 +58,7 @@ import {
   OnboardingTour,
   type OnboardingTourStepId,
 } from '@/presentation/shell/OnboardingTour';
+import { HelpDialog } from '@/presentation/shell/HelpScreen';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
 import {
@@ -214,6 +215,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     return { top, right: mapCameraMargin, bottom: top, left };
   }, [contextualSidebarWidth, navigationCollapsed, smartphoneViewport]);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [satellitePaneOpen, setSatellitePaneOpen] = useState(false);
   const [mobileTrackDetailsExpanded, setMobileTrackDetailsExpanded] = useState(false);
   const [multiTrackDetailsDismissed, setMultiTrackDetailsDismissed] = useState(false);
@@ -973,14 +975,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
             onOpenSettings={() => {
               setSettingsOpen(true);
             }}
-            onStartTour={
-              smartphoneViewport
-                ? null
-                : () => {
-                    setSettingsOpen(false);
-                    setTourStep(firstOnboardingTourStep);
-                  }
-            }
+            onOpenHelp={() => {
+              setHelpOpen(true);
+            }}
             onShare={() => {
               openMapShare(window.location.href, null);
             }}
@@ -1202,6 +1199,21 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           setAboutOpen(false);
         }}
         triggerRef={aboutTriggerRef}
+      />
+      <HelpDialog
+        open={helpOpen}
+        onClose={() => {
+          setHelpOpen(false);
+        }}
+        onStartTour={
+          smartphoneViewport
+            ? null
+            : () => {
+                setHelpOpen(false);
+                setSettingsOpen(false);
+                setTourStep(firstOnboardingTourStep);
+              }
+        }
       />
       <SettingsDialog
         developerMode={developerMode}

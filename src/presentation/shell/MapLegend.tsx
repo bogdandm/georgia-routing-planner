@@ -1,7 +1,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, Paper, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useEffect, useId, useRef } from 'react';
 
 import {
@@ -437,20 +437,15 @@ function LegendSwatch({ symbol }: { readonly symbol: LegendSymbol }) {
 /* eslint-enable lingui/no-unlocalized-strings */
 
 /**
- * Explains the hiking basemap's symbols in the first tour step. Swatches are drawn
- * from the same generated images and palette as the map style, so the legend cannot
- * drift from what the map shows.
+ * Explains the hiking basemap's symbols on the help screen. Swatches are drawn from the
+ * same generated images and palette as the map style, so the legend cannot drift from
+ * what the map shows.
  */
-export function OnboardingMapLegend() {
+export function MapLegend() {
   const { i18n } = useLingui();
   const titleId = useId();
   return (
-    <Paper
-      elevation={8}
-      role="note"
-      aria-labelledby={titleId}
-      sx={{ px: 2, py: 1.5, flexShrink: 0, maxWidth: 'min(720px, calc(100vw - 48px))' }}
-    >
+    <Box component="section" aria-labelledby={titleId} sx={{ minWidth: 0 }}>
       <Typography
         id={titleId}
         component="h3"
@@ -462,7 +457,8 @@ export function OnboardingMapLegend() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+          gap: 2,
           columnGap: 3,
         }}
       >
@@ -489,6 +485,6 @@ export function OnboardingMapLegend() {
           </Stack>
         ))}
       </Box>
-    </Paper>
+    </Box>
   );
 }

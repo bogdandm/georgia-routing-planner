@@ -68,13 +68,22 @@ describe('keyboard shortcut matching', () => {
     expect(matchOn(input, { code: 'KeyZ', key: 'z', ctrlKey: true })).toBeNull();
   });
 
-  it('ignores every shortcut inside a modal dialog', () => {
+  it('ignores every shortcut inside a modal dialog but still blocks Save page', () => {
     const button = mountTarget(
       '<div aria-modal="true"><button data-target></button></div>',
     );
+    const save = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      code: 'KeyS',
+      ctrlKey: true,
+      key: 's',
+    });
+    button.dispatchEvent(save);
 
     expect(matchOn(button, { code: 'KeyN', key: 'n' })).toBeNull();
-    expect(matchOn(button, { code: 'KeyS', key: 's', ctrlKey: true })).toBeNull();
+    expect(matchKeyboardShortcut(save)).toBeNull();
+    expect(save.defaultPrevented).toBe(true);
   });
 
   it('keeps menu typeahead unless the menu opts into shortcuts', () => {
@@ -94,6 +103,9 @@ describe('keyboard shortcut matching', () => {
 
   it('ignores auto-repeated keys', () => {
     expect(matchOn(document.body, { code: 'KeyN', key: 'n', repeat: true })).toBeNull();
+    expect(
+      matchOn(document.body, { code: 'KeyS', key: 's', ctrlKey: true, repeat: true }),
+    ).toBeNull();
   });
 
   it('cycles basemaps forward with 0 and backward with Shift+0', () => {

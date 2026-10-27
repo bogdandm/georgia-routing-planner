@@ -35,12 +35,13 @@ pair must not be held. Ctrl+F, Ctrl+E, and Ctrl+O stay text-editing keys on macO
 | Ctrl+E            | ⌘E        | Downloads the open saved track as GPX                                                                                | No saved track is open, or it is being edited                       |
 | Escape            | Escape    | Cancels marker placement and forecast-point selection, ends the ruler, and ends point insertion or a point move      | —                                                                   |
 
-Shortcuts are inactive while focus is in a text field, except Ctrl/⌘+F, S, O, and E;
-inside a modal dialog, including the onboarding tour; and inside menus and lists, so
-their type-to-select keeps working. The map-layer chooser is the exception: the digit
-keys keep switching layers while it has focus. Map shortcuts are inactive while the map
-is hidden behind the phone workspace or the desktop comparison grid. Auto-repeated keys
-are ignored.
+Shortcuts are inactive while focus is in a text field, except Ctrl/⌘+F, S, O, and E, and
+inside a modal dialog, including the onboarding tour. Inside menus and listboxes, plain
+and Shift shortcuts are inactive so type-to-select keeps working, while Ctrl/⌘ shortcuts
+still work. The map-layer chooser is the exception: the digit keys keep switching layers
+while it has focus. Map shortcuts are inactive while the map is hidden behind the phone
+workspace or the desktop comparison grid. Auto-repeated keys are ignored. Ctrl/⌘+S never
+opens the browser's **Save page**, even where shortcuts are inactive.
 
 Buttons with a shortcut show its keys as keycaps in their tooltip: 2D and 3D, the layer
 chooser, the ruler, **Plan route**, **New marker**, forecast-point selection, **Undo**,

@@ -113,9 +113,12 @@ function eventModifier(event: KeyboardEvent): ShortcutModifier | null {
  * belongs to the focused control: a modal dialog, a text field (except bindings marked
  * `inEditable`), or a menu/listbox whose typeahead needs plain keys. A menu opts back in with
  * the `data-keyboard-shortcuts` attribute.
+ *
+ * Mod+S is reserved: where it is suppressed (a dialog, an auto-repeat, IME composition) this
+ * still prevents its default, so the browser's Save page never opens.
  */
 export function matchKeyboardShortcut(event: KeyboardEvent): KeyboardShortcut | null {
-  if (event.defaultPrevented || event.repeat || event.isComposing) return null;
+  if (event.defaultPrevented) return null;
   const modifier = eventModifier(event);
   if (modifier === null) return null;
   const binding = bindings.find(
@@ -124,7 +127,10 @@ export function matchKeyboardShortcut(event: KeyboardEvent): KeyboardShortcut | 
   if (binding === undefined) return null;
 
   const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest('[aria-modal="true"]')) return null;
+  if (event.repeat || event.isComposing || target?.closest('[aria-modal="true"]')) {
+    if (binding.shortcut.action === 'save') event.preventDefault();
+    return null;
+  }
   if (
     !binding.inEditable &&
     target !== null &&

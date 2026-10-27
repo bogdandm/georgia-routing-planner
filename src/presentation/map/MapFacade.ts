@@ -110,6 +110,9 @@ export interface MapFacade {
     visibleAreaPadding?: MapFitPadding,
   ): void;
 
+  /** Turns the camera north; 3D keeps the directed-fit pitch. */
+  resetNorth(): void;
+
   /**
    * Fits a serializable geographic area without exposing native MapLibre bounds. With a
    * travel path in 3D, the camera faces along it at a fixed pitch and keeps its points

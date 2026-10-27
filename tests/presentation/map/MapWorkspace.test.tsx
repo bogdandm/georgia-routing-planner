@@ -2427,6 +2427,74 @@ describe('MapWorkspace', () => {
     });
   });
 
+  it('switches and cycles basemaps with the digit keys', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    const setMapLayerPreset = vi
+      .spyOn(mapLayers, 'setMapLayerPreset')
+      .mockReturnValue({ status: 'success' });
+    vi.spyOn(mapLayers, 'getAppliedScene').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    useUiStore.setState({ activeTab: 'layers', mobileWorkspaceOpen: false });
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Shortcut map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Shortcut map');
+
+    // The mocked layer service keeps Vector OSM active between the keys.
+    await user.keyboard('2');
+    await user.keyboard('0');
+    await user.keyboard('{Shift>}0{/Shift}');
+    expect(setMapLayerPreset.mock.calls).toEqual([
+      ['google-satellite'],
+      ['google-satellite'],
+      ['soviet-topographic'],
+    ]);
+
+    // Without a scene or mosaic, 7 neither applies Sentinel-2 nor opens Satellite.
+    await user.keyboard('7');
+    expect(setMapLayerPreset).toHaveBeenCalledTimes(3);
+    expect(useUiStore.getState().activeTab).toBe('layers');
+  });
+
+  it('turns north, toggles 3D, and runs the ruler from the keyboard', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Keyboard map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Keyboard map');
+
+    await user.keyboard('n');
+    expect(facade.northResets).toBe(1);
+
+    await user.keyboard('o');
+    await waitFor(() => {
+      expect(facade.terrainModeRequests).toEqual(['terrain']);
+    });
+
+    await user.keyboard('r');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('measurement');
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(facade.interactionModes.at(-1)).toBe('default');
+    });
+    expect(screen.getByRole('button', { name: 'Measure distance' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
   it('toggles the OSM overlay independently and opens the full Layers tab', async () => {
     const user = userEvent.setup();
     const services = createTestServices();

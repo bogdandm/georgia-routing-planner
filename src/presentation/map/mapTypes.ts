@@ -13,6 +13,18 @@ export type MapLayerPreset =
   | 'soviet-topographic'
   | 'sentinel-2';
 
+/** Basemap order shared by the layer chooser and the digit keyboard shortcuts. */
+export const basemapPresets = [
+  'vector-osm',
+  'google-satellite',
+  'bing-satellite',
+  'esri-satellite',
+  'napr-orthophoto',
+  'soviet-topographic',
+] as const satisfies readonly MapLayerPreset[];
+
+export type BasemapPreset = (typeof basemapPresets)[number];
+
 export interface MapCoordinate {
   readonly longitude: number;
   readonly latitude: number;

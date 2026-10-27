@@ -131,14 +131,15 @@ describe('MapViewControls', () => {
 
     const menu = await screen.findByRole('menu');
     const choices = screen.getAllByRole('menuitemradio');
+    // Each label is followed by the keycap of its digit shortcut.
     expect(choices.map((choice) => choice.textContent)).toEqual([
-      'Vector OSM',
-      'Google Satellite',
-      'Bing Aerial',
-      'Esri World Imagery',
-      'NAPR Orthophoto',
-      'Soviet Topographic',
-      'Sentinel-2',
+      'Vector OSM1',
+      'Google Satellite2',
+      'Bing Aerial3',
+      'Esri World Imagery4',
+      'NAPR Orthophoto5',
+      'Soviet Topographic6',
+      'Sentinel-27',
     ]);
     expect(menu.querySelectorAll('img')).toHaveLength(0);
     expect(

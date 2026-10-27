@@ -20,6 +20,7 @@ import type {
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -31,6 +32,7 @@ import Map, {
   GeolocateControl,
   NavigationControl,
   Marker,
+  type GeolocateControlInstance,
   type MapRef,
 } from 'react-map-gl/maplibre';
 import { useStore } from 'zustand';
@@ -58,6 +60,7 @@ import {
 import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
+  basemapPresets,
   defaultGeorgiaCamera,
   type MapCamera,
   type MapCoordinate,
@@ -65,6 +68,7 @@ import {
   type MapLayerPreset,
   type MapPointInspection,
 } from '@/presentation/map/mapTypes';
+import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
@@ -384,6 +388,7 @@ export function MapWorkspace({
   );
   const [copyError, setCopyError] = useState(false);
   const [layerChangeFailed, setLayerChangeFailed] = useState(false);
+  const geolocateControl = useRef<GeolocateControlInstance | null>(null);
   const smartphoneViewport = useMediaQuery('(width < 900px)');
   // Touch-first devices have no reliable right click, so the tap popup carries the actions.
   const touchPointer = useMediaQuery('(pointer: coarse)');
@@ -451,6 +456,7 @@ export function MapWorkspace({
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
+  const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const editablePath =
     activeTab === 'tracks' &&
@@ -676,6 +682,9 @@ export function MapWorkspace({
     mapLayers === null ||
     snapshot.lifecycle === 'loading' ||
     snapshot.lifecycle === 'fatal';
+  const hybridOverlayDisabled =
+    activeLayerPreset === null || activeLayerPreset === 'vector-osm';
+  const hybridOverlayEnabled = openStreetMapOpacity > 0;
 
   useEffect(() => {
     const basemap = sharedMapView?.basemap ?? null;
@@ -959,18 +968,28 @@ export function MapWorkspace({
   }, []);
 
   useEffect(() => {
-    if (markerPlacement === null && !weatherPointSelectionActive) return;
+    if (
+      markerPlacement === null &&
+      !weatherPointSelectionActive &&
+      !measurementActive
+    ) {
+      return;
+    }
     const cancelOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      cancelMarkerPlacement();
-      cancelWeatherPointSelection();
+      if (markerPlacement !== null || weatherPointSelectionActive) {
+        cancelMarkerPlacement();
+        cancelWeatherPointSelection();
+      } else {
+        setMeasurementPoints(null);
+      }
     };
     window.addEventListener('keydown', cancelOnEscape);
     return () => {
       window.removeEventListener('keydown', cancelOnEscape);
     };
-  }, [markerPlacement, weatherPointSelectionActive]);
+  }, [markerPlacement, measurementActive, weatherPointSelectionActive]);
   const mapStyle = useMemo(() => {
     if (mapProviderConfiguration.status !== 'valid') return unavailableMapStyle;
     return createHikingMapStyle(mapProviderConfiguration.value);
@@ -1702,6 +1721,88 @@ export function MapWorkspace({
     setMeasurementPoints(active ? [] : null);
   }, []);
 
+  // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.
+  const mainMapHidden =
+    (smartphoneViewport && mobileWorkspaceOpen) ||
+    (comparisonOpen && activeTab === 'satellite' && !smartphoneViewport);
+  const handleMapShortcut = useEffectEvent((event: KeyboardEvent) => {
+    const shortcut = matchKeyboardShortcut(event);
+    if (shortcut === null || mainMapHidden) return;
+    switch (shortcut.action) {
+      case 'north-up':
+        facade.resetNorth();
+        break;
+      case 'toggle-terrain': {
+        if (
+          terrainState === 'enabling' ||
+          terrainState === 'disabling' ||
+          snapshot.lifecycle === 'loading' ||
+          snapshot.lifecycle === 'fatal'
+        ) {
+          return;
+        }
+        const target = terrainState === 'terrain' ? 'flat' : 'terrain';
+        if (target === 'terrain' && mosaicActive) return;
+        handleTerrainControlChange(target);
+        break;
+      }
+      case 'toggle-ruler':
+        handleMeasurementActiveChange(!measurementActive);
+        break;
+      case 'geolocate':
+        // The test canvas has no native geolocate control.
+        if (geolocateControl.current === null) return;
+        geolocateControl.current.trigger();
+        break;
+      case 'select-basemap':
+        if (layerPresetDisabled) return;
+        handleLayerPresetChange(shortcut.preset);
+        break;
+      case 'show-sentinel-2':
+        // Without loaded imagery the menu row would navigate to Satellite; the key does not.
+        if (
+          layerPresetDisabled ||
+          (mapLayers.getAppliedScene() === null && !mosaicImageryAvailable)
+        ) {
+          return;
+        }
+        handleLayerPresetChange('sentinel-2');
+        break;
+      case 'toggle-osm-overlay':
+        if (hybridOverlayDisabled) return;
+        handleHybridOverlayChange(!hybridOverlayEnabled);
+        break;
+      case 'next-basemap':
+      case 'previous-basemap': {
+        if (layerPresetDisabled) return;
+        const step = shortcut.action === 'next-basemap' ? 1 : -1;
+        const index = basemapPresets.findIndex(
+          (preset) => preset === activeLayerPreset,
+        );
+        // Sentinel-2 or no preset starts the cycle from its first or last basemap.
+        const from = index === -1 ? (step === 1 ? -1 : basemapPresets.length) : index;
+        const next =
+          basemapPresets[(from + step + basemapPresets.length) % basemapPresets.length];
+        if (next === undefined) return;
+        handleLayerPresetChange(next);
+        break;
+      }
+      default:
+        // Workspace, search, and track shortcuts belong to their own listeners.
+        return;
+    }
+    event.preventDefault();
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      handleMapShortcut(event);
+    };
+    window.addEventListener('keydown', listener);
+    return () => {
+      window.removeEventListener('keydown', listener);
+    };
+  }, []);
+
   let cameraNoticeText: string | null = null;
   if (cameraNotice === 'camera-save-failed') {
     cameraNoticeText = t`The current camera could not be saved. Map interaction is still available.`;
@@ -1765,6 +1866,7 @@ export function MapWorkspace({
               visualizePitch
             />
             <GeolocateControl
+              ref={geolocateControl}
               position="top-right"
               fitBoundsOptions={{ duration: 650, linear: true, maxZoom: 15 }}
               positionOptions={{ enableHighAccuracy: true }}
@@ -1774,10 +1876,8 @@ export function MapWorkspace({
             />
             <MapViewControlsControl
               activeLayerPreset={activeLayerPreset}
-              hybridOverlayDisabled={
-                activeLayerPreset === null || activeLayerPreset === 'vector-osm'
-              }
-              hybridOverlayEnabled={openStreetMapOpacity > 0}
+              hybridOverlayDisabled={hybridOverlayDisabled}
+              hybridOverlayEnabled={hybridOverlayEnabled}
               terrainDisabled={mosaicActive}
               layerPresetDisabled={layerPresetDisabled}
               onLayerPresetChange={handleLayerPresetChange}
@@ -1888,10 +1988,8 @@ export function MapWorkspace({
       resolvedMapCanvas !== undefined ? (
         <MapViewControls
           activeLayerPreset={activeLayerPreset}
-          hybridOverlayDisabled={
-            activeLayerPreset === null || activeLayerPreset === 'vector-osm'
-          }
-          hybridOverlayEnabled={openStreetMapOpacity > 0}
+          hybridOverlayDisabled={hybridOverlayDisabled}
+          hybridOverlayEnabled={hybridOverlayEnabled}
           terrainDisabled={mosaicActive}
           layerPresetDisabled={layerPresetDisabled}
           onLayerPresetChange={handleLayerPresetChange}

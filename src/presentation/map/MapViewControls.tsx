@@ -8,6 +8,7 @@ import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import {
+  Box,
   CircularProgress,
   ClickAwayListener,
   ListItemIcon,
@@ -73,6 +74,9 @@ const sentinelPresetLabel = 'Sentinel-2';
 const sovietTopographicLegendUrl =
   // eslint-disable-next-line lingui/no-unlocalized-strings -- External reference URL.
   'https://www.planinite.info/Maps/pdf/%D0%A3%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5_%D0%B7%D0%BD%D0%B0%D0%BA%D0%B8_%D1%82%D0%BE%D0%BF%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D1%85_%D0%BA%D0%B0%D1%80%D1%82_%D0%A1%D0%A1%D0%A1%D0%A0-1966.pdf';
+/** Anchors the symbol-guide item to the end of the Soviet Topographic label. */
+// eslint-disable-next-line lingui/no-unlocalized-strings -- CSS anchor name.
+const legendAnchorName = '--soviet-topographic-legend';
 
 class MapViewControlHost implements IControl {
   readonly element: HTMLDivElement = document.createElement('div');
@@ -337,7 +341,9 @@ export function MapViewControls({
             >
               {basemapPresets.map((preset) => {
                 // The symbol guide is a sibling item: a link nested inside a menuitemradio
-                // would be an inaccessible nested interactive control.
+                // would be an inaccessible nested interactive control. The row keeps an empty
+                // slot after its label, and the guide is drawn over that slot through CSS
+                // anchor positioning, so the row's keycap stays in the common column.
                 const hasLegend = preset === 'soviet-topographic';
                 return (
                   <Fragment key={preset}>
@@ -348,23 +354,32 @@ export function MapViewControls({
                       }}
                       role="menuitemradio"
                       selected={activeLayerPreset === preset}
-                      sx={
-                        hasLegend
-                          ? {
-                              // Both row halves use one fixed height so their selection and
-                              // hover backgrounds line up regardless of their content.
-                              display: 'inline-flex',
-                              height: 44,
-                              minHeight: 44,
-                              px: 2,
-                              py: 0,
-                              verticalAlign: 'top',
-                              width: 'calc(100% - 44px)',
-                            }
-                          : { minHeight: 44, minWidth: 240, px: 2 }
-                      }
+                      // The guide slot is as tall as the row, so that row drops its padding.
+                      sx={{
+                        minHeight: 44,
+                        minWidth: 240,
+                        px: 2,
+                        ...(hasLegend ? { py: 0 } : {}),
+                      }}
                     >
-                      <ListItemText primary={t(basemapLabels[preset])} />
+                      <ListItemText
+                        primary={t(basemapLabels[preset])}
+                        sx={hasLegend ? { flex: 'none' } : undefined}
+                      />
+                      {hasLegend ? (
+                        <>
+                          <Box
+                            aria-hidden
+                            sx={{
+                              anchorName: legendAnchorName,
+                              flex: 'none',
+                              height: 44,
+                              width: 44,
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }} />
+                        </>
+                      ) : null}
                       <KeyboardShortcutKeys
                         shortcut={{ action: 'select-basemap', preset }}
                       />
@@ -382,12 +397,14 @@ export function MapViewControls({
                           role="menuitem"
                           target="_blank"
                           sx={{
-                            display: 'inline-flex',
                             height: 44,
                             justifyContent: 'center',
+                            left: 'anchor(left)',
                             minHeight: 44,
                             p: 0,
-                            verticalAlign: 'top',
+                            position: 'absolute',
+                            positionAnchor: legendAnchorName,
+                            top: 'anchor(top)',
                             width: 44,
                           }}
                         >

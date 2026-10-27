@@ -19,7 +19,8 @@ export type KeyboardShortcutAction =
   | 'undo'
   | 'save'
   | 'import-track'
-  | 'download-gpx';
+  | 'download-gpx'
+  | 'copy-map-link';
 
 export type KeyboardShortcut =
   | { readonly action: KeyboardShortcutAction }
@@ -92,6 +93,8 @@ const bindings: readonly ShortcutBinding[] = [
   withMod('KeyS', 'S', 'save', true),
   withMod('KeyO', 'O', 'import-track', true),
   withMod('KeyE', 'E', 'download-gpx', true),
+  // Text fields and selected page text keep the native copy.
+  withMod('KeyC', 'C', 'copy-map-link', false),
 ];
 
 export function isMacPlatform(): boolean {
@@ -112,7 +115,8 @@ function eventModifier(event: KeyboardEvent): ShortcutModifier | null {
  * Resolves a global keydown to an application shortcut, or null when the key is not bound or
  * belongs to the focused control: a modal dialog, a text field (except bindings marked
  * `inEditable`), or a menu/listbox whose typeahead needs plain keys. A menu opts back in with
- * the `data-keyboard-shortcuts` attribute.
+ * the `data-keyboard-shortcuts` attribute. Mod+C yields to the native copy while page text
+ * is selected.
  *
  * Mod+S is reserved: where it is suppressed (a dialog, an auto-repeat, IME composition) this
  * still prevents its default, so the browser's Save page never opens.
@@ -142,6 +146,12 @@ export function matchKeyboardShortcut(event: KeyboardEvent): KeyboardShortcut | 
   if (binding.modifier !== 'mod') {
     const menu = target?.closest('[role="menu"], [role="listbox"]');
     if (menu && !menu.hasAttribute('data-keyboard-shortcuts')) return null;
+  }
+  if (
+    binding.shortcut.action === 'copy-map-link' &&
+    window.getSelection()?.isCollapsed === false
+  ) {
+    return null;
   }
   return binding.shortcut;
 }

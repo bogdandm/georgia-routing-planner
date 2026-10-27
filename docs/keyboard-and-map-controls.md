@@ -11,29 +11,30 @@ keyboard layout, including Russian, and with Option-modified characters on macOS
 command modifier is Cmd on macOS and Ctrl on Windows and Linux; the other key of that
 pair must not be held. Ctrl+F, Ctrl+E, and Ctrl+O stay text-editing keys on macOS.
 
-| Windows and Linux | macOS     | Action                                                                                                               | Does nothing when                                                   |
-| ----------------- | --------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Ctrl+F, `/`       | ⌘F, `/`   | Focuses and selects the map search; on phones the open workspace closes first                                        | Focus is already in the map search, so the browser's own find opens |
-| `[`               | `[`       | Collapses or expands the desktop navigation, or opens or closes the phone workspace                                  | —                                                                   |
-| `T`               | `T`       | Opens Tracks and starts **Plan route**                                                                               | Map routing data is not configured                                  |
-| `P`               | `P`       | Opens Markers and starts placing a new marker, like **New marker**                                                   | The map or the saved markers are not ready                          |
-| `W`               | `W`       | Opens Weather and starts or cancels forecast-point selection                                                         | —                                                                   |
-| `S`               | `S`       | Leaves Mosaic, searches Sentinel scenes at the current viewport center, and opens Satellite                          | —                                                                   |
-| `M`               | `M`       | Fits the camera to the open track, the multi-track selection, or the route or edit draft                             | Nothing is open                                                     |
-| `N`               | `N`       | Turns the map north; 2D also resets the pitch, 3D keeps the 45° pitch of a track fit                                 | —                                                                   |
-| `O`               | `O`       | Switches between 2D and 3D                                                                                           | Terrain is changing, the map is loading, or Mosaic blocks 3D        |
-| `R`               | `R`       | Turns the ruler on or off                                                                                            | —                                                                   |
-| `L`, Home         | `L`, Home | Finds my location                                                                                                    | —                                                                   |
-| `1`–`6`           | `1`–`6`   | Vector OSM, Google Satellite, Bing Aerial, Esri World Imagery, NAPR Orthophoto, Soviet Topographic                   | The map layers are not ready                                        |
-| `7`               | `7`       | Shows Sentinel-2                                                                                                     | No scene or mosaic is loaded; it never opens Satellite              |
-| `8`               | `8`       | Turns the OSM overlay on or off                                                                                      | The overlay is unavailable, as on Vector OSM                        |
-| `0`               | `0`       | Next basemap of `1`–`6`, wrapping around                                                                             | The map layers are not ready                                        |
-| Shift+`0`         | ⇧`0`      | Previous basemap of `1`–`6`, wrapping around                                                                         | The map layers are not ready                                        |
-| Ctrl+Z            | ⌘Z        | Undoes the last route-plan or track edit                                                                             | No path is being edited                                             |
-| Ctrl+S            | ⌘S        | Saves the route plan, the import preview or shared track, or the saved-track edit; never the browser's **Save page** | Nothing can be saved                                                |
-| Ctrl+O            | ⌘O        | Opens the track file picker                                                                                          | —                                                                   |
-| Ctrl+E            | ⌘E        | Downloads the open saved track as GPX                                                                                | No saved track is open, or it is being edited                       |
-| Escape            | Escape    | Cancels marker placement and forecast-point selection, ends the ruler, and ends point insertion or a point move      | —                                                                   |
+| Windows and Linux | macOS     | Action                                                                                                                                           | Does nothing when                                                          |
+| ----------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Ctrl+F, `/`       | ⌘F, `/`   | Focuses and selects the map search; on phones the open workspace closes first                                                                    | Focus is already in the map search, so the browser's own find opens        |
+| `[`               | `[`       | Collapses or expands the desktop navigation, or opens or closes the phone workspace                                                              | —                                                                          |
+| `T`               | `T`       | Opens Tracks and starts **Plan route**                                                                                                           | Map routing data is not configured                                         |
+| `P`               | `P`       | Opens Markers and starts placing a new marker, like **New marker**                                                                               | The map or the saved markers are not ready                                 |
+| `W`               | `W`       | Opens Weather and starts or cancels forecast-point selection                                                                                     | —                                                                          |
+| `S`               | `S`       | Leaves Mosaic, searches Sentinel scenes at the current viewport center, and opens Satellite                                                      | —                                                                          |
+| `M`               | `M`       | Fits the camera to the open track, the multi-track selection, or the route or edit draft                                                         | Nothing is open                                                            |
+| `N`               | `N`       | Turns the map north; 2D also resets the pitch, 3D keeps the 45° pitch of a track fit                                                             | —                                                                          |
+| `O`               | `O`       | Switches between 2D and 3D                                                                                                                       | Terrain is changing, the map is loading, or Mosaic blocks 3D               |
+| `R`               | `R`       | Turns the ruler on or off                                                                                                                        | —                                                                          |
+| `L`, Home         | `L`, Home | Finds my location                                                                                                                                | —                                                                          |
+| `1`–`6`           | `1`–`6`   | Vector OSM, Google Satellite, Bing Aerial, Esri World Imagery, NAPR Orthophoto, Soviet Topographic                                               | The map layers are not ready                                               |
+| `7`               | `7`       | Shows Sentinel-2                                                                                                                                 | No scene or mosaic is loaded; it never opens Satellite                     |
+| `8`               | `8`       | Turns the OSM overlay on or off                                                                                                                  | The overlay is unavailable, as on Vector OSM                               |
+| `0`               | `0`       | Next basemap of `1`–`6`, wrapping around                                                                                                         | The map layers are not ready                                               |
+| Shift+`0`         | ⇧`0`      | Previous basemap of `1`–`6`, wrapping around                                                                                                     | The map layers are not ready                                               |
+| Ctrl+Z            | ⌘Z        | Undoes the last route-plan or track edit                                                                                                         | No path is being edited                                                    |
+| Ctrl+S            | ⌘S        | Saves the route plan, the import preview or shared track, or the saved-track edit; never the browser's **Save page**                             | Nothing can be saved                                                       |
+| Ctrl+O            | ⌘O        | Opens the track file picker                                                                                                                      | —                                                                          |
+| Ctrl+E            | ⌘E        | Downloads the open saved track as GPX                                                                                                            | No saved track is open, or it is being edited                              |
+| Ctrl+C            | ⌘C        | Copies a link to the current map view with the stored **Share** choices, without opening the dialog, and shows the copied link in a short notice | Focus is in a text field or page text is selected, so the native copy runs |
+| Escape            | Escape    | Cancels marker placement and forecast-point selection, ends the ruler, and ends point insertion or a point move                                  | —                                                                          |
 
 Shortcuts are inactive while focus is in a text field, except Ctrl/⌘+F, S, O, and E, and
 inside a modal dialog, including the onboarding tour. Inside menus and listboxes, plain
@@ -46,7 +47,12 @@ opens the browser's **Save page**, even where shortcuts are inactive.
 Buttons with a shortcut show its keys as keycaps in their tooltip: 2D and 3D, the layer
 chooser, the ruler, **Plan route**, **New marker**, forecast-point selection, **Undo**,
 **Download GPX**, and the navigation collapse and restore buttons. The layer-chooser
-menu shows each row's key at its right edge.
+menu shows each row's key in one column at its right edge, and the empty map search
+shows Ctrl/⌘+F. The map's right-click menu hints P, S, and W beside **Create marker
+here**, **Search satellite scenes here**, and **Show weather forecast**; these are
+reminders of the related global shortcuts, which act through the next map click or at
+the map center, not keys of the menu. Devices whose primary pointer is coarse, such as
+phones and tablets, usually have no keyboard and show no keycaps.
 
 ## Map controls
 

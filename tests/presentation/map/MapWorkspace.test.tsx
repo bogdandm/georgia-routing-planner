@@ -1775,6 +1775,65 @@ describe('MapWorkspace', () => {
     ).toBeVisible();
   });
 
+  it('copies the current view link with Ctrl+C and shows the copied link', async () => {
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({
+      camera: { longitude: 43.5, latitude: 42.25, zoom: 11, bearing: 0, pitch: 0 },
+    });
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByTestId('native-map');
+
+    await user.keyboard('{Control>}c{/Control}');
+
+    await screen.findByText('Link copied');
+    const copiedUrl = writeText.mock.calls[0]?.[0];
+    if (copiedUrl === undefined) throw new Error('Expected a copied map URL.');
+    const url = new URL(copiedUrl);
+    expect(url.searchParams.get('lat')).toBe('42.25000');
+    expect(url.searchParams.get('lon')).toBe('43.50000');
+    expect(screen.getByText(copiedUrl)).toBeVisible();
+  });
+
+  it('hints the related shortcuts in the context menu, but not on touch-first devices', async () => {
+    const facade = new FakeMapFacade();
+    const { unmount } = renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} />
+      </RuntimeServicesProvider>,
+    );
+    fireEvent.contextMenu(await screen.findByTestId('native-map'));
+
+    const keycapText = (name: string) =>
+      screen.getByRole('menuitem', { name }).querySelector('kbd')?.textContent ?? null;
+    expect(keycapText('Create marker here')).toBe('P');
+    expect(keycapText('Search satellite scenes here')).toBe('S');
+    expect(keycapText('Show weather forecast')).toBe('W');
+    expect(keycapText('Copy link')).toBeNull();
+    unmount();
+
+    mockMatchingMediaQueries('(pointer: coarse)');
+    const user = userEvent.setup();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Touch map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Touch map');
+    await user.click(screen.getByRole('button', { name: 'Choose map layer preset' }));
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Vector OSM' }).querySelector('kbd'),
+    ).toBeNull();
+  });
+
   it('opens the share dialog on the right-clicked point', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({

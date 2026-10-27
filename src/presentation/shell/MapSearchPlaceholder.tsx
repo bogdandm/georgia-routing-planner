@@ -42,6 +42,7 @@ import {
   maximumPlaceSearchSideKm,
 } from '@/application/map/expandPlaceSearchBounds';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
 import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { MapViewportBounds } from '@/presentation/map/mapTypes';
 import {
@@ -408,7 +409,11 @@ export function MapSearchPlaceholder() {
                       <CloseIcon sx={{ fontSize: 20 }} />
                     </IconButton>
                   </InputAdornment>
-                ) : null,
+                ) : (
+                  <InputAdornment position="end">
+                    <KeyboardShortcutKeys shortcut={{ action: 'focus-search' }} />
+                  </InputAdornment>
+                ),
             },
           }}
           sx={{

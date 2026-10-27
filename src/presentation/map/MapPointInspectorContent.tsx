@@ -23,6 +23,8 @@ import {
 } from '@mui/material';
 import { useEffect, useRef, type ReactNode } from 'react';
 
+import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
+import type { KeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { MapCoordinate, MapPointInspection } from '@/presentation/map/mapTypes';
 import {
   meteoblueForecastUrl,
@@ -116,6 +118,11 @@ interface MapPointActionEntry {
   readonly icon: ReactNode;
   readonly label: string;
   readonly href?: string;
+  /**
+   * A global shortcut for the same kind of action, shown as a hint only: it acts at the map
+   * center or by the next click, not at this point.
+   */
+  readonly shortcut?: KeyboardShortcut;
 }
 
 /**
@@ -153,11 +160,13 @@ export function MapPointActionList({
       action: 'create-marker',
       icon: <AddLocationAltOutlinedIcon />,
       label: t`Create marker here`,
+      shortcut: { action: 'place-marker' },
     },
     {
       action: 'search-satellite',
       icon: <SatelliteAltOutlinedIcon />,
       label: t`Search satellite scenes here`,
+      shortcut: { action: 'search-satellite' },
     },
   ];
   const weatherActions: readonly MapPointActionEntry[] = [
@@ -165,6 +174,7 @@ export function MapPointActionList({
       action: 'show-weather',
       icon: <WbCloudyOutlinedIcon />,
       label: t`Show weather forecast`,
+      shortcut: { action: 'select-forecast-point' },
     },
     {
       action: 'copy-weather-link',
@@ -186,16 +196,21 @@ export function MapPointActionList({
   ];
   // Dense rows keep the tap popup short; 40 px still leaves a comfortable touch target.
   const itemSx = touch ? { minHeight: 40 } : undefined;
-  const renderItem = ({ action, icon, label, href }: MapPointActionEntry) => {
+  const renderItem = ({ action, icon, label, href, shortcut }: MapPointActionEntry) => {
     const select = () => {
       onSelect(action);
     };
     const content = (
       <>
         <ListItemIcon sx={{ '& > svg': { fontSize: 20 } }}>{icon}</ListItemIcon>
-        <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
+        {/* With the keycap's own 8 px margin, the label keeps the 16 px row padding from it. */}
+        <ListItemText
+          slotProps={{ primary: { variant: 'body2' } }}
+          sx={shortcut === undefined ? undefined : { mr: 1 }}
+        >
           {label}
         </ListItemText>
+        {shortcut === undefined ? null : <KeyboardShortcutKeys shortcut={shortcut} />}
       </>
     );
     return href === undefined ? (

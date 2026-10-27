@@ -58,6 +58,17 @@ describe('keyboard shortcut matching', () => {
     });
   });
 
+  it('copies the map link with Ctrl+C unless page text is selected', () => {
+    expect(matchOn(document.body, { code: 'KeyC', key: 'c', ctrlKey: true })).toEqual({
+      action: 'copy-map-link',
+    });
+
+    const paragraph = mountTarget('<p data-target>Selected text</p>');
+    window.getSelection()?.selectAllChildren(paragraph);
+    expect(matchOn(paragraph, { code: 'KeyC', key: 'c', ctrlKey: true })).toBeNull();
+    window.getSelection()?.removeAllRanges();
+  });
+
   it('ignores plain keys in text fields but keeps command shortcuts there', () => {
     const input = mountTarget('<input data-target />');
 

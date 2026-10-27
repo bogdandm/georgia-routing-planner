@@ -688,7 +688,8 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   in 3D terrain the 3D mode with bearing and pitch. Each part has an **Include in link**
   checkbox, unavailable while the map does not show it; turning all three off shares
   coordinates only. The choices persist in this browser, and **Copy link** in the point
-  actions copies a link to the clicked point with them without opening the dialog.
+  actions copies a link to the clicked point with them without opening the dialog;
+  Ctrl+C (⌘C on macOS) does the same for the current view and shows the copied link.
   **Copy map link** next to the link field confirms the copy in place with **Copied**
   for two seconds; the map link never includes tracks. Links keep the page's other query
   parameters and its workspace-tab hash, except that an open shared-track link is

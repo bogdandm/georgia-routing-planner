@@ -170,7 +170,8 @@ type MapWorkspaceNotice =
   | 'camera-restore-failed'
   | 'shared-scene-restore-failed'
   | 'shared-comparison-restore-failed';
-type CopyConfirmation = 'coordinates' | 'link' | 'weather-link';
+/** `map-link` is the keyboard copy of the current view; its notice shows the copied link. */
+type CopyConfirmation = 'coordinates' | 'link' | 'map-link' | 'weather-link';
 type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 
 function WeatherForecastMapMarker({
@@ -383,9 +384,10 @@ export function MapWorkspace({
     readonly mouseY: number;
     readonly coordinate: MapCoordinate;
   } | null>(null);
-  const [copyConfirmation, setCopyConfirmation] = useState<CopyConfirmation | null>(
-    null,
-  );
+  const [copyConfirmation, setCopyConfirmation] = useState<{
+    readonly kind: CopyConfirmation;
+    readonly value: string;
+  } | null>(null);
   const [copyError, setCopyError] = useState(false);
   const [layerChangeFailed, setLayerChangeFailed] = useState(false);
   const geolocateControl = useRef<GeolocateControlInstance | null>(null);
@@ -544,7 +546,7 @@ export function MapWorkspace({
     async (value: string, confirmation: CopyConfirmation) => {
       try {
         await navigator.clipboard.writeText(value);
-        setCopyConfirmation(confirmation);
+        setCopyConfirmation({ kind: confirmation, value });
         setCopyError(false);
       } catch {
         setCopyError(true);
@@ -1520,8 +1522,11 @@ export function MapWorkspace({
     setMobileWorkspaceOpen(true);
   };
 
-  /** Copies a link to the clicked point with the browser's map share preferences. */
-  const copyPointLink = async (coordinate: MapCoordinate) => {
+  /**
+   * Copies a map link with the browser's share preferences, centered on `center` or, when it
+   * is null, on the current view.
+   */
+  const copyMapLink = async (center: MapCoordinate | null) => {
     const preferences = await database
       .loadMapSharePreferences()
       .catch((): MapSharePreferences => {
@@ -1535,9 +1540,9 @@ export function MapWorkspace({
     await copyText(
       createMapShareUrl(
         window.location.href,
-        selectMapShareView(state, preferences, coordinate),
+        selectMapShareView(state, preferences, center),
       ),
-      'link',
+      center === null ? 'map-link' : 'link',
     );
   };
 
@@ -1551,7 +1556,7 @@ export function MapWorkspace({
         );
         return;
       case 'copy-point-link':
-        void copyPointLink(coordinate);
+        void copyMapLink(coordinate);
         return;
       case 'share-point':
         openMapShare(window.location.href, coordinate);
@@ -1732,6 +1737,9 @@ export function MapWorkspace({
       case 'north-up':
         facade.resetNorth();
         break;
+      case 'copy-map-link':
+        void copyMapLink(null);
+        break;
       case 'toggle-terrain': {
         if (
           terrainState === 'enabling' ||
@@ -1814,11 +1822,14 @@ export function MapWorkspace({
     cameraNoticeText = t`The shared image comparison could not be opened. The shared map location is still available.`;
   }
   let copyConfirmationText: string | null = null;
-  if (copyConfirmation === 'coordinates') {
+  if (copyConfirmation?.kind === 'coordinates') {
     copyConfirmationText = t`Coordinates copied`;
-  } else if (copyConfirmation === 'link') {
+  } else if (
+    copyConfirmation?.kind === 'link' ||
+    copyConfirmation?.kind === 'map-link'
+  ) {
     copyConfirmationText = t`Link copied`;
-  } else if (copyConfirmation === 'weather-link') {
+  } else if (copyConfirmation?.kind === 'weather-link') {
     copyConfirmationText = t`Weather map link copied`;
   }
 
@@ -2119,7 +2130,21 @@ export function MapWorkspace({
       <Snackbar
         open={copyConfirmationText !== null}
         autoHideDuration={2_500}
-        message={copyConfirmationText}
+        message={
+          copyConfirmation?.kind === 'map-link' ? (
+            <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+              <span>{copyConfirmationText}</span>
+              <Typography
+                variant="caption"
+                sx={{ opacity: 0.8, wordBreak: 'break-all' }}
+              >
+                {copyConfirmation.value}
+              </Typography>
+            </Stack>
+          ) : (
+            copyConfirmationText
+          )
+        }
         onClose={() => {
           setCopyConfirmation(null);
         }}

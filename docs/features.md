@@ -196,11 +196,12 @@ needless climbs; without terrain data they fall back to distance only. Consecuti
 waiting for the router, such as both sides of an inserted point, are routed in one
 request on one graph. A pending routed leg reports tile download, graph construction,
 route terrain loading, and search progress while further clicks queue behind it.
-**Undo** and Ctrl+Z (Cmd+Z on macOS, except while typing in a field) undo the last edit,
-including an insertion, move, deletion, mode switch, or **Clear**. Routing has a
-one-minute limit; a failed request undoes the edit that needed it and names the points
-without a nearby trail. Missing provider topology shows an unavailable state; there is
-no backend or fallback routing service. Topology rules are in
+**Undo** and Mod+Z (Cmd+Z on macOS, Ctrl+Z elsewhere, except while typing in a field;
+see [keyboard shortcuts](./keyboard-and-map-controls.md#keyboard-shortcuts)) undo the
+last edit, including an insertion, move, deletion, mode switch, or **Clear**. Routing
+has a one-minute limit; a failed request undoes the edit that needed it and names the
+points without a nearby trail. Missing provider topology shows an unavailable state;
+there is no backend or fallback routing service. Topology rules are in
 [runtime flows](./runtime-flows.md#browser-route-planning).
 
 After each accepted edit the browser samples terrain and recomputes metrics and the
@@ -687,7 +688,8 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   in 3D terrain the 3D mode with bearing and pitch. Each part has an **Include in link**
   checkbox, unavailable while the map does not show it; turning all three off shares
   coordinates only. The choices persist in this browser, and **Copy link** in the point
-  actions copies a link to the clicked point with them without opening the dialog.
+  actions copies a link to the clicked point with them without opening the dialog;
+  Ctrl+C (⌘C on macOS) does the same for the current view and shows the copied link.
   **Copy map link** next to the link field confirms the copy in place with **Copied**
   for two seconds; the map link never includes tracks. Links keep the page's other query
   parameters and its workspace-tab hash, except that an open shared-track link is
@@ -695,19 +697,10 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   switches to the shared satellite layer, scene, and 3D view, and the shared satellite
   layer replaces their own layer choice. Below the whole map section, a **Tracks** table
   lists the tracks drawn on the map (see [public track links](#public-track-links)).
-- **Camera:** left drag pans, with an inertia that covers MapLibre's default distance in
-  half its time; middle drag or Shift+left drag rotates and pitches in 3D around the
-  terrain point under the press, marked by a small pivot ring; Ctrl+left drag in 3D
-  turns and tilts the view in place, like looking around from the camera position, which
-  stays fixed; the view follows the drag, keeping a point grabbed near the screen center
-  roughly under the pointer, so dragging right turns left and dragging down raises the
-  view toward the horizon. Middle, Shift, and Ctrl drags released while still moving
-  coast on briefly with fading speed; the next press or wheel stops the coast. Keyboard
-  pans, zooms, and orbits once the canvas has focus. Box zoom and right drag are off;
-  pitch is capped at 75 degrees. The 2D command resets pitch and bearing. On touch, two
-  fingers pinch-zoom, twist to rotate, and drag vertically to pitch. Rotation starts
-  only after a twist of at least 15 degrees that clearly outweighs the pinch and drag; a
-  pinch or drag that wins first never rotates until the fingers lift.
+- **Camera:** mouse, touch, and map-keyboard camera controls, the right-side control
+  column, and the global keyboard shortcuts are described in
+  [keyboard shortcuts and map controls](./keyboard-and-map-controls.md). The 2D command
+  resets pitch and bearing.
 - Attribution remains visible in every section and terrain mode.
 
 ## Map, terrain, and persistence

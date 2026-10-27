@@ -415,7 +415,7 @@ describe('WorkspaceShell', () => {
     expect(newPointsMode('Line')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('undoes the last route point with Ctrl+Z or Cmd+Z outside text fields', async () => {
+  it('undoes the last route point with Ctrl+Z, or Cmd+Z on macOS, outside text fields', async () => {
     const route = vi.fn<TrailRouter['route']>();
     setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
     const facade = new FakeMapFacade();
@@ -444,16 +444,66 @@ describe('WorkspaceShell', () => {
     act(() => {
       nameInput.blur();
     });
+    // Cmd is not the command modifier outside macOS.
+    await user.keyboard('{Meta>}z{/Meta}');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     await user.keyboard('{Control>}z{/Control}');
     expect(
       await screen.findByText('Click the map to choose the next point.'),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+    );
     await user.keyboard('{Meta>}z{/Meta}');
     expect(
       await screen.findByText('Click the map to choose the route start.'),
     ).toBeVisible();
+  });
+
+  it('starts, fits, and saves a route plan from the keyboard', async () => {
+    const route = vi.fn<TrailRouter['route']>();
+    setServices(createTestServices({ trailRouter: { route, dispose: vi.fn() } }));
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    const user = userEvent.setup();
+    renderWorkspaceShell(
+      <MapWorkspace facade={facade} mapCanvas={<div>Route planning map</div>} />,
+    );
+    await screen.findByText('Route planning map');
+
+    // The suite starts on Satellite; T switches to Tracks and opens a new plan.
+    await user.keyboard('t');
+    expect(screen.getByRole('tab', { name: 'Tracks' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByRole('heading', { name: 'New track' })).toBeVisible();
+    await user.click(newPointsMode('Line'));
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.64, latitude: 42.66 });
+    });
+    act(() => {
+      facade.emitPlanningClick({ longitude: 44.65, latitude: 42.67 });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    const fitsBefore = facade.fitBoundsRequests.length;
+    await user.keyboard('m');
+    await waitFor(() => {
+      expect(facade.fitBoundsRequests.length).toBeGreaterThan(fitsBefore);
+    });
+
+    await user.keyboard('{Control>}s{/Control}');
+    await waitFor(async () => {
+      await expect(services.database.listLocalTracks()).resolves.toEqual([
+        expect.objectContaining({ geometryKind: 'route' }),
+      ]);
+    });
+    expect(route).not.toHaveBeenCalled();
   });
 
   it('requests and draws the route search only while the developer option is on', async () => {

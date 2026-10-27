@@ -146,6 +146,14 @@ Settings actions. `WorkspaceSidebar` keeps the Tracks, Satellite, and Weather pa
 mounted while hidden so their sessions survive section changes. Shared palette values
 live in `appColors.ts` for both the MUI theme and the MapLibre style.
 
+[`keyboardShortcuts.ts`](../src/presentation/keyboardShortcuts.ts) owns the global
+keyboard-shortcut binding table, the platform command modifier, and the focus rules that
+suppress shortcuts in text fields, dialogs, and menus. It has no listener of its own:
+each action owner registers a window `keydown` listener and handles only its actions.
+`MapWorkspace` handles camera and layer keys, `MapSearchPlaceholder` focuses search,
+`TracksWorkspace` undoes path edits, and `WorkspaceShell` handles section, track, and
+file actions. `KeyboardShortcutKeys.tsx` renders the same bindings as tooltip keycaps.
+
 ## Workers
 
 Four Vite module workers share the request-correlated `WorkerRpc` transport

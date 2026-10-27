@@ -51,6 +51,7 @@ export class FakeMapFacade implements MapFacade {
     readonly padding: MapFitPadding | undefined;
     readonly path: MapTravelPath | undefined;
   }[] = [];
+  public northResets = 0;
   public pointInspection: MapPointInspection = { status: 'closed' };
   public readonly pointInspectionContent = document.createElement('div');
   public pointInspectionPopupEnabled = true;
@@ -216,6 +217,10 @@ export class FakeMapFacade implements MapFacade {
   ): void {
     this.navigationRequests.push(target);
     this.navigationPaddingRequests.push(visibleAreaPadding);
+  }
+
+  public resetNorth(): void {
+    this.northResets += 1;
   }
 
   public fitBounds(

@@ -18,6 +18,7 @@ import {
   setServices,
   setupWorkspaceShellTest,
   renderWorkspaceShell,
+  setSatelliteSearchAnchor,
   testViewport,
   syntheticSatelliteScene,
   deferred,
@@ -102,6 +103,73 @@ describe('WorkspaceShell', () => {
       'aria-expanded',
       'false',
     );
+  });
+
+  it('focuses the map search with Ctrl+F and slash outside other text fields', async () => {
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const mapSearch = screen.getByRole('textbox', {
+      name: 'Search places or coordinates',
+    });
+
+    await user.keyboard('{Control>}f{/Control}');
+    expect(mapSearch).toHaveFocus();
+
+    const trackSearch = await screen.findByPlaceholderText(
+      /^Search \d+ saved tracks?$/u,
+    );
+    await user.click(trackSearch);
+    await user.keyboard('/');
+    expect(trackSearch).toHaveFocus();
+    expect(trackSearch).toHaveValue('/');
+  });
+
+  it('collapses and restores the navigation with the bracket key', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    // user-event escapes a literal bracket by doubling it.
+    await user.keyboard('[[');
+    expect(useUiStore.getState().navigationCollapsed).toBe(true);
+    await user.keyboard('[[');
+    expect(useUiStore.getState().navigationCollapsed).toBe(false);
+  });
+
+  it('searches satellite images at the viewport center with S', async () => {
+    useUiStore.setState({ activeTab: 'tracks' });
+    setSatelliteSearchAnchor({ longitude: 44.1, latitude: 42.1 });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+
+    await user.keyboard('s');
+
+    expect(screen.getByRole('tab', { name: 'Satellite' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(mapInteractionStore.getState().satelliteSearchAnchor).toBeNull();
+  });
+
+  it('places a new marker from another section with P', async () => {
+    services.mapViewport.update(testViewport);
+    useUiStore.setState({ activeTab: 'markers' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'New marker' })).toBeEnabled();
+    });
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+
+    await user.keyboard('p');
+
+    expect(screen.getByRole('tab', { name: 'Markers' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(mapInteractionStore.getState().markerPlacement).toMatchObject({
+      target: { kind: 'saved-marker' },
+    });
   });
 
   it('opens the share dialog on the map center from the rail and copies its link', async () => {

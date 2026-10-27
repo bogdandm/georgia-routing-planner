@@ -21,11 +21,14 @@ import {
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type SyntheticEvent,
 } from 'react';
+import { flushSync } from 'react-dom';
 
 import {
   PlaceSearchFailure,
@@ -39,6 +42,8 @@ import {
   maximumPlaceSearchSideKm,
 } from '@/application/map/expandPlaceSearchBounds';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
+import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
+import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { MapViewportBounds } from '@/presentation/map/mapTypes';
 import {
   requestMapFitBounds,
@@ -136,6 +141,30 @@ export function MapSearchPlaceholder() {
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const [value, setValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focusSearchOnShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (matchKeyboardShortcut(event)?.action !== 'focus-search') return;
+    // A repeated Mod+F inside the search leaves the browser's own find to open.
+    if (event.target === inputRef.current) return;
+    event.preventDefault();
+    // The open phone workspace hides the map, so it closes before the input can focus.
+    if (useUiStore.getState().mobileWorkspaceOpen) {
+      flushSync(() => {
+        setMobileWorkspaceOpen(false);
+      });
+    }
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      focusSearchOnShortcut(event);
+    };
+    window.addEventListener('keydown', listener);
+    return () => {
+      window.removeEventListener('keydown', listener);
+    };
+  }, []);
   const [submittedSearch, setSubmittedSearch] = useState<{
     readonly query: string;
     readonly bounds: MapViewportBounds;
@@ -340,6 +369,7 @@ export function MapSearchPlaceholder() {
           fullWidth
           hiddenLabel
           size="small"
+          inputRef={inputRef}
           value={value}
           placeholder={t`Search places or coordinates`}
           onChange={(event) => {
@@ -379,7 +409,11 @@ export function MapSearchPlaceholder() {
                       <CloseIcon sx={{ fontSize: 20 }} />
                     </IconButton>
                   </InputAdornment>
-                ) : null,
+                ) : (
+                  <InputAdornment position="end">
+                    <KeyboardShortcutKeys shortcut={{ action: 'focus-search' }} />
+                  </InputAdornment>
+                ),
             },
           }}
           sx={{

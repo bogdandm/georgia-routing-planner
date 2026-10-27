@@ -633,6 +633,22 @@ export class MapLibreFacade implements MapFacade {
     });
   }
 
+  public resetNorth(): void {
+    const map = this.#map;
+    if (map === null) return;
+    map.easeTo({
+      bearing: 0,
+      pitch: this.#snapshot.terrainMode === 'terrain' ? directedFitPitchDegrees : 0,
+      duration: 650,
+      essential: true,
+    });
+    this.logger.log({
+      level: 'info',
+      name: 'map.navigation.north-reset',
+      data: { status: 'accepted' },
+    });
+  }
+
   public fitBounds(
     bounds: MapViewportBounds,
     maxZoom: number,

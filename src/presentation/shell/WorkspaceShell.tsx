@@ -16,7 +16,14 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useStore } from 'zustand';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
@@ -31,10 +38,20 @@ import { MapWorkspace } from '@/presentation/map/MapWorkspace';
 import { SatelliteCompareMaps } from '@/presentation/map/SatelliteCompareMaps';
 import {
   cancelMarkerPlacement,
+  cancelWeatherPointSelection,
+  mapInteractionStore,
   openMapShare,
+  requestMarkerPlacement,
+  requestSatelliteSearch,
+  startWeatherPointSelection,
 } from '@/presentation/map/mapInteractionStore';
+import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
+import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import { MapSearchPlaceholder } from '@/presentation/shell/MapSearchPlaceholder';
-import { MarkersWorkspaceProvider } from '@/presentation/markers/MarkersWorkspace';
+import {
+  MarkersWorkspaceProvider,
+  useMarkersWorkspace,
+} from '@/presentation/markers/MarkersWorkspace';
 import { OperationalStatus } from '@/presentation/shell/OperationalStatus';
 import {
   firstOnboardingTourStep,
@@ -43,7 +60,11 @@ import {
 } from '@/presentation/shell/OnboardingTour';
 import { SettingsDialog } from '@/presentation/shell/SettingsDialog';
 import { RemoteDeletionDialog } from '@/presentation/user/RemoteDeletionDialog';
-import { SatelliteMosaicProvider } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
+import {
+  SatelliteMosaicProvider,
+  useSatelliteMode,
+  useSatelliteMosaic,
+} from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import {
   closeComparison,
   isComparisonOpen,
@@ -62,6 +83,7 @@ import { appColors } from '@/presentation/theme/appColors';
 import type { MapFitPadding } from '@/presentation/map/mapTypes';
 import {
   TrackDetailsPane,
+  trackFileAccept,
   TracksWorkspaceProvider,
   useTracksWorkspace,
 } from '@/presentation/tracks/TracksWorkspace';
@@ -114,7 +136,9 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     logger,
     mapLayers,
     mapProviderConfiguration,
+    mapViewport,
     storageUsage,
+    trailRouter,
   } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
@@ -199,17 +223,30 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     active: activeTrack,
     activeStatsMetrics,
     activeProfile,
+    downloadActiveTrackGpx,
     elevationProgress,
+    importFiles,
     importState,
     multiTrackMode,
     multiTrackSelections,
     multiTrackStatsMetrics,
     recalculationState,
+    refocusActiveTrack,
     savePreview,
+    saveRoutePlan,
+    saveTrackEdit,
     setActiveName,
+    startRoutePlan,
     editActivePath,
     undoPathEdit,
   } = useTracksWorkspace();
+  const { loadState: markersLoadState } = useMarkersWorkspace();
+  const satelliteMode = useSatelliteMode();
+  const { toggleMosaicMode } = useSatelliteMosaic();
+  const weatherPointSelectionActive = useStore(
+    mapInteractionStore,
+    (state) => state.weatherPointSelectionActive,
+  );
   useEffect(() => {
     void mapLayers?.restorePersistedState();
   }, [mapLayers]);
@@ -432,6 +469,107 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     setMobileWorkspaceOpen,
     smartphoneViewport,
   ]);
+
+  // Workspace shortcuts; map, search, and undo shortcuts belong to their own owners.
+  const handleWorkspaceShortcut = useEffectEvent((event: KeyboardEvent) => {
+    const shortcut = matchKeyboardShortcut(event);
+    if (shortcut === null) return;
+    const openSection = (tab: WorkspaceTab) => {
+      if (activeTab !== tab) handleSectionChange(tab);
+    };
+    switch (shortcut.action) {
+      case 'toggle-navigation':
+        if (smartphoneViewport) {
+          setMobileWorkspaceOpen(!mobileWorkspaceOpen);
+        } else {
+          handleNavigationCollapsedChange(!navigationCollapsed);
+        }
+        break;
+      case 'new-track':
+        if (trailRouter === null) return;
+        openSection('tracks');
+        // Asks before replacing unsaved work and closes the phone workspace itself.
+        startRoutePlan();
+        break;
+      case 'place-marker':
+        // The same gate as the New marker button.
+        if (
+          mapViewport.getViewportSnapshot() === null ||
+          markersLoadState !== 'ready'
+        ) {
+          return;
+        }
+        // Placement outside Markers is cancelled, so the section switches first.
+        openSection('markers');
+        if (smartphoneViewport) setMobileWorkspaceOpen(false);
+        requestMarkerPlacement({ kind: 'saved-marker' });
+        break;
+      case 'select-forecast-point':
+        openSection('weather');
+        if (weatherPointSelectionActive) {
+          cancelWeatherPointSelection();
+        } else {
+          startWeatherPointSelection();
+          if (smartphoneViewport) setMobileWorkspaceOpen(false);
+        }
+        break;
+      case 'search-satellite':
+        if (satelliteMode === 'mosaic') toggleMosaicMode();
+        requestSatelliteSearch(null);
+        openSection('satellite');
+        // The queued search runs once Satellite is visible to show its results.
+        if (smartphoneViewport) {
+          setMobileWorkspaceOpen(true);
+        } else if (navigationCollapsed) {
+          handleNavigationCollapsedChange(false);
+        }
+        break;
+      case 'fit-track':
+        refocusActiveTrack();
+        break;
+      case 'save':
+        // Never the browser's Save page, even when nothing can be saved.
+        event.preventDefault();
+        if (activeTrack?.kind === 'route-plan') {
+          void saveRoutePlan();
+        } else if (activeTrack?.kind === 'preview' || activeTrack?.kind === 'shared') {
+          void savePreview();
+        } else if (activeTrack?.kind === 'saved' && activeTrack.edit !== null) {
+          void saveTrackEdit();
+        }
+        return;
+      case 'import-track': {
+        event.preventDefault();
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = trackFileAccept;
+        input.addEventListener(
+          'change',
+          () => {
+            if (input.files !== null) void importFiles(input.files);
+          },
+          { once: true },
+        );
+        input.click();
+        return;
+      }
+      case 'download-gpx':
+        if (!downloadActiveTrackGpx()) return;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => {
+      handleWorkspaceShortcut(event);
+    };
+    window.addEventListener('keydown', listener);
+    return () => {
+      window.removeEventListener('keydown', listener);
+    };
+  }, []);
 
   if (controlledFailure) {
     return <ControlledFailure />;
@@ -982,7 +1120,15 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
           />
         </Box>
         {!desktopNavigationCollapsed && !smartphoneViewport && !comparisonActive ? (
-          <Tooltip title={t`Hide navigation`} placement="right">
+          <Tooltip
+            title={
+              <ShortcutTooltipTitle
+                label={t`Hide navigation`}
+                shortcut={{ action: 'toggle-navigation' }}
+              />
+            }
+            placement="right"
+          >
             <IconButton
               aria-label={t`Hide navigation`}
               data-testid="navigation-collapse-toggle"

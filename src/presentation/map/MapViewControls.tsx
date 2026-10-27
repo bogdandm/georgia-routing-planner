@@ -8,6 +8,7 @@ import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import {
+  Box,
   CircularProgress,
   ClickAwayListener,
   ListItemIcon,
@@ -25,7 +26,16 @@ import { Fragment, useId, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useControl } from 'react-map-gl/maplibre';
 
-import type { MapLayerPreset, TerrainMode } from '@/presentation/map/mapTypes';
+import {
+  KeyboardShortcutKeys,
+  ShortcutTooltipTitle,
+} from '@/presentation/KeyboardShortcutKeys';
+import {
+  basemapPresets,
+  type BasemapPreset,
+  type MapLayerPreset,
+  type TerrainMode,
+} from '@/presentation/map/mapTypes';
 
 export type TerrainControlState =
   'flat' | 'enabling' | 'terrain' | 'disabling' | 'failed';
@@ -51,22 +61,22 @@ interface MapViewControlsProps {
   readonly onMeasurementActiveChange: (active: boolean) => void;
 }
 
-const layerPresets: readonly {
-  readonly label: MessageDescriptor;
-  readonly value: MapLayerPreset;
-}[] = [
-  { label: msg`Vector OSM`, value: 'vector-osm' },
-  { label: msg`Google Satellite`, value: 'google-satellite' },
-  { label: msg`Bing Aerial`, value: 'bing-satellite' },
-  { label: msg`Esri World Imagery`, value: 'esri-satellite' },
-  { label: msg`NAPR Orthophoto`, value: 'napr-orthophoto' },
-  { label: msg`Soviet Topographic`, value: 'soviet-topographic' },
-];
+const basemapLabels: Readonly<Record<BasemapPreset, MessageDescriptor>> = {
+  'vector-osm': msg`Vector OSM`,
+  'google-satellite': msg`Google Satellite`,
+  'bing-satellite': msg`Bing Aerial`,
+  'esri-satellite': msg`Esri World Imagery`,
+  'napr-orthophoto': msg`NAPR Orthophoto`,
+  'soviet-topographic': msg`Soviet Topographic`,
+};
 // eslint-disable-next-line lingui/no-unlocalized-strings -- Satellite mission name stays invariant.
 const sentinelPresetLabel = 'Sentinel-2';
 const sovietTopographicLegendUrl =
   // eslint-disable-next-line lingui/no-unlocalized-strings -- External reference URL.
   'https://www.planinite.info/Maps/pdf/%D0%A3%D1%81%D0%BB%D0%BE%D0%B2%D0%BD%D1%8B%D0%B5_%D0%B7%D0%BD%D0%B0%D0%BA%D0%B8_%D1%82%D0%BE%D0%BF%D0%BE%D0%B3%D1%80%D0%B0%D1%84%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D1%85_%D0%BA%D0%B0%D1%80%D1%82_%D0%A1%D0%A1%D0%A1%D0%A0-1966.pdf';
+/** Anchors the symbol-guide item to the end of the Soviet Topographic label. */
+// eslint-disable-next-line lingui/no-unlocalized-strings -- CSS anchor name.
+const legendAnchorName = '--soviet-topographic-legend';
 
 class MapViewControlHost implements IControl {
   readonly element: HTMLDivElement = document.createElement('div');
@@ -161,7 +171,15 @@ export function MapViewControls({
             disabled={pending}
             sx={{ width: 40, height: 36, p: 0 }}
           >
-            <Tooltip disableInteractive title={t`Flat map`}>
+            <Tooltip
+              disableInteractive
+              title={
+                <ShortcutTooltipTitle
+                  label={t`Flat map`}
+                  shortcut={{ action: 'toggle-terrain' }}
+                />
+              }
+            >
               <span>
                 {terrainState === 'disabling' ? (
                   <CircularProgress size={18} aria-hidden />
@@ -176,9 +194,14 @@ export function MapViewControls({
           <Tooltip
             disableInteractive
             title={
-              terrainDisabled
-                ? t`3D terrain is unavailable while Sentinel Mosaic is active.`
-                : t`3D terrain`
+              terrainDisabled ? (
+                t`3D terrain is unavailable while Sentinel Mosaic is active.`
+              ) : (
+                <ShortcutTooltipTitle
+                  label={t`3D terrain`}
+                  shortcut={{ action: 'toggle-terrain' }}
+                />
+              )
             }
           >
             <span>
@@ -200,7 +223,15 @@ export function MapViewControls({
             </span>
           </Tooltip>
         </ToggleButtonGroup>
-        <Tooltip disableInteractive title={t`Choose map layer preset`}>
+        <Tooltip
+          disableInteractive
+          title={
+            <ShortcutTooltipTitle
+              label={t`Choose map layer preset`}
+              shortcut={{ action: 'next-basemap' }}
+            />
+          }
+        >
           <span>
             <ToggleButton
               aria-controls={menuOpen ? menuId : undefined}
@@ -235,7 +266,15 @@ export function MapViewControls({
             </ToggleButton>
           </Tooltip>
         )}
-        <Tooltip disableInteractive title={t`Measure distance and elevation`}>
+        <Tooltip
+          disableInteractive
+          title={
+            <ShortcutTooltipTitle
+              label={t`Measure distance and elevation`}
+              shortcut={{ action: 'toggle-ruler' }}
+            />
+          }
+        >
           <ToggleButton
             aria-label={t`Measure distance`}
             onChange={() => {
@@ -284,6 +323,8 @@ export function MapViewControls({
             <MenuList
               aria-label={t`Choose map layer preset`}
               autoFocusItem
+              // Digit shortcuts keep working while the chooser has focus.
+              data-keyboard-shortcuts=""
               id={menuId}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
@@ -298,36 +339,50 @@ export function MapViewControls({
               }}
               sx={{ pb: 0 }}
             >
-              {layerPresets.map((preset) => {
+              {basemapPresets.map((preset) => {
                 // The symbol guide is a sibling item: a link nested inside a menuitemradio
-                // would be an inaccessible nested interactive control.
-                const hasLegend = preset.value === 'soviet-topographic';
+                // would be an inaccessible nested interactive control. The row keeps an empty
+                // slot after its label, and the guide is drawn over that slot through CSS
+                // anchor positioning, so the row's keycap stays in the common column.
+                const hasLegend = preset === 'soviet-topographic';
                 return (
-                  <Fragment key={preset.value}>
+                  <Fragment key={preset}>
                     <MenuItem
-                      aria-checked={activeLayerPreset === preset.value}
+                      aria-checked={activeLayerPreset === preset}
                       onClick={() => {
-                        onLayerPresetChange(preset.value);
+                        onLayerPresetChange(preset);
                       }}
                       role="menuitemradio"
-                      selected={activeLayerPreset === preset.value}
-                      sx={
-                        hasLegend
-                          ? {
-                              // Both row halves use one fixed height so their selection and
-                              // hover backgrounds line up regardless of their content.
-                              display: 'inline-flex',
-                              height: 44,
-                              minHeight: 44,
-                              px: 2,
-                              py: 0,
-                              verticalAlign: 'top',
-                              width: 'calc(100% - 44px)',
-                            }
-                          : { minHeight: 44, minWidth: 240, px: 2 }
-                      }
+                      selected={activeLayerPreset === preset}
+                      // The guide slot is as tall as the row, so that row drops its padding.
+                      sx={{
+                        minHeight: 44,
+                        minWidth: 240,
+                        px: 2,
+                        ...(hasLegend ? { py: 0 } : {}),
+                      }}
                     >
-                      <ListItemText primary={t(preset.label)} />
+                      <ListItemText
+                        primary={t(basemapLabels[preset])}
+                        sx={hasLegend ? { flex: 'none' } : undefined}
+                      />
+                      {hasLegend ? (
+                        <>
+                          <Box
+                            aria-hidden
+                            sx={{
+                              anchorName: legendAnchorName,
+                              flex: 'none',
+                              height: 44,
+                              width: 44,
+                            }}
+                          />
+                          <Box sx={{ flex: 1 }} />
+                        </>
+                      ) : null}
+                      <KeyboardShortcutKeys
+                        shortcut={{ action: 'select-basemap', preset }}
+                      />
                     </MenuItem>
                     {hasLegend ? (
                       <Tooltip
@@ -342,12 +397,14 @@ export function MapViewControls({
                           role="menuitem"
                           target="_blank"
                           sx={{
-                            display: 'inline-flex',
                             height: 44,
                             justifyContent: 'center',
+                            left: 'anchor(left)',
                             minHeight: 44,
                             p: 0,
-                            verticalAlign: 'top',
+                            position: 'absolute',
+                            positionAnchor: legendAnchorName,
+                            top: 'anchor(top)',
                             width: 44,
                           }}
                         >
@@ -375,6 +432,7 @@ export function MapViewControls({
                   )}
                 </ListItemIcon>
                 <ListItemText primary={t`OSM overlay`} />
+                <KeyboardShortcutKeys shortcut={{ action: 'toggle-osm-overlay' }} />
               </MenuItem>
               <MenuItem
                 aria-checked={weatherMapEnabled}
@@ -414,6 +472,7 @@ export function MapViewControls({
                 }}
               >
                 {sentinelPresetLabel}
+                <KeyboardShortcutKeys shortcut={{ action: 'show-sentinel-2' }} />
               </MenuItem>
               <MenuItem
                 onClick={() => {

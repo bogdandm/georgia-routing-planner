@@ -59,7 +59,6 @@ function shortcutRow(
 /* eslint-disable lingui/no-unlocalized-strings -- Media queries and keycap labels are machine tokens. */
 /** Wide enough for the legend's three columns and the shortcuts side by side. */
 const wideHelpQuery = '(width >= 1200px)';
-const fullScreenHelpQuery = '(width < 600px)';
 
 /**
  * Every global shortcut, plus Escape and MapLibre's own camera keys. Built at render
@@ -271,27 +270,36 @@ export function HelpPanel() {
   );
 }
 
-/** Help opened from the rail; `onStartTour` is `null` where the tour is unavailable. */
+/**
+ * Help opened from the rail. The smartphone layout shows it full screen and without the
+ * tour, which is desktop-only.
+ */
 export function HelpDialog({
   open,
+  smartphoneViewport,
   onClose,
   onStartTour,
 }: {
   readonly open: boolean;
+  readonly smartphoneViewport: boolean;
   readonly onClose: () => void;
-  readonly onStartTour: (() => void) | null;
+  readonly onStartTour: () => void;
 }) {
   const { t } = useLingui();
-  const fullScreen = useMediaQuery(fullScreenHelpQuery);
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={false} fullScreen={fullScreen}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      fullScreen={smartphoneViewport}
+    >
       <DialogTitle sx={{ pr: 7 }}>
         <Trans>Help</Trans>
       </DialogTitle>
       <DialogContent>
         <HelpPanel />
       </DialogContent>
-      {onStartTour === null ? null : (
+      {smartphoneViewport ? null : (
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
             variant="contained"

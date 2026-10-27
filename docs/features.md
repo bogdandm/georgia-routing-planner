@@ -81,10 +81,10 @@ panel.
 
 **Help** in the rail opens a dialog with the map legend and the keyboard shortcuts. From
 1200 CSS pixels the legend sits on the left and the shortcuts on the right, separated by
-a vertical divider; narrower viewports stack them, and phones show the dialog full
-screen. Devices whose primary pointer is coarse, such as phones and tablets, show only
-the legend. On desktop, **Take a tour!** closes the dialog and starts the onboarding
-tour; smartphones do not offer it.
+a vertical divider; narrower viewports stack them. Devices whose primary pointer is
+coarse, such as phones and tablets, show only the legend. On desktop, **Take a tour!**
+closes the dialog and starts the onboarding tour; the smartphone workspace shows the
+dialog full screen without it.
 
 The legend lists areas, lines, and points with swatches drawn from the same generated
 images and palette as the basemap style, with area signs enlarged for legibility. The

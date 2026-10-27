@@ -703,40 +703,13 @@ export function OnboardingTour({
             </Popper>
           );
         })}
-        {currentStep.id === 'overview' || currentStep.id === 'help' ? (
-          // The overview's map hint and the help panel are centred in a column that ends
-          // above the tour card; on short viewports the column scrolls instead of running
-          // under the card.
-          <Stack
-            sx={{
-              position: 'absolute',
-              top: 16,
-              left: 24,
-              right: 24,
-              bottom: tourCardReservedHeight,
-              alignItems: 'center',
-              justifyContent: 'safe center',
-              overflowY: 'auto',
-            }}
-          >
-            {currentStep.id === 'overview' ? (
-              <Box sx={{ maxWidth: 380, flexShrink: 0 }}>
-                <TourHintCard rows={mapContextMenuHintRows} />
-              </Box>
-            ) : (
-              <Paper
-                elevation={8}
-                sx={{ px: 3, py: 2, flexShrink: 0, maxWidth: '100%' }}
-              >
-                <HelpPanel />
-              </Paper>
-            )}
-          </Stack>
-        ) : null}
+        {/* The card precedes the centred column so its title heads the step's headings;
+            the z-index keeps it above that column on short viewports. */}
         <Paper
           elevation={12}
           sx={{
             position: 'absolute',
+            zIndex: 1,
             right: 24,
             bottom: tourCardBottom,
             width: 380,
@@ -812,6 +785,36 @@ export function OnboardingTour({
             </Button>
           </Stack>
         </Paper>
+        {currentStep.id === 'overview' || currentStep.id === 'help' ? (
+          // The overview's map hint and the help panel are centred in a column that ends
+          // above the tour card; on short viewports the column scrolls instead of running
+          // under the card.
+          <Stack
+            sx={{
+              position: 'absolute',
+              top: 16,
+              left: 24,
+              right: 24,
+              bottom: tourCardReservedHeight,
+              alignItems: 'center',
+              justifyContent: 'safe center',
+              overflowY: 'auto',
+            }}
+          >
+            {currentStep.id === 'overview' ? (
+              <Box sx={{ maxWidth: 380, flexShrink: 0 }}>
+                <TourHintCard rows={mapContextMenuHintRows} />
+              </Box>
+            ) : (
+              <Paper
+                elevation={8}
+                sx={{ px: 3, py: 2, flexShrink: 0, maxWidth: '100%' }}
+              >
+                <HelpPanel />
+              </Paper>
+            )}
+          </Stack>
+        ) : null}
       </Box>
     </Modal>
   );

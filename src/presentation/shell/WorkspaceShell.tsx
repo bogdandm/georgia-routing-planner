@@ -1202,18 +1202,15 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       />
       <HelpDialog
         open={helpOpen}
+        smartphoneViewport={smartphoneViewport}
         onClose={() => {
           setHelpOpen(false);
         }}
-        onStartTour={
-          smartphoneViewport
-            ? null
-            : () => {
-                setHelpOpen(false);
-                setSettingsOpen(false);
-                setTourStep(firstOnboardingTourStep);
-              }
-        }
+        onStartTour={() => {
+          setHelpOpen(false);
+          setSettingsOpen(false);
+          setTourStep(firstOnboardingTourStep);
+        }}
       />
       <SettingsDialog
         developerMode={developerMode}

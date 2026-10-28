@@ -123,7 +123,9 @@ usage data automatically.
 
 - No offline map-region downloads.
 - Routing, maps, terrain, search, imagery, and weather depend on public providers.
-- Current desktop Google Chrome is the primary supported browser.
+- Current desktop Google Chrome is the primary supported browser. Android Chrome can
+  install Trail Planner as a standalone app without the browser toolbar; the installed
+  app has no offline cache and still needs a network connection.
 
 ## Developer overview
 

@@ -13,6 +13,11 @@ never uploaded automatically. The Vite development and preview servers send
 `Cross-Origin-Embedder-Policy: require-corp`, so local runs are cross-origin isolated
 ([`vite.config.ts`](../vite.config.ts)).
 
+[`public/manifest.webmanifest`](../public/manifest.webmanifest), linked from
+`index.html`, makes the build installable as a `standalone` web app at the root scope
+with the `public/icon-192.png` and `public/icon-512.png` icons. The application
+registers no service worker and caches nothing for offline use.
+
 ```mermaid
 flowchart LR
   Main["main.tsx"] --> Bootstrap["bootstrap composition root"]

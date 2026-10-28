@@ -51,6 +51,7 @@ import type {
 } from '@/presentation/map/MapFacade';
 import { synchronizeMapAttributionDisclosure } from '@/presentation/map/mapAttributionControl';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
+import { MapLibreControlTooltip } from '@/presentation/map/MapLibreControlTooltip';
 import { SettledCameraPersistence } from '@/presentation/map/SettledCameraPersistence';
 import {
   MapViewControls,
@@ -1885,6 +1886,7 @@ export function MapWorkspace({
               showUserLocation
               trackUserLocation={false}
             />
+            <MapLibreControlTooltip map={attributionMap} />
             <MapViewControlsControl
               activeLayerPreset={activeLayerPreset}
               hybridOverlayDisabled={hybridOverlayDisabled}

@@ -1,7 +1,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Box, Paper, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useEffect, useId, useRef } from 'react';
 
 import {
@@ -437,20 +437,19 @@ function LegendSwatch({ symbol }: { readonly symbol: LegendSymbol }) {
 /* eslint-enable lingui/no-unlocalized-strings */
 
 /**
- * Explains the hiking basemap's symbols in the first tour step. Swatches are drawn
- * from the same generated images and palette as the map style, so the legend cannot
- * drift from what the map shows.
+ * Explains the hiking basemap's symbols on the help screen. Swatches are drawn from the
+ * same generated images and palette as the map style, so the legend cannot drift from
+ * what the map shows.
+ *
+ * The groups take one column on phones and three when the help screen stacks the legend
+ * above the shortcuts. From `lg`, where the legend sits beside the shortcuts, Areas and
+ * Lines share the first of two columns so the legend is about as tall as the shortcuts.
  */
-export function OnboardingMapLegend() {
+export function MapLegend() {
   const { i18n } = useLingui();
   const titleId = useId();
   return (
-    <Paper
-      elevation={8}
-      role="note"
-      aria-labelledby={titleId}
-      sx={{ px: 2, py: 1.5, flexShrink: 0, maxWidth: 'min(720px, calc(100vw - 48px))' }}
-    >
+    <Box component="section" aria-labelledby={titleId} sx={{ minWidth: 0 }}>
       <Typography
         id={titleId}
         component="h3"
@@ -462,12 +461,25 @@ export function OnboardingMapLegend() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-          columnGap: 3,
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            sm: 'repeat(3, minmax(0, max-content))',
+            lg: 'repeat(2, minmax(0, max-content))',
+          },
+          rowGap: 2,
+          columnGap: 4,
         }}
       >
-        {legendGroups.map((group) => (
-          <Stack key={group.title.id} spacing={0.75}>
+        {legendGroups.map((group, index) => (
+          <Stack
+            key={group.title.id}
+            spacing={0.75}
+            sx={
+              index === legendGroups.length - 1
+                ? { gridColumn: { lg: '2' }, gridRow: { lg: '1 / span 2' } }
+                : { gridColumn: { lg: '1' } }
+            }
+          >
             <Typography
               variant="caption"
               color="text.secondary"
@@ -489,6 +501,6 @@ export function OnboardingMapLegend() {
           </Stack>
         ))}
       </Box>
-    </Paper>
+    </Box>
   );
 }

@@ -406,6 +406,7 @@ export function WorkspaceSidebar({
         {activeTab === 'weather' ? (
           <>
             <Tooltip
+              describeChild
               title={
                 <ShortcutTooltipTitle
                   label={
@@ -598,6 +599,7 @@ export function WorkspaceSidebar({
             </Stack>
             {compactMarkersHeader ? <Box aria-hidden sx={{ flex: 1 }} /> : null}
             <Tooltip
+              describeChild
               title={
                 canCreateMarkers ? (
                   <ShortcutTooltipTitle
@@ -646,6 +648,7 @@ export function WorkspaceSidebar({
               </ToggleButton>
             </Tooltip>
             <Tooltip
+              describeChild
               title={
                 trailRouter === null ? (
                   t`Route planning is unavailable because map routing data is not configured`

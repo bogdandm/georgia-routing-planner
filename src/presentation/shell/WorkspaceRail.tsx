@@ -98,8 +98,8 @@ interface WorkspaceRailProps {
   readonly onOpenTracks: () => void;
   readonly onToggleDeveloperTools: () => void;
   readonly onOpenSettings: () => void;
-  /** Opens the onboarding tour; `null` hides the action where the tour is unavailable. */
-  readonly onStartTour: (() => void) | null;
+  /** Opens the help screen with the map legend, keyboard shortcuts, and the tour. */
+  readonly onOpenHelp: () => void;
   readonly onShare: () => void;
   readonly onSectionChange: (section: WorkspaceTab) => void;
   readonly onActiveTabClick: () => void;
@@ -119,7 +119,7 @@ export function WorkspaceRail({
   onToggleDeveloperTools,
   onOpenAbout,
   onOpenSettings,
-  onStartTour,
+  onOpenHelp,
   onShare,
   onSectionChange,
   onActiveTabClick,
@@ -287,6 +287,7 @@ export function WorkspaceRail({
             </ButtonBase>
           )}
           <Tooltip
+            describeChild
             title={
               <ShortcutTooltipTitle
                 label={t`Show navigation`}
@@ -574,15 +575,9 @@ export function WorkspaceRail({
         >
           <InfoOutlinedIcon />
         </WorkspaceRailIconButton>
-        {onStartTour === null ? null : (
-          <WorkspaceRailIconButton
-            label={t`Show tour`}
-            tooltip={t`Show tour`}
-            onClick={onStartTour}
-          >
-            <HelpOutlineOutlinedIcon />
-          </WorkspaceRailIconButton>
-        )}
+        <WorkspaceRailIconButton label={t`Help`} tooltip={t`Help`} onClick={onOpenHelp}>
+          <HelpOutlineOutlinedIcon />
+        </WorkspaceRailIconButton>
       </Stack>
     </Box>
   );

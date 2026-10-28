@@ -3795,14 +3795,24 @@ function TrackImportZone() {
           >
             <Trans>Drop GPX, FIT, or KML here</Trans>
           </Typography>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => inputRef.current?.click()}
-            sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
+          <Tooltip
+            describeChild
+            title={
+              <ShortcutTooltipTitle
+                label={t`Browse track file`}
+                shortcut={{ action: 'import-track' }}
+              />
+            }
           >
-            <Trans>Browse track file</Trans>
-          </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => inputRef.current?.click()}
+              sx={{ whiteSpace: 'nowrap', px: { xs: 1, sm: 1.25 } }}
+            >
+              <Trans>Browse track file</Trans>
+            </Button>
+          </Tooltip>
         </Stack>
         <input
           ref={inputRef}
@@ -6058,6 +6068,7 @@ export function TrackDetailsPane({
               ) : (
                 <>
                   <Tooltip
+                    describeChild
                     title={
                       <ShortcutTooltipTitle
                         label={t`Download GPX`}
@@ -6296,21 +6307,33 @@ export function TrackDetailsPane({
                 <Button size="small" color="inherit" onClick={discardPreview}>
                   <Trans>Discard</Trans>
                 </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  disabled={
-                    active.preparationStatus !== 'ready' ||
-                    recalculationState === 'recalculating'
+                <Tooltip
+                  describeChild
+                  title={
+                    <ShortcutTooltipTitle
+                      label={active.kind === 'shared' ? t`Save a copy` : t`Save`}
+                      shortcut={{ action: 'save' }}
+                    />
                   }
-                  onClick={() => void savePreview()}
                 >
-                  {active.kind === 'shared' ? (
-                    <Trans>Save a copy</Trans>
-                  ) : (
-                    <Trans>Save</Trans>
-                  )}
-                </Button>
+                  <span>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disabled={
+                        active.preparationStatus !== 'ready' ||
+                        recalculationState === 'recalculating'
+                      }
+                      onClick={() => void savePreview()}
+                    >
+                      {active.kind === 'shared' ? (
+                        <Trans>Save a copy</Trans>
+                      ) : (
+                        <Trans>Save</Trans>
+                      )}
+                    </Button>
+                  </span>
+                </Tooltip>
               </Stack>
             </>
           ) : null}

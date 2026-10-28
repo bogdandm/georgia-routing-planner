@@ -32,7 +32,8 @@ _This project was built 100% with LLMs._
   in folders.
 - Save named map markers with custom icons and colors, with optional weekend forecasts.
 - Choose which tracks, imagery, terrain, contours, weather, and map details are visible.
-- Use the interface in English or Russian, with a first-visit tour of each section.
+- Use the interface in English or Russian, with a help screen for the map legend and
+  keyboard shortcuts and a first-visit tour of each section.
 - Optionally sign in and synchronize tracks, folders, and markers across devices.
 - Share a synchronized track with a link. Recipients need no account.
 

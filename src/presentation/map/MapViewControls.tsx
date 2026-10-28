@@ -165,34 +165,43 @@ export function MapViewControls({
             },
           }}
         >
-          <ToggleButton
-            value="flat"
-            aria-label={t`Show flat 2D map`}
-            disabled={pending}
-            sx={{ width: 40, height: 36, p: 0 }}
+          {/*
+            Every control in the column shows its tooltip to the left, anchored to a
+            block wrapper the size of the button, so all tooltips line up with their
+            buttons. Opening below would cover the next button and, if interactive, eat
+            its clicks.
+          */}
+          <Tooltip
+            describeChild
+            disableInteractive
+            placement="left"
+            title={
+              <ShortcutTooltipTitle
+                label={t`Flat map`}
+                shortcut={{ action: 'toggle-terrain' }}
+              />
+            }
           >
-            <Tooltip
-              disableInteractive
-              title={
-                <ShortcutTooltipTitle
-                  label={t`Flat map`}
-                  shortcut={{ action: 'toggle-terrain' }}
-                />
-              }
-            >
-              <span>
+            <Box component="span" sx={{ display: 'block' }}>
+              <ToggleButton
+                value="flat"
+                aria-label={t`Show flat 2D map`}
+                disabled={pending}
+                sx={{ width: 40, height: 36, p: 0 }}
+              >
                 {terrainState === 'disabling' ? (
                   <CircularProgress size={18} aria-hidden />
                 ) : (
                   // eslint-disable-next-line lingui/no-unlocalized-strings -- Technical dimension token.
                   '2D'
                 )}
-              </span>
-            </Tooltip>
-          </ToggleButton>
-          {/* Interactive tooltips open below and would cover the next button, eating clicks. */}
+              </ToggleButton>
+            </Box>
+          </Tooltip>
           <Tooltip
+            describeChild
             disableInteractive
+            placement="left"
             title={
               terrainDisabled ? (
                 t`3D terrain is unavailable while Sentinel Mosaic is active.`
@@ -204,27 +213,27 @@ export function MapViewControls({
               )
             }
           >
-            <span>
+            <Box component="span" sx={{ display: 'block' }}>
               <ToggleButton
                 value="terrain"
                 aria-label={t`Show 3D terrain map`}
                 disabled={pending || terrainDisabled}
                 sx={{ width: 40, height: 36, p: 0 }}
               >
-                <span>
-                  {terrainState === 'enabling' ? (
-                    <CircularProgress size={18} aria-hidden />
-                  ) : (
-                    // eslint-disable-next-line lingui/no-unlocalized-strings -- Technical dimension token.
-                    '3D'
-                  )}
-                </span>
+                {terrainState === 'enabling' ? (
+                  <CircularProgress size={18} aria-hidden />
+                ) : (
+                  // eslint-disable-next-line lingui/no-unlocalized-strings -- Technical dimension token.
+                  '3D'
+                )}
               </ToggleButton>
-            </span>
+            </Box>
           </Tooltip>
         </ToggleButtonGroup>
         <Tooltip
+          describeChild
           disableInteractive
+          placement="left"
           title={
             <ShortcutTooltipTitle
               label={t`Choose map layer preset`}
@@ -232,7 +241,7 @@ export function MapViewControls({
             />
           }
         >
-          <span>
+          <Box component="span" sx={{ display: 'block' }}>
             <ToggleButton
               aria-controls={menuOpen ? menuId : undefined}
               aria-expanded={menuOpen}
@@ -248,11 +257,12 @@ export function MapViewControls({
             >
               <LayersOutlinedIcon fontSize="small" />
             </ToggleButton>
-          </span>
+          </Box>
         </Tooltip>
         {onOpenComparison === null ? null : (
           <Tooltip
             disableInteractive
+            placement="left"
             title={t`Compare images from different dates side by side`}
           >
             <ToggleButton
@@ -267,7 +277,9 @@ export function MapViewControls({
           </Tooltip>
         )}
         <Tooltip
+          describeChild
           disableInteractive
+          placement="left"
           title={
             <ShortcutTooltipTitle
               label={t`Measure distance and elevation`}

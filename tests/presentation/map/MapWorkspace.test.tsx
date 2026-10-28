@@ -1811,12 +1811,17 @@ describe('MapWorkspace', () => {
     );
     fireEvent.contextMenu(await screen.findByTestId('native-map'));
 
-    const keycapText = (name: string) =>
-      screen.getByRole('menuitem', { name }).querySelector('kbd')?.textContent ?? null;
+    const keycapText = (name: string) => {
+      const keys = screen.getByRole('menuitem', { name }).querySelectorAll('kbd');
+      return keys.length === 0
+        ? null
+        : Array.from(keys, (key) => key.textContent).join(' ');
+    };
+    expect(keycapText('Copy link')).toBe('Ctrl C');
     expect(keycapText('Create marker here')).toBe('P');
     expect(keycapText('Search satellite scenes here')).toBe('S');
     expect(keycapText('Show weather forecast')).toBe('W');
-    expect(keycapText('Copy link')).toBeNull();
+    expect(keycapText('Copy coordinates')).toBeNull();
     unmount();
 
     mockMatchingMediaQueries('(pointer: coarse)');
@@ -1832,6 +1837,24 @@ describe('MapWorkspace', () => {
     expect(
       screen.getByRole('menuitemradio', { name: 'Vector OSM' }).querySelector('kbd'),
     ).toBeNull();
+  });
+
+  it('keeps a control name while its shortcut tooltip is open', async () => {
+    const user = userEvent.setup();
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Map');
+
+    await user.hover(screen.getByRole('button', { name: 'Measure distance' }));
+
+    expect(await screen.findByRole('tooltip')).toBeVisible();
+    // The tooltip describes the button; its aria-hidden keycaps stay out of both texts.
+    expect(
+      screen.getByRole('button', { name: 'Measure distance' }),
+    ).toHaveAccessibleDescription('Measure distance and elevation');
   });
 
   it('opens the share dialog on the right-clicked point', async () => {

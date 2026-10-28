@@ -1,5 +1,8 @@
+import type { UserEvent } from '@testing-library/user-event';
+
 import {
   screen,
+  within,
   waitFor,
   userEvent,
   describe,
@@ -16,8 +19,13 @@ import {
 
 function tourDialog() {
   return screen.queryByRole('dialog', {
-    name: /Map and controls|Tracks|Track details/,
+    name: /Map and controls|Help|Tracks|Track details/,
   });
+}
+
+async function startTourFromHelp(user: UserEvent) {
+  await user.click(screen.getByRole('button', { name: 'Help' }));
+  await user.click(screen.getByRole('button', { name: 'Take a tour!' }));
 }
 
 describe('WorkspaceShell onboarding tour', () => {
@@ -29,6 +37,12 @@ describe('WorkspaceShell onboarding tour', () => {
     renderWorkspaceShell();
 
     expect(screen.getByRole('dialog', { name: 'Map and controls' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    const help = screen.getByRole('dialog', { name: 'Help' });
+    expect(within(help).getByRole('heading', { name: 'Map legend' })).toBeVisible();
+    expect(
+      within(help).getByRole('heading', { name: 'Keyboard and mouse' }),
+    ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('dialog', { name: 'Tracks' })).toBeVisible();
     expect(useUiStore.getState().activeTab).toBe('tracks');
@@ -44,31 +58,57 @@ describe('WorkspaceShell onboarding tour', () => {
     });
   });
 
-  it('reopens from the rail after it was completed', async () => {
+  it('opens help from the rail, and its tour button starts the tour', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
     expect(tourDialog()).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Show tour' }));
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+    const help = screen.getByRole('dialog', { name: 'Help' });
+    expect(within(help).getByRole('heading', { name: 'Map legend' })).toBeVisible();
+    const controls = within(help).getByRole('region', { name: 'Keyboard and mouse' });
+    expect(within(controls).getByText('Save the track').nextSibling).toHaveTextContent(
+      'CtrlS',
+    );
+    expect(
+      within(controls).getByText('Actions for a point').nextElementSibling,
+    ).toContainElement(within(controls).getByRole('img', { name: 'Right-click' }));
 
+    await user.click(within(help).getByRole('button', { name: 'Take a tour!' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Help' })).not.toBeInTheDocument();
+    });
     expect(screen.getByRole('dialog', { name: 'Map and controls' })).toBeVisible();
   });
 
-  it('stays closed on smartphones and shared-track links, which never get the example', async () => {
+  it('keeps help on touch phones, without keyboard shortcuts or the tour', async () => {
     useUiStore.setState({ onboardingCompleted: false });
-    mockViewportWidth(899);
-    const { unmount } = renderWorkspaceShell();
-    expect(tourDialog()).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show tour' })).not.toBeInTheDocument();
-    unmount();
-
-    mockViewportWidth(1920);
-    window.history.replaceState(null, '', `/#tracks/share/1.${'A'.repeat(43)}`);
+    mockViewportWidth(899, { touch: true });
+    const user = userEvent.setup();
     renderWorkspaceShell();
     expect(tourDialog()).not.toBeInTheDocument();
 
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Show tour' }));
-    expect(screen.getByText('1 of 7')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Open workspace' }));
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+
+    const help = screen.getByRole('dialog', { name: 'Help' });
+    expect(within(help).getByRole('heading', { name: 'Map legend' })).toBeVisible();
+    expect(within(help).queryByText('Keyboard and mouse')).not.toBeInTheDocument();
+    expect(
+      within(help).queryByRole('button', { name: 'Take a tour!' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('never opens by itself from shared-track links, which never get the example', async () => {
+    window.history.replaceState(null, '', `/#tracks/share/1.${'A'.repeat(43)}`);
+    useUiStore.setState({ onboardingCompleted: false });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    expect(tourDialog()).not.toBeInTheDocument();
+
+    await startTourFromHelp(user);
+    expect(screen.getByText('1 of 8')).toBeVisible();
   });
 
   it('shows the example track as an unsaved preview and discards it on close', async () => {
@@ -79,7 +119,8 @@ describe('WorkspaceShell onboarding tour', () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    await user.click(screen.getByRole('button', { name: 'Show tour' }));
+    await startTourFromHelp(user);
+    await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
 

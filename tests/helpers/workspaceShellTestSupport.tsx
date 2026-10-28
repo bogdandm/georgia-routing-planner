@@ -143,11 +143,12 @@ export function setServices(next: RuntimeServices): void {
   services = next;
 }
 
-export function mockViewportWidth(width: number) {
+export function mockViewportWidth(width: number, { touch = false } = {}) {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches:
       (query === '(width < 900px)' && width < 900) ||
-      (query === '(width < 1900px)' && width < 1900),
+      (query === '(width < 1900px)' && width < 1900) ||
+      (query === '(pointer: coarse)' && touch),
     media: query,
     onchange: null,
     addListener: vi.fn(),

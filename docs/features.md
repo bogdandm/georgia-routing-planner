@@ -13,8 +13,8 @@ this document whenever it no longer describes the interface.
   primary feature sections, in that order.
 - **Global rail actions:** `User` appears immediately above `Settings`; `Diagnostics` is
   available when developer mode is enabled. `About this site` sits below Settings and
-  opens author, repository, API, and data-source information. `Show tour` sits last and
-  reopens the onboarding tour on desktop.
+  opens author, repository, API, and data-source information. `Help` sits last and opens
+  the [help screen](#help-screen).
 - **Route planning:** starts from `Plan route` in the Tracks header. There is no
   separate planning destination.
 - **Contextual sidebar:** the left panel changes with the active feature section.
@@ -77,20 +77,38 @@ panel.
 - `?developer=1` enables diagnostics even when stored settings cannot load.
 - Uncaught React errors render a support-bundle fallback.
 
+### Help screen
+
+**Help** in the rail opens a dialog with the map legend and the keyboard and mouse
+controls. From 1200 CSS pixels the legend sits on the left and the controls on the
+right, separated by a vertical divider; narrower viewports stack them. Devices whose
+primary pointer is coarse, such as phones and tablets, show only the legend. On desktop,
+**Take a tour!** closes the dialog and starts the onboarding tour; the smartphone
+workspace shows the dialog full screen without it.
+
+The legend lists areas, lines, and points with swatches drawn from the same generated
+images and palette as the basemap style, with area signs enlarged for legibility. The
+controls list every global shortcut, Escape, the map's own camera keys, and the mouse
+gestures, grouped as Workspace, Tracks, Map, Map camera, and Mouse (see
+[keyboard shortcuts and map controls](./keyboard-and-map-controls.md)). Keys use the
+current platform's labels, with the macOS modifiers ⌘, ⌃, and ⇧ drawn as icons. Mouse
+gestures are drawn with Kenney's CC0 _Input Prompts_ glyphs, with the pressed button or
+turned wheel highlighted: a mouse with movement arrows and the left or middle button
+pressed for drags, the scroll wheel, and the right button.
+
 ### Onboarding tour
 
 The first desktop visit opens a tour unless it starts from a shared-track link. Each
 step switches to one section and shows all its hints at once: the step's controls are
 spotlighted over a dimmed workspace, with short callouts that favor icon-only buttons
 and hidden actions such as right-click point actions. Steps cover the map controls and
-lower rail, Tracks, Track details, Markers, Layers, Satellite, Weather, and User. Hints
-whose controls are absent, hidden, or off-screen are omitted. While a step is shown,
-collapsed navigation, track details over the Tracks list, and Satellite results stay
-hidden without changing their saved state.
+lower rail, Help, Tracks, Track details, Markers, Layers, Satellite, Weather, and User.
+Hints whose controls are absent, hidden, or off-screen are omitted. While a step is
+shown, collapsed navigation, track details over the Tracks list, and Satellite results
+stay hidden without changing their saved state.
 
-The first step centres a map legend over the map with the right-click hint below it. The
-legend lists areas, lines, and points with swatches drawn from the same generated images
-and palette as the basemap style, with area signs enlarged for legibility.
+The first step centres the right-click hint over the map. The second step shows the
+[help screen](#help-screen) content over the map.
 
 Track details imports the bundled example `public/onboarding/sakhizare-from-above.gpx`
 as an unsaved preview, which is never stored or synchronized. Leaving that step or
@@ -100,8 +118,9 @@ selection.
 
 **Next**, **Back**, the arrow keys, **Skip tour**, **Done**, and Escape navigate or
 close the tour; closing returns to the section open before it. Closing stores completion
-in `ui.preferences`, and **Show tour** in the rail opens it again. Smartphones do not
-show the tour; switching to the smartphone layout closes it without storing completion.
+in `ui.preferences`, and **Take a tour!** on the help screen opens it again. Smartphones
+do not show the tour; switching to the smartphone layout closes it without storing
+completion.
 
 ### User
 

@@ -105,7 +105,7 @@ describe('WorkspaceShell', () => {
     );
   });
 
-  it('focuses the map search with Ctrl+F and slash outside other text fields', async () => {
+  it('focuses the map search with Ctrl+F and slash and leaves it with Escape', async () => {
     useUiStore.setState({ activeTab: 'tracks' });
     const user = userEvent.setup();
     renderWorkspaceShell();
@@ -115,6 +115,12 @@ describe('WorkspaceShell', () => {
 
     await user.keyboard('{Control>}f{/Control}');
     expect(mapSearch).toHaveFocus();
+    // Escape leaves the search, so plain shortcuts such as slash work again.
+    await user.keyboard('{Escape}');
+    expect(mapSearch).not.toHaveFocus();
+    await user.keyboard('[Slash]');
+    expect(mapSearch).toHaveFocus();
+    expect(mapSearch).toHaveValue('');
 
     const trackSearch = await screen.findByPlaceholderText(
       /^Search \d+ saved tracks?$/u,

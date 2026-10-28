@@ -375,6 +375,10 @@ export function MapSearchPlaceholder() {
           onChange={(event) => {
             setValue(event.target.value);
           }}
+          onKeyDown={(event) => {
+            // Escape leaves the search so the plain map shortcuts work again.
+            if (event.key === 'Escape') inputRef.current?.blur();
+          }}
           slotProps={{
             htmlInput: {
               'aria-label': t`Search places or coordinates`,

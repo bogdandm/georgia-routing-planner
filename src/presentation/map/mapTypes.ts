@@ -25,6 +25,19 @@ export const basemapPresets = [
 
 export type BasemapPreset = (typeof basemapPresets)[number];
 
+/** One keyboard camera step: pan 100 px, zoom one level, rotate 15°, or pitch 10°. */
+export type MapCameraStep =
+  | 'pan-left'
+  | 'pan-right'
+  | 'pan-up'
+  | 'pan-down'
+  | 'zoom-in'
+  | 'zoom-out'
+  | 'rotate-left'
+  | 'rotate-right'
+  | 'pitch-up'
+  | 'pitch-down';
+
 export interface MapCoordinate {
   readonly longitude: number;
   readonly latitude: number;

@@ -1,5 +1,6 @@
 import type {
   MapCamera,
+  MapCameraStep,
   MapDebugOptions,
   MapFitPadding,
   MapDiagnosticsSnapshot,
@@ -112,6 +113,9 @@ export interface MapFacade {
 
   /** Turns the camera north; 3D keeps the directed-fit pitch. */
   resetNorth(): void;
+
+  /** Eases the camera by one keyboard step, as MapLibre's own keyboard handler does. */
+  stepCamera(step: MapCameraStep): void;
 
   /**
    * Fits a serializable geographic area without exposing native MapLibre bounds. With a

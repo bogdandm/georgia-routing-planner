@@ -90,7 +90,6 @@ interface KeyGuideRow {
 
 interface KeyGuideGroup {
   readonly title: MessageDescriptor;
-  readonly note?: MessageDescriptor;
   readonly rows: readonly KeyGuideRow[];
 }
 
@@ -107,9 +106,9 @@ function shortcutRow(
 
 /* eslint-disable lingui/no-unlocalized-strings -- Keycap labels are machine tokens. */
 /**
- * Every global shortcut, Escape, MapLibre's own camera keys, and the mouse gestures. The
- * keys form two columns, the workspace and the map; the mouse gestures run under both.
- * Built at render because keycap labels depend on the platform.
+ * Every global shortcut, Escape, and the mouse gestures. The keys form two columns, the
+ * workspace and the map; the mouse gestures run under both. Built at render because keycap
+ * labels depend on the platform.
  */
 function keyGuide(): {
   readonly columns: readonly (readonly KeyGuideGroup[])[];
@@ -179,7 +178,6 @@ function keyGuide(): {
     },
     {
       title: msg`Map camera`,
-      note: msg`Arrow, plus, and minus keys work after you click the map.`,
       rows: [
         shortcutRow(msg`Switch between 2D and 3D`, 'toggle-terrain'),
         shortcutRow(msg`Turn the map north`, 'north-up'),
@@ -345,11 +343,6 @@ function KeyGuideGroupList({
       >
         {i18n._(group.title)}
       </Typography>
-      {group.note === undefined ? null : (
-        <Typography variant="caption" color="text.secondary" component="p">
-          {i18n._(group.note)}
-        </Typography>
-      )}
       <Box
         sx={{
           display: 'grid',

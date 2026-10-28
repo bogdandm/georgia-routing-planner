@@ -2,19 +2,22 @@ import { Box, Tooltip } from '@mui/material';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { useEffect, useState } from 'react';
 
-import { KeycapHint } from '@/presentation/KeyboardShortcutKeys';
-import {
-  keyboardShortcutKeys,
-  type KeyboardShortcut,
-} from '@/presentation/keyboardShortcuts';
+import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
+import type { KeyboardShortcut } from '@/presentation/keyboardShortcuts';
 
-/** MapLibre's own buttons and their keys; the zoom keys are MapLibre's, not app shortcuts. */
-const controls: readonly (
-  | { readonly selector: string; readonly keys: readonly string[] }
-  | { readonly selector: string; readonly shortcut: KeyboardShortcut }
-)[] = [
-  { selector: '.maplibregl-ctrl-zoom-in', keys: ['+'] },
-  { selector: '.maplibregl-ctrl-zoom-out', keys: ['−'] },
+/** MapLibre's own buttons and their shortcuts. */
+const controls: readonly {
+  readonly selector: string;
+  readonly shortcut: KeyboardShortcut;
+}[] = [
+  {
+    selector: '.maplibregl-ctrl-zoom-in',
+    shortcut: { action: 'move-camera', step: 'zoom-in' },
+  },
+  {
+    selector: '.maplibregl-ctrl-zoom-out',
+    shortcut: { action: 'move-camera', step: 'zoom-out' },
+  },
   { selector: '.maplibregl-ctrl-compass', shortcut: { action: 'north-up' } },
   { selector: '.maplibregl-ctrl-geolocate', shortcut: { action: 'geolocate' } },
 ];
@@ -121,13 +124,7 @@ export function MapLibreControlTooltip({ map }: { readonly map: MapLibreMap | nu
         ) : (
           <>
             {active.label}
-            <KeycapHint
-              keys={
-                'shortcut' in control
-                  ? keyboardShortcutKeys(control.shortcut)
-                  : control.keys
-              }
-            />
+            <KeyboardShortcutKeys shortcut={control.shortcut} />
           </>
         )
       }

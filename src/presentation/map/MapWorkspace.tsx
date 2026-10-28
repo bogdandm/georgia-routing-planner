@@ -1738,6 +1738,9 @@ export function MapWorkspace({
       case 'north-up':
         facade.resetNorth();
         break;
+      case 'move-camera':
+        facade.stepCamera(shortcut.step);
+        break;
       case 'copy-map-link':
         void copyMapLink(null);
         break;
@@ -1864,7 +1867,9 @@ export function MapWorkspace({
             dragPan={dragPanInertia}
             dragRotate={false}
             attributionControl={smartphoneViewport ? false : { compact: true }}
-            keyboard
+            // Camera keys are app shortcuts, so they work wherever focus is, not only on
+            // the map.
+            keyboard={false}
             reuseMaps={false}
             scrollZoom
             style={{ width: '100%', height: '100%' }}

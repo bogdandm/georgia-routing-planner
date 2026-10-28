@@ -54,6 +54,7 @@ import {
   defaultGeorgiaCamera,
   type MapCoordinate,
   type MapCamera,
+  type MapCameraStep,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapFailureCategory,
@@ -78,6 +79,31 @@ const directedFitPitchDegrees = 45;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
+
+/**
+ * MapLibre's keyboard steps. A pan moves the current center by the offset, so panning left
+ * places it 100 px right of the screen center.
+ */
+const cameraSteps: Record<
+  MapCameraStep,
+  {
+    readonly offset?: readonly [number, number];
+    readonly zoom?: number;
+    readonly bearing?: number;
+    readonly pitch?: number;
+  }
+> = {
+  'pan-left': { offset: [100, 0] },
+  'pan-right': { offset: [-100, 0] },
+  'pan-up': { offset: [0, 100] },
+  'pan-down': { offset: [0, -100] },
+  'zoom-in': { zoom: 1 },
+  'zoom-out': { zoom: -1 },
+  'rotate-left': { bearing: -15 },
+  'rotate-right': { bearing: 15 },
+  'pitch-up': { pitch: 10 },
+  'pitch-down': { pitch: -10 },
+};
 
 /** Screen radius around a track-editing click that still hits a track point. */
 const trackPointHitPixels = 12;
@@ -646,6 +672,23 @@ export class MapLibreFacade implements MapFacade {
       level: 'info',
       name: 'map.navigation.north-reset',
       data: { status: 'accepted' },
+    });
+  }
+
+  public stepCamera(step: MapCameraStep): void {
+    const map = this.#map;
+    if (map === null) return;
+    const { offset = [0, 0], zoom = 0, bearing = 0, pitch = 0 } = cameraSteps[step];
+    map.easeTo({
+      center: map.getCenter(),
+      offset: [...offset],
+      zoom: map.getZoom() + zoom,
+      bearing: map.getBearing() + bearing,
+      pitch: map.getPitch() + pitch,
+      duration: 300,
+      easing: (t) => t * (2 - t),
+      // A held key repeats before the previous ease ends; one id lets the eases chain.
+      easeId: 'keyboard-camera-step',
     });
   }
 

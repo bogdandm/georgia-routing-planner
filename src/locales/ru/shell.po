@@ -154,11 +154,6 @@ msgstr "Примерное использование памяти JavaScript"
 msgid "Areas"
 msgstr "Площади"
 
-#. js-lingui-id: YI0Ul2
-#: src/presentation/shell/HelpScreen.tsx
-msgid "Arrow, plus, and minus keys work after you click the map."
-msgstr "Стрелки, плюс и минус работают после щелчка по карте."
-
 #. js-lingui-id: iH8pgl
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Back"

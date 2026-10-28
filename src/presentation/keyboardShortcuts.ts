@@ -1,4 +1,8 @@
-import { basemapPresets, type BasemapPreset } from '@/presentation/map/mapTypes';
+import {
+  basemapPresets,
+  type BasemapPreset,
+  type MapCameraStep,
+} from '@/presentation/map/mapTypes';
 
 export type KeyboardShortcutAction =
   | 'focus-search'
@@ -24,7 +28,8 @@ export type KeyboardShortcutAction =
 
 export type KeyboardShortcut =
   | { readonly action: KeyboardShortcutAction }
-  | { readonly action: 'select-basemap'; readonly preset: BasemapPreset };
+  | { readonly action: 'select-basemap'; readonly preset: BasemapPreset }
+  | { readonly action: 'move-camera'; readonly step: MapCameraStep };
 
 /** `mod` is Cmd on macOS and Ctrl elsewhere; the other key of the pair must not be held. */
 type ShortcutModifier = 'none' | 'shift' | 'mod';
@@ -35,6 +40,8 @@ interface ShortcutBinding {
   readonly modifier: ShortcutModifier;
   /** Whether the binding also fires while focus is in a text field. */
   readonly inEditable: boolean;
+  /** Whether auto-repeat fires it again, so a held key keeps moving the camera. */
+  readonly repeatable?: true;
   /** Keycap label for the key itself. */
   readonly key: string;
   readonly shortcut: KeyboardShortcut;
@@ -56,6 +63,22 @@ function withMod(
   inEditable: boolean,
 ): ShortcutBinding {
   return { code, modifier: 'mod', inEditable, key, shortcut: { action } };
+}
+
+function camera(
+  code: string,
+  modifier: 'none' | 'shift',
+  key: string,
+  step: MapCameraStep,
+): ShortcutBinding {
+  return {
+    code,
+    modifier,
+    inEditable: false,
+    repeatable: true,
+    key,
+    shortcut: { action: 'move-camera', step },
+  };
 }
 
 const bindings: readonly ShortcutBinding[] = [
@@ -95,6 +118,24 @@ const bindings: readonly ShortcutBinding[] = [
   withMod('KeyE', 'E', 'download-gpx', true),
   // Text fields and selected page text keep the native copy.
   withMod('KeyC', 'C', 'copy-map-link', false),
+  // MapLibre's camera keys, global instead of only while the map has focus.
+  camera('ArrowLeft', 'none', '←', 'pan-left'),
+  camera('ArrowUp', 'none', '↑', 'pan-up'),
+  camera('ArrowRight', 'none', '→', 'pan-right'),
+  camera('ArrowDown', 'none', '↓', 'pan-down'),
+  camera('ArrowLeft', 'shift', '←', 'rotate-left'),
+  camera('ArrowRight', 'shift', '→', 'rotate-right'),
+  camera('ArrowUp', 'shift', '↑', 'pitch-up'),
+  camera('ArrowDown', 'shift', '↓', 'pitch-down'),
+  // Shift never changes the zoom step; `+` is Shift+= on a US keyboard.
+  camera('Equal', 'none', '+', 'zoom-in'),
+  camera('Equal', 'shift', '+', 'zoom-in'),
+  camera('NumpadAdd', 'none', '+', 'zoom-in'),
+  camera('NumpadAdd', 'shift', '+', 'zoom-in'),
+  camera('Minus', 'none', '−', 'zoom-out'),
+  camera('Minus', 'shift', '−', 'zoom-out'),
+  camera('NumpadSubtract', 'none', '−', 'zoom-out'),
+  camera('NumpadSubtract', 'shift', '−', 'zoom-out'),
 ];
 
 export function isMacPlatform(): boolean {
@@ -114,9 +155,11 @@ function eventModifier(event: KeyboardEvent): ShortcutModifier | null {
 /**
  * Resolves a global keydown to an application shortcut, or null when the key is not bound or
  * belongs to the focused control: a modal dialog, a text field (except bindings marked
- * `inEditable`), or a menu/listbox whose typeahead needs plain keys. A menu opts back in with
- * the `data-keyboard-shortcuts` attribute. Mod+C yields to the native copy while page text
- * is selected.
+ * `inEditable`), or a menu/listbox whose typeahead and arrow navigation need plain keys. A
+ * menu opts back in with the `data-keyboard-shortcuts` attribute. A control that handles a
+ * key itself, such as tabs or a menu with its arrows, prevents its default and keeps it.
+ * Auto-repeat fires only camera steps. Mod+C yields to the native copy while page text is
+ * selected.
  *
  * Mod+S is reserved: where it is suppressed (a dialog, an auto-repeat, IME composition) this
  * still prevents its default, so the browser's Save page never opens.
@@ -131,7 +174,11 @@ export function matchKeyboardShortcut(event: KeyboardEvent): KeyboardShortcut | 
   if (binding === undefined) return null;
 
   const target = event.target instanceof Element ? event.target : null;
-  if (event.repeat || event.isComposing || target?.closest('[aria-modal="true"]')) {
+  if (
+    (event.repeat && binding.repeatable !== true) ||
+    event.isComposing ||
+    target?.closest('[aria-modal="true"]')
+  ) {
     if (binding.shortcut.action === 'save') event.preventDefault();
     return null;
   }
@@ -161,18 +208,24 @@ export function shiftKeyLabel(): string {
   return isMacPlatform() ? '⇧' : 'Shift';
 }
 
+/** Whether two shortcuts are the same command, including the basemap or camera step. */
+function sameShortcut(a: KeyboardShortcut, b: KeyboardShortcut): boolean {
+  if (a.action === 'select-basemap') {
+    return b.action === 'select-basemap' && a.preset === b.preset;
+  }
+  if (a.action === 'move-camera') {
+    return b.action === 'move-camera' && a.step === b.step;
+  }
+  return a.action === b.action;
+}
+
 /** Keycap labels for every binding of a shortcut, in binding order. */
 export function keyboardShortcutKeyCombinations(
   shortcut: KeyboardShortcut,
 ): readonly (readonly string[])[] {
   const mac = isMacPlatform();
   return bindings
-    .filter((candidate) =>
-      shortcut.action === 'select-basemap'
-        ? candidate.shortcut.action === 'select-basemap' &&
-          candidate.shortcut.preset === shortcut.preset
-        : candidate.shortcut.action === shortcut.action,
-    )
+    .filter((candidate) => sameShortcut(candidate.shortcut, shortcut))
     .map((binding) => {
       switch (binding.modifier) {
         case 'mod':

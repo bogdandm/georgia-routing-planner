@@ -112,10 +112,53 @@ describe('keyboard shortcut matching', () => {
     });
   });
 
-  it('ignores auto-repeated keys', () => {
+  it('ignores auto-repeated keys except camera steps, which keep moving while held', () => {
     expect(matchOn(document.body, { code: 'KeyN', key: 'n', repeat: true })).toBeNull();
     expect(
       matchOn(document.body, { code: 'KeyS', key: 's', ctrlKey: true, repeat: true }),
+    ).toBeNull();
+    expect(
+      matchOn(document.body, { code: 'ArrowLeft', key: 'ArrowLeft', repeat: true }),
+    ).toEqual({ action: 'move-camera', step: 'pan-left' });
+  });
+
+  it('moves the camera with arrows, Shift+arrows, and plus or minus from any button', () => {
+    const button = mountTarget('<button data-target></button>');
+
+    expect(matchOn(button, { code: 'ArrowUp', key: 'ArrowUp' })).toEqual({
+      action: 'move-camera',
+      step: 'pan-up',
+    });
+    expect(
+      matchOn(button, { code: 'ArrowRight', key: 'ArrowRight', shiftKey: true }),
+    ).toEqual({ action: 'move-camera', step: 'rotate-right' });
+    expect(
+      matchOn(button, { code: 'ArrowDown', key: 'ArrowDown', shiftKey: true }),
+    ).toEqual({ action: 'move-camera', step: 'pitch-down' });
+    // `+` is Shift+= on a US keyboard and zooms like `=`.
+    expect(matchOn(button, { code: 'Equal', key: '+', shiftKey: true })).toEqual({
+      action: 'move-camera',
+      step: 'zoom-in',
+    });
+    expect(matchOn(button, { code: 'NumpadSubtract', key: '-' })).toEqual({
+      action: 'move-camera',
+      step: 'zoom-out',
+    });
+    expect(
+      matchOn(button, { code: 'ArrowLeft', key: 'ArrowLeft', ctrlKey: true }),
+    ).toBeNull();
+  });
+
+  it('leaves arrows to text fields and to controls that handle them', () => {
+    const input = mountTarget('<input data-target />');
+    const tab = mountTarget('<button role="tab" data-target></button>');
+    tab.addEventListener('keydown', (event) => {
+      event.preventDefault();
+    });
+
+    expect(matchOn(input, { code: 'ArrowLeft', key: 'ArrowLeft' })).toBeNull();
+    expect(
+      matchOn(tab, { code: 'ArrowLeft', key: 'ArrowLeft', cancelable: true }),
     ).toBeNull();
   });
 

@@ -10,6 +10,7 @@ import {
   defaultGeorgiaCamera,
   type MapCoordinate,
   type MapCamera,
+  type MapCameraStep,
   type MapDebugOptions,
   type MapDiagnosticsSnapshot,
   type MapFitPadding,
@@ -52,6 +53,7 @@ export class FakeMapFacade implements MapFacade {
     readonly path: MapTravelPath | undefined;
   }[] = [];
   public northResets = 0;
+  public readonly cameraSteps: MapCameraStep[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
   public readonly pointInspectionContent = document.createElement('div');
   public pointInspectionPopupEnabled = true;
@@ -221,6 +223,10 @@ export class FakeMapFacade implements MapFacade {
 
   public resetNorth(): void {
     this.northResets += 1;
+  }
+
+  public stepCamera(step: MapCameraStep): void {
+    this.cameraSteps.push(step);
   }
 
   public fitBounds(

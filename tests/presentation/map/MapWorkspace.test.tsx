@@ -2577,6 +2577,23 @@ describe('MapWorkspace', () => {
     );
   });
 
+  it('moves the camera with the arrow and zoom keys while a map button has focus', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready', terrainMode: 'flat' });
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Keyboard map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Keyboard map');
+    screen.getByRole('button', { name: 'Measure distance' }).focus();
+
+    await user.keyboard('{ArrowLeft}{Shift>}{ArrowUp}{/Shift}[Equal][Minus]');
+
+    expect(facade.cameraSteps).toEqual(['pan-left', 'pitch-up', 'zoom-in', 'zoom-out']);
+  });
+
   it('toggles the OSM overlay independently and opens the full Layers tab', async () => {
     const user = userEvent.setup();
     const services = createTestServices();

@@ -113,6 +113,8 @@ export function MapLibreControlTooltip({ map }: { readonly map: MapLibreMap | nu
     <Tooltip
       open={active?.button.isConnected === true && control !== undefined}
       disableInteractive
+      // Matches the app's own controls in the same column.
+      placement="left"
       title={
         active === null || control === undefined ? (
           ''

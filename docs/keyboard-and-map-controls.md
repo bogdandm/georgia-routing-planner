@@ -49,14 +49,15 @@ chooser, the ruler, **Plan route**, **New marker**, forecast-point selection, **
 **Save** and **Save a copy**, **Browse track file**, **Download GPX**, and the
 navigation collapse and restore buttons. MapLibre's own zoom, compass, and **Find my
 location** buttons use the same tooltip instead of the browser's, with `+`, `−`, N, and
-L. The layer-chooser menu shows each row's key in one column at its right edge, and the
-empty map search shows Ctrl/⌘+F. The map's right-click menu hints Ctrl/⌘+C, P, S, and W
-beside **Copy link**, **Create marker here**, **Search satellite scenes here**, and
-**Show weather forecast**; these are reminders of the related global shortcuts, which
-act on the current view, through the next map click, or at the map center, not keys of
-the menu. Devices whose primary pointer is coarse, such as phones and tablets, usually
-have no keyboard and show no keycaps. The [help screen](./features.md#help-screen) lists
-every shortcut with its keys.
+L. Every tooltip of the map control column opens to the left of its button, vertically
+centered on it. The layer-chooser menu shows each row's key in one column at its right
+edge, and the empty map search shows Ctrl/⌘+F. The map's right-click menu hints
+Ctrl/⌘+C, P, S, and W beside **Copy link**, **Create marker here**, **Search satellite
+scenes here**, and **Show weather forecast**; these are reminders of the related global
+shortcuts, which act on the current view, through the next map click, or at the map
+center, not keys of the menu. Devices whose primary pointer is coarse, such as phones
+and tablets, usually have no keyboard and show no keycaps. The
+[help screen](./features.md#help-screen) lists every shortcut with its keys.
 
 ## Map controls
 

@@ -140,7 +140,9 @@ describe('keyboard shortcut matching', () => {
       action: 'move-camera',
       step: 'zoom-in',
     });
-    expect(matchOn(button, { code: 'NumpadSubtract', key: '-' })).toEqual({
+    expect(
+      matchOn(button, { code: 'NumpadSubtract', key: '-', shiftKey: true }),
+    ).toEqual({
       action: 'move-camera',
       step: 'zoom-out',
     });

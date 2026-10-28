@@ -127,13 +127,15 @@ const bindings: readonly ShortcutBinding[] = [
   camera('ArrowRight', 'shift', '→', 'rotate-right'),
   camera('ArrowUp', 'shift', '↑', 'pitch-up'),
   camera('ArrowDown', 'shift', '↓', 'pitch-down'),
-  // `+` is Shift+= on a US keyboard.
+  // Shift never changes the zoom step; `+` is Shift+= on a US keyboard.
   camera('Equal', 'none', '+', 'zoom-in'),
   camera('Equal', 'shift', '+', 'zoom-in'),
   camera('NumpadAdd', 'none', '+', 'zoom-in'),
+  camera('NumpadAdd', 'shift', '+', 'zoom-in'),
   camera('Minus', 'none', '−', 'zoom-out'),
   camera('Minus', 'shift', '−', 'zoom-out'),
   camera('NumpadSubtract', 'none', '−', 'zoom-out'),
+  camera('NumpadSubtract', 'shift', '−', 'zoom-out'),
 ];
 
 export function isMacPlatform(): boolean {

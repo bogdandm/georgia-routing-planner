@@ -365,10 +365,15 @@ msgstr "Download diagnostics"
 msgid "Download the track as GPX"
 msgstr "Download the track as GPX"
 
-#. js-lingui-id: i1nBkV
+#. js-lingui-id: rY4wWF
 #: src/presentation/shell/HelpScreen.tsx
-msgid "Drag"
-msgstr "Drag"
+msgid "Drag with the left button"
+msgstr "Drag with the left button"
+
+#. js-lingui-id: CspP5m
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Drag with the middle button"
+msgstr "Drag with the middle button"
 
 #. js-lingui-id: XzAuUz
 #: src/presentation/shell/MapLegend.tsx
@@ -720,11 +725,6 @@ msgstr "Measured {measuredAt}"
 #: src/presentation/shell/StorageUsagePanel.tsx
 msgid "Measuring browser storage…"
 msgstr "Measuring browser storage…"
-
-#. js-lingui-id: lUma69
-#: src/presentation/shell/HelpScreen.tsx
-msgid "Middle button"
-msgstr "Middle button"
 
 #. js-lingui-id: _5yqwd
 #: src/presentation/shell/MapLegend.tsx

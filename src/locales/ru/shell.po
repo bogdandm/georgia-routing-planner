@@ -365,10 +365,15 @@ msgstr "Скачать диагностику"
 msgid "Download the track as GPX"
 msgstr "Скачать трек в GPX"
 
-#. js-lingui-id: i1nBkV
+#. js-lingui-id: rY4wWF
 #: src/presentation/shell/HelpScreen.tsx
-msgid "Drag"
-msgstr "Перетаскивание"
+msgid "Drag with the left button"
+msgstr "Перетаскивание с зажатой левой кнопкой"
+
+#. js-lingui-id: CspP5m
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Drag with the middle button"
+msgstr "Перетаскивание с зажатой средней кнопкой"
 
 #. js-lingui-id: XzAuUz
 #: src/presentation/shell/MapLegend.tsx
@@ -720,11 +725,6 @@ msgstr "Измерено в {measuredAt}"
 #: src/presentation/shell/StorageUsagePanel.tsx
 msgid "Measuring browser storage…"
 msgstr "Измерение хранилища браузера…"
-
-#. js-lingui-id: lUma69
-#: src/presentation/shell/HelpScreen.tsx
-msgid "Middle button"
-msgstr "Средняя кнопка"
 
 #. js-lingui-id: _5yqwd
 #: src/presentation/shell/MapLegend.tsx

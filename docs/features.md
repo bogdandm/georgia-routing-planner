@@ -92,8 +92,9 @@ controls list every global shortcut, Escape, the map's own camera keys, and the 
 gestures, grouped as Workspace, Tracks, Map, Map camera, and Mouse (see
 [keyboard shortcuts and map controls](./keyboard-and-map-controls.md)). Keys use the
 current platform's labels, with the macOS modifiers ⌘, ⌃, and ⇧ drawn as icons. Mouse
-gestures are drawn with Kenney's CC0 _Input Prompts_ glyphs: a dragged mouse, the scroll
-wheel, the middle button, and the right button.
+gestures are drawn with Kenney's CC0 _Input Prompts_ glyphs, with the pressed button or
+turned wheel highlighted: a mouse with movement arrows and the left or middle button
+pressed for drags, the scroll wheel, and the right button.
 
 ### Onboarding tour
 

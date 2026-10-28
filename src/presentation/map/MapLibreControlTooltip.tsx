@@ -26,62 +26,99 @@ function controlButton(target: EventTarget | null): HTMLButtonElement | null {
     : null;
 }
 
+interface ActiveControl {
+  readonly button: HTMLButtonElement;
+  readonly label: string;
+}
+
 /**
  * Replaces the native `title` tooltips of MapLibre's zoom, compass, and geolocation buttons
- * with the app's tooltip, which adds the button's keys. The label stays MapLibre's localized
- * `aria-label`. The title is removed on hover because MapLibre writes it again whenever a
- * button's state changes. Touch pointers get no tooltip, like the app's own buttons.
+ * with the app's tooltip, which adds the button's keys. The label is MapLibre's localized
+ * `aria-label`. MapLibre rewrites `title` and `aria-label` whenever a button's state or the
+ * language changes, so an observer strips every new title and refreshes the shown label.
+ * Touch pointers get no tooltip, like the app's own buttons.
  */
 export function MapLibreControlTooltip({ map }: { readonly map: MapLibreMap | null }) {
-  const [button, setButton] = useState<HTMLButtonElement | null>(null);
+  const [active, setActive] = useState<ActiveControl | null>(null);
 
   useEffect(() => {
     if (map === null) return;
-    const container = map.getContainer();
-    const show = (target: HTMLButtonElement) => {
-      target.removeAttribute('title');
-      setButton(target);
+    // MapLibre creates this container with the map; controls are added into it later.
+    const container = map
+      .getContainer()
+      .querySelector<HTMLElement>('.maplibregl-control-container');
+    if (container === null) return;
+    const stripTitles = () => {
+      for (const button of container.querySelectorAll(
+        `:is(${controlSelector})[title]`,
+      )) {
+        button.removeAttribute('title');
+      }
+    };
+    stripTitles();
+    const observer = new MutationObserver((records) => {
+      stripTitles();
+      for (const { target } of records) {
+        const button = controlButton(target);
+        if (button === null) continue;
+        const label = button.getAttribute('aria-label') ?? '';
+        setActive((current) =>
+          current?.button === button && current.label !== label
+            ? { button, label }
+            : current,
+        );
+      }
+    });
+    observer.observe(container, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['title', 'aria-label'],
+    });
+    const show = (button: HTMLButtonElement) => {
+      setActive({ button, label: button.getAttribute('aria-label') ?? '' });
     };
     const handlePointerOver = (event: PointerEvent) => {
-      const target = controlButton(event.target);
-      if (target !== null && event.pointerType === 'mouse') show(target);
+      const button = controlButton(event.target);
+      if (button !== null && event.pointerType === 'mouse') show(button);
     };
     const handleFocusIn = (event: FocusEvent) => {
-      const target = controlButton(event.target);
-      if (target?.matches(':focus-visible')) show(target);
+      const button = controlButton(event.target);
+      if (button?.matches(':focus-visible')) show(button);
     };
     const handleLeave = (event: PointerEvent | FocusEvent) => {
-      const target = controlButton(event.target);
-      if (target === null || controlButton(event.relatedTarget) === target) return;
-      setButton((current) => (current === target ? null : current));
+      const button = controlButton(event.target);
+      if (button === null || controlButton(event.relatedTarget) === button) return;
+      setActive((current) => (current?.button === button ? null : current));
     };
     container.addEventListener('pointerover', handlePointerOver);
     container.addEventListener('pointerout', handleLeave);
     container.addEventListener('focusin', handleFocusIn);
     container.addEventListener('focusout', handleLeave);
     return () => {
+      observer.disconnect();
       container.removeEventListener('pointerover', handlePointerOver);
       container.removeEventListener('pointerout', handleLeave);
       container.removeEventListener('focusin', handleFocusIn);
       container.removeEventListener('focusout', handleLeave);
-      setButton(null);
+      setActive(null);
     };
   }, [map]);
 
   const control =
-    button === null
+    active === null
       ? undefined
-      : controls.find(({ selector }) => button.matches(selector));
+      : controls.find(({ selector }) => active.button.matches(selector));
   return (
     <Tooltip
-      open={button?.isConnected === true && control !== undefined}
+      open={active?.button.isConnected === true && control !== undefined}
       disableInteractive
       title={
-        button === null || control === undefined ? (
+        active === null || control === undefined ? (
           ''
         ) : (
           <>
-            {button.getAttribute('aria-label')}
+            {active.label}
             <KeycapHint
               keys={
                 'shortcut' in control
@@ -92,7 +129,7 @@ export function MapLibreControlTooltip({ map }: { readonly map: MapLibreMap | nu
           </>
         )
       }
-      slotProps={{ popper: { anchorEl: button } }}
+      slotProps={{ popper: { anchorEl: active?.button } }}
     >
       <Box component="span" hidden />
     </Tooltip>

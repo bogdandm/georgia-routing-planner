@@ -463,8 +463,8 @@ export function MapLegend() {
           display: 'grid',
           gridTemplateColumns: {
             xs: 'minmax(0, 1fr)',
-            sm: 'repeat(3, max-content)',
-            lg: 'repeat(2, max-content)',
+            sm: 'repeat(3, minmax(0, max-content))',
+            lg: 'repeat(2, minmax(0, max-content))',
           },
           rowGap: 2,
           columnGap: 4,

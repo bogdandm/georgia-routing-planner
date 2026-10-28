@@ -1839,6 +1839,24 @@ describe('MapWorkspace', () => {
     ).toBeNull();
   });
 
+  it('keeps a control name while its shortcut tooltip is open', async () => {
+    const user = userEvent.setup();
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={new FakeMapFacade()} mapCanvas={<div>Map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Map');
+
+    await user.hover(screen.getByRole('button', { name: 'Measure distance' }));
+
+    expect(await screen.findByRole('tooltip')).toBeVisible();
+    // The tooltip describes the button; its aria-hidden keycaps stay out of both texts.
+    expect(
+      screen.getByRole('button', { name: 'Measure distance' }),
+    ).toHaveAccessibleDescription('Measure distance and elevation');
+  });
+
   it('opens the share dialog on the right-clicked point', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({

@@ -287,6 +287,7 @@ export function WorkspaceRail({
             </ButtonBase>
           )}
           <Tooltip
+            describeChild
             title={
               <ShortcutTooltipTitle
                 label={t`Show navigation`}

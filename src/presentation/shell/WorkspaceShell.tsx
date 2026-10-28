@@ -1118,6 +1118,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
         </Box>
         {!desktopNavigationCollapsed && !smartphoneViewport && !comparisonActive ? (
           <Tooltip
+            describeChild
             title={
               <ShortcutTooltipTitle
                 label={t`Hide navigation`}

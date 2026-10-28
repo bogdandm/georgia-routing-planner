@@ -87,6 +87,11 @@ export function KeyboardShortcutKeys({
 }: {
   readonly shortcut: KeyboardShortcut;
 }) {
+/**
+ * Tooltip title with a shortcut. An element title makes MUI's open tooltip label its child
+ * through `aria-labelledby`, replacing the control's own name, so pass `describeChild` to
+ * the Tooltip: the title then describes the control instead.
+ */
   return <KeycapHint keys={keyboardShortcutKeys(shortcut)} />;
 }
 

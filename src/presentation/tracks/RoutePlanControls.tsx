@@ -62,6 +62,7 @@ export function RoutePlanQuickControls({
       sx={{ width: fullWidth ? '100%' : undefined, alignItems: 'center' }}
     >
       <Tooltip
+        describeChild
         title={<ShortcutTooltipTitle label={t`Undo`} shortcut={{ action: 'undo' }} />}
       >
         <span>
@@ -292,6 +293,7 @@ export function RoutePlanControls({
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1}>
           <Tooltip
+            describeChild
             title={
               <ShortcutTooltipTitle label={t`Undo`} shortcut={{ action: 'undo' }} />
             }
@@ -321,6 +323,7 @@ export function RoutePlanControls({
             <Trans>Discard</Trans>
           </Button>
           <Tooltip
+            describeChild
             title={
               <ShortcutTooltipTitle label={t`Save`} shortcut={{ action: 'save' }} />
             }
@@ -359,6 +362,7 @@ export function TrackEditControls({
   return (
     <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
       <Tooltip
+        describeChild
         title={<ShortcutTooltipTitle label={t`Undo`} shortcut={{ action: 'undo' }} />}
       >
         <span>
@@ -377,6 +381,7 @@ export function TrackEditControls({
           <Trans>Cancel</Trans>
         </Button>
         <Tooltip
+          describeChild
           title={<ShortcutTooltipTitle label={t`Save`} shortcut={{ action: 'save' }} />}
         >
           <span>

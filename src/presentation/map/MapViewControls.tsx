@@ -172,6 +172,7 @@ export function MapViewControls({
             its clicks.
           */}
           <Tooltip
+            describeChild
             disableInteractive
             placement="left"
             title={
@@ -198,6 +199,7 @@ export function MapViewControls({
             </Box>
           </Tooltip>
           <Tooltip
+            describeChild
             disableInteractive
             placement="left"
             title={
@@ -229,6 +231,7 @@ export function MapViewControls({
           </Tooltip>
         </ToggleButtonGroup>
         <Tooltip
+          describeChild
           disableInteractive
           placement="left"
           title={
@@ -274,6 +277,7 @@ export function MapViewControls({
           </Tooltip>
         )}
         <Tooltip
+          describeChild
           disableInteractive
           placement="left"
           title={

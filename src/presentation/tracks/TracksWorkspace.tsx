@@ -3796,6 +3796,7 @@ function TrackImportZone() {
             <Trans>Drop GPX, FIT, or KML here</Trans>
           </Typography>
           <Tooltip
+            describeChild
             title={
               <ShortcutTooltipTitle
                 label={t`Browse track file`}
@@ -6067,6 +6068,7 @@ export function TrackDetailsPane({
               ) : (
                 <>
                   <Tooltip
+                    describeChild
                     title={
                       <ShortcutTooltipTitle
                         label={t`Download GPX`}
@@ -6306,6 +6308,7 @@ export function TrackDetailsPane({
                   <Trans>Discard</Trans>
                 </Button>
                 <Tooltip
+                  describeChild
                   title={
                     <ShortcutTooltipTitle
                       label={active.kind === 'shared' ? t`Save a copy` : t`Save`}

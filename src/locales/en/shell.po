@@ -109,6 +109,11 @@ msgstr "Account"
 msgid "Account and sync between devices. The dot shows sync status."
 msgstr "Account and sync between devices. The dot shows sync status."
 
+#. js-lingui-id: 6Kx2vJ
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Actions for a point"
+msgstr "Actions for a point"
+
 #. js-lingui-id: OPLR35
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Add your own points to the track."
@@ -118,11 +123,6 @@ msgstr "Add your own points to the track."
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Administrative area"
 msgstr "Administrative area"
-
-#. js-lingui-id: 2eNzep
-#: src/presentation/shell/HelpScreen.tsx
-msgid "After you click the map."
-msgstr "After you click the map."
 
 #. js-lingui-id: GXUlVd
 #: src/presentation/shell/OnboardingTour.tsx
@@ -153,6 +153,11 @@ msgstr "Approximate JavaScript memory"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Areas"
 msgstr "Areas"
+
+#. js-lingui-id: YI0Ul2
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Arrow, plus, and minus keys work after you click the map."
+msgstr "Arrow, plus, and minus keys work after you click the map."
 
 #. js-lingui-id: iH8pgl
 #: src/presentation/shell/OnboardingTour.tsx
@@ -360,6 +365,11 @@ msgstr "Download diagnostics"
 msgid "Download the track as GPX"
 msgstr "Download the track as GPX"
 
+#. js-lingui-id: i1nBkV
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Drag"
+msgstr "Drag"
+
 #. js-lingui-id: XzAuUz
 #: src/presentation/shell/MapLegend.tsx
 msgid "Drinking water"
@@ -547,10 +557,10 @@ msgstr "Images are searched at the map center. Right-click the map to search at 
 msgid "Isolated dwelling"
 msgstr "Isolated dwelling"
 
-#. js-lingui-id: 77Emn0
+#. js-lingui-id: -4pBYk
 #: src/presentation/shell/HelpScreen.tsx
-msgid "Keyboard shortcuts"
-msgstr "Keyboard shortcuts"
+msgid "Keyboard and mouse"
+msgstr "Keyboard and mouse"
 
 #. js-lingui-id: g9-BQD
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -629,6 +639,11 @@ msgstr "Local track search results"
 msgid "localStorage"
 msgstr "localStorage"
 
+#. js-lingui-id: YdkFRS
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Look around in 3D"
+msgstr "Look around in 3D"
+
 #. js-lingui-id: 4HBFYh
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Map"
@@ -706,6 +721,11 @@ msgstr "Measured {measuredAt}"
 msgid "Measuring browser storage…"
 msgstr "Measuring browser storage…"
 
+#. js-lingui-id: lUma69
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Middle button"
+msgstr "Middle button"
+
 #. js-lingui-id: _5yqwd
 #: src/presentation/shell/MapLegend.tsx
 msgid "Military area"
@@ -751,6 +771,11 @@ msgstr "Mountain ridge"
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Mountain saddle"
 msgstr "Mountain saddle"
+
+#. js-lingui-id: S82nRC
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Mouse"
+msgstr "Mouse"
 
 #. js-lingui-id: O0r946
 #: src/presentation/shell/HelpScreen.tsx
@@ -1048,6 +1073,11 @@ msgstr "Return to individual Sentinel scenes"
 msgid "Ridge"
 msgstr "Ridge"
 
+#. js-lingui-id: tNX8oi
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Right-click"
+msgstr "Right-click"
+
 #. js-lingui-id: W6xcp6
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point."
@@ -1072,6 +1102,11 @@ msgstr "Road"
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Rotate"
 msgstr "Rotate"
+
+#. js-lingui-id: vOaNev
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Rotate and tilt in 3D"
+msgstr "Rotate and tilt in 3D"
 
 #. js-lingui-id: dN_PDN
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -1157,6 +1192,11 @@ msgstr "Saved markers are unavailable"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Scree"
 msgstr "Scree"
+
+#. js-lingui-id: nuk_Gh
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Scroll wheel"
+msgstr "Scroll wheel"
 
 #. js-lingui-id: srhkS0
 #: src/presentation/shell/MapSearchPlaceholder.tsx

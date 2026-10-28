@@ -109,6 +109,11 @@ msgstr "Профиль"
 msgid "Account and sync between devices. The dot shows sync status."
 msgstr "Профиль и синхронизация между устройствами. Точка показывает статус синхронизации."
 
+#. js-lingui-id: 6Kx2vJ
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Actions for a point"
+msgstr "Действия для точки"
+
 #. js-lingui-id: OPLR35
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Add your own points to the track."
@@ -118,11 +123,6 @@ msgstr "Добавляйте на трек свои метки."
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Administrative area"
 msgstr "Административная территория"
-
-#. js-lingui-id: 2eNzep
-#: src/presentation/shell/HelpScreen.tsx
-msgid "After you click the map."
-msgstr "После щелчка по карте."
 
 #. js-lingui-id: GXUlVd
 #: src/presentation/shell/OnboardingTour.tsx
@@ -153,6 +153,11 @@ msgstr "Примерное использование памяти JavaScript"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Areas"
 msgstr "Площади"
+
+#. js-lingui-id: YI0Ul2
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Arrow, plus, and minus keys work after you click the map."
+msgstr "Стрелки, плюс и минус работают после щелчка по карте."
 
 #. js-lingui-id: iH8pgl
 #: src/presentation/shell/OnboardingTour.tsx
@@ -360,6 +365,11 @@ msgstr "Скачать диагностику"
 msgid "Download the track as GPX"
 msgstr "Скачать трек в GPX"
 
+#. js-lingui-id: i1nBkV
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Drag"
+msgstr "Перетаскивание"
+
 #. js-lingui-id: XzAuUz
 #: src/presentation/shell/MapLegend.tsx
 msgid "Drinking water"
@@ -547,10 +557,10 @@ msgstr "Снимки подбираются для центра карты. Чт
 msgid "Isolated dwelling"
 msgstr "Отдельный дом"
 
-#. js-lingui-id: 77Emn0
+#. js-lingui-id: -4pBYk
 #: src/presentation/shell/HelpScreen.tsx
-msgid "Keyboard shortcuts"
-msgstr "Сочетания клавиш"
+msgid "Keyboard and mouse"
+msgstr "Клавиатура и мышь"
 
 #. js-lingui-id: g9-BQD
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -629,6 +639,11 @@ msgstr "Результаты поиска по локальным трекам"
 msgid "localStorage"
 msgstr "Хранилище localStorage"
 
+#. js-lingui-id: YdkFRS
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Look around in 3D"
+msgstr "Осмотреться в 3D"
+
 #. js-lingui-id: 4HBFYh
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Map"
@@ -706,6 +721,11 @@ msgstr "Измерено в {measuredAt}"
 msgid "Measuring browser storage…"
 msgstr "Измерение хранилища браузера…"
 
+#. js-lingui-id: lUma69
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Middle button"
+msgstr "Средняя кнопка"
+
 #. js-lingui-id: _5yqwd
 #: src/presentation/shell/MapLegend.tsx
 msgid "Military area"
@@ -751,6 +771,11 @@ msgstr "Горный гребень"
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Mountain saddle"
 msgstr "Горная седловина"
+
+#. js-lingui-id: S82nRC
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Mouse"
+msgstr "Мышь"
 
 #. js-lingui-id: O0r946
 #: src/presentation/shell/HelpScreen.tsx
@@ -1048,6 +1073,11 @@ msgstr "Вернуться к отдельным сценам Sentinel"
 msgid "Ridge"
 msgstr "Хребет"
 
+#. js-lingui-id: tNX8oi
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Right-click"
+msgstr "Правый щелчок"
+
 #. js-lingui-id: W6xcp6
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Right-click the map to copy coordinates, add a marker, or get weather and satellite images for that point."
@@ -1072,6 +1102,11 @@ msgstr "Дорога"
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Rotate"
 msgstr "Повернуть"
+
+#. js-lingui-id: vOaNev
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Rotate and tilt in 3D"
+msgstr "Повернуть и наклонить в 3D"
 
 #. js-lingui-id: dN_PDN
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -1157,6 +1192,11 @@ msgstr "Сохранённые метки недоступны"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Scree"
 msgstr "Осыпь"
+
+#. js-lingui-id: nuk_Gh
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Scroll wheel"
+msgstr "Колесо прокрутки"
 
 #. js-lingui-id: srhkS0
 #: src/presentation/shell/MapSearchPlaceholder.tsx

@@ -41,7 +41,7 @@ describe('WorkspaceShell onboarding tour', () => {
     const help = screen.getByRole('dialog', { name: 'Help' });
     expect(within(help).getByRole('heading', { name: 'Map legend' })).toBeVisible();
     expect(
-      within(help).getByRole('heading', { name: 'Keyboard shortcuts' }),
+      within(help).getByRole('heading', { name: 'Keyboard and mouse' }),
     ).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('dialog', { name: 'Tracks' })).toBeVisible();
@@ -66,10 +66,13 @@ describe('WorkspaceShell onboarding tour', () => {
     await user.click(screen.getByRole('button', { name: 'Help' }));
     const help = screen.getByRole('dialog', { name: 'Help' });
     expect(within(help).getByRole('heading', { name: 'Map legend' })).toBeVisible();
-    const shortcuts = within(help).getByRole('region', { name: 'Keyboard shortcuts' });
-    expect(within(shortcuts).getByText('Save the track').nextSibling).toHaveTextContent(
+    const controls = within(help).getByRole('region', { name: 'Keyboard and mouse' });
+    expect(within(controls).getByText('Save the track').nextSibling).toHaveTextContent(
       'CtrlS',
     );
+    expect(
+      within(controls).getByText('Actions for a point').nextElementSibling,
+    ).toContainElement(within(controls).getByRole('img', { name: 'Right-click' }));
 
     await user.click(within(help).getByRole('button', { name: 'Take a tour!' }));
 
@@ -91,7 +94,7 @@ describe('WorkspaceShell onboarding tour', () => {
 
     const help = screen.getByRole('dialog', { name: 'Help' });
     expect(within(help).getByRole('heading', { name: 'Map legend' })).toBeVisible();
-    expect(within(help).queryByText('Keyboard shortcuts')).not.toBeInTheDocument();
+    expect(within(help).queryByText('Keyboard and mouse')).not.toBeInTheDocument();
     expect(
       within(help).queryByRole('button', { name: 'Take a tour!' }),
     ).not.toBeInTheDocument();

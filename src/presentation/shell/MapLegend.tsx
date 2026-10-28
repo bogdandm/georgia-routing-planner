@@ -440,6 +440,10 @@ function LegendSwatch({ symbol }: { readonly symbol: LegendSymbol }) {
  * Explains the hiking basemap's symbols on the help screen. Swatches are drawn from the
  * same generated images and palette as the map style, so the legend cannot drift from
  * what the map shows.
+ *
+ * The groups take one column on phones and three when the help screen stacks the legend
+ * above the shortcuts. From `lg`, where the legend sits beside the shortcuts, Areas and
+ * Lines share the first of two columns so the legend is about as tall as the shortcuts.
  */
 export function MapLegend() {
   const { i18n } = useLingui();
@@ -457,13 +461,25 @@ export function MapLegend() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
-          gap: 2,
-          columnGap: 3,
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            sm: 'repeat(3, max-content)',
+            lg: 'repeat(2, max-content)',
+          },
+          rowGap: 2,
+          columnGap: 4,
         }}
       >
-        {legendGroups.map((group) => (
-          <Stack key={group.title.id} spacing={0.75}>
+        {legendGroups.map((group, index) => (
+          <Stack
+            key={group.title.id}
+            spacing={0.75}
+            sx={
+              index === legendGroups.length - 1
+                ? { gridColumn: { lg: '2' }, gridRow: { lg: '1 / span 2' } }
+                : { gridColumn: { lg: '1' } }
+            }
+          >
             <Typography
               variant="caption"
               color="text.secondary"

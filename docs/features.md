@@ -79,18 +79,21 @@ panel.
 
 ### Help screen
 
-**Help** in the rail opens a dialog with the map legend and the keyboard shortcuts. From
-1200 CSS pixels the legend sits on the left and the shortcuts on the right, separated by
-a vertical divider; narrower viewports stack them. Devices whose primary pointer is
-coarse, such as phones and tablets, show only the legend. On desktop, **Take a tour!**
-closes the dialog and starts the onboarding tour; the smartphone workspace shows the
-dialog full screen without it.
+**Help** in the rail opens a dialog with the map legend and the keyboard and mouse
+controls. From 1200 CSS pixels the legend sits on the left and the controls on the
+right, separated by a vertical divider; narrower viewports stack them. Devices whose
+primary pointer is coarse, such as phones and tablets, show only the legend. On desktop,
+**Take a tour!** closes the dialog and starts the onboarding tour; the smartphone
+workspace shows the dialog full screen without it.
 
 The legend lists areas, lines, and points with swatches drawn from the same generated
 images and palette as the basemap style, with area signs enlarged for legibility. The
-shortcut list covers every global shortcut, Escape, and the map's own camera keys, with
-keys shown for the current platform (see
-[keyboard shortcuts](./keyboard-and-map-controls.md#keyboard-shortcuts)).
+controls list every global shortcut, Escape, the map's own camera keys, and the mouse
+gestures, grouped as Workspace, Tracks, Map, Map camera, and Mouse (see
+[keyboard shortcuts and map controls](./keyboard-and-map-controls.md)). Keys use the
+current platform's labels, with the macOS modifiers ⌘, ⌃, and ⇧ drawn as icons. Mouse
+gestures are drawn with Kenney's CC0 _Input Prompts_ glyphs: a dragged mouse, the scroll
+wheel, the middle button, and the right button.
 
 ### Onboarding tour
 

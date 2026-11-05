@@ -33,7 +33,7 @@ describe('MapSearchPlaceholder', () => {
       </I18nProvider>,
     );
 
-  it('navigates locally to unlabeled latitude/longitude coordinates and inspects the point without contacting a provider', async () => {
+  it('navigates locally to hemisphere coordinates and inspects the point without contacting a provider', async () => {
     const services = createTestServices();
     if (services.searchPlaces === null) return;
     const execute = vi.spyOn(services.searchPlaces, 'execute');
@@ -42,18 +42,18 @@ describe('MapSearchPlaceholder', () => {
     const input = screen.getByRole('textbox', {
       name: 'Search places or coordinates',
     });
-    await user.type(input, '41.7, 44.8{Enter}');
+    await user.type(input, '41.88919° N, 43.74222° E{Enter}');
 
     expect(execute).not.toHaveBeenCalled();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
-      latitude: 41.7,
-      longitude: 44.8,
+      latitude: 41.88919,
+      longitude: 43.74222,
       zoom: 13,
     });
     expect(mapInteractionStore.getState().pointInspectionCommand?.coordinate).toEqual({
-      latitude: 41.7,
-      longitude: 44.8,
+      latitude: 41.88919,
+      longitude: 43.74222,
     });
     expect(
       mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,

@@ -14,6 +14,45 @@ describe('parseCoordinateQuery', () => {
     });
   });
 
+  it('accepts decimal degrees with hemisphere suffixes in either order', () => {
+    expect(parseCoordinateQuery('41.88919° N, 43.74222° E')).toMatchObject({
+      status: 'valid',
+      coordinate: { latitude: 41.88919, longitude: 43.74222 },
+    });
+    expect(parseCoordinateQuery('43.74222° W 41.88919° S')).toMatchObject({
+      status: 'valid',
+      coordinate: { latitude: -41.88919, longitude: -43.74222 },
+    });
+  });
+
+  it('converts degrees, minutes, and seconds with hemisphere suffixes', () => {
+    const result = parseCoordinateQuery(`42°14'44.24"N 44°37'23.10"E`);
+
+    expect(result.status).toBe('valid');
+    if (result.status !== 'valid') return;
+    expect(result.coordinate.latitude).toBeCloseTo(42.2456222222, 10);
+    expect(result.coordinate.longitude).toBeCloseTo(44.6230833333, 10);
+  });
+
+  it('rejects invalid hemisphere coordinates', () => {
+    expect(parseCoordinateQuery(`42°60'0"N 44°37'23"E`)).toEqual({
+      status: 'invalid',
+      code: 'out-of-bounds',
+    });
+    expect(parseCoordinateQuery(`42°14'60"N 44°37'23"E`)).toEqual({
+      status: 'invalid',
+      code: 'out-of-bounds',
+    });
+    expect(parseCoordinateQuery('91° N, 44° E')).toEqual({
+      status: 'invalid',
+      code: 'out-of-bounds',
+    });
+    expect(parseCoordinateQuery('41° N, 42° S')).toEqual({
+      status: 'invalid',
+      code: 'duplicate-axis',
+    });
+  });
+
   it('interprets unlabeled pairs as latitude, longitude', () => {
     expect(parseCoordinateQuery('41.7, 44.8')).toMatchObject({
       status: 'valid',

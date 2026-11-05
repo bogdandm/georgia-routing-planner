@@ -666,7 +666,9 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 
 - **Search:** place-or-coordinate search starts in the viewport and doubles the area up
   to a 500 km radius, appending deduplicated results with their distance. Coordinates
-  stay local; unlabeled pairs are `latitude, longitude`, matching **Copy coordinates**.
+  stay local. Unlabeled pairs are `latitude, longitude`, matching **Copy coordinates**;
+  hemisphere forms accept decimal degrees (`41.88919° N, 43.74222° E`) and degrees,
+  minutes, and seconds (`42°14'44.24"N 44°37'23.10"E`) in either axis order.
   Settlements, boundaries, mountains, and water features show by default; other results
   sit behind **Show other results**. Map movement does not dismiss or cancel a search.
   Up to two matching saved tracks are listed as well.

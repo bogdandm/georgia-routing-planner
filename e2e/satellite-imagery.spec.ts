@@ -3,7 +3,10 @@ import { expect, test } from '@playwright/test';
 
 import { installMapProviderFixtures } from './installMapProviderFixtures';
 
+const satelliteFixtureNow = new Date('2026-07-12T12:00:00.000Z');
+
 test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(satelliteFixtureNow);
   await installMapProviderFixtures(page);
 });
 

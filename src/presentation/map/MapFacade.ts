@@ -43,6 +43,16 @@ export interface TrackPointClick extends TrackPointPointer {
   readonly shiftKey: boolean;
 }
 
+/** Native mouse drag lifecycle shared by route planning and track editing. */
+export interface TrackPointDragHandlers {
+  /** Captures a hit candidate without changing the draft or selection. */
+  start(pointer: TrackPointPointer): boolean;
+  /** Preview only; emitted once per frame after at least 4 CSS px of travel. */
+  move(coordinate: MapCoordinate): void;
+  /** Exact release position, or null for a stationary press or cancellation. */
+  end(coordinate: MapCoordinate | null): void;
+}
+
 export type MapViewportMovement =
   | { readonly phase: 'moving' }
   | { readonly phase: 'settled'; readonly viewport: MapViewportSnapshot };
@@ -73,6 +83,8 @@ export interface MapFacade {
   subscribeTrackPointHover(
     listener: (pointer: TrackPointPointer | null) => void,
   ): () => void;
+  /** Replacing/removing handlers cancels any captured candidate or drag. */
+  setTrackPointDragHandlers(handlers: TrackPointDragHandlers | null): void;
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;

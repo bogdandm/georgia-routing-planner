@@ -4,6 +4,7 @@ import type {
   MapViewportMovement,
   PlanningPreview,
   TrackPointClick,
+  TrackPointDragHandlers,
   TrackPointPointer,
 } from '@/presentation/map/MapFacade';
 import {
@@ -40,6 +41,7 @@ export class FakeMapFacade implements MapFacade {
   public terrainModeRequests: TerrainMode[] = [];
   public interactionModes: MapInteractionMode[] = [];
   public planningPreviews: (PlanningPreview | null)[] = [];
+  public trackPointDragHandlers: TrackPointDragHandlers | null = null;
   public navigationRequests: {
     readonly longitude: number;
     readonly latitude: number;
@@ -144,6 +146,10 @@ export class FakeMapFacade implements MapFacade {
 
   public emitTrackPointHover(pointer: TrackPointPointer | null): void {
     for (const listener of this.#trackPointHoverListeners) listener(pointer);
+  }
+
+  public setTrackPointDragHandlers(handlers: TrackPointDragHandlers | null): void {
+    this.trackPointDragHandlers = handlers;
   }
 
   public getCamera(): MapCamera {

@@ -5,11 +5,15 @@ import { storedTrackElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
 import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 import {
+  applyTrackPathDrag,
+  beginTrackPathSave,
   canSaveTrackPath,
   completeTrackPathRequest,
   deleteTrackPathAnchors,
   endTrackPathInsertion,
   nearestTrackPathAnchor,
+  nearestTrackPathDragTarget,
+  previewTrackPathDrag,
   placeTrackPathPoint,
   setTrackPathInsertionMode,
   setTrackPathLegMode,
@@ -347,5 +351,158 @@ describe('track path editor', () => {
     expect(elevation?.trackPoints[1]?.map((point) => point.elevationMeters)).toEqual([
       1_050, 1_120, 1_200,
     ]);
+  });
+
+  it('previews an anchor move without history and commits metadata changes once', () => {
+    const base = startTrackPathInsertion(recordedTrack(), 0);
+    const target = { kind: 'anchor', anchorId: 1 } as const;
+    const preview = previewTrackPathDrag(base.path, target, P);
+    expect(preview.anchors[1]?.point).toEqual({
+      coordinate: P,
+      recordedAt: '2025-06-01T08:10:00Z',
+    });
+    expect(preview.legs.slice(0, 2)).toEqual([
+      {
+        kind: 'leg',
+        mode: 'line',
+        sections: [{ kind: 'direct', coordinates: [A, P] }],
+      },
+      {
+        kind: 'leg',
+        mode: 'line',
+        sections: [{ kind: 'direct', coordinates: [P, C] }],
+      },
+    ]);
+    expect(base.history).toHaveLength(0);
+    expect(base.path.anchors[1]?.point.elevationMeters).toBe(1_100);
+    const moved = applyTrackPathDrag(startTrackPathMove(base, 1), target, P);
+    expect(moved.path.anchors[1]?.point).toEqual(preview.anchors[1]?.point);
+    expect(moved.path.anchors[0]).toBe(base.path.anchors[0]);
+    expect(moved.path.legs[2]).toBe(base.path.legs[2]);
+    expect(moved.insertion).toBe(base.insertion);
+    expect(moved.movingAnchorId).toBeNull();
+    expect(moved.history).toHaveLength(1);
+    expect(moved.requestGeneration).toBe(base.requestGeneration + 1);
+    expect(moved.elevation).toBeNull();
+    const undone = undoTrackPathEdit(moved);
+    expect(undone.path).toBe(base.path);
+    expect(undone.insertion).toBe(base.insertion);
+  });
+
+  it('uses direct previews for routed neighbours and requests routing only on drop', () => {
+    const base = routeAll(setTrackPathLegMode(recordedTrack(), 0, 'routes'));
+    const target = { kind: 'anchor', anchorId: 0 } as const;
+    const preview = previewTrackPathDrag(base.path, target, P);
+    expect(preview.legs[0]).toMatchObject({
+      mode: 'line',
+      sections: [{ kind: 'direct', coordinates: [P, B] }],
+    });
+    const moved = applyTrackPathDrag(base, target, P);
+    expect(moved.path.legs[0]).toEqual({ kind: 'leg', mode: 'routes', sections: null });
+    expect(moved.pendingRequest?.waypoints).toEqual([P, B]);
+    expect(moved.history).toHaveLength(base.history.length + 1);
+  });
+
+  it('bends a straight edge with two direct legs and preserves the insertion cursor', () => {
+    const base = setTrackPathInsertionMode(
+      startTrackPathInsertion(recordedTrack(), 3),
+      'routes',
+    );
+    const target = { kind: 'leg', afterAnchorId: 0 } as const;
+    const preview = previewTrackPathDrag(base.path, target, P);
+    expect(new Set(preview.anchors.map((anchor) => anchor.id)).size).toBe(6);
+    expect(base.nextAnchorId).toBe(5);
+    const bent = applyTrackPathDrag(base, target, P);
+    expect(bent.path.anchors[1]).toEqual({ id: 5, point: { coordinate: P } });
+    expect(bent.nextAnchorId).toBe(6);
+    expect(bent.path.legs.slice(0, 2)).toEqual([
+      {
+        kind: 'leg',
+        mode: 'line',
+        sections: [{ kind: 'direct', coordinates: [A, P] }],
+      },
+      {
+        kind: 'leg',
+        mode: 'line',
+        sections: [{ kind: 'direct', coordinates: [P, B] }],
+      },
+    ]);
+    expect(bent.pendingRequest).toBeNull();
+    expect(bent.insertion).toBe(base.insertion);
+    expect(bent.history).toHaveLength(1);
+    const undone = undoTrackPathEdit(bent);
+    expect(undone.path).toBe(base.path);
+    expect(undone.insertion).toBe(base.insertion);
+  });
+
+  it('prioritizes anchors and excludes routed, gap and degenerate edges', () => {
+    const path = recordedTrack().path;
+    expect(nearestTrackPathDragTarget(path, A, 50)).toEqual({
+      kind: 'anchor',
+      anchorId: 0,
+    });
+    expect(nearestTrackPathDragTarget(path, [44.645, 42.665], 20)).toEqual({
+      kind: 'leg',
+      afterAnchorId: 0,
+    });
+    expect(nearestTrackPathDragTarget(path, [44.645, 42.665], 800)).toMatchObject({
+      kind: 'anchor',
+    });
+    expect(nearestTrackPathDragTarget(path, [44.665, 42.685], 20)).toBeNull();
+    const routed = setTrackPathLegMode(recordedTrack(), 0, 'routes');
+    expect(nearestTrackPathDragTarget(routed.path, [44.645, 42.665], 20)).toBeNull();
+    const degenerate = trackPathFromSegments([[{ coordinate: A }, { coordinate: A }]], {
+      stripElevation: false,
+    });
+    expect(nearestTrackPathDragTarget(degenerate, [44.645, 42.665], 20)).toBeNull();
+    expect(previewTrackPathDrag(degenerate, { kind: 'leg', afterAnchorId: 0 }, P)).toBe(
+      degenerate,
+    );
+  });
+
+  it('hits a rendered horizontal line rather than its great-circle arc', () => {
+    const path = trackPathFromSegments(
+      [[{ coordinate: [44, 42] }, { coordinate: [45, 42] }]],
+      { stripElevation: false },
+    );
+    expect(nearestTrackPathDragTarget(path, [44.5, 42], 20)).toEqual({
+      kind: 'leg',
+      afterAnchorId: 0,
+    });
+    expect(nearestTrackPathDragTarget(path, [44.5, 42.002], 20)).toBeNull();
+  });
+
+  it('hit-tests across the antimeridian without selecting the long way around', () => {
+    const path = trackPathFromSegments(
+      [[{ coordinate: [179.9, 0] }, { coordinate: [-179.9, 0] }]],
+      { stripElevation: false },
+    );
+    expect(nearestTrackPathDragTarget(path, [180, 0.0001], 20)).toEqual({
+      kind: 'leg',
+      afterAnchorId: 0,
+    });
+    expect(nearestTrackPathDragTarget(path, [0, 0], 20)).toBeNull();
+  });
+
+  it('rejects saving and stale targets and does not record an unchanged anchor', () => {
+    const base = recordedTrack();
+    const missing = { kind: 'anchor', anchorId: 999 } as const;
+    expect(applyTrackPathDrag(base, missing, P)).toBe(base);
+    expect(previewTrackPathDrag(base.path, missing, P)).toBe(base.path);
+    for (const afterAnchorId of [2, 4, 999]) {
+      const target = { kind: 'leg', afterAnchorId } as const;
+      expect(applyTrackPathDrag(base, target, P)).toBe(base);
+      expect(previewTrackPathDrag(base.path, target, P)).toBe(base.path);
+    }
+    const saving = beginTrackPathSave(base);
+    expect(applyTrackPathDrag(saving, { kind: 'anchor', anchorId: 0 }, P)).toBe(saving);
+    const unchanged = applyTrackPathDrag(
+      startTrackPathMove(base, 0),
+      { kind: 'anchor', anchorId: 0 },
+      A,
+    );
+    expect(unchanged.path).toBe(base.path);
+    expect(unchanged.history).toBe(base.history);
+    expect(unchanged.movingAnchorId).toBeNull();
   });
 });

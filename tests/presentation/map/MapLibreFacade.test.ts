@@ -7,6 +7,8 @@ import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import type {
   MapViewportMovement,
+  MapInteractionMode,
+  TrackPointDragHandlers,
   TrackPointClick,
 } from '@/presentation/map/MapFacade';
 import {
@@ -69,7 +71,7 @@ class FakeNativeMap {
     return this.#canvas;
   }
 
-  public getCanvasContainer(): HTMLCanvasElement {
+  public getCanvasContainer(): HTMLElement {
     return this.#canvas;
   }
 
@@ -120,7 +122,9 @@ class FakeNativeMap {
     return this.#pitch;
   }
 
-  public unproject(_point: { readonly x: number; readonly y: number }) {
+  public unproject(
+    _point: { readonly x: number; readonly y: number } | readonly [number, number],
+  ) {
     return { lng: 44.65, lat: 42.67 };
   }
 
@@ -1853,6 +1857,299 @@ describe('MapLibreFacade', () => {
     expect(trackPointListener).toHaveBeenCalledOnce();
     facade.destroy();
   });
+
+  it.each(['route-planning', 'track-editing'] as const)(
+    'keeps a captured stationary press as exactly one %s click',
+    (mode) => {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      const facade = new MapLibreFacade(services.logger);
+      const handlers = {
+        start: vi.fn<TrackPointDragHandlers['start']>(() => true),
+        move: vi.fn(),
+        end: vi.fn(),
+      } satisfies TrackPointDragHandlers;
+      const planning = vi.fn();
+      const track = vi.fn();
+      const nativePan = vi.fn();
+      const canvas = nativeMap.getCanvas();
+      // A native click is emitted only if the DOM event reaches MapLibre.
+      canvas.addEventListener('click', (originalEvent) => {
+        nativeMap.fire('click', {
+          originalEvent,
+          point: { x: 102, y: 101 },
+          lngLat: { lng: 44.65, lat: 42.67 },
+        });
+      });
+      canvas.addEventListener('mousedown', nativePan);
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      facade.setInteractionMode(mode);
+      facade.setTrackPointDragHandlers(handlers);
+      facade.subscribePlanningClicks(planning);
+      facade.subscribeTrackPointClicks(track);
+
+      canvas.dispatchEvent(
+        new MouseEvent('mousedown', {
+          button: 0,
+          buttons: 1,
+          clientX: 100,
+          clientY: 100,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      window.dispatchEvent(
+        new MouseEvent('mousemove', { clientX: 102, clientY: 101, buttons: 1 }),
+      );
+      window.dispatchEvent(
+        new MouseEvent('mouseup', { button: 0, clientX: 102, clientY: 101 }),
+      );
+      canvas.dispatchEvent(new MouseEvent('click', { button: 0, bubbles: true }));
+
+      expect(handlers.start).toHaveBeenCalledOnce();
+      expect(handlers.start.mock.lastCall?.[0]).toMatchObject({
+        coordinate: { longitude: 44.65, latitude: 42.67 },
+      });
+      expect(handlers.move).not.toHaveBeenCalled();
+      expect(handlers.end).toHaveBeenCalledExactlyOnceWith(null);
+      expect(nativePan).not.toHaveBeenCalled();
+      expect(planning).toHaveBeenCalledTimes(mode === 'route-planning' ? 1 : 0);
+      expect(track).toHaveBeenCalledTimes(mode === 'track-editing' ? 1 : 0);
+      if (mode === 'track-editing') {
+        expect(track).toHaveBeenCalledWith({
+          coordinate: { longitude: 44.65, latitude: 42.67 },
+          toleranceMeters: 0,
+          shiftKey: false,
+        });
+      }
+      expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+      facade.destroy();
+    },
+  );
+
+  it('throttles track dragging after four CSS pixels and commits the exact outside release without a click', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const unproject = vi.spyOn(nativeMap, 'unproject').mockImplementation((point) => {
+      const x = 'x' in point ? point.x : point[0];
+      const y = 'y' in point ? point.y : point[1];
+      return { lng: x / 100, lat: y / 100 };
+    });
+    const facade = new MapLibreFacade(services.logger);
+    const handlers = {
+      start: vi.fn(() => true),
+      move: vi.fn(),
+      end: vi.fn(),
+    } satisfies TrackPointDragHandlers;
+    const clicked = vi.fn();
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('route-planning');
+    facade.setTrackPointDragHandlers(handlers);
+    facade.subscribePlanningClicks(clicked);
+    const canvas = nativeMap.getCanvas();
+    canvas.dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        clientX: 100,
+        clientY: 100,
+      }),
+    );
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 103, clientY: 100 }),
+    );
+    vi.advanceTimersToNextFrame();
+    expect(handlers.move).not.toHaveBeenCalled();
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 104, clientY: 100 }),
+    );
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 108, clientY: 102 }),
+    );
+    expect(handlers.move).not.toHaveBeenCalled();
+    expect(canvas.style.cursor).toBe('grabbing');
+    vi.advanceTimersToNextFrame();
+    expect(handlers.move).toHaveBeenCalledExactlyOnceWith({
+      longitude: 1.08,
+      latitude: 1.02,
+    });
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 115, clientY: 110 }),
+    );
+    // Release is on the window, outside the canvas, and precedes the queued frame.
+    window.dispatchEvent(
+      new MouseEvent('mouseup', { button: 0, clientX: 900, clientY: 600 }),
+    );
+    expect(handlers.end).toHaveBeenCalledExactlyOnceWith({
+      longitude: 9,
+      latitude: 6,
+    });
+    expect(canvas.style.cursor).toBe('crosshair');
+    vi.advanceTimersToNextFrame();
+    expect(handlers.move).toHaveBeenCalledTimes(1);
+    nativeMap.fire('click', {
+      originalEvent: { button: 0 },
+      lngLat: { lng: 9, lat: 6 },
+    });
+    expect(clicked).not.toHaveBeenCalled();
+    // A fresh press is not suppressed by the preceding drag.
+    handlers.start.mockReturnValue(false);
+    canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, buttons: 1 }));
+    nativeMap.fire('click', {
+      originalEvent: { button: 0 },
+      lngLat: { lng: 2, lat: 3 },
+    });
+    expect(clicked).toHaveBeenCalledExactlyOnceWith({ longitude: 2, latitude: 3 });
+    facade.destroy();
+    unproject.mockRestore();
+  });
+
+  it('leaves misses, modified presses, non-editing modes, controls and markers native', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const container = document.createElement('div');
+    container.append(nativeMap.getCanvas());
+    const getContainer = vi
+      .spyOn(nativeMap, 'getCanvasContainer')
+      .mockReturnValue(container);
+    const facade = new MapLibreFacade(services.logger);
+    const handlers = { start: vi.fn(() => false), move: vi.fn(), end: vi.fn() };
+    const nativePan = vi.fn();
+    container.addEventListener('mousedown', nativePan);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    facade.setTrackPointDragHandlers(handlers);
+    const press = (target: HTMLElement, options: MouseEventInit = {}) => {
+      const event = new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        bubbles: true,
+        cancelable: true,
+        ...options,
+      });
+      target.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    };
+    press(nativeMap.getCanvas());
+    expect(handlers.start).toHaveBeenCalledOnce();
+    handlers.start.mockReturnValue(true);
+    press(nativeMap.getCanvas(), { shiftKey: true });
+    press(nativeMap.getCanvas(), { ctrlKey: true });
+    press(nativeMap.getCanvas(), { altKey: true });
+    press(nativeMap.getCanvas(), { metaKey: true });
+    press(nativeMap.getCanvas(), { button: 2, buttons: 2 });
+    const control = document.createElement('button');
+    const marker = document.createElement('div');
+    container.append(control, marker);
+    press(control);
+    press(marker);
+    for (const mode of [
+      'default',
+      'measurement',
+      'marker-placement',
+    ] satisfies MapInteractionMode[]) {
+      facade.setInteractionMode(mode);
+      press(nativeMap.getCanvas());
+    }
+    expect(handlers.start).toHaveBeenCalledOnce();
+    expect(handlers.end).not.toHaveBeenCalled();
+    expect(nativePan).toHaveBeenCalledTimes(11);
+    facade.destroy();
+    getContainer.mockRestore();
+  });
+
+  it('leaves Shift selection clicks untouched when drag handlers are installed', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(services.logger);
+    const handlers = { start: vi.fn(() => true), move: vi.fn(), end: vi.fn() };
+    const clicked = vi.fn();
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    facade.setTrackPointDragHandlers(handlers);
+    facade.subscribeTrackPointClicks(clicked);
+    nativeMap
+      .getCanvas()
+      .dispatchEvent(
+        new MouseEvent('mousedown', { button: 0, buttons: 1, shiftKey: true }),
+      );
+    nativeMap.fire('click', {
+      originalEvent: { button: 0, shiftKey: true },
+      point: { x: 100, y: 100 },
+      lngLat: { lng: 44.65, lat: 42.67 },
+    });
+    expect(handlers.start).not.toHaveBeenCalled();
+    expect(handlers.end).not.toHaveBeenCalled();
+    expect(clicked).toHaveBeenCalledExactlyOnceWith({
+      coordinate: { longitude: 44.65, latitude: 42.67 },
+      toleranceMeters: 0,
+      shiftKey: true,
+    });
+    facade.destroy();
+  });
+
+  it.each(['blur', 'Escape', 'mode', 'handlers', 'detach'] as const)(
+    'cancels a captured drag on %s and removes pending work and global listeners',
+    (reason) => {
+      vi.useFakeTimers();
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      const facade = new MapLibreFacade(services.logger);
+      const handlers = { start: vi.fn(() => true), move: vi.fn(), end: vi.fn() };
+      const clicked = vi.fn();
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      facade.setInteractionMode('route-planning');
+      facade.setTrackPointDragHandlers(handlers);
+      facade.subscribePlanningClicks(clicked);
+      const canvas = nativeMap.getCanvas();
+      canvas.dispatchEvent(new MouseEvent('mousedown', { button: 0, buttons: 1 }));
+      window.dispatchEvent(
+        new MouseEvent('mousemove', { buttons: 1, clientX: 10, clientY: 10 }),
+      );
+      expect(canvas.style.cursor).toBe('grabbing');
+      if (reason === 'blur') window.dispatchEvent(new Event('blur'));
+      if (reason === 'Escape') {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      }
+      if (reason === 'mode') facade.setInteractionMode('default');
+      if (reason === 'handlers') facade.setTrackPointDragHandlers(null);
+      if (reason === 'detach') facade.detachMap();
+      expect(handlers.end).toHaveBeenCalledExactlyOnceWith(null);
+      expect(canvas.style.cursor).toBe(
+        reason === 'mode' || reason === 'detach' ? '' : 'crosshair',
+      );
+      const moved = new MouseEvent('mousemove', {
+        buttons: 1,
+        clientX: 20,
+        clientY: 20,
+        cancelable: true,
+      });
+      window.dispatchEvent(moved);
+      window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+      window.dispatchEvent(new Event('blur'));
+      vi.advanceTimersToNextFrame();
+      expect(moved.defaultPrevented).toBe(false);
+      expect(handlers.end).toHaveBeenCalledTimes(1);
+      expect(handlers.move).not.toHaveBeenCalled();
+      nativeMap.fire('click', {
+        originalEvent: { button: 0 },
+        lngLat: { lng: 44.65, lat: 42.67 },
+      });
+      expect(facade.getPointInspection()).toEqual({ status: 'closed' });
+      expect(clicked).not.toHaveBeenCalled();
+      facade.destroy();
+      // Detach removes the permanent canvas capture listeners as well.
+      const down = new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        cancelable: true,
+      });
+      canvas.dispatchEvent(down);
+      expect(down.defaultPrevented).toBe(false);
+      expect(handlers.start).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('publishes primary planning clicks and labels the cursor for the active mode', async () => {
     const services = createTestServices();

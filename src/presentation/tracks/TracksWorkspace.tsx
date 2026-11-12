@@ -3383,6 +3383,47 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [editActivePath, listedPath, listedTrackKey],
   );
   useEffect(() => {
+    if (pointSelection === null) return undefined;
+    const handleSelectionKey = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        event.shiftKey ||
+        useUiStore.getState().activeTab !== 'tracks'
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS selector.
+          target.closest('input, textarea, select, [role="menu"], [role="listbox"]') !==
+            null)
+      ) {
+        return;
+      }
+      // A dialog rendered through a portal can own focus outside its DOM subtree.
+      // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS selector.
+      if (document.querySelector('[aria-modal="true"]') !== null) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setPointSelection(null);
+      } else if (event.key === 'Delete' && pathShortcutsActive) {
+        event.preventDefault();
+        deletePathSelection(pointSelection);
+      }
+    };
+    window.addEventListener('keydown', handleSelectionKey);
+    return () => {
+      window.removeEventListener('keydown', handleSelectionKey);
+    };
+  }, [deletePathSelection, pathShortcutsActive, pointSelection, setPointSelection]);
+  useEffect(() => {
     mapLayers?.setTrackPointSelection(
       listedPath === null || pointSelection === null
         ? null

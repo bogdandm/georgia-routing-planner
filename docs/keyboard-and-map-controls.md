@@ -40,6 +40,10 @@ pair must not be held. Ctrl+F, Ctrl+E, and Ctrl+O stay text-editing keys on macO
 | `+` or `=`, `-`   | `+` or `=`, `-` | Zooms in or out by one level; Shift does not change the step                                                                                                                       | —                                                                          |
 | Escape            | Escape          | Cancels marker placement and forecast-point selection, ends the ruler, and ends point insertion or a point move; in the map search, also moves focus out of it and keeps the query | —                                                                          |
 
+While the Tracks point editor is open, Delete removes the shared point selection and
+Escape clears it, regardless of whether it came from the map, list, or profile. Delete
+does not act in text fields, menus, or modal dialogs, and does not repeat while held.
+
 Shortcuts are inactive while focus is in a text field, except Ctrl/⌘+F, S, O, and E, and
 inside a modal dialog, including the onboarding tour. Inside menus and listboxes, plain
 and Shift shortcuts are inactive so type-to-select and arrow navigation keep working,
@@ -80,6 +84,12 @@ pointer, so dragging right turns left and dragging down raises the view toward t
 horizon. Middle, Shift, and Ctrl drags released while still moving coast on briefly with
 fading speed; the next press or wheel stops the coast. The wheel zooms. Box zoom and
 right drag are off; pitch is capped at 75 degrees.
+
+In the track point editor, an unmodified left drag on a point moves that point instead
+of panning. Dragging a **Line** edge inserts a bend point; routed edges and gaps do not.
+A stationary press keeps the existing click behavior. Release commits one undoable edit;
+Escape or losing focus cancels the preview. Away from editable geometry, left drag still
+pans normally.
 
 Right-click opens the point actions described in
 [persistent map controls](./features.md#persistent-map-controls).

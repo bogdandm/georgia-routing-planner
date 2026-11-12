@@ -1,14 +1,17 @@
 import { useLingui } from '@lingui/react/macro';
 import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import {
   Alert,
   Box,
   Button,
+  IconButton,
   Paper,
   Popover,
   Slide,
   Snackbar,
   Stack,
+  Tooltip,
   Typography,
   useMediaQuery,
 } from '@mui/material';
@@ -73,6 +76,13 @@ import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
+import {
+  applyTrackPathDrag,
+  nearestTrackPathDragTarget,
+  previewTrackPathDrag,
+  trackPathMapSections,
+  type TrackPathDragTarget,
+} from '@/presentation/tracks/trackPathEditor';
 import {
   cancelMarkerPlacement,
   cancelWeatherPointSelection,
@@ -480,6 +490,14 @@ export function MapWorkspace({
   const placePathPoint = tracksWorkspace?.placePathPoint;
   const selectPathPointNear = tracksWorkspace?.selectPathPointNear;
   const hoverPathPointNear = tracksWorkspace?.hoverPathPointNear;
+  const editActivePath = tracksWorkspace?.editActivePath;
+  const editableGeometry = editablePath?.path ?? null;
+  const editableVariant = editablePath?.variant ?? null;
+  const pointSelection = tracksWorkspace?.pointSelection ?? null;
+  const selectionCoordinate =
+    editablePath !== null && pointSelection !== null
+      ? tracksWorkspace?.pointsList?.anchors[pointSelection.last]?.coordinate
+      : null;
   const insertionAnchorId = editablePath?.insertion?.afterAnchorId ?? null;
   const routePlanPreviewAnchor =
     editablePath === null ||
@@ -930,6 +948,77 @@ export function MapWorkspace({
       hoverPathPointNear(null);
     };
   }, [facade, hoverPathPointNear, trackEditingActive]);
+
+  useEffect(() => {
+    if (
+      editableGeometry === null ||
+      editableVariant === null ||
+      editActivePath === undefined ||
+      markerPlacement !== null ||
+      weatherOwnsMapClicks ||
+      measurementActive
+    ) {
+      return undefined;
+    }
+    let target: TrackPathDragTarget | null = null;
+    let previewDrawn = false;
+    const draw = (path: typeof editableGeometry) => {
+      mapLayers?.setPlannedLineGeometry(
+        'route-plan',
+        trackPathMapSections(path),
+        path.anchors.map((anchor) => anchor.point.coordinate),
+        // eslint-disable-next-line lingui/no-unlocalized-strings -- Waypoint style tokens.
+        editableVariant === 'plan' ? 'numbered' : 'dots',
+      );
+    };
+    facade.setTrackPointDragHandlers({
+      start: (pointer) => {
+        target = nearestTrackPathDragTarget(
+          editableGeometry,
+          [pointer.coordinate.longitude, pointer.coordinate.latitude],
+          pointer.toleranceMeters,
+        );
+        return target !== null;
+      },
+      move: (coordinate) => {
+        if (target === null) return;
+        previewDrawn = true;
+        draw(
+          previewTrackPathDrag(editableGeometry, target, [
+            coordinate.longitude,
+            coordinate.latitude,
+          ]),
+        );
+      },
+      end: (coordinate) => {
+        if (previewDrawn) draw(editableGeometry);
+        previewDrawn = false;
+        const dropped = target;
+        target = null;
+        if (coordinate === null || dropped === null) return;
+        editActivePath((draft) =>
+          draft.path === editableGeometry
+            ? applyTrackPathDrag(draft, dropped, [
+                coordinate.longitude,
+                coordinate.latitude,
+              ])
+            : draft,
+        );
+      },
+    });
+    return () => {
+      facade.setTrackPointDragHandlers(null);
+    };
+  }, [
+    editActivePath,
+    editableGeometry,
+    editableVariant,
+    facade,
+    mapLayers,
+    markerPlacement,
+    measurementActive,
+    weatherOwnsMapClicks,
+  ]);
 
   useEffect(() => {
     if (!measurementActive) return undefined;
@@ -1910,6 +1999,34 @@ export function MapWorkspace({
               measurementActive={measurementActive}
               onMeasurementActiveChange={handleMeasurementActiveChange}
             />
+            {selectionCoordinate === null ||
+            selectionCoordinate === undefined ||
+            pointSelection === null ? null : (
+              <Marker
+                longitude={selectionCoordinate[0]}
+                latitude={selectionCoordinate[1]}
+                anchor="bottom-left"
+                offset={[12, -12]}
+              >
+                <Tooltip title={t`Delete selected points`}>
+                  <IconButton
+                    aria-label={t`Delete selected points`}
+                    color="error"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      tracksWorkspace?.deletePathSelection(pointSelection);
+                    }}
+                    sx={{
+                      bgcolor: 'background.paper',
+                      boxShadow: 3,
+                      '&:hover': { bgcolor: 'background.default' },
+                    }}
+                  >
+                    <DeleteOutlineOutlinedIcon />
+                  </IconButton>
+                </Tooltip>
+              </Marker>
+            )}
             {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
             ) : null}

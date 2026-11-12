@@ -745,6 +745,17 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
   };
 
   const handleListKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.defaultPrevented ||
+      event.repeat ||
+      event.nativeEvent.isComposing ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.shiftKey
+    ) {
+      return;
+    }
     if (event.key === 'Escape' && selection !== null) {
       event.stopPropagation();
       onSelectionChange(null);

@@ -67,6 +67,10 @@ export interface TrackPath {
   readonly legs: readonly PathLeg[];
 }
 
+export type TrackPathDragTarget =
+  | { readonly kind: 'anchor'; readonly anchorId: number }
+  | { readonly kind: 'leg'; readonly afterAnchorId: number };
+
 export interface PathInsertion {
   /** New points go after this anchor; null inserts before the first anchor. */
   readonly afterAnchorId: number | null;
@@ -553,30 +557,119 @@ function moveAnchor<D extends TrackPathDraft>(
   anchorId: number,
   coordinate: TrackCoordinate,
 ): D {
-  const index = anchorIndex(draft.path, anchorId);
-  const anchor = draft.path.anchors[index];
-  if (anchor === undefined) return cancelTrackPathMove(draft);
+  const path = movedAnchorPath(draft.path, anchorId, coordinate, false);
+  return path === draft.path ? cancelTrackPathMove(draft) : commitEdit(draft, path);
+}
+
+function movedAnchorPath(
+  path: TrackPath,
+  anchorId: number,
+  coordinate: TrackCoordinate,
+  preview: boolean,
+): TrackPath {
+  const index = anchorIndex(path, anchorId);
+  const anchor = path.anchors[index];
+  if (anchor === undefined) return path;
   // The recorded time still dates the point; its elevation belonged to the old place.
   const point: TrackPoint =
     anchor.point.recordedAt === undefined
       ? { coordinate }
       : { coordinate, recordedAt: anchor.point.recordedAt };
-  const anchors = draft.path.anchors.map((candidate, candidateIndex) =>
+  const anchors = path.anchors.map((candidate, candidateIndex) =>
     candidateIndex === index ? { id: anchor.id, point } : candidate,
   );
-  const legs = draft.path.legs.map((leg, legIndex) => {
+  const legs = path.legs.map((leg, legIndex) => {
     if (leg.kind === 'gap') return leg;
     if (legIndex === index - 1) {
-      const start = requiredAnchor(draft.path, legIndex).point.coordinate;
-      return connectingLeg(leg.mode, start, coordinate);
+      const start = requiredAnchor(path, legIndex).point.coordinate;
+      return connectingLeg(preview ? 'line' : leg.mode, start, coordinate);
     }
     if (legIndex === index) {
-      const end = requiredAnchor(draft.path, legIndex + 1).point.coordinate;
-      return connectingLeg(leg.mode, coordinate, end);
+      const end = requiredAnchor(path, legIndex + 1).point.coordinate;
+      return connectingLeg(preview ? 'line' : leg.mode, coordinate, end);
     }
     return leg;
   });
-  return commitEdit(draft, { anchors, legs });
+  return { anchors, legs };
+}
+
+function draggableLegIndex(path: TrackPath, afterAnchorId: number): number {
+  const index = anchorIndex(path, afterAnchorId);
+  const leg = path.legs[index];
+  const start = path.anchors[index];
+  const end = path.anchors[index + 1];
+  return leg?.kind === 'leg' &&
+    leg.mode === 'line' &&
+    start !== undefined &&
+    end !== undefined &&
+    geodesicDistanceMeters(start.point.coordinate, end.point.coordinate) > 0
+    ? index
+    : -1;
+}
+
+function bentLinePath(
+  path: TrackPath,
+  index: number,
+  coordinate: TrackCoordinate,
+  id: number,
+): TrackPath {
+  const start = requiredAnchor(path, index).point.coordinate;
+  const end = requiredAnchor(path, index + 1).point.coordinate;
+  return {
+    anchors: [
+      ...path.anchors.slice(0, index + 1),
+      { id, point: { coordinate } },
+      ...path.anchors.slice(index + 1),
+    ],
+    legs: [
+      ...path.legs.slice(0, index),
+      connectingLeg('line', start, coordinate),
+      connectingLeg('line', coordinate, end),
+      ...path.legs.slice(index + 1),
+    ],
+  };
+}
+
+/** Map-only geometry: no routing, metrics, draft mutation or history. */
+export function previewTrackPathDrag(
+  path: TrackPath,
+  target: TrackPathDragTarget,
+  coordinate: TrackCoordinate,
+): TrackPath {
+  if (target.kind === 'anchor') {
+    return movedAnchorPath(path, target.anchorId, coordinate, true);
+  }
+  const index = draggableLegIndex(path, target.afterAnchorId);
+  if (index < 0) return path;
+  const transientId = path.anchors.reduce(
+    (next, anchor) => Math.max(next, anchor.id + 1),
+    0,
+  );
+  return bentLinePath(path, index, coordinate, transientId);
+}
+
+/** Commits one drag, keeping the existing insertion cursor and mode unchanged. */
+export function applyTrackPathDrag<D extends TrackPathDraft>(
+  draft: D,
+  target: TrackPathDragTarget,
+  coordinate: TrackCoordinate,
+): D {
+  if (draft.status === 'saving') return draft;
+  if (target.kind === 'anchor') {
+    const anchor = draft.path.anchors[anchorIndex(draft.path, target.anchorId)];
+    if (anchor === undefined) return draft;
+    if (coordinatesEqual(anchor.point.coordinate, coordinate)) {
+      return cancelTrackPathMove(draft);
+    }
+    return moveAnchor(draft, target.anchorId, coordinate);
+  }
+  const index = draggableLegIndex(draft.path, target.afterAnchorId);
+  if (index < 0) return draft;
+  return commitEdit(
+    draft,
+    bentLinePath(draft.path, index, coordinate, draft.nextAnchorId),
+    { nextAnchorId: draft.nextAnchorId + 1 },
+  );
 }
 
 /** Inserts at the insertion point, or moves the anchor waiting for a new place. */
@@ -1067,7 +1160,7 @@ export function nearestTrackPathAnchor(
   let nearestDistance = toleranceMeters;
   for (const [index, anchor] of path.anchors.entries()) {
     const [longitude, latitude] = anchor.point.coordinate;
-    const longitudeDelta = Math.abs(longitude - coordinate[0]);
+    const longitudeDelta = Math.abs(longitude - coordinate[0]) % 360;
     if (
       Math.abs(latitude - coordinate[1]) > latitudeSpan ||
       Math.min(longitudeDelta, 360 - longitudeDelta) > longitudeSpan
@@ -1078,6 +1171,59 @@ export function nearestTrackPathAnchor(
     if (distance <= nearestDistance) {
       nearest = index;
       nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+/** Web Mercator's finite latitude limit, matching the map's straight line geometry. */
+function mercatorLatitude(latitude: number): number {
+  const clamped = Math.max(-85.05112878, Math.min(85.05112878, latitude));
+  return Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360));
+}
+
+/** Signed shortest longitude offset in radians, including repeated map worlds. */
+function longitudeOffset(longitude: number, origin: number): number {
+  return ((((((longitude - origin + 180) % 360) + 360) % 360) - 180) * Math.PI) / 180;
+}
+
+/** Anchors win over straight edges, even when an edge is closer to the pointer. */
+export function nearestTrackPathDragTarget(
+  path: TrackPath,
+  coordinate: TrackCoordinate,
+  toleranceMeters: number,
+): TrackPathDragTarget | null {
+  if (!Number.isFinite(toleranceMeters) || toleranceMeters < 0) return null;
+  const index = nearestTrackPathAnchor(path, coordinate, toleranceMeters);
+  if (index !== null) {
+    return { kind: 'anchor', anchorId: requiredAnchor(path, index).id };
+  }
+  let nearest: TrackPathDragTarget | null = null;
+  let nearestDistance = toleranceMeters;
+  for (const [legIndex, leg] of path.legs.entries()) {
+    if (leg.kind !== 'leg' || leg.mode !== 'line') continue;
+    const startAnchor = path.anchors[legIndex];
+    const endAnchor = path.anchors[legIndex + 1];
+    if (startAnchor === undefined || endAnchor === undefined) continue;
+    const start = startAnchor.point.coordinate;
+    const end = endAnchor.point.coordinate;
+    const dx = longitudeOffset(end[0], start[0]);
+    const startY = mercatorLatitude(start[1]);
+    const dy = mercatorLatitude(end[1]) - startY;
+    const squaredLength = dx * dx + dy * dy;
+    if (squaredLength === 0) continue;
+    // Hit the rendered Mercator segment, not a great-circle arc between the endpoints.
+    const x = longitudeOffset(coordinate[0], start[0]);
+    const y = mercatorLatitude(coordinate[1]) - startY;
+    const fraction = Math.max(0, Math.min(1, (x * dx + y * dy) / squaredLength));
+    const nearestCoordinate: TrackCoordinate = [
+      start[0] + (fraction * dx * 180) / Math.PI,
+      (Math.atan(Math.sinh(startY + fraction * dy)) * 180) / Math.PI,
+    ];
+    const distance = geodesicDistanceMeters(nearestCoordinate, coordinate);
+    if (distance <= nearestDistance) {
+      nearestDistance = distance;
+      nearest = { kind: 'leg', afterAnchorId: startAnchor.id };
     }
   }
   return nearest;

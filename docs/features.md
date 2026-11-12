@@ -368,6 +368,19 @@ selects the two points that now meet, scrolling the list to them, so the joined 
 mode is easy to change. Route plans use the same list with the switch always visible on
 every leg; only their clicked points are listed, never the router's intermediate points.
 
+An unmodified left-button drag on an editable map point moves it without changing the
+click behavior. Dragging a **Line** leg inserts a bend point between its endpoints;
+**Routes** legs and gaps cannot be split this way. The map previews the new geometry
+while dragging; release applies one edit and one **Undo** restores the original
+geometry. Escape or focus loss cancels an unfinished drag. Recorded time stays on a
+moved point, but its old elevation is discarded.
+
+While editing, any selection made through the map, list, or profile shows one delete
+icon beside the last selected point on the map, including a selection spanning many
+points. The icon and the Delete key remove the same selected range as the list's
+**Delete** action. Escape clears the shared selection. Text fields, menus, and modal
+dialogs keep their keyboard behavior; deleting is unavailable while saving.
+
 After each edit the browser recomputes terrain, metrics, the profile, and climbs as in
 planning; moved and added points take the calculated DEM elevation, so the profile spans
 the edited stretch. Save replaces the stored geometry of the same track, keeping its

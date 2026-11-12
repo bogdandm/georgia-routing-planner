@@ -160,6 +160,11 @@ msgstr "Create marker here"
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
 
+#. js-lingui-id: -fptTM
+#: src/presentation/map/MapWorkspace.tsx
+msgid "Delete selected points"
+msgstr "Delete selected points"
+
 #. js-lingui-id: SMM_gj
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Drag onto another map to swap"

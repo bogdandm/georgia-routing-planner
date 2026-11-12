@@ -20,6 +20,7 @@ import type {
   MapViewportMovement,
   PlanningPreview,
   TrackPointClick,
+  TrackPointDragHandlers,
   TrackPointPointer,
 } from '@/presentation/map/MapFacade';
 import {
@@ -107,6 +108,7 @@ const cameraSteps: Record<
 
 /** Screen radius around a track-editing click that still hits a track point. */
 const trackPointHitPixels = 12;
+const trackPointDragThresholdPixels = 4;
 
 const initialSnapshot: MapDiagnosticsSnapshot = {
   lifecycle: 'loading',
@@ -339,6 +341,18 @@ export class MapLibreFacade implements MapFacade {
    * compatibility mouse events, so the ruler readout stays on the last point instead.
    */
   #cursorPreviewEnabled = true;
+  #trackPointDragHandlers: TrackPointDragHandlers | null = null;
+  #trackPointDrag: {
+    readonly handlers: TrackPointDragHandlers;
+    readonly x: number;
+    readonly y: number;
+    readonly cursor: string;
+    dragging: boolean;
+  } | null = null;
+  #trackPointDragFrame: number | null = null;
+  #pendingTrackPointDragCoordinate: MapCoordinate | null = null;
+  /** A captured press publishes its stationary click itself, never through MapLibre. */
+  #suppressTrackPointClick = false;
 
   public constructor(
     private readonly logger: DiagnosticLogger,
@@ -365,6 +379,13 @@ export class MapLibreFacade implements MapFacade {
     this.#pointerGestures.setTerrainOrbitEnabled(
       this.#snapshot.terrainMode === 'terrain',
     );
+    // Camera capture runs first; plain left presses then get a chance before native pan.
+    map
+      .getCanvasContainer()
+      .addEventListener('mousedown', this.handleTrackPointMouseDown, true);
+    map
+      .getCanvasContainer()
+      .addEventListener('click', this.handleTrackPointNativeClick, true);
     this.#pointInspector.attach(map);
     map.on('style.load', this.handleStyleLoad);
     map.on('load', this.handleLoad);
@@ -445,6 +466,12 @@ export class MapLibreFacade implements MapFacade {
     return () => {
       this.#trackPointHoverListeners.delete(listener);
     };
+  }
+
+  public setTrackPointDragHandlers(handlers: TrackPointDragHandlers | null): void {
+    if (this.#trackPointDragHandlers === handlers) return;
+    this.finishTrackPointDrag(null);
+    this.#trackPointDragHandlers = handlers;
   }
 
   public getCamera(): MapCamera {
@@ -893,6 +920,7 @@ export class MapLibreFacade implements MapFacade {
 
   public setInteractionMode(mode: MapInteractionMode): void {
     if (this.#interactionMode === mode) return;
+    this.finishTrackPointDrag(null);
     if (this.#interactionMode === 'track-editing') {
       for (const listener of this.#trackPointHoverListeners) listener(null);
     }
@@ -939,6 +967,7 @@ export class MapLibreFacade implements MapFacade {
     this.#planningClickListeners.clear();
     this.#trackPointClickListeners.clear();
     this.#trackPointHoverListeners.clear();
+    this.#trackPointDragHandlers = null;
     this.#cursorElevationAbort?.abort();
   }
 
@@ -1073,7 +1102,7 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
     const map = this.#map;
-    if (map === null) return;
+    if (map === null || this.#trackPointDrag !== null) return;
     if (this.#interactionMode === 'track-editing') {
       const pointer = this.trackPointPointer(map, event.point, {
         longitude: event.lngLat.lng,
@@ -1142,6 +1171,10 @@ export class MapLibreFacade implements MapFacade {
 
   private readonly handleMapClick = (event: MapMouseEvent): void => {
     const map = this.#map;
+    if (this.#suppressTrackPointClick) {
+      this.#suppressTrackPointClick = false;
+      return;
+    }
     if (
       map === null ||
       this.#interactionMode === 'marker-placement' ||
@@ -1217,6 +1250,156 @@ export class MapLibreFacade implements MapFacade {
         latitude: offset.lat,
       }),
     };
+  }
+
+  private readonly handleTrackPointMouseDown = (event: MouseEvent): void => {
+    const map = this.#map;
+    const handlers = this.#trackPointDragHandlers;
+    if (this.#trackPointDrag !== null) return;
+    this.#suppressTrackPointClick = false;
+    if (
+      map === null ||
+      handlers === null ||
+      event.target !== map.getCanvas() ||
+      event.button !== 0 ||
+      event.buttons !== 1 ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.metaKey ||
+      (this.#interactionMode !== 'route-planning' &&
+        this.#interactionMode !== 'track-editing')
+    ) {
+      return;
+    }
+    const point = this.trackPointMousePosition(map, event);
+    const coordinate = map.unproject([point.x, point.y]);
+    if (
+      !handlers.start(
+        this.trackPointPointer(map, point, {
+          longitude: coordinate.lng,
+          latitude: coordinate.lat,
+        }),
+      )
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.#trackPointDrag = {
+      handlers,
+      x: event.clientX,
+      y: event.clientY,
+      cursor: map.getCanvas().style.cursor,
+      dragging: false,
+    };
+    this.#suppressTrackPointClick = true;
+    window.addEventListener('mousemove', this.handleTrackPointMouseMove, true);
+    window.addEventListener('mouseup', this.handleTrackPointMouseUp, true);
+    window.addEventListener('blur', this.handleTrackPointBlur);
+    window.addEventListener('keydown', this.handleTrackPointKeyDown, true);
+  };
+
+  private trackPointMousePosition(map: MapLibreMap, event: MouseEvent) {
+    const bounds = map.getCanvasContainer().getBoundingClientRect();
+    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+  }
+
+  private trackPointDragHasMoved(event: MouseEvent): boolean {
+    const drag = this.#trackPointDrag;
+    if (drag === null) return false;
+    if (
+      !drag.dragging &&
+      Math.hypot(event.clientX - drag.x, event.clientY - drag.y) >=
+        trackPointDragThresholdPixels
+    ) {
+      drag.dragging = true;
+      const canvas = this.#map?.getCanvas();
+      if (canvas !== undefined) canvas.style.cursor = 'grabbing';
+    }
+    return drag.dragging;
+  }
+
+  private readonly handleTrackPointMouseMove = (event: MouseEvent): void => {
+    const map = this.#map;
+    if (map === null || this.#trackPointDrag === null) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!this.trackPointDragHasMoved(event)) return;
+    const point = this.trackPointMousePosition(map, event);
+    const coordinate = map.unproject([point.x, point.y]);
+    this.#pendingTrackPointDragCoordinate = {
+      longitude: coordinate.lng,
+      latitude: coordinate.lat,
+    };
+    if (this.#trackPointDragFrame !== null) return;
+    this.#trackPointDragFrame = requestAnimationFrame(() => {
+      this.#trackPointDragFrame = null;
+      const pending = this.#pendingTrackPointDragCoordinate;
+      this.#pendingTrackPointDragCoordinate = null;
+      if (pending !== null) this.#trackPointDrag?.handlers.move(pending);
+    });
+  };
+
+  private readonly handleTrackPointMouseUp = (event: MouseEvent): void => {
+    const map = this.#map;
+    if (map === null || this.#trackPointDrag === null || event.button !== 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const point = this.trackPointMousePosition(map, event);
+    const released = map.unproject([point.x, point.y]);
+    const coordinate = { longitude: released.lng, latitude: released.lat };
+    const dragged = this.trackPointDragHasMoved(event);
+    const mode = this.#interactionMode;
+    this.finishTrackPointDrag(dragged ? coordinate : null);
+    // Ending a candidate can rerender the owner; only the original mode gets its click.
+    if (dragged || this.#map !== map || this.#interactionMode !== mode) return;
+    if (mode === 'route-planning') {
+      for (const listener of this.#planningClickListeners) listener(coordinate);
+    } else if (mode === 'track-editing') {
+      this.publishTrackPointClick(map, point, coordinate, event.shiftKey);
+    }
+  };
+
+  private readonly handleTrackPointNativeClick = (event: MouseEvent): void => {
+    const map = this.#map;
+    if (
+      !this.#suppressTrackPointClick ||
+      map === null ||
+      (event.target !== map.getCanvas() && event.target !== map.getCanvasContainer())
+    ) {
+      return;
+    }
+    this.#suppressTrackPointClick = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  private readonly handleTrackPointBlur = (): void => {
+    this.finishTrackPointDrag(null);
+  };
+
+  private readonly handleTrackPointKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+    this.finishTrackPointDrag(null);
+  };
+
+  private finishTrackPointDrag(coordinate: MapCoordinate | null): void {
+    const drag = this.#trackPointDrag;
+    if (drag === null) return;
+    this.#trackPointDrag = null;
+    window.removeEventListener('mousemove', this.handleTrackPointMouseMove, true);
+    window.removeEventListener('mouseup', this.handleTrackPointMouseUp, true);
+    window.removeEventListener('blur', this.handleTrackPointBlur);
+    window.removeEventListener('keydown', this.handleTrackPointKeyDown, true);
+    if (this.#trackPointDragFrame !== null) {
+      cancelAnimationFrame(this.#trackPointDragFrame);
+      this.#trackPointDragFrame = null;
+    }
+    this.#pendingTrackPointDragCoordinate = null;
+    const canvas = this.#map?.getCanvas();
+    if (canvas !== undefined) canvas.style.cursor = drag.cursor;
+    drag.handlers.end(coordinate);
   }
 
   private queryNearestPoi(
@@ -1937,6 +2120,8 @@ export class MapLibreFacade implements MapFacade {
   }
 
   private detach(): void {
+    this.finishTrackPointDrag(null);
+    this.#suppressTrackPointClick = false;
     this.#renderBenchmark?.abort(new Error('The map closed during the benchmark.'));
     this.cancelAllSourceRecoveries();
     this.#initialViewportSettled = false;
@@ -1962,6 +2147,12 @@ export class MapLibreFacade implements MapFacade {
     map
       .getCanvasContainer()
       .removeEventListener('mouseleave', this.handleCanvasMouseLeave);
+    map
+      .getCanvasContainer()
+      .removeEventListener('mousedown', this.handleTrackPointMouseDown, true);
+    map
+      .getCanvasContainer()
+      .removeEventListener('click', this.handleTrackPointNativeClick, true);
     map.getCanvas().style.cursor = '';
     this.#pointerGestures.detach();
     this.layerController?.detach(map);

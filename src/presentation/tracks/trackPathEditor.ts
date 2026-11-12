@@ -1182,6 +1182,24 @@ export interface TrackPathProjection {
   project(coordinate: TrackCoordinate): { readonly x: number; readonly y: number };
 }
 
+function projectedSegmentFraction(
+  pointer: TrackPathProjection['pointer'],
+  start: TrackPathProjection['pointer'],
+  end: TrackPathProjection['pointer'],
+): number | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const squaredLength = dx * dx + dy * dy;
+  if (squaredLength === 0) return null;
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      ((pointer.x - start.x) * dx + (pointer.y - start.y) * dy) / squaredLength,
+    ),
+  );
+}
+
 /** Anchors take precedence; distances use actual camera pixels, including in 3D. */
 export function nearestTrackPathDragTarget(
   path: TrackPath,
@@ -1208,15 +1226,8 @@ export function nearestTrackPathDragTarget(
     const end = projection.project(endCoordinate);
     const dx = end.x - start.x;
     const dy = end.y - start.y;
-    const squaredLength = dx * dx + dy * dy;
-    if (squaredLength === 0) continue;
-    const fraction = Math.max(
-      0,
-      Math.min(
-        1,
-        ((pointer.x - start.x) * dx + (pointer.y - start.y) * dy) / squaredLength,
-      ),
-    );
+    const fraction = projectedSegmentFraction(pointer, start, end);
+    if (fraction === null) continue;
     const distance = Math.hypot(
       pointer.x - start.x - fraction * dx,
       pointer.y - start.y - fraction * dy,
@@ -1227,4 +1238,25 @@ export function nearestTrackPathDragTarget(
     }
   }
   return nearest;
+}
+
+/** Screen-space bend hint only; anchor hits suppress the handle. */
+export function trackPathBendHandle(
+  path: TrackPath,
+  projection: TrackPathProjection,
+): { readonly x: number; readonly y: number } | null {
+  const target = nearestTrackPathDragTarget(path, projection);
+  if (target?.kind !== 'leg') return null;
+  const index = anchorIndex(path, target.afterAnchorId);
+  const startCoordinate = path.anchors[index]?.point.coordinate;
+  const endCoordinate = path.anchors[index + 1]?.point.coordinate;
+  if (startCoordinate === undefined || endCoordinate === undefined) return null;
+  const start = projection.project(startCoordinate);
+  const end = projection.project(endCoordinate);
+  const fraction = projectedSegmentFraction(projection.pointer, start, end);
+  if (fraction === null) return null;
+  return {
+    x: start.x + fraction * (end.x - start.x),
+    y: start.y + fraction * (end.y - start.y),
+  };
 }

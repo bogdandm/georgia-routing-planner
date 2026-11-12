@@ -369,9 +369,12 @@ mode is easy to change. Route plans use the same list with the switch always vis
 every leg; only their clicked points are listed, never the router's intermediate points.
 
 An unmodified left-button drag on an editable map point moves it without changing the
-click behavior. Dragging a **Line** leg inserts a bend point between its endpoints;
-**Routes** legs and gaps cannot be split this way. The map previews the new geometry
-while dragging; release applies one edit and one **Undo** restores the original
+click behavior. Dragging a **Line** leg inserts a bend point between its endpoints,
+including the original solid edges of a recorded track before any edits. A floating
+white point with a blue outline follows the nearest bend position when hovering over an
+eligible edge; it is hidden over existing anchors, routed legs, gaps, and during
+dragging. **Routes** legs and gaps cannot be split this way. The map previews the new
+geometry while dragging; release applies one edit and one **Undo** restores the original
 geometry. Escape or focus loss cancels an unfinished drag. Recorded time stays on a
 moved point, but its old elevation is discarded. Drag hits use the camera's projected
 pixel positions in both 2D and 3D. A rendered-feature query rejects presses away from

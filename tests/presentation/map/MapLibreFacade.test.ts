@@ -20,8 +20,17 @@ import {
 } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
 import {
+  applyTrackPathDrag,
   nearestTrackPathDragTarget,
+  previewTrackPathDrag,
+  setTrackPathLegMode,
+  startTrackPathEdit,
+  trackPathBendHandle,
   trackPathFromSegments,
+  trackPathMapSections,
+  trackPathSaveContent,
+  undoTrackPathEdit,
+  type TrackPath,
   type TrackPathDragTarget,
 } from '@/presentation/tracks/trackPathEditor';
 
@@ -1916,7 +1925,6 @@ describe('MapLibreFacade', () => {
   it.each([
     { terrain: false, hitLayer: null },
     { terrain: true, hitLayer: null },
-    { terrain: true, hitLayer: routePlanLayerIds.routed },
     { terrain: true, hitLayer: routePlanLayerIds.preview },
     { terrain: true, hitLayer: trackPointSelectionLayerIds.line },
   ])(
@@ -1961,6 +1969,313 @@ describe('MapLibreFacade', () => {
       facade.destroy();
     },
   );
+
+  it('bends an original solid recorded edge through native dragging with map-only preview and one Undo', () => {
+    vi.useFakeTimers();
+    const path = trackPathFromSegments(
+      [[{ coordinate: [1, 1] }, { coordinate: [3, 1] }]],
+      { stripElevation: false },
+    );
+    let draft = startTrackPathEdit(path, null);
+    const base = draft;
+    const nativeMap = new FakeNativeMap();
+    // Recorded Line legs are solid: their actual map section chooses the routed layer.
+    nativeMap.renderedFeatures = trackPathMapSections(path).map((section) => ({
+      layer: { id: routePlanLayerIds[section.kind] },
+      properties: { kind: section.kind },
+    }));
+    nativeMap.renderedLayers = nativeMap.renderedFeatures.map(({ layer }) => layer.id);
+    vi.spyOn(nativeMap, 'project').mockImplementation(([lng, lat]) => ({
+      x: lng * 100,
+      y: lat * 100,
+    }));
+    vi.spyOn(nativeMap, 'unproject').mockImplementation((point) => ({
+      lng: ('x' in point ? point.x : point[0]) / 100,
+      lat: ('y' in point ? point.y : point[1]) / 100,
+    }));
+    const facade = new MapLibreFacade(createTestServices().logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    let target: TrackPathDragTarget | null = null;
+    const previews: TrackPath[] = [];
+    facade.setTrackPointDragHandlers({
+      start: (projection) => {
+        target = nearestTrackPathDragTarget(draft.path, projection);
+        return target !== null;
+      },
+      move: (coordinate) => {
+        if (target !== null) {
+          previews.push(
+            previewTrackPathDrag(draft.path, target, [
+              coordinate.longitude,
+              coordinate.latitude,
+            ]),
+          );
+        }
+      },
+      end: (coordinate) => {
+        if (target !== null && coordinate !== null) {
+          draft = applyTrackPathDrag(draft, target, [
+            coordinate.longitude,
+            coordinate.latitude,
+          ]);
+        }
+      },
+    });
+    const pan = vi.fn();
+    nativeMap.getCanvas().addEventListener('mousedown', pan);
+    nativeMap.getCanvas().dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        clientX: 200,
+        clientY: 100,
+        bubbles: true,
+      }),
+    );
+    expect(target).toEqual({ kind: 'leg', afterAnchorId: 0 });
+    expect(pan).not.toHaveBeenCalled();
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 210, clientY: 140 }),
+    );
+    vi.advanceTimersToNextFrame();
+    expect(previews.at(-1)?.anchors.map(({ point }) => point.coordinate)).toEqual([
+      [1, 1],
+      [2.1, 1.4],
+      [3, 1],
+    ]);
+    expect(draft).toBe(base);
+    expect(draft.path).toBe(path);
+    expect(draft.history).toEqual([]);
+    expect(path.anchors).toHaveLength(2);
+    window.dispatchEvent(
+      new MouseEvent('mouseup', { button: 0, clientX: 220, clientY: 150 }),
+    );
+    expect(draft.history).toHaveLength(1);
+    expect(
+      trackPathSaveContent(draft)?.trackPoints[0]?.map(({ coordinate }) => coordinate),
+    ).toEqual([
+      [1, 1],
+      [2.2, 1.5],
+      [3, 1],
+    ]);
+    draft = undoTrackPathEdit(draft);
+    expect(draft.path).toBe(path);
+    expect(draft.history).toEqual([]);
+    facade.destroy();
+  });
+
+  it('leaves an actual Routes-mode edge to native panning after rendered-feature preflight', () => {
+    const recorded = trackPathFromSegments(
+      [[{ coordinate: [1, 1] }, { coordinate: [3, 1] }]],
+      { stripElevation: false },
+    );
+    const draft = setTrackPathLegMode(startTrackPathEdit(recorded, null), 0, 'routes');
+    const nativeMap = new FakeNativeMap();
+    nativeMap.renderedFeatures = trackPathMapSections(draft.path).map((section) => ({
+      layer: { id: routePlanLayerIds[section.kind] },
+      properties: { kind: section.kind },
+    }));
+    nativeMap.renderedLayers = nativeMap.renderedFeatures.map(({ layer }) => layer.id);
+    vi.spyOn(nativeMap, 'project').mockImplementation(([lng, lat]) => ({
+      x: lng * 100,
+      y: lat * 100,
+    }));
+    const facade = new MapLibreFacade(createTestServices().logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    const start = vi.fn(
+      (projection: Parameters<TrackPointDragHandlers['start']>[0]) =>
+        nearestTrackPathDragTarget(draft.path, projection) !== null,
+    );
+    const end = vi.fn();
+    facade.setTrackPointDragHandlers({ start, move: vi.fn(), end });
+    const pan = vi.fn();
+    nativeMap.getCanvas().addEventListener('mousedown', pan);
+    nativeMap.getCanvas().dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        clientX: 200,
+        clientY: 100,
+        bubbles: true,
+      }),
+    );
+    expect(start).toHaveReturnedWith(false);
+    expect(pan).toHaveBeenCalledOnce();
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+    expect(end).not.toHaveBeenCalled();
+    facade.destroy();
+  });
+
+  it('shows one snapped bend handle and clears it on miss, leave, press and camera movement', () => {
+    vi.useFakeTimers();
+    const path = trackPathFromSegments(
+      [[{ coordinate: [1, 1] }, { coordinate: [3, 1] }]],
+      { stripElevation: false },
+    );
+    const nativeMap = new FakeNativeMap();
+    nativeMap.renderedLayers = [routePlanLayerIds.routed];
+    nativeMap.renderedFeatures = [
+      { layer: { id: routePlanLayerIds.routed }, properties: { kind: 'routed' } },
+    ];
+    vi.spyOn(nativeMap, 'project').mockImplementation(([lng, lat]) => ({
+      x: lng * 100,
+      y: lat * 100,
+    }));
+    const facade = new MapLibreFacade(createTestServices().logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    const hover = vi.fn((projection: Parameters<TrackPointDragHandlers['start']>[0]) =>
+      trackPathBendHandle(path, projection),
+    );
+    facade.setTrackPointDragHandlers({
+      hover,
+      start: (projection) => nearestTrackPathDragTarget(path, projection) !== null,
+      move: vi.fn(),
+      end: vi.fn(),
+    });
+    const canvas = nativeMap.getCanvas();
+    const handles = () =>
+      nativeMap
+        .getCanvasContainer()
+        .querySelectorAll<HTMLElement>('.map-track-bend-handle');
+    const move = (x = 200, y = 107) => {
+      nativeMap.fire('mousemove', {
+        point: { x, y },
+        lngLat: { lng: x / 100, lat: y / 100 },
+        originalEvent: new MouseEvent('mousemove', { clientX: x, clientY: y }),
+      });
+      vi.advanceTimersToNextFrame();
+    };
+    nativeMap.fire('mousemove', {
+      point: { x: 190, y: 105 },
+      lngLat: { lng: 1.9, lat: 1.05 },
+      originalEvent: new MouseEvent('mousemove'),
+    });
+    nativeMap.fire('mousemove', {
+      point: { x: 200, y: 107 },
+      lngLat: { lng: 2, lat: 1.07 },
+      originalEvent: new MouseEvent('mousemove'),
+    });
+    expect(hover).not.toHaveBeenCalled();
+    vi.advanceTimersToNextFrame();
+    expect(hover).toHaveBeenCalledOnce();
+    expect(handles()).toHaveLength(1);
+    const handle = handles()[0];
+    expect(handle?.getAttribute('aria-hidden')).toBe('true');
+    expect(handle?.style.left).toBe('200px');
+    expect(handle?.style.top).toBe('100px');
+    move(220, 105);
+    expect(handles()).toHaveLength(1);
+    expect(handles()[0]).toBe(handle);
+    move(200, 140);
+    expect(handles()).toHaveLength(0);
+    move();
+    canvas.dispatchEvent(new MouseEvent('mouseleave'));
+    expect(handles()).toHaveLength(0);
+    move();
+    nativeMap.fire('movestart');
+    expect(handles()).toHaveLength(0);
+    nativeMap.fire('moveend');
+    move();
+    canvas.dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        clientX: 200,
+        clientY: 100,
+      }),
+    );
+    expect(handles()).toHaveLength(0);
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 220, clientY: 130 }),
+    );
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(0);
+    window.dispatchEvent(new MouseEvent('mouseup', { button: 0 }));
+    facade.destroy();
+    expect(handles()).toHaveLength(0);
+  });
+
+  it('gates bend hover before matching and cancels pending hints on mode, handlers and detach', () => {
+    vi.useFakeTimers();
+    const nativeMap = new FakeNativeMap();
+    const facade = new MapLibreFacade(createTestServices().logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    const hover = vi.fn(() => ({ x: 200, y: 100 }));
+    const handlers = { hover, start: () => false, move: vi.fn(), end: vi.fn() };
+    facade.setTrackPointDragHandlers(handlers);
+    const handles = () =>
+      nativeMap.getCanvasContainer().querySelectorAll('.map-track-bend-handle');
+    const move = (options: MouseEventInit = {}) => {
+      nativeMap.fire('mousemove', {
+        point: { x: 200, y: 107 },
+        lngLat: { lng: 2, lat: 1.07 },
+        originalEvent: new MouseEvent('mousemove', {
+          clientX: 200,
+          clientY: 107,
+          ...options,
+        }),
+      });
+    };
+    nativeMap.renderedFeatures = [];
+    move();
+    vi.advanceTimersToNextFrame();
+    expect(hover).not.toHaveBeenCalled();
+    expect(handles()).toHaveLength(0);
+    nativeMap.renderedFeatures = [
+      { layer: { id: routePlanLayerIds.direct }, properties: { kind: 'direct' } },
+    ];
+    for (const options of [
+      { shiftKey: true },
+      { ctrlKey: true },
+      { altKey: true },
+      { metaKey: true },
+      { buttons: 1 },
+      { buttons: 2 },
+      { buttons: 4 },
+    ]) {
+      move(options);
+      vi.advanceTimersToNextFrame();
+    }
+    expect(hover).not.toHaveBeenCalled();
+    expect(handles()).toHaveLength(0);
+    move();
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(1);
+    move({ shiftKey: true });
+    expect(handles()).toHaveLength(0);
+    move();
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(1);
+    move();
+    facade.setInteractionMode('default');
+    expect(handles()).toHaveLength(0);
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(0);
+    facade.setInteractionMode('track-editing');
+    move();
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(1);
+    move();
+    const replacement = vi.fn(() => ({ x: 180, y: 100 }));
+    facade.setTrackPointDragHandlers({ ...handlers, hover: replacement });
+    expect(handles()).toHaveLength(0);
+    vi.advanceTimersToNextFrame();
+    expect(replacement).not.toHaveBeenCalled();
+    move();
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(1);
+    move();
+    facade.detachMap();
+    expect(handles()).toHaveLength(0);
+    vi.advanceTimersToNextFrame();
+    expect(handles()).toHaveLength(0);
+    expect(replacement).toHaveBeenCalledOnce();
+    facade.destroy();
+  });
 
   it('captures terrain-projected anchors outside the geographic coordinates at the hit-box corners', () => {
     const path = trackPathFromSegments([[{ coordinate: [44, 42] }]], {

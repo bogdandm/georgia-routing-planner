@@ -22,6 +22,7 @@ import {
   startTrackPathInsertion,
   startTrackPathMove,
   trackPathAnchorDistances,
+  trackPathBendHandle,
   trackPathFromSegments,
   trackPathMapSections,
   trackPathSaveContent,
@@ -469,6 +470,88 @@ describe('track path editor', () => {
     expect(previewTrackPathDrag(degenerate, { kind: 'leg', afterAnchorId: 0 }, P)).toBe(
       degenerate,
     );
+  });
+
+  it('snaps a recorded Line bend handle to the closest anisotropic screen point without editing', () => {
+    const path = trackPathFromSegments(
+      [[{ coordinate: [0, 0] }, { coordinate: [1, 1] }]],
+      { stripElevation: false },
+    );
+    const draft = startTrackPathEdit(path, null);
+    const before = structuredClone(draft);
+    const handle = trackPathBendHandle(path, {
+      pointer: { x: 49, y: 15 },
+      project: ([longitude, latitude]) => ({
+        x: longitude * 100,
+        y: latitude * 10,
+      }),
+    });
+    // (49, 15) lies along the screen-space normal from the midpoint (50, 5).
+    expect(handle?.x).toBeCloseTo(50);
+    expect(handle?.y).toBeCloseTo(5);
+    expect(path.legs[0]).toMatchObject({ sections: [{ kind: 'recorded' }] });
+    expect(draft.path).toBe(path);
+    expect(draft).toEqual(before);
+  });
+
+  it('shows a bend handle at the 12 pixel boundary but not beyond it or near anchors', () => {
+    const path = trackPathFromSegments(
+      [[{ coordinate: [0, 0] }, { coordinate: [1, 0] }]],
+      { stripElevation: false },
+    );
+    const project = ([longitude, latitude]: TrackCoordinate) => ({
+      x: longitude * 100,
+      y: latitude * 10,
+    });
+    expect(trackPathBendHandle(path, { pointer: { x: 50, y: 12 }, project })).toEqual({
+      x: 50,
+      y: 0,
+    });
+    expect(
+      trackPathBendHandle(path, { pointer: { x: 50, y: 12.001 }, project }),
+    ).toBeNull();
+    expect(trackPathBendHandle(path, { pointer: { x: 12, y: 0 }, project })).toBeNull();
+    expect(
+      trackPathBendHandle(path, { pointer: { x: -13, y: 0 }, project }),
+    ).toBeNull();
+  });
+
+  it('does not offer bend handles for Routes legs, gaps, or collapsed screen segments', () => {
+    const draft = recordedTrack();
+    const middle = screenProjection([44.645, 42.665]);
+    expect(
+      trackPathBendHandle(setTrackPathLegMode(draft, 0, 'routes').path, middle),
+    ).toBeNull();
+    expect(
+      trackPathBendHandle(draft.path, screenProjection([44.665, 42.685])),
+    ).toBeNull();
+    const degenerate = trackPathFromSegments([[{ coordinate: A }, { coordinate: A }]], {
+      stripElevation: false,
+    });
+    expect(trackPathBendHandle(degenerate, middle)).toBeNull();
+    expect(trackPathBendHandle(degenerate, screenProjection(A))).toBeNull();
+    expect(
+      trackPathBendHandle(draft.path, {
+        pointer: { x: 50, y: 0 },
+        project: () => ({ x: 0, y: 0 }),
+      }),
+    ).toBeNull();
+  });
+
+  it('snaps a bend handle in the pointer repeated world using the supplied projection', () => {
+    const path = trackPathFromSegments(
+      [[{ coordinate: [179.9, 0] }, { coordinate: [-179.9, 0] }]],
+      { stripElevation: false },
+    );
+    const handle = trackPathBendHandle(path, {
+      pointer: { x: 20, y: 8 },
+      project: ([longitude, latitude]) => ({
+        x: (longitude + 360 * Math.round((540 - longitude) / 360) - 540) * 1000,
+        y: latitude * 1000,
+      }),
+    });
+    expect(handle?.x).toBeCloseTo(20);
+    expect(handle?.y).toBe(0);
   });
 
   it('uses the camera pixel radius under an anisotropic projection', () => {

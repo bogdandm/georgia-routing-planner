@@ -46,6 +46,10 @@ export interface TrackPointClick extends TrackPointPointer {
 
 /** Native mouse drag lifecycle shared by route planning and track editing. */
 export interface TrackPointDragHandlers {
+  /** Optional visual hint: closest bend position in canvas CSS pixels, never an edit. */
+  hover?(
+    projection: TrackPathProjection,
+  ): { readonly x: number; readonly y: number } | null;
   /** Captures a hit candidate without changing the draft or selection. */
   start(projection: TrackPathProjection): boolean;
   /** Preview only; emitted once per frame after at least 4 CSS px of travel. */

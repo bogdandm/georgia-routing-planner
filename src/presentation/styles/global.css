@@ -82,6 +82,18 @@ body {
   pointer-events: none;
 }
 
+.map-track-bend-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
 .map-point-inspector__anchor {
   width: 9px;
   height: 9px;

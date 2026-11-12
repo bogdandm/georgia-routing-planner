@@ -31,6 +31,8 @@ import {
   sovietTopographicSourceIds,
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
+import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
+import type { TrackPathProjection } from '@/presentation/tracks/trackPathEditor';
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import {
   runRenderBenchmark,
@@ -352,6 +354,9 @@ export class MapLibreFacade implements MapFacade {
   } | null = null;
   #trackPointDragFrame: number | null = null;
   #pendingTrackPointDragCoordinate: MapCoordinate | null = null;
+  #trackBendHoverFrame: number | null = null;
+  #pendingTrackBendHoverPoint: TrackPathProjection['pointer'] | null = null;
+  #trackBendHoverElement: HTMLDivElement | null = null;
   /** A captured press publishes its stationary click itself, never through MapLibre. */
   #suppressTrackPointClick = false;
 
@@ -471,6 +476,7 @@ export class MapLibreFacade implements MapFacade {
 
   public setTrackPointDragHandlers(handlers: TrackPointDragHandlers | null): void {
     if (this.#trackPointDragHandlers === handlers) return;
+    this.clearTrackBendHover();
     this.finishTrackPointDrag(null);
     this.#trackPointDragHandlers = handlers;
   }
@@ -921,6 +927,7 @@ export class MapLibreFacade implements MapFacade {
 
   public setInteractionMode(mode: MapInteractionMode): void {
     if (this.#interactionMode === mode) return;
+    this.clearTrackBendHover();
     this.finishTrackPointDrag(null);
     if (this.#interactionMode === 'track-editing') {
       for (const listener of this.#trackPointHoverListeners) listener(null);
@@ -1095,6 +1102,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleMoveStart = (): void => {
+    this.clearTrackBendHover();
     this.layerController?.setTerrainInteractionActive(true);
     for (const listener of this.#viewportMovementListeners) {
       listener({ phase: 'moving' });
@@ -1104,6 +1112,7 @@ export class MapLibreFacade implements MapFacade {
   private readonly handleMapMouseMove = (event: MapMouseEvent): void => {
     const map = this.#map;
     if (map === null || this.#trackPointDrag !== null) return;
+    this.scheduleTrackBendHover(event);
     if (this.#interactionMode === 'track-editing') {
       const pointer = this.trackPointPointer(map, event.point, {
         longitude: event.lngLat.lng,
@@ -1118,6 +1127,7 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleCanvasMouseLeave = (): void => {
+    this.clearTrackBendHover();
     for (const listener of this.#trackPointHoverListeners) listener(null);
     if (this.#cursorPreviewEnabled) this.clearPlanningPreview();
   };
@@ -1253,7 +1263,98 @@ export class MapLibreFacade implements MapFacade {
     };
   }
 
+  private trackPointDragProjection(
+    map: MapLibreMap,
+    point: TrackPathProjection['pointer'],
+  ): TrackPathProjection | null {
+    // Native feature queries account for terrain; geographic corner bounds do not.
+    // Misses must reach camera pan without projecting a potentially 100k-point path.
+    // Recorded Line legs also use the solid layer; editor mode decides bend eligibility.
+    const layers = [
+      routePlanLayerIds.waypoints,
+      routePlanLayerIds.direct,
+      routePlanLayerIds.routed,
+    ].filter((id) => map.getLayer(id) !== undefined);
+    if (
+      layers.length === 0 ||
+      map.queryRenderedFeatures(
+        [
+          [point.x - trackPointHitPixels, point.y - trackPointHitPixels],
+          [point.x + trackPointHitPixels, point.y + trackPointHitPixels],
+        ],
+        { layers },
+      ).length === 0
+    ) {
+      return null;
+    }
+    const coordinate = map.unproject([point.x, point.y]);
+    return {
+      pointer: point,
+      project: ([longitude, latitude]) =>
+        map.project([
+          longitude + 360 * Math.round((coordinate.lng - longitude) / 360),
+          latitude,
+        ]),
+    };
+  }
+
+  private scheduleTrackBendHover(event: MapMouseEvent): void {
+    if (
+      this.#trackPointDragHandlers?.hover === undefined ||
+      (this.#interactionMode !== 'route-planning' &&
+        this.#interactionMode !== 'track-editing') ||
+      event.originalEvent.buttons ||
+      event.originalEvent.ctrlKey ||
+      event.originalEvent.shiftKey ||
+      event.originalEvent.altKey ||
+      event.originalEvent.metaKey
+    ) {
+      this.clearTrackBendHover();
+      return;
+    }
+    this.#pendingTrackBendHoverPoint = { x: event.point.x, y: event.point.y };
+    if (this.#trackBendHoverFrame !== null) return;
+    this.#trackBendHoverFrame = requestAnimationFrame(() => {
+      this.#trackBendHoverFrame = null;
+      const point = this.#pendingTrackBendHoverPoint;
+      this.#pendingTrackBendHoverPoint = null;
+      const map = this.#map;
+      if (map === null || point === null || map.isMoving()) {
+        this.clearTrackBendHover();
+        return;
+      }
+      const projection = this.trackPointDragProjection(map, point);
+      const handle =
+        projection === null ? null : this.#trackPointDragHandlers?.hover?.(projection);
+      if (handle === null || handle === undefined) {
+        this.clearTrackBendHover();
+        return;
+      }
+      if (this.#trackBendHoverElement === null) {
+        const element = document.createElement('div');
+        element.className = 'map-track-bend-handle';
+        element.setAttribute('aria-hidden', 'true');
+        element.style.borderColor = mapVisualPalette.userGeometry.gpxTrack;
+        map.getCanvasContainer().append(element);
+        this.#trackBendHoverElement = element;
+      }
+      this.#trackBendHoverElement.style.left = `${String(handle.x)}px`;
+      this.#trackBendHoverElement.style.top = `${String(handle.y)}px`;
+    });
+  }
+
+  private clearTrackBendHover(): void {
+    if (this.#trackBendHoverFrame !== null) {
+      cancelAnimationFrame(this.#trackBendHoverFrame);
+      this.#trackBendHoverFrame = null;
+    }
+    this.#pendingTrackBendHoverPoint = null;
+    this.#trackBendHoverElement?.remove();
+    this.#trackBendHoverElement = null;
+  }
+
   private readonly handleTrackPointMouseDown = (event: MouseEvent): void => {
+    this.clearTrackBendHover();
     const map = this.#map;
     const handlers = this.#trackPointDragHandlers;
     if (this.#trackPointDrag !== null) return;
@@ -1273,37 +1374,11 @@ export class MapLibreFacade implements MapFacade {
     ) {
       return;
     }
-    const point = this.trackPointMousePosition(map, event);
-    // Native feature queries account for terrain; geographic corner bounds do not.
-    // Misses must reach camera pan without projecting a potentially 100k-point path.
-    const layers = [routePlanLayerIds.waypoints, routePlanLayerIds.direct].filter(
-      (id) => map.getLayer(id) !== undefined,
+    const projection = this.trackPointDragProjection(
+      map,
+      this.trackPointMousePosition(map, event),
     );
-    if (
-      layers.length === 0 ||
-      map.queryRenderedFeatures(
-        [
-          [point.x - trackPointHitPixels, point.y - trackPointHitPixels],
-          [point.x + trackPointHitPixels, point.y + trackPointHitPixels],
-        ],
-        { layers },
-      ).length === 0
-    ) {
-      return;
-    }
-    const coordinate = map.unproject([point.x, point.y]);
-    if (
-      !handlers.start({
-        pointer: point,
-        project: ([longitude, latitude]) =>
-          map.project([
-            longitude + 360 * Math.round((coordinate.lng - longitude) / 360),
-            latitude,
-          ]),
-      })
-    ) {
-      return;
-    }
+    if (projection === null || !handlers.start(projection)) return;
     this.clearPlanningPreview();
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -2150,6 +2225,7 @@ export class MapLibreFacade implements MapFacade {
   }
 
   private detach(): void {
+    this.clearTrackBendHover();
     this.finishTrackPointDrag(null);
     this.#suppressTrackPointClick = false;
     this.#renderBenchmark?.abort(new Error('The map closed during the benchmark.'));

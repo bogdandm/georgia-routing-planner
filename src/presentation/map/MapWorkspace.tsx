@@ -80,6 +80,7 @@ import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
   previewTrackPathDrag,
+  trackPathBendHandle,
   trackPathMapSections,
   type TrackPathDragTarget,
 } from '@/presentation/tracks/trackPathEditor';
@@ -973,6 +974,7 @@ export function MapWorkspace({
       );
     };
     facade.setTrackPointDragHandlers({
+      hover: (projection) => trackPathBendHandle(editableGeometry, projection),
       start: (projection) => {
         target = nearestTrackPathDragTarget(editableGeometry, projection);
         return target !== null;

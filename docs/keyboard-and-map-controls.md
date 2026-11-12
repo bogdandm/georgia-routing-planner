@@ -93,10 +93,11 @@ fading speed; the next press or wheel stops the coast. The wheel zooms. Box zoom
 right drag are off; pitch is capped at 75 degrees.
 
 In the track point editor, an unmodified left drag on a point moves that point instead
-of panning. Dragging a **Line** edge inserts a bend point; routed edges and gaps do not.
-A stationary press keeps the existing click behavior. Release commits one undoable edit;
-Escape or losing focus cancels the preview. Away from editable geometry, left drag still
-pans normally.
+of panning. Dragging a **Line** edge, including an unedited solid track edge, inserts a
+bend point; routed edges and gaps do not. A floating hover point marks the nearest
+available bend position. A stationary press keeps the existing click behavior. Release
+commits one undoable edit; Escape or losing focus cancels the preview. Away from
+editable geometry, left drag still pans normally.
 
 Right-click opens the point actions described in
 [persistent map controls](./features.md#persistent-map-controls).

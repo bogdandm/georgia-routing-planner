@@ -1186,27 +1186,26 @@ export interface TrackPathProjection {
 export function nearestTrackPathDragTarget(
   path: TrackPath,
   projection: TrackPathProjection,
-  tolerancePixels = 12,
 ): TrackPathDragTarget | null {
   const { pointer } = projection;
-  const points = path.anchors.map((anchor) =>
-    projection.project(anchor.point.coordinate),
-  );
   let nearest: TrackPathDragTarget | null = null;
-  let nearestDistance = tolerancePixels;
-  for (const [index, point] of points.entries()) {
+  let nearestDistance = 12;
+  for (const anchor of path.anchors) {
+    const point = projection.project(anchor.point.coordinate);
     const distance = Math.hypot(pointer.x - point.x, pointer.y - point.y);
     if (distance <= nearestDistance) {
       nearestDistance = distance;
-      nearest = { kind: 'anchor', anchorId: requiredAnchor(path, index).id };
+      nearest = { kind: 'anchor', anchorId: anchor.id };
     }
   }
   if (nearest !== null) return nearest;
   for (const [index, leg] of path.legs.entries()) {
     if (leg.kind !== 'leg' || leg.mode !== 'line') continue;
-    const start = points[index];
-    const end = points[index + 1];
-    if (start === undefined || end === undefined) continue;
+    const startCoordinate = path.anchors[index]?.point.coordinate;
+    const endCoordinate = path.anchors[index + 1]?.point.coordinate;
+    if (startCoordinate === undefined || endCoordinate === undefined) continue;
+    const start = projection.project(startCoordinate);
+    const end = projection.project(endCoordinate);
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const squaredLength = dx * dx + dy * dy;

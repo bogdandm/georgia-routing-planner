@@ -13,10 +13,17 @@ import type {
 } from '@/presentation/map/MapFacade';
 import {
   naprOrthophotoSourceIds,
+  routePlanLayerIds,
   sovietTopographicSourceIds,
   sentinelMosaicIdPrefixes,
+  trackPointSelectionLayerIds,
 } from '@/presentation/map/mapIds';
 import { createTestServices } from '@test/helpers/createTestServices';
+import {
+  nearestTrackPathDragTarget,
+  trackPathFromSegments,
+  type TrackPathDragTarget,
+} from '@/presentation/tracks/trackPathEditor';
 
 type TestListener = (event?: unknown) => void;
 
@@ -45,6 +52,22 @@ class FakeNativeMap {
   public initialTerrain: unknown = null;
   public moving = false;
   public projectedPoint = { x: 0, y: 0 };
+  public renderedLayers: string[] = [
+    routePlanLayerIds.direct,
+    routePlanLayerIds.waypoints,
+  ];
+  public renderedFeatures: {
+    layer: { id: string };
+    properties: { kind: string };
+  }[] = [
+    { layer: { id: routePlanLayerIds.waypoints }, properties: { kind: 'anchor' } },
+  ];
+  public readonly queryRenderedFeatures = vi.fn(
+    (_box: unknown, options: { readonly layers: readonly string[] }) =>
+      this.renderedFeatures.filter((feature) =>
+        options.layers.includes(feature.layer.id),
+      ),
+  );
   public padding = { top: 0, right: 0, bottom: 0, left: 0 };
   public cameraForBoundsPadding: FakeNativeMap['padding'] | null = null;
   public touchZoomRotate = { _touchRotate: { _isBelowThreshold: () => true } };
@@ -149,6 +172,7 @@ class FakeNativeMap {
   }
 
   public getLayer(id: string): unknown {
+    if (this.renderedLayers.includes(id)) return { id };
     return this.styleReady && id === 'basemap-background'
       ? { id, type: 'background' }
       : undefined;
@@ -1855,6 +1879,118 @@ describe('MapLibreFacade', () => {
     });
     expect(planningListener).toHaveBeenCalledOnce();
     expect(trackPointListener).toHaveBeenCalledOnce();
+    facade.destroy();
+  });
+
+  it.each([
+    { terrain: false, hitLayer: null },
+    { terrain: true, hitLayer: null },
+    { terrain: true, hitLayer: routePlanLayerIds.routed },
+    { terrain: true, hitLayer: routePlanLayerIds.preview },
+    { terrain: true, hitLayer: trackPointSelectionLayerIds.line },
+  ])(
+    'pans past a 100000-point path without projection: terrain=$terrain, layer=$hitLayer',
+    ({ terrain, hitLayer }) => {
+      const path = trackPathFromSegments(
+        [
+          Array.from({ length: 100_000 }, (_, index) => ({
+            coordinate: [44 + index / 1_000_000, 42] as const,
+          })),
+        ],
+        { stripElevation: false },
+      );
+      const nativeMap = new FakeNativeMap();
+      nativeMap.initialTerrain = terrain ? { source: 'terrain-dem' } : null;
+      nativeMap.renderedFeatures =
+        hitLayer === null
+          ? []
+          : [{ layer: { id: hitLayer }, properties: { kind: 'direct' } }];
+      const facade = new MapLibreFacade(createTestServices().logger);
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      facade.setInteractionMode('track-editing');
+      facade.setTrackPointDragHandlers({
+        start: (projection) => nearestTrackPathDragTarget(path, projection) !== null,
+        move: vi.fn(),
+        end: vi.fn(),
+      });
+      const project = vi.spyOn(nativeMap, 'project');
+      const pan = vi.fn();
+      nativeMap.getCanvas().addEventListener('mousedown', pan);
+      nativeMap.getCanvas().dispatchEvent(
+        new MouseEvent('mousedown', {
+          button: 0,
+          buttons: 1,
+          clientX: 100,
+          clientY: 100,
+          bubbles: true,
+        }),
+      );
+      expect(pan).toHaveBeenCalledOnce();
+      expect(project).not.toHaveBeenCalled();
+      facade.destroy();
+    },
+  );
+
+  it('captures terrain-projected anchors outside the geographic coordinates at the hit-box corners', () => {
+    const path = trackPathFromSegments([[{ coordinate: [44, 42] }]], {
+      stripElevation: false,
+    });
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem' };
+    nativeMap.projectedPoint = { x: 100, y: 100 };
+    // unproject returns 44.65/42.67, but relief projects this anchor inside the hit box.
+    const facade = new MapLibreFacade(createTestServices().logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    let target: TrackPathDragTarget | null = null;
+    facade.setTrackPointDragHandlers({
+      start: (projection) => {
+        target = nearestTrackPathDragTarget(path, projection);
+        return target !== null;
+      },
+      move: vi.fn(),
+      end: vi.fn(),
+    });
+    const pan = vi.fn();
+    nativeMap.getCanvas().addEventListener('mousedown', pan);
+    nativeMap.getCanvas().dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        clientX: 100,
+        clientY: 100,
+        bubbles: true,
+      }),
+    );
+    expect(target).toEqual({ kind: 'anchor', anchorId: 0 });
+    expect(pan).not.toHaveBeenCalled();
+    facade.destroy();
+  });
+
+  it('keeps camera panning when editable layers are absent', () => {
+    const nativeMap = new FakeNativeMap();
+    nativeMap.renderedLayers = [];
+    const facade = new MapLibreFacade(createTestServices().logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('track-editing');
+    facade.setTrackPointDragHandlers({
+      start: () => true,
+      move: vi.fn(),
+      end: vi.fn(),
+    });
+    const pan = vi.fn();
+    nativeMap.getCanvas().addEventListener('mousedown', pan);
+    nativeMap.getCanvas().dispatchEvent(
+      new MouseEvent('mousedown', {
+        button: 0,
+        buttons: 1,
+        clientX: 100,
+        clientY: 100,
+        bubbles: true,
+      }),
+    );
+    expect(pan).toHaveBeenCalledOnce();
+    expect(nativeMap.queryRenderedFeatures).not.toHaveBeenCalled();
     facade.destroy();
   });
 

@@ -43,7 +43,10 @@ function screenProjection(coordinate: TrackCoordinate) {
     x: longitude * 10_000,
     y: latitude * 1_000,
   });
-  return { pointer: project(coordinate), project };
+  return {
+    pointer: project(coordinate),
+    project,
+  };
 }
 
 function leg(start: TrackCoordinate, end: TrackCoordinate): TrailRouteLeg {
@@ -454,9 +457,6 @@ describe('track path editor', () => {
       kind: 'leg',
       afterAnchorId: 0,
     });
-    expect(nearestTrackPathDragTarget(path, middle, 100)).toMatchObject({
-      kind: 'anchor',
-    });
     expect(
       nearestTrackPathDragTarget(path, screenProjection([44.665, 42.685])),
     ).toBeNull();
@@ -505,6 +505,22 @@ describe('track path editor', () => {
         project,
       }),
     ).toBeNull();
+  });
+
+  it('hits crossing edges in the pointer repeated world without dropping their endpoints', () => {
+    const path = trackPathFromSegments(
+      [[{ coordinate: [179.9, 0] }, { coordinate: [-179.9, 0] }]],
+      { stripElevation: false },
+    );
+    expect(
+      nearestTrackPathDragTarget(path, {
+        pointer: { x: 0, y: 0 },
+        project: ([longitude, latitude]) => ({
+          x: (longitude + 360 * Math.round((540 - longitude) / 360) - 540) * 1000,
+          y: latitude * 1000,
+        }),
+      }),
+    ).toEqual({ kind: 'leg', afterAnchorId: 0 });
   });
 
   it('rejects saving and stale targets and does not record an unchanged anchor', () => {

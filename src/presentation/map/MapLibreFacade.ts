@@ -27,6 +27,7 @@ import {
   mapLayerIds,
   mapSourceIds,
   naprOrthophotoSourceIds,
+  routePlanLayerIds,
   sovietTopographicSourceIds,
   sentinelMosaicIdPrefixes,
 } from '@/presentation/map/mapIds';
@@ -1273,6 +1274,23 @@ export class MapLibreFacade implements MapFacade {
       return;
     }
     const point = this.trackPointMousePosition(map, event);
+    // Native feature queries account for terrain; geographic corner bounds do not.
+    // Misses must reach camera pan without projecting a potentially 100k-point path.
+    const layers = [routePlanLayerIds.waypoints, routePlanLayerIds.direct].filter(
+      (id) => map.getLayer(id) !== undefined,
+    );
+    if (
+      layers.length === 0 ||
+      map.queryRenderedFeatures(
+        [
+          [point.x - trackPointHitPixels, point.y - trackPointHitPixels],
+          [point.x + trackPointHitPixels, point.y + trackPointHitPixels],
+        ],
+        { layers },
+      ).length === 0
+    ) {
+      return;
+    }
     const coordinate = map.unproject([point.x, point.y]);
     if (
       !handlers.start({

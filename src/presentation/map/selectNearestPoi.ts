@@ -111,16 +111,18 @@ function toCandidate(
   }
   if (distanceMeters === null) return null;
   const properties = feature.properties as Readonly<Record<string, unknown>> | null;
+  const originalName = safeProperty(properties, 'name');
   const name =
     safeProperty(properties, 'name:en') ??
     safeProperty(properties, 'name:latin') ??
     safeProperty(properties, 'name_en') ??
-    safeProperty(properties, 'name');
+    originalName;
   if (name === null) return null;
   const category =
     safeProperty(properties, 'subclass') ?? safeProperty(properties, 'class');
   return {
     name,
+    originalName,
     category,
     distanceMeters,
     stableKey: `${String(feature.id ?? '')}\u0000${name}\u0000${category ?? ''}`,
@@ -145,6 +147,7 @@ export function selectNearestPoi(
   if (nearest === undefined) return null;
   return {
     name: nearest.name,
+    originalName: nearest.originalName,
     category: nearest.category,
     distanceMeters: nearest.distanceMeters,
   };

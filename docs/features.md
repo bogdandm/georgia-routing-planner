@@ -679,8 +679,11 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   Ready, a **Contours · …** line reports contour generation workload.
 - **Point inspection:** a map click, a place-search result, or a coordinate search opens
   an anchored popup with coordinates, terrain elevation, and the nearest map feature
-  with its distance; named features link to English Wikipedia and Google Search. While
-  the popup is visible, the next map click only closes it.
+  with its distance. When the provider's original name differs from the displayed name,
+  it appears on a separate line. Google Search uses that original name, or the displayed
+  name when no original is available, without adding a country. Google Maps and Yandex
+  Maps links always open the clicked coordinates, even when no nearby feature is found.
+  While the popup is visible, the next map click only closes it.
 - **Image comparison:** on desktop, the compare button below the map-layer chooser opens
   the Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

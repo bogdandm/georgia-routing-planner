@@ -1682,6 +1682,7 @@ describe('MapWorkspace', () => {
     const facade = new FakeMapFacade();
     facade.nearestPoi = {
       name: 'Mtatsminda',
+      originalName: null,
       category: 'peak',
       distanceMeters: 24,
     };
@@ -1889,7 +1890,12 @@ describe('MapWorkspace', () => {
 
   it('offers weather actions for the right-clicked point', async () => {
     const facade = new FakeMapFacade();
-    facade.nearestPoi = { name: 'Mtatsminda', category: 'peak', distanceMeters: 24 };
+    facade.nearestPoi = {
+      name: 'Mtatsminda',
+      originalName: null,
+      category: 'peak',
+      distanceMeters: 24,
+    };
     const weatherMap = mapLayerStore.getState().weatherMap;
     mapLayerStore.setState({
       weatherMap: {
@@ -2131,6 +2137,7 @@ describe('MapWorkspace', () => {
     expect(useUiStore.getState().mobileWorkspaceOpen).toBe(false);
     facade.nearestPoi = {
       name: 'Nearby weather POI',
+      originalName: null,
       category: 'tourism',
       distanceMeters: 500,
     };
@@ -2158,6 +2165,7 @@ describe('MapWorkspace', () => {
     consumeWeatherForecastRequest(request.id);
     facade.nearestPoi = {
       name: 'Distant weather POI',
+      originalName: null,
       category: 'tourism',
       distanceMeters: 500.01,
     };

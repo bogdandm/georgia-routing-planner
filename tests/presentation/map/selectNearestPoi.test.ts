@@ -78,7 +78,12 @@ describe('selectNearestPoi', () => {
         ],
         selected,
       ),
-    ).toEqual({ name: 'English A', category: 'attraction', distanceMeters: 0 });
+    ).toEqual({
+      name: 'English A',
+      originalName: 'Native A',
+      category: 'attraction',
+      distanceMeters: 0,
+    });
   });
 
   it('measures named lake lines and prefers English names', () => {
@@ -102,9 +107,30 @@ describe('selectNearestPoi', () => {
       selected,
     );
 
-    expect(result).toMatchObject({ name: 'English lake', category: 'lake' });
+    expect(result).toMatchObject({
+      name: 'English lake',
+      originalName: 'ადგილობრივი ტბა',
+      category: 'lake',
+    });
     expect(result?.distanceMeters).toBeLessThan(0.001);
   });
+
+  it.each([undefined, '', '   ', 42])(
+    'keeps an English-only feature when its original name is %s',
+    (originalName) => {
+      expect(
+        selectNearestPoi(
+          [
+            pointFeature('english-only', 44.8, 41.7, {
+              'name:en': 'English lake',
+              name: originalName,
+            }),
+          ],
+          { longitude: 44.8, latitude: 41.7 },
+        ),
+      ).toMatchObject({ name: 'English lake', originalName: null });
+    },
+  );
 
   it('chooses the nearest segment of a named lake multiline before point features', () => {
     const selected = { longitude: 44.8, latitude: 41.7 };

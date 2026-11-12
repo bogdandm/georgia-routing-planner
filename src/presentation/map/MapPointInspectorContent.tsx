@@ -264,22 +264,29 @@ export function MapPointInspectorContent({
   const measurementFormatter = new Intl.NumberFormat(i18n.locale, {
     maximumFractionDigits: 0,
   });
-  const nearbyName =
-    inspection.nearbyPoi.status === 'found' ? inspection.nearbyPoi.poi.name : null;
+  const nearbyPoi =
+    inspection.nearbyPoi.status === 'found' ? inspection.nearbyPoi.poi : null;
+  const originalName = nearbyPoi?.originalName ?? null;
+  const searchName = originalName ?? nearbyPoi?.name ?? null;
+  const latitude = String(inspection.coordinate.latitude);
+  const longitude = String(inspection.coordinate.longitude);
   /* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */
-  const featureLinks: readonly { readonly label: string; readonly href: string }[] =
-    nearbyName === null
-      ? []
-      : [
-          {
-            label: 'Wikipedia',
-            href: `https://en.wikipedia.org/wiki/${encodeURIComponent(nearbyName.replaceAll(' ', '_'))}`,
-          },
-          {
-            label: 'Google Search',
-            href: `https://www.google.com/search?q=${encodeURIComponent(`${nearbyName} Georgia`)}`,
-          },
-        ];
+  const featureLinks = [
+    {
+      label: 'Google Maps',
+      href: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+    },
+    {
+      label: 'Yandex Maps',
+      href: `https://yandex.com/maps/?pt=${longitude},${latitude}&z=16&l=map`,
+    },
+  ];
+  if (searchName !== null) {
+    featureLinks.unshift({
+      label: 'Google Search',
+      href: `https://www.google.com/search?q=${encodeURIComponent(searchName)}`,
+    });
+  }
   /* eslint-enable lingui/no-unlocalized-strings */
 
   // The native popup opens before React fills it, so focus moves here once per opening.
@@ -327,25 +334,26 @@ export function MapPointInspectorContent({
         label={t`Nearby map feature`}
         value={nearbyFeatureText(inspection, measurementFormatter, i18n)}
       />
-      {featureLinks.length === 0 ? null : (
-        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          {featureLinks.map(({ label, href }) => (
-            <Link
-              key={label}
-              variant="body2"
-              // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI prop token.
-              underline="hover"
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-            >
-              {label}
-              <OpenInNewOutlinedIcon sx={{ fontSize: 14 }} />
-            </Link>
-          ))}
-        </Stack>
+      {originalName === null || originalName === nearbyPoi?.name ? null : (
+        <LabelValue label={t`Original name`} value={originalName} />
       )}
+      <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
+        {featureLinks.map(({ label, href }) => (
+          <Link
+            key={label}
+            variant="body2"
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI prop token.
+            underline="hover"
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+          >
+            {label}
+            <OpenInNewOutlinedIcon sx={{ fontSize: 14 }} />
+          </Link>
+        ))}
+      </Stack>
       {actions === null ? null : (
         <div>
           <Divider sx={{ mb: 0.25 }} />

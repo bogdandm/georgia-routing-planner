@@ -344,6 +344,11 @@ msgstr "Open topographic map symbols (PDF)"
 msgid "Open windy.com"
 msgstr "Open windy.com"
 
+#. js-lingui-id: HosBa9
+#: src/presentation/map/MapPointInspectorContent.tsx
+msgid "Original name"
+msgstr "Original name"
+
 #. js-lingui-id: pOgx3m
 #: src/presentation/map/MapViewControls.tsx
 msgid "OSM overlay"

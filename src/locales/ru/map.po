@@ -344,6 +344,11 @@ msgstr "Открыть условные обозначения топограф�
 msgid "Open windy.com"
 msgstr "Открыть windy.com"
 
+#. js-lingui-id: HosBa9
+#: src/presentation/map/MapPointInspectorContent.tsx
+msgid "Original name"
+msgstr "Название на языке оригинала"
+
 #. js-lingui-id: pOgx3m
 #: src/presentation/map/MapViewControls.tsx
 msgid "OSM overlay"

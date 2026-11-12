@@ -680,10 +680,12 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
 - **Point inspection:** a map click, a place-search result, or a coordinate search opens
   an anchored popup with coordinates, terrain elevation, and the nearest map feature
   with its distance. When the provider's original name differs from the displayed name,
-  it appears on a separate line. Google Search uses that original name, or the displayed
-  name when no original is available, without adding a country. Google Maps and Yandex
-  Maps links always open the clicked coordinates, even when no nearby feature is found.
-  While the popup is visible, the next map click only closes it.
+  it appears as a second line in the same **Nearby map feature** group, without its own
+  label. **Google Search** searches the original name; **Google Search (En)** searches
+  the preferred English/display name. If a variant is missing, its search uses the
+  available name instead. Neither search adds a country. Coordinate links to external
+  maps belong to point actions, not the desktop inspection popup. While the popup is
+  visible, the next map click only closes it.
 - **Image comparison:** on desktop, the compare button below the map-layer chooser opens
   the Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing
@@ -698,12 +700,13 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   from the first point. Route planning uses the same cursor label with the distance of
   the pending segment only.
 - **Point actions:** right-click opens copy coordinates, **Copy link**, **Share…**,
-  create a marker, search satellite scenes here, show the weather forecast, copy a
-  weather-map link, and open meteoblue.com or windy.com. On coarse-pointer devices a tap
-  or search instead opens a bottom sheet with the details and the same actions. A search
-  move lands with the point above the sheet, in 2D and 3D; a tapped point under the
-  sheet moves above it. Closing a sheet that moved the map recenters it on the full
-  screen.
+  create a marker, search satellite scenes here, open Google Maps or Yandex Maps at the
+  clicked coordinates, show the weather forecast, copy a weather-map link, and open
+  meteoblue.com or windy.com. External map links do not depend on a nearby named
+  feature. On coarse-pointer devices a tap or search instead opens a bottom sheet with
+  the details and the same actions. A search move lands with the point above the sheet,
+  in 2D and 3D; a tapped point under the sheet moves above it. Closing a sheet that
+  moved the map recenters it on the full screen.
 - **Sharing:** one **Share** dialog builds a link to the current map. The rail **Share**
   action opens it on the map center; **Share…** in the point actions opens it on the
   clicked point with the current zoom. Its **Map view** section always carries the

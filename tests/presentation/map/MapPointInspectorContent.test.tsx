@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -43,6 +43,12 @@ describe('MapPointInspectorContent', () => {
       '<script>fixture hut</script> (alpine hut), 42 m away',
     );
     expect(container).toHaveTextContent('<script>ქართული ქოხი & ტბა</script>');
+    expect(screen.queryByText('Original name')).not.toBeInTheDocument();
+    const nearbyFeature = screen.getByText('Nearby map feature').parentElement;
+    if (nearbyFeature === null) throw new Error('Missing nearby feature details.');
+    expect(
+      within(nearbyFeature).getByText('<script>ქართული ქოხი & ტბა</script>'),
+    ).toBeVisible();
     expect(container.querySelector('script')).toBeNull();
     const links = screen.getAllByRole('link');
     expect(screen.queryByRole('link', { name: 'Wikipedia' })).not.toBeInTheDocument();
@@ -50,14 +56,13 @@ describe('MapPointInspectorContent', () => {
       screen.getByRole('link', { name: 'Google Search' }).getAttribute('href') ?? '',
     );
     expect(search.searchParams.get('q')).toBe('<script>ქართული ქოხი & ტბა</script>');
-    expect(screen.getByRole('link', { name: 'Google Maps' })).toHaveAttribute(
-      'href',
-      'https://www.google.com/maps/search/?api=1&query=41.712345,44.801234',
+    const englishSearch = new URL(
+      screen.getByRole('link', { name: 'Google Search (En)' }).getAttribute('href') ??
+        '',
     );
-    expect(screen.getByRole('link', { name: 'Yandex Maps' })).toHaveAttribute(
-      'href',
-      'https://yandex.com/maps/?pt=44.801234,41.712345&z=16&l=map',
-    );
+    expect(englishSearch.searchParams.get('q')).toBe('<script>fixture hut</script>');
+    expect(screen.queryByRole('link', { name: 'Google Maps' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Yandex Maps' })).not.toBeInTheDocument();
     for (const link of links) {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
@@ -95,6 +100,11 @@ describe('MapPointInspectorContent', () => {
       screen.getByRole('link', { name: 'Google Search' }).getAttribute('href') ?? '',
     );
     expect(search.searchParams.get('q')).toBe('English-only lake');
+    const englishSearch = new URL(
+      screen.getByRole('link', { name: 'Google Search (En)' }).getAttribute('href') ??
+        '',
+    );
+    expect(englishSearch.searchParams.get('q')).toBe('English-only lake');
   });
 
   it('renders loading, missing, and provider-error states intentionally', () => {
@@ -130,13 +140,6 @@ describe('MapPointInspectorContent', () => {
     expect(
       screen.queryByRole('link', { name: 'Google Search' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Google Maps' })).toHaveAttribute(
-      'href',
-      'https://www.google.com/maps/search/?api=1&query=41.712345,44.801234',
-    );
-    expect(screen.getByRole('link', { name: 'Yandex Maps' })).toHaveAttribute(
-      'href',
-      'https://yandex.com/maps/?pt=44.801234,41.712345&z=16&l=map',
-    );
+    expect(screen.queryAllByRole('link')).toEqual([]);
   });
 });

@@ -1888,8 +1888,11 @@ describe('MapWorkspace', () => {
     expect(new URL(link.value).searchParams.get('lon')).toBe('44.80000');
   });
 
-  it('offers weather actions for the right-clicked point', async () => {
+  it('offers external map and weather links for the right-clicked point', async () => {
     const facade = new FakeMapFacade();
+    facade.setSnapshot({
+      camera: { longitude: 43.5, latitude: 42.25, zoom: 11, bearing: 0, pitch: 0 },
+    });
     facade.nearestPoi = {
       name: 'Mtatsminda',
       originalName: null,
@@ -1906,10 +1909,10 @@ describe('MapWorkspace', () => {
         selectedTimeIndex: 0,
       },
     });
+    const user = userEvent.setup();
     const writeText = vi
       .spyOn(navigator.clipboard, 'writeText')
       .mockResolvedValue(undefined);
-    const user = userEvent.setup();
     renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace facade={facade} />
@@ -1918,6 +1921,20 @@ describe('MapWorkspace', () => {
     const nativeMap = await screen.findByTestId('native-map');
 
     fireEvent.contextMenu(nativeMap);
+    const googleMaps = screen.getByRole('menuitem', { name: 'Google Maps' });
+    const yandexMaps = screen.getByRole('menuitem', { name: 'Yandex Maps' });
+    expect(googleMaps).toHaveAttribute(
+      'href',
+      'https://www.google.com/maps/search/?api=1&query=41.7,44.8',
+    );
+    expect(yandexMaps).toHaveAttribute(
+      'href',
+      'https://yandex.com/maps/?pt=44.8,41.7&z=16&l=map',
+    );
+    for (const link of [googleMaps, yandexMaps]) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
     expect(
       screen.getByRole('menuitem', { name: 'Open meteoblue.com' }),
     ).toHaveAttribute('href', 'https://www.meteoblue.com/en/weather/week/41.7N44.8E');

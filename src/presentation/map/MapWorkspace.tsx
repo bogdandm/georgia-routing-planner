@@ -1603,6 +1603,8 @@ export function MapWorkspace({
       }
       case 'open-meteoblue':
       case 'open-windy':
+      case 'open-google-maps':
+      case 'open-yandex-maps':
         return;
     }
   };

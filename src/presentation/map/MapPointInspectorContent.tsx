@@ -43,7 +43,9 @@ export type MapPointAction =
   | 'show-weather'
   | 'copy-weather-link'
   | 'open-meteoblue'
-  | 'open-windy';
+  | 'open-windy'
+  | 'open-google-maps'
+  | 'open-yandex-maps';
 
 // Decimal-degree coordinates keep the same machine-readable form as copied values.
 // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
@@ -99,7 +101,7 @@ function LabelValue({
   value,
 }: {
   readonly label: string;
-  readonly value: string;
+  readonly value: ReactNode;
 }) {
   return (
     <div>
@@ -140,6 +142,8 @@ export function MapPointActionList({
   readonly onSelect: (action: MapPointAction) => void;
 }) {
   const { t } = useLingui();
+  const latitude = String(coordinate.latitude);
+  const longitude = String(coordinate.longitude);
   const pointActions: readonly MapPointActionEntry[] = [
     {
       action: 'copy-coordinates',
@@ -169,6 +173,20 @@ export function MapPointActionList({
       label: t`Search satellite scenes here`,
       shortcut: { action: 'search-satellite' },
     },
+    /* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */
+    {
+      action: 'open-google-maps',
+      icon: <OpenInNewOutlinedIcon />,
+      label: 'Google Maps',
+      href: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+    },
+    {
+      action: 'open-yandex-maps',
+      icon: <OpenInNewOutlinedIcon />,
+      label: 'Yandex Maps',
+      href: `https://yandex.com/maps/?pt=${longitude},${latitude}&z=16&l=map`,
+    },
+    /* eslint-enable lingui/no-unlocalized-strings */
   ];
   const weatherActions: readonly MapPointActionEntry[] = [
     {
@@ -268,25 +286,20 @@ export function MapPointInspectorContent({
     inspection.nearbyPoi.status === 'found' ? inspection.nearbyPoi.poi : null;
   const originalName = nearbyPoi?.originalName ?? null;
   const searchName = originalName ?? nearbyPoi?.name ?? null;
-  const latitude = String(inspection.coordinate.latitude);
-  const longitude = String(inspection.coordinate.longitude);
-  /* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */
-  const featureLinks = [
-    {
-      label: 'Google Maps',
-      href: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
-    },
-    {
-      label: 'Yandex Maps',
-      href: `https://yandex.com/maps/?pt=${longitude},${latitude}&z=16&l=map`,
-    },
-  ];
-  if (searchName !== null) {
-    featureLinks.unshift({
-      label: 'Google Search',
-      href: `https://www.google.com/search?q=${encodeURIComponent(searchName)}`,
-    });
-  }
+  /* eslint-disable lingui/no-unlocalized-strings -- Product names, language codes and URLs stay invariant. */
+  const featureLinks =
+    searchName === null
+      ? []
+      : [
+          {
+            label: 'Google Search',
+            href: `https://www.google.com/search?q=${encodeURIComponent(searchName)}`,
+          },
+          {
+            label: 'Google Search (En)',
+            href: `https://www.google.com/search?q=${encodeURIComponent(nearbyPoi?.name ?? searchName)}`,
+          },
+        ];
   /* eslint-enable lingui/no-unlocalized-strings */
 
   // The native popup opens before React fills it, so focus moves here once per opening.
@@ -332,28 +345,36 @@ export function MapPointInspectorContent({
       />
       <LabelValue
         label={t`Nearby map feature`}
-        value={nearbyFeatureText(inspection, measurementFormatter, i18n)}
+        value={
+          <>
+            {nearbyFeatureText(inspection, measurementFormatter, i18n)}
+            {originalName === null || originalName === nearbyPoi?.name ? null : (
+              <Box component="span" sx={{ display: 'block' }}>
+                {originalName}
+              </Box>
+            )}
+          </>
+        }
       />
-      {originalName === null || originalName === nearbyPoi?.name ? null : (
-        <LabelValue label={t`Original name`} value={originalName} />
+      {featureLinks.length === 0 ? null : (
+        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          {featureLinks.map(({ label, href }) => (
+            <Link
+              key={label}
+              variant="body2"
+              // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI prop token.
+              underline="hover"
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+            >
+              {label}
+              <OpenInNewOutlinedIcon sx={{ fontSize: 14 }} />
+            </Link>
+          ))}
+        </Stack>
       )}
-      <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
-        {featureLinks.map(({ label, href }) => (
-          <Link
-            key={label}
-            variant="body2"
-            // eslint-disable-next-line lingui/no-unlocalized-strings -- MUI prop token.
-            underline="hover"
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
-          >
-            {label}
-            <OpenInNewOutlinedIcon sx={{ fontSize: 14 }} />
-          </Link>
-        ))}
-      </Stack>
       {actions === null ? null : (
         <div>
           <Divider sx={{ mb: 0.25 }} />

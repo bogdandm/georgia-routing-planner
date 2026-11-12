@@ -21,7 +21,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 
 import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
 import type { KeyboardShortcut } from '@/presentation/keyboardShortcuts';
@@ -139,16 +139,17 @@ interface MapPointActionEntry {
  */
 export function MapPointActionList({
   coordinate,
-  camera,
+  getCamera,
   touch,
   onSelect,
 }: {
   readonly coordinate: MapCoordinate;
-  readonly camera: MapCamera;
+  readonly getCamera: () => MapCamera;
   readonly touch: boolean;
   readonly onSelect: (action: MapPointAction) => void;
 }) {
   const { t } = useLingui();
+  const camera = getCamera();
   const pointActions: readonly MapPointActionEntry[] = [
     {
       action: 'copy-coordinates',
@@ -226,6 +227,12 @@ export function MapPointActionList({
     const select = () => {
       onSelect(action);
     };
+    const refreshMapView = (event: MouseEvent<HTMLAnchorElement>) => {
+      if (action === 'open-google-maps' || action === 'open-yandex-maps') {
+        // Movement need not publish a React snapshot before native link navigation.
+        event.currentTarget.href = externalMapViewUrl(action, getCamera(), coordinate);
+      }
+    };
     const content = (
       <>
         <ListItemIcon sx={{ '& > svg': { fontSize: 20 } }}>{icon}</ListItemIcon>
@@ -251,7 +258,11 @@ export function MapPointActionList({
         target="_blank"
         rel="noopener noreferrer"
         sx={itemSx}
-        onClick={select}
+        onClick={(event) => {
+          refreshMapView(event);
+          select();
+        }}
+        onAuxClick={refreshMapView}
       >
         {content}
       </MenuItem>

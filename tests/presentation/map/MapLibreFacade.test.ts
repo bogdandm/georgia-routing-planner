@@ -252,6 +252,37 @@ describe('MapLibreFacade', () => {
     activateAppLocale('en');
   });
 
+  it('reads the live camera during movement without publishing a settled snapshot', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const onCameraSettled = vi.fn();
+    const facade = new MapLibreFacade(services.logger, onCameraSettled);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    nativeMap.fire('moveend');
+    const settled = facade.getDiagnosticsSnapshot().camera;
+    onCameraSettled.mockClear();
+
+    nativeMap.moving = true;
+    nativeMap.fire('movestart');
+    nativeMap.easeTo({
+      center: [-76.5, -12.25],
+      zoom: 11.4,
+      bearing: 28,
+      pitch: 45,
+    });
+
+    expect(facade.getCamera()).toEqual({
+      longitude: -76.5,
+      latitude: -12.25,
+      zoom: 11.4,
+      bearing: 28,
+      pitch: 45,
+    });
+    expect(facade.getDiagnosticsSnapshot().camera).toEqual(settled);
+    expect(onCameraSettled).not.toHaveBeenCalled();
+    facade.destroy();
+  });
+
   it('owns lifecycle listeners, updates snapshots, and cleans up deterministically', async () => {
     const services = createTestServices();
     const nativeMap = new FakeNativeMap();

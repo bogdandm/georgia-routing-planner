@@ -707,11 +707,13 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   their supported integer range. Google opens a view without a pin; Yandex also marks
   the clicked point. Their URL controls do not transfer rotation, pitch, or exact
   viewport bounds. **G** opens Google Maps and **Y** opens Yandex Maps at the current
-  center without a pin; point actions show these shortcuts as hints. External map links
-  do not depend on a nearby named feature. On coarse-pointer devices a tap or search
-  instead opens a bottom sheet with the details and the same actions. A search move
-  lands with the point above the sheet, in 2D and 3D; a tapped point under the sheet
-  moves above it. Closing a sheet that moved the map recenters it on the full screen.
+  center without a pin; point actions show these shortcuts as hints. Both paths read the
+  live camera at activation, including movement before a settled snapshot is published.
+  External map links do not depend on a nearby named feature. On coarse-pointer devices
+  a tap or search instead opens a bottom sheet with the details and the same actions. A
+  search move lands with the point above the sheet, in 2D and 3D; a tapped point under
+  the sheet moves above it. Closing a sheet that moved the map recenters it on the full
+  screen.
 - **Sharing:** one **Share** dialog builds a link to the current map. The rail **Share**
   action opens it on the map center; **Share…** in the point actions opens it on the
   clicked point with the current zoom. Its **Map view** section always carries the

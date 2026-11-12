@@ -2073,7 +2073,7 @@ export function MapWorkspace({
         {contextMenu === null ? null : (
           <MapPointActionList
             coordinate={contextMenu.coordinate}
-            camera={snapshot.camera}
+            getCamera={() => facade.getCamera()}
             touch={false}
             onSelect={(action) => {
               closeContextMenu();
@@ -2135,7 +2135,7 @@ export function MapWorkspace({
               actions={
                 <MapPointActionList
                   coordinate={sheetInspection.coordinate}
-                  camera={snapshot.camera}
+                  getCamera={() => facade.getCamera()}
                   touch
                   onSelect={(action) => {
                     runPointAction(action, sheetInspection.coordinate);

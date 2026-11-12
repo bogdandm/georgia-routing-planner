@@ -73,6 +73,7 @@ export interface MapFacade {
   subscribeTrackPointHover(
     listener: (pointer: TrackPointPointer | null) => void,
   ): () => void;
+  /** Reads the live camera, including movement; before attachment returns the last known view. */
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;

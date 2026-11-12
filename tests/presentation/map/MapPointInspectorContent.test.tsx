@@ -1,10 +1,13 @@
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
-import { MapPointInspectorContent } from '@/presentation/map/MapPointInspectorContent';
+import {
+  MapPointActionList,
+  MapPointInspectorContent,
+} from '@/presentation/map/MapPointInspectorContent';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const coordinate = { longitude: 44.801234, latitude: 41.712345 };
@@ -23,6 +26,46 @@ describe('external map view zoom', () => {
     expect(yandexUrl.searchParams.get('z')).toBe(String(yandex));
     expect(yandexUrl.searchParams.has('pt')).toBe(false);
   });
+});
+
+describe('MapPointActionList', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
+  it.each([
+    ['Google Maps', 'center', '43.75,45.25', 'zoom'],
+    ['Yandex Maps', 'll', '45.25,43.75', 'z'],
+  ])(
+    'uses the live camera when activating %s after the menu opens',
+    (label, centerKey, center, zoomKey) => {
+      let camera = { ...coordinate, zoom: 8, bearing: 0, pitch: 0 };
+      renderWithI18n(
+        <MapPointActionList
+          coordinate={coordinate}
+          getCamera={() => camera}
+          touch={false}
+          onSelect={() => undefined}
+        />,
+      );
+      const link = screen.getByRole('menuitem', { name: label });
+      camera = {
+        longitude: 45.25,
+        latitude: 43.75,
+        zoom: 14.8,
+        bearing: 28,
+        pitch: 45,
+      };
+      fireEvent.click(link);
+
+      const url = new URL(link.getAttribute('href') ?? '');
+      expect(url.searchParams.get(centerKey)).toBe(center);
+      expect(url.searchParams.get(zoomKey)).toBe('16');
+      expect(url.searchParams.get('pt')).toBe(
+        label === 'Yandex Maps' ? '44.801234,41.712345' : null,
+      );
+    },
+  );
 });
 
 describe('MapPointInspectorContent', () => {

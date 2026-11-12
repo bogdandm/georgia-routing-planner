@@ -37,8 +37,8 @@ function uniqueGpxFilename(name: string, usedNames: ReadonlySet<string>): string
 }
 
 export function exportTrackAsGpx(
-  summary: LocalTrackSummary,
-  content: LocalTrackContent,
+  summary: Pick<LocalTrackSummary, 'name'>,
+  content: Pick<LocalTrackContent, 'trackPoints' | 'markers'>,
 ): string {
   const escapedName = escapeXml(summary.name);
   const documentStart = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Trail Planner" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${escapedName}</name></metadata>`;

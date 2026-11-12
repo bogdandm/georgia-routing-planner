@@ -881,6 +881,25 @@ describe('WorkspaceShell', () => {
     expect(
       await screen.findByRole('heading', { name: 'Recipient trail' }),
     ).toBeVisible();
+    let downloadedBlob: Blob | null = null;
+    let downloadedFilename: string | null = null;
+    vi.spyOn(URL, 'createObjectURL').mockImplementation((object) => {
+      if (object instanceof Blob) downloadedBlob = object;
+      return 'blob:shared-track-download';
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloadedFilename = this.download;
+    });
+    const download = screen.getByRole('button', { name: 'Download GPX' });
+    await user.click(download);
+    expect(downloadedFilename).toBe('Recipient trail.gpx');
+    const blob = requiredBlob(downloadedBlob);
+    expect(blob.type).toBe('application/gpx+xml');
+    const downloadedGpx = new TextDecoder().decode(await readBlob(blob));
+    expect(downloadedGpx).toContain('<name>Recipient trail</name>');
+    expect(downloadedGpx).toContain('lat="42" lon="44"');
     const sharedTrackLabel = screen.getByText('Shared track');
     expect(sharedTrackLabel).toBeVisible();
     expect(sharedTrackLabel).toHaveStyle({

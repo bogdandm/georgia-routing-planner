@@ -517,7 +517,7 @@ interface TracksWorkspaceValue {
   readonly savePreview: () => Promise<void>;
   readonly saveRoutePlan: () => Promise<void>;
   readonly selectSaved: (summary: LocalTrackSummary) => Promise<void>;
-  /** Downloads the open saved track as GPX; false when no saved track is open unedited. */
+  /** Downloads the open saved or shared track as GPX; false when unavailable. */
   readonly downloadActiveTrackGpx: () => boolean;
   readonly refocusActiveTrack: () => void;
   readonly startRoutePlan: () => void;
@@ -2682,12 +2682,26 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [active, activePath, multiTrackMode, readyMultiTrackSelections]);
 
   const downloadActiveTrackGpx = useCallback(() => {
-    if (active?.kind !== 'saved' || active.edit !== null) return false;
+    if (
+      active === null ||
+      (active.kind === 'saved' && active.edit !== null) ||
+      (active.kind !== 'saved' && active.kind !== 'shared')
+    ) {
+      return false;
+    }
+    const name = active.kind === 'saved' ? active.summary.name : active.name;
+    const content =
+      active.kind === 'saved'
+        ? active.content
+        : {
+            trackPoints: active.sourceSegments.map((segment) => segment.points),
+            markers: [],
+          };
     downloadFile(
-      safeTrackFilename(active.summary.name, 'gpx'),
+      safeTrackFilename(name, 'gpx'),
       // eslint-disable-next-line lingui/no-unlocalized-strings -- MIME type.
       'application/gpx+xml',
-      exportTrackAsGpx(active.summary, active.content),
+      exportTrackAsGpx({ name }, content),
     );
     return true;
   }, [active]);
@@ -6028,6 +6042,30 @@ export function TrackDetailsPane({
                 <CheckIcon fontSize="small" />
               </IconButton>
             </span>
+          </Tooltip>
+        ) : null}
+        {active.kind === 'shared' ? (
+          <Tooltip
+            describeChild
+            title={
+              <ShortcutTooltipTitle
+                label={t`Download GPX`}
+                shortcut={{ action: 'download-gpx' }}
+              />
+            }
+          >
+            <IconButton
+              size="small"
+              aria-label={t`Download GPX`}
+              onClick={() => {
+                downloadActiveTrackGpx();
+              }}
+            >
+              <DownloadOutlinedIcon
+                fontSize="small"
+                sx={{ transform: 'translateY(1px)' }}
+              />
+            </IconButton>
           </Tooltip>
         ) : null}
         {active.kind === 'saved' && active.edit === null ? (

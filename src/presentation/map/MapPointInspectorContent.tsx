@@ -25,7 +25,12 @@ import { useEffect, useRef, type ReactNode } from 'react';
 
 import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
 import type { KeyboardShortcut } from '@/presentation/keyboardShortcuts';
-import type { MapCoordinate, MapPointInspection } from '@/presentation/map/mapTypes';
+import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
+import type {
+  MapCamera,
+  MapCoordinate,
+  MapPointInspection,
+} from '@/presentation/map/mapTypes';
 import {
   meteoblueForecastUrl,
   windyForecastUrl,
@@ -134,16 +139,16 @@ interface MapPointActionEntry {
  */
 export function MapPointActionList({
   coordinate,
+  camera,
   touch,
   onSelect,
 }: {
   readonly coordinate: MapCoordinate;
+  readonly camera: MapCamera;
   readonly touch: boolean;
   readonly onSelect: (action: MapPointAction) => void;
 }) {
   const { t } = useLingui();
-  const latitude = String(coordinate.latitude);
-  const longitude = String(coordinate.longitude);
   const pointActions: readonly MapPointActionEntry[] = [
     {
       action: 'copy-coordinates',
@@ -178,13 +183,15 @@ export function MapPointActionList({
       action: 'open-google-maps',
       icon: <OpenInNewOutlinedIcon />,
       label: 'Google Maps',
-      href: `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+      href: externalMapViewUrl('open-google-maps', camera, coordinate),
+      shortcut: { action: 'open-google-maps' },
     },
     {
       action: 'open-yandex-maps',
       icon: <OpenInNewOutlinedIcon />,
       label: 'Yandex Maps',
-      href: `https://yandex.com/maps/?pt=${longitude},${latitude}&z=16&l=map`,
+      href: externalMapViewUrl('open-yandex-maps', camera, coordinate),
+      shortcut: { action: 'open-yandex-maps' },
     },
     /* eslint-enable lingui/no-unlocalized-strings */
   ];

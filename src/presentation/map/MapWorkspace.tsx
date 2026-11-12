@@ -129,6 +129,7 @@ import {
   MapPointInspectorContent,
   type MapPointAction,
 } from '@/presentation/map/MapPointInspectorContent';
+import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
@@ -1746,6 +1747,14 @@ export function MapWorkspace({
       case 'copy-map-link':
         void copyMapLink(null);
         break;
+      case 'open-google-maps':
+      case 'open-yandex-maps':
+        window.open(
+          externalMapViewUrl(shortcut.action, facade.getCamera(), null),
+          '_blank',
+          'noopener,noreferrer',
+        );
+        break;
       case 'toggle-terrain': {
         if (
           terrainState === 'enabling' ||
@@ -2062,6 +2071,7 @@ export function MapWorkspace({
         {contextMenu === null ? null : (
           <MapPointActionList
             coordinate={contextMenu.coordinate}
+            camera={snapshot.camera}
             touch={false}
             onSelect={(action) => {
               closeContextMenu();
@@ -2123,6 +2133,7 @@ export function MapWorkspace({
               actions={
                 <MapPointActionList
                   coordinate={sheetInspection.coordinate}
+                  camera={snapshot.camera}
                   touch
                   onSelect={(action) => {
                     runPointAction(action, sheetInspection.coordinate);

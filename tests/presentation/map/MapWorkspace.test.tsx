@@ -1823,6 +1823,8 @@ describe('MapWorkspace', () => {
     expect(keycapText('Search satellite scenes here')).toBe('S');
     expect(keycapText('Show weather forecast')).toBe('W');
     expect(keycapText('Copy coordinates')).toBeNull();
+    expect(keycapText('Google Maps')).toBe('G');
+    expect(keycapText('Yandex Maps')).toBe('Y');
     unmount();
 
     mockMatchingMediaQueries('(pointer: coarse)');
@@ -1891,7 +1893,7 @@ describe('MapWorkspace', () => {
   it('offers external map and weather links for the right-clicked point', async () => {
     const facade = new FakeMapFacade();
     facade.setSnapshot({
-      camera: { longitude: 43.5, latitude: 42.25, zoom: 11, bearing: 0, pitch: 0 },
+      camera: { longitude: 43.5, latitude: 42.25, zoom: 11.4, bearing: 28, pitch: 45 },
     });
     facade.nearestPoi = {
       name: 'Mtatsminda',
@@ -1923,14 +1925,21 @@ describe('MapWorkspace', () => {
     fireEvent.contextMenu(nativeMap);
     const googleMaps = screen.getByRole('menuitem', { name: 'Google Maps' });
     const yandexMaps = screen.getByRole('menuitem', { name: 'Yandex Maps' });
-    expect(googleMaps).toHaveAttribute(
-      'href',
-      'https://www.google.com/maps/search/?api=1&query=41.7,44.8',
-    );
-    expect(yandexMaps).toHaveAttribute(
-      'href',
-      'https://yandex.com/maps/?pt=44.8,41.7&z=16&l=map',
-    );
+    const googleUrl = new URL(googleMaps.getAttribute('href') ?? '');
+    expect(googleUrl.pathname).toBe('/maps/@');
+    expect(Object.fromEntries(googleUrl.searchParams)).toEqual({
+      api: '1',
+      map_action: 'map',
+      center: '42.25,43.5',
+      zoom: '12',
+    });
+    const yandexUrl = new URL(yandexMaps.getAttribute('href') ?? '');
+    expect(Object.fromEntries(yandexUrl.searchParams)).toEqual({
+      ll: '43.5,42.25',
+      z: '12',
+      l: 'map',
+      pt: '44.8,41.7',
+    });
     for (const link of [googleMaps, yandexMaps]) {
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
@@ -2569,6 +2578,50 @@ describe('MapWorkspace', () => {
     expect(useUiStore.getState().activeTab).toBe('layers');
   });
 
+  it('opens external maps from the current camera with G and Y without stealing text input', async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({
+      lifecycle: 'ready',
+      camera: { longitude: 43.5, latitude: 42.25, zoom: 11.4, bearing: 28, pitch: 45 },
+    });
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace
+          facade={facade}
+          mapCanvas={<input aria-label="Map text fixture" />}
+        />
+      </RuntimeServicesProvider>,
+    );
+    const input = await screen.findByRole('textbox', { name: 'Map text fixture' });
+    await user.keyboard('g');
+    expect(open).toHaveBeenCalledOnce();
+    const googleUrl = new URL(String(open.mock.calls[0]?.[0]));
+    expect(googleUrl.hostname).toBe('www.google.com');
+    expect(googleUrl.searchParams.get('center')).toBe('42.25,43.5');
+    expect(googleUrl.searchParams.get('zoom')).toBe('12');
+    expect(open.mock.calls[0]?.slice(1)).toEqual(['_blank', 'noopener,noreferrer']);
+
+    act(() => {
+      facade.setSnapshot({
+        camera: { longitude: 45.25, latitude: 43.75, zoom: 14.8, bearing: 0, pitch: 0 },
+      });
+    });
+    await user.keyboard('y');
+    expect(open).toHaveBeenCalledTimes(2);
+    const yandexUrl = new URL(String(open.mock.calls[1]?.[0]));
+    expect(yandexUrl.hostname).toBe('yandex.com');
+    expect(yandexUrl.searchParams.get('ll')).toBe('45.25,43.75');
+    expect(yandexUrl.searchParams.get('z')).toBe('16');
+    expect(yandexUrl.searchParams.has('pt')).toBe(false);
+    expect(open.mock.calls[1]?.slice(1)).toEqual(['_blank', 'noopener,noreferrer']);
+
+    await user.click(input);
+    await user.keyboard('gy');
+    expect(input).toHaveValue('gy');
+    expect(open).toHaveBeenCalledTimes(2);
+  });
   it('turns north, toggles 3D, and runs the ruler from the keyboard', async () => {
     const user = userEvent.setup();
     const facade = new FakeMapFacade();

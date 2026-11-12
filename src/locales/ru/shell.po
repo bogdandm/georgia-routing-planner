@@ -837,6 +837,16 @@ msgstr "Открыть настройки"
 msgid "Open the point on meteoblue.com or windy.com."
 msgstr "Открыть точку на meteoblue.com или windy.com."
 
+#. js-lingui-id: ArSgE8
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Open this view in Google Maps"
+msgstr "Открыть текущий вид в Google Maps"
+
+#. js-lingui-id: J5mn5e
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Open this view in Yandex Maps"
+msgstr "Открыть текущий вид в Яндекс Картах"
+
 #. js-lingui-id: BgoQna
 #: src/presentation/shell/WorkspaceRail.tsx
 msgid "Open tracks"

@@ -3,10 +3,27 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { activateAppLocale } from '@/presentation/localization/appI18n';
+import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
 import { MapPointInspectorContent } from '@/presentation/map/MapPointInspectorContent';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const coordinate = { longitude: 44.801234, latitude: 41.712345 };
+
+describe('external map view zoom', () => {
+  it.each([
+    [2, 3, 3],
+    [11.2, 12, 12],
+    [11.8, 13, 13],
+    [20, 21, 19],
+  ])('converts MapLibre zoom %s to Google %s and Yandex %s', (zoom, google, yandex) => {
+    const camera = { ...coordinate, zoom, bearing: 28, pitch: 45 };
+    const googleUrl = new URL(externalMapViewUrl('open-google-maps', camera, null));
+    const yandexUrl = new URL(externalMapViewUrl('open-yandex-maps', camera, null));
+    expect(googleUrl.searchParams.get('zoom')).toBe(String(google));
+    expect(yandexUrl.searchParams.get('z')).toBe(String(yandex));
+    expect(yandexUrl.searchParams.has('pt')).toBe(false);
+  });
+});
 
 describe('MapPointInspectorContent', () => {
   beforeEach(() => {

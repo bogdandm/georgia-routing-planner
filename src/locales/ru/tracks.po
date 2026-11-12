@@ -551,6 +551,7 @@ msgstr "Редактировать папку"
 
 #. js-lingui-id: Wm7go4
 #: src/presentation/tracks/TrackPointsSection.tsx
+#: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Edit points"
 msgstr "Редактировать точки"
 

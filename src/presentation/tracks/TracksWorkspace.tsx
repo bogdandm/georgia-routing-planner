@@ -6162,6 +6162,17 @@ export function TrackDetailsPane({
                     ? t`Remove from favorites`
                     : t`Add to favorites`}
                 </MenuItem>
+                {mode !== 'mobile' ? (
+                  <MenuItem
+                    onClick={() => {
+                      setActionMenuAnchor(null);
+                      startTrackEdit();
+                    }}
+                  >
+                    <EditOutlinedIcon fontSize="small" sx={{ mr: 1.25 }} />
+                    <Trans>Edit points</Trans>
+                  </MenuItem>
+                ) : null}
                 <MenuItem
                   onClick={() => {
                     downloadFile(

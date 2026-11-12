@@ -60,7 +60,8 @@ describe('WorkspaceShell track points', () => {
       points: [points[1]?.coordinate],
     });
 
-    await user.click(within(details).getByRole('button', { name: 'Edit points' }));
+    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Edit points' }));
     expect(within(details).queryByText(/^Markers/u)).not.toBeInTheDocument();
     await waitFor(() => {
       expect(facade.interactionModes.at(-1)).toBe('track-editing');

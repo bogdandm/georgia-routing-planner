@@ -476,7 +476,7 @@ export class MapLibreFacade implements MapFacade {
   }
 
   public getCamera(): MapCamera {
-    return this.#snapshot.camera;
+    return this.#map === null ? this.#snapshot.camera : this.readCamera(this.#map);
   }
 
   public getViewportSnapshot(): MapViewportSnapshot | null {

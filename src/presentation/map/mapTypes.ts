@@ -79,6 +79,8 @@ export interface MapViewportSnapshot {
 
 export interface NearbyPoi {
   readonly name: string | null;
+  /** Untranslated provider `name`; `null` when only a translated name is available. */
+  readonly originalName: string | null;
   /** Provider category token; `null` when the source feature has no category. */
   readonly category: string | null;
   readonly distanceMeters: number;

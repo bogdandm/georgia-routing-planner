@@ -86,6 +86,7 @@ export interface MapFacade {
   ): () => void;
   /** Replacing/removing handlers cancels any captured candidate or drag. */
   setTrackPointDragHandlers(handlers: TrackPointDragHandlers | null): void;
+  /** Reads the live camera, including movement; before attachment returns the last known view. */
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;
   getViewportSnapshot(): MapViewportSnapshot | null;

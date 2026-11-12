@@ -1751,7 +1751,9 @@ export function MapWorkspace({
       case 'open-yandex-maps':
         window.open(
           externalMapViewUrl(shortcut.action, facade.getCamera(), null),
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Native browsing-context target.
           '_blank',
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Native window security feature tokens.
           'noopener,noreferrer',
         );
         break;

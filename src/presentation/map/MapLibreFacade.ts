@@ -1275,15 +1275,18 @@ export class MapLibreFacade implements MapFacade {
     const point = this.trackPointMousePosition(map, event);
     const coordinate = map.unproject([point.x, point.y]);
     if (
-      !handlers.start(
-        this.trackPointPointer(map, point, {
-          longitude: coordinate.lng,
-          latitude: coordinate.lat,
-        }),
-      )
+      !handlers.start({
+        pointer: point,
+        project: ([longitude, latitude]) =>
+          map.project([
+            longitude + 360 * Math.round((coordinate.lng - longitude) / 360),
+            latitude,
+          ]),
+      })
     ) {
       return;
     }
+    this.clearPlanningPreview();
     event.preventDefault();
     event.stopImmediatePropagation();
     this.#trackPointDrag = {
@@ -1329,7 +1332,10 @@ export class MapLibreFacade implements MapFacade {
     const point = this.trackPointMousePosition(map, event);
     const coordinate = map.unproject([point.x, point.y]);
     this.#pendingTrackPointDragCoordinate = {
-      longitude: coordinate.lng,
+      longitude:
+        coordinate.lng >= -180 && coordinate.lng <= 180
+          ? coordinate.lng
+          : ((((coordinate.lng + 180) % 360) + 360) % 360) - 180,
       latitude: coordinate.lat,
     };
     if (this.#trackPointDragFrame !== null) return;
@@ -1348,7 +1354,13 @@ export class MapLibreFacade implements MapFacade {
     event.stopImmediatePropagation();
     const point = this.trackPointMousePosition(map, event);
     const released = map.unproject([point.x, point.y]);
-    const coordinate = { longitude: released.lng, latitude: released.lat };
+    const coordinate = {
+      longitude:
+        released.lng >= -180 && released.lng <= 180
+          ? released.lng
+          : ((((released.lng + 180) % 360) + 360) % 360) - 180,
+      latitude: released.lat,
+    };
     const dragged = this.trackPointDragHasMoved(event);
     const mode = this.#interactionMode;
     this.finishTrackPointDrag(dragged ? coordinate : null);

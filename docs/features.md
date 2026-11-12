@@ -373,7 +373,9 @@ click behavior. Dragging a **Line** leg inserts a bend point between its endpoin
 **Routes** legs and gaps cannot be split this way. The map previews the new geometry
 while dragging; release applies one edit and one **Undo** restores the original
 geometry. Escape or focus loss cancels an unfinished drag. Recorded time stays on a
-moved point, but its old elevation is discarded.
+moved point, but its old elevation is discarded. Drag hits use the camera's projected
+pixel positions in both 2D and 3D. Repeated-world and off-map releases wrap longitude
+back into the stored coordinate range.
 
 While editing, any selection made through the map, list, or profile shows one delete
 icon beside the last selected point on the map, including a selection spanning many

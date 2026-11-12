@@ -17,6 +17,7 @@ import type {
   RenderBenchmarkReport,
   RenderBenchmarkStep,
 } from '@/presentation/map/renderBenchmark';
+import type { TrackPathProjection } from '@/presentation/tracks/trackPathEditor';
 
 /**
  * `track-editing` keeps the normal cursor, never opens point inspection, and publishes
@@ -46,7 +47,7 @@ export interface TrackPointClick extends TrackPointPointer {
 /** Native mouse drag lifecycle shared by route planning and track editing. */
 export interface TrackPointDragHandlers {
   /** Captures a hit candidate without changing the draft or selection. */
-  start(pointer: TrackPointPointer): boolean;
+  start(projection: TrackPathProjection): boolean;
   /** Preview only; emitted once per frame after at least 4 CSS px of travel. */
   move(coordinate: MapCoordinate): void;
   /** Exact release position, or null for a stationary press or cancellation. */

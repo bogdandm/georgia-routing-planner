@@ -38,6 +38,14 @@ const D = [44.67, 42.69] as const;
 const E = [44.68, 42.7] as const;
 const P = [44.655, 42.69] as const;
 
+function screenProjection(coordinate: TrackCoordinate) {
+  const project = ([longitude, latitude]: TrackCoordinate) => ({
+    x: longitude * 10_000,
+    y: latitude * 1_000,
+  });
+  return { pointer: project(coordinate), project };
+}
+
 function leg(start: TrackCoordinate, end: TrackCoordinate): TrailRouteLeg {
   const middle: TrackCoordinate = [
     (start[0] + end[0]) / 2,
@@ -437,51 +445,66 @@ describe('track path editor', () => {
 
   it('prioritizes anchors and excludes routed, gap and degenerate edges', () => {
     const path = recordedTrack().path;
-    expect(nearestTrackPathDragTarget(path, A, 50)).toEqual({
+    expect(nearestTrackPathDragTarget(path, screenProjection(A))).toEqual({
       kind: 'anchor',
       anchorId: 0,
     });
-    expect(nearestTrackPathDragTarget(path, [44.645, 42.665], 20)).toEqual({
+    const middle = screenProjection([44.645, 42.665]);
+    expect(nearestTrackPathDragTarget(path, middle)).toEqual({
       kind: 'leg',
       afterAnchorId: 0,
     });
-    expect(nearestTrackPathDragTarget(path, [44.645, 42.665], 800)).toMatchObject({
+    expect(nearestTrackPathDragTarget(path, middle, 100)).toMatchObject({
       kind: 'anchor',
     });
-    expect(nearestTrackPathDragTarget(path, [44.665, 42.685], 20)).toBeNull();
+    expect(
+      nearestTrackPathDragTarget(path, screenProjection([44.665, 42.685])),
+    ).toBeNull();
     const routed = setTrackPathLegMode(recordedTrack(), 0, 'routes');
-    expect(nearestTrackPathDragTarget(routed.path, [44.645, 42.665], 20)).toBeNull();
+    expect(nearestTrackPathDragTarget(routed.path, middle)).toBeNull();
     const degenerate = trackPathFromSegments([[{ coordinate: A }, { coordinate: A }]], {
       stripElevation: false,
     });
-    expect(nearestTrackPathDragTarget(degenerate, [44.645, 42.665], 20)).toBeNull();
+    expect(nearestTrackPathDragTarget(degenerate, middle)).toBeNull();
     expect(previewTrackPathDrag(degenerate, { kind: 'leg', afterAnchorId: 0 }, P)).toBe(
       degenerate,
     );
   });
 
-  it('hits a rendered horizontal line rather than its great-circle arc', () => {
+  it('uses the camera pixel radius under an anisotropic projection', () => {
     const path = trackPathFromSegments(
-      [[{ coordinate: [44, 42] }, { coordinate: [45, 42] }]],
+      [[{ coordinate: [0, 0] }, { coordinate: [1, 0] }]],
       { stripElevation: false },
     );
-    expect(nearestTrackPathDragTarget(path, [44.5, 42], 20)).toEqual({
-      kind: 'leg',
-      afterAnchorId: 0,
+    const project = ([longitude, latitude]: TrackCoordinate) => ({
+      x: longitude * 100,
+      y: latitude * 2,
     });
-    expect(nearestTrackPathDragTarget(path, [44.5, 42.002], 20)).toBeNull();
-  });
-
-  it('hit-tests across the antimeridian without selecting the long way around', () => {
-    const path = trackPathFromSegments(
-      [[{ coordinate: [179.9, 0] }, { coordinate: [-179.9, 0] }]],
-      { stripElevation: false },
-    );
-    expect(nearestTrackPathDragTarget(path, [180, 0.0001], 20)).toEqual({
-      kind: 'leg',
-      afterAnchorId: 0,
-    });
-    expect(nearestTrackPathDragTarget(path, [0, 0], 20)).toBeNull();
+    expect(
+      nearestTrackPathDragTarget(path, {
+        pointer: { x: 50, y: 11 },
+        project,
+      }),
+    ).toEqual({ kind: 'leg', afterAnchorId: 0 });
+    expect(
+      nearestTrackPathDragTarget(path, {
+        pointer: { x: 50, y: 13 },
+        project,
+      }),
+    ).toBeNull();
+    expect(
+      nearestTrackPathDragTarget(path, {
+        pointer: { x: 0, y: 11 },
+        project,
+      }),
+    ).toEqual({ kind: 'anchor', anchorId: 0 });
+    // Beyond an endpoint, proximity to the infinite supporting line is not a hit.
+    expect(
+      nearestTrackPathDragTarget(path, {
+        pointer: { x: 113, y: 0 },
+        project,
+      }),
+    ).toBeNull();
   });
 
   it('rejects saving and stale targets and does not record an unchanged anchor', () => {

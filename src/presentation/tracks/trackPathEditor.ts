@@ -1176,54 +1176,55 @@ export function nearestTrackPathAnchor(
   return nearest;
 }
 
-/** Web Mercator's finite latitude limit, matching the map's straight line geometry. */
-function mercatorLatitude(latitude: number): number {
-  const clamped = Math.max(-85.05112878, Math.min(85.05112878, latitude));
-  return Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360));
+/** Synchronous camera projection used only during native mouse hit testing. */
+export interface TrackPathProjection {
+  readonly pointer: { readonly x: number; readonly y: number };
+  project(coordinate: TrackCoordinate): { readonly x: number; readonly y: number };
 }
 
-/** Signed shortest longitude offset in radians, including repeated map worlds. */
-function longitudeOffset(longitude: number, origin: number): number {
-  return ((((((longitude - origin + 180) % 360) + 360) % 360) - 180) * Math.PI) / 180;
-}
-
-/** Anchors win over straight edges, even when an edge is closer to the pointer. */
+/** Anchors take precedence; distances use actual camera pixels, including in 3D. */
 export function nearestTrackPathDragTarget(
   path: TrackPath,
-  coordinate: TrackCoordinate,
-  toleranceMeters: number,
+  projection: TrackPathProjection,
+  tolerancePixels = 12,
 ): TrackPathDragTarget | null {
-  if (!Number.isFinite(toleranceMeters) || toleranceMeters < 0) return null;
-  const index = nearestTrackPathAnchor(path, coordinate, toleranceMeters);
-  if (index !== null) {
-    return { kind: 'anchor', anchorId: requiredAnchor(path, index).id };
-  }
+  const { pointer } = projection;
+  const points = path.anchors.map((anchor) =>
+    projection.project(anchor.point.coordinate),
+  );
   let nearest: TrackPathDragTarget | null = null;
-  let nearestDistance = toleranceMeters;
-  for (const [legIndex, leg] of path.legs.entries()) {
-    if (leg.kind !== 'leg' || leg.mode !== 'line') continue;
-    const startAnchor = path.anchors[legIndex];
-    const endAnchor = path.anchors[legIndex + 1];
-    if (startAnchor === undefined || endAnchor === undefined) continue;
-    const start = startAnchor.point.coordinate;
-    const end = endAnchor.point.coordinate;
-    const dx = longitudeOffset(end[0], start[0]);
-    const startY = mercatorLatitude(start[1]);
-    const dy = mercatorLatitude(end[1]) - startY;
-    const squaredLength = dx * dx + dy * dy;
-    if (squaredLength === 0) continue;
-    // Hit the rendered Mercator segment, not a great-circle arc between the endpoints.
-    const x = longitudeOffset(coordinate[0], start[0]);
-    const y = mercatorLatitude(coordinate[1]) - startY;
-    const fraction = Math.max(0, Math.min(1, (x * dx + y * dy) / squaredLength));
-    const nearestCoordinate: TrackCoordinate = [
-      start[0] + (fraction * dx * 180) / Math.PI,
-      (Math.atan(Math.sinh(startY + fraction * dy)) * 180) / Math.PI,
-    ];
-    const distance = geodesicDistanceMeters(nearestCoordinate, coordinate);
+  let nearestDistance = tolerancePixels;
+  for (const [index, point] of points.entries()) {
+    const distance = Math.hypot(pointer.x - point.x, pointer.y - point.y);
     if (distance <= nearestDistance) {
       nearestDistance = distance;
-      nearest = { kind: 'leg', afterAnchorId: startAnchor.id };
+      nearest = { kind: 'anchor', anchorId: requiredAnchor(path, index).id };
+    }
+  }
+  if (nearest !== null) return nearest;
+  for (const [index, leg] of path.legs.entries()) {
+    if (leg.kind !== 'leg' || leg.mode !== 'line') continue;
+    const start = points[index];
+    const end = points[index + 1];
+    if (start === undefined || end === undefined) continue;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const squaredLength = dx * dx + dy * dy;
+    if (squaredLength === 0) continue;
+    const fraction = Math.max(
+      0,
+      Math.min(
+        1,
+        ((pointer.x - start.x) * dx + (pointer.y - start.y) * dy) / squaredLength,
+      ),
+    );
+    const distance = Math.hypot(
+      pointer.x - start.x - fraction * dx,
+      pointer.y - start.y - fraction * dy,
+    );
+    if (distance <= nearestDistance) {
+      nearestDistance = distance;
+      nearest = { kind: 'leg', afterAnchorId: requiredAnchor(path, index).id };
     }
   }
   return nearest;

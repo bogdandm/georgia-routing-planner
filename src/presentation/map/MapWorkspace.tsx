@@ -972,12 +972,8 @@ export function MapWorkspace({
       );
     };
     facade.setTrackPointDragHandlers({
-      start: (pointer) => {
-        target = nearestTrackPathDragTarget(
-          editableGeometry,
-          [pointer.coordinate.longitude, pointer.coordinate.latitude],
-          pointer.toleranceMeters,
-        );
+      start: (projection) => {
+        target = nearestTrackPathDragTarget(editableGeometry, projection);
         return target !== null;
       },
       move: (coordinate) => {

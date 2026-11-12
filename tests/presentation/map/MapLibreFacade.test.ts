@@ -1908,7 +1908,7 @@ describe('MapLibreFacade', () => {
 
       expect(handlers.start).toHaveBeenCalledOnce();
       expect(handlers.start.mock.lastCall?.[0]).toMatchObject({
-        coordinate: { longitude: 44.65, latitude: 42.67 },
+        pointer: { x: 100, y: 100 },
       });
       expect(handlers.move).not.toHaveBeenCalled();
       expect(handlers.end).toHaveBeenCalledExactlyOnceWith(null);
@@ -2150,6 +2150,68 @@ describe('MapLibreFacade', () => {
       expect(handlers.start).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('clears stale planning previews and wraps drag coordinates and projected worlds', () => {
+    vi.useFakeTimers();
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    const setPlannedLinePreview = vi.fn();
+    const clearPlannedLinePreview = vi.fn();
+    const layerController = {
+      attach: vi.fn(),
+      detach: vi.fn(),
+      setPlannedLinePreview,
+      clearPlannedLinePreview,
+    } as unknown as MapLibreLayerController;
+    const facade = new MapLibreFacade(
+      services.logger,
+      undefined,
+      undefined,
+      undefined,
+      layerController,
+    );
+    const handlers = {
+      start: vi.fn<TrackPointDragHandlers['start']>(() => true),
+      move: vi.fn(),
+      end: vi.fn(),
+    };
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    facade.setInteractionMode('route-planning');
+    facade.setPlanningPreview({ anchor: { longitude: 44, latitude: 42 } });
+    nativeMap.fire('mousemove', { point: { x: 100, y: 100 } });
+    expect(setPlannedLinePreview).toHaveBeenCalled();
+    clearPlannedLinePreview.mockClear();
+    const unproject = vi
+      .spyOn(nativeMap, 'unproject')
+      .mockReturnValue({ lng: 541, lat: 42 });
+    const project = vi.spyOn(nativeMap, 'project');
+    facade.setTrackPointDragHandlers(handlers);
+    nativeMap
+      .getCanvas()
+      .dispatchEvent(new MouseEvent('mousedown', { button: 0, buttons: 1 }));
+    expect(clearPlannedLinePreview).toHaveBeenCalledExactlyOnceWith('route-plan');
+    const projection = handlers.start.mock.lastCall?.[0];
+    if (projection === undefined) throw new Error('Expected screen projection.');
+    projection.project([-179, 42]);
+    expect(project).toHaveBeenLastCalledWith([541, 42]);
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { buttons: 1, clientX: 10, clientY: 10 }),
+    );
+    vi.advanceTimersToNextFrame();
+    expect(handlers.move).toHaveBeenCalledExactlyOnceWith({
+      longitude: -179,
+      latitude: 42,
+    });
+    unproject.mockReturnValue({ lng: -541, lat: 43 });
+    window.dispatchEvent(
+      new MouseEvent('mouseup', { button: 0, clientX: 20, clientY: 20 }),
+    );
+    expect(handlers.end).toHaveBeenCalledExactlyOnceWith({
+      longitude: 179,
+      latitude: 43,
+    });
+    facade.destroy();
+  });
 
   it('publishes primary planning clicks and labels the cursor for the active mode', async () => {
     const services = createTestServices();

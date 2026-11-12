@@ -184,11 +184,15 @@ describe('WorkspaceShell track points', () => {
     });
     const handlers = facade.trackPointDragHandlers;
     if (handlers === null) throw new Error('Expected track drag handlers.');
+    const project = ([longitude, latitude]: readonly [number, number]) => ({
+      x: longitude * 10_000,
+      y: latitude * 10_000,
+    });
     act(() => {
       expect(
         handlers.start({
-          coordinate: { longitude: 44.01, latitude: 42.01 },
-          toleranceMeters: 20,
+          pointer: project([44.01, 42.01]),
+          project,
         }),
       ).toBe(true);
       handlers.move({ longitude: 44.012, latitude: 42.014 });
@@ -201,8 +205,8 @@ describe('WorkspaceShell track points', () => {
     expect(within(details).getByRole('button', { name: 'Undo' })).toBeDisabled();
     act(() => {
       handlers.start({
-        coordinate: { longitude: 44.01, latitude: 42.01 },
-        toleranceMeters: 20,
+        pointer: project([44.01, 42.01]),
+        project,
       });
       handlers.move({ longitude: 44.012, latitude: 42.014 });
       handlers.end({ longitude: 44.012, latitude: 42.014 });
@@ -218,8 +222,8 @@ describe('WorkspaceShell track points', () => {
       if (current === null) throw new Error('Expected track drag handlers.');
       expect(
         current.start({
-          coordinate: { longitude: 44.005, latitude: 42.005 },
-          toleranceMeters: 20,
+          pointer: project([44.005, 42.005]),
+          project,
         }),
       ).toBe(true);
       current.move({ longitude: 44.004, latitude: 42.008 });

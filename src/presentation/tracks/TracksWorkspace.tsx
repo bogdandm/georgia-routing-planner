@@ -3408,7 +3408,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         return;
       }
       // A dialog rendered through a portal can own focus outside its DOM subtree.
-      // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS selector.
       if (document.querySelector('[aria-modal="true"]') !== null) return;
       if (event.key === 'Escape') {
         event.preventDefault();

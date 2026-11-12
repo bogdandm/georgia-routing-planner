@@ -195,7 +195,9 @@ describe('WorkspaceShell track points', () => {
     });
     expect(within(details).getByRole('button', { name: 'Save' })).toBeDisabled();
     // Canceling a preview neither changes the point nor adds an undo step.
-    act(() => handlers.end(null));
+    act(() => {
+      handlers.end(null);
+    });
     expect(within(details).getByRole('button', { name: 'Undo' })).toBeDisabled();
     act(() => {
       handlers.start({

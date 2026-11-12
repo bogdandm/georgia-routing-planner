@@ -21,11 +21,16 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 
 import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
 import type { KeyboardShortcut } from '@/presentation/keyboardShortcuts';
-import type { MapCoordinate, MapPointInspection } from '@/presentation/map/mapTypes';
+import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
+import type {
+  MapCamera,
+  MapCoordinate,
+  MapPointInspection,
+} from '@/presentation/map/mapTypes';
 import {
   meteoblueForecastUrl,
   windyForecastUrl,
@@ -43,7 +48,9 @@ export type MapPointAction =
   | 'show-weather'
   | 'copy-weather-link'
   | 'open-meteoblue'
-  | 'open-windy';
+  | 'open-windy'
+  | 'open-google-maps'
+  | 'open-yandex-maps';
 
 // Decimal-degree coordinates keep the same machine-readable form as copied values.
 // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
@@ -99,7 +106,7 @@ function LabelValue({
   value,
 }: {
   readonly label: string;
-  readonly value: string;
+  readonly value: ReactNode;
 }) {
   return (
     <div>
@@ -132,14 +139,17 @@ interface MapPointActionEntry {
  */
 export function MapPointActionList({
   coordinate,
+  getCamera,
   touch,
   onSelect,
 }: {
   readonly coordinate: MapCoordinate;
+  readonly getCamera: () => MapCamera;
   readonly touch: boolean;
   readonly onSelect: (action: MapPointAction) => void;
 }) {
   const { t } = useLingui();
+  const camera = getCamera();
   const pointActions: readonly MapPointActionEntry[] = [
     {
       action: 'copy-coordinates',
@@ -169,6 +179,22 @@ export function MapPointActionList({
       label: t`Search satellite scenes here`,
       shortcut: { action: 'search-satellite' },
     },
+    /* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */
+    {
+      action: 'open-google-maps',
+      icon: <OpenInNewOutlinedIcon />,
+      label: 'Google Maps',
+      href: externalMapViewUrl('open-google-maps', camera, coordinate),
+      shortcut: { action: 'open-google-maps' },
+    },
+    {
+      action: 'open-yandex-maps',
+      icon: <OpenInNewOutlinedIcon />,
+      label: 'Yandex Maps',
+      href: externalMapViewUrl('open-yandex-maps', camera, coordinate),
+      shortcut: { action: 'open-yandex-maps' },
+    },
+    /* eslint-enable lingui/no-unlocalized-strings */
   ];
   const weatherActions: readonly MapPointActionEntry[] = [
     {
@@ -201,6 +227,12 @@ export function MapPointActionList({
     const select = () => {
       onSelect(action);
     };
+    const refreshMapView = (event: MouseEvent<HTMLAnchorElement>) => {
+      if (action === 'open-google-maps' || action === 'open-yandex-maps') {
+        // Movement need not publish a React snapshot before native link navigation.
+        event.currentTarget.href = externalMapViewUrl(action, getCamera(), coordinate);
+      }
+    };
     const content = (
       <>
         <ListItemIcon sx={{ '& > svg': { fontSize: 20 } }}>{icon}</ListItemIcon>
@@ -226,7 +258,11 @@ export function MapPointActionList({
         target="_blank"
         rel="noopener noreferrer"
         sx={itemSx}
-        onClick={select}
+        onClick={(event) => {
+          refreshMapView(event);
+          select();
+        }}
+        onAuxClick={refreshMapView}
       >
         {content}
       </MenuItem>
@@ -264,20 +300,22 @@ export function MapPointInspectorContent({
   const measurementFormatter = new Intl.NumberFormat(i18n.locale, {
     maximumFractionDigits: 0,
   });
-  const nearbyName =
-    inspection.nearbyPoi.status === 'found' ? inspection.nearbyPoi.poi.name : null;
-  /* eslint-disable lingui/no-unlocalized-strings -- External product names and URLs stay invariant. */
-  const featureLinks: readonly { readonly label: string; readonly href: string }[] =
-    nearbyName === null
+  const nearbyPoi =
+    inspection.nearbyPoi.status === 'found' ? inspection.nearbyPoi.poi : null;
+  const originalName = nearbyPoi?.originalName ?? null;
+  const searchName = originalName ?? nearbyPoi?.name ?? null;
+  /* eslint-disable lingui/no-unlocalized-strings -- Product names, language codes and URLs stay invariant. */
+  const featureLinks =
+    searchName === null
       ? []
       : [
           {
-            label: 'Wikipedia',
-            href: `https://en.wikipedia.org/wiki/${encodeURIComponent(nearbyName.replaceAll(' ', '_'))}`,
+            label: 'Google Search',
+            href: `https://www.google.com/search?q=${encodeURIComponent(searchName)}`,
           },
           {
-            label: 'Google Search',
-            href: `https://www.google.com/search?q=${encodeURIComponent(`${nearbyName} Georgia`)}`,
+            label: 'Google Search (En)',
+            href: `https://www.google.com/search?q=${encodeURIComponent(nearbyPoi?.name ?? searchName)}`,
           },
         ];
   /* eslint-enable lingui/no-unlocalized-strings */
@@ -325,7 +363,16 @@ export function MapPointInspectorContent({
       />
       <LabelValue
         label={t`Nearby map feature`}
-        value={nearbyFeatureText(inspection, measurementFormatter, i18n)}
+        value={
+          <>
+            {nearbyFeatureText(inspection, measurementFormatter, i18n)}
+            {originalName === null || originalName === nearbyPoi?.name ? null : (
+              <Box component="span" sx={{ display: 'block' }}>
+                {originalName}
+              </Box>
+            )}
+          </>
+        }
       />
       {featureLinks.length === 0 ? null : (
         <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>

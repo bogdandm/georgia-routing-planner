@@ -24,7 +24,9 @@ export type KeyboardShortcutAction =
   | 'save'
   | 'import-track'
   | 'download-gpx'
-  | 'copy-map-link';
+  | 'copy-map-link'
+  | 'open-google-maps'
+  | 'open-yandex-maps';
 
 export type KeyboardShortcut =
   | { readonly action: KeyboardShortcutAction }
@@ -95,6 +97,8 @@ const bindings: readonly ShortcutBinding[] = [
   plain('KeyR', 'R', 'toggle-ruler'),
   plain('KeyL', 'L', 'geolocate'),
   plain('Home', 'Home', 'geolocate'),
+  plain('KeyG', 'G', 'open-google-maps'),
+  plain('KeyY', 'Y', 'open-yandex-maps'),
   ...basemapPresets.map((preset, index): ShortcutBinding => ({
     code: `Digit${index + 1}`,
     modifier: 'none',

@@ -174,6 +174,8 @@ function keyGuide(): {
         shortcutRow(msg`Show Sentinel-2 imagery`, 'show-sentinel-2'),
         shortcutRow(msg`Turn the OSM overlay on or off`, 'toggle-osm-overlay'),
         shortcutRow(msg`Turn the ruler on or off`, 'toggle-ruler'),
+        shortcutRow(msg`Open this view in Google Maps`, 'open-google-maps'),
+        shortcutRow(msg`Open this view in Yandex Maps`, 'open-yandex-maps'),
       ],
     },
     {

@@ -129,6 +129,7 @@ import {
   MapPointInspectorContent,
   type MapPointAction,
 } from '@/presentation/map/MapPointInspectorContent';
+import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
 import { useOptionalTracksWorkspace } from '@/presentation/tracks/TracksWorkspace';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { MonochromeWeatherPeriodIcon } from '@/presentation/weather/WeatherConditionIcon';
@@ -1603,6 +1604,8 @@ export function MapWorkspace({
       }
       case 'open-meteoblue':
       case 'open-windy':
+      case 'open-google-maps':
+      case 'open-yandex-maps':
         return;
     }
   };
@@ -1743,6 +1746,16 @@ export function MapWorkspace({
         break;
       case 'copy-map-link':
         void copyMapLink(null);
+        break;
+      case 'open-google-maps':
+      case 'open-yandex-maps':
+        window.open(
+          externalMapViewUrl(shortcut.action, facade.getCamera(), null),
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Native browsing-context target.
+          '_blank',
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- Native window security feature tokens.
+          'noopener,noreferrer',
+        );
         break;
       case 'toggle-terrain': {
         if (
@@ -2060,6 +2073,7 @@ export function MapWorkspace({
         {contextMenu === null ? null : (
           <MapPointActionList
             coordinate={contextMenu.coordinate}
+            getCamera={() => facade.getCamera()}
             touch={false}
             onSelect={(action) => {
               closeContextMenu();
@@ -2121,6 +2135,7 @@ export function MapWorkspace({
               actions={
                 <MapPointActionList
                   coordinate={sheetInspection.coordinate}
+                  getCamera={() => facade.getCamera()}
                   touch
                   onSelect={(action) => {
                     runPointAction(action, sheetInspection.coordinate);

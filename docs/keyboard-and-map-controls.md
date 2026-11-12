@@ -24,6 +24,8 @@ pair must not be held. Ctrl+F, Ctrl+E, and Ctrl+O stay text-editing keys on macO
 | `O`               | `O`             | Switches between 2D and 3D                                                                                                                                                         | Terrain is changing, the map is loading, or Mosaic blocks 3D               |
 | `R`               | `R`             | Turns the ruler on or off                                                                                                                                                          | —                                                                          |
 | `L`, Home         | `L`, Home       | Finds my location                                                                                                                                                                  | —                                                                          |
+| `G`               | `G`             | Opens the current center and zoom in Google Maps                                                                                                                                   | —                                                                          |
+| `Y`               | `Y`             | Opens the current center and zoom in Yandex Maps                                                                                                                                   | —                                                                          |
 | `1`–`6`           | `1`–`6`         | Vector OSM, Google Satellite, Bing Aerial, Esri World Imagery, NAPR Orthophoto, Soviet Topographic                                                                                 | The map layers are not ready                                               |
 | `7`               | `7`             | Shows Sentinel-2                                                                                                                                                                   | No scene or mosaic is loaded; it never opens Satellite                     |
 | `8`               | `8`             | Turns the OSM overlay on or off                                                                                                                                                    | The overlay is unavailable, as on Vector OSM                               |
@@ -60,12 +62,17 @@ location** buttons use the same tooltip instead of the browser's, with `+`, `−
 L. Every tooltip of the map control column opens to the left of its button, vertically
 centered on it. The layer-chooser menu shows each row's key in one column at its right
 edge, and the empty map search shows Ctrl/⌘+F. The map's right-click menu hints
-Ctrl/⌘+C, P, S, and W beside **Copy link**, **Create marker here**, **Search satellite
-scenes here**, and **Show weather forecast**; these are reminders of the related global
-shortcuts, which act on the current view, through the next map click, or at the map
-center, not keys of the menu. Devices whose primary pointer is coarse, such as phones
-and tablets, usually have no keyboard and show no keycaps. The
-[help screen](./features.md#help-screen) lists every shortcut with its keys.
+Ctrl/⌘+C, P, S, W, G, and Y beside **Copy link**, **Create marker here**, **Search
+satellite scenes here**, **Show weather forecast**, **Google Maps**, and **Yandex
+Maps**; these are reminders of the related global shortcuts, which act on the current
+view, through the next map click, or at the map center, not keys of the menu. External
+maps use a supported integer zoom converted from MapLibre's zoom scale. Their view URLs
+preserve the center, not exact viewport bounds, rotation, or pitch. Google's view mode
+has no point marker; Yandex's point action can mark the clicked point without
+recentering, while the global shortcut opens only the view. Devices whose primary
+pointer is coarse, such as phones and tablets, usually have no keyboard and show no
+keycaps. The [help screen](./features.md#help-screen) lists every shortcut with its
+keys.
 
 ## Map controls
 

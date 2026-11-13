@@ -17,6 +17,7 @@ import type {
   RenderBenchmarkReport,
   RenderBenchmarkStep,
 } from '@/presentation/map/renderBenchmark';
+import type { TrackPathProjection } from '@/presentation/tracks/trackPathEditor';
 
 /**
  * `track-editing` keeps the normal cursor, never opens point inspection, and publishes
@@ -41,6 +42,20 @@ export interface TrackPointPointer {
 /** Primary map click while editing track points. */
 export interface TrackPointClick extends TrackPointPointer {
   readonly shiftKey: boolean;
+}
+
+/** Native mouse drag lifecycle shared by route planning and track editing. */
+export interface TrackPointDragHandlers {
+  /** Optional visual hint: closest bend position in canvas CSS pixels, never an edit. */
+  hover?(
+    projection: TrackPathProjection,
+  ): { readonly x: number; readonly y: number } | null;
+  /** Captures a hit candidate without changing the draft or selection. */
+  start(projection: TrackPathProjection): boolean;
+  /** Preview only; emitted once per frame after at least 4 CSS px of travel. */
+  move(coordinate: MapCoordinate): void;
+  /** Exact release position, or null for a stationary press or cancellation. */
+  end(coordinate: MapCoordinate | null): void;
 }
 
 export type MapViewportMovement =
@@ -73,6 +88,8 @@ export interface MapFacade {
   subscribeTrackPointHover(
     listener: (pointer: TrackPointPointer | null) => void,
   ): () => void;
+  /** Replacing/removing handlers cancels any captured candidate or drag. */
+  setTrackPointDragHandlers(handlers: TrackPointDragHandlers | null): void;
   /** Reads the live camera, including movement; before attachment returns the last known view. */
   getCamera(): MapCamera;
   getDiagnosticsSnapshot(): MapDiagnosticsSnapshot;

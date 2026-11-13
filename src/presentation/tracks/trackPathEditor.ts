@@ -67,6 +67,10 @@ export interface TrackPath {
   readonly legs: readonly PathLeg[];
 }
 
+export type TrackPathDragTarget =
+  | { readonly kind: 'anchor'; readonly anchorId: number }
+  | { readonly kind: 'leg'; readonly afterAnchorId: number };
+
 export interface PathInsertion {
   /** New points go after this anchor; null inserts before the first anchor. */
   readonly afterAnchorId: number | null;
@@ -553,30 +557,119 @@ function moveAnchor<D extends TrackPathDraft>(
   anchorId: number,
   coordinate: TrackCoordinate,
 ): D {
-  const index = anchorIndex(draft.path, anchorId);
-  const anchor = draft.path.anchors[index];
-  if (anchor === undefined) return cancelTrackPathMove(draft);
+  const path = movedAnchorPath(draft.path, anchorId, coordinate, false);
+  return path === draft.path ? cancelTrackPathMove(draft) : commitEdit(draft, path);
+}
+
+function movedAnchorPath(
+  path: TrackPath,
+  anchorId: number,
+  coordinate: TrackCoordinate,
+  preview: boolean,
+): TrackPath {
+  const index = anchorIndex(path, anchorId);
+  const anchor = path.anchors[index];
+  if (anchor === undefined) return path;
   // The recorded time still dates the point; its elevation belonged to the old place.
   const point: TrackPoint =
     anchor.point.recordedAt === undefined
       ? { coordinate }
       : { coordinate, recordedAt: anchor.point.recordedAt };
-  const anchors = draft.path.anchors.map((candidate, candidateIndex) =>
+  const anchors = path.anchors.map((candidate, candidateIndex) =>
     candidateIndex === index ? { id: anchor.id, point } : candidate,
   );
-  const legs = draft.path.legs.map((leg, legIndex) => {
+  const legs = path.legs.map((leg, legIndex) => {
     if (leg.kind === 'gap') return leg;
     if (legIndex === index - 1) {
-      const start = requiredAnchor(draft.path, legIndex).point.coordinate;
-      return connectingLeg(leg.mode, start, coordinate);
+      const start = requiredAnchor(path, legIndex).point.coordinate;
+      return connectingLeg(preview ? 'line' : leg.mode, start, coordinate);
     }
     if (legIndex === index) {
-      const end = requiredAnchor(draft.path, legIndex + 1).point.coordinate;
-      return connectingLeg(leg.mode, coordinate, end);
+      const end = requiredAnchor(path, legIndex + 1).point.coordinate;
+      return connectingLeg(preview ? 'line' : leg.mode, coordinate, end);
     }
     return leg;
   });
-  return commitEdit(draft, { anchors, legs });
+  return { anchors, legs };
+}
+
+function draggableLegIndex(path: TrackPath, afterAnchorId: number): number {
+  const index = anchorIndex(path, afterAnchorId);
+  const leg = path.legs[index];
+  const start = path.anchors[index];
+  const end = path.anchors[index + 1];
+  return leg?.kind === 'leg' &&
+    leg.mode === 'line' &&
+    start !== undefined &&
+    end !== undefined &&
+    geodesicDistanceMeters(start.point.coordinate, end.point.coordinate) > 0
+    ? index
+    : -1;
+}
+
+function bentLinePath(
+  path: TrackPath,
+  index: number,
+  coordinate: TrackCoordinate,
+  id: number,
+): TrackPath {
+  const start = requiredAnchor(path, index).point.coordinate;
+  const end = requiredAnchor(path, index + 1).point.coordinate;
+  return {
+    anchors: [
+      ...path.anchors.slice(0, index + 1),
+      { id, point: { coordinate } },
+      ...path.anchors.slice(index + 1),
+    ],
+    legs: [
+      ...path.legs.slice(0, index),
+      connectingLeg('line', start, coordinate),
+      connectingLeg('line', coordinate, end),
+      ...path.legs.slice(index + 1),
+    ],
+  };
+}
+
+/** Map-only geometry: no routing, metrics, draft mutation or history. */
+export function previewTrackPathDrag(
+  path: TrackPath,
+  target: TrackPathDragTarget,
+  coordinate: TrackCoordinate,
+): TrackPath {
+  if (target.kind === 'anchor') {
+    return movedAnchorPath(path, target.anchorId, coordinate, true);
+  }
+  const index = draggableLegIndex(path, target.afterAnchorId);
+  if (index < 0) return path;
+  const transientId = path.anchors.reduce(
+    (next, anchor) => Math.max(next, anchor.id + 1),
+    0,
+  );
+  return bentLinePath(path, index, coordinate, transientId);
+}
+
+/** Commits one drag, keeping the existing insertion cursor and mode unchanged. */
+export function applyTrackPathDrag<D extends TrackPathDraft>(
+  draft: D,
+  target: TrackPathDragTarget,
+  coordinate: TrackCoordinate,
+): D {
+  if (draft.status === 'saving') return draft;
+  if (target.kind === 'anchor') {
+    const anchor = draft.path.anchors[anchorIndex(draft.path, target.anchorId)];
+    if (anchor === undefined) return draft;
+    if (coordinatesEqual(anchor.point.coordinate, coordinate)) {
+      return cancelTrackPathMove(draft);
+    }
+    return moveAnchor(draft, target.anchorId, coordinate);
+  }
+  const index = draggableLegIndex(draft.path, target.afterAnchorId);
+  if (index < 0) return draft;
+  return commitEdit(
+    draft,
+    bentLinePath(draft.path, index, coordinate, draft.nextAnchorId),
+    { nextAnchorId: draft.nextAnchorId + 1 },
+  );
 }
 
 /** Inserts at the insertion point, or moves the anchor waiting for a new place. */
@@ -1067,7 +1160,7 @@ export function nearestTrackPathAnchor(
   let nearestDistance = toleranceMeters;
   for (const [index, anchor] of path.anchors.entries()) {
     const [longitude, latitude] = anchor.point.coordinate;
-    const longitudeDelta = Math.abs(longitude - coordinate[0]);
+    const longitudeDelta = Math.abs(longitude - coordinate[0]) % 360;
     if (
       Math.abs(latitude - coordinate[1]) > latitudeSpan ||
       Math.min(longitudeDelta, 360 - longitudeDelta) > longitudeSpan
@@ -1081,4 +1174,89 @@ export function nearestTrackPathAnchor(
     }
   }
   return nearest;
+}
+
+/** Synchronous camera projection used only during native mouse hit testing. */
+export interface TrackPathProjection {
+  readonly pointer: { readonly x: number; readonly y: number };
+  project(coordinate: TrackCoordinate): { readonly x: number; readonly y: number };
+}
+
+function projectedSegmentFraction(
+  pointer: TrackPathProjection['pointer'],
+  start: TrackPathProjection['pointer'],
+  end: TrackPathProjection['pointer'],
+): number | null {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const squaredLength = dx * dx + dy * dy;
+  if (squaredLength === 0) return null;
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      ((pointer.x - start.x) * dx + (pointer.y - start.y) * dy) / squaredLength,
+    ),
+  );
+}
+
+/** Anchors take precedence; distances use actual camera pixels, including in 3D. */
+export function nearestTrackPathDragTarget(
+  path: TrackPath,
+  projection: TrackPathProjection,
+): TrackPathDragTarget | null {
+  const { pointer } = projection;
+  let nearest: TrackPathDragTarget | null = null;
+  let nearestDistance = 12;
+  for (const anchor of path.anchors) {
+    const point = projection.project(anchor.point.coordinate);
+    const distance = Math.hypot(pointer.x - point.x, pointer.y - point.y);
+    if (distance <= nearestDistance) {
+      nearestDistance = distance;
+      nearest = { kind: 'anchor', anchorId: anchor.id };
+    }
+  }
+  if (nearest !== null) return nearest;
+  for (const [index, leg] of path.legs.entries()) {
+    if (leg.kind !== 'leg' || leg.mode !== 'line') continue;
+    const startCoordinate = path.anchors[index]?.point.coordinate;
+    const endCoordinate = path.anchors[index + 1]?.point.coordinate;
+    if (startCoordinate === undefined || endCoordinate === undefined) continue;
+    const start = projection.project(startCoordinate);
+    const end = projection.project(endCoordinate);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const fraction = projectedSegmentFraction(pointer, start, end);
+    if (fraction === null) continue;
+    const distance = Math.hypot(
+      pointer.x - start.x - fraction * dx,
+      pointer.y - start.y - fraction * dy,
+    );
+    if (distance <= nearestDistance) {
+      nearestDistance = distance;
+      nearest = { kind: 'leg', afterAnchorId: requiredAnchor(path, index).id };
+    }
+  }
+  return nearest;
+}
+
+/** Screen-space bend hint only; anchor hits suppress the handle. */
+export function trackPathBendHandle(
+  path: TrackPath,
+  projection: TrackPathProjection,
+): { readonly x: number; readonly y: number } | null {
+  const target = nearestTrackPathDragTarget(path, projection);
+  if (target?.kind !== 'leg') return null;
+  const index = anchorIndex(path, target.afterAnchorId);
+  const startCoordinate = path.anchors[index]?.point.coordinate;
+  const endCoordinate = path.anchors[index + 1]?.point.coordinate;
+  if (startCoordinate === undefined || endCoordinate === undefined) return null;
+  const start = projection.project(startCoordinate);
+  const end = projection.project(endCoordinate);
+  const fraction = projectedSegmentFraction(projection.pointer, start, end);
+  if (fraction === null) return null;
+  return {
+    x: start.x + fraction * (end.x - start.x),
+    y: start.y + fraction * (end.y - start.y),
+  };
 }

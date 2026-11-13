@@ -160,6 +160,11 @@ msgstr "Поставить метку"
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Текущая погода: {temperature}, осадки {precipitation}"
 
+#. js-lingui-id: -fptTM
+#: src/presentation/map/MapWorkspace.tsx
+msgid "Delete selected points"
+msgstr "Удалить выбранные точки"
+
 #. js-lingui-id: SMM_gj
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Drag onto another map to swap"

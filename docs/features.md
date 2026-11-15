@@ -348,8 +348,8 @@ the hiker is at that time, and an hour in a break between recorded segments stay
 earlier segment's end. Unlike the forecast timeline, any track length qualifies, and
 times past midnight wrap. Labels are white text on white-bordered rounded rectangles in
 the track colour, follow the Local GPX opacity and visibility, and are not drawn in
-satellite comparison panes. Endpoint times always show; hourly times give way to map
-labels and each other where they would overlap.
+satellite comparison panes. They draw above map labels, which give way to them. Endpoint
+times always show; hourly times give way to the endpoints and each other.
 
 **Show times on the map**, the first control in **Along the route**, turns the labels on
 or off for one track and is remembered in this browser like its route start and pace.

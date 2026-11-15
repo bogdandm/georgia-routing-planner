@@ -567,8 +567,8 @@ Import parsing, naming, and saving are described in [features.md](features.md) a
 [data-model.md](data-model.md). `TracksWorkspaceProvider` sends validated segments
 grouped per track to `MapLibreLayerController.setImportedTrackGeometry`, which keeps one
 GeoJSON `MultiLineString` with a casing and line plus an endpoint source with each
-track's first and last points, drawn above the line as symbol icons rasterized in
-`trackEndpointIcons.ts`: a white Play triangle on green at the start and a white Stop
+track's first and last points, drawn above the basemap labels as symbol icons rasterized
+in `trackEndpointIcons.ts`: a white Play triangle on green at the start and a white Stop
 square on red at the finish. All share one persistent visibility/opacity pair. In
 multi-track mode the provider passes every ready selected track and fits their combined
 bounds. Route plans and the ruler use `setPlannedLineGeometry` with separate
@@ -579,9 +579,10 @@ Time markers are a separate source fed by `setImportedTrackTimeLabels`, so a new
 start or pace never resends geometry. The provider resolves each shown track's choice
 (its own, else `trackTimeMarkers` in `mapLayerStore` from `map.layers`), runs
 `planTrackClockTimes` on its profile and settings, and places the start and finish times
-on the drawn endpoints. Two symbol layers above the lines and below the endpoint icons
-draw them on a stretchable rounded-rectangle image with `icon-text-fit`: endpoint times
-allow overlap and are placed first; hourly times keep collision detection. Path editing,
+on the drawn endpoints. Two symbol layers above the basemap labels and below the
+endpoint icons draw them on a stretchable rounded-rectangle image with `icon-text-fit`,
+so basemap labels give way to them rather than covering them; endpoint times allow
+overlap and are placed first, and hourly times keep collision detection. Path editing,
 route plans, and tracks without a profile send no labels.
 
 With an elevation profile, grade subsegments across every source run feed the highlight

@@ -108,7 +108,10 @@ export function createImportedTrackLineLayer(
   };
 }
 
-/** Start and finish icons; the map must provide `importedTrackEndpointImageIds`. */
+/**
+ * Start and finish icons; the map must provide `importedTrackEndpointImageIds`. They always
+ * show and, like the endpoint times, hide basemap labels they would overlap.
+ */
 export function createImportedTrackEndpointLayer(
   visible: boolean,
   opacity: number,
@@ -127,7 +130,6 @@ export function createImportedTrackEndpointLayer(
         importedTrackEndpointImageIds.finish,
       ],
       'icon-allow-overlap': true,
-      'icon-ignore-placement': true,
       // Source order, not screen position, decides which coincident icon is on top.
       'symbol-z-order': 'source',
     },
@@ -164,9 +166,10 @@ const endpointTimeOffsetEms = 0.9;
 
 /**
  * Time labels in white on track-coloured rounded rectangles; the map must provide
- * `importedTrackTimeLabelImageId`. Endpoint times always show, the start's to the right
- * of its icon and the finish's to the left, so a loop's shared point shows both. Hourly
- * times yield to every label placed before them, endpoint times included.
+ * `importedTrackTimeLabelImageId`. They sit above the basemap labels, so those yield to
+ * them. Endpoint times always show, the start's to the right of its icon and the
+ * finish's to the left, so a loop's shared point shows both. Hourly times yield to the
+ * endpoint icons and times.
  */
 export function createImportedTrackTimeLayer(
   labels: 'endpoint' | 'hour',

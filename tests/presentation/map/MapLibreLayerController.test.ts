@@ -1387,7 +1387,6 @@ describe('MapLibreLayerController', () => {
       importedTrackLayerIds.focusCasingB,
       importedTrackLayerIds.focusLineB,
       importedTrackLayerIds.focusHighlightB,
-      importedTrackLayerIds.endpoints,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
     expect(importedTrackLineLayerIdsInOrder).toEqual(
       [...importedTrackLineLayerIdsInOrder].sort((left, right) => left - right),
@@ -1413,9 +1412,15 @@ describe('MapLibreLayerController', () => {
     expect(Math.min(...importedTrackLineLayerIdsInOrder)).toBeGreaterThan(
       [...map.layers.keys()].indexOf(mapLayerIds.cliffs),
     );
-    expect([...map.layers.keys()].indexOf(importedTrackLayerIds.trace)).toBeGreaterThan(
-      Math.max(...labelLayerIndices),
-    );
+    // Endpoint icons, like the hover trace, sit above basemap labels so those yield.
+    for (const layerId of [
+      importedTrackLayerIds.endpoints,
+      importedTrackLayerIds.trace,
+    ]) {
+      expect([...map.layers.keys()].indexOf(layerId)).toBeGreaterThan(
+        Math.max(...labelLayerIndices),
+      );
+    }
     const moveCount = map.moves.length;
     map.fire('styledata', {});
     expect(map.moves).toHaveLength(moveCount);
@@ -1495,12 +1500,15 @@ describe('MapLibreLayerController', () => {
     expect(map.layers.get(importedTrackLayerIds.hourTimes)).not.toHaveProperty(
       'layout.text-allow-overlap',
     );
+    // Labels sit above the basemap labels, so a road name never covers a track time.
     const layerOrder = [
       importedTrackLayerIds.line,
+      mapLayerIds.fords,
+      mapLayerIds.roadLabels,
+      mapLayerIds.placeLabels,
       importedTrackLayerIds.hourTimes,
       importedTrackLayerIds.endpointTimes,
       importedTrackLayerIds.endpoints,
-      mapLayerIds.fords,
     ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
     expect(layerOrder).toEqual([...layerOrder].sort((left, right) => left - right));
 

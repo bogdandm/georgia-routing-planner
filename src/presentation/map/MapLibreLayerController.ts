@@ -3750,11 +3750,15 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Point overlays above every other layer, bottom to top: selected track points, the
-   * elevation hover point, then saved markers.
+   * Point overlays above every other layer, bottom to top: track hourly times, endpoint
+   * times, and endpoint icons, so basemap labels yield to them instead of covering them;
+   * selected track points, the elevation hover point, then saved markers.
    */
   private ensureTopLayerOrder(map: MapLibreMap): void {
     const topLayerIds = [
+      importedTrackLayerIds.hourTimes,
+      importedTrackLayerIds.endpointTimes,
+      importedTrackLayerIds.endpoints,
       trackPointSelectionLayerIds.points,
       importedTrackLayerIds.trace,
       savedMarkerLayerIds.symbols,
@@ -4403,9 +4407,6 @@ export class MapLibreLayerController {
       importedTrackLayerIds.highlight,
       ...importedTrackFocusSlots.flatMap(({ layerIds }) => layerIds),
       trackPointSelectionLayerIds.line,
-      importedTrackLayerIds.hourTimes,
-      importedTrackLayerIds.endpointTimes,
-      importedTrackLayerIds.endpoints,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getLayersOrder();
     const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);

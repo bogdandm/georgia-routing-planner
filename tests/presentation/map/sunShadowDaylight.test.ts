@@ -5,6 +5,7 @@ import {
   type DaylightWindow,
   daylightFrameInstants,
   daylightWindow,
+  sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
 
 const minute = 60_000;
@@ -96,5 +97,33 @@ describe('daylightFrameInstants', () => {
     const lastStep = (frames.at(-1) ?? 0) - (frames.at(-2) ?? 0);
     expect(lastStep).toBeGreaterThan(0);
     expect(lastStep).toBeLessThanOrEqual(10 * minute);
+  });
+});
+
+describe('sunlitNow', () => {
+  it('keeps a current time while the Sun is up', () => {
+    expect(sunlitNow(tbilisiTime(13, 40), tchkhutkharo, 'Asia/Tbilisi')).toBe(
+      tbilisiTime(13, 40),
+    );
+  });
+
+  it('replaces a dark current time with 11:00 of the same local day', () => {
+    expect(sunlitNow(tbilisiTime(22, 30), tchkhutkharo, 'Asia/Tbilisi')).toBe(
+      tbilisiTime(11, 0),
+    );
+    expect(sunlitNow(tbilisiTime(3, 15), tchkhutkharo, 'Asia/Tbilisi')).toBe(
+      tbilisiTime(11, 0),
+    );
+    // Twilight still counts as dark: the Sun is below the horizon.
+    expect(sunlitNow(tbilisiTime(18, 0), tchkhutkharo, 'Asia/Tbilisi')).toBe(
+      tbilisiTime(11, 0),
+    );
+  });
+
+  it('keeps the current time on a day without sunrise and sunset', () => {
+    const polarNight = Date.UTC(2026, 11, 21, 12);
+    expect(sunlitNow(polarNight, { latitude: 78.2, longitude: 15.6 }, 'UTC')).toBe(
+      polarNight,
+    );
   });
 });

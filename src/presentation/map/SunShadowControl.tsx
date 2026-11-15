@@ -33,6 +33,7 @@ import {
   type DaylightWindow,
   daylightWindow,
   localDayBounds,
+  sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
 import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
 
@@ -318,7 +319,14 @@ function SunShadowPanel({
         />
         <Button
           onClick={() => {
-            onChange({ enabled, instantMs: Date.now() });
+            const nowMs = Date.now();
+            onChange({
+              enabled,
+              instantMs:
+                latitude === null || longitude === null
+                  ? nowMs
+                  : sunlitNow(nowMs, { latitude, longitude }, timeZone),
+            });
           }}
           size="small"
           variant="outlined"

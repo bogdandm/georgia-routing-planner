@@ -176,11 +176,11 @@ failed tile-cache entry. Final failure appears only in the shared operational st
 On style readiness, style data changes, imagery swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 sun-shadow raster, generated contour source, minor/index lines, and index labels. The
-order is base surface fills, relief/satellite in the selected order, waterways, sun
-shadow, contours, water-body polygons, then OSM boundaries, transport, ridges and
-cliffs, the Sentinel scene footprint, user routes and tracks, and finally icons and
-labels (contour labels included), so relief and shadow stay visible over opaque
-land-cover fills while water bodies mask isolines and shadow. 3D terrain draws
+order is base surface fills, relief/satellite in the selected order, waterways,
+contours, water-body polygons, sun shadow, buildings, then OSM boundaries, transport,
+ridges and cliffs, the Sentinel scene footprint, user routes and tracks, and finally
+icons and labels (contour labels included), so relief and shadow stay visible over
+opaque land-cover fills while water bodies mask isolines and shadow. 3D terrain draws
 consecutive line, fill, raster, and hillshade layers into one draped texture per terrain
 tile, and every icon or label layer between them would add another full set of textures
 and terrain passes; keeping all lines and fills below the first icon layer gives the
@@ -246,17 +246,22 @@ sequenceDiagram
 
 While the switch is on and shadows are not known to be unavailable, the controller keeps
 the `terrain-sun-shadow` raster source (z7–12, overzoomed above) and its layer directly
-below the minor contours. Once that layer exists it sets the relief hillshade's minimum
-zoom to 24 so the fixed-light shading does not double the real-sun relief; a failed
-shadow setup leaves the relief drawn. Turning the switch off removes the source and
-layer and restores the relief zoom range. The relief visibility preference is never
-written. The tile URL carries the instant as a whole epoch minute, so an unchanged
-minute changes nothing, and a new minute replaces the source tiles with `setTiles`:
-MapLibre requests only the visible tiles again. When a camera move settles, the instant
-is clamped again to the shown range at the new center, matching the panel. Otherwise
-camera moves (pan, rotate, pitch, 3D) never recompute, because MapLibre's tile cache and
-the worker's mask cache already hold the tiles; returning to an earlier minute hits the
-mask cache. Compare panes never add the source.
+above the water polygons, so lakes and contours are shaded too. Once that layer exists
+it sets the relief hillshade's minimum zoom to 24 so the fixed-light shading does not
+double the real-sun relief; a failed shadow setup leaves the relief drawn. Turning the
+switch off removes the source and layer and restores the relief zoom range. The relief
+visibility preference is never written. The tile URL carries the instant as a whole
+epoch minute, so an unchanged minute changes nothing, and a new minute replaces the
+source tiles with `setTiles`: MapLibre requests only the visible tiles again. When a
+camera move settles, the instant is clamped again to the shown range at the new center,
+matching the panel. Otherwise camera moves (pan, rotate, pitch, 3D) never recompute,
+because MapLibre's tile cache and the worker's mask cache already hold the tiles;
+returning to an earlier minute hits the mask cache. Compare panes never add the source.
+
+The session instant starts at the current time. On the first reconciliation with a map,
+a start time outside sunrise–sunset at the map center becomes 11:00 of that local day,
+so the map never opens fully shaded; the panel's **Now** applies the same rule. An
+instant chosen in the panel is never replaced, only clamped to the range.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
 the module worker on the first tile request. Requests wait while the map is dragged,

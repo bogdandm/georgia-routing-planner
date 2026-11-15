@@ -428,12 +428,16 @@ function createSunShadowController(
   return { controller, shadows, services };
 }
 
-/** Asserts relief → sun shadow → minor contours as three adjacent layers. */
+/** Asserts relief → contours → water → sun shadow, with the shadow directly over water. */
 function expectReliefShadowContourStack(map: FakeLayerMap): void {
   const order = [...map.layers.keys()];
   const shadowIndex = order.indexOf(terrainOverlayLayerIds.sunShadow);
-  expect(order[shadowIndex - 1]).toBe(terrainOverlayLayerIds.reliefShade);
-  expect(order[shadowIndex + 1]).toBe(terrainOverlayLayerIds.contourMinor);
+  expect(order.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+    order.indexOf(terrainOverlayLayerIds.contourMinor),
+  );
+  expect(order.indexOf(terrainOverlayLayerIds.contourIndex)).toBeLessThan(shadowIndex);
+  expect(order[shadowIndex - 1]).toBe(mapLayerIds.water);
+  expect(order[shadowIndex + 1]).toBe(mapLayerIds.buildings);
 }
 
 const shadowInstantMs = Date.UTC(2026, 6, 1, 8, 30, 15);
@@ -2640,7 +2644,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('adds sun shadows between relief and contours and redraws them only per minute', async () => {
+  it('adds sun shadows over lakes and contours and redraws them only per minute', async () => {
     const { controller, services } = createSunShadowController();
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -2690,6 +2694,25 @@ describe('MapLibreLayerController', () => {
         sunShadowEnabled: false,
       });
     });
+  });
+
+  it('starts a session that opens at night at 11:00 on that day at the map center', () => {
+    vi.useFakeTimers();
+    // 23:15 in Tbilisi (UTC+4).
+    vi.setSystemTime(Date.UTC(2026, 6, 1, 19, 15));
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+      Date.UTC(2026, 6, 1, 7, 0),
+    );
+    // A time the user picks afterwards is never replaced, only kept within the range.
+    const userEveningMs = Date.UTC(2026, 6, 1, 17, 0);
+    controller.setSunShadow({ enabled: true, instantMs: userEveningMs });
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(userEveningMs);
+    controller.dispose();
   });
 
   it('moves a night instant to two hours after sunset at the map center', () => {
@@ -2987,8 +3010,8 @@ describe('MapLibreLayerController', () => {
     expect(belowOrder.indexOf(terrainOverlayLayerIds.sunShadow)).toBeGreaterThan(
       imageryIndex,
     );
-    expect(belowOrder[belowOrder.indexOf(terrainOverlayLayerIds.sunShadow) + 1]).toBe(
-      terrainOverlayLayerIds.contourMinor,
+    expect(belowOrder[belowOrder.indexOf(terrainOverlayLayerIds.sunShadow) - 1]).toBe(
+      mapLayerIds.water,
     );
     let movesBefore = map.moves.length;
     for (let index = 0; index < 3; index += 1) map.fire('styledata', {});

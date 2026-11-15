@@ -93,6 +93,24 @@ export function clampToDaylight(
 }
 
 /**
+ * The current instant while the Sun is up at `place`; otherwise 11:00 on the same local
+ * day, so a session or **Now** at night never opens with the whole map in shade.
+ * Unchanged on a day without sunrise and sunset.
+ */
+export function sunlitNow(
+  nowMs: number,
+  place: { readonly latitude: number; readonly longitude: number },
+  timeZone: string,
+): number {
+  const window = daylightWindow(nowMs, place, timeZone);
+  if (window === null || (nowMs >= window.sunriseMs && nowMs <= window.sunsetMs)) {
+    return nowMs;
+  }
+  const date = instantToZonedWallTime(new Date(nowMs), timeZone);
+  return zonedWallTimeToInstant({ ...date, hour: 11, minute: 0 }, timeZone).getTime();
+}
+
+/**
  * Whole-minute frames from `firstMinuteMs` every `stepMinutes`, plus `lastMinuteMs` when
  * not already last.
  */

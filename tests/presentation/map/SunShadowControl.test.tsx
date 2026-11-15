@@ -126,6 +126,22 @@ describe('SunShadowControl', () => {
     });
   });
 
+  it('turns Now at night into 11:00 of that day at the map center', async () => {
+    const user = userEvent.setup();
+    // 23:15 in Tbilisi (UTC+4).
+    vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 6, 1, 19, 15));
+    const { onChange } = renderSunShadowControls({ enabled: true });
+    await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
+
+    await user.click(screen.getByRole('button', { name: 'Now' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      enabled: true,
+      instantMs: Date.UTC(2026, 6, 1, 7, 0),
+    });
+    vi.restoreAllMocks();
+  });
+
   it('offers times from two hours before sunrise to two hours after sunset', async () => {
     const user = userEvent.setup();
     renderSunShadowControls({});

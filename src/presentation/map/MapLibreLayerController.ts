@@ -135,6 +135,7 @@ import {
   type DaylightWindow,
   daylightFrameInstants,
   daylightWindow,
+  sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
 import {
   type TerrainShadowMetricsSnapshot,
@@ -1012,6 +1013,8 @@ export class MapLibreLayerController {
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
   #sunShadowPlaybackFrames: readonly number[] = [];
   #sunShadowPlaybackIndex = 0;
+  /** True until the session's start instant (now) was checked against the map's night. */
+  #sunShadowInstantIsSessionStart = true;
   readonly #releaseSunShadowAvailability: () => void;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
@@ -1229,6 +1232,9 @@ export class MapLibreLayerController {
     const enabledChanged = this.#sunShadowEnabled !== value.enabled;
     if (!enabledChanged && this.#sunShadowInstantMs === instantMs) return;
     this.#sunShadowEnabled = value.enabled;
+    // A chosen instant replaces the session start time; toggling the switch keeps it.
+    if (instantMs !== this.#sunShadowInstantMs)
+      this.#sunShadowInstantIsSessionStart = false;
     this.#sunShadowInstantMs = instantMs;
     mapLayerStore.setState({
       sunShadow: {
@@ -1380,10 +1386,7 @@ export class MapLibreLayerController {
   private showSunShadowPlaybackFrame(map: MapLibreMap): void {
     const instantMs = this.#sunShadowPlaybackFrames[this.#sunShadowPlaybackIndex];
     if (instantMs === undefined) return;
-    this.#sunShadowInstantMs = instantMs;
-    mapLayerStore.setState({
-      sunShadow: { ...mapLayerStore.getState().sunShadow, instantMs },
-    });
+    this.setSunShadowInstant(instantMs);
     this.reconcileSunShadow(map);
   }
 
@@ -3644,14 +3647,11 @@ export class MapLibreLayerController {
       const activeRasterLayerId = this.currentVisibleRasterLayerId();
       const bottomRasterLayerId = this.currentVisibleRasterBottomLayerId();
       const satelliteVisible = activeRasterLayerId !== null;
-      // Relief sits directly below the sun-shadow layer, which sits directly below the
-      // contours; relief below satellite keeps its own anchor.
+      // Relief sits directly below the contours; relief below satellite keeps its own anchor.
       const overlayAboveReliefId =
-        map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined
-          ? terrainOverlayLayerIds.sunShadow
-          : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
-            ? mapInsertionPoints.terrainOverlaysBeforeLayerId
-            : terrainOverlayLayerIds.contourMinor;
+        map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
+          ? mapInsertionPoints.terrainOverlaysBeforeLayerId
+          : terrainOverlayLayerIds.contourMinor;
       const beforeId =
         !this.#terrainOverlayPreferences.shadeAboveSatellite &&
         bottomRasterLayerId !== null
@@ -3703,11 +3703,11 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Keeps the sun-shadow raster directly below the minor contours while shadows are on
-   * and the browser can render them, and removes it otherwise. Once it draws, the
-   * fixed-light relief hillshade is excluded through its zoom range because the shadow
-   * layer already shades relief for the real sun. A failure only logs: the relief and
-   * contours keep working without shadows.
+   * Keeps the sun-shadow raster directly above the water polygons, so lakes and contours
+   * are shaded too, while shadows are on and the browser can render them, and removes it
+   * otherwise. Once it draws, the fixed-light relief hillshade is excluded through its
+   * zoom range because the shadow layer already shades relief for the real sun. A failure
+   * only logs: the relief and contours keep working without shadows.
    */
   private reconcileSunShadow(map: MapLibreMap): void {
     const wanted =
@@ -3727,6 +3727,16 @@ export class MapLibreLayerController {
       );
     };
     try {
+      // The session starts at the current time; at night that would open fully shaded.
+      if (this.#sunShadowInstantIsSessionStart) {
+        this.#sunShadowInstantIsSessionStart = false;
+        const { place, timeZone } = this.sunShadowPlace(map);
+        this.setSunShadowInstant(
+          quantizeSunShadowInstant(
+            sunlitNow(this.#sunShadowInstantMs, place, timeZone),
+          ),
+        );
+      }
       if (!wanted) {
         setReliefHidden(false);
         if (map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
@@ -3744,12 +3754,7 @@ export class MapLibreLayerController {
         this.#sunShadowInstantMs,
         this.sunShadowDaylight(map, this.#sunShadowInstantMs),
       );
-      if (instantMs !== this.#sunShadowInstantMs) {
-        this.#sunShadowInstantMs = instantMs;
-        mapLayerStore.setState({
-          sunShadow: { ...mapLayerStore.getState().sunShadow, instantMs },
-        });
-      }
+      this.setSunShadowInstant(instantMs);
       const tileUrl = this.sunShadowTiles.createTileUrl(this.#sunShadowInstantMs);
       const source = map.getSource(mapSourceIds.terrainSunShadow);
       if (source === undefined) {
@@ -3767,15 +3772,15 @@ export class MapLibreLayerController {
         this.#appliedSunShadowTileUrl = tileUrl;
       }
       if (map.getLayer(terrainOverlayLayerIds.sunShadow) === undefined) {
-        map.addLayer(createSunShadowLayer(), terrainOverlayLayerIds.contourMinor);
+        map.addLayer(createSunShadowLayer(), mapInsertionPoints.sunShadowBeforeLayerId);
       } else {
         // moveLayer emits styledata, so the layer only moves when it is out of place.
         const layerIds = map.getLayersOrder();
         const shadowIndex = layerIds.indexOf(terrainOverlayLayerIds.sunShadow);
-        if (layerIds[shadowIndex + 1] !== terrainOverlayLayerIds.contourMinor) {
+        if (layerIds[shadowIndex + 1] !== mapInsertionPoints.sunShadowBeforeLayerId) {
           map.moveLayer(
             terrainOverlayLayerIds.sunShadow,
-            terrainOverlayLayerIds.contourMinor,
+            mapInsertionPoints.sunShadowBeforeLayerId,
           );
         }
       }
@@ -3786,22 +3791,39 @@ export class MapLibreLayerController {
     }
   }
 
+  /** The map center rounded like the sun panel (0.01°), and its IANA time zone. */
+  private sunShadowPlace(map: MapLibreMap): {
+    readonly place: { readonly latitude: number; readonly longitude: number };
+    readonly timeZone: string;
+  } {
+    const center = map.getCenter();
+    const latitude = Math.round(center.lat * 100) / 100;
+    const longitude = Math.round(center.lng * 100) / 100;
+    return {
+      place: { latitude, longitude },
+      timeZone: lookupTimeZone(latitude, longitude),
+    };
+  }
+
   /**
-   * Daylight of the local day containing `instantMs` at the map center, rounded like the
-   * sun panel (0.01°) so both agree on the zone and the sunrise and sunset minutes.
+   * Daylight of the local day containing `instantMs` at the map center, so the panel and
+   * the controller agree on the zone and the sunrise and sunset minutes.
    */
   private sunShadowDaylight(
     map: MapLibreMap,
     instantMs: number,
   ): DaylightWindow | null {
-    const center = map.getCenter();
-    const latitude = Math.round(center.lat * 100) / 100;
-    const longitude = Math.round(center.lng * 100) / 100;
-    return daylightWindow(
-      instantMs,
-      { latitude, longitude },
-      lookupTimeZone(latitude, longitude),
-    );
+    const { place, timeZone } = this.sunShadowPlace(map);
+    return daylightWindow(instantMs, place, timeZone);
+  }
+
+  /** Applies an instant chosen by the controller itself and publishes it; never persisted. */
+  private setSunShadowInstant(instantMs: number): void {
+    if (instantMs === this.#sunShadowInstantMs) return;
+    this.#sunShadowInstantMs = instantMs;
+    mapLayerStore.setState({
+      sunShadow: { ...mapLayerStore.getState().sunShadow, instantMs },
+    });
   }
 
   /**

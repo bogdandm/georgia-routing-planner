@@ -1,0 +1,781 @@
+import { subsolarPoint } from '@/domain/terrain/solarPosition';
+import { terrainShadowModel } from '@/domain/terrain/terrainShadow';
+import {
+  type TerrainShadowTileMetrics,
+  type TerrainShadowTileRequest,
+  type TerrainShadowTileResult,
+  terrainShadowUnavailableErrorCode,
+} from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
+import {
+  fullscreenVertexShaderSource,
+  maximumReductionFactor,
+  maximumReductionFragmentShaderSource,
+  terrainShadowFragmentShaderSource,
+  terrariumDecodeFragmentShaderSource,
+} from '@/infrastructure/terrainShadow/terrainShadowShaders';
+import {
+  demTileUrl,
+  type TerrainShadowMosaicLevel,
+  terrainShadowLevelZooms,
+  terrainShadowMosaicLevel,
+  terrainShadowMosaicSize,
+  terrainShadowMosaicTiles,
+  terrainShadowTileGeometry,
+  terrainShadowTileSize,
+} from '@/infrastructure/terrainShadow/terrainShadowTiles';
+
+const maximumCachedDemTiles = 64;
+const maximumCachedMasks = 64;
+/** Horizontal bands per shadow pass, flushed separately to keep GPU submissions short. */
+const shadowPassBands = 8;
+const bytesPerTexel = 4;
+const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
+
+const shadowUniformNames = [
+  'uMosaic0',
+  'uMosaic1',
+  'uMosaic2',
+  'uLevelMaximum',
+  'uLevelOrigin',
+  'uLevelTexelsPerOutputPixel',
+  'uLevelTexelsPerRadian',
+  'uTileLongitude',
+  'uTileMercatorY',
+  'uSubsolar',
+  'uBaseResolutionEquatorMeters',
+  'uColor',
+] as const;
+const reductionUniformNames = ['uSource', 'uSourceSize', 'uTargetOrigin'] as const;
+
+type UniformLocations<TName extends string> = Readonly<
+  Record<TName, WebGLUniformLocation>
+>;
+
+interface ShaderProgram<TName extends string> {
+  readonly program: WebGLProgram;
+  readonly uniforms: UniformLocations<TName>;
+}
+
+interface ReductionStage {
+  readonly texture: WebGLTexture;
+  readonly size: number;
+}
+
+interface GpuResources {
+  readonly canvas: OffscreenCanvas;
+  readonly gl: WebGL2RenderingContext;
+  readonly vertexArray: WebGLVertexArrayObject;
+  readonly decodeProgram: ShaderProgram<'uEncoded'>;
+  readonly reductionProgram: ShaderProgram<(typeof reductionUniformNames)[number]>;
+  readonly shadowProgram: ShaderProgram<(typeof shadowUniformNames)[number]>;
+  /** RGBA8 staging texture for one encoded DEM upload. */
+  readonly encodedTexture: WebGLTexture;
+  readonly readFramebuffer: WebGLFramebuffer;
+  readonly drawFramebuffer: WebGLFramebuffer;
+  readonly mosaics: readonly [WebGLTexture, WebGLTexture, WebGLTexture];
+  readonly reductionStages: readonly ReductionStage[];
+  /** 3×1 R32F: texel i holds the maximum elevation of LOD level i. */
+  readonly levelMaximum: WebGLTexture;
+  readonly staticBytes: number;
+}
+
+/** Decoded DEM tile; `texture === null` is a 404 tile treated as sea level 0 m. */
+interface DemTileEntry {
+  readonly texture: WebGLTexture | null;
+}
+
+interface InflightDemFetch {
+  readonly promise: Promise<void>;
+  readonly controller: AbortController;
+  waiters: number;
+}
+
+class TerrainShadowUnavailableError extends Error {
+  public readonly code = terrainShadowUnavailableErrorCode;
+
+  public constructor(message: string) {
+    super(message);
+    this.name = 'TerrainShadowUnavailableError';
+  }
+}
+
+function abortError(): DOMException {
+  return new DOMException('Terrain shadow tile request canceled.', 'AbortError');
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) throw abortError();
+}
+
+function contextLostError(): Error {
+  return new Error('The terrain shadow WebGL context was lost.');
+}
+
+function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise<T>((resolve, reject) => {
+    const handleAbort = () => {
+      reject(abortError());
+    };
+    signal.addEventListener('abort', handleAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', handleAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', handleAbort);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
+}
+
+/** Lets queued RPC cancel messages arrive before the next GPU job starts. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+function compileShader(
+  gl: WebGL2RenderingContext,
+  type: GLenum,
+  source: string,
+): WebGLShader {
+  const shader = gl.createShader(type);
+  if (shader === null)
+    throw new TerrainShadowUnavailableError('WebGL shader allocation failed.');
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) !== true) {
+    const log = gl.getShaderInfoLog(shader) ?? '';
+    gl.deleteShader(shader);
+    throw new TerrainShadowUnavailableError(
+      `Terrain shadow shader failed to compile: ${log}`,
+    );
+  }
+  return shader;
+}
+
+function createProgram<TName extends string>(
+  gl: WebGL2RenderingContext,
+  fragmentSource: string,
+  uniformNames: readonly TName[],
+): ShaderProgram<TName> {
+  const vertexShader = compileShader(
+    gl,
+    gl.VERTEX_SHADER,
+    fullscreenVertexShaderSource,
+  );
+  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  const program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  if (gl.getProgramParameter(program, gl.LINK_STATUS) !== true) {
+    const log = gl.getProgramInfoLog(program) ?? '';
+    throw new TerrainShadowUnavailableError(
+      `Terrain shadow program failed to link: ${log}`,
+    );
+  }
+  const uniforms: Partial<Record<TName, WebGLUniformLocation>> = {};
+  for (const name of uniformNames) {
+    const location = gl.getUniformLocation(program, name);
+    if (location === null) {
+      throw new TerrainShadowUnavailableError(
+        `Terrain shadow uniform ${name} is missing.`,
+      );
+    }
+    uniforms[name] = location;
+  }
+  return { program, uniforms: uniforms as UniformLocations<TName> };
+}
+
+function createTexture(
+  gl: WebGL2RenderingContext,
+  internalFormat: GLenum,
+  width: number,
+  height: number,
+): WebGLTexture {
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, internalFormat, width, height);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return texture;
+}
+
+function createGpuResources(onContextLost: () => void): GpuResources {
+  if (typeof OffscreenCanvas === 'undefined') {
+    throw new TerrainShadowUnavailableError(
+      'OffscreenCanvas is unavailable in this worker.',
+    );
+  }
+  const canvas = new OffscreenCanvas(terrainShadowTileSize, terrainShadowTileSize);
+  const gl = canvas.getContext('webgl2', {
+    alpha: true,
+    premultipliedAlpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    preserveDrawingBuffer: false,
+    powerPreference: 'high-performance',
+  });
+  if (gl === null) throw new TerrainShadowUnavailableError('WebGL2 is unavailable.');
+  if (gl.getExtension('EXT_color_buffer_float') === null) {
+    throw new TerrainShadowUnavailableError(
+      'WebGL2 float render targets are unavailable.',
+    );
+  }
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    onContextLost();
+  });
+
+  const decodeProgram = createProgram(gl, terrariumDecodeFragmentShaderSource, [
+    'uEncoded',
+  ] as const);
+  const reductionProgram = createProgram(
+    gl,
+    maximumReductionFragmentShaderSource,
+    reductionUniformNames,
+  );
+  const shadowProgram = createProgram(
+    gl,
+    terrainShadowFragmentShaderSource,
+    shadowUniformNames,
+  );
+  const mosaicSize = terrainShadowMosaicSize;
+  const mosaics = [
+    createTexture(gl, gl.R32F, mosaicSize, mosaicSize),
+    createTexture(gl, gl.R32F, mosaicSize, mosaicSize),
+    createTexture(gl, gl.R32F, mosaicSize, mosaicSize),
+  ] as const;
+  // Intermediate maxima (1536 → 192 → 24 → 3); the last pass writes `levelMaximum`.
+  const reductionStages: ReductionStage[] = [];
+  let reducedSize = Math.ceil(mosaicSize / maximumReductionFactor);
+  while (reducedSize > 1) {
+    reductionStages.push({
+      texture: createTexture(gl, gl.R32F, reducedSize, reducedSize),
+      size: reducedSize,
+    });
+    reducedSize = Math.ceil(reducedSize / maximumReductionFactor);
+  }
+  const levelMaximum = createTexture(gl, gl.R32F, mosaics.length, 1);
+  const encodedTexture = createTexture(
+    gl,
+    gl.RGBA8,
+    terrainShadowTileSize,
+    terrainShadowTileSize,
+  );
+  const staticBytes =
+    // Encoded staging texture plus the double-buffered output canvas.
+    3 * tileBytes +
+    mosaics.length * mosaicSize * mosaicSize * bytesPerTexel +
+    reductionStages.reduce(
+      (sum, stage) => sum + stage.size * stage.size * bytesPerTexel,
+      0,
+    ) +
+    mosaics.length * bytesPerTexel;
+
+  return {
+    canvas,
+    gl,
+    vertexArray: gl.createVertexArray(),
+    decodeProgram,
+    reductionProgram,
+    shadowProgram,
+    encodedTexture,
+    readFramebuffer: gl.createFramebuffer(),
+    drawFramebuffer: gl.createFramebuffer(),
+    mosaics,
+    reductionStages,
+    levelMaximum,
+    staticBytes,
+  };
+}
+
+function attachDrawTarget(gpu: GpuResources, texture: WebGLTexture): void {
+  const { gl } = gpu;
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, gpu.drawFramebuffer);
+  gl.framebufferTexture2D(
+    gl.DRAW_FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    texture,
+    0,
+  );
+}
+
+function drawFullscreen(gpu: GpuResources): void {
+  gpu.gl.bindVertexArray(gpu.vertexArray);
+  gpu.gl.drawArrays(gpu.gl.TRIANGLES, 0, 3);
+}
+
+/**
+ * Resolves once the GPU has executed every command issued so far. Polls a fence between
+ * event-loop tasks instead of a pixel readback, so the worker never blocks on the GPU.
+ */
+async function waitForGpu(gl: WebGL2RenderingContext): Promise<void> {
+  const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+  if (sync === null) return;
+  gl.flush();
+  try {
+    while (gl.clientWaitSync(sync, 0, 0) === gl.TIMEOUT_EXPIRED) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+  } finally {
+    gl.deleteSync(sync);
+  }
+}
+
+/** Uploads one Terrarium bitmap and decodes it on the GPU into an R32F meter texture. */
+function decodeDemTile(gpu: GpuResources, bitmap: ImageBitmap): WebGLTexture {
+  const { gl } = gpu;
+  const texture = createTexture(
+    gl,
+    gl.R32F,
+    terrainShadowTileSize,
+    terrainShadowTileSize,
+  );
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, gpu.encodedTexture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
+  attachDrawTarget(gpu, texture);
+  gl.disable(gl.SCISSOR_TEST);
+  gl.viewport(0, 0, terrainShadowTileSize, terrainShadowTileSize);
+  gl.useProgram(gpu.decodeProgram.program);
+  gl.uniform1i(gpu.decodeProgram.uniforms.uEncoded, 0);
+  drawFullscreen(gpu);
+  return texture;
+}
+
+/** Copies the 3×3 decoded tiles into one level mosaic; missing rows become 0 m. */
+function assembleMosaic(
+  gpu: GpuResources,
+  target: WebGLTexture,
+  tiles: readonly (WebGLTexture | null)[],
+): void {
+  const { gl } = gpu;
+  const size = terrainShadowTileSize;
+  attachDrawTarget(gpu, target);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, gpu.readFramebuffer);
+  gl.enable(gl.SCISSOR_TEST);
+  tiles.forEach((texture, slot) => {
+    const x = (slot % terrainShadowMosaicTiles) * size;
+    const y = Math.floor(slot / terrainShadowMosaicTiles) * size;
+    gl.scissor(x, y, size, size);
+    if (texture === null) {
+      gl.clearBufferfv(gl.COLOR, 0, [0, 0, 0, 0]);
+      return;
+    }
+    gl.framebufferTexture2D(
+      gl.READ_FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture,
+      0,
+    );
+    gl.blitFramebuffer(
+      0,
+      0,
+      size,
+      size,
+      x,
+      y,
+      x + size,
+      y + size,
+      gl.COLOR_BUFFER_BIT,
+      gl.NEAREST,
+    );
+  });
+  gl.disable(gl.SCISSOR_TEST);
+}
+
+/** Folds one mosaic down to its maximum elevation in texel `level` of `levelMaximum`. */
+function reduceMaximum(gpu: GpuResources, mosaic: WebGLTexture, level: number): void {
+  const { gl, reductionProgram } = gpu;
+  gl.useProgram(reductionProgram.program);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(reductionProgram.uniforms.uSource, 0);
+  let source = mosaic;
+  let sourceSize = terrainShadowMosaicSize;
+  const passes = [
+    ...gpu.reductionStages.map((stage) => ({ ...stage, originX: 0 })),
+    { texture: gpu.levelMaximum, size: 1, originX: level },
+  ];
+  for (const pass of passes) {
+    attachDrawTarget(gpu, pass.texture);
+    gl.viewport(pass.originX, 0, pass.size, pass.size);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform2i(reductionProgram.uniforms.uSourceSize, sourceSize, sourceSize);
+    gl.uniform2i(reductionProgram.uniforms.uTargetOrigin, pass.originX, 0);
+    drawFullscreen(gpu);
+    source = pass.texture;
+    sourceSize = pass.size;
+  }
+}
+
+function drawShadowPass(
+  gpu: GpuResources,
+  request: TerrainShadowTileRequest,
+  levels: readonly TerrainShadowMosaicLevel[],
+): void {
+  const { gl, shadowProgram } = gpu;
+  const uniforms = shadowProgram.uniforms;
+  const geometry = terrainShadowTileGeometry(request);
+  const sun = subsolarPoint(new Date(request.instantMs));
+  const finestZoom = levels[0]?.zoom ?? request.z;
+
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  gl.viewport(0, 0, terrainShadowTileSize, terrainShadowTileSize);
+  gl.useProgram(shadowProgram.program);
+  const samplers = [
+    [uniforms.uMosaic0, gpu.mosaics[0]],
+    [uniforms.uMosaic1, gpu.mosaics[1]],
+    [uniforms.uMosaic2, gpu.mosaics[2]],
+    [uniforms.uLevelMaximum, gpu.levelMaximum],
+  ] as const;
+  samplers.forEach(([location, texture], unit) => {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(location, unit);
+  });
+  gl.uniform2fv(
+    uniforms.uLevelOrigin,
+    levels.flatMap((level) => [...level.outputOriginTexels]),
+  );
+  gl.uniform1fv(
+    uniforms.uLevelTexelsPerOutputPixel,
+    levels.map((level) => level.texelsPerOutputPixel),
+  );
+  gl.uniform1fv(
+    uniforms.uLevelTexelsPerRadian,
+    levels.map((level) => level.texelsPerRadian),
+  );
+  gl.uniform2f(
+    uniforms.uTileLongitude,
+    geometry.westLongitudeRadians,
+    geometry.longitudeSpanRadians,
+  );
+  gl.uniform2f(
+    uniforms.uTileMercatorY,
+    geometry.northMercatorY,
+    geometry.mercatorYSpan,
+  );
+  gl.uniform2f(uniforms.uSubsolar, sun.declinationRadians, sun.longitudeRadians);
+  gl.uniform1f(
+    uniforms.uBaseResolutionEquatorMeters,
+    (2 * Math.PI * terrainShadowModel.earthRadiusMeters) /
+      (2 ** finestZoom * terrainShadowTileSize),
+  );
+  gl.uniform3f(
+    uniforms.uColor,
+    request.color[0] / 255,
+    request.color[1] / 255,
+    request.color[2] / 255,
+  );
+
+  const bandHeight = terrainShadowTileSize / shadowPassBands;
+  gl.enable(gl.SCISSOR_TEST);
+  for (let band = 0; band < shadowPassBands; band += 1) {
+    gl.scissor(0, band * bandHeight, terrainShadowTileSize, bandHeight);
+    drawFullscreen(gpu);
+    gl.flush();
+  }
+  gl.disable(gl.SCISSOR_TEST);
+}
+
+/**
+ * Worker-owned WebGL2 terrain-shadow renderer. One OffscreenCanvas context is created on
+ * the first request and recreated after a context loss; decoded DEM tiles and rendered
+ * masks live in bounded LRU caches. GPU work runs one tile at a time; DEM fetches run
+ * concurrently and are shared between requests for the same tile.
+ */
+export class TerrainShadowRenderer {
+  #gpu: GpuResources | null = null;
+  /** Incremented on context loss so stale uploads and jobs never touch a new context. */
+  #generation = 0;
+  readonly #demTiles = new Map<string, DemTileEntry>();
+  readonly #demPins = new Map<string, number>();
+  readonly #inflightDem = new Map<string, InflightDemFetch>();
+  readonly #masks = new Map<string, ImageBitmap>();
+  #gpuQueue: Promise<void> = Promise.resolve();
+  #disposed = false;
+
+  public async render(
+    request: TerrainShadowTileRequest,
+    signal: AbortSignal,
+  ): Promise<TerrainShadowTileResult> {
+    throwIfAborted(signal);
+    if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
+    const gpu = this.ensureGpu();
+    const generation = this.#generation;
+    const maskKey = [
+      request.demTileUrl,
+      request.color.join(','),
+      `${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`,
+    ].join('|');
+
+    const cached = this.#masks.get(maskKey);
+    if (cached !== undefined) {
+      const startedAt = performance.now();
+      this.touchMask(maskKey, cached);
+      const bitmap = await createImageBitmap(cached);
+      return {
+        bitmap,
+        metrics: this.metrics({
+          computeMs: performance.now() - startedAt,
+          demFetchMs: 0,
+          cacheHit: true,
+          demTilesFetched: 0,
+        }),
+      };
+    }
+
+    const levels = terrainShadowLevelZooms(
+      request.z,
+      request.demMinZoom,
+      request.demMaxZoom,
+    ).map((zoom) => terrainShadowMosaicLevel(request, zoom));
+    const levelUrls = levels.map((level) =>
+      level.tiles.map((tile) =>
+        tile === null ? null : demTileUrl(request.demTileUrl, tile),
+      ),
+    );
+    const urls = [...new Set(levelUrls.flat().filter((url) => url !== null))];
+
+    for (const url of urls) this.#demPins.set(url, (this.#demPins.get(url) ?? 0) + 1);
+    try {
+      const fetchStartedAt = performance.now();
+      const fetched = await Promise.all(
+        urls.map((url) => this.acquireDemTile(url, signal)),
+      );
+      const demFetchMs = performance.now() - fetchStartedAt;
+
+      const { rendered, startedAt } = await this.runSerially(async () => {
+        throwIfAborted(signal);
+        if (generation !== this.#generation || this.#gpu !== gpu)
+          throw contextLostError();
+        const jobStartedAt = performance.now();
+        levelUrls.forEach((tileUrls, level) => {
+          const mosaic = gpu.mosaics[level];
+          if (mosaic === undefined) return;
+          assembleMosaic(
+            gpu,
+            mosaic,
+            tileUrls.map((url) => this.demTexture(url)),
+          );
+          reduceMaximum(gpu, mosaic, level);
+        });
+        drawShadowPass(gpu, request, levels);
+        // Holding the queue until the GPU finishes keeps at most one tile of shadow work
+        // competing with map frames, and makes `computeMs` the real GPU time.
+        await waitForGpu(gpu.gl);
+        if (gpu.gl.isContextLost()) throw contextLostError();
+        return {
+          rendered: gpu.canvas.transferToImageBitmap(),
+          startedAt: jobStartedAt,
+        };
+      });
+      const bitmap = await createImageBitmap(rendered);
+      this.storeMask(maskKey, rendered);
+      return {
+        bitmap,
+        metrics: this.metrics({
+          computeMs: performance.now() - startedAt,
+          demFetchMs,
+          cacheHit: false,
+          demTilesFetched: fetched.filter(Boolean).length,
+        }),
+      };
+    } finally {
+      for (const url of urls) {
+        const pins = (this.#demPins.get(url) ?? 1) - 1;
+        if (pins > 0) this.#demPins.set(url, pins);
+        else this.#demPins.delete(url);
+      }
+      this.evictDemTiles();
+    }
+  }
+
+  public dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    const gpu = this.#gpu;
+    this.dropCaches();
+    gpu?.gl.getExtension('WEBGL_lose_context')?.loseContext();
+  }
+
+  private ensureGpu(): GpuResources {
+    if (this.#gpu !== null) return this.#gpu;
+    const generation = this.#generation;
+    const gpu = createGpuResources(() => {
+      if (generation === this.#generation) this.dropCaches();
+    });
+    this.#gpu = gpu;
+    return gpu;
+  }
+
+  /** Drops every cache and the context; the next request creates a fresh context. */
+  private dropCaches(): void {
+    this.#generation += 1;
+    this.#gpu = null;
+    for (const inflight of this.#inflightDem.values()) inflight.controller.abort();
+    this.#inflightDem.clear();
+    this.#demTiles.clear();
+    for (const mask of this.#masks.values()) mask.close();
+    this.#masks.clear();
+  }
+
+  /** Resolves `true` when this request started the network fetch for `url`. */
+  private async acquireDemTile(url: string, signal: AbortSignal): Promise<boolean> {
+    const cached = this.#demTiles.get(url);
+    if (cached !== undefined) {
+      this.#demTiles.delete(url);
+      this.#demTiles.set(url, cached);
+      return false;
+    }
+    let inflight = this.#inflightDem.get(url);
+    const started = inflight === undefined;
+    if (inflight === undefined) {
+      const controller = new AbortController();
+      const created: InflightDemFetch = {
+        promise: this.fetchDemTile(url, controller.signal, this.#generation).finally(
+          () => {
+            if (this.#inflightDem.get(url) === created) this.#inflightDem.delete(url);
+          },
+        ),
+        controller,
+        waiters: 0,
+      };
+      inflight = created;
+      this.#inflightDem.set(url, created);
+      // A download canceled after its last waiter left must not surface as unhandled.
+      created.promise.catch(() => undefined);
+    }
+    inflight.waiters += 1;
+    try {
+      await untilAborted(inflight.promise, signal);
+    } finally {
+      inflight.waiters -= 1;
+      if (inflight.waiters === 0 && signal.aborted) {
+        // Nobody waits any more: cancel the download and let later requests start afresh.
+        if (this.#inflightDem.get(url) === inflight) this.#inflightDem.delete(url);
+        inflight.controller.abort();
+      }
+    }
+    return started;
+  }
+
+  private async fetchDemTile(
+    url: string,
+    signal: AbortSignal,
+    generation: number,
+  ): Promise<void> {
+    // Same URL and default request mode as MapLibre's raster-dem source: HTTP cache hits.
+    const response = await fetch(url, { signal });
+    if (response.status === 404) {
+      this.storeDemTile(url, { texture: null });
+      return;
+    }
+    if (!response.ok) {
+      throw new Error(`DEM tile request failed with HTTP ${String(response.status)}.`);
+    }
+    const blob = await response.blob();
+    const bitmap = await createImageBitmap(blob, {
+      premultiplyAlpha: 'none',
+      colorSpaceConversion: 'none',
+    });
+    try {
+      throwIfAborted(signal);
+      const gpu = this.#gpu;
+      if (gpu === null || generation !== this.#generation) throw contextLostError();
+      if (
+        bitmap.width !== terrainShadowTileSize ||
+        bitmap.height !== terrainShadowTileSize
+      ) {
+        throw new Error(
+          `DEM tiles must be ${String(terrainShadowTileSize)} px, got ${String(bitmap.width)}×${String(bitmap.height)}.`,
+        );
+      }
+      this.storeDemTile(url, { texture: decodeDemTile(gpu, bitmap) });
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  private storeDemTile(url: string, entry: DemTileEntry): void {
+    this.#demTiles.delete(url);
+    this.#demTiles.set(url, entry);
+    this.evictDemTiles();
+  }
+
+  /** Evicts least-recently-used unpinned tiles; pinned tiles may briefly exceed the bound. */
+  private evictDemTiles(): void {
+    for (const [url, entry] of this.#demTiles) {
+      if (this.#demTiles.size <= maximumCachedDemTiles) return;
+      if (this.#demPins.has(url)) continue;
+      this.#demTiles.delete(url);
+      if (entry.texture !== null) this.#gpu?.gl.deleteTexture(entry.texture);
+    }
+  }
+
+  private demTexture(url: string | null): WebGLTexture | null {
+    if (url === null) return null;
+    const entry = this.#demTiles.get(url);
+    if (entry === undefined) throw contextLostError();
+    return entry.texture;
+  }
+
+  private touchMask(key: string, mask: ImageBitmap): void {
+    this.#masks.delete(key);
+    this.#masks.set(key, mask);
+  }
+
+  private storeMask(key: string, mask: ImageBitmap): void {
+    this.#masks.get(key)?.close();
+    this.touchMask(key, mask);
+    for (const [oldestKey, oldest] of this.#masks) {
+      if (this.#masks.size <= maximumCachedMasks) break;
+      this.#masks.delete(oldestKey);
+      oldest.close();
+    }
+  }
+
+  private runSerially<T>(job: () => Promise<T>): Promise<T> {
+    const run = this.#gpuQueue.then(yieldToEventLoop).then(job);
+    this.#gpuQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private metrics(
+    tile: Pick<
+      TerrainShadowTileMetrics,
+      'computeMs' | 'demFetchMs' | 'cacheHit' | 'demTilesFetched'
+    >,
+  ): TerrainShadowTileMetrics {
+    let decodedTiles = 0;
+    for (const entry of this.#demTiles.values()) {
+      if (entry.texture !== null) decodedTiles += 1;
+    }
+    return {
+      ...tile,
+      gpuBytes:
+        (this.#gpu?.staticBytes ?? 0) + (decodedTiles + this.#masks.size) * tileBytes,
+      cachedMasks: this.#masks.size,
+      cachedDemTiles: this.#demTiles.size,
+    };
+  }
+}

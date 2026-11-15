@@ -62,7 +62,7 @@ export class FakeMapFacade implements MapFacade {
   public cursorPreviewEnabled = true;
   public pointInspectionRequests: MapCoordinate[] = [];
   public pointInspectionOptions: (
-    { readonly refreshNearbyPoiOnIdle?: boolean } | undefined
+    { readonly refreshNearbyPoiWhenSettled?: boolean } | undefined
   )[] = [];
   public pointInspectionRevealInsets: number[] = [];
   public nearestPoi: NearbyPoi | null = null;
@@ -190,7 +190,7 @@ export class FakeMapFacade implements MapFacade {
 
   public openPointInspection(
     coordinate: MapCoordinate,
-    options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+    options?: { readonly refreshNearbyPoiWhenSettled?: boolean },
   ): void {
     const inspectionCoordinate = { ...coordinate };
     this.pointInspectionRequests.push(inspectionCoordinate);

@@ -56,7 +56,8 @@ describe('MapSearchPlaceholder', () => {
       longitude: 43.74222,
     });
     expect(
-      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+      mapInteractionStore.getState().pointInspectionCommand
+        ?.refreshNearbyPoiWhenSettled,
     ).toBe(true);
   });
 
@@ -102,7 +103,8 @@ describe('MapSearchPlaceholder', () => {
       longitude: 44.8271,
     });
     expect(
-      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+      mapInteractionStore.getState().pointInspectionCommand
+        ?.refreshNearbyPoiWhenSettled,
     ).toBe(true);
     expect(
       screen.queryByRole('list', { name: 'Place search results' }),
@@ -238,7 +240,8 @@ describe('MapSearchPlaceholder', () => {
       longitude: 44.8271,
     });
     expect(
-      mapInteractionStore.getState().pointInspectionCommand?.refreshNearbyPoiOnIdle,
+      mapInteractionStore.getState().pointInspectionCommand
+        ?.refreshNearbyPoiWhenSettled,
     ).toBe(true);
   });
 

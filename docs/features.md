@@ -714,11 +714,19 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   first whole minute after sunrise to the last whole minute before sunset; on a day
   without both (polar day or night) it spans 00:00 to 23:50. Any night instant (from
   **Now**, a date change, or a session that starts at night) moves to the nearest
-  daylight minute at the map center before shadows draw. Browsers that cannot render
+  daylight minute at the map center before shadows draw. **Play the day**, left of the
+  slider and available while shadows are on, first computes shadows for every 10-minute
+  daylight frame of the shown day over the visible tiles, showing a percentage and a
+  cancel button, then loops the frames from the current time through sunset and back to
+  sunrise at about 6–7 frames per second, each frame shown only once its tiles are
+  drawn; **Stop** ends it. Any map move, a change in the panel, or turning shadows off
+  stops playback. A view needing more than 2560 tile frames shows a note to zoom in
+  instead, and a failed computation shows an error note. Browsers that cannot render
   floating-point targets in a worker (WebGL2 with `EXT_color_buffer_float` and
   `OffscreenCanvas`) see a disabled switch with an explanation. Only the switch persists
-  (default off); the instant is session state that starts at the current time. The
-  overlay is described in [Map, terrain, and persistence](#map-terrain-and-persistence).
+  (default off); the instant and playback are session state, and the instant starts at
+  the current time. The overlay is described in
+  [Map, terrain, and persistence](#map-terrain-and-persistence).
 - **Image comparison:** on desktop, the compare button below the sun button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

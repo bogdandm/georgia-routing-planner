@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { WorkerRpcClient } from '@/infrastructure/runtime/WorkerRpc';
 import type {
+  TerrainShadowTileMetrics,
   TerrainShadowTileRequest,
   TerrainShadowTileResult,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
@@ -31,6 +32,7 @@ describe('TerrainShadowWorkerServer', () => {
     const render = vi.fn();
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render,
+      prefetch: vi.fn(),
       dispose: vi.fn(),
     });
     const client = new WorkerRpcClient(clientEndpoint);
@@ -64,6 +66,7 @@ describe('TerrainShadowWorkerServer', () => {
     );
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render,
+      prefetch: vi.fn(),
       dispose: vi.fn(),
     });
     const client = new WorkerRpcClient(clientEndpoint);
@@ -86,6 +89,38 @@ describe('TerrainShadowWorkerServer', () => {
     await vi.waitFor(() => {
       expect(close).toHaveBeenCalledOnce();
     });
+
+    client.dispose();
+    server.dispose();
+  });
+
+  it('validates prefetch payloads and answers with the cached tile metrics', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const metrics: TerrainShadowTileMetrics = {
+      computeMs: 40,
+      demFetchMs: 0,
+      cacheHit: false,
+      demTilesFetched: 0,
+      memoryBytes: 1_048_576,
+      cachedMasks: 1,
+      cachedDemTiles: 27,
+    };
+    const prefetch = vi.fn(() => Promise.resolve(metrics));
+    const server = new TerrainShadowWorkerServer(serverEndpoint, {
+      render: vi.fn(),
+      prefetch,
+      dispose: vi.fn(),
+    });
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(terrainShadowWorkerMethods.prefetchTile, { ...request, z: 13 }),
+    ).rejects.toThrow();
+    expect(prefetch).not.toHaveBeenCalled();
+    await expect(
+      client.request(terrainShadowWorkerMethods.prefetchTile, request),
+    ).resolves.toEqual(metrics);
+    expect(prefetch).toHaveBeenCalledExactlyOnceWith(request, expect.any(AbortSignal));
 
     client.dispose();
     server.dispose();

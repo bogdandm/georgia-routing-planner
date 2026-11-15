@@ -66,6 +66,7 @@ msgstr "Bing Aerial"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/map/MapWorkspace.tsx
+#: src/presentation/map/SunShadowControl.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -114,6 +115,11 @@ msgstr "Clouds, precipitation, and wind"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Compare images from different dates side by side"
 msgstr "Compare images from different dates side by side"
+
+#. js-lingui-id: E4xaOs
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Computing shadows for the day: {percent}%"
+msgstr "Computing shadows for the day: {percent}%"
 
 #. js-lingui-id: EOv8gS
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -369,6 +375,11 @@ msgstr "OSM overlay"
 msgid "Pick image date"
 msgstr "Pick image date"
 
+#. js-lingui-id: bmT7Do
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Play the day"
+msgstr "Play the day"
+
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Satellite layer"
@@ -388,6 +399,11 @@ msgstr "Sentinel-2 image"
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Sentinel-2 image from {date}"
 msgstr "Sentinel-2 image from {date}"
+
+#. js-lingui-id: -1oTrp
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Shadows for the day could not be computed."
+msgstr "Shadows for the day could not be computed."
 
 #. js-lingui-id: Z8lGw6
 #: src/presentation/map/MapShareDialog.tsx
@@ -419,6 +435,11 @@ msgstr "Show weather forecast"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Soviet Topographic"
 msgstr "Soviet Topographic"
+
+#. js-lingui-id: ygCKqB
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Stop"
+msgstr "Stop"
 
 #. js-lingui-id: 6TGtTn
 #: src/presentation/map/SunShadowControl.tsx
@@ -501,6 +522,11 @@ msgstr "Time of day"
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Toggle attribution"
 msgstr "Toggle attribution"
+
+#. js-lingui-id: 6IuztJ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Too much of the map is in view to animate the day. Zoom in and try again."
+msgstr "Too much of the map is in view to animate the day. Zoom in and try again."
 
 #. js-lingui-id: gd3dhq
 #: src/presentation/map/MapViewControls.tsx

@@ -42,7 +42,10 @@ import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
-import { daylightWindow } from '@/presentation/map/sunShadowDaylight';
+import {
+  daylightFrameInstants,
+  daylightWindow,
+} from '@/presentation/map/sunShadowDaylight';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
@@ -79,6 +82,8 @@ class FakeLayerMap {
     }[];
   }[] = [];
   bounds = { west: 44, south: 41, east: 45, north: 42 };
+  coveringTileIds: { readonly z: number; readonly x: number; readonly y: number }[] =
+    [];
 
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
@@ -191,6 +196,12 @@ class FakeLayerMap {
 
   public getCenter(): { readonly lng: number; readonly lat: number } {
     return { lng: 43.14, lat: 42.71 };
+  }
+
+  public coveringTiles(): {
+    readonly canonical: { readonly z: number; readonly x: number; readonly y: number };
+  }[] {
+    return this.coveringTileIds.map((canonical) => ({ canonical }));
   }
 
   public setLayerZoomRange(id: string, minzoom: number, maxzoom: number): void {
@@ -2559,6 +2570,7 @@ describe('MapLibreLayerController', () => {
       enabled: true,
       instantMs: minute * 60_000,
       availability: 'available',
+      playback: { status: 'idle' },
     });
     const setTiles = vi.spyOn(source, 'setTiles');
     const movesBefore = map.moves.length;
@@ -2635,6 +2647,119 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().visibility['terrain-relief']).toBe(
       storedVisibility,
     );
+  });
+
+  describe('day playback', () => {
+    const center = { latitude: 42.71, longitude: 43.14 };
+
+    function startPlayback(tileIds = [{ z: 12, x: 2541, y: 1514 }]) {
+      vi.useFakeTimers();
+      const { controller, shadows } = createSunShadowController();
+      const map = new FakeLayerMap();
+      map.coveringTileIds = tileIds;
+      controller.attach(map as unknown as MapLibreMap);
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
+      if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
+      const frames = daylightFrameInstants(window, 10);
+      controller.playSunShadowDay();
+      return { controller, shadows, map, frames };
+    }
+
+    it('precomputes deduplicated tiles for every daylight frame, then plays them', async () => {
+      const { controller, shadows, frames } = startPlayback([
+        { z: 12, x: 2541, y: 1514 },
+        { z: 12, x: 2541, y: 1514 },
+        { z: 12, x: 2542, y: 1514 },
+      ]);
+
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({
+        status: 'loading',
+        progress: 0,
+      });
+      const call = shadows.prefetchCalls[0];
+      expect(call?.tiles).toEqual([
+        { z: 12, x: 2541, y: 1514 },
+        { z: 12, x: 2542, y: 1514 },
+      ]);
+      expect(call?.instantsMs).toEqual(frames);
+      call?.onProgress(1, 3);
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({
+        status: 'loading',
+        progress: 1 / 3,
+      });
+
+      call?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const startIndex = frames.findIndex(
+        (frame) => frame >= Math.floor(shadowInstantMs / 60_000) * 60_000,
+      );
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: frames[startIndex],
+        playback: { status: 'playing' },
+      });
+      await vi.advanceTimersByTimeAsync(150);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames[startIndex + 1]);
+      controller.dispose();
+    });
+
+    it('waits for the shown frame to load and wraps from sunset to sunrise', async () => {
+      const { controller, shadows, map, frames } = startPlayback();
+      shadows.prefetchCalls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      map.sourceLoaded = false;
+      const shown = mapLayerStore.getState().sunShadow.instantMs;
+      await vi.advanceTimersByTimeAsync(450);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(shown);
+
+      map.sourceLoaded = true;
+      const remaining = frames.length - 1 - frames.indexOf(shown);
+      await vi.advanceTimersByTimeAsync(150 * remaining);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames.at(-1));
+      await vi.advanceTimersByTimeAsync(150);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames[0]);
+      controller.dispose();
+    });
+
+    it('stops on a camera move and cancels the precomputation', () => {
+      const { controller, shadows, map } = startPlayback();
+
+      map.fire('movestart', {});
+
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      expect(shadows.prefetchCalls[0]?.signal.aborted).toBe(true);
+      controller.dispose();
+    });
+
+    it('stops when the user changes the instant', async () => {
+      const { controller, shadows } = startPlayback();
+      shadows.prefetchCalls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      const shown = mapLayerStore.getState().sunShadow.instantMs;
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: shown,
+        playback: { status: 'idle' },
+      });
+      controller.dispose();
+    });
+
+    it('refuses views needing more than the playback tile limit', () => {
+      const { controller, shadows } = startPlayback(
+        Array.from({ length: 40 }, (_, x) => ({ z: 12, x, y: 1514 })),
+      );
+
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({
+        status: 'too-many-tiles',
+      });
+      expect(shadows.prefetchCalls).toHaveLength(0);
+      controller.dispose();
+    });
   });
 
   it('re-adds sun shadows after a style reload at the current instant', () => {

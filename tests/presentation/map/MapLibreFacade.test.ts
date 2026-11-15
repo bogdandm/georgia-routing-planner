@@ -2924,6 +2924,7 @@ describe('MapLibreFacade', () => {
           enabled: false,
           instantMs: previousInstantMs,
           availability: 'available',
+          playback: { status: 'idle' },
         },
       });
       vi.mocked(runRenderBenchmark).mockImplementation(
@@ -2960,6 +2961,7 @@ describe('MapLibreFacade', () => {
           enabled: true,
           instantMs: previousInstantMs,
           availability: 'unavailable',
+          playback: { status: 'idle' },
         },
       });
 

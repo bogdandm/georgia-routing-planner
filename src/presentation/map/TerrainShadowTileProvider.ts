@@ -8,6 +8,7 @@ import {
   WorkerRpcTransportError,
 } from '@/infrastructure/runtime/WorkerRpc';
 import {
+  isTerrainShadowTileMetrics,
   isTerrainShadowTileResult,
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
@@ -33,11 +34,28 @@ export interface TerrainShadowMetricsSnapshot {
   readonly memoryBytes: number;
 }
 
+export interface TerrainShadowTileAddress {
+  readonly z: number;
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
   createTileUrl(instantMs: number): string;
   /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
   setInteractionActive(active: boolean): void;
+  /**
+   * Renders and caches every tile for every instant (tile-major) without handing tiles to
+   * MapLibre; at most `terrainShadowPrefetchConcurrency` requests in flight. Rejects with
+   * an AbortError on `signal`, or with the first tile failure.
+   */
+  prefetch(
+    tiles: readonly TerrainShadowTileAddress[],
+    instantsMs: readonly number[],
+    signal: AbortSignal,
+    onProgress: (completed: number, total: number) => void,
+  ): Promise<void>;
   getAvailability(): TerrainShadowAvailability;
   subscribeAvailability(
     listener: (value: TerrainShadowAvailability) => void,
@@ -49,14 +67,13 @@ export interface TerrainShadowTileProvider {
 
 export const terrainShadowProtocolId = 'terrain-shadow';
 export const terrainShadowMinZoom = 7;
+/** Prefetch keeps the single GPU queue fed while the next DEM tiles download. */
+const terrainShadowPrefetchConcurrency = 4;
 
 type TerrainShadowWorkerFactory = () => WorkerRpcEndpoint;
 
-interface ParsedTileAddress {
+interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly epochMinute: number;
-  readonly z: number;
-  readonly x: number;
-  readonly y: number;
 }
 
 interface GateWaiter {
@@ -231,22 +248,9 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     this.#pendingTiles += 1;
     try {
       await this.waitForInteractionEnd(signal);
-      const request: TerrainShadowTileRequest = {
-        z: address.z,
-        x: address.x,
-        y: address.y,
-        instantMs: address.epochMinute * millisecondsPerMinute,
-        tileSize: 512,
-        demTileUrl: this.#terrain.tileUrl,
-        demMinZoom: this.#terrain.minZoom,
-        demMaxZoom: this.#terrain.maxZoom,
-        shadowColor,
-        highlightColor,
-        highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
-      };
       const result = await this.ensureRpc().request<unknown>(
         terrainShadowWorkerMethods.renderTile,
-        request,
+        this.createRequest(address, address.epochMinute),
         signal,
       );
       if (!isTerrainShadowTileResult(result)) {
@@ -256,21 +260,109 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       this.setAvailability('available');
       return { data: result.bitmap };
     } catch (error) {
-      if (!signal.aborted) {
-        this.#metrics.tilesFailed += 1;
-        if (
-          error instanceof WorkerRpcTransportError ||
-          (error instanceof WorkerRpcRemoteError &&
-            error.code === terrainShadowUnavailableErrorCode)
-        ) {
-          this.setAvailability('unavailable');
-        }
-      }
+      this.recordTileFailure(error, signal);
       throw error;
     } finally {
       this.#pendingTiles -= 1;
     }
   };
+
+  public async prefetch(
+    tiles: readonly TerrainShadowTileAddress[],
+    instantsMs: readonly number[],
+    signal: AbortSignal,
+    onProgress: (completed: number, total: number) => void,
+  ): Promise<void> {
+    if (this.#disposed) throw new Error('The terrain shadow provider was disposed.');
+    if (this.#availability === 'unavailable') {
+      throw new Error('Terrain shadows are unavailable in this browser.');
+    }
+    if (signal.aborted) throw abortError();
+    // The interaction gate is ignored: a camera move cancels the whole prefetch instead.
+    const requests = tiles.flatMap((tile) =>
+      instantsMs.map((instantMs) =>
+        this.createRequest(tile, Math.floor(instantMs / millisecondsPerMinute)),
+      ),
+    );
+    // One internal signal cancels the remaining requests after the first failure too.
+    const controller = new AbortController();
+    const forwardAbort = () => {
+      controller.abort();
+    };
+    signal.addEventListener('abort', forwardAbort, { once: true });
+    let nextIndex = 0;
+    let completed = 0;
+    // Each runner takes the next request in order, so requests start tile-major.
+    const runQueue = async () => {
+      while (nextIndex < requests.length && !controller.signal.aborted) {
+        const request = requests[nextIndex];
+        nextIndex += 1;
+        try {
+          const metrics = await this.ensureRpc().request<unknown>(
+            terrainShadowWorkerMethods.prefetchTile,
+            request,
+            controller.signal,
+          );
+          if (!isTerrainShadowTileMetrics(metrics)) {
+            throw new Error('The terrain shadow worker returned invalid metrics.');
+          }
+          this.recordTile(metrics);
+          this.setAvailability('available');
+        } catch (error) {
+          this.recordTileFailure(error, controller.signal);
+          throw error;
+        }
+        completed += 1;
+        onProgress(completed, requests.length);
+      }
+    };
+    try {
+      await Promise.all(
+        Array.from(
+          { length: Math.min(terrainShadowPrefetchConcurrency, requests.length) },
+          runQueue,
+        ),
+      );
+    } catch (error) {
+      controller.abort();
+      if (signal.aborted) throw abortError();
+      throw error;
+    } finally {
+      signal.removeEventListener('abort', forwardAbort);
+    }
+  }
+
+  private createRequest(
+    address: TerrainShadowTileAddress,
+    epochMinute: number,
+  ): TerrainShadowTileRequest {
+    return {
+      z: address.z,
+      x: address.x,
+      y: address.y,
+      instantMs: epochMinute * millisecondsPerMinute,
+      tileSize: 512,
+      demTileUrl: this.#terrain.tileUrl,
+      demMinZoom: this.#terrain.minZoom,
+      demMaxZoom: this.#terrain.maxZoom,
+      shadowColor,
+      highlightColor,
+      highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
+    };
+  }
+
+  /** Counts a failure unless canceled; a lost or unsupported worker disables shadows. */
+  private recordTileFailure(error: unknown, signal: AbortSignal): void {
+    if (signal.aborted) return;
+    this.#metrics.tilesFailed += 1;
+    if (
+      error instanceof WorkerRpcTransportError ||
+      (error instanceof WorkerRpcRemoteError &&
+        error.code === terrainShadowUnavailableErrorCode)
+    ) {
+      this.setAvailability('unavailable');
+    }
+  }
 
   private ensureRpc(): WorkerRpcClient {
     if (this.#rpc !== null) return this.#rpc;

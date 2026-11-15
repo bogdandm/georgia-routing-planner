@@ -48,21 +48,25 @@ class FakeImageBitmap {
 
 interface SentRequest {
   readonly requestId: number;
+  readonly method: unknown;
   readonly payload: unknown;
 }
 
 /** Worker double that records RPC requests and answers them on demand. */
 class FakeShadowWorker implements WorkerRpcEndpoint {
   public readonly requests: SentRequest[] = [];
+  public readonly canceledRequestIds: number[] = [];
   public terminated = false;
   readonly #listeners = new Map<string, Set<EventListener>>();
 
   public postMessage(message: unknown): void {
     if (typeof message !== 'object' || message === null) return;
-    const { type, requestId, payload } = message as Readonly<Record<string, unknown>>;
-    if (type === 'request' && typeof requestId === 'number') {
-      this.requests.push({ requestId, payload });
-    }
+    const { type, requestId, method, payload } = message as Readonly<
+      Record<string, unknown>
+    >;
+    if (typeof requestId !== 'number') return;
+    if (type === 'request') this.requests.push({ requestId, method, payload });
+    if (type === 'cancel') this.canceledRequestIds.push(requestId);
   }
 
   public addEventListener(type: string, listener: EventListener): void {
@@ -357,6 +361,97 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       demTilesFetched: 0,
       memoryBytes: 120,
     });
+    provider.dispose();
+  });
+
+  it('prefetches every tile and instant tile-major with at most four requests in flight', async () => {
+    const { provider, worker } = createProvider();
+    const tiles = [
+      { z: 12, x: 2541, y: 1514 },
+      { z: 12, x: 2542, y: 1514 },
+    ];
+    const instants = [0, 10, 20].map((minutes) => instantMs + minutes * 60_000);
+    const onProgress = vi.fn();
+
+    const prefetch = provider.prefetch(
+      tiles,
+      instants,
+      new AbortController().signal,
+      onProgress,
+    );
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(4);
+    });
+    for (let index = 0; index < 6; index += 1) {
+      await vi.waitFor(() => {
+        expect(worker.requests.length).toBeGreaterThan(index);
+      });
+      expect(worker.requests.length - index).toBeLessThanOrEqual(4);
+      worker.respond(index, renderedMetrics);
+    }
+    await expect(prefetch).resolves.toBeUndefined();
+
+    expect(worker.requests.map((request) => request.method)).toEqual(
+      Array<string>(6).fill('terrain-shadow.prefetch-tile'),
+    );
+    expect(
+      worker.requests.map((request) => {
+        const payload = request.payload as { x: number; instantMs: number };
+        return [payload.x, payload.instantMs];
+      }),
+    ).toEqual(
+      tiles.flatMap((tile) =>
+        instants.map((instant) => [tile.x, Math.floor(instant / 60_000) * 60_000]),
+      ),
+    );
+    expect(onProgress).toHaveBeenLastCalledWith(6, 6);
+    expect(provider.getMetrics().tilesRendered).toBe(6);
+    provider.dispose();
+  });
+
+  it('rejects an aborted prefetch and cancels its requests in flight', async () => {
+    const { provider, worker } = createProvider();
+    const controller = new AbortController();
+    const prefetch = provider.prefetch(
+      [{ z: 12, x: 2541, y: 1514 }],
+      [instantMs, instantMs + 600_000],
+      controller.signal,
+      vi.fn(),
+    );
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(2);
+    });
+
+    controller.abort();
+
+    await expect(prefetch).rejects.toMatchObject({ name: 'AbortError' });
+    expect(worker.canceledRequestIds).toEqual(
+      worker.requests.map((request) => request.requestId),
+    );
+    expect(provider.getMetrics().tilesFailed).toBe(0);
+    provider.dispose();
+  });
+
+  it('rejects a prefetch and disables shadows when the worker cannot render', async () => {
+    const { provider, worker } = createProvider();
+    const prefetch = provider.prefetch(
+      [{ z: 12, x: 2541, y: 1514 }],
+      [instantMs],
+      new AbortController().signal,
+      vi.fn(),
+    );
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+
+    worker.fail(0, {
+      name: 'TerrainShadowUnavailableError',
+      message: 'WebGL2 is unavailable.',
+      code: terrainShadowUnavailableErrorCode,
+    });
+
+    await expect(prefetch).rejects.toThrow('WebGL2 is unavailable.');
+    expect(provider.getAvailability()).toBe('unavailable');
     provider.dispose();
   });
 

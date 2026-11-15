@@ -380,8 +380,11 @@ describe('MapViewControls', () => {
           enabled: false,
           instantMs: 0,
           availability: 'available',
+          playback: { status: 'idle' },
           mapViewport: new MapViewportSnapshotStore(),
           onChange: vi.fn(),
+          onPlay: vi.fn(),
+          onStop: vi.fn(),
         }}
         onLayerPresetChange={() => 'map'}
         onTerrainModeChange={() => undefined}

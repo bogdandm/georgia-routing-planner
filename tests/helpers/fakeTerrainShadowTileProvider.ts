@@ -1,8 +1,19 @@
 import type {
   TerrainShadowAvailability,
   TerrainShadowMetricsSnapshot,
+  TerrainShadowTileAddress,
   TerrainShadowTileProvider,
 } from '@/presentation/map/TerrainShadowTileProvider';
+
+/** One recorded prefetch; the test settles it, and aborting its signal rejects it. */
+export interface FakePrefetchCall {
+  readonly tiles: readonly TerrainShadowTileAddress[];
+  readonly instantsMs: readonly number[];
+  readonly signal: AbortSignal;
+  readonly onProgress: (completed: number, total: number) => void;
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
+}
 
 const emptyMetrics: TerrainShadowMetricsSnapshot = {
   tilesRendered: 0,
@@ -20,6 +31,7 @@ const emptyMetrics: TerrainShadowMetricsSnapshot = {
 export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider {
   public interactionActive = false;
   public disposed = false;
+  public readonly prefetchCalls: FakePrefetchCall[] = [];
   public metrics: TerrainShadowMetricsSnapshot = emptyMetrics;
   #availability: TerrainShadowAvailability;
   readonly #listeners = new Set<(value: TerrainShadowAvailability) => void>();
@@ -34,6 +46,31 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
 
   public setInteractionActive(active: boolean): void {
     this.interactionActive = active;
+  }
+
+  public prefetch(
+    tiles: readonly TerrainShadowTileAddress[],
+    instantsMs: readonly number[],
+    signal: AbortSignal,
+    onProgress: (completed: number, total: number) => void,
+  ): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      signal.addEventListener(
+        'abort',
+        () => {
+          reject(new DOMException('Prefetch canceled.', 'AbortError'));
+        },
+        { once: true },
+      );
+      this.prefetchCalls.push({
+        tiles,
+        instantsMs,
+        signal,
+        onProgress,
+        resolve,
+        reject,
+      });
+    });
   }
 
   public getAvailability(): TerrainShadowAvailability {

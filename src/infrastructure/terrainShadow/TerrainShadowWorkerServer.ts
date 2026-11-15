@@ -8,6 +8,8 @@ import { TerrainShadowRenderer } from '@/infrastructure/terrainShadow/TerrainSha
 
 export const terrainShadowWorkerMethods = {
   renderTile: 'terrain-shadow.render-tile',
+  /** Caches one tile's shade mask and answers with its metrics only. */
+  prefetchTile: 'terrain-shadow.prefetch-tile',
 } as const;
 
 /** Validates worker messages and transfers rendered shade masks without copying them. */
@@ -18,7 +20,7 @@ export class TerrainShadowWorkerServer {
     endpoint: WorkerRpcEndpoint,
     renderer: Pick<
       TerrainShadowRenderer,
-      'render' | 'dispose'
+      'render' | 'prefetch' | 'dispose'
     > = new TerrainShadowRenderer(),
   ) {
     this.#rpc = new WorkerRpcServer(
@@ -40,6 +42,8 @@ export class TerrainShadowWorkerServer {
           }
           return { value: result, transfer: [result.bitmap] };
         },
+        [terrainShadowWorkerMethods.prefetchTile]: async (payload, { signal }) =>
+          renderer.prefetch(terrainShadowTileRequestSchema.parse(payload), signal),
       },
       () => {
         renderer.dispose();

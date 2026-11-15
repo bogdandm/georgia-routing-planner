@@ -294,6 +294,23 @@ a disabled switch with an explanation. A failure to add or reorder the layer is 
 and leaves relief and contours working. `domain/terrain/terrainShadow.ts` is the CPU
 reference for the shader model.
 
+**Play the day** (`MapLibreLayerController.playSunShadowDay`) takes the daylight window
+of the shown day at the map center, makes whole-minute frames from sunrise every 10
+minutes plus the sunset minute, and asks `map.coveringTiles` for the 512 px z7–12 tiles
+of the current view, deduplicated across world copies. That public coverage ignores
+terrain-aware culling; tiles it misses render on demand during playback. When tiles ×
+frames exceed 2560, playback is refused as `too-many-tiles`. Otherwise the provider's
+`prefetch` sends `terrain-shadow.prefetch-tile` requests tile-major, at most four at a
+time and past the interaction gate, so the worker renders each mask into its cache and
+answers with metrics only; consecutive instants of a tile reuse the assembled mosaics.
+Progress is published to `mapLayerStore.sunShadow.playback` in whole percents. After the
+prefetch, a 150 ms timer shows the next frame by updating the instant and calling only
+the sun-shadow reconciliation, without persistence, and waits while the shadow source is
+still loading the shown frame. The animation loops until stopped. A `movestart` event,
+`setSunShadow` (every panel change, the switch, and the render benchmark), or detach
+aborts the prefetch, clears the timer, and returns the state to `idle`; a prefetch
+failure is logged as `map.sun-shadow.playback-failed` and published as `failed`.
+
 ## Sentinel search
 
 ```mermaid

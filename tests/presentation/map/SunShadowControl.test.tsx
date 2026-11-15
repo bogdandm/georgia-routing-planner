@@ -48,6 +48,8 @@ function tbilisiDaylightMinutes(instantMs: number): {
 
 function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
   const onChange = vi.fn();
+  const onPlay = vi.fn();
+  const onStop = vi.fn();
   renderWithI18n(
     <MapViewControls
       activeLayerPreset={null}
@@ -70,13 +72,16 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
         enabled: false,
         instantMs: tbilisiNoonMs,
         availability: 'available',
+        playback: { status: 'idle' },
         mapViewport: tbilisiViewport(),
         onChange,
+        onPlay,
+        onStop,
         ...sunShadow,
       }}
     />,
   );
-  return { onChange };
+  return { onChange, onPlay, onStop };
 }
 
 describe('SunShadowControl', () => {
@@ -166,5 +171,37 @@ describe('SunShadowControl', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(button).toHaveFocus();
     expect(windowEscape).not.toHaveBeenCalled();
+  });
+
+  it('asks to play the day from the Play button', async () => {
+    const user = userEvent.setup();
+    const { onPlay } = renderSunShadowControls({ enabled: true });
+    await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
+
+    await user.click(screen.getByRole('button', { name: 'Play the day' }));
+
+    expect(onPlay).toHaveBeenCalledOnce();
+  });
+
+  it('disables Play while shadows are off', async () => {
+    const user = userEvent.setup();
+    renderSunShadowControls({});
+    await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
+
+    expect(screen.getByRole('button', { name: 'Play the day' })).toBeDisabled();
+  });
+
+  it('shows the precomputation progress and cancels it', async () => {
+    const user = userEvent.setup();
+    const { onStop } = renderSunShadowControls({
+      enabled: true,
+      playback: { status: 'loading', progress: 0.426 },
+    });
+    await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
+
+    expect(screen.getByText('Computing shadows for the day: 43%')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onStop).toHaveBeenCalledOnce();
   });
 });

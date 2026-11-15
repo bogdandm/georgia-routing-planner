@@ -66,6 +66,7 @@ msgstr "Аэроснимки Bing"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/map/MapWorkspace.tsx
+#: src/presentation/map/SunShadowControl.tsx
 msgid "Cancel"
 msgstr "Отмена"
 
@@ -114,6 +115,11 @@ msgstr "Облака, осадки и ветер"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Compare images from different dates side by side"
 msgstr "Сравнить снимки за разные даты рядом"
+
+#. js-lingui-id: E4xaOs
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Computing shadows for the day: {percent}%"
+msgstr "Расчёт теней на день: {percent}%"
 
 #. js-lingui-id: EOv8gS
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -369,6 +375,11 @@ msgstr "OSM поверх снимков"
 msgid "Pick image date"
 msgstr "Выбрать дату снимка"
 
+#. js-lingui-id: bmT7Do
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Play the day"
+msgstr "Показать весь день"
+
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Satellite layer"
@@ -388,6 +399,11 @@ msgstr "Снимок Sentinel-2"
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Sentinel-2 image from {date}"
 msgstr "Снимок Sentinel-2 от {date}"
+
+#. js-lingui-id: -1oTrp
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Shadows for the day could not be computed."
+msgstr "Не удалось рассчитать тени на день."
 
 #. js-lingui-id: Z8lGw6
 #: src/presentation/map/MapShareDialog.tsx
@@ -419,6 +435,11 @@ msgstr "Показать прогноз погоды"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Soviet Topographic"
 msgstr "Топокарта СССР"
+
+#. js-lingui-id: ygCKqB
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Stop"
+msgstr "Остановить"
 
 #. js-lingui-id: 6TGtTn
 #: src/presentation/map/SunShadowControl.tsx
@@ -501,6 +522,11 @@ msgstr "Время суток"
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Toggle attribution"
 msgstr "Показать или скрыть атрибуцию"
+
+#. js-lingui-id: 6IuztJ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Too much of the map is in view to animate the day. Zoom in and try again."
+msgstr "В кадре слишком большая часть карты для анимации дня. Приблизьте карту и попробуйте снова."
 
 #. js-lingui-id: gd3dhq
 #: src/presentation/map/MapViewControls.tsx

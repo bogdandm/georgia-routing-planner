@@ -87,6 +87,7 @@ import {
   type SatelliteImageryProblem,
   type SatelliteMosaicRenderProgress,
   type TerrainOverlayProblem,
+  type SunShadowPlayback,
   type WeatherMapProblem,
 } from '@/presentation/map/mapLayerStore';
 import {
@@ -127,12 +128,16 @@ import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerat
 import {
   clampToDaylight,
   type DaylightWindow,
+  daylightFrameInstants,
   daylightWindow,
 } from '@/presentation/map/sunShadowDaylight';
-import type {
-  TerrainShadowMetricsSnapshot,
-  TerrainShadowTileProvider,
+import {
+  type TerrainShadowMetricsSnapshot,
+  type TerrainShadowTileAddress,
+  type TerrainShadowTileProvider,
+  terrainShadowMinZoom,
 } from '@/presentation/map/TerrainShadowTileProvider';
+import { terrainShadowPlaybackTileLimit } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type {
   MapLayerPreset,
@@ -419,6 +424,9 @@ function quantizeSunShadowInstant(instantMs: number): number {
  * and their many writers stay untouched.
  */
 const sunHiddenReliefMinZoom = 24;
+/** Day playback frames: sun instants 10 minutes apart, shown for 150 ms each (~6.7 fps). */
+const sunShadowPlaybackStepMinutes = 10;
+const sunShadowPlaybackFrameMs = 150;
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
@@ -981,6 +989,11 @@ export class MapLibreLayerController {
   /** Shadow instant in epoch milliseconds, quantized to whole minutes. */
   #sunShadowInstantMs = quantizeSunShadowInstant(Date.now());
   #appliedSunShadowTileUrl: string | null = null;
+  /** Present from Play until stop; aborting it cancels the day prefetch. */
+  #sunShadowPlaybackAbort: AbortController | null = null;
+  #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
+  #sunShadowPlaybackFrames: readonly number[] = [];
+  #sunShadowPlaybackIndex = 0;
   readonly #releaseSunShadowAvailability: () => void;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
@@ -1097,6 +1110,7 @@ export class MapLibreLayerController {
         enabled: this.#sunShadowEnabled,
         instantMs: this.#sunShadowInstantMs,
         availability: sunShadowTiles.getAvailability(),
+        playback: { status: 'idle' },
       },
     });
     this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
@@ -1176,11 +1190,13 @@ export class MapLibreLayerController {
   /**
    * Shows or hides terrain-cast sun shadows for one instant, quantized to whole minutes.
    * Only `enabled` persists; an unchanged switch and minute leaves the map untouched.
+   * Every call stops day playback first, so user changes always win over the animation.
    */
   public setSunShadow(value: {
     readonly enabled: boolean;
     readonly instantMs: number;
   }): void {
+    this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
     const instantMs = quantizeSunShadowInstant(value.instantMs);
     const enabledChanged = this.#sunShadowEnabled !== value.enabled;
@@ -1196,6 +1212,142 @@ export class MapLibreLayerController {
     });
     if (this.#map !== null) this.reconcileTerrainOverlays();
     if (enabledChanged) this.persistStableState();
+  }
+
+  /**
+   * Precomputes shadows for every 10-minute daylight frame of the shown day over the
+   * tiles covering the view, then loops through them until stopped. Any camera move,
+   * `setSunShadow`, or detach stops it.
+   */
+  public playSunShadowDay(): void {
+    this.stopSunShadowPlayback();
+    const map = this.#map;
+    if (
+      map === null ||
+      !this.#sunShadowEnabled ||
+      this.sunShadowTiles.getAvailability() === 'unavailable'
+    ) {
+      return;
+    }
+    const window = this.sunShadowDaylight(map, this.#sunShadowInstantMs);
+    if (window === null) {
+      this.publishSunShadowPlayback({ status: 'failed' });
+      return;
+    }
+    const frames = daylightFrameInstants(window, sunShadowPlaybackStepMinutes);
+    // Public coverage ignores terrain-aware culling; tiles it misses load on demand.
+    const tiles = new Map<string, TerrainShadowTileAddress>();
+    for (const tile of map.coveringTiles({
+      tileSize: 512,
+      minzoom: terrainShadowMinZoom,
+      maxzoom: this.terrain.maxZoom,
+      roundZoom: true,
+    })) {
+      const { z, x, y } = tile.canonical;
+      tiles.set(`${String(z)}/${String(x)}/${String(y)}`, { z, x, y });
+    }
+    if (tiles.size * frames.length > terrainShadowPlaybackTileLimit) {
+      this.publishSunShadowPlayback({ status: 'too-many-tiles' });
+      return;
+    }
+
+    const controller = new AbortController();
+    this.#sunShadowPlaybackAbort = controller;
+    this.#sunShadowPlaybackFrames = frames;
+    map.on('movestart', this.handleSunShadowPlaybackMove);
+    this.publishSunShadowPlayback({ status: 'loading', progress: 0 });
+    let percent = 0;
+    this.sunShadowTiles
+      .prefetch([...tiles.values()], frames, controller.signal, (completed, total) => {
+        const nextPercent = Math.floor((100 * completed) / total);
+        if (nextPercent === percent || controller.signal.aborted) return;
+        percent = nextPercent;
+        this.publishSunShadowPlayback({
+          status: 'loading',
+          progress: completed / total,
+        });
+      })
+      .then(
+        () => {
+          if (controller.signal.aborted) return;
+          const startIndex = frames.findIndex(
+            (frame) => frame >= this.#sunShadowInstantMs,
+          );
+          this.#sunShadowPlaybackIndex = Math.max(startIndex, 0);
+          this.publishSunShadowPlayback({ status: 'playing' });
+          this.showSunShadowPlaybackFrame(map);
+          this.#sunShadowPlaybackTimer = setTimeout(
+            this.tickSunShadowPlayback,
+            sunShadowPlaybackFrameMs,
+          );
+        },
+        () => {
+          // An aborted prefetch is a deliberate stop, not a failure.
+          if (controller.signal.aborted) return;
+          this.logger.log({ level: 'error', name: 'map.sun-shadow.playback-failed' });
+          this.stopSunShadowPlayback();
+          this.publishSunShadowPlayback({ status: 'failed' });
+        },
+      );
+  }
+
+  /** Cancels the prefetch or animation and returns the playback state to idle. */
+  public stopSunShadowPlayback(): void {
+    const running = this.#sunShadowPlaybackAbort !== null;
+    this.#sunShadowPlaybackAbort?.abort();
+    this.#sunShadowPlaybackAbort = null;
+    if (this.#sunShadowPlaybackTimer !== null) {
+      clearTimeout(this.#sunShadowPlaybackTimer);
+      this.#sunShadowPlaybackTimer = null;
+    }
+    this.#map?.off('movestart', this.handleSunShadowPlaybackMove);
+    this.#sunShadowPlaybackFrames = [];
+    if (running || mapLayerStore.getState().sunShadow.playback.status !== 'idle') {
+      this.publishSunShadowPlayback({ status: 'idle' });
+    }
+  }
+
+  private readonly handleSunShadowPlaybackMove = (): void => {
+    this.stopSunShadowPlayback();
+  };
+
+  /**
+   * Advances one frame only after MapLibre has every visible tile of the current one, so
+   * each frame appears complete instead of tearing; the day loops until stopped.
+   */
+  private readonly tickSunShadowPlayback = (): void => {
+    this.#sunShadowPlaybackTimer = null;
+    const map = this.#map;
+    if (map === null || this.#sunShadowPlaybackAbort === null) return;
+    const frameLoading =
+      map.getSource(mapSourceIds.terrainSunShadow) !== undefined &&
+      !map.isSourceLoaded(mapSourceIds.terrainSunShadow);
+    if (!frameLoading) {
+      this.#sunShadowPlaybackIndex =
+        (this.#sunShadowPlaybackIndex + 1) % this.#sunShadowPlaybackFrames.length;
+      this.showSunShadowPlaybackFrame(map);
+    }
+    this.#sunShadowPlaybackTimer = setTimeout(
+      this.tickSunShadowPlayback,
+      sunShadowPlaybackFrameMs,
+    );
+  };
+
+  /** Applies the current frame without persisting or reconciling the other overlays. */
+  private showSunShadowPlaybackFrame(map: MapLibreMap): void {
+    const instantMs = this.#sunShadowPlaybackFrames[this.#sunShadowPlaybackIndex];
+    if (instantMs === undefined) return;
+    this.#sunShadowInstantMs = instantMs;
+    mapLayerStore.setState({
+      sunShadow: { ...mapLayerStore.getState().sunShadow, instantMs },
+    });
+    this.reconcileSunShadow(map);
+  }
+
+  private publishSunShadowPlayback(playback: SunShadowPlayback): void {
+    mapLayerStore.setState({
+      sunShadow: { ...mapLayerStore.getState().sunShadow, playback },
+    });
   }
 
   /** Shadow tile counters for the developer render benchmark. */
@@ -1238,6 +1390,7 @@ export class MapLibreLayerController {
 
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
+    this.stopSunShadowPlayback();
     this.contourTiles.setInteractionActive(false);
     this.sunShadowTiles.setInteractionActive(false);
     this.#appliedSunShadowTileUrl = null;
@@ -1285,6 +1438,7 @@ export class MapLibreLayerController {
   /** Releases map listeners, persistence work, protocols, and terrain compute resources. */
   public dispose(): void {
     this.#disposed = true;
+    this.stopSunShadowPlayback();
     this.#weatherMetadataController?.abort();
     this.#weatherMetadataController = null;
     this.clearMosaic();

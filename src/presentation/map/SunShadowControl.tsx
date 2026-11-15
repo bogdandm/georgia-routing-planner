@@ -1,10 +1,14 @@
 import { useLingui } from '@lingui/react/macro';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import StopRoundedIcon from '@mui/icons-material/StopRounded';
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
 import {
   Box,
   Button,
+  CircularProgress,
   ClickAwayListener,
   FormControlLabel,
+  IconButton,
   Paper,
   Popper,
   Slider,
@@ -23,6 +27,7 @@ import {
   zonedWallTimeToInstant,
   type ZonedWallTime,
 } from '@/domain/time/zonedWallTime';
+import type { SunShadowPlayback } from '@/presentation/map/mapLayerStore';
 import type { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import {
   clampToDaylight,
@@ -42,9 +47,14 @@ export interface SunShadowControlProps {
   /** Shadow instant in epoch milliseconds. */
   readonly instantMs: number;
   readonly availability: TerrainShadowAvailability;
+  readonly playback: SunShadowPlayback;
   /** Its center picks the time zone and the place of sunrise, sunset, and night. */
   readonly mapViewport: MapViewportSnapshotStore;
   readonly onChange: (value: SunShadowChange) => void;
+  /** Precomputes and animates the shown day; the layer controller owns the playback. */
+  readonly onPlay: () => void;
+  /** Cancels the precomputation or stops the animation. */
+  readonly onStop: () => void;
 }
 
 const minutesPerDay = 24 * 60;
@@ -217,8 +227,11 @@ function SunShadowPanel({
   enabled,
   instantMs,
   availability,
+  playback,
   mapViewport,
   onChange,
+  onPlay,
+  onStop,
 }: SunShadowControlProps) {
   const { i18n, t } = useLingui();
   const viewport = useSyncExternalStore(
@@ -267,6 +280,8 @@ function SunShadowPanel({
   const commitWall = (next: ZonedWallTime) => {
     onChange({ enabled, instantMs: zonedWallTimeToInstant(next, timeZone).getTime() });
   };
+  const percent =
+    playback.status === 'loading' ? Math.round(playback.progress * 100) : 0;
 
   return (
     <Stack spacing={1}>
@@ -315,6 +330,24 @@ function SunShadowPanel({
         </Button>
       </Stack>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+        {playback.status === 'loading' ? (
+          <IconButton aria-label={t`Cancel`} onClick={onStop} size="small">
+            <CircularProgress size={20} value={percent} variant="determinate" />
+          </IconButton>
+        ) : playback.status === 'playing' ? (
+          <IconButton aria-label={t`Stop`} onClick={onStop} size="small">
+            <StopRoundedIcon fontSize="small" />
+          </IconButton>
+        ) : (
+          <IconButton
+            aria-label={t`Play the day`}
+            disabled={!enabled || unavailable}
+            onClick={onPlay}
+            size="small"
+          >
+            <PlayArrowRoundedIcon fontSize="small" />
+          </IconButton>
+        )}
         <Slider
           aria-label={t`Time of day`}
           getAriaValueText={formatWallMinutes}
@@ -353,6 +386,21 @@ function SunShadowPanel({
           </Typography>
         )}
       </Stack>
+      {playback.status === 'loading' ? (
+        <Typography color="text.secondary" variant="caption">
+          {t`Computing shadows for the day: ${percent}%`}
+        </Typography>
+      ) : null}
+      {playback.status === 'too-many-tiles' ? (
+        <Typography color="text.secondary" variant="caption">
+          {t`Too much of the map is in view to animate the day. Zoom in and try again.`}
+        </Typography>
+      ) : null}
+      {playback.status === 'failed' ? (
+        <Typography color="text.secondary" variant="caption">
+          {t`Shadows for the day could not be computed.`}
+        </Typography>
+      ) : null}
     </Stack>
   );
 }

@@ -162,6 +162,14 @@ export interface WeatherMapSnapshot {
   readonly problem: WeatherMapProblem | null;
 }
 
+/** Day playback of sun shadows; `progress` is the precomputed fraction from 0 to 1. */
+export type SunShadowPlayback =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading'; readonly progress: number }
+  | { readonly status: 'playing' }
+  | { readonly status: 'too-many-tiles' }
+  | { readonly status: 'failed' };
+
 /** Terrain-cast sun shadows as the layer controller applies them. */
 export interface SunShadowSnapshot {
   readonly enabled: boolean;
@@ -169,6 +177,7 @@ export interface SunShadowSnapshot {
   readonly instantMs: number;
   /** `unavailable` means this browser cannot render shadows (no WebGL2 float rendering). */
   readonly availability: TerrainShadowAvailability;
+  readonly playback: SunShadowPlayback;
 }
 
 export interface MapLayerState {
@@ -246,7 +255,12 @@ const initialMapLayerState: MapLayerState = {
     problem: null,
   },
   // The layer controller replaces this with the session's start instant when constructed.
-  sunShadow: { enabled: false, instantMs: 0, availability: 'unknown' },
+  sunShadow: {
+    enabled: false,
+    instantMs: 0,
+    availability: 'unknown',
+    playback: { status: 'idle' },
+  },
 };
 
 /** Serializable map-layer state shared by map controls and feature panels. */

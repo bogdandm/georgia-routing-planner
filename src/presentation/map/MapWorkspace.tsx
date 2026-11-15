@@ -1837,9 +1837,16 @@ export function MapWorkspace({
           enabled: sunShadow.enabled,
           instantMs: sunShadow.instantMs,
           availability: sunShadow.availability,
+          playback: sunShadow.playback,
           mapViewport,
           onChange: (value) => {
             mapLayers.setSunShadow(value);
+          },
+          onPlay: () => {
+            mapLayers.playSunShadowDay();
+          },
+          onStop: () => {
+            mapLayers.stopSunShadowPlayback();
           },
         };
 

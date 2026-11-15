@@ -175,20 +175,20 @@ failed tile-cache entry. Final failure appears only in the shared operational st
 
 On style readiness, style data changes, imagery swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
-generated contour source, minor/index lines, and index labels. The order is base surface
-fills, relief/satellite in the selected order, waterways, contours, water-body polygons,
-then OSM boundaries, transport, ridges and cliffs, the Sentinel scene footprint, user
-routes and tracks, and finally icons and labels (contour labels included), so relief
-stays visible over opaque land-cover fills while water bodies mask isolines. 3D terrain
-draws consecutive line, fill, raster, and hillshade layers into one draped texture per
-terrain tile, and every icon or label layer between them would add another full set of
-textures and terrain passes; keeping all lines and fills below the first icon layer
-gives the main map one draped stack. A paint change redraws the draped textures only on
-its first frame, so the style disables paint transitions (`transition` of zero): a fade
-would freeze them at the previous value, leaving land-cover fills over imagery after a
-switch to satellite, or missing after a switch back, until the camera moves. Changing
-the contour interval updates the existing vector source's tiles without touching the
-camera.
+sun-shadow raster, generated contour source, minor/index lines, and index labels. The
+order is base surface fills, relief/satellite in the selected order, waterways, sun
+shadow, contours, water-body polygons, then OSM boundaries, transport, ridges and
+cliffs, the Sentinel scene footprint, user routes and tracks, and finally icons and
+labels (contour labels included), so relief and shadow stay visible over opaque
+land-cover fills while water bodies mask isolines and shadow. 3D terrain draws
+consecutive line, fill, raster, and hillshade layers into one draped texture per terrain
+tile, and every icon or label layer between them would add another full set of textures
+and terrain passes; keeping all lines and fills below the first icon layer gives the
+main map one draped stack. A paint change redraws the draped textures only on its first
+frame, so the style disables paint transitions (`transition` of zero): a fade would
+freeze them at the previous value, leaving land-cover fills over imagery after a switch
+to satellite, or missing after a switch back, until the camera moves. Changing the
+contour interval updates the existing vector source's tiles without touching the camera.
 
 The `terrain-dem` raster-dem source points at the provider URL, so MapLibre fetches,
 caches, and decodes relief and 3D terrain tiles on its own workers. Contours use a
@@ -222,6 +222,67 @@ Applying, hiding, replacing, or clearing satellite imagery reapplies the shared 
 mode on existing layers: opaque land-cover fills switch off over imagery while line
 features, hillshade strength, and label halos update atomically. The camera, sources,
 and user visibility choices are preserved.
+
+## Terrain sun shadows
+
+```mermaid
+sequenceDiagram
+  participant Map as MapLibre
+  participant Provider as MapLibreTerrainShadowTileProvider
+  participant Worker as terrain-shadow worker
+  participant DEM as Mapterhorn DEM
+  Map->>Provider: terrain-shadow://<epochMinute>/{z}/{x}/{y}
+  Provider->>Provider: wait until the camera settles
+  Provider->>Worker: renderTile (tile, instant, DEM URL, color)
+  alt mask cached for tile and minute
+    Worker-->>Provider: ImageBitmap
+  else
+    Worker->>DEM: 3×3 mosaics at z, z−2, z−4 (cached tiles skipped)
+    Worker->>Worker: WebGL2 horizon march on OffscreenCanvas, fence wait
+    Worker-->>Provider: ImageBitmap (transferred)
+  end
+  Provider-->>Map: raster tile data
+```
+
+While the switch is on and shadows are not known to be unavailable, the controller keeps
+the `terrain-sun-shadow` raster source (z7–12, overzoomed above) and its layer directly
+below the minor contours; turning the switch off removes both. The tile URL carries the
+instant as a whole epoch minute, so an unchanged minute changes nothing, and a new
+minute replaces the source tiles with `setTiles`: MapLibre requests only the visible
+tiles again. Camera moves (pan, rotate, pitch, 3D) never recompute, because MapLibre's
+tile cache and the worker's mask cache already hold the tiles; returning to an earlier
+minute hits the mask cache. Compare panes never add the source.
+
+`MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
+the module worker on the first tile request. Requests wait while the map is dragged,
+zoomed, or rotated, through the same interaction signal as contours; aborted requests
+leave the gate or cancel their worker job. The worker answers with an `ImageBitmap`,
+which MapLibre accepts directly, so no image is encoded.
+
+For an output tile at zoom z, the worker builds 3×3 DEM mosaics at z, z−2, and z−4
+(clamped to the DEM zoom range) around the tile, so occluders up to the 100 km cap are
+covered at z12. Each horizon sample reads the finest mosaic that contains it, and a GPU
+reduction of each level's maximum elevation ends the march early once nothing ahead can
+rise above the Sun. Per pixel the shader computes the Sun's azimuth and refracted
+elevation, marches along the great circle toward the Sun with Earth curvature and
+terrestrial refraction, and converts the highest horizon angle into the visible fraction
+of the solar disk; the alpha is the shaded fraction. GPU jobs run one at a time and wait
+on a fence before the next starts, so at most one tile of shadow work competes with map
+frames.
+
+DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
+so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,
+or decode failure fails the shadow tile instead of drawing a truncated horizon. The
+worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
+and 64 rendered masks keyed by tile and minute in LRU caches. A lost WebGL context drops
+both caches, and the next request creates a fresh context.
+
+A failed tile fails only that tile; MapLibre leaves it blank. When the worker reports
+missing WebGL2 float support or its transport fails, availability becomes `unavailable`
+for the session: the controller removes the shadow layer and source, and the panel shows
+a disabled switch with an explanation. A failure to add or reorder the layer is logged
+and leaves relief and contours working. `domain/terrain/terrainShadow.ts` is the CPU
+reference for the shader model.
 
 ## Sentinel search
 

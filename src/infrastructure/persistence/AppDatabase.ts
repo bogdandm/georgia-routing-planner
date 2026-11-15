@@ -683,6 +683,8 @@ const mapLayerPreferencesSchema = z
           .default(defaultTerrainOverlayPreferences.demTileSize),
       })
       .default(defaultTerrainOverlayPreferences),
+    // Only the switch persists; the shadow instant is session state that starts at now.
+    sunShadowEnabled: z.boolean().default(false),
   })
   .strict();
 
@@ -728,6 +730,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
+  sunShadowEnabled: false,
 };
 
 // Preferences that travel in a data archive, with the check each archived value must

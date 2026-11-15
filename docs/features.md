@@ -705,8 +705,19 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   available name instead. Neither search adds a country. Coordinate links to external
   maps belong to point actions, not the desktop inspection popup. While the popup is
   visible, the next map click only closes it.
-- **Image comparison:** on desktop, the compare button below the map-layer chooser opens
-  the Satellite comparison grid from any section (see [Comparison](#comparison)).
+- **Sun shadows:** the sun button directly below the map-layer chooser opens a compact
+  non-modal panel; opening it does not turn shadows on. It holds a **Sun shadows**
+  switch, a date field, a time-of-day slider from 00:00 to 23:50 in 10-minute steps that
+  applies on release or keyboard change, and **Now**. Date and time are local wall time
+  at the map center (the browser's zone until the first viewport settles), with the
+  zone's GMT offset and that day's sunrise and sunset at the center shown below; a note
+  appears when the sun is below the horizon there. Browsers that cannot render
+  floating-point targets in a worker (WebGL2 with `EXT_color_buffer_float` and
+  `OffscreenCanvas`) see a disabled switch with an explanation. Only the switch persists
+  (default off); the instant is session state that starts at the current time. The
+  overlay is described in [Map, terrain, and persistence](#map-terrain-and-persistence).
+- **Image comparison:** on desktop, the compare button below the sun button opens the
+  Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing
   it again ends and discards the measurement. While it is on, primary map clicks add
   numbered blue points joined by straight lines; it takes clicks from route planning and
@@ -792,6 +803,30 @@ DEM tiles; it is saved in the browser and applies to relief and 3D at once. Relo
 restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing and pitch
 and re-enters terrain once the map is ready. Details are in
 [runtime flows](./runtime-flows.md).
+
+Sun shadows are terrain-cast shadows for the real position of the Sun at the chosen
+instant, not hillshade. Each pixel gets its own solar azimuth and elevation (NOAA/Meeus
+solar coordinates with atmospheric refraction) and is shaded when the terrain horizon
+toward the Sun, traced along the great circle with Earth curvature and terrestrial
+refraction, rises above the solar disk; a partly covered disk gives soft penumbra edges,
+and night is full shade. The shade is a semitransparent dark-blue raster drawn above
+relief, satellite imagery, and land cover but below water, contours, labels, and tracks;
+it drapes over 3D terrain, stays on while the weather map is shown, and is not drawn in
+comparison panes. It appears from z7 and is computed up to z12, then overzoomed.
+
+Shadow accuracy is limited by the data and the model:
+
+- The DEM is the Copernicus GLO-30 surface model via Mapterhorn (about 30 m source), so
+  forest canopy and buildings partly count as terrain. A z12 pixel is about 14 m at 42°
+  N.
+- Distant occluders are read from coarser zooms (about 57 m pixels at z10 and 228 m at
+  z8), which can slightly lower distant peaks; shadows longer than 100 km are cut.
+- Below about 1° of solar elevation refraction depends on the weather, so shadows near
+  sunrise and sunset are approximate.
+- Near borders the time-zone lookup can pick a neighbouring country's zone (Kazbegi and
+  Tusheti resolve to Europe/Moscow, GMT+3, instead of Asia/Tbilisi); the displayed
+  offset always matches the instant the shadows use.
+- Desktop Chrome is the supported target.
 
 Map errors are classified and shown in the status line; offline messaging promises only
 that already rendered areas may stay visible. Retry and recovery rules are in

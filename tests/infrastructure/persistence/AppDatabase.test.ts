@@ -520,6 +520,7 @@ describe('AppDatabase', () => {
         shadeAboveSatellite: true,
         demTileSize: 256,
       },
+      sunShadowEnabled: true,
     } as const;
 
     await database.saveMapLayerPreferences(preferences);
@@ -548,6 +549,20 @@ describe('AppDatabase', () => {
       contourIntervalMeters: 25,
       shadeAboveSatellite: true,
       demTileSize: 512,
+    });
+  });
+
+  it('loads sun shadows off for layer preferences saved before the shadow switch', async () => {
+    const { sunShadowEnabled: _sunShadowEnabled, ...preferences } =
+      await database.loadMapLayerPreferences();
+    await database.settings.put({
+      key: 'map.layers',
+      value: preferences,
+      updatedAt: '2026-11-01T00:00:00.000Z',
+    });
+
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      sunShadowEnabled: false,
     });
   });
 

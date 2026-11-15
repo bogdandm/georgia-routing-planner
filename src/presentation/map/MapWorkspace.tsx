@@ -61,6 +61,7 @@ import {
   MapViewControlsControl,
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
+import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
 import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
@@ -468,6 +469,7 @@ export function MapWorkspace({
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
+  const sunShadow = useStore(mapLayerStore, (state) => state.sunShadow);
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
@@ -1816,6 +1818,18 @@ export function MapWorkspace({
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);
+  const sunShadowControl: SunShadowControlProps | null =
+    mapLayers === null
+      ? null
+      : {
+          enabled: sunShadow.enabled,
+          instantMs: sunShadow.instantMs,
+          availability: sunShadow.availability,
+          mapViewport,
+          onChange: (value) => {
+            mapLayers.setSunShadow(value);
+          },
+        };
 
   // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.
   const mainMapHidden =
@@ -2009,6 +2023,7 @@ export function MapWorkspace({
               weatherMapEnabled={weatherMap.enabled}
               measurementActive={measurementActive}
               onMeasurementActiveChange={handleMeasurementActiveChange}
+              sunShadow={sunShadowControl}
             />
             {selectionCoordinate === null ||
             selectionCoordinate === undefined ||
@@ -2149,6 +2164,7 @@ export function MapWorkspace({
           weatherMapEnabled={weatherMap.enabled}
           measurementActive={measurementActive}
           onMeasurementActiveChange={handleMeasurementActiveChange}
+          sunShadow={sunShadowControl}
         />
       ) : null}
       <ElevationGradeLegend

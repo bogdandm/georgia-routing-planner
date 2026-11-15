@@ -75,6 +75,8 @@ export interface PersistedMapLayerPreferences {
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;
+  /** Terrain-cast sun shadows; the shadow instant is session state and never persists. */
+  readonly sunShadowEnabled: boolean;
 }
 
 /** Persists map presentation choices locally without synchronizing them off-device. */

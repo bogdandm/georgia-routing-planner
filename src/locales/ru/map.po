@@ -160,6 +160,11 @@ msgstr "Поставить метку"
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Текущая погода: {temperature}, осадки {precipitation}"
 
+#. js-lingui-id: mYGY3B
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Date"
+msgstr "Дата"
+
 #. js-lingui-id: -fptTM
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Delete selected points"
@@ -329,6 +334,11 @@ msgstr "На карте не показан спутниковый слой."
 msgid "No Sentinel-2 image is shown on the map."
 msgstr "На карте не показан снимок Sentinel-2."
 
+#. js-lingui-id: cH5kXP
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Now"
+msgstr "Сейчас"
+
 #. js-lingui-id: YJQPdw
 #: src/presentation/map/MapViewControls.tsx
 msgid "Open image comparison"
@@ -410,6 +420,21 @@ msgstr "Показать прогноз погоды"
 msgid "Soviet Topographic"
 msgstr "Топокарта СССР"
 
+#. js-lingui-id: 6TGtTn
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sun shadows"
+msgstr "Тени от солнца"
+
+#. js-lingui-id: 5HL4bJ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sunrise {sunrise}"
+msgstr "Восход {sunrise}"
+
+#. js-lingui-id: YnRO0w
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sunset {sunset}"
+msgstr "Закат {sunset}"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -456,10 +481,25 @@ msgstr "Не удалось открыть общее сравнение сни�
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "Не удалось восстановить общий спутниковый снимок. Общее местоположение на карте по-прежнему доступно."
 
+#. js-lingui-id: i16OQP
+#: src/presentation/map/SunShadowControl.tsx
+msgid "The sun is below the horizon at the map center."
+msgstr "В центре карты солнце за горизонтом."
+
+#. js-lingui-id: hoiu-9
+#: src/presentation/map/SunShadowControl.tsx
+msgid "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
+msgstr "Этот браузер не может рассчитать тени: недоступен рендеринг WebGL2 с плавающей точкой."
+
 #. js-lingui-id: HUfyUv
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "This scene has no supported true-color asset."
 msgstr "У этой сцены нет поддерживаемого изображения в естественных цветах."
+
+#. js-lingui-id: lWvGF7
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Time of day"
+msgstr "Время суток"
 
 #. js-lingui-id: Tm0RL6
 #: src/presentation/map/MapWorkspace.tsx

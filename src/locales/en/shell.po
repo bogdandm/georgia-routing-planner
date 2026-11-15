@@ -1409,6 +1409,11 @@ msgstr "Strait"
 msgid "Stream"
 msgstr "Stream"
 
+#. js-lingui-id: 6EbKyP
+#: src/presentation/shell/OnboardingTour.tsx
+msgid "Sun shadows: see where mountains cast shade at any date and time."
+msgstr "Sun shadows: see where mountains cast shade at any date and time."
+
 #. js-lingui-id: SMpAF6
 #: src/presentation/shell/MapLegend.tsx
 msgid "Swamp"

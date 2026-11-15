@@ -2,6 +2,8 @@ import type {
   HillshadeLayerSpecification,
   LineLayerSpecification,
   RasterDEMSourceSpecification,
+  RasterLayerSpecification,
+  RasterSourceSpecification,
   SymbolLayerSpecification,
   VectorSourceSpecification,
 } from 'maplibre-gl';
@@ -13,6 +15,7 @@ import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
+import { terrainShadowMinZoom } from '@/presentation/map/TerrainShadowTileProvider';
 
 // Contour vector tiles stop at the DEM's z12 and are overzoomed; line widths keep growing
 // to this display zoom so close-up contours stay as legible as before.
@@ -58,6 +61,34 @@ export function createTerrainContourSource(
     minzoom: terrain.overlays.contourMinZoom,
     maxzoom: terrain.overlays.contourMaxZoom,
     attribution: terrain.attribution,
+  };
+}
+
+/** Cast-shadow raster for one sun instant; `tileUrl` comes from the shadow tile provider. */
+export function createSunShadowSource(
+  terrain: MapProviderConfiguration['terrain'],
+  tileUrl: string,
+): RasterSourceSpecification {
+  return {
+    type: 'raster',
+    tiles: [tileUrl],
+    tileSize: 512,
+    minzoom: terrainShadowMinZoom,
+    maxzoom: terrain.maxZoom,
+    attribution: terrain.attribution,
+  };
+}
+
+export function createSunShadowLayer(): RasterLayerSpecification {
+  return {
+    id: terrainOverlayLayerIds.sunShadow,
+    type: 'raster',
+    source: mapSourceIds.terrainSunShadow,
+    paint: {
+      'raster-opacity': mapVisualPalette.terrain.sunShadowOpacity,
+      'raster-fade-duration': 0,
+      'raster-resampling': 'linear',
+    },
   };
 }
 

@@ -5,7 +5,11 @@ import {
   parseMapProviderConfiguration,
 } from '@/bootstrap/configuration/MapProviderConfiguration';
 import { mapSourceIds, terrainOverlayLayerIds } from '@/presentation/map/mapIds';
-import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
+import {
+  createSunShadowLayer,
+  createSunShadowSource,
+  createTerrainDemSource,
+} from '@/presentation/map/terrainOverlayStyle';
 
 describe('terrain overlay style contracts', () => {
   it('loads the provider raster DEM with the requested declared tile size', () => {
@@ -25,11 +29,31 @@ describe('terrain overlay style contracts', () => {
     });
   });
 
-  it('keeps terrain source and overlay layer IDs unique', () => {
-    const ids = [
-      ...Object.values(mapSourceIds),
-      ...Object.values(terrainOverlayLayerIds),
-    ];
-    expect(new Set(ids).size).toBe(ids.length);
+  it('keeps map source IDs and terrain overlay layer IDs unique', () => {
+    const sourceIds = Object.values(mapSourceIds);
+    const layerIds = Object.values(terrainOverlayLayerIds);
+    expect(new Set(sourceIds).size).toBe(sourceIds.length);
+    expect(new Set(layerIds).size).toBe(layerIds.length);
+  });
+
+  it('serves sun shadows from the shadow zoom up to the DEM maximum without fading', () => {
+    const configuration = parseMapProviderConfiguration(
+      defaultMapProviderConfigurationInput,
+      'https://example.test/app/',
+    );
+    const tileUrl = 'terrain-shadow://29000000/{z}/{x}/{y}';
+
+    expect(createSunShadowSource(configuration.terrain, tileUrl)).toEqual({
+      type: 'raster',
+      tiles: [tileUrl],
+      tileSize: 512,
+      minzoom: 7,
+      maxzoom: 12,
+      attribution: configuration.terrain.attribution,
+    });
+    expect(createSunShadowLayer()).toMatchObject({
+      source: mapSourceIds.terrainSunShadow,
+      paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' },
+    });
   });
 });

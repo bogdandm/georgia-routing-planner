@@ -119,5 +119,6 @@ with Shift. The panes never rotate or pitch.
 
 The right edge of the map stacks zoom in and zoom out; the compass, which shows the
 bearing and pitch and resets north on click; **Find my location**; the 2D and 3D switch,
-where 2D also resets pitch and bearing; the map-layer chooser; on desktop, the image
-comparison; and the ruler.
+where 2D also resets pitch and bearing; the map-layer chooser; the sun-shadow panel
+button; on desktop, the image comparison; and the ruler. The sun-shadow panel closes
+with Escape or a press outside it.

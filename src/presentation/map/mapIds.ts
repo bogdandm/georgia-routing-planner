@@ -5,6 +5,7 @@ export const mapSourceIds = {
   basemapDetailVector: 'basemap-detail-vector',
   terrainDem: 'terrain-dem',
   terrainContours: 'terrain-contours',
+  terrainSunShadow: 'terrain-sun-shadow',
   weatherClouds: 'weather-clouds',
   weatherPrecipitation: 'weather-precipitation',
   weatherWind: 'weather-wind',
@@ -46,6 +47,7 @@ export const sovietTopographicSourceIds = {
 
 export const terrainOverlayLayerIds = {
   reliefShade: 'terrain-relief-shade',
+  sunShadow: 'terrain-sun-shadow',
   contourMinor: 'terrain-contour-minor',
   contourIndex: 'terrain-contour-index',
   contourLabels: 'terrain-contour-labels',

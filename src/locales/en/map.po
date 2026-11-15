@@ -160,6 +160,11 @@ msgstr "Create marker here"
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
 
+#. js-lingui-id: mYGY3B
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Date"
+msgstr "Date"
+
 #. js-lingui-id: -fptTM
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Delete selected points"
@@ -329,6 +334,11 @@ msgstr "No satellite layer is shown on the map."
 msgid "No Sentinel-2 image is shown on the map."
 msgstr "No Sentinel-2 image is shown on the map."
 
+#. js-lingui-id: cH5kXP
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Now"
+msgstr "Now"
+
 #. js-lingui-id: YJQPdw
 #: src/presentation/map/MapViewControls.tsx
 msgid "Open image comparison"
@@ -410,6 +420,21 @@ msgstr "Show weather forecast"
 msgid "Soviet Topographic"
 msgstr "Soviet Topographic"
 
+#. js-lingui-id: 6TGtTn
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sun shadows"
+msgstr "Sun shadows"
+
+#. js-lingui-id: 5HL4bJ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sunrise {sunrise}"
+msgstr "Sunrise {sunrise}"
+
+#. js-lingui-id: YnRO0w
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sunset {sunset}"
+msgstr "Sunset {sunset}"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -456,10 +481,25 @@ msgstr "The shared image comparison could not be opened. The shared map location
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
 
+#. js-lingui-id: i16OQP
+#: src/presentation/map/SunShadowControl.tsx
+msgid "The sun is below the horizon at the map center."
+msgstr "The sun is below the horizon at the map center."
+
+#. js-lingui-id: hoiu-9
+#: src/presentation/map/SunShadowControl.tsx
+msgid "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
+msgstr "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
+
 #. js-lingui-id: HUfyUv
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "This scene has no supported true-color asset."
 msgstr "This scene has no supported true-color asset."
+
+#. js-lingui-id: lWvGF7
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Time of day"
+msgstr "Time of day"
 
 #. js-lingui-id: Tm0RL6
 #: src/presentation/map/MapWorkspace.tsx

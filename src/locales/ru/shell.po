@@ -1409,6 +1409,11 @@ msgstr "Пролив"
 msgid "Stream"
 msgstr "Ручей"
 
+#. js-lingui-id: 6EbKyP
+#: src/presentation/shell/OnboardingTour.tsx
+msgid "Sun shadows: see where mountains cast shade at any date and time."
+msgstr "Тени от солнца: где горы отбрасывают тень в любой день и час."
+
 #. js-lingui-id: SMpAF6
 #: src/presentation/shell/MapLegend.tsx
 msgid "Swamp"

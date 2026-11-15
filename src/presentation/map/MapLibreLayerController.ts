@@ -101,6 +101,8 @@ import {
   createContourLabelLayer,
   createContourLineLayer,
   createReliefShadeLayer,
+  createSunShadowLayer,
+  createSunShadowSource,
   createTerrainContourSource,
   createTerrainDemSource,
   type TerrainOverlaySnapshot,
@@ -121,6 +123,10 @@ import {
   type ImportedTrackOverlaySnapshot,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
+import type {
+  TerrainShadowMetricsSnapshot,
+  TerrainShadowTileProvider,
+} from '@/presentation/map/TerrainShadowTileProvider';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type {
   MapLayerPreset,
@@ -395,6 +401,11 @@ const canceledDirectSourceErrorWindowMs = 5_000;
 const terrainQueuePublishIntervalMs = 250;
 // Quick pans load a few DEM tiles from cache; only sustained loading reaches the status.
 const terrainDemLoadingIndicatorDelayMs = 300;
+
+/** Shadow tiles are keyed by whole minutes, so finer instant changes redraw nothing. */
+function quantizeSunShadowInstant(instantMs: number): number {
+  return Math.floor(instantMs / 60_000) * 60_000;
+}
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
@@ -953,6 +964,11 @@ export class MapLibreLayerController {
     defaultTerrainOverlayPreferences;
   #contourFailureReported = false;
   #appliedContourTileUrl: string | null = null;
+  #sunShadowEnabled = false;
+  /** Shadow instant in epoch milliseconds, quantized to whole minutes. */
+  #sunShadowInstantMs = quantizeSunShadowInstant(Date.now());
+  #appliedSunShadowTileUrl: string | null = null;
+  readonly #releaseSunShadowAvailability: () => void;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
   readonly #readySatelliteBasemapSourceIds = new Set<string>();
@@ -1035,6 +1051,7 @@ export class MapLibreLayerController {
     private readonly renderer: MapProviderConfiguration['satellite']['renderer'],
     private readonly terrain: MapProviderConfiguration['terrain'],
     private readonly contourTiles: ContourTileGenerator,
+    private readonly sunShadowTiles: TerrainShadowTileProvider,
     private readonly satelliteCogTiles: SatelliteCogTileProvider,
     private readonly logger: DiagnosticLogger,
     private readonly idGenerator: IdGenerator,
@@ -1062,6 +1079,21 @@ export class MapLibreLayerController {
         terrainQueuePublishIntervalMs,
       );
     });
+    mapLayerStore.setState({
+      sunShadow: {
+        enabled: this.#sunShadowEnabled,
+        instantMs: this.#sunShadowInstantMs,
+        availability: sunShadowTiles.getAvailability(),
+      },
+    });
+    this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
+      (availability) => {
+        mapLayerStore.setState({
+          sunShadow: { ...mapLayerStore.getState().sunShadow, availability },
+        });
+        if (this.#map !== null) this.reconcileTerrainOverlays();
+      },
+    );
   }
 
   private readonly publishPendingTerrainQueue = (): void => {
@@ -1125,6 +1157,41 @@ export class MapLibreLayerController {
 
   public setTerrainInteractionActive(active: boolean): void {
     this.contourTiles.setInteractionActive(active);
+    this.sunShadowTiles.setInteractionActive(active);
+  }
+
+  /**
+   * Shows or hides terrain-cast sun shadows for one instant, quantized to whole minutes.
+   * Only `enabled` persists; an unchanged switch and minute leaves the map untouched.
+   */
+  public setSunShadow(value: {
+    readonly enabled: boolean;
+    readonly instantMs: number;
+  }): void {
+    if (!Number.isFinite(value.instantMs)) return;
+    const instantMs = quantizeSunShadowInstant(value.instantMs);
+    const enabledChanged = this.#sunShadowEnabled !== value.enabled;
+    if (!enabledChanged && this.#sunShadowInstantMs === instantMs) return;
+    this.#sunShadowEnabled = value.enabled;
+    this.#sunShadowInstantMs = instantMs;
+    mapLayerStore.setState({
+      sunShadow: {
+        ...mapLayerStore.getState().sunShadow,
+        enabled: value.enabled,
+        instantMs,
+      },
+    });
+    if (this.#map !== null) this.reconcileTerrainOverlays();
+    if (enabledChanged) this.persistStableState();
+  }
+
+  /** Shadow tile counters for the developer render benchmark. */
+  public getSunShadowMetrics(): TerrainShadowMetricsSnapshot {
+    return this.sunShadowTiles.getMetrics();
+  }
+
+  public resetSunShadowMetrics(): void {
+    this.sunShadowTiles.resetMetrics();
   }
 
   /** Shows the area pattern choice of the mode the native map currently draws. */
@@ -1159,6 +1226,8 @@ export class MapLibreLayerController {
   public detach(map: MapLibreMap): void {
     if (this.#map !== map) return;
     this.contourTiles.setInteractionActive(false);
+    this.sunShadowTiles.setInteractionActive(false);
+    this.#appliedSunShadowTileUrl = null;
     map.off('styledata', this.handleStyleData);
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
@@ -1211,12 +1280,14 @@ export class MapLibreLayerController {
     if (map !== null) this.detach(map);
     this.#releaseTerrainComputeStatus();
     this.#releaseTerrainComputeQueue();
+    this.#releaseSunShadowAvailability();
     if (this.#terrainQueuePublishTimer !== null) {
       clearTimeout(this.#terrainQueuePublishTimer);
       this.#terrainQueuePublishTimer = null;
     }
     this.#pendingTerrainQueue = null;
     this.contourTiles.dispose();
+    this.sunShadowTiles.dispose();
     this.satelliteCogTiles.dispose();
     if (this.#weatherProtocolRegistered) {
       releaseWeatherMapProtocol();
@@ -2174,6 +2245,7 @@ export class MapLibreLayerController {
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
+      this.#sunShadowEnabled = persisted.sunShadowEnabled;
       mapLayerStore.setState({
         visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
@@ -2185,6 +2257,10 @@ export class MapLibreLayerController {
         satelliteRenderingMode: persisted.satelliteRenderingMode,
         satelliteRenderingTuning: { ...persisted.renderingTuning },
         layerProblem: null,
+        sunShadow: {
+          ...mapLayerStore.getState().sunShadow,
+          enabled: persisted.sunShadowEnabled,
+        },
       });
       this.applyBaseLayerVisibility();
       this.reconcileTerrainOverlays();
@@ -3127,6 +3203,7 @@ export class MapLibreLayerController {
         satelliteRenderingMode: this.#satelliteRenderingMode,
         renderingTuning,
         terrainOverlays: { ...this.#terrainOverlayPreferences },
+        sunShadowEnabled: this.#sunShadowEnabled,
       })
       .catch(() => {
         this.logger.log({
@@ -3332,16 +3409,23 @@ export class MapLibreLayerController {
       }
       this.ensureContourLayers(map);
       this.ensureContourOrder(map);
+      this.reconcileSunShadow(map);
       const activeRasterLayerId = this.currentVisibleRasterLayerId();
       const bottomRasterLayerId = this.currentVisibleRasterBottomLayerId();
       const satelliteVisible = activeRasterLayerId !== null;
+      // Relief sits directly below the sun-shadow layer, which sits directly below the
+      // contours; relief below satellite keeps its own anchor.
+      const overlayAboveReliefId =
+        map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined
+          ? terrainOverlayLayerIds.sunShadow
+          : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
+            ? mapInsertionPoints.terrainOverlaysBeforeLayerId
+            : terrainOverlayLayerIds.contourMinor;
       const beforeId =
         !this.#terrainOverlayPreferences.shadeAboveSatellite &&
         bottomRasterLayerId !== null
           ? bottomRasterLayerId
-          : map.getLayer(terrainOverlayLayerIds.contourMinor) === undefined
-            ? mapInsertionPoints.terrainOverlaysBeforeLayerId
-            : terrainOverlayLayerIds.contourMinor;
+          : overlayAboveReliefId;
       const layerIds = map.getLayersOrder();
       const reliefIndex = layerIds.indexOf(terrainOverlayLayerIds.reliefShade);
       const beforeIndex = layerIds.indexOf(beforeId);
@@ -3384,6 +3468,59 @@ export class MapLibreLayerController {
       return { status: 'success' };
     } catch {
       return this.terrainOverlayFailure('relief-render-failed');
+    }
+  }
+
+  /**
+   * Keeps the sun-shadow raster directly below the minor contours while shadows are on
+   * and the browser can render them, and removes it otherwise. A failure only logs: the
+   * relief and contours keep working without shadows.
+   */
+  private reconcileSunShadow(map: MapLibreMap): void {
+    const wanted =
+      this.#sunShadowEnabled && this.sunShadowTiles.getAvailability() !== 'unavailable';
+    try {
+      if (!wanted) {
+        if (map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
+          map.removeLayer(terrainOverlayLayerIds.sunShadow);
+        }
+        if (map.getSource(mapSourceIds.terrainSunShadow) !== undefined) {
+          map.removeSource(mapSourceIds.terrainSunShadow);
+        }
+        this.#appliedSunShadowTileUrl = null;
+        return;
+      }
+      const tileUrl = this.sunShadowTiles.createTileUrl(this.#sunShadowInstantMs);
+      const source = map.getSource(mapSourceIds.terrainSunShadow);
+      if (source === undefined) {
+        map.addSource(
+          mapSourceIds.terrainSunShadow,
+          createSunShadowSource(this.terrain, tileUrl),
+        );
+        this.#appliedSunShadowTileUrl = tileUrl;
+      } else if (this.#appliedSunShadowTileUrl !== tileUrl) {
+        const raster = source as { setTiles?: (tiles: string[]) => void };
+        if (raster.setTiles === undefined) {
+          throw new Error('The sun-shadow source cannot update its tiles.');
+        }
+        raster.setTiles([tileUrl]);
+        this.#appliedSunShadowTileUrl = tileUrl;
+      }
+      if (map.getLayer(terrainOverlayLayerIds.sunShadow) === undefined) {
+        map.addLayer(createSunShadowLayer(), terrainOverlayLayerIds.contourMinor);
+        return;
+      }
+      // moveLayer emits styledata, so the layer only moves when it is out of place.
+      const layerIds = map.getLayersOrder();
+      const shadowIndex = layerIds.indexOf(terrainOverlayLayerIds.sunShadow);
+      if (layerIds[shadowIndex + 1] !== terrainOverlayLayerIds.contourMinor) {
+        map.moveLayer(
+          terrainOverlayLayerIds.sunShadow,
+          terrainOverlayLayerIds.contourMinor,
+        );
+      }
+    } catch {
+      this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
     }
   }
 

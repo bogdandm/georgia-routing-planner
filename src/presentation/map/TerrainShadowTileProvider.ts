@@ -277,7 +277,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (this.#availability === 'unavailable') {
       throw new Error('Terrain shadows are unavailable in this browser.');
     }
-    if (signal.aborted) throw abortError();
+    signal.throwIfAborted();
     // The interaction gate is ignored: a camera move cancels the whole prefetch instead.
     const requests = tiles.flatMap((tile) =>
       instantsMs.map((instantMs) =>
@@ -325,11 +325,12 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       );
     } catch (error) {
       controller.abort();
-      if (signal.aborted) throw abortError();
-      throw error;
+      if (!signal.aborted) throw error;
     } finally {
       signal.removeEventListener('abort', forwardAbort);
     }
+    // A caller abort always wins, even when every runner had already stopped cleanly.
+    if (signal.aborted) throw abortError();
   }
 
   private createRequest(

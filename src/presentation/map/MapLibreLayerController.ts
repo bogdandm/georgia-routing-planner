@@ -434,7 +434,9 @@ const sunShadowPlaybackStepMinutes = 10;
 const sunShadowPlaybackFrameMs = 150;
 /**
  * Frames this close to sunrise or sunset at the center still cache masks somewhere in
- * view (tiles differ by minutes, and the worker's night test keeps a 1° margin).
+ * view: tiles differ by minutes, and the worker's night test waits for the Sun about 4°
+ * below the horizon (summit sea-level horizon plus a 1° margin), roughly 25 minutes in
+ * Georgia.
  */
 const sunShadowLitFrameSlackMs = 30 * 60_000;
 
@@ -1276,7 +1278,7 @@ export class MapLibreLayerController {
       tiles.set(`${String(z)}/${String(x)}/${String(y)}`, { z, x, y });
     }
     // Only frames with the Sun near or above the horizon cache a mask; the worker answers
-    // darker twilight frames with a shared full-shade mask that costs no memory.
+    // darker twilight frames with a shared night mask that costs no memory.
     const litFrameCount = frames.filter(
       (frame) =>
         frame >= window.sunriseMs - sunShadowLitFrameSlackMs &&

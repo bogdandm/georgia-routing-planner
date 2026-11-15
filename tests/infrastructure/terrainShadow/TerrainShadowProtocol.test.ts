@@ -19,6 +19,9 @@ const request: TerrainShadowTileRequest = {
   shadowColor: [27, 36, 51],
   highlightColor: [255, 247, 230],
   highlightOpacity: 0.6,
+  lowSunShadowColor: [46, 63, 122],
+  lowSunShadowLift: 0.4,
+  lowSunGlowOpacity: 0.35,
 };
 
 const metrics: TerrainShadowTileMetrics = {

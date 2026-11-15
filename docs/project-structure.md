@@ -217,9 +217,11 @@ analysis, such as classifying track points as sunlit or shaded:
 `domain/terrain/solarPosition.ts` computes subsolar points, solar position with
 atmospheric refraction, and sunrise and sunset; `domain/terrain/terrainShadow.ts` holds
 the shared model constants, a `TerrainElevationSampler` contract, and the CPU reference
-that the GLSL shader mirrors (`horizonAngleTowardSun`, `visibleSolarDiskFraction`,
-`evaluateTerrainSunlight`); `domain/time/zonedWallTime.ts` converts between instants and
-wall time in an IANA zone.
+that the GLSL shader mirrors (`horizonAngleTowardSun`, `seaLevelHorizonDegrees`,
+`visibleSolarDiskFraction`, `evaluateTerrainSunlight`);
+`domain/terrain/atmosphericSunlight.ts` holds the relative optical air mass, which the
+shader mirrors, and the Rayleigh-extinction color of direct sunlight;
+`domain/time/zonedWallTime.ts` converts between instants and wall time in an IANA zone.
 
 `SatelliteCompareMaps` renders the comparison grid as separate lightweight maps, keyed
 by grid position, that never attach to the facade or the controller's map. Each pane's

@@ -108,6 +108,7 @@ function parseShadowColor(hex: string): readonly [number, number, number] {
 
 const shadowColor = parseShadowColor(mapVisualPalette.terrain.sunShadow);
 const highlightColor = parseShadowColor(mapVisualPalette.terrain.sunHighlight);
+const lowSunShadowColor = parseShadowColor(mapVisualPalette.terrain.sunLowShadow);
 
 function defaultWorkerFactory(): WorkerRpcEndpoint {
   return new Worker(
@@ -349,6 +350,9 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       shadowColor,
       highlightColor,
       highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
+      lowSunShadowColor,
+      lowSunShadowLift: mapVisualPalette.terrain.sunLowShadowLift,
+      lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
     };
   }
 

@@ -48,7 +48,10 @@ export interface TerrainHorizon {
 
 export interface TerrainSunlight {
   readonly sun: SolarPosition;
-  /** −90 when the march was skipped because the sun is below the horizon. */
+  /**
+   * Higher of the marched terrain horizon and the sea-level horizon; only the latter when
+   * the Sun is below it and the march was skipped.
+   */
   readonly horizonDegrees: number;
   /** Visible fraction of the solar disk in [0, 1]; shade alpha is `1 − sunlitFraction`. */
   readonly sunlitFraction: number;
@@ -71,6 +74,19 @@ const curvatureFactor =
 /** Apparent drop of distant terrain below the observer's level from curvature minus refraction. */
 export function curvatureDropMeters(distanceMeters: number): number {
   return distanceMeters * distanceMeters * curvatureFactor;
+}
+
+/**
+ * Horizon angle of the sea-level sphere seen from `elevationMeters`, with the same
+ * curvature-minus-refraction model as the march: −atan(2·√(h·c)), 0 at or below sea level.
+ * No terrain lies below it, so the Sun is hidden there even beyond the march cap; from a
+ * 5000 m summit it lies about 2.1° below the observer's level.
+ */
+export function seaLevelHorizonDegrees(elevationMeters: number): number {
+  return (
+    -Math.atan(2 * Math.sqrt(Math.max(elevationMeters, 0) * curvatureFactor)) *
+    degreesPerRadian
+  );
 }
 
 /** Exact great-circle destination on the model sphere; longitude normalized to [−180, 180). */
@@ -187,7 +203,6 @@ export function visibleSolarDiskFraction(
   horizonDegrees: number,
 ): number {
   const radius = terrainShadowModel.solarDiskRadiusDegrees;
-  if (apparentElevationDegrees <= -radius) return 0;
   const u = Math.min(
     1,
     Math.max(-1, (apparentElevationDegrees - horizonDegrees) / radius),
@@ -195,7 +210,11 @@ export function visibleSolarDiskFraction(
   return 0.5 + (u * Math.sqrt(1 - u * u) + Math.asin(u)) / Math.PI;
 }
 
-/** Sun position and terrain-cast sunlight at one ground point; skips the march at night. */
+/**
+ * Sun position and terrain-cast sunlight at one ground point. The horizon is never below
+ * the sea-level horizon, so summits stay lit while the Sun is just below the observer's
+ * level; the march is skipped once the whole disk is below that horizon.
+ */
 export function evaluateTerrainSunlight(
   sampler: TerrainElevationSampler,
   observer: TerrainObserver,
@@ -207,20 +226,30 @@ export function evaluateTerrainSunlight(
     observer.latitudeDegrees,
     observer.longitudeDegrees,
   );
-  if (sun.apparentElevationDegrees <= -terrainShadowModel.solarDiskRadiusDegrees) {
-    return { sun, horizonDegrees: -90, sunlitFraction: 0, coverageLimited: false };
+  const seaLevelHorizon = seaLevelHorizonDegrees(observer.elevationMeters);
+  if (
+    sun.apparentElevationDegrees + terrainShadowModel.solarDiskRadiusDegrees <=
+    seaLevelHorizon
+  ) {
+    return {
+      sun,
+      horizonDegrees: seaLevelHorizon,
+      sunlitFraction: 0,
+      coverageLimited: false,
+    };
   }
   const horizon = horizonAngleTowardSun(sampler, observer, sun.azimuthDegrees, {
     baseResolutionMeters: options.baseResolutionMeters,
     maximumElevationMeters: options.maximumElevationMeters,
     apparentSunElevationDegrees: sun.apparentElevationDegrees,
   });
+  const horizonDegrees = Math.max(horizon.horizonDegrees, seaLevelHorizon);
   return {
     sun,
-    horizonDegrees: horizon.horizonDegrees,
+    horizonDegrees,
     sunlitFraction: visibleSolarDiskFraction(
       sun.apparentElevationDegrees,
-      horizon.horizonDegrees,
+      horizonDegrees,
     ),
     coverageLimited: horizon.coverageLimited,
   };

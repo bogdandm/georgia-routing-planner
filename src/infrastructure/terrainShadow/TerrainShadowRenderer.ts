@@ -13,6 +13,11 @@ import {
   fullscreenVertexShaderSource,
   maximumReductionFactor,
   maximumReductionFragmentShaderSource,
+  type ShadePalette,
+  shadeMaskBytes,
+  sunlightGridSize,
+  sunlightGridStride,
+  sunlightNightCode,
   terrainShadowShadeFragmentShaderSource,
   terrainShadowVisibilityFragmentShaderSource,
   terrainShadowVisibilitySize,
@@ -35,9 +40,9 @@ const maximumCachedDemTiles = 64;
 const shadowPassBands = 8;
 const bytesPerTexel = 4;
 const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
-const maskBytes = terrainShadowTileSize * terrainShadowTileSize;
-/** Shared all-zero mask (full shade) answered for every night tile; never cached. */
-const nightMask = new Uint8Array(maskBytes);
+const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
+/** Shared mask answered for every night tile (full shade, night sunlight); never cached. */
+const nightMask = new Uint8Array(shadeMaskBytes).fill(sunlightNightCode, tilePixels);
 
 /** Uniforms both shadow passes read; the rest are only active in one pass. */
 const tileUniformNames = [
@@ -92,7 +97,7 @@ interface GpuResources {
   readonly levelMaximum: WebGLTexture;
   /** R8 visible solar-disk fraction for the tile plus the blur margin. */
   readonly visibilityTexture: WebGLTexture;
-  /** RGBA8 shade pass target; only the red channel carries the brightness byte. */
+  /** RGBA8 shade pass target: red carries the brightness byte, green the sunlight code. */
   readonly shadeTexture: WebGLTexture;
   /** Reused RGBA readback of `shadeTexture`. */
   readonly readback: Uint8Array;
@@ -547,7 +552,7 @@ function drawShadePasses(
   drawFullscreen(gpu);
 }
 
-/** Reads the brightness bytes of `shadeTexture`; row 0 is the northern edge. */
+/** Reads `shadeTexture` into the `shadeMaskBytes` layout; row 0 is the northern edge. */
 function readShadeMask(gpu: GpuResources): Uint8Array {
   const { gl, readback } = gpu;
   gl.bindFramebuffer(gl.READ_FRAMEBUFFER, gpu.readFramebuffer);
@@ -567,17 +572,26 @@ function readShadeMask(gpu: GpuResources): Uint8Array {
     gl.UNSIGNED_BYTE,
     readback,
   );
-  const mask = new Uint8Array(maskBytes);
-  for (let index = 0; index < maskBytes; index += 1) {
+  const mask = new Uint8Array(shadeMaskBytes);
+  for (let index = 0; index < tilePixels; index += 1) {
     mask[index] = readback[index * bytesPerTexel] ?? 0;
+  }
+  const sampleOffset = sunlightGridStride / 2;
+  for (let gridRow = 0; gridRow < sunlightGridSize; gridRow += 1) {
+    const row = gridRow * sunlightGridStride + sampleOffset;
+    for (let gridColumn = 0; gridColumn < sunlightGridSize; gridColumn += 1) {
+      const column = gridColumn * sunlightGridStride + sampleOffset;
+      mask[tilePixels + gridRow * sunlightGridSize + gridColumn] =
+        readback[(row * terrainShadowTileSize + column) * bytesPerTexel + 1] ?? 0;
+    }
   }
   return mask;
 }
 
 /**
  * Worker-owned WebGL2 terrain-shadow renderer. One OffscreenCanvas context is created on
- * the first request and recreated after a context loss; decoded DEM tiles and one-byte
- * shade masks live in bounded LRU caches. GPU work runs one tile at a time; DEM fetches
+ * the first request and recreated after a context loss; decoded DEM tiles and shade masks
+ * live in bounded LRU caches. GPU work runs one tile at a time; DEM fetches
  * run concurrently and are shared between requests for the same tile.
  */
 export class TerrainShadowRenderer {
@@ -592,6 +606,8 @@ export class TerrainShadowRenderer {
   #assembledMosaicKey: string | null = null;
   #gpuQueue: Promise<void> = Promise.resolve();
   #disposed = false;
+  /** The lookup table of the last palette; every request carries the same palette. */
+  #shadeTable: { readonly key: string; readonly table: Uint32Array } | null = null;
 
   /** Colors the cached shade mask of `request` into a transferable bitmap. */
   public async render(
@@ -600,11 +616,7 @@ export class TerrainShadowRenderer {
   ): Promise<TerrainShadowTileResult> {
     const { mask, metrics } = await this.ensureMask(request, signal);
     const startedAt = performance.now();
-    const table = createShadeLookupTable(
-      request.shadowColor,
-      request.highlightColor,
-      request.highlightOpacity,
-    );
+    const table = this.shadeTable(request);
     const bitmap = await createImageBitmap(
       new ImageData(
         expandShadeMask(mask, table),
@@ -627,6 +639,21 @@ export class TerrainShadowRenderer {
     signal: AbortSignal,
   ): Promise<TerrainShadowTileMetrics> {
     return (await this.ensureMask(request, signal)).metrics;
+  }
+
+  private shadeTable(palette: ShadePalette): Uint32Array {
+    const key = JSON.stringify([
+      palette.shadowColor,
+      palette.highlightColor,
+      palette.highlightOpacity,
+      palette.lowSunShadowColor,
+      palette.lowSunShadowLift,
+      palette.lowSunGlowOpacity,
+    ]);
+    if (this.#shadeTable?.key !== key) {
+      this.#shadeTable = { key, table: createShadeLookupTable(palette) };
+    }
+    return this.#shadeTable.table;
   }
 
   private async ensureMask(
@@ -897,7 +924,7 @@ export class TerrainShadowRenderer {
       memoryBytes:
         (this.#gpu?.staticBytes ?? 0) +
         decodedTiles * tileBytes +
-        this.#masks.size * maskBytes,
+        this.#masks.size * shadeMaskBytes,
       cachedMasks: this.#masks.size,
       cachedDemTiles: this.#demTiles.size,
     };

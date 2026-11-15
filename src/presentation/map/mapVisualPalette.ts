@@ -63,13 +63,19 @@ export const mapVisualPalette = {
     scree: '#A39B91',
     /**
      * Real-sun relief: the worker expands each shade pixel into `sunShadow` (darker than
-     * flat ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter).
-     * Both are opaque `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
+     * flat ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter),
+     * tinted by the sunlight color. As the Sun sinks, shade turns toward `sunLowShadow` and
+     * loses up to `sunLowShadowLift` of its opacity, and ground in direct sun gains a
+     * sunlight-colored glow of up to `sunLowGlowOpacity`. Colors are opaque `#RRGGBB`;
+     * `sunShadowOpacity` is the layer `raster-opacity`.
      */
     sunShadow: '#1B2433',
     sunShadowOpacity: 0.5,
     sunHighlight: '#FFF7E6',
     sunHighlightOpacity: 0.6,
+    sunLowShadow: '#2E3F7A',
+    sunLowShadowLift: 0.25,
+    sunLowGlowOpacity: 0.25,
   },
   restricted: {
     line: '#C95050',

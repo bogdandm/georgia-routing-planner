@@ -272,23 +272,40 @@ level's maximum elevation ends the march early once nothing ahead can rise above
 Sun. The visibility pass computes, per pixel of the tile plus a 2 px margin, the Sun's
 azimuth and refracted elevation, marches along the great circle toward the Sun with
 Earth curvature and terrestrial refraction, and stores the visible fraction of the solar
-disk. The shade pass blurs that fraction with a 5×5 Gaussian (σ = 1 px) and multiplies
-it by Lambert lighting from finest-mosaic central differences, normalized so flat ground
-in full sun (or at 10° elevation for lower suns) is 1. The slope term reaches zero
-exactly where the march begins to report self-shadow, so terminators stay continuous.
-The worker reads the result back as one byte per pixel (brightness × 127) and colors it
-through a 256-entry table: shadow color with alpha 1 − brightness below 127, highlight
-color fading in above it. GPU jobs run one at a time and wait on a fence before the next
-starts, so at most one tile of shadow work competes with map frames.
+disk. The horizon is never taken below the pixel's sea-level horizon (the tangent to a
+sea-level sphere under the same curvature model, about 2.1° below a 5000 m summit), so
+summits keep the last light while the Sun is already below their level and the sea
+beyond the 100 km march cap still hides it. The shade pass blurs that fraction with a
+5×5 Gaussian (σ = 1 px) and multiplies it by Lambert lighting from finest-mosaic central
+differences, normalized so flat ground in full sun (or at 10° elevation for lower suns)
+is 1. The slope term reaches zero exactly where the march begins to report self-shadow,
+so terminators stay continuous. That direct light makes up 65% of the brightness; the
+other 35% is sky light, a softly wrapped Lambert light from the Sun's azimuth at 30°
+elevation on 1.5× exaggerated slopes, which keeps relief inside shadows and fades out
+between the horizon and the night elevation. The same pass writes a sunlight code: the
+logarithm of the relative optical air mass of the direct-sun path (Kasten–Young, scaled
+by the pressure at the pixel's height, or through the tangent height when the Sun is
+below the pixel's level), or, once the Sun is below the sea-level horizon, how far
+twilight has faded toward the night elevation. The worker reads the result back as one
+brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of sunlight codes,
+interpolates the codes bilinearly, and colors each pixel through a 256 × 256 table built
+once per palette. Below 127 the shadow color fades in with alpha 1 − brightness; above
+it the highlight color fades in. The highlight is tinted by the Rayleigh-extinction
+sunlight color (`domain/terrain/atmosphericSunlight.ts`) at 60% strength; as the Sun
+sinks, shadows turn toward the low-Sun shadow color and lose part of their opacity, and
+ground lit by the direct Sun gains a sunlight-colored glow. GPU jobs run one at a time
+and wait on a fence before the next starts, so at most one tile of shadow work competes
+with map frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,
 or decode failure fails the shadow tile instead of drawing a truncated horizon. The
 worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
-and up to 3072 one-byte shade masks (768 MiB) keyed by DEM URL, tile, and minute in LRU
-caches; colors are applied per request, so they are not part of the key. A tile whose
-four corners see the Sun more than 1° below the solar disk is answered with a shared
-all-zero (full-shade) mask without DEM fetches, GPU work, or a cache entry. A lost WebGL
+and up to 3072 shade masks of 272 KiB (816 MiB) keyed by DEM URL, tile, and minute in
+LRU caches; colors are applied per request, so they are not part of the key. A tile
+whose four corners see the Sun more than 1° below the night elevation (the whole disk
+below the sea-level horizon of Everest's summit, about −3.1°) is answered with a shared
+full-shade night mask without DEM fetches, GPU work, or a cache entry. A lost WebGL
 context drops both caches, and the next request creates a fresh context.
 
 A failed tile fails only that tile; MapLibre leaves it blank. When the worker reports

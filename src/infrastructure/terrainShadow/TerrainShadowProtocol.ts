@@ -5,7 +5,7 @@ const colorSchema = z
   .tuple([colorChannelSchema, colorChannelSchema, colorChannelSchema])
   .readonly();
 
-/** Cached one-byte shade masks per worker: 3072 × 256 KiB = 768 MiB. */
+/** Cached shade masks per worker: 3072 × 272 KiB (brightness plus sunlight grid) = 816 MiB. */
 export const terrainShadowMaskCacheLimit = 3072;
 /** Most tiles × frames one day playback may precompute; stays below the mask cache. */
 export const terrainShadowPlaybackTileLimit = 2560;
@@ -29,6 +29,9 @@ export const terrainShadowTileRequestSchema = z
     shadowColor: colorSchema,
     highlightColor: colorSchema,
     highlightOpacity: z.number().min(0).max(1),
+    lowSunShadowColor: colorSchema,
+    lowSunShadowLift: z.number().min(0).max(1),
+    lowSunGlowOpacity: z.number().min(0).max(1),
   })
   .strict()
   .refine(
@@ -57,7 +60,7 @@ export interface TerrainShadowTileMetrics {
   readonly cachedDemTiles: number;
 }
 
-/** 512 px shade bitmap expanded from a cached one-byte mask; transferred, never copied. */
+/** 512 px shade bitmap expanded from a cached shade mask; transferred, never copied. */
 export interface TerrainShadowTileResult {
   readonly bitmap: ImageBitmap;
   readonly metrics: TerrainShadowTileMetrics;

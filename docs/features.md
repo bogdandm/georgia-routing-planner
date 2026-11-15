@@ -874,14 +874,22 @@ atmospheric refraction). Its brightness is the slope's lighting toward the Sun (
 terrain normal against the Sun direction, with flat ground in full sun as the neutral
 level and suns below 10° darkening flat ground gradually) multiplied by the visible
 fraction of the solar disk above the terrain horizon, traced along the great circle with
-Earth curvature and terrestrial refraction. Cast-shadow edges are softened over a few
-pixels, and night is full shade. Darker pixels draw a semitransparent dark-blue shade
-and sunlit slopes a faint warm highlight. While sun shadows draw, the fixed-light relief
-shading is hidden without changing its saved visibility, and it returns when they are
-turned off. The raster is drawn above relief, satellite imagery, and land cover but
-below water, contours, labels, and tracks; it drapes over 3D terrain, stays on while the
-weather map is shown, and is not drawn in comparison panes. It appears from z7 and is
-computed up to z12, then overzoomed.
+Earth curvature and terrestrial refraction. The horizon never sinks below the sea-level
+horizon, so high summits keep the first and last light for several minutes while the
+valleys are already below the Sun's level. About a third of the brightness is sky light
+from the Sun's side of the sky, so relief stays readable inside shadows; it fades out in
+twilight. Cast-shadow edges are softened over a few pixels, and night is full shade.
+Darker pixels draw a semitransparent dark-blue shade and sunlit slopes a faint highlight
+in a softened color of direct sunlight: white at midday, then yellow, orange, and red as
+the Sun sinks, computed from clear-air Rayleigh extinction along the path through the
+atmosphere, so summits stay whiter than valleys. As the Sun sinks, shadows also turn
+bluer and lighter and ground in direct sun gains a sunlight-colored glow; both fade out
+in twilight. While sun shadows draw, the fixed-light relief shading is hidden without
+changing its saved visibility, and it returns when they are turned off. The raster is
+drawn above relief, satellite imagery, and land cover but below water, contours, labels,
+and tracks; it drapes over 3D terrain, stays on while the weather map is shown, and is
+not drawn in comparison panes. It appears from z7 and is computed up to z12, then
+overzoomed.
 
 Shadow accuracy is limited by the data and the model:
 
@@ -892,6 +900,8 @@ Shadow accuracy is limited by the data and the model:
   z8), which can slightly lower distant peaks; shadows longer than 100 km are cut.
 - Below about 1° of solar elevation refraction depends on the weather, so shadows near
   sunrise and sunset are approximate.
+- The sunlight color assumes clear air: dust, haze, and smoke make real sunsets redder
+  and dimmer, and the color varies smoothly over about four pixels.
 - Near borders the time-zone lookup can pick a neighbouring country's zone (Kazbegi and
   Tusheti resolve to Europe/Moscow, GMT+3, instead of Asia/Tbilisi); the displayed
   offset always matches the instant the shadows use.

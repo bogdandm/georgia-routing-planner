@@ -35,7 +35,7 @@ interface MapFitBoundsCommand {
 interface MapPointInspectionCommand {
   readonly id: number;
   readonly coordinate: MapCoordinate;
-  readonly refreshNearbyPoiOnIdle: boolean;
+  readonly refreshNearbyPoiWhenSettled: boolean;
 }
 
 interface SatelliteSearchRequest {
@@ -178,14 +178,14 @@ export function consumeMapFitBoundsCommand(commandId: number): void {
 
 export function requestMapPointInspection(
   coordinate: MapCoordinate,
-  options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+  options?: { readonly refreshNearbyPoiWhenSettled?: boolean },
 ): void {
   nextCommandId += 1;
   mapInteractionStore.setState({
     pointInspectionCommand: {
       id: nextCommandId,
       coordinate: { ...coordinate },
-      refreshNearbyPoiOnIdle: options?.refreshNearbyPoiOnIdle ?? false,
+      refreshNearbyPoiWhenSettled: options?.refreshNearbyPoiWhenSettled ?? false,
     },
   });
 }

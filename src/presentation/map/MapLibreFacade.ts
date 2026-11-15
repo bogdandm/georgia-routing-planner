@@ -339,6 +339,8 @@ export class MapLibreFacade implements MapFacade {
   #pendingNearbyPoiRefresh: {
     readonly sequence: number;
     readonly startedAt: number;
+    /** Frames before the search's own navigation still show the previous view. */
+    readonly cameraCommandIssued: boolean;
   } | null = null;
   #completedPointInspectionSequence = 0;
   /** Touch sheet height currently applied as bottom camera padding. */
@@ -418,6 +420,7 @@ export class MapLibreFacade implements MapFacade {
     map.on('load', this.handleLoad);
     map.on('styledata', this.handleStyleData);
     map.on('idle', this.handleIdle);
+    map.on('render', this.handleRender);
     map.on('movestart', this.handleMoveStart);
     map.on('moveend', this.handleMoveEnd);
     map.on('mousemove', this.handleMapMouseMove);
@@ -615,7 +618,7 @@ export class MapLibreFacade implements MapFacade {
 
   public openPointInspection(
     coordinate: MapCoordinate,
-    options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+    options?: { readonly refreshNearbyPoiWhenSettled?: boolean },
   ): void {
     const map = this.#map;
     if (
@@ -633,9 +636,9 @@ export class MapLibreFacade implements MapFacade {
     this.#pointInspectionSequence += 1;
     const sequence = this.#pointInspectionSequence;
     const startedAt = performance.now();
-    const refreshNearbyPoiOnIdle = options?.refreshNearbyPoiOnIdle === true;
-    this.#pendingNearbyPoiRefresh = refreshNearbyPoiOnIdle
-      ? { sequence, startedAt }
+    const refreshNearbyPoiWhenSettled = options?.refreshNearbyPoiWhenSettled === true;
+    this.#pendingNearbyPoiRefresh = refreshNearbyPoiWhenSettled
+      ? { sequence, startedAt, cameraCommandIssued: false }
       : null;
     this.#pointInspectionAbort?.abort();
     const abortController = new AbortController();
@@ -653,7 +656,7 @@ export class MapLibreFacade implements MapFacade {
       sequence,
       abortController.signal,
       startedAt,
-      !refreshNearbyPoiOnIdle,
+      !refreshNearbyPoiWhenSettled,
     );
   }
 
@@ -707,6 +710,7 @@ export class MapLibreFacade implements MapFacade {
         ],
       });
     }
+    this.markNearbyPoiCameraCommandIssued();
     this.logger.log({
       level: 'info',
       name: 'map.navigation.requested',
@@ -831,6 +835,7 @@ export class MapLibreFacade implements MapFacade {
         essential: true,
       });
     }
+    this.markNearbyPoiCameraCommandIssued();
     this.logger.log({
       level: 'info',
       name: 'map.navigation.bounds-requested',
@@ -1114,7 +1119,6 @@ export class MapLibreFacade implements MapFacade {
   };
 
   private readonly handleIdle = (): void => {
-    this.refreshPendingNearbyPoi();
     // Idle fires after every repaint and only diagnostics export/drawer read it, so the
     // timestamp is stored without notifying React subscribers.
     this.#snapshot = { ...this.#snapshot, lastIdleAt: new Date().toISOString() };
@@ -1601,15 +1605,33 @@ export class MapLibreFacade implements MapFacade {
     }
   }
 
-  private refreshPendingNearbyPoi(): void {
+  // A search opens its inspection before issuing its camera command (MapWorkspace holds
+  // the camera for it, and terrain transitions can hold a fit longer), so earlier frames
+  // still show the previous view.
+  private markNearbyPoiCameraCommandIssued(): void {
+    const pending = this.#pendingNearbyPoiRefresh;
+    if (pending !== null) {
+      this.#pendingNearbyPoiRefresh = { ...pending, cameraCommandIssued: true };
+    }
+  }
+
+  // MapLibre fires `render` after it updates source tiles for the frame's camera, so a
+  // still camera with a loaded basemap means the destination's features are queryable.
+  // `idle` would also wait for unrelated sources (contours, relief, imagery, weather),
+  // and one tile that never settles there withholds it until the camera moves again.
+  private readonly handleRender = (): void => {
     const pending = this.#pendingNearbyPoiRefresh;
     const map = this.#map;
     const inspection = this.#pointInspection;
     if (
       pending === null ||
+      !pending.cameraCommandIssued ||
       map === null ||
       pending.sequence !== this.#pointInspectionSequence ||
-      inspection.status === 'closed'
+      inspection.status === 'closed' ||
+      map.isMoving() ||
+      (map.getSource(mapSourceIds.basemapVector) !== undefined &&
+        !map.isSourceLoaded(mapSourceIds.basemapVector))
     ) {
       return;
     }
@@ -1619,7 +1641,7 @@ export class MapLibreFacade implements MapFacade {
       nearbyPoi: this.inspectNearbyPoi(map, inspection.coordinate),
     });
     this.logPointInspectionCompleted(pending.sequence, pending.startedAt);
-  }
+  };
 
   private async inspectPoint(
     map: MapLibreMap,
@@ -2293,6 +2315,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('load', this.handleLoad);
     map.off('styledata', this.handleStyleData);
     map.off('idle', this.handleIdle);
+    map.off('render', this.handleRender);
     map.off('movestart', this.handleMoveStart);
     map.off('moveend', this.handleMoveEnd);
     map.off('moveend', this.handleOverlayResetMoveEnd);

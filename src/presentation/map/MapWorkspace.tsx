@@ -809,11 +809,13 @@ export function MapWorkspace({
     facade.revealPointInspection(sheet.offsetHeight);
   }, [facade, sheetCoordinate]);
 
-  // On touch, a search's camera move waits until its inspection sheet has rendered, so
-  // one move can land with the point above the sheet instead of panning afterwards.
-  const cameraWaitsForSheet = touchPointer && pointInspectionCommand !== null;
+  // A search's camera move waits until its inspection has opened: the facade then looks
+  // up the nearby feature only after this move, never in the previous view. On touch the
+  // sheet has also rendered, so one move can land with the point above the sheet instead
+  // of panning afterwards.
+  const cameraWaitsForInspection = pointInspectionCommand !== null;
   useEffect(() => {
-    if (navigationCommand === null || cameraWaitsForSheet) return;
+    if (navigationCommand === null || cameraWaitsForInspection) return;
     runThenConsume(
       () => {
         facade.navigateTo(navigationCommand.target, getNavigationPadding?.());
@@ -822,7 +824,7 @@ export function MapWorkspace({
         consumeMapNavigationCommand(navigationCommand.id);
       },
     );
-  }, [cameraWaitsForSheet, facade, getNavigationPadding, navigationCommand]);
+  }, [cameraWaitsForInspection, facade, getNavigationPadding, navigationCommand]);
   // A terrain transition ends by jumping back to the camera it started from, so a fit
   // waits for it, including a restored or shared 3D view that has not entered terrain
   // yet. In 3D the fit then also faces along the track. The startup intent only starts
@@ -839,7 +841,7 @@ export function MapWorkspace({
     if (
       fitBoundsCommand === null ||
       snapshot.lifecycle === 'loading' ||
-      cameraWaitsForSheet ||
+      cameraWaitsForInspection ||
       terrainTransitionPending
     ) {
       return;
@@ -858,7 +860,7 @@ export function MapWorkspace({
       },
     );
   }, [
-    cameraWaitsForSheet,
+    cameraWaitsForInspection,
     facade,
     fitBoundsCommand,
     getNavigationPadding,
@@ -880,7 +882,7 @@ export function MapWorkspace({
       return;
     }
     facade.openPointInspection(pointInspectionCommand.coordinate, {
-      refreshNearbyPoiOnIdle: pointInspectionCommand.refreshNearbyPoiOnIdle,
+      refreshNearbyPoiWhenSettled: pointInspectionCommand.refreshNearbyPoiWhenSettled,
     });
     consumeMapPointInspectionCommand(pointInspectionCommand.id);
   }, [facade, pointInspectionCommand, snapshot.lifecycle]);

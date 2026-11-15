@@ -767,8 +767,10 @@ describe('MapWorkspace', () => {
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
   });
 
-  it('opens a selected result immediately while navigating to it', async () => {
+  it('opens a selected result before starting the camera move to it', async () => {
     const facade = new FakeMapFacade();
+    const open = vi.spyOn(facade, 'openPointInspection');
+    const navigate = vi.spyOn(facade, 'navigateTo');
     renderWithI18n(
       <RuntimeServicesProvider services={createTestServices()}>
         <MapWorkspace
@@ -783,7 +785,7 @@ describe('MapWorkspace', () => {
       requestMapNavigation({ latitude: 41.7, longitude: 44.8, zoom: 13 });
       requestMapPointInspection(
         { latitude: 41.7, longitude: 44.8 },
-        { refreshNearbyPoiOnIdle: true },
+        { refreshNearbyPoiWhenSettled: true },
       );
     });
 
@@ -796,7 +798,13 @@ describe('MapWorkspace', () => {
       ]);
     });
     expect(mapInteractionStore.getState().pointInspectionCommand).toBeNull();
-    expect(facade.pointInspectionOptions).toEqual([{ refreshNearbyPoiOnIdle: true }]);
+    expect(facade.pointInspectionOptions).toEqual([
+      { refreshNearbyPoiWhenSettled: true },
+    ]);
+    // The facade arms the nearby-feature lookup from this camera command.
+    expect(open.mock.invocationCallOrder[0]).toBeLessThan(
+      navigate.mock.invocationCallOrder[0] ?? 0,
+    );
   });
 
   it('on touch, reserves the sheet height before starting a search camera move', async () => {

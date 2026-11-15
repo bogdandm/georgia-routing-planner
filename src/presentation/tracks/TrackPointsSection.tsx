@@ -4,12 +4,10 @@ import AddIcon from '@mui/icons-material/Add';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import OpenWithIcon from '@mui/icons-material/OpenWith';
 import {
   Box,
   Button,
-  ButtonBase,
   IconButton,
   Stack,
   ToggleButton,
@@ -43,6 +41,8 @@ import {
   formatTrackDistance,
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 
 export type TrackPointsLegMode = 'routes' | 'line';
 
@@ -539,7 +539,13 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
   const { i18n, t } = useLingui();
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `track-points-${useId().replaceAll(':', '')}`;
-  const [expanded, setExpanded] = useState(editing);
+  const rememberedExpanded = useUiStore(
+    (state) => state.trackSectionExpanded.points ?? variant === 'plan',
+  );
+  const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
+  // Editing and a chart reveal can open the list without rewriting the saved choice.
+  const [forcedExpanded, setForcedExpanded] = useState(editing);
+  const expanded = forcedExpanded || rememberedExpanded;
   const [observedEditing, setObservedEditing] = useState(editing);
   const [observedReveal, setObservedReveal] = useState(revealRequest);
   const [scrollTop, setScrollTop] = useState(0);
@@ -600,7 +606,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
 
   if (editing !== observedEditing) {
     setObservedEditing(editing);
-    if (editing) setExpanded(true);
+    if (editing) setForcedExpanded(true);
   }
   if (revealRequest !== observedReveal) {
     setObservedReveal(revealRequest);
@@ -615,7 +621,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
         scrollTop,
         viewportHeight,
       );
-      setExpanded(true);
+      setForcedExpanded(true);
       setScrollTop(top);
       setScrollCommand({ top });
     }
@@ -634,7 +640,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
     };
   }, []);
 
-  const open = variant === 'plan' || expanded;
+  const open = expanded;
   const hasRows = layout.rowCount > 0;
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -936,11 +942,6 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
 
   const selectedCount = selection === null ? 0 : selection.last - selection.first + 1;
   const countLabel = numberFormat.format(anchorCount);
-  const heading = (
-    <Typography component="h3" variant="subtitle2">
-      <Trans>Points ({countLabel})</Trans>
-    </Typography>
-  );
 
   return (
     // Grows into the free pane height so a long list does not end above empty space.
@@ -959,39 +960,18 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
           columnGap: 0.5,
         }}
       >
-        {variant === 'plan' ? (
-          <Box sx={{ px: 1 }}>{heading}</Box>
-        ) : (
-          <ButtonBase
-            aria-label={t`Points`}
-            aria-controls={detailsId}
-            aria-expanded={expanded}
-            onClick={() => {
-              setExpanded((current) => !current);
-              setScrollTop(0);
-            }}
-            sx={{
-              minWidth: 0,
-              minHeight: editing ? 32 : 44,
-              justifyContent: 'space-between',
-              px: 1,
-              textAlign: 'left',
-            }}
-          >
-            {heading}
-            <ExpandMoreIcon
-              aria-hidden
-              fontSize="small"
-              sx={{
-                transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: (theme) =>
-                  theme.transitions.create('transform', {
-                    duration: theme.transitions.duration.shortest,
-                  }),
-              }}
-            />
-          </ButtonBase>
-        )}
+        <TrackSectionHeading
+          title={t`Points (${countLabel})`}
+          label={t`Points`}
+          detailsId={detailsId}
+          expanded={expanded}
+          compact={editing}
+          onToggle={() => {
+            setForcedExpanded(false);
+            setSectionExpanded('points', !expanded);
+            setScrollTop(0);
+          }}
+        />
         {variant === 'track' && !editing && onStartEditing !== undefined ? (
           <Tooltip title={t`Edit points`}>
             <span>

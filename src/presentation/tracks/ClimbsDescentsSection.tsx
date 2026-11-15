@@ -4,7 +4,6 @@ import NorthEastIcon from '@mui/icons-material/NorthEast';
 import SouthEastIcon from '@mui/icons-material/SouthEast';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Box,
   ButtonBase,
@@ -14,7 +13,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useId, useState, type ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 
 import {
   gradeBandForGrade,
@@ -26,6 +25,8 @@ import {
   formatTrackGrade,
 } from '@/presentation/tracks/trackFormatters';
 import { appColors } from '@/presentation/theme/appColors';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 
 interface ClimbsDescentsSectionProps {
   readonly recalculating: boolean;
@@ -72,7 +73,8 @@ export function ClimbsDescentsSection({
   onSegmentSelectionChange,
 }: ClimbsDescentsSectionProps): ReactElement {
   const { i18n, t } = useLingui();
-  const [expanded, setExpanded] = useState(false);
+  const expanded = useUiStore((state) => state.trackSectionExpanded.climbs ?? false);
+  const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `climbs-descents-${useId().replaceAll(':', '')}`;
   const directionalSegments = numberedDirectionalSegments(segments);
@@ -88,36 +90,14 @@ export function ClimbsDescentsSection({
           columnGap: 0.5,
         }}
       >
-        <ButtonBase
-          aria-label={t`Climbs & Descents`}
-          aria-controls={detailsId}
-          aria-expanded={expanded}
-          onClick={() => {
-            setExpanded((current) => !current);
+        <TrackSectionHeading
+          title={t`Climbs & Descents`}
+          detailsId={detailsId}
+          expanded={expanded}
+          onToggle={() => {
+            setSectionExpanded('climbs', !expanded);
           }}
-          sx={{
-            minWidth: 0,
-            minHeight: 44,
-            justifyContent: 'space-between',
-            px: 1,
-            textAlign: 'left',
-          }}
-        >
-          <Typography component="h3" variant="subtitle2">
-            <Trans>Climbs & Descents</Trans>
-          </Typography>
-          <ExpandMoreIcon
-            aria-hidden
-            fontSize="small"
-            sx={{
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: (theme) =>
-                theme.transitions.create('transform', {
-                  duration: theme.transitions.duration.shortest,
-                }),
-            }}
-          />
-        </ButtonBase>
+        />
         <Tooltip title={t`Recalculate elevation`}>
           <span>
             <IconButton

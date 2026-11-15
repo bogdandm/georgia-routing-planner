@@ -517,20 +517,22 @@ Results are cached in memory per marker and preference set and drawn on the map 
 while Markers is active. A marker without elevation stores the forecast elevation and
 reports a marker change for synchronization.
 
-While its section is expanded, `TrackWeatherSection` runs the same use case once per
-distinct location with the profile elevation: the highest, median-elevation, and lowest
-profile points from `selectTrackElevationLocations`, plus the timeline checkpoints from
-`planTrackWeatherTimeline` (`application/weather/TrackWeatherForecast.ts`). The timeline
-accumulates DIN 33466 time over profile samples from cumulative distance, ascent, and
-descent and scales it to the stored `estimatedSeconds`, or uses recorded sample
-timestamps when the track has recorded time. Changing the date or the start time only
-reselects hours from the loaded forecasts; collapsing or unmounting aborts pending
-requests. Results stay in component state, keyed by the section's track, and failed
-locations retry on the next expansion. `TracksWorkspaceProvider` loads
-`weather.track-preferences` once and saves every disclosure or weekday change and every
-released start or pace slider of a saved track; changes made before the record loads are
-merged over it, keeping its per-track entries, and then saved. The record's `timelines`
-map holds only tracks whose start or pace differs from the defaults, keyed by saved
+While its weather disclosure is expanded, `TrackWeatherSection` runs the same use case
+once per distinct location with the profile elevation: the highest, median-elevation,
+and lowest profile points from `selectTrackElevationLocations`, plus the timeline
+checkpoints from `planTrackWeatherTimeline`
+(`application/weather/TrackWeatherForecast.ts`). The timeline accumulates DIN 33466 time
+over profile samples from cumulative distance, ascent, and descent and scales it to the
+stored `estimatedSeconds`, or uses recorded sample timestamps unless **Ignore recorded
+time** selects the estimate. Changing the date or start time only reselects hours from
+loaded forecasts; collapsing weather or unmounting aborts pending requests. Results stay
+in component state, keyed by the section's track, and failed locations retry on the next
+expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and saves
+every disclosure or weekday change and every released start or pace slider and timing
+option of a saved track; changes made before the record loads are merged over it,
+keeping its per-track entries, and then saved. The record's `timelines` map holds tracks
+with non-default start, pace, recorded-time override, or relative display, or any
+explicit time-marker visibility choice (a null choice follows Layers), keyed by saved
 track ID. The provider owns the active track's settings: a preview or shared track keeps
 them in memory and they move to the new saved ID on save. Deleting a track from the
 Tracks workspace removes its entry; tracks removed by synchronization leave an unused
@@ -659,13 +661,41 @@ Import parsing, naming, and saving are described in [features.md](features.md) a
 [data-model.md](data-model.md). `TracksWorkspaceProvider` sends validated segments
 grouped per track to `MapLibreLayerController.setImportedTrackGeometry`, which keeps one
 GeoJSON `MultiLineString` with a casing and line plus an endpoint source with each
-track's first and last points, drawn above the line as symbol icons rasterized in
-`trackEndpointIcons.ts`: a white Play triangle on green at the start and a white Stop
+track's first and last points, drawn above the basemap labels as symbol icons rasterized
+in `trackEndpointIcons.ts`: a white Play triangle on green at the start and a white Stop
 square on red at the finish. All share one persistent visibility/opacity pair. In
 multi-track mode the provider passes every ready selected track and fits their combined
 bounds. Route plans and the ruler use `setPlannedLineGeometry` with separate
 `route-plan` and `measurement` sources that share one blue layer structure with numbered
 waypoints.
+
+Time markers are a separate source fed by `setImportedTrackTimeLabels`, so a new route
+start or pace never resends geometry. The provider resolves each shown track's choice
+(its own, else `trackTimeMarkers` in `mapLayerStore` from `map.layers`), runs
+`planTrackClockTimes` on its profile and settings, and places the start and finish times
+on the drawn endpoints, extending outward east or west. The same elapsed-time owner
+drives the independent Route timing controls and forecast checkpoints. Recorded-time
+override and relative display are browser-local choices; relative map times do not shift
+weather arrival times. Two symbol layers above the basemap labels and below the endpoint
+icons draw them on a stretchable rounded-rectangle image with `icon-text-fit`, so
+basemap labels give way to them rather than covering them; endpoint times allow overlap
+and are placed first, and hourly times keep collision detection. Path editing, route
+plans, and tracks without a profile send no labels.
+
+For the active editable track, `planTrackMarkerTimes` associates each marker with the
+nearest discrete route sample within 500 m (first in route order on a tie), then formats
+that point's elapsed time with the same start, pace, recorded-time, and relative-display
+settings. The workspace resolves time visibility against the Layers default and shares
+the resulting ID-to-time map with the marker list and map presentation. No passage time
+or snapped coordinate is stored in track content; hiding times preserves the markers.
+
+`createTrackTimingRoute` reuses a complete filtered profile or retains the full source
+geometry and timestamps when the profile omitted elevation-less spans. The workspace
+memoizes those samples independently of timing settings and shares them with map times,
+marker passage times, and weather checkpoints. Unknown elevation contributes horizontal
+distance only; source-segment boundaries never contribute vertical travel. For a
+forecast checkpoint without elevation, the existing point forecast request resolves
+elevation and the card displays the returned value.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

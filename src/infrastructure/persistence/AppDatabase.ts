@@ -483,6 +483,7 @@ const uiPreferencesSchema = z
     markerSort: z.enum(markerSorts).default('created'),
     trackSort: z.enum(trackSorts).default('created'),
     onboardingCompleted: z.boolean().default(false),
+    trackSectionExpanded: z.record(z.string(), z.boolean()).default({}),
   })
   .strict();
 
@@ -501,6 +502,7 @@ interface UiPreferences {
   readonly markerSort: MarkerSort;
   readonly trackSort: TrackSort;
   readonly onboardingCompleted: boolean;
+  readonly trackSectionExpanded: Readonly<Record<string, boolean>>;
 }
 
 const defaultUiPreferences: UiPreferences = {
@@ -511,6 +513,7 @@ const defaultUiPreferences: UiPreferences = {
   markerSort: 'created',
   trackSort: 'created',
   onboardingCompleted: false,
+  trackSectionExpanded: {},
 };
 const markerWeatherWeekdaySchema: z.ZodType<MarkerWeatherWeekday> = z.union([
   z.literal(0),
@@ -573,6 +576,10 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
               .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
               .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
               .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
+            // Entries saved before these options load with their defaults.
+            ignoreRecordedTime: z.boolean().default(false),
+            timeMarkers: z.boolean().nullable().default(null),
+            relativeTimeMarkers: z.boolean().default(false),
           })
           .strict(),
       )
@@ -652,6 +659,7 @@ const mapLayerPreferencesSchema = z
       })
       .strict(),
     naturalFeaturePatternsIn3d: z.boolean().default(false),
+    trackTimeMarkers: z.boolean().default(true),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     importedTrackOpacity: z.number().min(0).max(1).default(1),
     weatherMapOpacity: z.number().min(0).max(1).default(defaultWeatherMapOpacity),
@@ -724,6 +732,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'track-elevation-gradient': true,
   },
   naturalFeaturePatternsIn3d: false,
+  trackTimeMarkers: true,
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,
   weatherMapOpacity: defaultWeatherMapOpacity,

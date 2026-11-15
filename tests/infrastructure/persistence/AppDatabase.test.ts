@@ -1,6 +1,7 @@
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultTrackWeatherTimelineSettings } from '@/application/weather/TrackWeatherForecast';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
   markerIconKeys,
@@ -137,6 +138,7 @@ describe('AppDatabase', () => {
       markerSort: 'created',
       trackSort: 'created',
       onboardingCompleted: false,
+      trackSectionExpanded: {},
     });
 
     await database.saveUiPreferences({
@@ -147,6 +149,7 @@ describe('AppDatabase', () => {
       markerSort: 'distance',
       trackSort: 'distance',
       onboardingCompleted: true,
+      trackSectionExpanded: { timing: false, markers: true },
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
@@ -157,6 +160,7 @@ describe('AppDatabase', () => {
       markerSort: 'distance',
       trackSort: 'distance',
       onboardingCompleted: true,
+      trackSectionExpanded: { timing: false, markers: true },
     });
 
     await database.saveElevationGradeLegendDismissed(false);
@@ -168,6 +172,7 @@ describe('AppDatabase', () => {
       markerSort: 'distance',
       trackSort: 'distance',
       onboardingCompleted: true,
+      trackSectionExpanded: { timing: false, markers: true },
     });
   });
 
@@ -218,7 +223,19 @@ describe('AppDatabase', () => {
     const saved = {
       expanded: true,
       weekday: 3,
-      timelines: { 'local:kazbegi': { startHour: 6.5, paceFactor: 1.25 } },
+      timelines: {
+        'local:kazbegi': {
+          ...defaultTrackWeatherTimelineSettings,
+          startHour: 6.5,
+          paceFactor: 1.25,
+          ignoreRecordedTime: true,
+          relativeTimeMarkers: true,
+        },
+        'local:gudauri': {
+          ...defaultTrackWeatherTimelineSettings,
+          timeMarkers: false,
+        },
+      },
     } as const;
     await database.saveTrackWeatherPreferences(saved);
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual(saved);
@@ -234,6 +251,26 @@ describe('AppDatabase', () => {
       weekday: 2,
       timelines: {},
     });
+
+    // Older track entries load the default timing and map display options.
+    await database.settings.put({
+      key: 'weather.track-preferences',
+      value: {
+        expanded: true,
+        weekday: 2,
+        timelines: { 'local:kazbegi': { startHour: 7, paceFactor: 1 } },
+      },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toHaveProperty(
+      'timelines',
+      {
+        'local:kazbegi': {
+          ...defaultTrackWeatherTimelineSettings,
+          startHour: 7,
+        },
+      },
+    );
 
     for (const value of [
       { expanded: true, weekday: 7 },
@@ -344,6 +381,7 @@ describe('AppDatabase', () => {
       markerSort: 'created',
       trackSort: 'created',
       onboardingCompleted: false,
+      trackSectionExpanded: {},
     });
   });
 
@@ -510,6 +548,7 @@ describe('AppDatabase', () => {
         'track-elevation-gradient': false,
       },
       naturalFeaturePatternsIn3d: true,
+      trackTimeMarkers: false,
       openStreetMapOpacity: 0.65,
       importedTrackOpacity: 0.7,
       weatherMapOpacity: 0.8,
@@ -597,6 +636,7 @@ describe('AppDatabase', () => {
         'track-elevation-gradient': true,
       },
       naturalFeaturePatternsIn3d: false,
+      trackTimeMarkers: true,
       importedTrackOpacity: 1,
       weatherMapOpacity: 1,
       satelliteRenderingMode: 'auto',

@@ -114,7 +114,7 @@ export interface MapFacade {
   getNearestPoi(coordinate: MapCoordinate): NearbyPoi | null;
   openPointInspection(
     coordinate: MapCoordinate,
-    options?: { readonly refreshNearbyPoiOnIdle?: boolean },
+    options?: { readonly refreshNearbyPoiWhenSettled?: boolean },
   ): void;
   closePointInspection(): void;
 

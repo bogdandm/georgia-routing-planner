@@ -115,10 +115,13 @@ describe('TrackPointsSection', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the plan variant expanded without a pencil', () => {
+  it('opens the plan variant expanded by default without a pencil', () => {
     renderSection({ variant: 'plan', onStartEditing: vi.fn() });
 
-    expect(screen.queryByRole('button', { name: 'Points' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Points' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(
       screen.queryByRole('button', { name: 'Edit points' }),
     ).not.toBeInTheDocument();

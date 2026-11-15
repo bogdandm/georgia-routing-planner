@@ -28,6 +28,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
   let elevationGradeLegendDismissed = false;
   let markerSort: MarkerSort = 'created';
   let trackSort: TrackSort = 'created';
+  let trackSectionExpanded: Readonly<Record<string, boolean>> = {};
   // Unreadable settings must not reopen the tour on every visit.
   let onboardingCompleted = true;
   let locale = resolveAppLocale(null, navigator.languages);
@@ -39,6 +40,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     elevationGradeLegendDismissed = preferences.elevationGradeLegendDismissed;
     markerSort = preferences.markerSort;
     trackSort = preferences.trackSort;
+    trackSectionExpanded = preferences.trackSectionExpanded;
     onboardingCompleted = preferences.onboardingCompleted;
     locale = resolveAppLocale(preferences.locale, navigator.languages);
   } catch {
@@ -53,6 +55,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     elevationGradeLegendDismissed,
     markerSort,
     trackSort,
+    trackSectionExpanded,
     onboardingCompleted,
   });
   const root = createRoot(rootElement);

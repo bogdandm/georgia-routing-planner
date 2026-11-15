@@ -416,6 +416,16 @@ msgstr "The selected weather frame could not be shown."
 msgid "The weather map provider is unavailable."
 msgstr "The weather map provider is unavailable."
 
+#. js-lingui-id: -vD4Tz
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Time markers"
+msgstr "Time markers"
+
+#. js-lingui-id: mBpYkO
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Times on tracks and their markers; each track's Route timing settings take precedence."
+msgstr "Times on tracks and their markers; each track's Route timing settings take precedence."
+
 #. js-lingui-id: W7HXf3
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Track opacity"

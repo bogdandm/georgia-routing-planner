@@ -391,6 +391,11 @@ msgstr "Confirm rename"
 msgid "Copy link"
 msgstr "Copy link"
 
+#. js-lingui-id: y0eFz0
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Count map times from 00:00 at the start"
+msgstr "Count map times from 00:00 at the start"
+
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -621,6 +626,7 @@ msgstr "Elevation profile loading: {percent}"
 
 #. js-lingui-id: oX4-C9
 #: src/presentation/tracks/TrackMarkersSection.tsx
+#: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Elevation unavailable"
 msgstr "Elevation unavailable"
 
@@ -700,6 +706,11 @@ msgstr "Forecast date"
 msgid "Highest"
 msgstr "Highest"
 
+#. js-lingui-id: nyzDhI
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Ignore recorded time"
+msgstr "Ignore recorded time"
+
 #. js-lingui-id: LjMWQs
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Import a GPX, FIT, or KML file to preview it, then save it in this browser."
@@ -734,6 +745,7 @@ msgstr "Loading elevation: {percent}"
 
 #. js-lingui-id: o4EgvC
 #: src/presentation/tracks/TrackMarkersSection.tsx
+#: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Loading elevation…"
 msgstr "Loading elevation…"
 
@@ -1081,6 +1093,11 @@ msgstr "Route ready. Click the map to add another point."
 msgid "Route start"
 msgstr "Route start"
 
+#. js-lingui-id: EaYbJd
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Route timing"
+msgstr "Route timing"
+
 #. js-lingui-id: kKayYU
 #: src/presentation/tracks/RoutePlanControls.tsx
 #: src/presentation/tracks/TrackPointsSection.tsx
@@ -1240,6 +1257,11 @@ msgstr "Sharing could not be updated. Try again."
 msgid "Sharing status could not be loaded."
 msgstr "Sharing status could not be loaded."
 
+#. js-lingui-id: oG5653
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Show times on the map"
+msgstr "Show times on the map"
+
 #. js-lingui-id: qh04VC
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Show track grade legend"
@@ -1269,6 +1291,11 @@ msgstr "Sort tracks. Current: {currentSortLabel}"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Sort: {currentSortLabel}"
 msgstr "Sort: {currentSortLabel}"
+
+#. js-lingui-id: eHx-29
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Source details"
+msgstr "Source details"
 
 #. js-lingui-id: l9wI00
 #: src/presentation/tracks/ElevationProfileChart.tsx

@@ -358,7 +358,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(10);
+    expect(nativeMap.listenerCount()).toBe(11);
 
     nativeMap.fire('style.load');
     expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
@@ -871,7 +871,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(12);
+    expect(nativeMap.listenerCount()).toBe(13);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -883,7 +883,7 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(12);
+    expect(nativeMap.listenerCount()).toBe(13);
     expect(nativeMap.terrainTileUpdates).toEqual([
       ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp?terrainEnableRetry=1'],
     ]);
@@ -1402,7 +1402,7 @@ describe('MapLibreFacade', () => {
     expect(facade.getPointInspection()).toEqual({ status: 'closed' });
   });
 
-  it('opens immediately and refreshes nearby features after search navigation idles', () => {
+  it('refreshes nearby features after the search camera command settles on a loaded basemap, without waiting for idle', () => {
     const services = createTestServices();
     const provider = services.mapProviderConfiguration;
     expect(provider.status).toBe('valid');
@@ -1454,7 +1454,7 @@ describe('MapLibreFacade', () => {
 
     facade.openPointInspection(
       { longitude: 44.80145, latitude: 41.69346 },
-      { refreshNearbyPoiOnIdle: true },
+      { refreshNearbyPoiWhenSettled: true },
     );
 
     expect(popup.show).toHaveBeenCalled();
@@ -1468,6 +1468,15 @@ describe('MapLibreFacade', () => {
       nearbyPoi: { status: 'loading' },
     });
 
+    // The search's camera command can be held (touch sheet, terrain transition) while
+    // the still map keeps rendering the previous view.
+    nativeMap.fire('render');
+    expect(facade.getPointInspection()).toMatchObject({
+      nearbyPoi: { status: 'loading' },
+    });
+
+    facade.navigateTo({ longitude: 44.80145, latitude: 41.69346, zoom: 13 });
+    nativeMap.moving = true;
     nativeMap.sourceFeatures.set('poi', [
       {
         type: 'Feature',
@@ -1480,7 +1489,22 @@ describe('MapLibreFacade', () => {
         layer: { id: 'basemap-poi', type: 'symbol' },
       } as unknown as GeoJSONFeature,
     ]);
-    nativeMap.fire('idle');
+    nativeMap.fire('render');
+    expect(facade.getPointInspection()).toMatchObject({
+      nearbyPoi: { status: 'loading' },
+    });
+
+    // The camera has arrived, but the destination basemap tiles are still loading.
+    nativeMap.moving = false;
+    nativeMap.sourceLoaded = false;
+    nativeMap.fire('render');
+    expect(facade.getPointInspection()).toMatchObject({
+      nearbyPoi: { status: 'loading' },
+    });
+
+    // Other sources may keep MapLibre from ever reaching idle (the fake never loads).
+    nativeMap.sourceLoaded = true;
+    nativeMap.fire('render');
 
     expect(facade.getPointInspection()).toMatchObject({
       elevation: {

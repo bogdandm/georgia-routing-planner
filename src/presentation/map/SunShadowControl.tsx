@@ -336,16 +336,28 @@ function SunShadowPanel({
       </Stack>
       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
         {playback.status === 'loading' ? (
-          <IconButton aria-label={t`Cancel`} onClick={onStop} size="small">
+          <IconButton
+            aria-label={t`Cancel`}
+            color="primary"
+            onClick={onStop}
+            size="small"
+          >
             <CircularProgress size={20} value={percent} variant="determinate" />
           </IconButton>
         ) : playback.status === 'playing' ? (
-          <IconButton aria-label={t`Stop`} onClick={onStop} size="small">
+          <IconButton
+            aria-label={t`Stop`}
+            color="primary"
+            onClick={onStop}
+            size="small"
+          >
             <StopRoundedIcon fontSize="small" />
           </IconButton>
         ) : (
           <IconButton
             aria-label={t`Play the day`}
+            // Enabled actions use the primary ink like the switch and slider; grey means disabled.
+            color="primary"
             disabled={!enabled || unavailable}
             onClick={onPlay}
             size="small"

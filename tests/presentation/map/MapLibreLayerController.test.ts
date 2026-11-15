@@ -1474,20 +1474,20 @@ describe('MapLibreLayerController', () => {
     ]);
 
     controller.setImportedTrackTimeLabels([
-      { kind: 'start', coordinate: [44, 42], time: '09:00' },
-      { kind: 'finish', coordinate: [44.1, 42.1], time: '10:30' },
-      { kind: 'hour', coordinate: [44.07, 42.07], time: '10:00' },
+      { placement: 'right', coordinate: [44, 42], time: '09:00' },
+      { placement: 'left', coordinate: [44.1, 42.1], time: '10:30' },
+      { placement: 'hour', coordinate: [44.07, 42.07], time: '10:00' },
     ]);
 
     expect(map.sources.get(mapSourceIds.importedTrackTimeLabels)).toHaveProperty(
       'data.features',
       [
-        ['start', [44, 42], '09:00'],
-        ['finish', [44.1, 42.1], '10:30'],
+        ['right', [44, 42], '09:00'],
+        ['left', [44.1, 42.1], '10:30'],
         ['hour', [44.07, 42.07], '10:00'],
-      ].map(([kind, coordinates, time]) => ({
+      ].map(([placement, coordinates, time]) => ({
         type: 'Feature',
-        properties: { kind, time },
+        properties: { placement, time },
         geometry: { type: 'Point', coordinates },
       })),
     );
@@ -3850,6 +3850,42 @@ describe('MapLibreLayerController', () => {
       },
     });
     expect(map.getLayersOrder().at(-1)).toBe(savedMarkerLayerIds.symbols);
+
+    controller.setTrackMarkers(
+      trackMarkers.map((marker) => ({ ...marker, passageTime: '11:30' })),
+    );
+    expect(map.sources.get(mapSourceIds.savedMarkers)).toHaveProperty(
+      'data.features.3',
+      {
+        type: 'Feature',
+        id: 'track:alpha',
+        properties: {
+          id: 'alpha',
+          name: 'Track summit · 11:30',
+          iconKey: 'place',
+          colorKey: 'blue',
+          kind: 'track',
+        },
+        geometry: { type: 'Point', coordinates: [44.6, 41.5] },
+      },
+    );
+    controller.setTrackMarkers(
+      trackMarkers.map((marker) => ({ ...marker, passageTime: '27:45' })),
+    );
+    expect(map.sources.get(mapSourceIds.savedMarkers)).toHaveProperty(
+      'data.features.3.properties.name',
+      'Track summit · 27:45',
+    );
+    controller.setTrackMarkers(trackMarkers);
+    expect(map.sources.get(mapSourceIds.savedMarkers)).toHaveProperty(
+      'data.features.3.properties.name',
+      'Track summit',
+    );
+    expect(trackMarkers[0]).toEqual({
+      id: 'alpha',
+      name: 'Track summit',
+      coordinate: [44.6, 41.5],
+    });
 
     controller.setSavedMarkers([]);
     const trackOnlySource = map.sources.get(mapSourceIds.savedMarkers) as {

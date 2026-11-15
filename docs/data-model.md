@@ -77,7 +77,7 @@ upsert.
 | `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                       |
 | `satellite.comparison-layout`   | Comparison grid layout last picked in the sidebar: 2 (2×1) or 4 (2×2); absent until the first pick                                                 |
 | `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                               |
-| `weather.track-preferences`     | Forecast section expansion, preferred weekday, and route start, pace, and time-marker choice per saved track (defaults); never uploaded            |
+| `weather.track-preferences`     | Forecast expansion and weekday; per-track route start, pace, recorded-time override, time visibility, and elapsed-time display; never uploaded     |
 | `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                     |
 | `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                  |
 | `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                           |

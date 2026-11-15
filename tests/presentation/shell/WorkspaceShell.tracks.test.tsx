@@ -47,7 +47,10 @@ import {
   type LocalTrackSummary,
 } from '@test/helpers/workspaceShellTestSupport';
 import { PlaceSearchFailure } from '@/application/ports/PlaceSearchGateway';
-import type { TrackWeatherPreferences } from '@/application/weather/TrackWeatherForecast';
+import {
+  defaultTrackWeatherTimelineSettings,
+  type TrackWeatherPreferences,
+} from '@/application/weather/TrackWeatherForecast';
 
 async function createTrackFolder(
   id: string,
@@ -2027,12 +2030,22 @@ describe('WorkspaceShell', () => {
     const source = savedTrackSummary('local:ridge', 'Ridge trail');
     await services.database.saveLocalTrack(source, savedTrackContent(source.id));
     await services.database.saveLatestOpenedTrackId(source.id);
-    const other = { startHour: 6, paceFactor: 1.5, timeMarkers: null };
+    const other = {
+      ...defaultTrackWeatherTimelineSettings,
+      startHour: 6,
+      paceFactor: 1.5,
+      timeMarkers: null,
+    };
     await services.database.saveTrackWeatherPreferences({
       expanded: false,
       weekday: 6,
       timelines: {
-        [source.id]: { startHour: 7, paceFactor: 1, timeMarkers: null },
+        [source.id]: {
+          ...defaultTrackWeatherTimelineSettings,
+          startHour: 7,
+          paceFactor: 1,
+          timeMarkers: null,
+        },
         'local:other': other,
       },
     });
@@ -2062,7 +2075,14 @@ describe('WorkspaceShell', () => {
     const stored: TrackWeatherPreferences = {
       expanded: false,
       weekday: 6,
-      timelines: { [source.id]: { startHour: 7, paceFactor: 1, timeMarkers: null } },
+      timelines: {
+        [source.id]: {
+          ...defaultTrackWeatherTimelineSettings,
+          startHour: 7,
+          paceFactor: 1,
+          timeMarkers: null,
+        },
+      },
     };
     const load = deferred<TrackWeatherPreferences>();
     vi.spyOn(services.database, 'loadTrackWeatherPreferences').mockReturnValueOnce(
@@ -2117,7 +2137,14 @@ describe('WorkspaceShell', () => {
     expect(saved).toBeDefined();
     await waitFor(async () => {
       expect((await services.database.loadTrackWeatherPreferences()).timelines).toEqual(
-        { [saved?.id ?? '']: { startHour: 8, paceFactor: 1, timeMarkers: null } },
+        {
+          [saved?.id ?? '']: {
+            ...defaultTrackWeatherTimelineSettings,
+            startHour: 8,
+            paceFactor: 1,
+            timeMarkers: null,
+          },
+        },
       );
     });
   });
@@ -2144,9 +2171,9 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(setImportedTrackTimeLabels.mock.lastCall?.[0]).toEqual(
         expect.arrayContaining([
-          { kind: 'start', coordinate: points[0]?.coordinate, time: '09:00' },
+          { placement: 'left', coordinate: points[0]?.coordinate, time: '09:00' },
           expect.objectContaining({
-            kind: 'finish',
+            placement: 'right',
             coordinate: points.at(-1)?.coordinate,
           }),
         ]),
@@ -2164,13 +2191,192 @@ describe('WorkspaceShell', () => {
     await waitFor(async () => {
       expect(
         (await services.database.loadTrackWeatherPreferences()).timelines[source.id],
-      ).toEqual({ startHour: 9, paceFactor: 1, timeMarkers: false });
+      ).toEqual({
+        ...defaultTrackWeatherTimelineSettings,
+        startHour: 9,
+        paceFactor: 1,
+        timeMarkers: false,
+      });
     });
     // The track's own choice outlives a change of the Layers default.
     act(() => {
       mapLayers.setTrackTimeMarkers(true);
     });
     expect(toggle).not.toBeChecked();
+  });
+
+  it('updates active marker passage times from every timing control without moving markers', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setTrackMarkers = vi.spyOn(mapLayers, 'setTrackMarkers');
+    const base = savedTrackSummary('local:ridge', 'Ridge trail');
+    const source = {
+      ...base,
+      metrics: { ...base.metrics, elapsedSeconds: 3600, estimatedSeconds: 7200 },
+    };
+    const nearMarker = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'Summit flag',
+      coordinate: [44.0101, 42.0101] as const,
+    };
+    const farMarker = {
+      id: '00000000-0000-4000-8000-000000000002',
+      name: 'Distant camp',
+      coordinate: [45, 43] as const,
+    };
+    const content = {
+      ...savedTrackContent(source.id),
+      trackPoints: [
+        [
+          {
+            coordinate: [44, 42] as const,
+            elevationMeters: 1000,
+            recordedAt: '2026-07-22T06:00:00.000Z',
+          },
+          {
+            coordinate: [44.01, 42.01] as const,
+            elevationMeters: 1120,
+            recordedAt: '2026-07-22T07:00:00.000Z',
+          },
+        ],
+      ],
+      markers: [nearMarker, farMarker],
+    };
+    await services.database.saveLocalTrack(source, content);
+    await services.database.saveLatestOpenedTrackId(source.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('heading', { name: 'Ridge trail' });
+    await user.click(within(details).getByRole('button', { name: 'Markers' }));
+    const markerList = within(details).getByRole('list', { name: 'Track markers' });
+    expect(await within(markerList).findByText('10:00')).toBeVisible();
+    expect(within(markerList).getByText(farMarker.name)).toBeVisible();
+    await waitFor(() => {
+      expect(setTrackMarkers).toHaveBeenLastCalledWith([
+        { ...nearMarker, passageTime: '10:00' },
+        farMarker,
+      ]);
+    });
+
+    act(() => {
+      mapLayers.setTrackTimeMarkers(false);
+    });
+    expect(within(markerList).queryByText('10:00')).not.toBeInTheDocument();
+    expect(setTrackMarkers).toHaveBeenLastCalledWith(content.markers);
+    act(() => {
+      mapLayers.setTrackTimeMarkers(true);
+    });
+    expect(within(markerList).getByText('10:00')).toBeVisible();
+
+    within(details).getByRole('slider', { name: 'Route start' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(within(markerList).getByText('10:30')).toBeVisible();
+    within(details).getByRole('slider', { name: 'Adjust pace' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(within(markerList).getByText('10:33')).toBeVisible();
+    await user.click(
+      within(details).getByRole('checkbox', { name: 'Ignore recorded time' }),
+    );
+    expect(within(markerList).getByText('11:36')).toBeVisible();
+    await user.click(
+      within(details).getByRole('checkbox', {
+        name: 'Count map times from 00:00 at the start',
+      }),
+    );
+    expect(within(markerList).getByText('02:06')).toBeVisible();
+    expect(setTrackMarkers).toHaveBeenLastCalledWith([
+      { ...nearMarker, passageTime: '02:06' },
+      farMarker,
+    ]);
+    await user.click(
+      within(details).getByRole('checkbox', { name: 'Show times on the map' }),
+    );
+    expect(within(markerList).queryByText('02:06')).not.toBeInTheDocument();
+    expect(within(markerList).getByText(nearMarker.name)).toBeVisible();
+    expect(within(markerList).getByText(farMarker.name)).toBeVisible();
+    expect(setTrackMarkers).toHaveBeenLastCalledWith(content.markers);
+    expect((await services.database.loadLocalTrackContent(source.id)).markers).toEqual(
+      content.markers,
+    );
+  });
+
+  it('keeps marker and endpoint times on the full recording when elevation covers only its middle', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const labels = vi.spyOn(mapLayers, 'setImportedTrackTimeLabels');
+    const base = savedTrackSummary('local:partial', 'Partial elevation');
+    const source = {
+      ...base,
+      metrics: {
+        ...base.metrics,
+        elapsedSeconds: 10800,
+        recordedStartAt: '2026-07-22T05:00:00.000Z',
+      },
+    };
+    const content = {
+      ...savedTrackContent(source.id),
+      trackPoints: [
+        [
+          { coordinate: [44, 42] as const, recordedAt: '2026-07-22T05:00:00.000Z' },
+          {
+            coordinate: [44.02, 42] as const,
+            elevationMeters: 1000,
+            recordedAt: '2026-07-22T06:00:00.000Z',
+          },
+          {
+            coordinate: [44.04, 42] as const,
+            elevationMeters: 1000,
+            recordedAt: '2026-07-22T07:00:00.000Z',
+          },
+          { coordinate: [44.06, 42] as const, recordedAt: '2026-07-22T08:00:00.000Z' },
+        ],
+      ],
+      markers: [
+        {
+          id: '00000000-0000-4000-8000-000000000001',
+          name: 'Before elevation',
+          coordinate: [44, 42] as const,
+        },
+        {
+          id: '00000000-0000-4000-8000-000000000002',
+          name: 'First elevation',
+          coordinate: [44.02, 42] as const,
+        },
+      ],
+    };
+    await services.database.saveLocalTrack(source, content);
+    await services.database.saveLatestOpenedTrackId(source.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('heading', { name: source.name });
+    await user.click(within(details).getByRole('button', { name: 'Markers' }));
+    const markerList = within(details).getByRole('list', { name: 'Track markers' });
+    expect(await within(markerList).findByText('09:00')).toBeVisible();
+    expect(within(markerList).getByText('10:00')).toBeVisible();
+    expect(within(details).getByText(/3h 0m in total/)).toBeVisible();
+    await waitFor(() => {
+      expect(labels).toHaveBeenLastCalledWith([
+        { placement: 'left', coordinate: [44, 42], time: '09:00' },
+        { placement: 'right', coordinate: [44.06, 42], time: '12:00' },
+        { placement: 'hour', coordinate: [44.02, 42], time: '10:00' },
+        { placement: 'hour', coordinate: [44.04, 42], time: '11:00' },
+      ]);
+    });
+    await user.click(within(details).getByRole('button', { name: 'Weather forecast' }));
+    const forecast = within(details).getByRole('list', {
+      name: 'Forecast along the route',
+    });
+    expect(within(forecast).getByText('09:00')).toBeVisible();
+    expect(within(forecast).getByText('12:00')).toBeVisible();
+    expect(
+      await within(forecast).findAllByRole('article', { name: /forecast$/ }),
+    ).toHaveLength(2);
   });
 
   it('publishes whole-track grade colors for flat macro ranges', async () => {

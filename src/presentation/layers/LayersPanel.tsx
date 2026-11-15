@@ -790,7 +790,7 @@ export function LayersPanel() {
                       color="text.secondary"
                       sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
                     >
-                      {t`Start, finish, and full-hour times on tracks; each track's weather forecast can override this.`}
+                      {t`Times on tracks and their markers; each track's Route timing settings take precedence.`}
                     </Typography>
                   </Box>
                 ) : null}

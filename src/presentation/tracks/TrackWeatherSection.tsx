@@ -40,6 +40,8 @@ import {
   trackWeatherDates,
   trackWeatherLocalTime,
   trackWeatherWeekday,
+  type TrackElevationLocations,
+  type TrackTimingRoute,
   type TrackWeatherCheckpoint,
   type TrackWeatherLocation,
   type TrackWeatherPreferences,
@@ -73,7 +75,8 @@ const checkpointHeaderWidth = 62;
 
 function locationKey(location: TrackWeatherLocation): string {
   const [longitude, latitude] = location.coordinate;
-  return `${longitude.toFixed(5)},${latitude.toFixed(5)},${Math.round(location.elevationMeters).toString()}`;
+  const elevation = location.elevationMeters;
+  return `${longitude.toFixed(5)},${latitude.toFixed(5)},${elevation === undefined ? '' : Math.round(elevation).toString()}`;
 }
 
 /** Browser-local calendar date; forecast dates are labels in the track's timezone. */
@@ -109,6 +112,7 @@ function formatStartHour(hour: number): string {
 interface TrackWeatherSectionProps {
   readonly profile: ElevationProfile;
   readonly metrics: TrackStatsMetrics;
+  readonly timingRoute: TrackTimingRoute;
   /** Null while the stored preferences load; the section then stays collapsed. */
   readonly preferences: TrackWeatherPreferences | null;
   readonly onPreferencesChange: (preferences: TrackWeatherPreferences) => void;
@@ -118,12 +122,13 @@ interface TrackWeatherSectionProps {
 }
 
 /**
- * Forecasts at the track's highest, median, and lowest elevations and, for day hikes,
- * where the hiker is expected every three hours. Forecasts load only while expanded.
+ * Independent route timing controls and forecasts at the track's elevation points
+ * and day-hike checkpoints. Only the weather section gates forecast requests.
  */
 export function TrackWeatherSection({
   profile,
   metrics,
+  timingRoute,
   preferences,
   onPreferencesChange,
   timelineSettings,
@@ -157,8 +162,36 @@ export function TrackWeatherSection({
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const startLabelId = `${detailsId}-start`;
   const timeline = useMemo(
-    () => planTrackWeatherTimeline(profile, metrics, paceFactor),
-    [metrics, paceFactor, profile],
+    () =>
+      planTrackWeatherTimeline(timingRoute, metrics, {
+        paceFactor,
+        ignoreRecordedTime: timelineSettings.ignoreRecordedTime,
+      }),
+    [metrics, paceFactor, timingRoute, timelineSettings.ignoreRecordedTime],
+  );
+  const timeMarkers = timelineSettings.timeMarkers ?? defaultTimeMarkers;
+  const timelineCheckbox = (
+    label: string,
+    checked: boolean,
+    change: (checked: boolean) => TrackWeatherTimelineSettings,
+    disabled = false,
+  ) => (
+    <FormControlLabel
+      sx={{ m: 0 }}
+      slotProps={{ typography: { variant: 'body2' } }}
+      disabled={disabled}
+      control={
+        <Checkbox
+          size="small"
+          sx={{ p: 0, mr: 1 }}
+          checked={checked}
+          onChange={(event) => {
+            onTimelineSettingsChange(change(event.target.checked));
+          }}
+        />
+      }
+      label={label}
+    />
   );
   const locations = useMemo(() => {
     const all: TrackWeatherLocation[] = [
@@ -194,10 +227,12 @@ export function TrackWeatherSection({
       const [longitude, latitude] = location.coordinate;
       pointWeatherForecast
         .execute(
-          {
-            coordinate: { longitude, latitude },
-            elevationMeters: location.elevationMeters,
-          },
+          location.elevationMeters === undefined
+            ? { coordinate: { longitude, latitude } }
+            : {
+                coordinate: { longitude, latitude },
+                elevationMeters: location.elevationMeters,
+              },
           controller.signal,
         )
         .then(
@@ -266,7 +301,10 @@ export function TrackWeatherSection({
     window.history.pushState(window.history.state, '', nextUrl);
   };
 
-  const elevationCard = (title: string, location: TrackWeatherLocation) => {
+  const elevationCard = (
+    title: string,
+    location: TrackElevationLocations['highest'],
+  ) => {
     const elevation = formatTrackElevation(location.elevationMeters, i18n);
     const state = forecastFor(location);
     const day =
@@ -316,7 +354,16 @@ export function TrackWeatherSection({
       startHour,
       checkpoint.elapsedSeconds,
     ).slice(11, 16);
-    const elevation = formatTrackElevation(checkpoint.elevationMeters, i18n);
+    const state = forecastFor(checkpoint);
+    const elevationMeters =
+      checkpoint.elevationMeters ??
+      (state?.status === 'ready' ? state.forecast.elevationMeters : undefined);
+    const elevation =
+      elevationMeters !== undefined
+        ? formatTrackElevation(elevationMeters, i18n)
+        : state === undefined
+          ? t`Loading elevation…`
+          : t`Elevation unavailable`;
     const distance = formatTrackDistance(checkpoint.distanceMeters, i18n);
     const place =
       checkpoint.kind === 'start'
@@ -324,7 +371,6 @@ export function TrackWeatherSection({
         : checkpoint.kind === 'finish'
           ? t`Finish`
           : t`At ${distance}`;
-    const state = forecastFor(checkpoint);
     const summary =
       state?.status === 'ready'
         ? summarizeTrackWeatherCheckpoint(
@@ -378,202 +424,204 @@ export function TrackWeatherSection({
   );
   const duration = formatTrackDuration(timeline.durationSeconds, i18n);
   const timelineCaption =
-    timeline.status === 'too-long'
-      ? t`Available for day hikes shorter than ${maximumDistance} and 12 hours.`
-      : paceFactor !== 1
-        ? t`Starting at ${startTime} at the adjusted pace, about ${duration} in total.`
-        : timeline.durationSource === 'recorded'
-          ? t`Starting at ${startTime} at the recorded pace, ${duration} in total.`
-          : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
+    paceFactor !== 1
+      ? t`Starting at ${startTime} at the adjusted pace, about ${duration} in total.`
+      : timeline.durationSource === 'recorded'
+        ? t`Starting at ${startTime} at the recorded pace, ${duration} in total.`
+        : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
   const paceFormat = new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 2 });
   const formatPace = (value: number) => `×${paceFormat.format(value)}`;
 
   return (
-    <Box component="section" data-tour="track-weather">
-      <ButtonBase
-        aria-label={t`Weather forecast`}
-        aria-controls={detailsId}
-        aria-expanded={expanded}
-        onClick={() => {
-          onPreferencesChange({ ...current, expanded: !expanded });
-        }}
-        sx={{
-          width: '100%',
-          minHeight: 44,
-          justifyContent: 'space-between',
-          px: 1,
-          textAlign: 'left',
-        }}
-      >
-        <Typography component="h3" variant="subtitle2">
-          <Trans>Weather forecast</Trans>
+    <>
+      <Stack component="section" spacing={1} sx={{ px: 1, pb: 2 }}>
+        <Typography component="h3" variant="subtitle2" sx={{ py: 1.5 }}>
+          <Trans>Route timing</Trans>
         </Typography>
-        <ExpandMoreIcon
-          aria-hidden
-          fontSize="small"
-          sx={{
-            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: (theme) =>
-              theme.transitions.create('transform', {
-                duration: theme.transitions.duration.shortest,
-              }),
-          }}
-        />
-      </ButtonBase>
-      {expanded ? (
-        <Stack id={detailsId} spacing={1.5} sx={{ px: 1, pb: 1 }}>
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
-            size="small"
-            aria-label={t`Forecast date`}
-            value={selectedDate}
-            onChange={(_event, value: string | null) => {
-              if (value !== null) {
-                onPreferencesChange({
-                  ...current,
-                  weekday: trackWeatherWeekday(value),
-                });
-              }
-            }}
-          >
-            {dates.map((date) => (
-              <ToggleButton
-                key={date}
-                value={date}
-                aria-label={fullDateFormat.format(utcDate(date))}
-                sx={{ flexDirection: 'column', px: 0, py: 0.5, lineHeight: 1.2 }}
-              >
-                <Box component="span" sx={{ fontWeight: 700 }}>
-                  {weekdayFormat.format(utcDate(date))}
-                </Box>
-                <Box component="span">{Number(date.slice(8, 10))}</Box>
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-          <Stack spacing={1}>
-            <Typography component="h4" variant="subtitle2">
-              <Trans>By elevation</Trans>
+        {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
+          ...timelineSettings,
+          timeMarkers: checked,
+        }))}
+        {timelineCheckbox(
+          t`Count map times from 00:00 at the start`,
+          timelineSettings.relativeTimeMarkers,
+          (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
+          !timeMarkers,
+        )}
+        {metrics.elapsedSeconds === undefined
+          ? null
+          : timelineCheckbox(
+              t`Ignore recorded time`,
+              timelineSettings.ignoreRecordedTime,
+              (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
+            )}
+        <Box>
+          <Typography id={startLabelId} variant="caption" color="text.secondary">
+            <Trans>Route start</Trans>
+          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              {formatStartHour(0)}
             </Typography>
-            <Stack role="list" aria-label={t`Forecast by elevation`} spacing={1}>
-              {elevationCard(t`Highest`, elevationLocations.highest)}
-              {elevationCard(t`Median`, elevationLocations.median)}
-              {elevationCard(t`Lowest`, elevationLocations.lowest)}
+            <Slider
+              size="small"
+              aria-labelledby={startLabelId}
+              min={0}
+              max={TRACK_WEATHER_LATEST_START_HOUR}
+              step={TRACK_WEATHER_START_HOUR_STEP}
+              marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
+              value={startHour}
+              valueLabelDisplay="auto"
+              valueLabelFormat={formatStartHour}
+              getAriaValueText={formatStartHour}
+              onChange={(_event, value) => {
+                setStartDraft(value);
+              }}
+              onChangeCommitted={(_event, value) => {
+                setStartDraft(null);
+                onTimelineSettingsChange({
+                  ...timelineSettings,
+                  startHour: value,
+                });
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+            </Typography>
+          </Stack>
+        </Box>
+        <Box>
+          <Typography id={paceLabelId} variant="caption" color="text.secondary">
+            <Trans>Adjust pace</Trans>
+          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              <Trans>Faster</Trans>
+            </Typography>
+            <Slider
+              size="small"
+              aria-labelledby={paceLabelId}
+              min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
+              max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
+              step={TRACK_WEATHER_PACE_FACTOR_STEP}
+              marks={[{ value: 1 }]}
+              value={paceDraft ?? paceFactor}
+              valueLabelDisplay="auto"
+              valueLabelFormat={formatPace}
+              getAriaValueText={formatPace}
+              onChange={(_event, value) => {
+                setPaceDraft(value);
+              }}
+              onChangeCommitted={(_event, value) => {
+                setPaceDraft(null);
+                // Keyboard steps accumulate floating-point error (×0.5 plus ten
+                // steps is 1.0000000000000004); hundredths keep exact steps.
+                onTimelineSettingsChange({
+                  ...timelineSettings,
+                  paceFactor: Math.round(value * 100) / 100,
+                });
+              }}
+            />
+            <Typography variant="caption" color="text.secondary">
+              <Trans>Slower</Trans>
+            </Typography>
+          </Stack>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          {timelineCaption}
+        </Typography>
+      </Stack>
+      <Box component="section" data-tour="track-weather">
+        <ButtonBase
+          aria-label={t`Weather forecast`}
+          aria-controls={detailsId}
+          aria-expanded={expanded}
+          onClick={() => {
+            onPreferencesChange({ ...current, expanded: !expanded });
+          }}
+          sx={{
+            width: '100%',
+            minHeight: 44,
+            justifyContent: 'space-between',
+            px: 1,
+            textAlign: 'left',
+          }}
+        >
+          <Typography component="h3" variant="subtitle2">
+            <Trans>Weather forecast</Trans>
+          </Typography>
+          <ExpandMoreIcon
+            aria-hidden
+            fontSize="small"
+            sx={{
+              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: (theme) =>
+                theme.transitions.create('transform', {
+                  duration: theme.transitions.duration.shortest,
+                }),
+            }}
+          />
+        </ButtonBase>
+        {expanded ? (
+          <Stack id={detailsId} spacing={1.5} sx={{ px: 1, pb: 1 }}>
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              aria-label={t`Forecast date`}
+              value={selectedDate}
+              onChange={(_event, value: string | null) => {
+                if (value !== null) {
+                  onPreferencesChange({
+                    ...current,
+                    weekday: trackWeatherWeekday(value),
+                  });
+                }
+              }}
+            >
+              {dates.map((date) => (
+                <ToggleButton
+                  key={date}
+                  value={date}
+                  aria-label={fullDateFormat.format(utcDate(date))}
+                  sx={{ flexDirection: 'column', px: 0, py: 0.5, lineHeight: 1.2 }}
+                >
+                  <Box component="span" sx={{ fontWeight: 700 }}>
+                    {weekdayFormat.format(utcDate(date))}
+                  </Box>
+                  <Box component="span">{Number(date.slice(8, 10))}</Box>
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            <Stack spacing={1}>
+              <Typography component="h4" variant="subtitle2">
+                <Trans>By elevation</Trans>
+              </Typography>
+              <Stack role="list" aria-label={t`Forecast by elevation`} spacing={1}>
+                {elevationCard(t`Highest`, elevationLocations.highest)}
+                {elevationCard(t`Median`, elevationLocations.median)}
+                {elevationCard(t`Lowest`, elevationLocations.lowest)}
+              </Stack>
+            </Stack>
+            <Stack spacing={1}>
+              <Typography component="h4" variant="subtitle2">
+                <Trans>Along the route</Trans>
+              </Typography>
+              {timeline.status === 'available' ? (
+                <Stack role="list" aria-label={t`Forecast along the route`} spacing={1}>
+                  {timeline.checkpoints.map(checkpointCard)}
+                </Stack>
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>
+                    Available for day hikes shorter than {maximumDistance} and 12 hours.
+                  </Trans>
+                </Typography>
+              )}
             </Stack>
           </Stack>
-          <Stack spacing={1}>
-            <Typography component="h4" variant="subtitle2">
-              <Trans>Along the route</Trans>
-            </Typography>
-            <FormControlLabel
-              sx={{ m: 0 }}
-              slotProps={{ typography: { variant: 'body2' } }}
-              control={
-                <Checkbox
-                  size="small"
-                  sx={{ p: 0, mr: 1 }}
-                  checked={timelineSettings.timeMarkers ?? defaultTimeMarkers}
-                  onChange={(event) => {
-                    onTimelineSettingsChange({
-                      ...timelineSettings,
-                      timeMarkers: event.target.checked,
-                    });
-                  }}
-                />
-              }
-              label={t`Show times on the map`}
-            />
-            <Box>
-              <Typography id={startLabelId} variant="caption" color="text.secondary">
-                <Trans>Route start</Trans>
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1.5}
-                sx={{ alignItems: 'center', px: 0.5 }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  {formatStartHour(0)}
-                </Typography>
-                <Slider
-                  size="small"
-                  aria-labelledby={startLabelId}
-                  min={0}
-                  max={TRACK_WEATHER_LATEST_START_HOUR}
-                  step={TRACK_WEATHER_START_HOUR_STEP}
-                  marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
-                  value={startHour}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatStartHour}
-                  getAriaValueText={formatStartHour}
-                  onChange={(_event, value) => {
-                    setStartDraft(value);
-                  }}
-                  onChangeCommitted={(_event, value) => {
-                    setStartDraft(null);
-                    onTimelineSettingsChange({
-                      ...timelineSettings,
-                      startHour: value,
-                    });
-                  }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
-                </Typography>
-              </Stack>
-            </Box>
-            <Box>
-              <Typography id={paceLabelId} variant="caption" color="text.secondary">
-                <Trans>Adjust pace</Trans>
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1.5}
-                sx={{ alignItems: 'center', px: 0.5 }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  <Trans>Faster</Trans>
-                </Typography>
-                <Slider
-                  size="small"
-                  aria-labelledby={paceLabelId}
-                  min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
-                  max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
-                  step={TRACK_WEATHER_PACE_FACTOR_STEP}
-                  marks={[{ value: 1 }]}
-                  value={paceDraft ?? paceFactor}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatPace}
-                  getAriaValueText={formatPace}
-                  onChange={(_event, value) => {
-                    setPaceDraft(value);
-                  }}
-                  onChangeCommitted={(_event, value) => {
-                    setPaceDraft(null);
-                    // Keyboard steps accumulate floating-point error (×0.5 plus ten
-                    // steps is 1.0000000000000004); hundredths keep exact steps.
-                    onTimelineSettingsChange({
-                      ...timelineSettings,
-                      paceFactor: Math.round(value * 100) / 100,
-                    });
-                  }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  <Trans>Slower</Trans>
-                </Typography>
-              </Stack>
-            </Box>
-            <Typography variant="caption" color="text.secondary">
-              {timelineCaption}
-            </Typography>
-            {timeline.status === 'available' ? (
-              <Stack role="list" aria-label={t`Forecast along the route`} spacing={1}>
-                {timeline.checkpoints.map(checkpointCard)}
-              </Stack>
-            ) : null}
-          </Stack>
-        </Stack>
-      ) : null}
-    </Box>
+        ) : null}
+      </Box>
+    </>
   );
 }

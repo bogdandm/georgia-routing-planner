@@ -573,8 +573,10 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
               .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
               .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
               .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
-            // Entries saved before map time markers follow the Layers default.
+            // Entries saved before these options load with their defaults.
+            ignoreRecordedTime: z.boolean().default(false),
             timeMarkers: z.boolean().nullable().default(null),
+            relativeTimeMarkers: z.boolean().default(false),
           })
           .strict(),
       )

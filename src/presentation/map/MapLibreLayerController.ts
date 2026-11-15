@@ -747,9 +747,15 @@ interface MissingSavedMarkerImage extends Pick<SavedMarker, 'iconKey' | 'colorKe
   readonly imageId: string;
 }
 
+/** Transient map label data; passage times never become part of stored markers. */
+export interface TrackMapMarker extends TrackMarker {
+  readonly passageTime?: string;
+}
+
 interface RenderedMarker {
   readonly id: string;
   readonly name: string;
+  readonly passageTime?: string;
   readonly coordinate: readonly [number, number];
   readonly iconKey: SavedMarker['iconKey'];
   readonly colorKey: SavedMarker['colorKey'];
@@ -1015,7 +1021,7 @@ export class MapLibreLayerController {
     { readonly layer: unknown; readonly value: number }
   >();
   #savedMarkers: readonly SavedMarker[] = [];
-  #trackMarkers: readonly TrackMarker[] = [];
+  #trackMarkers: readonly TrackMapMarker[] = [];
   #savedMarkerGeneration = 0;
   readonly #savedMarkerImages = new Map<string, SavedMarkerImageState>();
   readonly #savedMarkerImageIds = new Set<string>();
@@ -1639,7 +1645,7 @@ export class MapLibreLayerController {
   /** Clock times drawn on the imported tracks; independent of their geometry. */
   public setImportedTrackTimeLabels(labels: readonly ImportedTrackTimeLabel[]): void {
     this.#importedTrackTimeLabels = labels.map((label) => ({
-      kind: label.kind,
+      placement: label.placement,
       coordinate: [label.coordinate[0], label.coordinate[1]],
       time: label.time,
     }));
@@ -1843,7 +1849,7 @@ export class MapLibreLayerController {
     this.reconcileSavedMarkers();
   }
 
-  public setTrackMarkers(markers: readonly TrackMarker[]): void {
+  public setTrackMarkers(markers: readonly TrackMapMarker[]): void {
     this.#trackMarkers = markers
       .map((marker) => ({
         ...marker,
@@ -3699,7 +3705,10 @@ export class MapLibreLayerController {
           id: `${marker.kind}:${marker.id}`,
           properties: {
             id: marker.id,
-            name: marker.name,
+            name:
+              marker.passageTime === undefined
+                ? marker.name
+                : `${marker.name} · ${marker.passageTime}`,
             iconKey: marker.iconKey,
             colorKey: marker.colorKey,
             kind: marker.kind,

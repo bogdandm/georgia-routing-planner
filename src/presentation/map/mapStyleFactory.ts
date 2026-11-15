@@ -139,9 +139,9 @@ export function createImportedTrackEndpointLayer(
 
 /** A clock time on a track: beside its start or finish icon, or at a full hour. */
 export interface ImportedTrackTimeLabel {
-  readonly kind: TrackEndpointKind | 'hour';
+  /** Hourly times centre on their point; endpoint times extend to one side of the icon. */
+  readonly placement: 'hour' | 'left' | 'right';
   readonly coordinate: readonly [number, number];
-  /** Local `HH:mm`. */
   readonly time: string;
 }
 
@@ -149,13 +149,13 @@ export function createImportedTrackTimeLabelCollection(
   labels: readonly ImportedTrackTimeLabel[],
 ): FeatureCollection<
   Point,
-  { readonly kind: ImportedTrackTimeLabel['kind']; readonly time: string }
+  { readonly placement: ImportedTrackTimeLabel['placement']; readonly time: string }
 > {
   return {
     type: 'FeatureCollection',
-    features: labels.map(({ kind, coordinate, time }) => ({
+    features: labels.map(({ placement, coordinate, time }) => ({
       type: 'Feature',
-      properties: { kind, time },
+      properties: { placement, time },
       geometry: { type: 'Point', coordinates: [...coordinate] },
     })),
   };
@@ -167,8 +167,7 @@ const endpointTimeOffsetEms = 0.9;
 /**
  * Time labels in white on track-coloured rounded rectangles; the map must provide
  * `importedTrackTimeLabelImageId`. They sit above the basemap labels, so those yield to
- * them. Endpoint times always show, the start's to the right of its icon and the
- * finish's to the left, so a loop's shared point shows both. Hourly times yield to the
+ * them. Endpoint times always show on their side of the icon. Hourly times yield to the
  * endpoint icons and times.
  */
 export function createImportedTrackTimeLayer(
@@ -177,7 +176,7 @@ export function createImportedTrackTimeLayer(
   opacity: number,
 ): SymbolLayerSpecification {
   const endpoint = labels === 'endpoint';
-  const isHour: ExpressionSpecification = ['==', ['get', 'kind'], 'hour'];
+  const isHour: ExpressionSpecification = ['==', ['get', 'placement'], 'hour'];
   const layout: NonNullable<SymbolLayerSpecification['layout']> = {
     visibility: visible ? 'visible' : 'none',
     'text-field': ['get', 'time'],
@@ -188,11 +187,11 @@ export function createImportedTrackTimeLayer(
     'icon-text-fit-padding': [1, 5, 1, 5],
   };
   if (endpoint) {
-    layout['text-anchor'] = ['match', ['get', 'kind'], 'start', 'left', 'right'];
+    layout['text-anchor'] = ['match', ['get', 'placement'], 'right', 'left', 'right'];
     layout['text-offset'] = [
       'match',
-      ['get', 'kind'],
-      'start',
+      ['get', 'placement'],
+      'right',
       ['literal', [endpointTimeOffsetEms, 0]],
       ['literal', [-endpointTimeOffsetEms, 0]],
     ];

@@ -1,6 +1,7 @@
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultTrackWeatherTimelineSettings } from '@/application/weather/TrackWeatherForecast';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
   markerIconKeys,
@@ -219,8 +220,17 @@ describe('AppDatabase', () => {
       expanded: true,
       weekday: 3,
       timelines: {
-        'local:kazbegi': { startHour: 6.5, paceFactor: 1.25, timeMarkers: null },
-        'local:gudauri': { startHour: 9, paceFactor: 1, timeMarkers: false },
+        'local:kazbegi': {
+          ...defaultTrackWeatherTimelineSettings,
+          startHour: 6.5,
+          paceFactor: 1.25,
+          ignoreRecordedTime: true,
+          relativeTimeMarkers: true,
+        },
+        'local:gudauri': {
+          ...defaultTrackWeatherTimelineSettings,
+          timeMarkers: false,
+        },
       },
     } as const;
     await database.saveTrackWeatherPreferences(saved);
@@ -238,7 +248,7 @@ describe('AppDatabase', () => {
       timelines: {},
     });
 
-    // Track entries stored before map time markers follow the Layers default.
+    // Older track entries load the default timing and map display options.
     await database.settings.put({
       key: 'weather.track-preferences',
       value: {
@@ -250,7 +260,12 @@ describe('AppDatabase', () => {
     });
     await expect(database.loadTrackWeatherPreferences()).resolves.toHaveProperty(
       'timelines',
-      { 'local:kazbegi': { startHour: 7, paceFactor: 1, timeMarkers: null } },
+      {
+        'local:kazbegi': {
+          ...defaultTrackWeatherTimelineSettings,
+          startHour: 7,
+        },
+      },
     );
 
     for (const value of [

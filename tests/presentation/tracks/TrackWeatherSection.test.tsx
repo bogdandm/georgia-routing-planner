@@ -78,6 +78,7 @@ function renderSection(
       <TrackWeatherSection
         profile={ridge}
         metrics={metrics}
+        timingRoute={ridge}
         preferences={preferences}
         onPreferencesChange={(next) => {
           onPreferencesChange(next);
@@ -108,6 +109,7 @@ function expandedSection(metrics: TrackStatsMetrics) {
         <TrackWeatherSection
           profile={ridge}
           metrics={metrics}
+          timingRoute={ridge}
           preferences={expandedPreferences}
           onPreferencesChange={vi.fn()}
           timelineSettings={defaultTrackWeatherTimelineSettings}
@@ -176,6 +178,52 @@ describe('TrackWeatherSection', () => {
     ).toHaveLength(3);
     // Three elevation points plus three checkpoints; the start is also the lowest point.
     expect(execute).toHaveBeenCalledTimes(5);
+  });
+
+  it('adjusts route timing with weather closed and uses it when forecasts open', async () => {
+    const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
+    const user = userEvent.setup();
+    renderSection(null);
+
+    const timing = screen.getByRole('heading', { name: 'Route timing', level: 3 });
+    const disclosure = screen.getByRole('button', { name: 'Weather forecast' });
+    expect(
+      timing.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    screen.getByRole('slider', { name: 'Route start' }).focus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    screen.getByRole('slider', { name: 'Adjust pace' }).focus();
+    await user.keyboard('{Home}');
+    await user.click(screen.getByRole('checkbox', { name: 'Show times on the map' }));
+    expect(
+      screen.getByRole('checkbox', { name: 'Show times on the map' }),
+    ).not.toBeChecked();
+    expect(execute).not.toHaveBeenCalled();
+
+    await user.click(disclosure);
+    const route = screen.getByRole('list', { name: 'Forecast along the route' });
+    expect(
+      within(route)
+        .getAllByRole('group')
+        .map((card) => card.getAttribute('aria-label')),
+    ).toEqual(['10:00, Start, 2,000 m', '12:45, Finish, 2,400 m']);
+    expect(
+      await within(route).findAllByRole('article', { name: /forecast$/ }),
+    ).toHaveLength(2);
+
+    await user.click(disclosure);
+    expect(
+      screen.queryByRole('list', { name: 'Forecast along the route' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Route start' })).toHaveAttribute(
+      'aria-valuetext',
+      '10:00',
+    );
+    expect(screen.getByRole('slider', { name: 'Adjust pace' })).toHaveAttribute(
+      'aria-valuetext',
+      '×0.5',
+    );
   });
 
   it('opens the full forecast at a clicked location in Weather', async () => {
@@ -265,6 +313,7 @@ describe('TrackWeatherSection', () => {
     // Arrivals after midnight fall on the next date; only the time of day is shown.
     expect(labels()[2]).toBe('05:00, Finish, 2,400 m');
     expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      ...defaultTrackWeatherTimelineSettings,
       startHour: 23.5,
       paceFactor: 1,
       timeMarkers: null,
@@ -274,6 +323,7 @@ describe('TrackWeatherSection', () => {
   it('opens on the given start time and pace and reports released values on the step grid', async () => {
     const user = userEvent.setup();
     const { onTimelineSettingsChange } = renderSection(expandedPreferences, dayHike, {
+      ...defaultTrackWeatherTimelineSettings,
       startHour: 7,
       paceFactor: 2,
       timeMarkers: null,
@@ -295,6 +345,7 @@ describe('TrackWeatherSection', () => {
     await user.keyboard('{Home}');
     await user.keyboard(Array.from({ length: 10 }, () => '{ArrowRight}').join(''));
     expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      ...defaultTrackWeatherTimelineSettings,
       startHour: 7,
       paceFactor: 1,
       timeMarkers: null,

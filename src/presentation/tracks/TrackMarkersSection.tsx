@@ -38,6 +38,7 @@ function markerElevationKey(marker: TrackMarker): string {
 interface TrackMarkersSectionProps {
   readonly elevationProvider: ElevationProvider | null;
   readonly markers: readonly TrackMarker[];
+  readonly markerTimes: ReadonlyMap<string, string>;
   readonly onAdd: () => void;
   readonly onRename: (markerId: string, name: string) => Promise<void>;
   readonly onDelete: (markerId: string) => Promise<void>;
@@ -46,6 +47,7 @@ interface TrackMarkersSectionProps {
 export function TrackMarkersSection({
   elevationProvider,
   markers,
+  markerTimes,
   onAdd,
   onRename,
   onDelete,
@@ -265,6 +267,7 @@ export function TrackMarkersSection({
                 const pendingDelete = pendingDeleteId === marker.id;
                 const deleting = deletingId === marker.id;
                 const markerName = marker.name;
+                const passageTime = markerTimes.get(marker.id);
                 const elevation = markerElevations.get(markerElevationKey(marker));
                 const elevationLabel =
                   elevation?.status === 'available'
@@ -314,9 +317,27 @@ export function TrackMarkersSection({
                         sx={{ minWidth: 0, px: 1.5, py: 1.25 }}
                       >
                         <Stack spacing={0.125} sx={{ minWidth: 0 }}>
-                          <Typography variant="subtitle2" noWrap>
-                            {marker.name}
-                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{ alignItems: 'baseline' }}
+                          >
+                            <Typography variant="subtitle2" noWrap sx={{ minWidth: 0 }}>
+                              {marker.name}
+                            </Typography>
+                            {passageTime === undefined ? null : (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  flexShrink: 0,
+                                  fontVariantNumeric: 'tabular-nums',
+                                }}
+                              >
+                                {passageTime}
+                              </Typography>
+                            )}
+                          </Stack>
                           <Typography variant="caption" color="text.secondary" noWrap>
                             {elevationLabel}
                           </Typography>

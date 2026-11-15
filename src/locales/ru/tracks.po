@@ -391,6 +391,11 @@ msgstr "Подтвердить переименование"
 msgid "Copy link"
 msgstr "Копировать ссылку"
 
+#. js-lingui-id: y0eFz0
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Count map times from 00:00 at the start"
+msgstr "Отсчитывать время на карте с 00:00 на старте"
+
 #. js-lingui-id: Oo7YVo
 #: src/presentation/tracks/TrackFolderEditorDialog.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -621,6 +626,7 @@ msgstr "Загрузка профиля высот: {percent}"
 
 #. js-lingui-id: oX4-C9
 #: src/presentation/tracks/TrackMarkersSection.tsx
+#: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Elevation unavailable"
 msgstr "Высота недоступна"
 
@@ -700,6 +706,11 @@ msgstr "Дата прогноза"
 msgid "Highest"
 msgstr "Верх"
 
+#. js-lingui-id: nyzDhI
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Ignore recorded time"
+msgstr "Не учитывать записанное время"
+
 #. js-lingui-id: LjMWQs
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Import a GPX, FIT, or KML file to preview it, then save it in this browser."
@@ -734,6 +745,7 @@ msgstr "Загрузка высот: {percent}"
 
 #. js-lingui-id: o4EgvC
 #: src/presentation/tracks/TrackMarkersSection.tsx
+#: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Loading elevation…"
 msgstr "Загрузка высоты…"
 
@@ -1080,6 +1092,11 @@ msgstr "Маршрут готов. Нажмите на карту, чтобы д
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Route start"
 msgstr "Старт маршрута"
+
+#. js-lingui-id: EaYbJd
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Route timing"
+msgstr "Время прохождения"
 
 #. js-lingui-id: kKayYU
 #: src/presentation/tracks/RoutePlanControls.tsx

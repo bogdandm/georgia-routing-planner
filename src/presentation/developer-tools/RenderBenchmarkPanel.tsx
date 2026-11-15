@@ -21,9 +21,12 @@ import {
 import {
   sceneSettleTimeoutMs,
   summarizeRenderBenchmark,
+  summarizeSunShadowScene,
   type RenderBenchmarkReport,
   type RenderBenchmarkStep,
   type RenderBenchmarkVerdict,
+  type SunShadowBenchmarkResults,
+  type SunShadowSceneName,
 } from '@/presentation/map/renderBenchmark';
 
 const stepLabels: Record<RenderBenchmarkStep, string> = {
@@ -33,9 +36,40 @@ const stepLabels: Record<RenderBenchmarkStep, string> = {
   orbit: 'Measuring rotation',
   zoom: 'Measuring zoom out and in',
   pan: 'Measuring panning',
+  'shadow-initial': 'Computing sun shadows for a mountain scene',
+  'shadow-time-change': 'Recomputing sun shadows 10 minutes later',
+  'shadow-time-revisit': 'Returning to the first shadow time',
+  'shadow-orbit': 'Measuring rotation over mountains with sun shadows',
   synthetic: 'Measuring raw GPU throughput',
 };
-const steps = Object.keys(stepLabels);
+const plainSteps: readonly RenderBenchmarkStep[] = [
+  'settle',
+  'warm-up',
+  'static',
+  'orbit',
+  'zoom',
+  'pan',
+  'synthetic',
+];
+/** Shadow steps repeat per mountain scene, so progress steps back between scenes. */
+const sunShadowSteps: readonly RenderBenchmarkStep[] = [
+  'settle',
+  'warm-up',
+  'static',
+  'orbit',
+  'zoom',
+  'pan',
+  'shadow-initial',
+  'shadow-time-change',
+  'shadow-time-revisit',
+  'shadow-orbit',
+  'synthetic',
+];
+
+const sunShadowSceneLabels: Record<SunShadowSceneName, string> = {
+  kazbegi: 'Kazbegi',
+  ushba: 'Ushba',
+};
 
 const verdictChips: Record<
   RenderBenchmarkVerdict,
@@ -49,6 +83,54 @@ const verdictChips: Record<
   bad: { label: 'Bad', color: 'warning' },
   potato: { label: 'Potato', color: 'error' },
 };
+
+function SunShadowSummary({
+  results,
+}: {
+  readonly results: SunShadowBenchmarkResults;
+}) {
+  return (
+    <Stack spacing={1}>
+      <Typography variant="body2">
+        Sun shadows at {results.instant}, then {String(results.timeChangeMinutes)}{' '}
+        minutes later
+      </Typography>
+      {results.scenes.map((result) => {
+        const summary = summarizeSunShadowScene(result);
+        return (
+          <Box key={summary.name}>
+            <Typography variant="subtitle2">
+              {sunShadowSceneLabels[summary.name]}
+              {summary.settled ? '' : ': did not finish loading in time'}
+            </Typography>
+            <Typography variant="body2">
+              First view: {String(summary.initialWallMs)} ms,{' '}
+              {String(summary.initialTilesRendered)} tiles, GPU{' '}
+              {String(summary.gpuMsPerTile.mean)} ms mean and{' '}
+              {String(summary.gpuMsPerTile.max)} ms max per tile,{' '}
+              {String(summary.demTilesFetched)} elevation tiles
+            </Typography>
+            <Typography variant="body2">
+              Time change: {String(summary.timeChangeWallMs)} ms,{' '}
+              {String(summary.timeChangeTilesRendered)} tiles
+            </Typography>
+            <Typography variant="body2">
+              Back to the first time: {String(summary.revisitWallMs)} ms,{' '}
+              {String(summary.revisitTilesFromCache)} tiles from cache
+            </Typography>
+            <Typography variant="body2">
+              Rotation: {String(summary.orbitFramesPerSecond)} fps, 95% of frames within{' '}
+              {String(summary.orbitFrameIntervalP95Ms)} ms
+            </Typography>
+            <Typography variant="body2">
+              Shadow GPU memory: {String(summary.gpuMegabytes)} MB
+            </Typography>
+          </Box>
+        );
+      })}
+    </Stack>
+  );
+}
 
 function BenchmarkSummary({ report }: { readonly report: RenderBenchmarkReport }) {
   const { buildInfo } = useRuntimeServices();
@@ -101,6 +183,9 @@ function BenchmarkSummary({ report }: { readonly report: RenderBenchmarkReport }
           </Typography>
         )}
       </Box>
+      {report.sunShadows === null ? null : (
+        <SunShadowSummary results={report.sunShadows} />
+      )}
       <Button
         size="small"
         variant="outlined"
@@ -137,22 +222,41 @@ function StepElapsed({ startedAt }: { readonly startedAt: number }) {
 export function RenderBenchmarkPanel() {
   const state = useStore(mapInteractionStore, (current) => current.renderBenchmark);
   const busy = state.status === 'requested' || state.status === 'running';
+  const steps =
+    state.status === 'running' && state.options.sunShadows
+      ? sunShadowSteps
+      : plainSteps;
   const stepIndex = state.status === 'running' ? steps.indexOf(state.step) : 0;
   return (
     <Stack spacing={1}>
       <Typography variant="overline">3D render benchmark</Typography>
       <Typography variant="body2" color="text.secondary">
         Switches to 3D over Tbilisi for about a minute, measures rendering, then
-        restores your view. Keep this tab visible and leave the map alone while it runs.
+        restores your view. With sun shadows, it also measures shadows over Kazbegi and
+        Ushba, which takes longer, then restores your shadow settings. Keep this tab
+        visible and leave the map alone while it runs.
       </Typography>
       <Button
         size="small"
         variant="outlined"
         startIcon={<SpeedOutlinedIcon />}
         disabled={busy}
-        onClick={requestRenderBenchmark}
+        onClick={() => {
+          requestRenderBenchmark({ sunShadows: false });
+        }}
       >
-        {busy ? 'Benchmark running…' : 'Run 3D benchmark'}
+        Run 3D benchmark
+      </Button>
+      <Button
+        size="small"
+        variant="outlined"
+        startIcon={<SpeedOutlinedIcon />}
+        disabled={busy}
+        onClick={() => {
+          requestRenderBenchmark({ sunShadows: true });
+        }}
+      >
+        Run 3D benchmark with sun shadows
       </Button>
       {busy ? (
         <Box>

@@ -1,16 +1,39 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
+import type { TerrainShadowMetricsSnapshot } from '@/presentation/map/TerrainShadowTileProvider';
+
 /**
  * Developer 3D render benchmark. It drives the native map through a fixed scene over
  * Tbilisi, looking toward the horizon across dense streets, buildings, and labels, so
  * reports from different computers describe the same work, and adds synthetic WebGL
- * measurements that separate fill-rate from draw-call limits. Reports contain no user
- * camera, tracks, markers, or URLs beyond provider host names.
+ * measurements that separate fill-rate from draw-call limits. The sun-shadow variant
+ * measures the same phases with terrain-cast shadows on, then shadow computation and
+ * rotation over fixed Georgian mountain scenes at fixed instants. Reports contain no
+ * user camera, tracks, markers, or URLs beyond provider host names.
  */
 
 export type RenderBenchmarkPhaseName = 'static' | 'orbit' | 'zoom' | 'pan';
+export type SunShadowBenchmarkStepName =
+  'shadow-initial' | 'shadow-time-change' | 'shadow-time-revisit' | 'shadow-orbit';
 export type RenderBenchmarkStep =
-  'settle' | 'warm-up' | RenderBenchmarkPhaseName | 'synthetic';
+  | 'settle'
+  | 'warm-up'
+  | RenderBenchmarkPhaseName
+  | SunShadowBenchmarkStepName
+  | 'synthetic';
+
+export interface RenderBenchmarkOptions {
+  /** Also measures terrain-cast sun shadows; the plain run leaves them as they are. */
+  readonly sunShadows: boolean;
+}
+
+/** How the benchmark drives terrain-cast sun shadows; the caller restores them after. */
+export interface SunShadowBenchmarkHooks {
+  /** Shows sun shadows for the instant, in epoch milliseconds. */
+  setInstant(instantMs: number): void;
+  metrics(): TerrainShadowMetricsSnapshot;
+  resetMetrics(): void;
+}
 
 const glCallNames = [
   'drawElements',
@@ -64,6 +87,45 @@ export interface SyntheticGpuResults {
   };
 }
 
+export type SunShadowSceneName = 'kazbegi' | 'ushba';
+
+/** One shadow update: from changing the instant or camera until the map is idle. */
+export interface SunShadowStepResult {
+  readonly instant: string;
+  readonly wallMs: number;
+  /** Whether the map went idle within the limit; otherwise tiles were still loading. */
+  readonly settled: boolean;
+  /** Shadow tile counters since the step started; `gpuBytes` is the latest estimate. */
+  readonly metrics: TerrainShadowMetricsSnapshot;
+}
+
+export interface SunShadowSceneResult {
+  readonly name: SunShadowSceneName;
+  readonly longitude: number;
+  readonly latitude: number;
+  readonly zoom: number;
+  readonly bearing: number;
+  readonly pitch: number;
+  /** Shadows computed for a scene shown for the first time. */
+  readonly initial: SunShadowStepResult;
+  /** The same view ten minutes later: every visible shadow tile changes. */
+  readonly timeChange: SunShadowStepResult;
+  /** Back to the first instant: shadow tiles should come from the cache. */
+  readonly revisit: SunShadowStepResult;
+  /** Rotation over the mountains with shadows on, measured like the camera phases. */
+  readonly orbit: RenderBenchmarkPhase;
+  readonly jsHeapUsedMb: number | null;
+  /** Latest estimate of GPU memory held by shadow computation. */
+  readonly gpuBytes: number;
+}
+
+export interface SunShadowBenchmarkResults {
+  /** The fixed shadow instant: a low winter sun, so shadows are long. */
+  readonly instant: string;
+  readonly timeChangeMinutes: number;
+  readonly scenes: readonly SunShadowSceneResult[];
+}
+
 export interface RenderBenchmarkReport {
   readonly kind: 'trail-planner-render-benchmark';
   /** 2: the Tbilisi horizon scene; version 1 reports used a Mestia slope and differ. */
@@ -109,6 +171,12 @@ export interface RenderBenchmarkReport {
     readonly allocatedTextureSizes: Readonly<Record<string, number>>;
   };
   readonly phases: readonly RenderBenchmarkPhase[];
+  /**
+   * Sun-shadow measurements; `null` in plain runs. Shadow runs also measure `phases`
+   * with shadows on. The version stays 2 because plain reports keep their meaning;
+   * reports from builds before this field omit it.
+   */
+  readonly sunShadows: SunShadowBenchmarkResults | null;
   readonly synthetic: SyntheticGpuResults | null;
 }
 
@@ -137,14 +205,49 @@ export interface RenderBenchmarkSummary {
   readonly gpuFrameP50Ms: number | null;
 }
 
+interface BenchmarkScene {
+  readonly longitude: number;
+  readonly latitude: number;
+  readonly zoom: number;
+  readonly bearing: number;
+  readonly pitch: number;
+}
+
 /** At the app's maximum pitch, so the horizon and many distant tiles stay in view. */
-const scene = {
+const scene: BenchmarkScene = {
   longitude: 44.74552,
   latitude: 41.78669,
   zoom: 14.26,
   bearing: 26.47,
   pitch: 75,
 };
+
+interface SunShadowScene extends BenchmarkScene {
+  readonly name: SunShadowSceneName;
+}
+
+/** High Caucasus slopes whose ridges cast long shadows across deep valleys. */
+const sunShadowScenes: readonly SunShadowScene[] = [
+  {
+    name: 'kazbegi',
+    longitude: 44.643,
+    latitude: 42.6573,
+    zoom: 12.6,
+    bearing: 200,
+    pitch: 60,
+  },
+  {
+    name: 'ushba',
+    longitude: 42.68,
+    latitude: 43.095,
+    zoom: 12.6,
+    bearing: 150,
+    pitch: 60,
+  },
+];
+/** About 09:30 local time at the winter solstice: a low sun and long shadows. */
+const sunShadowInstantMs = Date.parse('2026-12-21T05:30:00Z');
+const sunShadowTimeChangeMinutes = 10;
 /** Loading the scene from a cold cache can take this long on slow connections. */
 export const sceneSettleTimeoutMs = 30_000;
 /** Each phase restarts from the loaded scene; tiles are already cached by then. */
@@ -276,6 +379,51 @@ export function summarizeRenderBenchmark(
     freezesOver500Ms,
     renderCpuP50Ms: staticPhase?.renderCpuMs.p50 ?? 0,
     gpuFrameP50Ms: staticPhase?.gpuFrameMs?.p50 ?? null,
+  };
+}
+
+export interface SunShadowSceneSummary {
+  readonly name: SunShadowSceneName;
+  /** Whether every shadow step and the orbit started from a loaded scene. */
+  readonly settled: boolean;
+  readonly initialWallMs: number;
+  readonly initialTilesRendered: number;
+  /** GPU time per computed shadow tile in the initial step; zeros without tiles. */
+  readonly gpuMsPerTile: { readonly mean: number; readonly max: number };
+  readonly demTilesFetched: number;
+  readonly timeChangeWallMs: number;
+  readonly timeChangeTilesRendered: number;
+  readonly revisitWallMs: number;
+  readonly revisitTilesFromCache: number;
+  readonly orbitFramesPerSecond: number;
+  readonly orbitFrameIntervalP95Ms: number;
+  readonly gpuMegabytes: number;
+}
+
+/** The numbers the developer drawer shows for one sun-shadow scene. */
+export function summarizeSunShadowScene(
+  result: SunShadowSceneResult,
+): SunShadowSceneSummary {
+  const { initial, timeChange, revisit, orbit } = result;
+  const { tilesRendered, totalComputeMs, maxComputeMs } = initial.metrics;
+  return {
+    name: result.name,
+    settled:
+      initial.settled && timeChange.settled && revisit.settled && orbit.startedSettled,
+    initialWallMs: initial.wallMs,
+    initialTilesRendered: tilesRendered,
+    gpuMsPerTile: {
+      mean: tilesRendered > 0 ? round(totalComputeMs / tilesRendered) : 0,
+      max: round(maxComputeMs),
+    },
+    demTilesFetched: initial.metrics.demTilesFetched,
+    timeChangeWallMs: timeChange.wallMs,
+    timeChangeTilesRendered: timeChange.metrics.tilesRendered,
+    revisitWallMs: revisit.wallMs,
+    revisitTilesFromCache: revisit.metrics.tilesFromCache,
+    orbitFramesPerSecond: orbit.framesPerSecond,
+    orbitFrameIntervalP95Ms: orbit.frameIntervalMs.p95,
+    gpuMegabytes: round(result.gpuBytes / 2 ** 20),
   };
 }
 
@@ -473,19 +621,22 @@ async function ease(
   await sleep(options.duration + 50, signal);
 }
 
+type PhaseScript = (map: MapLibreMap, signal: AbortSignal) => Promise<void>;
+
+/** Turns around a scene, so terrain tiles enter the view and need new textures. */
+function orbitScript(target: BenchmarkScene): PhaseScript {
+  return async (map, signal) => {
+    await ease(map, { bearing: target.bearing + 120, duration: 4_000 }, signal);
+  };
+}
+
 /** Phase camera scripts; each starts from the fixed scene. */
-const phaseScripts: Record<
-  RenderBenchmarkPhaseName,
-  (map: MapLibreMap, signal: AbortSignal) => Promise<void>
-> = {
+const phaseScripts: Record<RenderBenchmarkPhaseName, PhaseScript> = {
   // The settled scene: cached draped textures, terrain, and labels.
   static: async (_map, signal) => {
     await sleep(3_000, signal);
   },
-  // Turns around the scene, so terrain tiles enter the view and need new textures.
-  orbit: async (map, signal) => {
-    await ease(map, { bearing: scene.bearing + 120, duration: 4_000 }, signal);
-  },
+  orbit: orbitScript(scene),
   // Crosses the minimum zooms of detail layers out and back, reloading tiles.
   zoom: async (map, signal) => {
     await ease(map, { zoom: 11.5, duration: 1_500 }, signal);
@@ -517,22 +668,25 @@ const phaseScripts: Record<
   },
 };
 
-function jumpToScene(map: MapLibreMap): void {
+function jumpToScene(map: MapLibreMap, target: BenchmarkScene): void {
   map.jumpTo({
-    center: [scene.longitude, scene.latitude],
-    zoom: scene.zoom,
-    bearing: scene.bearing,
-    pitch: scene.pitch,
+    center: [target.longitude, target.latitude],
+    zoom: target.zoom,
+    bearing: target.bearing,
+    pitch: target.pitch,
   });
 }
 
+/** Measures `script` from `target` once the map has loaded that view. */
 async function measurePhase(
   map: MapLibreMap,
   probe: MapGlProbe,
   name: RenderBenchmarkPhaseName,
+  target: BenchmarkScene,
+  script: PhaseScript,
   signal: AbortSignal,
 ): Promise<RenderBenchmarkPhase> {
-  jumpToScene(map);
+  jumpToScene(map, target);
   const startedSettled = await waitForIdle(map, phaseSettleTimeoutMs, signal);
   probe.resetPhase();
   const frameTimes: number[] = [];
@@ -558,7 +712,7 @@ async function measurePhase(
   map.on('render', onRender);
   repaint();
   try {
-    await phaseScripts[name](map, signal);
+    await script(map, signal);
   } finally {
     repainting = false;
     map.off('render', onRender);
@@ -818,14 +972,18 @@ function readWebGlInfo(gl: WebGL2RenderingContext, timerQuery: boolean) {
   };
 }
 
-function readEnvironment(map: MapLibreMap, gl: WebGL2RenderingContext) {
-  const canvas = map.getCanvas();
-  const deviceMemory: unknown = Reflect.get(navigator, 'deviceMemory');
+function readJsHeapUsedMb(): number | null {
   const memory: unknown = Reflect.get(performance, 'memory');
   const usedHeap: unknown =
     typeof memory === 'object' && memory !== null
       ? Reflect.get(memory, 'usedJSHeapSize')
       : null;
+  return typeof usedHeap === 'number' ? Math.round(usedHeap / 2 ** 20) : null;
+}
+
+function readEnvironment(map: MapLibreMap, gl: WebGL2RenderingContext) {
+  const canvas = map.getCanvas();
+  const deviceMemory: unknown = Reflect.get(navigator, 'deviceMemory');
   return {
     userAgent: navigator.userAgent,
     hardwareConcurrency: navigator.hardwareConcurrency,
@@ -838,7 +996,7 @@ function readEnvironment(map: MapLibreMap, gl: WebGL2RenderingContext) {
       drawingBufferWidth: gl.drawingBufferWidth,
       drawingBufferHeight: gl.drawingBufferHeight,
     },
-    jsHeapUsedMb: typeof usedHeap === 'number' ? Math.round(usedHeap / 2 ** 20) : null,
+    jsHeapUsedMb: readJsHeapUsedMb(),
   };
 }
 
@@ -860,15 +1018,101 @@ function readStyle(map: MapLibreMap) {
 }
 
 /**
+ * Shows shadows for `instantMs`, after jumping to `target` when given, and times the
+ * map until it is idle with the shadow tiles that change.
+ */
+async function measureSunShadowUpdate(
+  map: MapLibreMap,
+  hooks: SunShadowBenchmarkHooks,
+  instantMs: number,
+  target: BenchmarkScene | null,
+  signal: AbortSignal,
+): Promise<SunShadowStepResult> {
+  hooks.resetMetrics();
+  const startedAt = performance.now();
+  hooks.setInstant(instantMs);
+  if (target !== null) jumpToScene(map, target);
+  const settled = await waitForIdle(map, sceneSettleTimeoutMs, signal);
+  return {
+    instant: new Date(instantMs).toISOString(),
+    wallMs: Math.round(performance.now() - startedAt),
+    settled,
+    metrics: hooks.metrics(),
+  };
+}
+
+async function measureSunShadows(
+  map: MapLibreMap,
+  probe: MapGlProbe,
+  hooks: SunShadowBenchmarkHooks,
+  onStep: (step: RenderBenchmarkStep) => void,
+  signal: AbortSignal,
+): Promise<SunShadowBenchmarkResults> {
+  const laterInstantMs = sunShadowInstantMs + sunShadowTimeChangeMinutes * 60_000;
+  const scenes: SunShadowSceneResult[] = [];
+  for (const target of sunShadowScenes) {
+    onStep('shadow-initial');
+    const initial = await measureSunShadowUpdate(
+      map,
+      hooks,
+      sunShadowInstantMs,
+      target,
+      signal,
+    );
+    onStep('shadow-time-change');
+    const timeChange = await measureSunShadowUpdate(
+      map,
+      hooks,
+      laterInstantMs,
+      null,
+      signal,
+    );
+    onStep('shadow-time-revisit');
+    const revisit = await measureSunShadowUpdate(
+      map,
+      hooks,
+      sunShadowInstantMs,
+      null,
+      signal,
+    );
+    onStep('shadow-orbit');
+    const orbit = await measurePhase(
+      map,
+      probe,
+      'orbit',
+      target,
+      orbitScript(target),
+      signal,
+    );
+    scenes.push({
+      ...target,
+      initial,
+      timeChange,
+      revisit,
+      orbit,
+      jsHeapUsedMb: readJsHeapUsedMb(),
+      gpuBytes: hooks.metrics().gpuBytes,
+    });
+  }
+  return {
+    instant: new Date(sunShadowInstantMs).toISOString(),
+    timeChangeMinutes: sunShadowTimeChangeMinutes,
+    scenes,
+  };
+}
+
+/**
  * Runs the benchmark on a map that already shows 3D terrain. The caller owns the terrain
  * mode, restores the user's camera afterwards, and can stop the run with `callerSignal`.
- * Hidden tabs get no animation frames, so hiding the tab stops the run instead of
- * measuring nothing.
+ * With `sunShadow`, every phase runs with shadows on and shadow scenes follow; the
+ * caller restores the user's shadow settings. Hidden tabs get no animation frames, so
+ * hiding the tab stops the run instead of measuring nothing.
  */
 export async function runRenderBenchmark(
   map: MapLibreMap,
   onStep: (step: RenderBenchmarkStep) => void,
   callerSignal: AbortSignal,
+  sunShadow: SunShadowBenchmarkHooks | null,
 ): Promise<RenderBenchmarkReport> {
   const gl = map.getCanvas().getContext('webgl2');
   if (gl === null) throw new Error('The map has no WebGL 2 context.');
@@ -888,7 +1132,8 @@ export async function runRenderBenchmark(
   const probe = new MapGlProbe(map, gl);
   try {
     onStep('settle');
-    jumpToScene(map);
+    sunShadow?.setInstant(sunShadowInstantMs);
+    jumpToScene(map, scene);
     const settleStartedAt = performance.now();
     const settled = await waitForIdle(map, sceneSettleTimeoutMs, signal);
     const settleMs = Math.round(performance.now() - settleStartedAt);
@@ -897,15 +1142,22 @@ export async function runRenderBenchmark(
     // One unmeasured pass loads the tiles every measured phase reaches.
     onStep('warm-up');
     await phaseScripts.zoom(map, signal);
-    jumpToScene(map);
+    jumpToScene(map, scene);
     await phaseScripts.pan(map, signal);
 
     const phases: RenderBenchmarkPhase[] = [];
     for (const name of ['static', 'orbit', 'zoom', 'pan'] as const) {
       onStep(name);
-      phases.push(await measurePhase(map, probe, name, signal));
+      phases.push(
+        await measurePhase(map, probe, name, scene, phaseScripts[name], signal),
+      );
     }
     const textureSizes = Object.fromEntries(probe.textureSizes);
+
+    const sunShadows =
+      sunShadow === null
+        ? null
+        : await measureSunShadows(map, probe, sunShadow, onStep, signal);
 
     onStep('synthetic');
     await waitForIdle(map, 5_000, signal);
@@ -920,6 +1172,7 @@ export async function runRenderBenchmark(
       scene: { ...scene, settleMs, settled },
       style: { ...style, allocatedTextureSizes: textureSizes },
       phases,
+      sunShadows,
       synthetic,
     };
   } finally {

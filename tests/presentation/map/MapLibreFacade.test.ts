@@ -18,6 +18,9 @@ import {
   sentinelMosaicIdPrefixes,
   trackPointSelectionLayerIds,
 } from '@/presentation/map/mapIds';
+import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
+import { runRenderBenchmark } from '@/presentation/map/renderBenchmark';
+import type { TerrainShadowMetricsSnapshot } from '@/presentation/map/TerrainShadowTileProvider';
 import { createTestServices } from '@test/helpers/createTestServices';
 import {
   applyTrackPathDrag,
@@ -36,8 +39,15 @@ import {
 
 type TestListener = (event?: unknown) => void;
 
+// Benchmark runs need real WebGL; facade tests drive only the facade around them.
+vi.mock(import('@/presentation/map/renderBenchmark'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  runRenderBenchmark: vi.fn(),
+}));
+
 afterEach(() => {
   vi.useRealTimers();
+  resetMapLayerStore();
 });
 
 class FakeNativeMap {
@@ -2859,5 +2869,124 @@ describe('MapLibreFacade', () => {
     nativeMap.getCanvas().dispatchEvent(new MouseEvent('mouseleave'));
     expect(setPlannedLinePreview).toHaveBeenCalledTimes(calls);
     expect(clearPlannedLinePreview).not.toHaveBeenCalled();
+  });
+
+  describe('render benchmark sun shadows', () => {
+    const shadowMetrics: TerrainShadowMetricsSnapshot = {
+      tilesRendered: 0,
+      tilesFromCache: 0,
+      tilesFailed: 0,
+      pendingTiles: 0,
+      totalComputeMs: 0,
+      maxComputeMs: 0,
+      totalDemFetchMs: 0,
+      demTilesFetched: 0,
+      gpuBytes: 0,
+    };
+    const previousInstantMs = Date.parse('2026-07-01T09:00:00Z');
+    const benchmarkInstantMs = Date.parse('2026-12-21T05:30:00Z');
+
+    function createBenchmarkFacade() {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+      const setSunShadow = vi.fn<MapLibreLayerController['setSunShadow']>();
+      const facade = new MapLibreFacade(
+        services.logger,
+        undefined,
+        undefined,
+        undefined,
+        {
+          attach: vi.fn(),
+          detach: vi.fn(),
+          handleRasterSourceData: vi.fn(() => false),
+          handleRasterSourceFailure: vi.fn(),
+          handleRasterSourceRecovered: vi.fn(),
+          isRasterSourceRecoveryComplete: vi.fn(() => false),
+          setTerrainInteractionActive: vi.fn(),
+          setPlannedLinePreview: vi.fn(),
+          clearPlannedLinePreview: vi.fn(),
+          setSunShadow,
+          getSunShadowMetrics: vi.fn(() => shadowMetrics),
+          resetSunShadowMetrics: vi.fn(),
+        },
+      );
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      nativeMap.fire('load');
+      vi.mocked(runRenderBenchmark).mockReset();
+      return { facade, setSunShadow };
+    }
+
+    it('restores the previous sun shadows when a sun-shadow run is stopped', async () => {
+      const { facade, setSunShadow } = createBenchmarkFacade();
+      mapLayerStore.setState({
+        sunShadow: {
+          enabled: false,
+          instantMs: previousInstantMs,
+          availability: 'available',
+        },
+      });
+      vi.mocked(runRenderBenchmark).mockImplementation(
+        (_map, _onStep, signal, sunShadow) => {
+          sunShadow?.setInstant(benchmarkInstantMs);
+          return new Promise((_resolve, reject) => {
+            signal.addEventListener(
+              'abort',
+              () => {
+                reject(new Error('The benchmark stopped.'));
+              },
+              { once: true },
+            );
+          });
+        },
+      );
+      const stop = new AbortController();
+
+      const run = facade.runRenderBenchmark(vi.fn(), stop.signal, { sunShadows: true });
+      stop.abort();
+
+      await expect(run).rejects.toThrow('The benchmark stopped.');
+      expect(setSunShadow.mock.calls).toEqual([
+        [{ enabled: true, instantMs: benchmarkInstantMs }],
+        [{ enabled: false, instantMs: previousInstantMs }],
+      ]);
+      facade.destroy();
+    });
+
+    it('refuses a sun-shadow run where shadows cannot render', async () => {
+      const { facade, setSunShadow } = createBenchmarkFacade();
+      mapLayerStore.setState({
+        sunShadow: {
+          enabled: true,
+          instantMs: previousInstantMs,
+          availability: 'unavailable',
+        },
+      });
+
+      await expect(
+        facade.runRenderBenchmark(vi.fn(), new AbortController().signal, {
+          sunShadows: true,
+        }),
+      ).rejects.toThrow(
+        'This browser cannot render sun shadows, so the sun-shadow benchmark cannot run.',
+      );
+      expect(runRenderBenchmark).not.toHaveBeenCalled();
+      expect(setSunShadow).not.toHaveBeenCalled();
+      facade.destroy();
+    });
+
+    it('leaves sun shadows alone in a plain run', async () => {
+      const { facade, setSunShadow } = createBenchmarkFacade();
+      vi.mocked(runRenderBenchmark).mockRejectedValue(new Error('No WebGL.'));
+
+      await expect(
+        facade.runRenderBenchmark(vi.fn(), new AbortController().signal, {
+          sunShadows: false,
+        }),
+      ).rejects.toThrow('No WebGL.');
+      expect(vi.mocked(runRenderBenchmark).mock.calls[0]?.[3]).toBeNull();
+      expect(setSunShadow).not.toHaveBeenCalled();
+      facade.destroy();
+    });
   });
 });

@@ -8,6 +8,7 @@ import type {
   MapViewportBounds,
 } from '@/presentation/map/mapTypes';
 import type {
+  RenderBenchmarkOptions,
   RenderBenchmarkReport,
   RenderBenchmarkStep,
 } from '@/presentation/map/renderBenchmark';
@@ -79,9 +80,10 @@ interface MapShareRequest {
 /** Developer render benchmark: requested by the developer drawer, run by the map. */
 export type RenderBenchmarkState =
   | { readonly status: 'idle' }
-  | { readonly status: 'requested' }
+  | { readonly status: 'requested'; readonly options: RenderBenchmarkOptions }
   | {
       readonly status: 'running';
+      readonly options: RenderBenchmarkOptions;
       readonly step: RenderBenchmarkStep;
       /** `Date.now()` when the step began, so the drawer can show how long it runs. */
       readonly stepStartedAt: number;
@@ -363,10 +365,10 @@ export function closeMapShare(): void {
   mapInteractionStore.setState({ shareRequest: null });
 }
 
-export function requestRenderBenchmark(): void {
+export function requestRenderBenchmark(options: RenderBenchmarkOptions): void {
   const { status } = mapInteractionStore.getState().renderBenchmark;
   if (status === 'requested' || status === 'running') return;
-  mapInteractionStore.setState({ renderBenchmark: { status: 'requested' } });
+  mapInteractionStore.setState({ renderBenchmark: { status: 'requested', options } });
 }
 
 export function setRenderBenchmarkState(renderBenchmark: RenderBenchmarkState): void {

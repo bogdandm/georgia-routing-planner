@@ -14,6 +14,7 @@ import type {
   TerrainTransitionResult,
 } from '@/presentation/map/mapTypes';
 import type {
+  RenderBenchmarkOptions,
   RenderBenchmarkReport,
   RenderBenchmarkStep,
 } from '@/presentation/map/renderBenchmark';
@@ -150,12 +151,14 @@ export interface MapFacade {
   /** Resolves after the requested terrain source is usable or flat fallback is restored. */
   setTerrainMode(mode: TerrainMode): Promise<TerrainTransitionResult>;
   /**
-   * Developer benchmark in 3D at a fixed scene; restores the user's mode and camera.
+   * Developer benchmark in 3D at a fixed scene; restores the user's mode and camera,
+   * and the sun-shadow settings when `options.sunShadows` measured shadows.
    * `signal` stops the run, and so does detaching the map.
    */
   runRenderBenchmark(
     onStep: (step: RenderBenchmarkStep) => void,
     signal: AbortSignal,
+    options: RenderBenchmarkOptions,
   ): Promise<RenderBenchmarkReport>;
   setDebugOptions(options: MapDebugOptions): void;
   setInteractionMode(mode: MapInteractionMode): void;

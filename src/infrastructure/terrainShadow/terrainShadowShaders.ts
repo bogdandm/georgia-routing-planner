@@ -57,6 +57,21 @@ void main() {
 }
 `;
 
+/** Extra visibility texels around the tile so the soft-edge blur has full support. */
+export const terrainShadowVisibilityMarginPixels = 2;
+/** Side of the visibility texture: the 512 px tile plus the blur margin on both sides. */
+export const terrainShadowVisibilitySize =
+  terrainShadowTileSize + 2 * terrainShadowVisibilityMarginPixels;
+/** Stored shade byte = round(brightness × 127): flat ground in full sun is exactly 127. */
+export const shadeBrightnessScale = 127;
+/**
+ * Sun elevation whose flat-ground brightness counts as full sun. Lower suns divide by
+ * this floor instead of their own sine, so dawn and dusk darken flat ground gradually.
+ */
+export const terrainShadeFlatReferenceElevationDegrees = 10;
+/** Gaussian σ of the cast-shadow soft edge, in output pixels. */
+export const terrainShadowSoftEdgeSigmaPixels = 1;
+
 /**
  * GPU mirror of `horizonAngleTowardSun` and `visibleSolarDiskFraction` in
  * `@/domain/terrain/terrainShadow` and `solarPositionAt` in `@/domain/terrain/solarPosition`;
@@ -67,8 +82,11 @@ void main() {
  * The offset integrates the great circle step by step (midpoint rule) instead of
  * subtracting absolute `asin`/`atan` results: GPU inverse trigonometry is only accurate to
  * about 1e-5 rad, which would move near samples by several z12 texels.
+ *
+ * Output pixels are measured from the tile's north-west corner and both passes write
+ * framebuffer row 0 as the northern edge, so `readPixels` rows match ImageData rows.
  */
-export const terrainShadowFragmentShaderSource = `#version 300 es
+const terrainShadowCommonShaderSource = `#version 300 es
 precision highp float;
 precision highp int;
 precision highp sampler2D;
@@ -88,9 +106,8 @@ uniform vec2 uTileMercatorY;
 uniform vec2 uSubsolar;
 // Finest DEM pixel ground size at the equator; scaled by cos(latitude) per observer.
 uniform float uBaseResolutionEquatorMeters;
-uniform vec3 uColor;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec4 outValue;
 
 const float pi = 3.141592653589793;
 const float earthRadiusMeters = ${glslFloat(terrainShadowModel.earthRadiusMeters)};
@@ -233,22 +250,120 @@ float horizonAngleTowardSun(
   return horizonDegrees;
 }
 
-void main() {
-  // Output pixel center measured from the tile's north-west corner (canvas rows are bottom-up).
-  vec2 outputPixel = vec2(gl_FragCoord.x, tileSize - gl_FragCoord.y);
+// (latitude, longitude) in radians of an output pixel measured from the tile's north-west corner.
+vec2 pixelLatitudeLongitude(vec2 outputPixel) {
   float longitude = uTileLongitude.x + uTileLongitude.y * (outputPixel.x / tileSize);
   float mercatorY = uTileMercatorY.x - uTileMercatorY.y * (outputPixel.y / tileSize);
-  float latitude = 2.0 * atan(exp(mercatorY)) - 0.5 * pi;
+  return vec2(2.0 * atan(exp(mercatorY)) - 0.5 * pi, longitude);
+}
+`;
 
-  SolarPosition sun = solarPositionAt(latitude, longitude);
+/**
+ * Visible solar-disk fraction per pixel of the tile plus a blur margin. Texture row 0 is
+ * the northern edge minus the margin; the shade pass reads it with matching offsets.
+ */
+export const terrainShadowVisibilityFragmentShaderSource = `${terrainShadowCommonShaderSource}
+const float visibilityMargin = ${glslFloat(terrainShadowVisibilityMarginPixels)};
+
+void main() {
+  vec2 outputPixel = gl_FragCoord.xy - visibilityMargin;
+  vec2 latitudeLongitude = pixelLatitudeLongitude(outputPixel);
+  SolarPosition sun = solarPositionAt(latitudeLongitude.x, latitudeLongitude.y);
   float sunlitFraction = 0.0;
   if (sun.apparentElevationDegrees > -solarDiskRadiusDegrees) {
     float horizonDegrees = horizonAngleTowardSun(
-      outputPixel, latitude, sun.azimuthRadians, sun.apparentElevationDegrees
+      outputPixel, latitudeLongitude.x, sun.azimuthRadians, sun.apparentElevationDegrees
     );
     sunlitFraction = visibleSolarDiskFraction(sun.apparentElevationDegrees, horizonDegrees);
   }
-  float shade = 1.0 - sunlitFraction;
-  outColor = vec4(uColor * shade, shade);
+  outValue = vec4(sunlitFraction, 0.0, 0.0, 1.0);
 }
 `;
+
+/**
+ * Real-sun relief brightness: blurred cast-shadow visibility times Lambert slope lighting,
+ * normalized so flat ground in full sun is 1. The slope term reaches 0 exactly where the
+ * horizon march starts reporting self-shadow, so terminators stay continuous. Output is
+ * brightness × `shadeBrightnessScale` / 255 in the red channel.
+ */
+export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShaderSource}
+uniform sampler2D uVisibility;
+
+const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
+const float softEdgeSigma = ${glslFloat(terrainShadowSoftEdgeSigmaPixels)};
+const float flatReferenceElevationDegrees = ${glslFloat(terrainShadeFlatReferenceElevationDegrees)};
+const float brightnessScale = ${glslFloat(shadeBrightnessScale)};
+
+void main() {
+  vec2 outputPixel = gl_FragCoord.xy;
+  vec2 latitudeLongitude = pixelLatitudeLongitude(outputPixel);
+  SolarPosition sun = solarPositionAt(latitudeLongitude.x, latitudeLongitude.y);
+
+  ivec2 center = ivec2(gl_FragCoord.xy) + visibilityMargin;
+  float weightSum = 0.0;
+  float visibility = 0.0;
+  for (int dy = -visibilityMargin; dy <= visibilityMargin; ++dy) {
+    for (int dx = -visibilityMargin; dx <= visibilityMargin; ++dx) {
+      float weight = exp(-float(dx * dx + dy * dy) / (2.0 * softEdgeSigma * softEdgeSigma));
+      visibility += weight * texelFetch(uVisibility, center + ivec2(dx, dy), 0).r;
+      weightSum += weight;
+    }
+  }
+  visibility /= weightSum;
+
+  // Mosaic y grows south, so north is the negative texel direction.
+  vec2 texels = uLevelOrigin[0] + outputPixel * uLevelTexelsPerOutputPixel[0];
+  float texelMeters = uBaseResolutionEquatorMeters * cos(latitudeLongitude.x);
+  float dzEast = (mosaicElevation(0, texels + vec2(1.0, 0.0)) - mosaicElevation(0, texels - vec2(1.0, 0.0))) / (2.0 * texelMeters);
+  float dzNorth = (mosaicElevation(0, texels - vec2(0.0, 1.0)) - mosaicElevation(0, texels + vec2(0.0, 1.0))) / (2.0 * texelMeters);
+  vec3 normal = normalize(vec3(-dzEast, -dzNorth, 1.0));
+
+  float elevation = radians(sun.apparentElevationDegrees);
+  float azimuth = sun.azimuthRadians;
+  vec3 toSun = vec3(sin(azimuth) * cos(elevation), cos(azimuth) * cos(elevation), sin(elevation));
+  float brightness = visibility * max(dot(normal, toSun), 0.0)
+    / max(toSun.z, sin(radians(flatReferenceElevationDegrees)));
+  outValue = vec4(clamp(brightness * brightnessScale / 255.0, 0.0, 1.0), 0.0, 0.0, 1.0);
+}
+`;
+
+type Rgb = readonly [number, number, number];
+
+/**
+ * RGBA8 colors for every shade byte, written byte-wise so the table is endian-safe when
+ * read through a `Uint32Array`. Bytes up to 127 fade `shadowColor` in as brightness drops;
+ * brighter bytes fade `highlightColor` in up to `highlightOpacity`. Colors are not
+ * premultiplied (ImageData semantics).
+ */
+export function createShadeLookupTable(
+  shadowColor: Rgb,
+  highlightColor: Rgb,
+  highlightOpacity: number,
+): Uint32Array {
+  const table = new Uint32Array(256);
+  const bytes = new Uint8Array(table.buffer);
+  for (let value = 0; value < 256; value += 1) {
+    const brightness = value / shadeBrightnessScale;
+    const [color, alpha] =
+      brightness <= 1
+        ? [shadowColor, 1 - brightness]
+        : [highlightColor, Math.min(brightness - 1, 1) * highlightOpacity];
+    bytes.set([color[0], color[1], color[2], Math.round(alpha * 255)], value * 4);
+  }
+  return table;
+}
+
+/** Expands a one-byte-per-pixel 512 px shade mask into ImageData RGBA bytes. */
+export function expandShadeMask(
+  mask: Uint8Array,
+  table: Uint32Array,
+): Uint8ClampedArray<ArrayBuffer> {
+  const pixels = new Uint8ClampedArray(
+    terrainShadowTileSize * terrainShadowTileSize * 4,
+  );
+  const pixels32 = new Uint32Array(pixels.buffer);
+  for (let index = 0; index < pixels32.length; index += 1) {
+    pixels32[index] = table[mask[index] ?? 0] ?? 0;
+  }
+  return pixels;
+}

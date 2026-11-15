@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
 const colorChannelSchema = z.number().int().min(0).max(255);
+const colorSchema = z
+  .tuple([colorChannelSchema, colorChannelSchema, colorChannelSchema])
+  .readonly();
+
+/** Cached one-byte shade masks per worker: 3072 × 256 KiB = 768 MiB. */
+export const terrainShadowMaskCacheLimit = 3072;
+/** Most tiles × frames one day playback may precompute; stays below the mask cache. */
+export const terrainShadowPlaybackTileLimit = 2560;
 
 export const terrainShadowTileRequestSchema = z
   .object({
@@ -18,9 +26,9 @@ export const terrainShadowTileRequestSchema = z
       ),
     demMinZoom: z.number().int().min(0).max(22),
     demMaxZoom: z.number().int().min(0).max(22),
-    color: z
-      .tuple([colorChannelSchema, colorChannelSchema, colorChannelSchema])
-      .readonly(),
+    shadowColor: colorSchema,
+    highlightColor: colorSchema,
+    highlightOpacity: z.number().min(0).max(1),
   })
   .strict()
   .refine(
@@ -35,18 +43,21 @@ export const terrainShadowTileRequestSchema = z
 
 export type TerrainShadowTileRequest = z.infer<typeof terrainShadowTileRequestSchema>;
 
-/** Per-tile worker measurements; `gpuBytes` estimates every worker cache after the tile. */
+/**
+ * Per-tile worker measurements; `memoryBytes` estimates worker memory after the tile:
+ * GPU textures plus cached shade masks.
+ */
 export interface TerrainShadowTileMetrics {
   readonly computeMs: number;
   readonly demFetchMs: number;
   readonly cacheHit: boolean;
   readonly demTilesFetched: number;
-  readonly gpuBytes: number;
+  readonly memoryBytes: number;
   readonly cachedMasks: number;
   readonly cachedDemTiles: number;
 }
 
-/** Premultiplied 512 px shade mask; the bitmap is transferred, never copied. */
+/** 512 px shade bitmap expanded from a cached one-byte mask; transferred, never copied. */
 export interface TerrainShadowTileResult {
   readonly bitmap: ImageBitmap;
   readonly metrics: TerrainShadowTileMetrics;
@@ -62,7 +73,9 @@ function isFiniteNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
-function isTerrainShadowTileMetrics(value: unknown): value is TerrainShadowTileMetrics {
+export function isTerrainShadowTileMetrics(
+  value: unknown,
+): value is TerrainShadowTileMetrics {
   if (typeof value !== 'object' || value === null) return false;
   const metrics = value as Readonly<Record<string, unknown>>;
   return (
@@ -70,7 +83,7 @@ function isTerrainShadowTileMetrics(value: unknown): value is TerrainShadowTileM
     isFiniteNonNegative(metrics.demFetchMs) &&
     typeof metrics.cacheHit === 'boolean' &&
     isFiniteNonNegative(metrics.demTilesFetched) &&
-    isFiniteNonNegative(metrics.gpuBytes) &&
+    isFiniteNonNegative(metrics.memoryBytes) &&
     isFiniteNonNegative(metrics.cachedMasks) &&
     isFiniteNonNegative(metrics.cachedDemTiles)
   );

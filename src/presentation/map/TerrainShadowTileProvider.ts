@@ -29,8 +29,8 @@ export interface TerrainShadowMetricsSnapshot {
   readonly maxComputeMs: number;
   readonly totalDemFetchMs: number;
   readonly demTilesFetched: number;
-  /** Latest worker estimate of resident GPU bytes; kept across `resetMetrics`. */
-  readonly gpuBytes: number;
+  /** Latest worker memory estimate (GPU textures plus cached shade masks); kept across `resetMetrics`. */
+  readonly memoryBytes: number;
 }
 
 export interface TerrainShadowTileProvider {
@@ -90,6 +90,7 @@ function parseShadowColor(hex: string): readonly [number, number, number] {
 }
 
 const shadowColor = parseShadowColor(mapVisualPalette.terrain.sunShadow);
+const highlightColor = parseShadowColor(mapVisualPalette.terrain.sunHighlight);
 
 function defaultWorkerFactory(): WorkerRpcEndpoint {
   return new Worker(
@@ -117,7 +118,7 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   return { epochMinute, z, x, y };
 }
 
-function emptyMetrics(gpuBytes: number): MutableMetrics {
+function emptyMetrics(memoryBytes: number): MutableMetrics {
   return {
     tilesRendered: 0,
     tilesFromCache: 0,
@@ -126,7 +127,7 @@ function emptyMetrics(gpuBytes: number): MutableMetrics {
     maxComputeMs: 0,
     totalDemFetchMs: 0,
     demTilesFetched: 0,
-    gpuBytes,
+    memoryBytes,
   };
 }
 
@@ -201,7 +202,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   }
 
   public resetMetrics(): void {
-    this.#metrics = emptyMetrics(this.#metrics.gpuBytes);
+    this.#metrics = emptyMetrics(this.#metrics.memoryBytes);
   }
 
   public dispose(): void {
@@ -239,7 +240,9 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
         demTileUrl: this.#terrain.tileUrl,
         demMinZoom: this.#terrain.minZoom,
         demMaxZoom: this.#terrain.maxZoom,
-        color: shadowColor,
+        shadowColor,
+        highlightColor,
+        highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
       };
       const result = await this.ensureRpc().request<unknown>(
         terrainShadowWorkerMethods.renderTile,
@@ -310,7 +313,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     metrics.maxComputeMs = Math.max(metrics.maxComputeMs, tile.computeMs);
     metrics.totalDemFetchMs += tile.demFetchMs;
     metrics.demTilesFetched += tile.demTilesFetched;
-    metrics.gpuBytes = tile.gpuBytes;
+    metrics.memoryBytes = tile.memoryBytes;
   }
 
   private setAvailability(value: TerrainShadowAvailability): void {

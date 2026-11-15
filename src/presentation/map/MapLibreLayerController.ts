@@ -407,6 +407,13 @@ function quantizeSunShadowInstant(instantMs: number): number {
   return Math.floor(instantMs / 60_000) * 60_000;
 }
 
+/**
+ * The sun layer draws relief for the real sun, so the fixed-light hillshade is excluded
+ * through its zoom range while it draws. Visibility preferences, weather suppression,
+ * and their many writers stay untouched.
+ */
+const sunHiddenReliefMinZoom = 24;
+
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
   | { readonly status: 'failed'; readonly problem: Problem };
@@ -3473,13 +3480,26 @@ export class MapLibreLayerController {
 
   /**
    * Keeps the sun-shadow raster directly below the minor contours while shadows are on
-   * and the browser can render them, and removes it otherwise. A failure only logs: the
-   * relief and contours keep working without shadows.
+   * and the browser can render them, and removes it otherwise. While it draws, the
+   * fixed-light relief hillshade is excluded through its zoom range because the shadow
+   * layer already shades relief for the real sun. A failure only logs: the relief and
+   * contours keep working without shadows.
    */
   private reconcileSunShadow(map: MapLibreMap): void {
     const wanted =
       this.#sunShadowEnabled && this.sunShadowTiles.getAvailability() !== 'unavailable';
     try {
+      const relief = map.getLayer(terrainOverlayLayerIds.reliefShade);
+      if (
+        relief !== undefined &&
+        (relief.minzoom === sunHiddenReliefMinZoom) !== wanted
+      ) {
+        map.setLayerZoomRange(
+          terrainOverlayLayerIds.reliefShade,
+          wanted ? sunHiddenReliefMinZoom : 0,
+          24,
+        );
+      }
       if (!wanted) {
         if (map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
           map.removeLayer(terrainOverlayLayerIds.sunShadow);

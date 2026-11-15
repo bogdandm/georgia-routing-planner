@@ -16,7 +16,9 @@ const request: TerrainShadowTileRequest = {
   demTileUrl: 'https://tiles.example/{z}/{x}/{y}.webp',
   demMinZoom: 0,
   demMaxZoom: 12,
-  color: [27, 36, 51],
+  shadowColor: [27, 36, 51],
+  highlightColor: [255, 247, 230],
+  highlightOpacity: 0.6,
 };
 
 const metrics: TerrainShadowTileMetrics = {
@@ -24,7 +26,7 @@ const metrics: TerrainShadowTileMetrics = {
   demFetchMs: 4,
   cacheHit: false,
   demTilesFetched: 9,
-  gpuBytes: 1_048_576,
+  memoryBytes: 1_048_576,
   cachedMasks: 1,
   cachedDemTiles: 27,
 };
@@ -53,7 +55,8 @@ describe('terrainShadowTileRequestSchema', () => {
     ['a fractional row', { ...request, y: 1.5 }],
     ['a non-finite instant', { ...request, instantMs: Number.NaN }],
     ['a 256 px tile', { ...request, tileSize: 256 }],
-    ['a color channel above 255', { ...request, color: [27, 36, 256] }],
+    ['a color channel above 255', { ...request, shadowColor: [27, 36, 256] }],
+    ['a highlight opacity above 1', { ...request, highlightOpacity: 1.5 }],
     [
       'a tile below the DEM minimum zoom',
       { ...request, z: 3, x: 0, y: 0, demMinZoom: 4 },
@@ -75,7 +78,7 @@ describe('isTerrainShadowTileResult', () => {
     expect(isTerrainShadowTileResult({ bitmap, metrics })).toBe(true);
     expect(isTerrainShadowTileResult({ bitmap: {}, metrics })).toBe(false);
     expect(
-      isTerrainShadowTileResult({ bitmap, metrics: { ...metrics, gpuBytes: -1 } }),
+      isTerrainShadowTileResult({ bitmap, metrics: { ...metrics, memoryBytes: -1 } }),
     ).toBe(false);
     expect(isTerrainShadowTileResult({ bitmap })).toBe(false);
   });

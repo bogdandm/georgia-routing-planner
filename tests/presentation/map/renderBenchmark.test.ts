@@ -96,7 +96,7 @@ const emptyShadowMetrics: TerrainShadowMetricsSnapshot = {
   maxComputeMs: 0,
   totalDemFetchMs: 0,
   demTilesFetched: 0,
-  gpuBytes: 0,
+  memoryBytes: 0,
 };
 
 function shadowStep(
@@ -295,7 +295,7 @@ describe('render benchmark', () => {
       revisit: shadowStep(40, { tilesFromCache: 3 }),
       orbit: phase('orbit', { p95: 48, freezes: 0, frames: 24 }),
       jsHeapUsedMb: null,
-      gpuBytes: 25 * 2 ** 20,
+      memoryBytes: 25 * 2 ** 20,
     });
 
     expect(summary).toEqual({
@@ -311,7 +311,7 @@ describe('render benchmark', () => {
       revisitTilesFromCache: 3,
       orbitFramesPerSecond: 24,
       orbitFrameIntervalP95Ms: 48,
-      gpuMegabytes: 25,
+      memoryMegabytes: 25,
     });
     // Without computed tiles, there is no per-tile GPU time to average.
     expect(
@@ -323,7 +323,7 @@ describe('render benchmark', () => {
         bearing: 150,
         pitch: 60,
         jsHeapUsedMb: null,
-        gpuBytes: 0,
+        memoryBytes: 0,
         initial: shadowStep(10, {}),
         timeChange: { ...shadowStep(30_000, {}), settled: false },
         revisit: shadowStep(10, {}),
@@ -356,7 +356,11 @@ describe('render benchmark', () => {
       setInstant: (instantMs) => {
         events.push(`instant ${new Date(instantMs).toISOString()}`);
       },
-      metrics: () => ({ ...emptyShadowMetrics, tilesRendered: 4, gpuBytes: 2 ** 23 }),
+      metrics: () => ({
+        ...emptyShadowMetrics,
+        tilesRendered: 4,
+        memoryBytes: 2 ** 23,
+      }),
       resetMetrics: () => {
         events.push('reset');
       },
@@ -397,7 +401,7 @@ describe('render benchmark', () => {
       timeChange: { instant: '2026-12-21T05:40:00.000Z', settled: true },
       revisit: { instant: '2026-12-21T05:30:00.000Z', settled: true },
       orbit: { name: 'orbit', startedSettled: true },
-      gpuBytes: 2 ** 23,
+      memoryBytes: 2 ** 23,
     });
   });
 });

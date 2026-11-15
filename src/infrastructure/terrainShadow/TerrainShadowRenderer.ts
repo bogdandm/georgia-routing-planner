@@ -4,13 +4,18 @@ import {
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
   type TerrainShadowTileResult,
+  terrainShadowMaskCacheLimit,
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
+  createShadeLookupTable,
+  expandShadeMask,
   fullscreenVertexShaderSource,
   maximumReductionFactor,
   maximumReductionFragmentShaderSource,
-  terrainShadowFragmentShaderSource,
+  terrainShadowShadeFragmentShaderSource,
+  terrainShadowVisibilityFragmentShaderSource,
+  terrainShadowVisibilitySize,
   terrariumDecodeFragmentShaderSource,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import {
@@ -25,27 +30,33 @@ import {
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
 const maximumCachedDemTiles = 64;
-const maximumCachedMasks = 64;
-/** Horizontal bands per shadow pass, flushed separately to keep GPU submissions short. */
+/** Horizontal bands per visibility pass, flushed separately to keep GPU submissions short. */
 const shadowPassBands = 8;
 const bytesPerTexel = 4;
 const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
+const maskBytes = terrainShadowTileSize * terrainShadowTileSize;
 
-const shadowUniformNames = [
+/** Uniforms both shadow passes read; the rest are only active in one pass. */
+const tileUniformNames = [
   'uMosaic0',
-  'uMosaic1',
-  'uMosaic2',
-  'uLevelMaximum',
   'uLevelOrigin',
   'uLevelTexelsPerOutputPixel',
-  'uLevelTexelsPerRadian',
   'uTileLongitude',
   'uTileMercatorY',
   'uSubsolar',
   'uBaseResolutionEquatorMeters',
-  'uColor',
 ] as const;
+const visibilityUniformNames = [
+  ...tileUniformNames,
+  'uMosaic1',
+  'uMosaic2',
+  'uLevelMaximum',
+  'uLevelTexelsPerRadian',
+] as const;
+const shadeUniformNames = [...tileUniformNames, 'uVisibility'] as const;
 const reductionUniformNames = ['uSource', 'uSourceSize', 'uTargetOrigin'] as const;
+/** Texture unit of the visibility texture in the shade pass, after the four mosaic units. */
+const visibilityTextureUnit = 4;
 
 type UniformLocations<TName extends string> = Readonly<
   Record<TName, WebGLUniformLocation>
@@ -62,12 +73,12 @@ interface ReductionStage {
 }
 
 interface GpuResources {
-  readonly canvas: OffscreenCanvas;
   readonly gl: WebGL2RenderingContext;
   readonly vertexArray: WebGLVertexArrayObject;
   readonly decodeProgram: ShaderProgram<'uEncoded'>;
   readonly reductionProgram: ShaderProgram<(typeof reductionUniformNames)[number]>;
-  readonly shadowProgram: ShaderProgram<(typeof shadowUniformNames)[number]>;
+  readonly visibilityProgram: ShaderProgram<(typeof visibilityUniformNames)[number]>;
+  readonly shadeProgram: ShaderProgram<(typeof shadeUniformNames)[number]>;
   /** RGBA8 staging texture for one encoded DEM upload. */
   readonly encodedTexture: WebGLTexture;
   readonly readFramebuffer: WebGLFramebuffer;
@@ -76,6 +87,12 @@ interface GpuResources {
   readonly reductionStages: readonly ReductionStage[];
   /** 3×1 R32F: texel i holds the maximum elevation of LOD level i. */
   readonly levelMaximum: WebGLTexture;
+  /** R8 visible solar-disk fraction for the tile plus the blur margin. */
+  readonly visibilityTexture: WebGLTexture;
+  /** RGBA8 shade pass target; only the red channel carries the brightness byte. */
+  readonly shadeTexture: WebGLTexture;
+  /** Reused RGBA readback of `shadeTexture`. */
+  readonly readback: Uint8Array;
   readonly staticBytes: number;
 }
 
@@ -216,10 +233,10 @@ function createGpuResources(onContextLost: () => void): GpuResources {
       'OffscreenCanvas is unavailable in this worker.',
     );
   }
-  const canvas = new OffscreenCanvas(terrainShadowTileSize, terrainShadowTileSize);
+  // Every pass renders into textures; the default framebuffer is never drawn.
+  const canvas = new OffscreenCanvas(1, 1);
   const gl = canvas.getContext('webgl2', {
-    alpha: true,
-    premultipliedAlpha: true,
+    alpha: false,
     antialias: false,
     depth: false,
     stencil: false,
@@ -245,10 +262,15 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     maximumReductionFragmentShaderSource,
     reductionUniformNames,
   );
-  const shadowProgram = createProgram(
+  const visibilityProgram = createProgram(
     gl,
-    terrainShadowFragmentShaderSource,
-    shadowUniformNames,
+    terrainShadowVisibilityFragmentShaderSource,
+    visibilityUniformNames,
+  );
+  const shadeProgram = createProgram(
+    gl,
+    terrainShadowShadeFragmentShaderSource,
+    shadeUniformNames,
   );
   const mosaicSize = terrainShadowMosaicSize;
   const mosaics = [
@@ -273,9 +295,23 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     terrainShadowTileSize,
     terrainShadowTileSize,
   );
+  const visibilityTexture = createTexture(
+    gl,
+    gl.R8,
+    terrainShadowVisibilitySize,
+    terrainShadowVisibilitySize,
+  );
+  const shadeTexture = createTexture(
+    gl,
+    gl.RGBA8,
+    terrainShadowTileSize,
+    terrainShadowTileSize,
+  );
+  const readback = new Uint8Array(tileBytes);
   const staticBytes =
-    // Encoded staging texture plus the double-buffered output canvas.
+    // Encoded staging texture, shade target, and its CPU readback.
     3 * tileBytes +
+    terrainShadowVisibilitySize * terrainShadowVisibilitySize +
     mosaics.length * mosaicSize * mosaicSize * bytesPerTexel +
     reductionStages.reduce(
       (sum, stage) => sum + stage.size * stage.size * bytesPerTexel,
@@ -284,18 +320,21 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     mosaics.length * bytesPerTexel;
 
   return {
-    canvas,
     gl,
     vertexArray: gl.createVertexArray(),
     decodeProgram,
     reductionProgram,
-    shadowProgram,
+    visibilityProgram,
+    shadeProgram,
     encodedTexture,
     readFramebuffer: gl.createFramebuffer(),
     drawFramebuffer: gl.createFramebuffer(),
     mosaics,
     reductionStages,
     levelMaximum,
+    visibilityTexture,
+    shadeTexture,
+    readback,
     staticBytes,
   };
 }
@@ -424,31 +463,17 @@ function reduceMaximum(gpu: GpuResources, mosaic: WebGLTexture, level: number): 
   }
 }
 
-function drawShadowPass(
-  gpu: GpuResources,
+/** Sets the tile, sun, and finest-level uniforms both shadow passes read. */
+function setShadowUniforms(
+  gl: WebGL2RenderingContext,
+  uniforms: UniformLocations<(typeof tileUniformNames)[number]>,
   request: TerrainShadowTileRequest,
   levels: readonly TerrainShadowMosaicLevel[],
 ): void {
-  const { gl, shadowProgram } = gpu;
-  const uniforms = shadowProgram.uniforms;
   const geometry = terrainShadowTileGeometry(request);
   const sun = subsolarPoint(new Date(request.instantMs));
   const finestZoom = levels[0]?.zoom ?? request.z;
-
-  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-  gl.viewport(0, 0, terrainShadowTileSize, terrainShadowTileSize);
-  gl.useProgram(shadowProgram.program);
-  const samplers = [
-    [uniforms.uMosaic0, gpu.mosaics[0]],
-    [uniforms.uMosaic1, gpu.mosaics[1]],
-    [uniforms.uMosaic2, gpu.mosaics[2]],
-    [uniforms.uLevelMaximum, gpu.levelMaximum],
-  ] as const;
-  samplers.forEach(([location, texture], unit) => {
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(location, unit);
-  });
+  gl.uniform1i(uniforms.uMosaic0, 0);
   gl.uniform2fv(
     uniforms.uLevelOrigin,
     levels.flatMap((level) => [...level.outputOriginTexels]),
@@ -456,10 +481,6 @@ function drawShadowPass(
   gl.uniform1fv(
     uniforms.uLevelTexelsPerOutputPixel,
     levels.map((level) => level.texelsPerOutputPixel),
-  );
-  gl.uniform1fv(
-    uniforms.uLevelTexelsPerRadian,
-    levels.map((level) => level.texelsPerRadian),
   );
   gl.uniform2f(
     uniforms.uTileLongitude,
@@ -477,28 +498,84 @@ function drawShadowPass(
     (2 * Math.PI * terrainShadowModel.earthRadiusMeters) /
       (2 ** finestZoom * terrainShadowTileSize),
   );
-  gl.uniform3f(
-    uniforms.uColor,
-    request.color[0] / 255,
-    request.color[1] / 255,
-    request.color[2] / 255,
-  );
+}
 
-  const bandHeight = terrainShadowTileSize / shadowPassBands;
+/** Marches the horizon into `visibilityTexture`, then lights the slopes into `shadeTexture`. */
+function drawShadePasses(
+  gpu: GpuResources,
+  request: TerrainShadowTileRequest,
+  levels: readonly TerrainShadowMosaicLevel[],
+): void {
+  const { gl, visibilityProgram, shadeProgram } = gpu;
+  const textures = [gpu.mosaics[0], gpu.mosaics[1], gpu.mosaics[2], gpu.levelMaximum];
+  textures.forEach((texture, unit) => {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+  });
+
+  attachDrawTarget(gpu, gpu.visibilityTexture);
+  gl.viewport(0, 0, terrainShadowVisibilitySize, terrainShadowVisibilitySize);
+  gl.useProgram(visibilityProgram.program);
+  const uniforms = visibilityProgram.uniforms;
+  setShadowUniforms(gl, uniforms, request, levels);
+  gl.uniform1i(uniforms.uMosaic1, 1);
+  gl.uniform1i(uniforms.uMosaic2, 2);
+  gl.uniform1i(uniforms.uLevelMaximum, 3);
+  gl.uniform1fv(
+    uniforms.uLevelTexelsPerRadian,
+    levels.map((level) => level.texelsPerRadian),
+  );
+  const bandHeight = Math.ceil(terrainShadowVisibilitySize / shadowPassBands);
   gl.enable(gl.SCISSOR_TEST);
   for (let band = 0; band < shadowPassBands; band += 1) {
-    gl.scissor(0, band * bandHeight, terrainShadowTileSize, bandHeight);
+    gl.scissor(0, band * bandHeight, terrainShadowVisibilitySize, bandHeight);
     drawFullscreen(gpu);
     gl.flush();
   }
   gl.disable(gl.SCISSOR_TEST);
+
+  attachDrawTarget(gpu, gpu.shadeTexture);
+  gl.viewport(0, 0, terrainShadowTileSize, terrainShadowTileSize);
+  gl.activeTexture(gl.TEXTURE0 + visibilityTextureUnit);
+  gl.bindTexture(gl.TEXTURE_2D, gpu.visibilityTexture);
+  gl.useProgram(shadeProgram.program);
+  setShadowUniforms(gl, shadeProgram.uniforms, request, levels);
+  gl.uniform1i(shadeProgram.uniforms.uVisibility, visibilityTextureUnit);
+  drawFullscreen(gpu);
+}
+
+/** Reads the brightness bytes of `shadeTexture`; row 0 is the northern edge. */
+function readShadeMask(gpu: GpuResources): Uint8Array {
+  const { gl, readback } = gpu;
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, gpu.readFramebuffer);
+  gl.framebufferTexture2D(
+    gl.READ_FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    gpu.shadeTexture,
+    0,
+  );
+  gl.readPixels(
+    0,
+    0,
+    terrainShadowTileSize,
+    terrainShadowTileSize,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    readback,
+  );
+  const mask = new Uint8Array(maskBytes);
+  for (let index = 0; index < maskBytes; index += 1) {
+    mask[index] = readback[index * bytesPerTexel] ?? 0;
+  }
+  return mask;
 }
 
 /**
  * Worker-owned WebGL2 terrain-shadow renderer. One OffscreenCanvas context is created on
- * the first request and recreated after a context loss; decoded DEM tiles and rendered
- * masks live in bounded LRU caches. GPU work runs one tile at a time; DEM fetches run
- * concurrently and are shared between requests for the same tile.
+ * the first request and recreated after a context loss; decoded DEM tiles and one-byte
+ * shade masks live in bounded LRU caches. GPU work runs one tile at a time; DEM fetches
+ * run concurrently and are shared between requests for the same tile.
  */
 export class TerrainShadowRenderer {
   #gpu: GpuResources | null = null;
@@ -507,33 +584,68 @@ export class TerrainShadowRenderer {
   readonly #demTiles = new Map<string, DemTileEntry>();
   readonly #demPins = new Map<string, number>();
   readonly #inflightDem = new Map<string, InflightDemFetch>();
-  readonly #masks = new Map<string, ImageBitmap>();
+  readonly #masks = new Map<string, Uint8Array>();
+  /** DEM URLs the mosaics currently hold, so consecutive instants of a tile reuse them. */
+  #assembledMosaicKey: string | null = null;
   #gpuQueue: Promise<void> = Promise.resolve();
   #disposed = false;
 
+  /** Colors the cached shade mask of `request` into a transferable bitmap. */
   public async render(
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
   ): Promise<TerrainShadowTileResult> {
+    const { mask, metrics } = await this.ensureMask(request, signal);
+    const startedAt = performance.now();
+    const table = createShadeLookupTable(
+      request.shadowColor,
+      request.highlightColor,
+      request.highlightOpacity,
+    );
+    const bitmap = await createImageBitmap(
+      new ImageData(
+        expandShadeMask(mask, table),
+        terrainShadowTileSize,
+        terrainShadowTileSize,
+      ),
+    );
+    return {
+      bitmap,
+      metrics: {
+        ...metrics,
+        computeMs: metrics.computeMs + performance.now() - startedAt,
+      },
+    };
+  }
+
+  /** Computes and caches the shade mask of `request` without producing a bitmap. */
+  public async prefetch(
+    request: TerrainShadowTileRequest,
+    signal: AbortSignal,
+  ): Promise<TerrainShadowTileMetrics> {
+    return (await this.ensureMask(request, signal)).metrics;
+  }
+
+  private async ensureMask(
+    request: TerrainShadowTileRequest,
+    signal: AbortSignal,
+  ): Promise<{
+    readonly mask: Uint8Array;
+    readonly metrics: TerrainShadowTileMetrics;
+  }> {
     throwIfAborted(signal);
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
     const gpu = this.ensureGpu();
     const generation = this.#generation;
-    const maskKey = [
-      request.demTileUrl,
-      request.color.join(','),
-      `${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`,
-    ].join('|');
+    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`;
 
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
-      const startedAt = performance.now();
-      this.touchMask(maskKey, cached);
-      const bitmap = await createImageBitmap(cached);
+      this.storeMask(maskKey, cached);
       return {
-        bitmap,
+        mask: cached,
         metrics: this.metrics({
-          computeMs: performance.now() - startedAt,
+          computeMs: 0,
           demFetchMs: 0,
           cacheHit: true,
           demTilesFetched: 0,
@@ -551,6 +663,7 @@ export class TerrainShadowRenderer {
         tile === null ? null : demTileUrl(request.demTileUrl, tile),
       ),
     );
+    const mosaicKey = levelUrls.flat().join('|');
     const urls = [...new Set(levelUrls.flat().filter((url) => url !== null))];
 
     for (const url of urls) this.#demPins.set(url, (this.#demPins.get(url) ?? 0) + 1);
@@ -561,35 +674,35 @@ export class TerrainShadowRenderer {
       );
       const demFetchMs = performance.now() - fetchStartedAt;
 
-      const { rendered, startedAt } = await this.runSerially(async () => {
+      const { mask, startedAt } = await this.runSerially(async () => {
         throwIfAborted(signal);
         if (generation !== this.#generation || this.#gpu !== gpu)
           throw contextLostError();
         const jobStartedAt = performance.now();
-        levelUrls.forEach((tileUrls, level) => {
-          const mosaic = gpu.mosaics[level];
-          if (mosaic === undefined) return;
-          assembleMosaic(
-            gpu,
-            mosaic,
-            tileUrls.map((url) => this.demTexture(url)),
-          );
-          reduceMaximum(gpu, mosaic, level);
-        });
-        drawShadowPass(gpu, request, levels);
+        if (this.#assembledMosaicKey !== mosaicKey) {
+          this.#assembledMosaicKey = null;
+          levelUrls.forEach((tileUrls, level) => {
+            const mosaic = gpu.mosaics[level];
+            if (mosaic === undefined) return;
+            assembleMosaic(
+              gpu,
+              mosaic,
+              tileUrls.map((url) => this.demTexture(url)),
+            );
+            reduceMaximum(gpu, mosaic, level);
+          });
+          this.#assembledMosaicKey = mosaicKey;
+        }
+        drawShadePasses(gpu, request, levels);
         // Holding the queue until the GPU finishes keeps at most one tile of shadow work
         // competing with map frames, and makes `computeMs` the real GPU time.
         await waitForGpu(gpu.gl);
         if (gpu.gl.isContextLost()) throw contextLostError();
-        return {
-          rendered: gpu.canvas.transferToImageBitmap(),
-          startedAt: jobStartedAt,
-        };
+        return { mask: readShadeMask(gpu), startedAt: jobStartedAt };
       });
-      const bitmap = await createImageBitmap(rendered);
-      this.storeMask(maskKey, rendered);
+      this.storeMask(maskKey, mask);
       return {
-        bitmap,
+        mask,
         metrics: this.metrics({
           computeMs: performance.now() - startedAt,
           demFetchMs,
@@ -632,8 +745,8 @@ export class TerrainShadowRenderer {
     for (const inflight of this.#inflightDem.values()) inflight.controller.abort();
     this.#inflightDem.clear();
     this.#demTiles.clear();
-    for (const mask of this.#masks.values()) mask.close();
     this.#masks.clear();
+    this.#assembledMosaicKey = null;
   }
 
   /** Resolves `true` when this request started the network fetch for `url`. */
@@ -736,18 +849,13 @@ export class TerrainShadowRenderer {
     return entry.texture;
   }
 
-  private touchMask(key: string, mask: ImageBitmap): void {
+  /** Inserts or refreshes `key` as most recently used and evicts beyond the cap. */
+  private storeMask(key: string, mask: Uint8Array): void {
     this.#masks.delete(key);
     this.#masks.set(key, mask);
-  }
-
-  private storeMask(key: string, mask: ImageBitmap): void {
-    this.#masks.get(key)?.close();
-    this.touchMask(key, mask);
-    for (const [oldestKey, oldest] of this.#masks) {
-      if (this.#masks.size <= maximumCachedMasks) break;
+    for (const oldestKey of this.#masks.keys()) {
+      if (this.#masks.size <= terrainShadowMaskCacheLimit) break;
       this.#masks.delete(oldestKey);
-      oldest.close();
     }
   }
 
@@ -772,8 +880,10 @@ export class TerrainShadowRenderer {
     }
     return {
       ...tile,
-      gpuBytes:
-        (this.#gpu?.staticBytes ?? 0) + (decodedTiles + this.#masks.size) * tileBytes,
+      memoryBytes:
+        (this.#gpu?.staticBytes ?? 0) +
+        decodedTiles * tileBytes +
+        this.#masks.size * maskBytes,
       cachedMasks: this.#masks.size,
       cachedDemTiles: this.#demTiles.size,
     };

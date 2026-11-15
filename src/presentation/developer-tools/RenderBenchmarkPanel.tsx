@@ -123,7 +123,7 @@ function SunShadowSummary({
               {String(summary.orbitFrameIntervalP95Ms)} ms
             </Typography>
             <Typography variant="body2">
-              Shadow GPU memory: {String(summary.gpuMegabytes)} MB
+              Shadow worker memory: {String(summary.memoryMegabytes)} MB
             </Typography>
           </Box>
         );

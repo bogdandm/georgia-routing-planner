@@ -61,9 +61,15 @@ export const mapVisualPalette = {
     cliff: '#8C4A1E',
     pass: '#29343A',
     scree: '#A39B91',
-    /** Terrain-cast sun shadow raster: opaque `#RRGGBB` color and layer `raster-opacity`. */
+    /**
+     * Real-sun relief: the worker expands each shade pixel into `sunShadow` (darker than
+     * flat ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter).
+     * Both are opaque `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
+     */
     sunShadow: '#1B2433',
     sunShadowOpacity: 0.5,
+    sunHighlight: '#FFF7E6',
+    sunHighlightOpacity: 0.6,
   },
   restricted: {
     line: '#C95050',

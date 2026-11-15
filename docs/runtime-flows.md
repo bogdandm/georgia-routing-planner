@@ -233,25 +233,28 @@ sequenceDiagram
   participant DEM as Mapterhorn DEM
   Map->>Provider: terrain-shadow://<epochMinute>/{z}/{x}/{y}
   Provider->>Provider: wait until the camera settles
-  Provider->>Worker: renderTile (tile, instant, DEM URL, color)
+  Provider->>Worker: renderTile (tile, instant, DEM URL, shade colors)
   alt mask cached for tile and minute
-    Worker-->>Provider: ImageBitmap
+    Worker-->>Provider: ImageBitmap colored from the mask
   else
     Worker->>DEM: 3×3 mosaics at z, z−2, z−4 (cached tiles skipped)
-    Worker->>Worker: WebGL2 horizon march on OffscreenCanvas, fence wait
-    Worker-->>Provider: ImageBitmap (transferred)
+    Worker->>Worker: WebGL2 visibility and shade passes, fence wait, mask readback
+    Worker-->>Provider: ImageBitmap colored from the mask (transferred)
   end
   Provider-->>Map: raster tile data
 ```
 
 While the switch is on and shadows are not known to be unavailable, the controller keeps
 the `terrain-sun-shadow` raster source (z7–12, overzoomed above) and its layer directly
-below the minor contours; turning the switch off removes both. The tile URL carries the
-instant as a whole epoch minute, so an unchanged minute changes nothing, and a new
-minute replaces the source tiles with `setTiles`: MapLibre requests only the visible
-tiles again. Camera moves (pan, rotate, pitch, 3D) never recompute, because MapLibre's
-tile cache and the worker's mask cache already hold the tiles; returning to an earlier
-minute hits the mask cache. Compare panes never add the source.
+below the minor contours, and sets the relief hillshade's minimum zoom to 24 so the
+fixed-light shading does not double the real-sun relief; turning the switch off removes
+the source and layer and restores the relief zoom range. The relief visibility
+preference is never written. The tile URL carries the instant as a whole epoch minute,
+so an unchanged minute changes nothing, and a new minute replaces the source tiles with
+`setTiles`: MapLibre requests only the visible tiles again. Camera moves (pan, rotate,
+pitch, 3D) never recompute, because MapLibre's tile cache and the worker's mask cache
+already hold the tiles; returning to an earlier minute hits the mask cache. Compare
+panes never add the source.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
 the module worker on the first tile request. Requests wait while the map is dragged,
@@ -261,21 +264,28 @@ which MapLibre accepts directly, so no image is encoded.
 
 For an output tile at zoom z, the worker builds 3×3 DEM mosaics at z, z−2, and z−4
 (clamped to the DEM zoom range) around the tile, so occluders up to the 100 km cap are
-covered at z12. Each horizon sample reads the finest mosaic that contains it, and a GPU
-reduction of each level's maximum elevation ends the march early once nothing ahead can
-rise above the Sun. Per pixel the shader computes the Sun's azimuth and refracted
-elevation, marches along the great circle toward the Sun with Earth curvature and
-terrestrial refraction, and converts the highest horizon angle into the visible fraction
-of the solar disk; the alpha is the shaded fraction. GPU jobs run one at a time and wait
-on a fence before the next starts, so at most one tile of shadow work competes with map
-frames.
+covered at z12; consecutive instants of the same tile reuse the assembled mosaics. Each
+horizon sample reads the finest mosaic that contains it, and a GPU reduction of each
+level's maximum elevation ends the march early once nothing ahead can rise above the
+Sun. The visibility pass computes, per pixel of the tile plus a 2 px margin, the Sun's
+azimuth and refracted elevation, marches along the great circle toward the Sun with
+Earth curvature and terrestrial refraction, and stores the visible fraction of the solar
+disk. The shade pass blurs that fraction with a 5×5 Gaussian (σ = 1 px) and multiplies
+it by Lambert lighting from finest-mosaic central differences, normalized so flat ground
+in full sun (or at 10° elevation for lower suns) is 1. The slope term reaches zero
+exactly where the march begins to report self-shadow, so terminators stay continuous.
+The worker reads the result back as one byte per pixel (brightness × 127) and colors it
+through a 256-entry table: shadow color with alpha 1 − brightness below 127, highlight
+color fading in above it. GPU jobs run one at a time and wait on a fence before the next
+starts, so at most one tile of shadow work competes with map frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,
 or decode failure fails the shadow tile instead of drawing a truncated horizon. The
 worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
-and 64 rendered masks keyed by tile and minute in LRU caches. A lost WebGL context drops
-both caches, and the next request creates a fresh context.
+and up to 3072 one-byte shade masks (768 MiB) keyed by DEM URL, tile, and minute in LRU
+caches; colors are applied per request, so they are not part of the key. A lost WebGL
+context drops both caches, and the next request creates a fresh context.
 
 A failed tile fails only that tile; MapLibre leaves it blank. When the worker reports
 missing WebGL2 float support or its transport fails, availability becomes `unavailable`

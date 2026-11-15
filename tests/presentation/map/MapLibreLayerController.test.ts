@@ -188,6 +188,13 @@ class FakeLayerMap {
     this.visibility.set(id, String(value));
   }
 
+  public setLayerZoomRange(id: string, minzoom: number, maxzoom: number): void {
+    const layer = this.layers.get(id);
+    if (layer === undefined) throw new Error(`Layer ${id} is unavailable.`);
+    layer.minzoom = minzoom;
+    layer.maxzoom = maxzoom;
+  }
+
   public setPaintProperty(id: string, name: string, value: unknown): void {
     if (!this.layers.has(id)) throw new Error(`Layer ${id} is unavailable.`);
     this.paint.set(id, value);
@@ -2578,6 +2585,30 @@ describe('MapLibreLayerController', () => {
         sunShadowEnabled: false,
       });
     });
+  });
+
+  it('hides the fixed-light relief through its zoom range only while sun shadows draw', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const reliefVisibility = map.visibility.get(terrainOverlayLayerIds.reliefShade);
+    const storedVisibility = mapLayerStore.getState().visibility['terrain-relief'];
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)).toMatchObject({
+      minzoom: 24,
+    });
+
+    controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)).toMatchObject({
+      minzoom: 0,
+    });
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe(
+      reliefVisibility,
+    );
+    expect(mapLayerStore.getState().visibility['terrain-relief']).toBe(
+      storedVisibility,
+    );
   });
 
   it('re-adds sun shadows after a style reload at the current instant', () => {

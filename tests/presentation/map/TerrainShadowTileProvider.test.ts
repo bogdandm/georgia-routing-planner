@@ -37,7 +37,7 @@ const renderedMetrics: TerrainShadowTileMetrics = {
   demFetchMs: 10,
   cacheHit: false,
   demTilesFetched: 9,
-  gpuBytes: 100,
+  memoryBytes: 100,
   cachedMasks: 1,
   cachedDemTiles: 9,
 };
@@ -178,7 +178,9 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       demTileUrl: terrain.tileUrl,
       demMinZoom: 0,
       demMaxZoom: 12,
-      color: [0x1b, 0x24, 0x33],
+      shadowColor: [0x1b, 0x24, 0x33],
+      highlightColor: [0xff, 0xf7, 0xe6],
+      highlightOpacity: 0.6,
     });
 
     const second = loadTile();
@@ -316,7 +318,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
         demFetchMs: 0,
         cacheHit: true,
         demTilesFetched: 0,
-        gpuBytes: 120,
+        memoryBytes: 120,
       },
     });
     worker.fail(2, {
@@ -339,7 +341,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       maxComputeMs: 40,
       totalDemFetchMs: 10,
       demTilesFetched: 9,
-      gpuBytes: 120,
+      memoryBytes: 120,
     });
     expect(provider.getAvailability()).toBe('available');
 
@@ -353,7 +355,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       maxComputeMs: 0,
       totalDemFetchMs: 0,
       demTilesFetched: 0,
-      gpuBytes: 120,
+      memoryBytes: 120,
     });
     provider.dispose();
   });

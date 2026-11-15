@@ -95,7 +95,7 @@ export interface SunShadowStepResult {
   readonly wallMs: number;
   /** Whether the map went idle within the limit; otherwise tiles were still loading. */
   readonly settled: boolean;
-  /** Shadow tile counters since the step started; `gpuBytes` is the latest estimate. */
+  /** Shadow tile counters since the step started; `memoryBytes` is the latest estimate. */
   readonly metrics: TerrainShadowMetricsSnapshot;
 }
 
@@ -115,8 +115,8 @@ export interface SunShadowSceneResult {
   /** Rotation over the mountains with shadows on, measured like the camera phases. */
   readonly orbit: RenderBenchmarkPhase;
   readonly jsHeapUsedMb: number | null;
-  /** Latest estimate of GPU memory held by shadow computation. */
-  readonly gpuBytes: number;
+  /** Latest estimate of worker memory: GPU textures plus cached shade masks. */
+  readonly memoryBytes: number;
 }
 
 export interface SunShadowBenchmarkResults {
@@ -397,7 +397,7 @@ export interface SunShadowSceneSummary {
   readonly revisitTilesFromCache: number;
   readonly orbitFramesPerSecond: number;
   readonly orbitFrameIntervalP95Ms: number;
-  readonly gpuMegabytes: number;
+  readonly memoryMegabytes: number;
 }
 
 /** The numbers the developer drawer shows for one sun-shadow scene. */
@@ -423,7 +423,7 @@ export function summarizeSunShadowScene(
     revisitTilesFromCache: revisit.metrics.tilesFromCache,
     orbitFramesPerSecond: orbit.framesPerSecond,
     orbitFrameIntervalP95Ms: orbit.frameIntervalMs.p95,
-    gpuMegabytes: round(result.gpuBytes / 2 ** 20),
+    memoryMegabytes: round(result.memoryBytes / 2 ** 20),
   };
 }
 
@@ -1091,7 +1091,7 @@ async function measureSunShadows(
       revisit,
       orbit,
       jsHeapUsedMb: readJsHeapUsedMb(),
-      gpuBytes: hooks.metrics().gpuBytes,
+      memoryBytes: hooks.metrics().memoryBytes,
     });
   }
   return {

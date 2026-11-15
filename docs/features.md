@@ -804,15 +804,20 @@ restore the last settled mode: 2D keeps center and zoom, 3D also keeps bearing a
 and re-enters terrain once the map is ready. Details are in
 [runtime flows](./runtime-flows.md).
 
-Sun shadows are terrain-cast shadows for the real position of the Sun at the chosen
-instant, not hillshade. Each pixel gets its own solar azimuth and elevation (NOAA/Meeus
-solar coordinates with atmospheric refraction) and is shaded when the terrain horizon
-toward the Sun, traced along the great circle with Earth curvature and terrestrial
-refraction, rises above the solar disk; a partly covered disk gives soft penumbra edges,
-and night is full shade. The shade is a semitransparent dark-blue raster drawn above
-relief, satellite imagery, and land cover but below water, contours, labels, and tracks;
-it drapes over 3D terrain, stays on while the weather map is shown, and is not drawn in
-comparison panes. It appears from z7 and is computed up to z12, then overzoomed.
+Sun shadows shade relief for the real position of the Sun at the chosen instant. Each
+pixel gets its own solar azimuth and elevation (NOAA/Meeus solar coordinates with
+atmospheric refraction). Its brightness is the slope's lighting toward the Sun (the
+terrain normal against the Sun direction, with flat ground in full sun as the neutral
+level and suns below 10° darkening flat ground gradually) multiplied by the visible
+fraction of the solar disk above the terrain horizon, traced along the great circle with
+Earth curvature and terrestrial refraction. Cast-shadow edges are softened over a few
+pixels, and night is full shade. Darker pixels draw a semitransparent dark-blue shade
+and sunlit slopes a faint warm highlight. While sun shadows draw, the fixed-light relief
+shading is hidden without changing its saved visibility, and it returns when they are
+turned off. The raster is drawn above relief, satellite imagery, and land cover but
+below water, contours, labels, and tracks; it drapes over 3D terrain, stays on while the
+weather map is shown, and is not drawn in comparison panes. It appears from z7 and is
+computed up to z12, then overzoomed.
 
 Shadow accuracy is limited by the data and the model:
 

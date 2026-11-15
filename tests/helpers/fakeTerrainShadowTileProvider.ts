@@ -13,7 +13,7 @@ const emptyMetrics: TerrainShadowMetricsSnapshot = {
   maxComputeMs: 0,
   totalDemFetchMs: 0,
   demTilesFetched: 0,
-  gpuBytes: 0,
+  memoryBytes: 0,
 };
 
 /** Shadow provider without a worker; tests switch availability and read interaction. */

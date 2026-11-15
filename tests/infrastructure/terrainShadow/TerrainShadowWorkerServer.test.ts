@@ -20,7 +20,9 @@ const request: TerrainShadowTileRequest = {
   demTileUrl: 'https://tiles.example/{z}/{x}/{y}.webp',
   demMinZoom: 0,
   demMaxZoom: 12,
-  color: [27, 36, 51],
+  shadowColor: [27, 36, 51],
+  highlightColor: [255, 247, 230],
+  highlightOpacity: 0.6,
 };
 
 describe('TerrainShadowWorkerServer', () => {

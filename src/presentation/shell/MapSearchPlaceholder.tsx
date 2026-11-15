@@ -287,7 +287,7 @@ export function MapSearchPlaceholder() {
       setValidationCode(null);
       requestMapNavigation({ ...coordinateResult.coordinate, zoom: 13 });
       requestMapPointInspection(coordinateResult.coordinate, {
-        refreshNearbyPoiOnIdle: true,
+        refreshNearbyPoiWhenSettled: true,
       });
       return;
     }
@@ -512,7 +512,7 @@ export function MapSearchPlaceholder() {
                     requestMapFitBounds(result.bounds, 13);
                   }
                   requestMapPointInspection(result.coordinate, {
-                    refreshNearbyPoiOnIdle: true,
+                    refreshNearbyPoiWhenSettled: true,
                   });
                   closeResults();
                 }}

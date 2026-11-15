@@ -380,24 +380,41 @@ export function withTrackWeatherTimeline(
   };
 }
 
+/** Track metrics the route timeline reads. */
+export type TrackTimingMetrics = Pick<
+  TrackMetrics,
+  'elapsedSeconds' | 'estimatedSeconds' | 'ascentMeters' | 'descentMeters'
+>;
+
 /**
  * Elapsed seconds at each profile point. Recorded timestamps drive the pace when the
  * track has a recorded duration and `ignoreRecordedTime` is off; otherwise the DIN 33466
- * estimate adds climbing and descending time to horizontal walking time. `paceFactor`
- * stretches (above 1) or compresses that time.
+ * estimate adds climbing and descending time to horizontal walking time, scaled to the
+ * track's stored estimate. Recorded tracks store none, so the DIN total of the route's
+ * distance and the stored ascent and descent anchors it instead of the noisier
+ * per-sample sum. `paceFactor` stretches (above 1) or compresses that time.
  */
 function routeElapsedSeconds(
   points: readonly TrackTimingPoint[],
-  metrics: Pick<TrackMetrics, 'elapsedSeconds' | 'estimatedSeconds'>,
+  metrics: TrackTimingMetrics,
   timing: TrackWeatherTiming,
 ): { readonly elapsed: readonly number[]; readonly recorded: boolean } {
   const recorded =
     metrics.elapsedSeconds === undefined || timing.ignoreRecordedTime
       ? null
       : recordedElapsedSeconds(points);
-  const elapsed = (
-    recorded ?? estimatedElapsedSeconds(points, metrics.estimatedSeconds)
-  ).map((seconds) => seconds * timing.paceFactor);
+  const estimateTotal =
+    metrics.estimatedSeconds ??
+    (metrics.ascentMeters === undefined || metrics.descentMeters === undefined
+      ? undefined
+      : estimateHikingSeconds(
+          points.at(-1)?.distanceMeters ?? 0,
+          metrics.ascentMeters,
+          metrics.descentMeters,
+        ));
+  const elapsed = (recorded ?? estimatedElapsedSeconds(points, estimateTotal)).map(
+    (seconds) => seconds * timing.paceFactor,
+  );
   return { elapsed, recorded: recorded !== null };
 }
 
@@ -414,7 +431,7 @@ export type TrackWeatherTiming = Pick<
  */
 export function planTrackWeatherTimeline(
   profile: TrackTimingRoute,
-  metrics: Pick<TrackMetrics, 'distanceMeters' | 'elapsedSeconds' | 'estimatedSeconds'>,
+  metrics: TrackTimingMetrics & Pick<TrackMetrics, 'distanceMeters'>,
   timing: TrackWeatherTiming = defaultTrackWeatherTimelineSettings,
 ): TrackWeatherTimeline {
   const { points } = profile;
@@ -494,7 +511,7 @@ function hoursAndMinutes(seconds: number, wrapAtMidnight: boolean): string {
  */
 export function planTrackClockTimes(
   profile: TrackTimingRoute,
-  metrics: Pick<TrackMetrics, 'elapsedSeconds' | 'estimatedSeconds'>,
+  metrics: TrackTimingMetrics,
   settings: TrackWeatherTimelineSettings,
 ): TrackClockTimes {
   const { points } = profile;
@@ -530,7 +547,7 @@ export function planTrackClockTimes(
  */
 export function planTrackMarkerTimes(
   profile: TrackTimingRoute,
-  metrics: Pick<TrackMetrics, 'elapsedSeconds' | 'estimatedSeconds'>,
+  metrics: TrackTimingMetrics,
   settings: TrackWeatherTimelineSettings,
   markers: readonly TrackMarker[],
 ): ReadonlyMap<string, string> {

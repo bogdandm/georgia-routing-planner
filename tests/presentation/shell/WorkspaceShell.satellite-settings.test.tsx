@@ -893,6 +893,7 @@ describe('WorkspaceShell', () => {
         markerSort: 'created',
         trackSort: 'created',
         onboardingCompleted: true,
+        trackSectionExpanded: {},
       });
     });
   });

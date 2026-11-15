@@ -261,7 +261,7 @@ describe('planTrackWeatherTimeline', () => {
     ]);
   });
 
-  it('times the route by the estimate when recorded time is ignored', () => {
+  it('times the route by the stored-metric estimate when recorded time is ignored', () => {
     const recorded = profile([
       { distanceMeters: 0, elevationMeters: 1_000, recordedAt: '2026-06-01T05:00:00Z' },
       {
@@ -270,10 +270,13 @@ describe('planTrackWeatherTimeline', () => {
         recordedAt: '2026-06-01T07:00:00Z',
       },
     ]);
+    // Like real recorded summaries, no stored estimate. The stored 600 m ascent, not the
+    // 400 m between samples, sets the DIN total: 2 h climbing plus half of 1 h walking.
     const metrics = {
       distanceMeters: 4_000,
       elapsedSeconds: 2 * hour,
-      estimatedSeconds: 3 * hour,
+      ascentMeters: 600,
+      descentMeters: 0,
     };
     const ignoring = {
       ...defaultTrackWeatherTimelineSettings,
@@ -283,13 +286,13 @@ describe('planTrackWeatherTimeline', () => {
     expect(planTrackWeatherTimeline(recorded, metrics, ignoring)).toMatchObject({
       status: 'available',
       durationSource: 'estimated',
-      durationSeconds: expect.closeTo(3 * hour, 6) as number,
+      durationSeconds: expect.closeTo(2.5 * hour, 6) as number,
     });
     expect(
       planTrackClockTimes(recorded, metrics, defaultTrackWeatherTimelineSettings)
         .finish,
     ).toBe('11:00');
-    expect(planTrackClockTimes(recorded, metrics, ignoring).finish).toBe('12:00');
+    expect(planTrackClockTimes(recorded, metrics, ignoring).finish).toBe('11:30');
   });
 
   it('falls back to the estimate when a profile sample has no timestamp', () => {
@@ -681,7 +684,8 @@ describe('planTrackMarkerTimes', () => {
       },
     ]);
     const markers = [marker('middle', [44.02, 42]), marker('finish', [44.04, 42])];
-    const metrics = { elapsedSeconds: 2 * hour, estimatedSeconds: 4 * hour };
+    // Recorded tracks store no estimate; 4 km and 300 m up make a 1.5 h DIN total.
+    const metrics = { elapsedSeconds: 2 * hour, ascentMeters: 300, descentMeters: 0 };
     const timing = { ...settings, startHour: 23.5, paceFactor: 1.5 };
 
     expect(planTrackMarkerTimes(route, metrics, timing, markers)).toEqual(
@@ -699,8 +703,8 @@ describe('planTrackMarkerTimes', () => {
       ),
     ).toEqual(
       new Map([
-        ['middle', '02:30'],
-        ['finish', '05:30'],
+        ['middle', '00:37'],
+        ['finish', '01:45'],
       ]),
     );
   });

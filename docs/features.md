@@ -325,8 +325,9 @@ the **Weather forecast** section beneath it. Its map-time options, **Route start
 **Adjust pace** controls remain available while the forecast is collapsed. The timeline
 follows recorded timestamps when the track has recorded time and otherwise the DIN 33466
 estimate, so climbs advance more slowly than flat walking. **Ignore recorded time**,
-offered on timed tracks, selects the estimate instead. **Route start** sets the start
-from 00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time,
+offered on timed tracks, selects the estimate instead, totalling the DIN 33466 time of
+the track's distance and stored ascent and descent. **Route start** sets the start from
+00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time,
 rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace** scales hiking
 time from ×0.5 (faster) to ×2 (slower) on release. These settings are remembered in this
 browser for each saved track and reset to the defaults for a reversed copy; an unsaved

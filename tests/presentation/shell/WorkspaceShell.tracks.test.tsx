@@ -2278,7 +2278,14 @@ describe('WorkspaceShell', () => {
     const base = savedTrackSummary('local:ridge', 'Ridge trail');
     const source = {
       ...base,
-      metrics: { ...base.metrics, elapsedSeconds: 3600, estimatedSeconds: 7200 },
+      // Recorded summaries store no estimate; ignoring the recording uses the DIN total
+      // of the stored 600 m ascent: 2 h climbing plus half the horizontal time.
+      metrics: {
+        ...base.metrics,
+        elapsedSeconds: 3600,
+        ascentMeters: 600,
+        descentMeters: 0,
+      },
     };
     const nearMarker = {
       id: '00000000-0000-4000-8000-000000000001',
@@ -2345,21 +2352,21 @@ describe('WorkspaceShell', () => {
     await user.click(
       within(details).getByRole('checkbox', { name: 'Ignore recorded time' }),
     );
-    expect(within(markerList).getByText('11:36')).toBeVisible();
+    expect(within(markerList).getByText('11:46')).toBeVisible();
     await user.click(
       within(details).getByRole('checkbox', {
         name: 'Count map times from 00:00 at the start',
       }),
     );
-    expect(within(markerList).getByText('02:06')).toBeVisible();
+    expect(within(markerList).getByText('02:16')).toBeVisible();
     expect(setTrackMarkers).toHaveBeenLastCalledWith([
-      { ...nearMarker, passageTime: '02:06' },
+      { ...nearMarker, passageTime: '02:16' },
       farMarker,
     ]);
     await user.click(
       within(details).getByRole('checkbox', { name: 'Show times on the map' }),
     );
-    expect(within(markerList).queryByText('02:06')).not.toBeInTheDocument();
+    expect(within(markerList).queryByText('02:16')).not.toBeInTheDocument();
     expect(within(markerList).getByText(nearMarker.name)).toBeVisible();
     expect(within(markerList).getByText(farMarker.name)).toBeVisible();
     expect(setTrackMarkers).toHaveBeenLastCalledWith(content.markers);

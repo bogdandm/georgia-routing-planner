@@ -224,6 +224,46 @@ describe('prepareImportedTrack', () => {
     ).toBe(true);
   });
 
+  it('aligns retained switchback vertices with DEM samples along the source path', async () => {
+    // 20 m legs alternating north and south advance longitude linearly along the path,
+    // while 30 m stations cut every corner and their chord length falls short of it.
+    const legNorthMeters = Math.sqrt(20 ** 2 - 10 ** 2);
+    const points = Array.from({ length: 41 }, (_, index) => ({
+      coordinate: [
+        ((index * 10) / earthRadiusMeters) * (180 / Math.PI),
+        (((index % 2) * legNorthMeters) / earthRadiusMeters) * (180 / Math.PI),
+      ] as const,
+    }));
+    const provider: ElevationProvider = {
+      sample: () => Promise.resolve({ status: 'unavailable' }),
+      sampleMany: (coordinates) =>
+        Promise.resolve(
+          coordinates.map(
+            (coordinate) =>
+              ({
+                status: 'available',
+                meters: coordinate.longitude * 1_000_000,
+              }) as const,
+          ),
+        ),
+    };
+
+    const prepared = await prepareImportedTrack([{ points }], provider, signal, {
+      preserveGeometry: true,
+      sampleIntervalMeters: 30,
+      maximumElevationSamples: 5_000,
+    });
+
+    const calculated = prepared.calculatedSegments?.[0]?.points ?? [];
+    expect(calculated).toHaveLength(points.length);
+    for (const [index, point] of calculated.entries()) {
+      expect(point.elevationMeters).toBeCloseTo(
+        (points[index]?.coordinate[0] ?? 0) * 1_000_000,
+        1,
+      );
+    }
+  });
+
   it.each([
     ['non-finite interval', { sampleIntervalMeters: Number.NaN }],
     ['non-positive interval', { sampleIntervalMeters: 0 }],

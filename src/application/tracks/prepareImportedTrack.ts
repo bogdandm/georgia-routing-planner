@@ -24,6 +24,8 @@ interface ResampledStation {
   readonly coordinate: TrackCoordinate;
   readonly recordedAt?: string;
   readonly sourceSegmentIndex: number;
+  /** Distance along the source polyline; chords between stations can be shorter. */
+  readonly sourceDistanceMeters: number;
 }
 
 export interface TrackElevationProgressPoint {
@@ -196,6 +198,7 @@ function resampleSegment(
         sourcePoint?.coordinate ??
         interpolateCoordinate(start.coordinate, end.coordinate, fraction),
       sourceSegmentIndex,
+      sourceDistanceMeters: distanceMeters,
       ...(recordedAt === undefined ? {} : { recordedAt }),
     };
     stations.push(station);
@@ -212,6 +215,7 @@ function resampleSegment(
   const endpointStation: ResampledStation = {
     coordinate: endpoint.coordinate,
     sourceSegmentIndex,
+    sourceDistanceMeters: totalDistance,
     ...(endpoint.recordedAt === undefined ? {} : { recordedAt: endpoint.recordedAt }),
   };
   const finalStation = requiredValue(stations, stations.length - 1);
@@ -454,7 +458,14 @@ export async function prepareImportedTrack(
     resampleSegment(segment, sourceSegmentIndex, signal, effectiveIntervalMeters),
   );
   const stations = resampled.flat();
-  const distancesBySegment = resampled.map((segment) => pointDistances(segment));
+  // Retained geometry is measured along the source polyline, so its stations must be
+  // too: chords between sparse stations cut switchbacks, and mapping source vertices
+  // onto chord distances shifts elevations forward and flattens the track end.
+  const distancesBySegment = resampled.map((segment) =>
+    options.preserveGeometry
+      ? segment.map((station) => station.sourceDistanceMeters)
+      : pointDistances(segment),
+  );
   const stationDistanceMeters: number[] = [];
   let distanceOffset = 0;
   for (const distances of distancesBySegment) {

@@ -246,15 +246,17 @@ sequenceDiagram
 
 While the switch is on and shadows are not known to be unavailable, the controller keeps
 the `terrain-sun-shadow` raster source (z7–12, overzoomed above) and its layer directly
-below the minor contours, and sets the relief hillshade's minimum zoom to 24 so the
-fixed-light shading does not double the real-sun relief; turning the switch off removes
-the source and layer and restores the relief zoom range. The relief visibility
-preference is never written. The tile URL carries the instant as a whole epoch minute,
-so an unchanged minute changes nothing, and a new minute replaces the source tiles with
-`setTiles`: MapLibre requests only the visible tiles again. Camera moves (pan, rotate,
-pitch, 3D) never recompute, because MapLibre's tile cache and the worker's mask cache
-already hold the tiles; returning to an earlier minute hits the mask cache. Compare
-panes never add the source.
+below the minor contours. Once that layer exists it sets the relief hillshade's minimum
+zoom to 24 so the fixed-light shading does not double the real-sun relief; a failed
+shadow setup leaves the relief drawn. Turning the switch off removes the source and
+layer and restores the relief zoom range. The relief visibility preference is never
+written. The tile URL carries the instant as a whole epoch minute, so an unchanged
+minute changes nothing, and a new minute replaces the source tiles with `setTiles`:
+MapLibre requests only the visible tiles again. When a camera move settles, the instant
+is clamped again to the shown range at the new center, matching the panel. Otherwise
+camera moves (pan, rotate, pitch, 3D) never recompute, because MapLibre's tile cache and
+the worker's mask cache already hold the tiles; returning to an earlier minute hits the
+mask cache. Compare panes never add the source.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
 the module worker on the first tile request. Requests wait while the map is dragged,
@@ -307,10 +309,12 @@ answers with metrics only; consecutive instants of a tile reuse the assembled mo
 Progress is published to `mapLayerStore.sunShadow.playback` in whole percents. After the
 prefetch, a 150 ms timer shows the next frame by updating the instant and calling only
 the sun-shadow reconciliation, without persistence, and waits while the shadow source is
-still loading the shown frame. The animation loops until stopped. A `movestart` event,
-`setSunShadow` (every panel change, the switch, and the render benchmark), or detach
-aborts the prefetch, clears the timer, and returns the state to `idle`; a prefetch
-failure is logged as `map.sun-shadow.playback-failed` and published as `failed`.
+still loading the shown frame. The animation loops until stopped. Play does nothing
+while the camera is already moving. A `movestart` event, `setSunShadow` (every panel
+change, the switch, and the render benchmark), or detach aborts the prefetch, clears the
+timer, and returns the state to `idle`; a prefetch failure is logged as
+`map.sun-shadow.playback-failed` and published as `failed`, as is availability turning
+`unavailable` during playback.
 
 ## Sentinel search
 

@@ -1118,6 +1118,10 @@ export class MapLibreLayerController {
         mapLayerStore.setState({
           sunShadow: { ...mapLayerStore.getState().sunShadow, availability },
         });
+        if (availability === 'unavailable' && this.#sunShadowPlaybackAbort !== null) {
+          this.stopSunShadowPlayback();
+          this.publishSunShadowPlayback({ status: 'failed' });
+        }
         if (this.#map !== null) this.reconcileTerrainOverlays();
       },
     );
@@ -1185,6 +1189,9 @@ export class MapLibreLayerController {
   public setTerrainInteractionActive(active: boolean): void {
     this.contourTiles.setInteractionActive(active);
     this.sunShadowTiles.setInteractionActive(active);
+    // The settled center may have another sunrise, sunset, or time zone, so the instant
+    // is clamped again for it, as the panel does for its displayed time.
+    if (!active && this.#map !== null) this.reconcileSunShadow(this.#map);
   }
 
   /**
@@ -1222,8 +1229,10 @@ export class MapLibreLayerController {
   public playSunShadowDay(): void {
     this.stopSunShadowPlayback();
     const map = this.#map;
+    // A move already in progress fired its `movestart` before this listener existed.
     if (
       map === null ||
+      map.isMoving() ||
       !this.#sunShadowEnabled ||
       this.sunShadowTiles.getAvailability() === 'unavailable'
     ) {
@@ -3640,7 +3649,7 @@ export class MapLibreLayerController {
 
   /**
    * Keeps the sun-shadow raster directly below the minor contours while shadows are on
-   * and the browser can render them, and removes it otherwise. While it draws, the
+   * and the browser can render them, and removes it otherwise. Once it draws, the
    * fixed-light relief hillshade is excluded through its zoom range because the shadow
    * layer already shades relief for the real sun. A failure only logs: the relief and
    * contours keep working without shadows.
@@ -3648,19 +3657,23 @@ export class MapLibreLayerController {
   private reconcileSunShadow(map: MapLibreMap): void {
     const wanted =
       this.#sunShadowEnabled && this.sunShadowTiles.getAvailability() !== 'unavailable';
-    try {
+    const setReliefHidden = (hidden: boolean) => {
       const relief = map.getLayer(terrainOverlayLayerIds.reliefShade);
       if (
-        relief !== undefined &&
-        (relief.minzoom === sunHiddenReliefMinZoom) !== wanted
+        relief === undefined ||
+        (relief.minzoom === sunHiddenReliefMinZoom) === hidden
       ) {
-        map.setLayerZoomRange(
-          terrainOverlayLayerIds.reliefShade,
-          wanted ? sunHiddenReliefMinZoom : 0,
-          24,
-        );
+        return;
       }
+      map.setLayerZoomRange(
+        terrainOverlayLayerIds.reliefShade,
+        hidden ? sunHiddenReliefMinZoom : 0,
+        24,
+      );
+    };
+    try {
       if (!wanted) {
+        setReliefHidden(false);
         if (map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
           map.removeLayer(terrainOverlayLayerIds.sunShadow);
         }
@@ -3700,17 +3713,19 @@ export class MapLibreLayerController {
       }
       if (map.getLayer(terrainOverlayLayerIds.sunShadow) === undefined) {
         map.addLayer(createSunShadowLayer(), terrainOverlayLayerIds.contourMinor);
-        return;
+      } else {
+        // moveLayer emits styledata, so the layer only moves when it is out of place.
+        const layerIds = map.getLayersOrder();
+        const shadowIndex = layerIds.indexOf(terrainOverlayLayerIds.sunShadow);
+        if (layerIds[shadowIndex + 1] !== terrainOverlayLayerIds.contourMinor) {
+          map.moveLayer(
+            terrainOverlayLayerIds.sunShadow,
+            terrainOverlayLayerIds.contourMinor,
+          );
+        }
       }
-      // moveLayer emits styledata, so the layer only moves when it is out of place.
-      const layerIds = map.getLayersOrder();
-      const shadowIndex = layerIds.indexOf(terrainOverlayLayerIds.sunShadow);
-      if (layerIds[shadowIndex + 1] !== terrainOverlayLayerIds.contourMinor) {
-        map.moveLayer(
-          terrainOverlayLayerIds.sunShadow,
-          terrainOverlayLayerIds.contourMinor,
-        );
-      }
+      // Last, so a failed shadow setup never leaves the map without any relief shading.
+      setReliefHidden(true);
     } catch {
       this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
     }

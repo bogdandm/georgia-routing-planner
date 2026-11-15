@@ -2,6 +2,7 @@ import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'mapli
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentBounds } from '@openmeteo/weather-map-layer';
+import lookupTimeZone from '@photostructure/tz-lookup';
 
 import {
   SAVED_MARKER_SCHEMA_VERSION,
@@ -84,6 +85,9 @@ class FakeLayerMap {
   bounds = { west: 44, south: 41, east: 45, north: 42 };
   coveringTileIds: { readonly z: number; readonly x: number; readonly y: number }[] =
     [];
+  center = { lng: 43.14, lat: 42.71 };
+  moving = false;
+  readonly failingLayerAdds = new Set<string>();
 
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
@@ -140,6 +144,7 @@ class FakeLayerMap {
 
   public addLayer(layer: Record<string, unknown>, beforeId?: string): void {
     const id = String(layer.id);
+    if (this.failingLayerAdds.has(id)) throw new Error(`Synthetic ${id} add failure.`);
     if (beforeId === undefined || !this.layers.has(beforeId)) {
       this.layers.set(id, layer);
       return;
@@ -195,7 +200,11 @@ class FakeLayerMap {
   }
 
   public getCenter(): { readonly lng: number; readonly lat: number } {
-    return { lng: 43.14, lat: 42.71 };
+    return this.center;
+  }
+
+  public isMoving(): boolean {
+    return this.moving;
   }
 
   public coveringTiles(): {
@@ -2761,6 +2770,71 @@ describe('MapLibreLayerController', () => {
       expect(shadows.prefetchCalls).toHaveLength(0);
       controller.dispose();
     });
+
+    it('does not start while the camera is already moving', () => {
+      vi.useFakeTimers();
+      const { controller, shadows } = createSunShadowController();
+      const map = new FakeLayerMap();
+      controller.attach(map as unknown as MapLibreMap);
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      map.moving = true;
+
+      controller.playSunShadowDay();
+
+      expect(shadows.prefetchCalls).toHaveLength(0);
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      controller.dispose();
+    });
+
+    it('stops with a failure when shadows become unavailable while playing', async () => {
+      const { controller, shadows } = startPlayback();
+      shadows.prefetchCalls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      shadows.setAvailability('unavailable');
+      const shown = mapLayerStore.getState().sunShadow.instantMs;
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: shown,
+        playback: { status: 'failed' },
+      });
+      controller.dispose();
+    });
+  });
+
+  it('clamps the instant again for the center a camera move settles on', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    // 21:30 in Tbilisi: within two hours after sunset there, after it farther east.
+    const eveningMs = Date.UTC(2026, 6, 1, 17, 30);
+    controller.setSunShadow({ enabled: true, instantMs: eveningMs });
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(eveningMs);
+
+    map.center = { lng: 70, lat: 42.71 };
+    controller.setTerrainInteractionActive(true);
+    controller.setTerrainInteractionActive(false);
+
+    const eastWindow = daylightWindow(
+      eveningMs,
+      { latitude: 42.71, longitude: 70 },
+      lookupTimeZone(42.71, 70),
+    );
+    expect(eastWindow?.lastMinuteMs).toBeLessThan(eveningMs);
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(eastWindow?.lastMinuteMs);
+  });
+
+  it('keeps the fixed-light relief when the sun-shadow layer cannot be added', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    map.failingLayerAdds.add(terrainOverlayLayerIds.sunShadow);
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(false);
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)?.minzoom).not.toBe(24);
   });
 
   it('re-adds sun shadows after a style reload at the current instant', () => {

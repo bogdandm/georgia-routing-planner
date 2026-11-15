@@ -47,6 +47,23 @@ function sequenceDem(values: readonly (number | null)[]): ElevationProvider {
   };
 }
 
+/** Elevation grows linearly with longitude, so expected vertex values are exact. */
+function longitudeDem(): ElevationProvider {
+  return {
+    sample: () => Promise.resolve({ status: 'unavailable' }),
+    sampleMany: (coordinates) =>
+      Promise.resolve(
+        coordinates.map(
+          (coordinate) =>
+            ({
+              status: 'available',
+              meters: coordinate.longitude * 1_000_000,
+            }) as const,
+        ),
+      ),
+  };
+}
+
 const sourceSegments: readonly TrackSegment[] = [
   {
     points: [
@@ -234,21 +251,8 @@ describe('prepareImportedTrack', () => {
         (((index % 2) * legNorthMeters) / earthRadiusMeters) * (180 / Math.PI),
       ] as const,
     }));
-    const provider: ElevationProvider = {
-      sample: () => Promise.resolve({ status: 'unavailable' }),
-      sampleMany: (coordinates) =>
-        Promise.resolve(
-          coordinates.map(
-            (coordinate) =>
-              ({
-                status: 'available',
-                meters: coordinate.longitude * 1_000_000,
-              }) as const,
-          ),
-        ),
-    };
 
-    const prepared = await prepareImportedTrack([{ points }], provider, signal, {
+    const prepared = await prepareImportedTrack([{ points }], longitudeDem(), signal, {
       preserveGeometry: true,
       sampleIntervalMeters: 30,
       maximumElevationSamples: 5_000,
@@ -526,6 +530,23 @@ describe('prepareImportedTrack', () => {
     expect(prepared.calculatedSegments?.[0]?.points[2]?.coordinate).toEqual(
       equatorCoordinate(20),
     );
+  });
+
+  it('keeps the sampled position of a retained vertex that the route revisits at its end', async () => {
+    const points = [0, 30, 40, 30].map((distanceMeters) => ({
+      coordinate: equatorCoordinate(distanceMeters),
+    }));
+
+    const prepared = await prepareImportedTrack([{ points }], longitudeDem(), signal, {
+      preserveGeometry: true,
+      sampleIntervalMeters: 30,
+      maximumElevationSamples: 5_000,
+    });
+
+    const revisitedMeters = equatorCoordinate(30)[0] * 1_000_000;
+    const calculated = prepared.calculatedSegments?.[0]?.points;
+    expect(calculated?.[1]?.elevationMeters).toBeCloseTo(revisitedMeters, 6);
+    expect(calculated?.[3]?.elevationMeters).toBeCloseTo(revisitedMeters, 6);
   });
 
   it('omits interpolated timestamps when a source timestamp is invalid', async () => {

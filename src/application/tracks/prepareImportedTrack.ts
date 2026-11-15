@@ -19,6 +19,7 @@ import {
 
 const defaultSampleIntervalMeters = 10;
 const maximumPersistedPoints = 100_000;
+const stationDistanceToleranceMeters = 1e-6;
 
 interface ResampledStation {
   readonly coordinate: TrackCoordinate;
@@ -149,7 +150,11 @@ function segmentDistanceMeters(segment: TrackSegment): number {
 function stationCount(distanceMeters: number, intervalMeters: number): number {
   const wholeStations = Math.floor(distanceMeters / intervalMeters);
   return (
-    wholeStations + 1 + (distanceMeters - wholeStations * intervalMeters > 1e-6 ? 1 : 0)
+    wholeStations +
+    1 +
+    (distanceMeters - wholeStations * intervalMeters > stationDistanceToleranceMeters
+      ? 1
+      : 0)
   );
 }
 
@@ -219,9 +224,10 @@ function resampleSegment(
     ...(endpoint.recordedAt === undefined ? {} : { recordedAt: endpoint.recordedAt }),
   };
   const finalStation = requiredValue(stations, stations.length - 1);
+  // Compare path positions, not coordinates: a route may revisit its endpoint earlier.
   if (
-    finalStation.coordinate[0] === endpoint.coordinate[0] &&
-    finalStation.coordinate[1] === endpoint.coordinate[1]
+    totalDistance - finalStation.sourceDistanceMeters <=
+    stationDistanceToleranceMeters
   ) {
     stations[stations.length - 1] = endpointStation;
   } else {

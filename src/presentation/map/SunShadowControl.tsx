@@ -30,7 +30,6 @@ import {
 import type { SunShadowPlayback } from '@/presentation/map/mapLayerStore';
 import type { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import {
-  clampToDaylight,
   type DaylightWindow,
   daylightWindow,
   localDayBounds,
@@ -263,15 +262,13 @@ function SunShadowPanel({
     const time = instantToZonedWallTime(new Date(instant), timeZone);
     return time.hour * 60 + time.minute;
   };
-  // The slider only offers daylight; the layer controller clamps every commit the same way.
-  const minimumMinutes =
-    daylight === null
-      ? 0
-      : toWallMinutes(clampToDaylight(daylight.sunriseMs, daylight));
+  // The slider offers two hours around daylight; the layer controller clamps every
+  // commit to the same range.
+  const minimumMinutes = daylight === null ? 0 : toWallMinutes(daylight.firstMinuteMs);
   const maximumMinutes =
     daylight === null
       ? minutesPerDay - timeStepMinutes
-      : toWallMinutes(clampToDaylight(daylight.sunsetMs, daylight));
+      : toWallMinutes(daylight.lastMinuteMs);
   const wallMinutes = Math.min(
     Math.max(wall.hour * 60 + wall.minute, minimumMinutes),
     maximumMinutes,

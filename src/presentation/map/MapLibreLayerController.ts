@@ -3671,7 +3671,7 @@ export class MapLibreLayerController {
         return;
       }
       // Every path that enables shadows or moves the instant passes here, including a
-      // persisted switch restored at night, so shadows never draw a night instant.
+      // persisted switch restored at night, so shadows only draw within two hours of daylight.
       const instantMs = clampToDaylight(
         this.#sunShadowInstantMs,
         this.sunShadowDaylight(map, this.#sunShadowInstantMs),

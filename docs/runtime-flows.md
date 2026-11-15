@@ -295,8 +295,9 @@ and leaves relief and contours working. `domain/terrain/terrainShadow.ts` is the
 reference for the shader model.
 
 **Play the day** (`MapLibreLayerController.playSunShadowDay`) takes the daylight window
-of the shown day at the map center, makes whole-minute frames from sunrise every 10
-minutes plus the sunset minute, and asks `map.coveringTiles` for the 512 px z7–12 tiles
+of the shown day at the map center, which spans two hours before sunrise to two hours
+after sunset (clamped to the local day), makes whole-minute frames from its start every
+10 minutes plus its last minute, and asks `map.coveringTiles` for the 512 px z7–12 tiles
 of the current view, deduplicated across world copies. That public coverage ignores
 terrain-aware culling; tiles it misses render on demand during playback. When tiles ×
 frames exceed 2560, playback is refused as `too-many-tiles`. Otherwise the provider's

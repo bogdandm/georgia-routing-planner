@@ -2604,12 +2604,12 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('moves a night instant to the last daylight minute at the map center', () => {
+  it('moves a night instant to two hours after sunset at the map center', () => {
     const { controller } = createSunShadowController();
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
-    // 23:00 in Tbilisi (UTC+4).
-    const nightMs = Date.UTC(2026, 6, 1, 19, 0);
+    // 23:30 in Tbilisi (UTC+4).
+    const nightMs = Date.UTC(2026, 6, 1, 19, 30);
     const window = daylightWindow(
       nightMs,
       { latitude: 42.71, longitude: 43.14 },
@@ -2618,10 +2618,11 @@ describe('MapLibreLayerController', () => {
 
     controller.setSunShadow({ enabled: true, instantMs: nightMs });
 
-    const sunsetMinuteMs = Math.floor((window?.sunsetMs ?? 0) / 60_000) * 60_000;
-    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(sunsetMinuteMs);
+    const lastMinuteMs =
+      Math.floor((window?.sunsetMs ?? 0) / 60_000) * 60_000 + 2 * 60 * 60_000;
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(lastMinuteMs);
     expect(map.sources.get(mapSourceIds.terrainSunShadow)).toMatchObject({
-      tiles: [`terrain-shadow://${String(sunsetMinuteMs / 60_000)}/{z}/{x}/{y}`],
+      tiles: [`terrain-shadow://${String(lastMinuteMs / 60_000)}/{z}/{x}/{y}`],
     });
   });
 

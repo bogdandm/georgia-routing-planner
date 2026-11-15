@@ -6,10 +6,18 @@ import {
 } from '@/domain/time/zonedWallTime';
 
 const millisecondsPerMinute = 60_000;
+/** Shadows are offered this long before sunrise and after sunset, for dawn and dusk. */
+const twilightMarginMilliseconds = 2 * 60 * millisecondsPerMinute;
 
 export interface DaylightWindow {
   readonly sunriseMs: number;
   readonly sunsetMs: number;
+  /**
+   * First and last whole minute shadows may show: two hours before the rounded-up sunrise
+   * and after the rounded-down sunset, kept inside the local calendar day.
+   */
+  readonly firstMinuteMs: number;
+  readonly lastMinuteMs: number;
 }
 
 /** Instants of local midnight starting `date` and the next day in `timeZone`. */
@@ -37,8 +45,8 @@ export function localDayBounds(
 }
 
 /**
- * Sunrise and sunset of the local calendar day containing `instantMs` at `place`; null
- * when the day lacks either (polar day or night).
+ * Sunrise, sunset, and the shadow time range of the local calendar day containing
+ * `instantMs` at `place`; null when the day lacks either event (polar day or night).
  */
 export function daylightWindow(
   instantMs: number,
@@ -58,50 +66,48 @@ export function daylightWindow(
   if (events.sunrise === null || events.sunset === null) return null;
   const sunriseMs = events.sunrise.getTime();
   const sunsetMs = events.sunset.getTime();
-  return sunsetMs > sunriseMs ? { sunriseMs, sunsetMs } : null;
+  if (sunsetMs <= sunriseMs) return null;
+  return {
+    sunriseMs,
+    sunsetMs,
+    firstMinuteMs: Math.max(
+      Math.ceil(sunriseMs / millisecondsPerMinute) * millisecondsPerMinute -
+        twilightMarginMilliseconds,
+      day.startMs,
+    ),
+    lastMinuteMs: Math.min(
+      Math.floor(sunsetMs / millisecondsPerMinute) * millisecondsPerMinute +
+        twilightMarginMilliseconds,
+      day.endMs - millisecondsPerMinute,
+    ),
+  };
 }
 
-function firstDaylightMinute(window: DaylightWindow): number {
-  return Math.ceil(window.sunriseMs / millisecondsPerMinute) * millisecondsPerMinute;
-}
-
-function lastDaylightMinute(window: DaylightWindow): number {
-  return Math.floor(window.sunsetMs / millisecondsPerMinute) * millisecondsPerMinute;
-}
-
-/**
- * Clamps to [sunrise rounded up, sunset rounded down] to whole minutes; unchanged when
- * `window` is null.
- */
+/** Clamps to [`firstMinuteMs`, `lastMinuteMs`]; unchanged when `window` is null. */
 export function clampToDaylight(
   instantMs: number,
   window: DaylightWindow | null,
 ): number {
   if (window === null) return instantMs;
-  return Math.min(
-    Math.max(instantMs, firstDaylightMinute(window)),
-    lastDaylightMinute(window),
-  );
+  return Math.min(Math.max(instantMs, window.firstMinuteMs), window.lastMinuteMs);
 }
 
 /**
- * Whole-minute frames from rounded-up sunrise every `stepMinutes`, plus rounded-down
- * sunset when not already last.
+ * Whole-minute frames from `firstMinuteMs` every `stepMinutes`, plus `lastMinuteMs` when
+ * not already last.
  */
 export function daylightFrameInstants(
   window: DaylightWindow,
   stepMinutes: number,
 ): readonly number[] {
-  const first = firstDaylightMinute(window);
-  const last = lastDaylightMinute(window);
   const frames: number[] = [];
   for (
-    let instant = first;
-    instant <= last;
+    let instant = window.firstMinuteMs;
+    instant <= window.lastMinuteMs;
     instant += stepMinutes * millisecondsPerMinute
   ) {
     frames.push(instant);
   }
-  if (frames.at(-1) !== last) frames.push(last);
+  if (frames.at(-1) !== window.lastMinuteMs) frames.push(window.lastMinuteMs);
   return frames;
 }

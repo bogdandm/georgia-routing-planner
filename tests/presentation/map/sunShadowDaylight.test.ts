@@ -45,31 +45,50 @@ describe('daylightWindow', () => {
       ),
     ).toBeNull();
   });
+
+  it('keeps the two-hour margin inside the local calendar day', () => {
+    // Helsinki midsummer: sunset near 22:50, so sunset + 2 h would pass midnight.
+    const window = daylightWindow(
+      Date.UTC(2026, 5, 21, 9),
+      { latitude: 60.17, longitude: 24.94 },
+      'Europe/Helsinki',
+    );
+
+    expect(window?.lastMinuteMs).toBe(Date.UTC(2026, 5, 21, 20, 59));
+    expect(window?.firstMinuteMs).toBe(
+      Math.ceil((window?.sunriseMs ?? 0) / minute) * minute - 120 * minute,
+    );
+  });
 });
 
 describe('clampToDaylight', () => {
   const window = novemberWindow();
-  const firstMinute = Math.ceil(window.sunriseMs / minute) * minute;
-  const lastMinute = Math.floor(window.sunsetMs / minute) * minute;
+  const firstMinute = Math.ceil(window.sunriseMs / minute) * minute - 120 * minute;
+  const lastMinute = Math.floor(window.sunsetMs / minute) * minute + 120 * minute;
 
-  it('moves night instants to the nearest whole daylight minute', () => {
-    expect(clampToDaylight(tbilisiTime(5, 0), window)).toBe(firstMinute);
-    expect(clampToDaylight(tbilisiTime(20, 0), window)).toBe(lastMinute);
+  it('moves night instants to two hours before sunrise or after sunset', () => {
+    expect(clampToDaylight(tbilisiTime(3, 0), window)).toBe(firstMinute);
+    expect(clampToDaylight(tbilisiTime(22, 0), window)).toBe(lastMinute);
   });
 
-  it('keeps daylight instants and instants without a window', () => {
-    expect(clampToDaylight(tbilisiTime(12, 0), window)).toBe(tbilisiTime(12, 0));
+  it('keeps instants within two hours of daylight and instants without a window', () => {
+    expect(clampToDaylight(tbilisiTime(6, 30), window)).toBe(tbilisiTime(6, 30));
+    expect(clampToDaylight(tbilisiTime(19, 0), window)).toBe(tbilisiTime(19, 0));
     expect(clampToDaylight(tbilisiTime(23, 0), null)).toBe(tbilisiTime(23, 0));
   });
 });
 
 describe('daylightFrameInstants', () => {
-  it('steps from the first to the last daylight minute without duplicates', () => {
+  it('steps from two hours before sunrise to two hours after sunset without duplicates', () => {
     const window = novemberWindow();
     const frames = daylightFrameInstants(window, 10);
 
-    expect(frames[0]).toBe(Math.ceil(window.sunriseMs / minute) * minute);
-    expect(frames.at(-1)).toBe(Math.floor(window.sunsetMs / minute) * minute);
+    expect(frames[0]).toBe(
+      Math.ceil(window.sunriseMs / minute) * minute - 120 * minute,
+    );
+    expect(frames.at(-1)).toBe(
+      Math.floor(window.sunsetMs / minute) * minute + 120 * minute,
+    );
     expect(new Set(frames).size).toBe(frames.length);
     for (let index = 1; index < frames.length - 1; index += 1) {
       expect((frames[index] ?? 0) - (frames[index - 1] ?? 0)).toBe(10 * minute);

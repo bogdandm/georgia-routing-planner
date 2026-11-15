@@ -773,7 +773,8 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   the current time to the end of the range and back to its start at about 6–7 frames per
   second, each frame shown only once its tiles are drawn; **Stop** ends it. Any map
   move, a change in the panel, or turning shadows off stops playback. A view needing
-  more than 2560 tile frames shows a note to zoom in instead, and a failed computation
+  more than 2560 tile frames between half an hour before sunrise and half an hour after
+  sunset shows a note to zoom in instead, until the map moves, and a failed computation
   shows an error note. Browsers that cannot render floating-point targets in a worker
   (WebGL2 with `EXT_color_buffer_float` and `OffscreenCanvas`) see a disabled switch
   with an explanation. Only the switch persists (default off); the instant and playback

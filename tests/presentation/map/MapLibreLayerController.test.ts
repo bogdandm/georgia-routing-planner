@@ -2838,8 +2838,8 @@ describe('MapLibreLayerController', () => {
       controller.dispose();
     });
 
-    it('refuses views needing more than the playback tile limit', () => {
-      const { controller, shadows } = startPlayback(
+    it('refuses views needing more than the playback tile limit until the camera moves', () => {
+      const { controller, shadows, map } = startPlayback(
         Array.from({ length: 40 }, (_, x) => ({ z: 12, x, y: 1514 })),
       );
 
@@ -2847,6 +2847,31 @@ describe('MapLibreLayerController', () => {
         status: 'too-many-tiles',
       });
       expect(shadows.prefetchCalls).toHaveLength(0);
+
+      // The note describes the refused view, so a new view clears it.
+      map.fire('movestart', {});
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      controller.dispose();
+    });
+
+    it('budgets only frames near daylight, since darker twilight tiles cost no memory', () => {
+      const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
+      if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
+      const frames = daylightFrameInstants(window, 10);
+      const litFrames = frames.filter(
+        (frame) =>
+          frame >= window.sunriseMs - 30 * 60_000 &&
+          frame <= window.sunsetMs + 30 * 60_000,
+      ).length;
+      const tileCount = Math.floor(2560 / litFrames);
+      expect(tileCount * frames.length).toBeGreaterThan(2560);
+
+      const { controller, shadows } = startPlayback(
+        Array.from({ length: tileCount }, (_, x) => ({ z: 12, x, y: 1514 })),
+      );
+
+      expect(shadows.prefetchCalls[0]?.instantsMs).toEqual(frames);
+      expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
       controller.dispose();
     });
 

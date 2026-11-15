@@ -1,3 +1,5 @@
+import { solarDiskRadiusDegrees, solarPosition } from '@/domain/terrain/solarPosition';
+
 /** Edge length of every DEM tile and of every rendered shade tile, in pixels. */
 export const terrainShadowTileSize = 512;
 
@@ -98,6 +100,41 @@ export function terrainShadowTileGeometry(
     northMercatorY: Math.PI - output.y * span,
     mercatorYSpan: span,
   };
+}
+
+/**
+ * Over one z7–12 tile the solar elevation departs from its corner values by far less
+ * than this margin, so corners this far below the solar disk prove the tile is dark.
+ */
+const nightCornerMarginDegrees = 1;
+
+/**
+ * True when the Sun is below the horizon at every pixel of the tile at `instantMs`, so
+ * its shade mask is all zero (full shade) without any DEM or GPU work.
+ */
+export function isTerrainShadowNightTile(
+  output: TerrainShadowTileAddress,
+  instantMs: number,
+): boolean {
+  const geometry = terrainShadowTileGeometry(output);
+  const instant = new Date(instantMs);
+  for (const column of [0, 1]) {
+    for (const row of [0, 1]) {
+      const longitude =
+        geometry.westLongitudeRadians + column * geometry.longitudeSpanRadians;
+      const latitude =
+        2 *
+          Math.atan(Math.exp(geometry.northMercatorY - row * geometry.mercatorYSpan)) -
+        Math.PI / 2;
+      const elevation = solarPosition(
+        instant,
+        (latitude * 180) / Math.PI,
+        (longitude * 180) / Math.PI,
+      ).apparentElevationDegrees;
+      if (elevation > -solarDiskRadiusDegrees - nightCornerMarginDegrees) return false;
+    }
+  }
+  return true;
 }
 
 export function demTileUrl(template: string, tile: TerrainShadowTileAddress): string {

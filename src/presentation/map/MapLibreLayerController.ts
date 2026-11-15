@@ -432,6 +432,11 @@ const sunHiddenReliefMinZoom = 24;
 /** Day playback frames: sun instants 10 minutes apart, shown for 150 ms each (~6.7 fps). */
 const sunShadowPlaybackStepMinutes = 10;
 const sunShadowPlaybackFrameMs = 150;
+/**
+ * Frames this close to sunrise or sunset at the center still cache masks somewhere in
+ * view (tiles differ by minutes, and the worker's night test keeps a 1° margin).
+ */
+const sunShadowLitFrameSlackMs = 30 * 60_000;
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
@@ -1177,6 +1182,7 @@ export class MapLibreLayerController {
     this.#map = map;
     map.setMissingStyleImageResolver(this.resolveBasemapImage);
     map.on('styledata', this.handleStyleData);
+    map.on('movestart', this.handleSunShadowPlaybackMove);
     map.on('error', this.handleTerrainOverlayError);
     map.on('sourcedata', this.handleSourceData);
     map.on('dataloading', this.handleWeatherMapDataLoading);
@@ -1236,14 +1242,14 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Precomputes shadows for every 10-minute daylight frame of the shown day over the
+   * Precomputes shadows for every 10-minute frame of the shown day's range over the
    * tiles covering the view, then loops through them until stopped. Any camera move,
    * `setSunShadow`, or detach stops it.
    */
   public playSunShadowDay(): void {
     this.stopSunShadowPlayback();
     const map = this.#map;
-    // A move already in progress fired its `movestart` before this listener existed.
+    // A move already in progress fired its `movestart` before Play was pressed.
     if (
       map === null ||
       map.isMoving() ||
@@ -1269,7 +1275,19 @@ export class MapLibreLayerController {
       const { z, x, y } = tile.canonical;
       tiles.set(`${String(z)}/${String(x)}/${String(y)}`, { z, x, y });
     }
-    if (tiles.size * frames.length > terrainShadowPlaybackTileLimit) {
+    // Only frames with the Sun near or above the horizon cache a mask; the worker answers
+    // darker twilight frames with a shared full-shade mask that costs no memory.
+    const litFrameCount = frames.filter(
+      (frame) =>
+        frame >= window.sunriseMs - sunShadowLitFrameSlackMs &&
+        frame <= window.sunsetMs + sunShadowLitFrameSlackMs,
+    ).length;
+    if (tiles.size * litFrameCount > terrainShadowPlaybackTileLimit) {
+      this.logger.log({
+        level: 'info',
+        name: 'map.sun-shadow.playback-refused',
+        data: { tiles: tiles.size, litFrames: litFrameCount },
+      });
       this.publishSunShadowPlayback({ status: 'too-many-tiles' });
       return;
     }
@@ -1277,7 +1295,6 @@ export class MapLibreLayerController {
     const controller = new AbortController();
     this.#sunShadowPlaybackAbort = controller;
     this.#sunShadowPlaybackFrames = frames;
-    map.on('movestart', this.handleSunShadowPlaybackMove);
     this.publishSunShadowPlayback({ status: 'loading', progress: 0 });
     let percent = 0;
     this.sunShadowTiles
@@ -1323,13 +1340,16 @@ export class MapLibreLayerController {
       clearTimeout(this.#sunShadowPlaybackTimer);
       this.#sunShadowPlaybackTimer = null;
     }
-    this.#map?.off('movestart', this.handleSunShadowPlaybackMove);
     this.#sunShadowPlaybackFrames = [];
     if (running || mapLayerStore.getState().sunShadow.playback.status !== 'idle') {
       this.publishSunShadowPlayback({ status: 'idle' });
     }
   }
 
+  /**
+   * Registered for the whole attachment: a move stops playback and also clears a refusal
+   * or failure note, which described the previous view.
+   */
   private readonly handleSunShadowPlaybackMove = (): void => {
     this.stopSunShadowPlayback();
   };
@@ -1418,6 +1438,7 @@ export class MapLibreLayerController {
     this.sunShadowTiles.setInteractionActive(false);
     this.#appliedSunShadowTileUrl = null;
     map.off('styledata', this.handleStyleData);
+    map.off('movestart', this.handleSunShadowPlaybackMove);
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);

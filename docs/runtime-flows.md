@@ -286,7 +286,9 @@ so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, ne
 or decode failure fails the shadow tile instead of drawing a truncated horizon. The
 worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
 and up to 3072 one-byte shade masks (768 MiB) keyed by DEM URL, tile, and minute in LRU
-caches; colors are applied per request, so they are not part of the key. A lost WebGL
+caches; colors are applied per request, so they are not part of the key. A tile whose
+four corners see the Sun more than 1° below the solar disk is answered with a shared
+all-zero (full-shade) mask without DEM fetches, GPU work, or a cache entry. A lost WebGL
 context drops both caches, and the next request creates a fresh context.
 
 A failed tile fails only that tile; MapLibre leaves it blank. When the worker reports
@@ -301,18 +303,21 @@ of the shown day at the map center, which spans two hours before sunrise to two 
 after sunset (clamped to the local day), makes whole-minute frames from its start every
 10 minutes plus its last minute, and asks `map.coveringTiles` for the 512 px z7–12 tiles
 of the current view, deduplicated across world copies. That public coverage ignores
-terrain-aware culling; tiles it misses render on demand during playback. When tiles ×
-frames exceed 2560, playback is refused as `too-many-tiles`. Otherwise the provider's
-`prefetch` sends `terrain-shadow.prefetch-tile` requests tile-major, at most four at a
-time and past the interaction gate, so the worker renders each mask into its cache and
-answers with metrics only; consecutive instants of a tile reuse the assembled mosaics.
-Progress is published to `mapLayerStore.sunShadow.playback` in whole percents. After the
+terrain-aware culling; tiles it misses render on demand during playback. Only frames
+from 30 minutes before sunrise to 30 minutes after sunset hold cached masks, so when
+tiles × those frames exceed 2560, playback is refused as `too-many-tiles` and logged as
+`map.sun-shadow.playback-refused` with both counts. Otherwise the provider's `prefetch`
+sends `terrain-shadow.prefetch-tile` requests tile-major, at most four at a time and
+past the interaction gate, so the worker renders each mask into its cache and answers
+with metrics only; consecutive instants of a tile reuse the assembled mosaics. Progress
+is published to `mapLayerStore.sunShadow.playback` in whole percents. After the
 prefetch, a 150 ms timer shows the next frame by updating the instant and calling only
 the sun-shadow reconciliation, without persistence, and waits while the shadow source is
 still loading the shown frame. The animation loops until stopped. Play does nothing
-while the camera is already moving. A `movestart` event, `setSunShadow` (every panel
-change, the switch, and the render benchmark), or detach aborts the prefetch, clears the
-timer, and returns the state to `idle`; a prefetch failure is logged as
+while the camera is already moving. A `movestart` event (the controller listens for the
+whole attachment, so it also clears a refusal or failure note), `setSunShadow` (every
+panel change, the switch, and the render benchmark), or detach aborts the prefetch,
+clears the timer, and returns the state to `idle`; a prefetch failure is logged as
 `map.sun-shadow.playback-failed` and published as `failed`, as is availability turning
 `unavailable` during playback.
 

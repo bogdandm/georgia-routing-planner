@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   demTileUrl,
+  isTerrainShadowNightTile,
   mosaicContainsWithMargin,
   terrainShadowLevelZooms,
   terrainShadowMosaicLevel,
@@ -147,5 +148,25 @@ describe('demTileUrl', () => {
     expect(
       demTileUrl('https://tiles.example/{z}/{x}/{y}.webp', { z: 10, x: 635, y: 378 }),
     ).toBe('https://tiles.example/10/635/378.webp');
+  });
+});
+
+describe('isTerrainShadowNightTile', () => {
+  // The z12 tile around Tchkhutkharo; Tbilisi time is UTC+4 and sunset there is 17:45.
+  const [x, y] = worldTexel(43.14, 42.71, 12).map((texel) =>
+    Math.floor(texel / terrainShadowTileSize),
+  ) as [number, number];
+  const tile = { z: 12, x, y };
+  const tbilisiTime = (hour: number, minute: number) =>
+    Date.UTC(2026, 10, 15, hour - 4, minute);
+
+  it('keeps daylight and sunset tiles for the GPU', () => {
+    expect(isTerrainShadowNightTile(tile, tbilisiTime(13, 40))).toBe(false);
+    expect(isTerrainShadowNightTile(tile, tbilisiTime(17, 46))).toBe(false);
+  });
+
+  it('answers tiles well after sunset and before sunrise as night', () => {
+    expect(isTerrainShadowNightTile(tile, tbilisiTime(18, 30))).toBe(true);
+    expect(isTerrainShadowNightTile(tile, tbilisiTime(6, 30))).toBe(true);
   });
 });

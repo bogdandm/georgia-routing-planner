@@ -20,6 +20,7 @@ import {
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import {
   demTileUrl,
+  isTerrainShadowNightTile,
   type TerrainShadowMosaicLevel,
   terrainShadowLevelZooms,
   terrainShadowMosaicLevel,
@@ -35,6 +36,8 @@ const shadowPassBands = 8;
 const bytesPerTexel = 4;
 const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
 const maskBytes = terrainShadowTileSize * terrainShadowTileSize;
+/** Shared all-zero mask (full shade) answered for every night tile; never cached. */
+const nightMask = new Uint8Array(maskBytes);
 
 /** Uniforms both shadow passes read; the rest are only active in one pass. */
 const tileUniformNames = [
@@ -637,8 +640,19 @@ export class TerrainShadowRenderer {
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
     const gpu = this.ensureGpu();
     const generation = this.#generation;
+    // Twilight playback frames are dark everywhere: no DEM, GPU work, or cache memory.
+    if (isTerrainShadowNightTile(request, request.instantMs)) {
+      return {
+        mask: nightMask,
+        metrics: this.metrics({
+          computeMs: 0,
+          demFetchMs: 0,
+          cacheHit: true,
+          demTilesFetched: 0,
+        }),
+      };
+    }
     const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`;
-
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);

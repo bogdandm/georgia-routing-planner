@@ -322,19 +322,20 @@ local time and shows where the hiker is every three hours and at the finish, eac
 the forecast at that location from its arrival hour until the next checkpoint; the
 finish covers its arrival hour. The pace follows recorded timestamps when the track has
 recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
-flat walking. The timeline is offered only for day hikes shorter than 30 km and 12
-hours. For those tracks a **Route start** slider above the pace sets the start from
-00:00 to 23:30 in half-hour steps, defaulting to 09:00; arrivals after midnight use the
-next date's forecast hours. An **Adjust pace** slider scales the timeline from ×0.5
-(faster) to ×2 (slower) and replans the checkpoints on release. Both are remembered in
-this browser for each saved track, and reset to the defaults for a reversed copy; an
-unsaved track keeps them while it is open and carries them over when it is saved. They
-are not synchronized to the account. Neither changes the track's recorded or estimated
-time. Slowing a track past 12 hours hides the timeline until the pace is reduced. Cards
-reuse the 7-day forecast rows from Weather and request each location with its profile
-elevation. Clicking a loaded forecast row opens Weather with the full forecast at that
-location and elevation, labelled with the card's point or time. Failed track forecasts
-retry automatically as in Weather when the app becomes visible again.
+flat walking. The forecast checkpoints are offered only for day hikes shorter than 30 km
+and 12 hours, but every track gets a **Route start** slider above the pace, since it
+also times the map's time markers. It sets the start from 00:00 to 23:30 in half-hour
+steps, defaulting to 09:00; arrivals after midnight use the next date's forecast hours.
+An **Adjust pace** slider scales the timeline from ×0.5 (faster) to ×2 (slower) and
+replans the checkpoints on release. Both are remembered in this browser for each saved
+track, and reset to the defaults for a reversed copy; an unsaved track keeps them while
+it is open and carries them over when it is saved. They are not synchronized to the
+account. Neither changes the track's recorded or estimated time. Slowing a track past 12
+hours hides the checkpoints until the pace is reduced. Cards reuse the 7-day forecast
+rows from Weather and request each location with its profile elevation. Clicking a
+loaded forecast row opens Weather with the full forecast at that location and elevation,
+labelled with the card's point or time. Failed track forecasts retry automatically as in
+Weather when the app becomes visible again.
 
 #### Time markers
 
@@ -343,7 +344,8 @@ timeline as **Along the route**: its route start and pace, recorded timestamps w
 track has recorded time, and otherwise the DIN 33466 estimate. The start and finish show
 their exact `HH:mm` beside the Play and Stop markers, the start to the right and the
 finish to the left so a loop shows both; each full hour between them shows `HH:00` where
-the hiker is at that time. Unlike the forecast timeline, any track length qualifies, and
+the hiker is at that time, and an hour in a break between recorded segments stays at the
+earlier segment's end. Unlike the forecast timeline, any track length qualifies, and
 times past midnight wrap. Labels are white text on white-bordered rounded rectangles in
 the track colour, follow the Local GPX opacity and visibility, and are not drawn in
 satellite comparison panes. Endpoint times always show; hourly times give way to map

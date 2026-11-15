@@ -32,6 +32,7 @@ function profile(
     readonly distanceMeters: number;
     readonly elevationMeters: number;
     readonly recordedAt?: string;
+    readonly sourceSegmentIndex?: number;
   }[],
 ): ElevationProfile {
   const points = samples.map((sample, index): ElevationProfilePoint => {
@@ -39,7 +40,7 @@ function profile(
       coordinate: [44 + sample.distanceMeters / 100_000, 42],
       rawElevationMeters: sample.elevationMeters,
       elevationMeters: sample.elevationMeters,
-      sourceSegmentIndex: 0,
+      sourceSegmentIndex: sample.sourceSegmentIndex ?? 0,
       sampleIndex: index,
       distanceMeters: sample.distanceMeters,
       trendElevationMeters: sample.elevationMeters,
@@ -355,6 +356,43 @@ describe('planTrackClockTimes', () => {
     );
     expect(slow.finish).toBe('19:45');
     expect(slow.hours).toHaveLength(13);
+  });
+
+  it('keeps hours in a recorded break between segments at the earlier segment end', () => {
+    const overnight = profile([
+      { distanceMeters: 0, elevationMeters: 1_000, recordedAt: '2026-06-01T05:00:00Z' },
+      {
+        distanceMeters: 2_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T06:00:00Z',
+      },
+      {
+        distanceMeters: 3_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T09:00:00Z',
+        sourceSegmentIndex: 1,
+      },
+      {
+        distanceMeters: 5_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T10:00:00Z',
+        sourceSegmentIndex: 1,
+      },
+    ]);
+
+    const times = planTrackClockTimes(
+      overnight,
+      { elapsedSeconds: 5 * hour },
+      { startHour: 8, paceFactor: 1, timeMarkers: null },
+    );
+    expect(
+      times.hours.map(({ coordinate, time }) => [time, coordinate[0].toFixed(2)]),
+    ).toEqual([
+      ['09:00', '44.02'],
+      ['10:00', '44.02'],
+      ['11:00', '44.02'],
+      ['12:00', '44.03'],
+    ]);
   });
 });
 

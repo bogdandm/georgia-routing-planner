@@ -192,10 +192,16 @@ function locationAtElapsed(
   const after = requiredPoint(points, index);
   const beforeSeconds = elapsed[index - 1] ?? 0;
   const afterSeconds = elapsed[index] ?? beforeSeconds;
+  // Between source segments no track is drawn: the hiker waits at the previous
+  // segment's end until the next one starts.
   const fraction =
     afterSeconds <= beforeSeconds
       ? 0
-      : (seconds - beforeSeconds) / (afterSeconds - beforeSeconds);
+      : before.sourceSegmentIndex !== after.sourceSegmentIndex
+        ? seconds < afterSeconds
+          ? 0
+          : 1
+        : (seconds - beforeSeconds) / (afterSeconds - beforeSeconds);
   return {
     coordinate: [
       interpolate(before.coordinate[0], after.coordinate[0], fraction),

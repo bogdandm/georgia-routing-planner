@@ -213,7 +213,7 @@ describe('TrackWeatherSection', () => {
     );
   });
 
-  it('limits the route timeline and its start and pace adjustments to day hikes', () => {
+  it('limits the route forecast to day hikes but keeps the start and pace for map times', () => {
     renderSection(expandedPreferences, { distanceMeters: 31_000 });
 
     expect(
@@ -222,7 +222,8 @@ describe('TrackWeatherSection', () => {
     expect(
       screen.queryByRole('list', { name: 'Forecast along the route' }),
     ).not.toBeInTheDocument();
-    expect(screen.queryAllByRole('slider')).toEqual([]);
+    expect(screen.getByRole('slider', { name: 'Route start' })).toBeVisible();
+    expect(screen.getByRole('slider', { name: 'Adjust pace' })).toBeVisible();
   });
 
   it('moves the route forecast to a chosen start time above the pace control', async () => {

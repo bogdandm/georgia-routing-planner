@@ -160,12 +160,6 @@ export function TrackWeatherSection({
     () => planTrackWeatherTimeline(profile, metrics, paceFactor),
     [metrics, paceFactor, profile],
   );
-  // Start and pace adjustments are offered only for tracks that qualify at their own
-  // pace; slowing one down past the limit keeps the sliders so the change can be undone.
-  const timelineAdjustable = useMemo(
-    () => planTrackWeatherTimeline(profile, metrics).status === 'available',
-    [metrics, profile],
-  );
   const locations = useMemo(() => {
     const all: TrackWeatherLocation[] = [
       elevationLocations.highest,
@@ -489,94 +483,86 @@ export function TrackWeatherSection({
               }
               label={t`Show times on the map`}
             />
-            {timelineAdjustable ? (
-              <>
-                <Box>
-                  <Typography
-                    id={startLabelId}
-                    variant="caption"
-                    color="text.secondary"
-                  >
-                    <Trans>Route start</Trans>
-                  </Typography>
-                  <Stack
-                    direction="row"
-                    spacing={1.5}
-                    sx={{ alignItems: 'center', px: 0.5 }}
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      {formatStartHour(0)}
-                    </Typography>
-                    <Slider
-                      size="small"
-                      aria-labelledby={startLabelId}
-                      min={0}
-                      max={TRACK_WEATHER_LATEST_START_HOUR}
-                      step={TRACK_WEATHER_START_HOUR_STEP}
-                      marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
-                      value={startHour}
-                      valueLabelDisplay="auto"
-                      valueLabelFormat={formatStartHour}
-                      getAriaValueText={formatStartHour}
-                      onChange={(_event, value) => {
-                        setStartDraft(value);
-                      }}
-                      onChangeCommitted={(_event, value) => {
-                        setStartDraft(null);
-                        onTimelineSettingsChange({
-                          ...timelineSettings,
-                          startHour: value,
-                        });
-                      }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
-                    </Typography>
-                  </Stack>
-                </Box>
-                <Box>
-                  <Typography id={paceLabelId} variant="caption" color="text.secondary">
-                    <Trans>Adjust pace</Trans>
-                  </Typography>
-                  <Stack
-                    direction="row"
-                    spacing={1.5}
-                    sx={{ alignItems: 'center', px: 0.5 }}
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      <Trans>Faster</Trans>
-                    </Typography>
-                    <Slider
-                      size="small"
-                      aria-labelledby={paceLabelId}
-                      min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
-                      max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
-                      step={TRACK_WEATHER_PACE_FACTOR_STEP}
-                      marks={[{ value: 1 }]}
-                      value={paceDraft ?? paceFactor}
-                      valueLabelDisplay="auto"
-                      valueLabelFormat={formatPace}
-                      getAriaValueText={formatPace}
-                      onChange={(_event, value) => {
-                        setPaceDraft(value);
-                      }}
-                      onChangeCommitted={(_event, value) => {
-                        setPaceDraft(null);
-                        // Keyboard steps accumulate floating-point error (×0.5 plus ten
-                        // steps is 1.0000000000000004); hundredths keep exact steps.
-                        onTimelineSettingsChange({
-                          ...timelineSettings,
-                          paceFactor: Math.round(value * 100) / 100,
-                        });
-                      }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      <Trans>Slower</Trans>
-                    </Typography>
-                  </Stack>
-                </Box>
-              </>
-            ) : null}
+            <Box>
+              <Typography id={startLabelId} variant="caption" color="text.secondary">
+                <Trans>Route start</Trans>
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', px: 0.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  {formatStartHour(0)}
+                </Typography>
+                <Slider
+                  size="small"
+                  aria-labelledby={startLabelId}
+                  min={0}
+                  max={TRACK_WEATHER_LATEST_START_HOUR}
+                  step={TRACK_WEATHER_START_HOUR_STEP}
+                  marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
+                  value={startHour}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={formatStartHour}
+                  getAriaValueText={formatStartHour}
+                  onChange={(_event, value) => {
+                    setStartDraft(value);
+                  }}
+                  onChangeCommitted={(_event, value) => {
+                    setStartDraft(null);
+                    onTimelineSettingsChange({
+                      ...timelineSettings,
+                      startHour: value,
+                    });
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+                </Typography>
+              </Stack>
+            </Box>
+            <Box>
+              <Typography id={paceLabelId} variant="caption" color="text.secondary">
+                <Trans>Adjust pace</Trans>
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', px: 0.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>Faster</Trans>
+                </Typography>
+                <Slider
+                  size="small"
+                  aria-labelledby={paceLabelId}
+                  min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
+                  max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
+                  step={TRACK_WEATHER_PACE_FACTOR_STEP}
+                  marks={[{ value: 1 }]}
+                  value={paceDraft ?? paceFactor}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={formatPace}
+                  getAriaValueText={formatPace}
+                  onChange={(_event, value) => {
+                    setPaceDraft(value);
+                  }}
+                  onChangeCommitted={(_event, value) => {
+                    setPaceDraft(null);
+                    // Keyboard steps accumulate floating-point error (×0.5 plus ten
+                    // steps is 1.0000000000000004); hundredths keep exact steps.
+                    onTimelineSettingsChange({
+                      ...timelineSettings,
+                      paceFactor: Math.round(value * 100) / 100,
+                    });
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>Slower</Trans>
+                </Typography>
+              </Stack>
+            </Box>
             <Typography variant="caption" color="text.secondary">
               {timelineCaption}
             </Typography>

@@ -11,19 +11,30 @@ import type {
   ElevationProfile,
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
-import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
+import type { TrackMarker } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
 import {
   estimateHikingSeconds,
+  geodesicDistanceMeters,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 
-/** Route timeline adjustments for one track; they never change its recorded time. */
+/**
+ * Route timeline adjustments for one track; they never change its recorded time. They
+ * also decide whether and how the map labels the track with these times.
+ */
 export interface TrackWeatherTimelineSettings {
   /** Fractional local hour of the day at which the hike starts. */
   readonly startHour: number;
   /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
   readonly paceFactor: number;
+  /** Times the route by the DIN 33466 estimate even when it has recorded time. */
+  readonly ignoreRecordedTime: boolean;
+  /** Clock times on the map line; null follows the Layers default. */
+  readonly timeMarkers: boolean | null;
+  /** Map times count from 00:00 at the start instead of the route start's clock time. */
+  readonly relativeTimeMarkers: boolean;
 }
 
 /** Browser-local track forecast view state. */
@@ -57,14 +68,18 @@ const millisecondsPerDay = 86_400_000;
 
 export interface TrackWeatherLocation {
   readonly coordinate: TrackCoordinate;
-  readonly elevationMeters: number;
+  readonly elevationMeters: number | undefined;
   readonly distanceMeters: number;
 }
 
+interface TrackElevationLocation extends TrackWeatherLocation {
+  readonly elevationMeters: number;
+}
+
 export interface TrackElevationLocations {
-  readonly highest: TrackWeatherLocation;
-  readonly median: TrackWeatherLocation;
-  readonly lowest: TrackWeatherLocation;
+  readonly highest: TrackElevationLocation;
+  readonly median: TrackElevationLocation;
+  readonly lowest: TrackElevationLocation;
 }
 
 export interface TrackWeatherCheckpoint extends TrackWeatherLocation {
@@ -84,6 +99,7 @@ export type TrackWeatherTimeline =
     }
   | {
       readonly status: 'too-long';
+      readonly durationSource: 'recorded' | 'estimated';
       readonly distanceMeters: number;
       readonly durationSeconds: number;
     };
@@ -93,7 +109,87 @@ export interface TrackWeatherCheckpointPeriod {
   readonly period: PointWeatherForecastPeriod;
 }
 
-function location(point: ElevationProfilePoint): TrackWeatherLocation {
+interface TrackTimingPoint extends TrackPoint {
+  readonly distanceMeters: number;
+  readonly sourceSegmentIndex: number;
+}
+
+/** Full-route samples for labels; unlike an elevation profile, no geometry is omitted. */
+export interface TrackTimingRoute {
+  readonly points: readonly TrackTimingPoint[];
+}
+
+/**
+ * Reuse a complete profile's filtered elevation. If elevation omitted any route span,
+ * keep all original points and timestamps; unknown elevation contributes no vertical
+ * travel, but its horizontal distance still counts.
+ */
+export function createTrackTimingRoute(
+  profile: ElevationProfile,
+  segments: readonly (readonly TrackPoint[])[],
+  distanceMeters: number,
+): TrackTimingRoute {
+  const first = segments[0]?.[0];
+  const last = segments.at(-1)?.at(-1);
+  const profileFirst = profile.points[0];
+  const profileLast = profile.points.at(-1);
+  if (
+    first !== undefined &&
+    last !== undefined &&
+    profileFirst !== undefined &&
+    profileLast !== undefined &&
+    first.coordinate[0] === profileFirst.coordinate[0] &&
+    first.coordinate[1] === profileFirst.coordinate[1] &&
+    last.coordinate[0] === profileLast.coordinate[0] &&
+    last.coordinate[1] === profileLast.coordinate[1] &&
+    first.recordedAt === profileFirst.recordedAt &&
+    last.recordedAt === profileLast.recordedAt &&
+    Math.abs(profileLast.distanceMeters - distanceMeters) < 0.001
+  ) {
+    return profile;
+  }
+
+  const points: TrackTimingPoint[] = [];
+  let cumulativeDistance = 0;
+  for (
+    let sourceSegmentIndex = 0;
+    sourceSegmentIndex < segments.length;
+    sourceSegmentIndex += 1
+  ) {
+    const segment = segments[sourceSegmentIndex];
+    if (segment === undefined) continue;
+    for (let index = 0; index < segment.length; index += 1) {
+      const point = requiredPoint(segment, index);
+      const previous = segment[index - 1];
+      if (previous !== undefined) {
+        cumulativeDistance += geodesicDistanceMeters(
+          previous.coordinate,
+          point.coordinate,
+        );
+      }
+      const sample = {
+        ...point,
+        distanceMeters: cumulativeDistance,
+        sourceSegmentIndex,
+      };
+      const before = previous?.elevationMeters;
+      const current = point.elevationMeters;
+      const after = segment[index + 1]?.elevationMeters;
+      if (before !== undefined && current !== undefined && after !== undefined) {
+        sample.elevationMeters =
+          before +
+          current +
+          after -
+          Math.min(before, current, after) -
+          Math.max(before, current, after);
+      }
+      points.push(sample);
+    }
+  }
+  return { points };
+}
+
+function location(point: ElevationProfilePoint): TrackElevationLocation {
   return {
     coordinate: point.coordinate,
     elevationMeters: point.elevationMeters,
@@ -101,10 +197,7 @@ function location(point: ElevationProfilePoint): TrackWeatherLocation {
   };
 }
 
-function requiredPoint(
-  points: readonly ElevationProfilePoint[],
-  index: number,
-): ElevationProfilePoint {
+function requiredPoint<Point>(points: readonly Point[], index: number): Point {
   const point = points[index];
   if (point === undefined) throw new RangeError('The elevation profile is empty.');
   return point;
@@ -147,15 +240,19 @@ export function selectTrackElevationLocations(
  * descent, scaled so the finish matches the track's stored estimate when one exists.
  */
 function estimatedElapsedSeconds(
-  points: readonly ElevationProfilePoint[],
+  points: readonly TrackTimingPoint[],
   totalSeconds: number | undefined,
 ): readonly number[] {
   const elapsed: number[] = [];
   let ascentMeters = 0;
   let descentMeters = 0;
-  let previous: ElevationProfilePoint | undefined;
+  let previous: TrackTimingPoint | undefined;
   for (const point of points) {
-    if (previous !== undefined) {
+    if (
+      previous?.sourceSegmentIndex === point.sourceSegmentIndex &&
+      previous.elevationMeters !== undefined &&
+      point.elevationMeters !== undefined
+    ) {
       const change = point.elevationMeters - previous.elevationMeters;
       if (change > 0) ascentMeters += change;
       else descentMeters -= change;
@@ -176,31 +273,42 @@ function interpolate(start: number, end: number, fraction: number): number {
 }
 
 function locationAtElapsed(
-  points: readonly ElevationProfilePoint[],
+  points: readonly TrackTimingPoint[],
   elapsed: readonly number[],
   seconds: number,
 ): TrackWeatherLocation {
   const index = elapsed.findIndex((value) => value >= seconds);
-  if (index <= 0)
-    return location(requiredPoint(points, index < 0 ? points.length - 1 : 0));
+  if (index <= 0) {
+    const point = requiredPoint(points, index < 0 ? points.length - 1 : 0);
+    return {
+      coordinate: point.coordinate,
+      elevationMeters: point.elevationMeters,
+      distanceMeters: point.distanceMeters,
+    };
+  }
   const before = requiredPoint(points, index - 1);
   const after = requiredPoint(points, index);
   const beforeSeconds = elapsed[index - 1] ?? 0;
   const afterSeconds = elapsed[index] ?? beforeSeconds;
+  // Between source segments no track is drawn: the hiker waits at the previous
+  // segment's end until the next one starts.
   const fraction =
     afterSeconds <= beforeSeconds
       ? 0
-      : (seconds - beforeSeconds) / (afterSeconds - beforeSeconds);
+      : before.sourceSegmentIndex !== after.sourceSegmentIndex
+        ? seconds < afterSeconds
+          ? 0
+          : 1
+        : (seconds - beforeSeconds) / (afterSeconds - beforeSeconds);
   return {
     coordinate: [
       interpolate(before.coordinate[0], after.coordinate[0], fraction),
       interpolate(before.coordinate[1], after.coordinate[1], fraction),
     ],
-    elevationMeters: interpolate(
-      before.elevationMeters,
-      after.elevationMeters,
-      fraction,
-    ),
+    elevationMeters:
+      before.elevationMeters === undefined || after.elevationMeters === undefined
+        ? undefined
+        : interpolate(before.elevationMeters, after.elevationMeters, fraction),
     distanceMeters: interpolate(before.distanceMeters, after.distanceMeters, fraction),
   };
 }
@@ -213,19 +321,35 @@ export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
 export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
   startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
   paceFactor: 1,
+  ignoreRecordedTime: false,
+  timeMarkers: null,
+  relativeTimeMarkers: false,
 };
 
 /**
- * The saved track's timeline settings, or the defaults. Only own entries count, so a
- * track ID such as `constructor` never reads an `Object.prototype` member.
+ * Saved overrides win; otherwise use the recorded start's browser-local clock time,
+ * rounded to the nearest half-hour. Only own entries count for untrusted track IDs.
  */
 export function trackWeatherTimeline(
   preferences: TrackWeatherPreferences | null,
-  trackId: string,
+  trackId: string | null,
+  recordedStartAt?: string,
 ): TrackWeatherTimelineSettings {
-  return preferences !== null && Object.hasOwn(preferences.timelines, trackId)
-    ? (preferences.timelines[trackId] ?? defaultTrackWeatherTimelineSettings)
-    : defaultTrackWeatherTimelineSettings;
+  if (
+    preferences !== null &&
+    trackId !== null &&
+    Object.hasOwn(preferences.timelines, trackId)
+  ) {
+    const stored = preferences.timelines[trackId];
+    if (stored !== undefined) return stored;
+  }
+  if (recordedStartAt === undefined) return defaultTrackWeatherTimelineSettings;
+  const start = new Date(recordedStartAt);
+  if (!Number.isFinite(start.getTime())) return defaultTrackWeatherTimelineSettings;
+  const seconds =
+    start.getHours() * 3600 + start.getMinutes() * 60 + start.getSeconds();
+  const startHour = (Math.round(seconds / 1800) % 48) / 2;
+  return { ...defaultTrackWeatherTimelineSettings, startHour };
 }
 
 /**
@@ -236,12 +360,17 @@ export function withTrackWeatherTimeline(
   preferences: TrackWeatherPreferences,
   trackId: string,
   settings: TrackWeatherTimelineSettings | null,
+  recordedStartAt?: string,
 ): TrackWeatherPreferences {
   const others = Object.entries(preferences.timelines).filter(([id]) => id !== trackId);
+  const defaults = trackWeatherTimeline(null, null, recordedStartAt);
   const adjusted =
     settings !== null &&
-    (settings.startHour !== defaultTrackWeatherTimelineSettings.startHour ||
-      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor);
+    (settings.startHour !== defaults.startHour ||
+      settings.paceFactor !== defaults.paceFactor ||
+      settings.ignoreRecordedTime !== defaults.ignoreRecordedTime ||
+      settings.timeMarkers !== defaults.timeMarkers ||
+      settings.relativeTimeMarkers !== defaults.relativeTimeMarkers);
   // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
   return {
     ...preferences,
@@ -251,31 +380,71 @@ export function withTrackWeatherTimeline(
   };
 }
 
+/** Track metrics the route timeline reads. */
+export type TrackTimingMetrics = Pick<
+  TrackMetrics,
+  'elapsedSeconds' | 'estimatedSeconds' | 'ascentMeters' | 'descentMeters'
+>;
+
 /**
- * Places the hiker on the route every three hours from the start and at the finish.
- * Recorded timestamps drive the pace when the track has a recorded duration; otherwise
- * the DIN 33466 estimate adds climbing and descending time to horizontal walking time.
- * `paceFactor` stretches (above 1) or compresses that time for the forecast only.
+ * Elapsed seconds at each profile point. Recorded timestamps drive the pace when the
+ * track has a recorded duration and `ignoreRecordedTime` is off; otherwise the DIN 33466
+ * estimate adds climbing and descending time to horizontal walking time, scaled to the
+ * track's stored estimate. Recorded tracks store none, so the DIN total of the route's
+ * distance and the stored ascent and descent anchors it instead of the noisier
+ * per-sample sum. `paceFactor` stretches (above 1) or compresses that time.
+ */
+function routeElapsedSeconds(
+  points: readonly TrackTimingPoint[],
+  metrics: TrackTimingMetrics,
+  timing: TrackWeatherTiming,
+): { readonly elapsed: readonly number[]; readonly recorded: boolean } {
+  const recorded =
+    metrics.elapsedSeconds === undefined || timing.ignoreRecordedTime
+      ? null
+      : recordedElapsedSeconds(points);
+  const estimateTotal =
+    metrics.estimatedSeconds ??
+    (metrics.ascentMeters === undefined || metrics.descentMeters === undefined
+      ? undefined
+      : estimateHikingSeconds(
+          points.at(-1)?.distanceMeters ?? 0,
+          metrics.ascentMeters,
+          metrics.descentMeters,
+        ));
+  const elapsed = (recorded ?? estimatedElapsedSeconds(points, estimateTotal)).map(
+    (seconds) => seconds * timing.paceFactor,
+  );
+  return { elapsed, recorded: recorded !== null };
+}
+
+/** The settings that change how long the route takes. */
+export type TrackWeatherTiming = Pick<
+  TrackWeatherTimelineSettings,
+  'paceFactor' | 'ignoreRecordedTime'
+>;
+
+/**
+ * Places the hiker on the route every three hours from the start and at the finish,
+ * timed by `routeElapsedSeconds`; the timing adjusts the time for the forecast only.
  * Only day hikes qualify: shorter than 30 km and, after the adjustment, 12 hours.
  */
 export function planTrackWeatherTimeline(
-  profile: ElevationProfile,
-  metrics: Pick<TrackMetrics, 'distanceMeters' | 'elapsedSeconds' | 'estimatedSeconds'>,
-  paceFactor = 1,
+  profile: TrackTimingRoute,
+  metrics: TrackTimingMetrics & Pick<TrackMetrics, 'distanceMeters'>,
+  timing: TrackWeatherTiming = defaultTrackWeatherTimelineSettings,
 ): TrackWeatherTimeline {
   const { points } = profile;
-  const recorded =
-    metrics.elapsedSeconds === undefined ? null : recordedElapsedSeconds(points);
-  const elapsed = (
-    recorded ?? estimatedElapsedSeconds(points, metrics.estimatedSeconds)
-  ).map((seconds) => seconds * paceFactor);
+  const { elapsed, recorded } = routeElapsedSeconds(points, metrics, timing);
   const durationSeconds = elapsed.at(-1) ?? 0;
+  const durationSource = recorded ? 'recorded' : 'estimated';
   if (
     metrics.distanceMeters >= TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS ||
     durationSeconds >= TRACK_WEATHER_TIMELINE_MAXIMUM_SECONDS
   ) {
     return {
       status: 'too-long',
+      durationSource,
       distanceMeters: metrics.distanceMeters,
       durationSeconds,
     };
@@ -301,10 +470,114 @@ export function planTrackWeatherTimeline(
   });
   return {
     status: 'available',
-    durationSource: recorded === null ? 'estimated' : 'recorded',
+    durationSource,
     durationSeconds,
     checkpoints,
   };
+}
+
+/** Where the hiker is at one full hour. */
+export interface TrackHourMarker {
+  readonly coordinate: TrackCoordinate;
+  /** `HH:00`. */
+  readonly time: string;
+}
+
+/**
+ * Times along a route: local clock times that wrap past midnight, or, for relative
+ * markers, hours and minutes since the start that keep counting past 24.
+ */
+export interface TrackClockTimes {
+  /** `HH:mm` at the start and at the finish. */
+  readonly start: string;
+  readonly finish: string;
+  /** Every full hour strictly between the start and the finish, in route order. */
+  readonly hours: readonly TrackHourMarker[];
+}
+
+/** `HH:mm` of a number of seconds; whole minutes are truncated. */
+function hoursAndMinutes(seconds: number, wrapAtMidnight: boolean): string {
+  const totalMinutes = Math.floor(seconds / 60);
+  const minutes = wrapAtMidnight ? totalMinutes % 1_440 : totalMinutes;
+  return [Math.floor(minutes / 60), minutes % 60]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
+}
+
+/**
+ * Times for the map on the forecast's timeline, at the track's route start and timing,
+ * or counted from 00:00 at the start for relative markers. Unlike the forecast, any
+ * length qualifies: these are labels, not forecasts.
+ */
+export function planTrackClockTimes(
+  profile: TrackTimingRoute,
+  metrics: TrackTimingMetrics,
+  settings: TrackWeatherTimelineSettings,
+): TrackClockTimes {
+  const { points } = profile;
+  const { elapsed } = routeElapsedSeconds(points, metrics, settings);
+  // Whole seconds, so a scaled estimate a hair short of a full hour still finishes on
+  // it rather than a minute earlier, and that hour is not also labelled on the way.
+  const durationSeconds = Math.round(elapsed.at(-1) ?? 0);
+  const relative = settings.relativeTimeMarkers;
+  const startSeconds = relative ? 0 : settings.startHour * 3_600;
+  const hours: TrackHourMarker[] = [];
+  for (
+    let hourSeconds = (Math.floor(startSeconds / 3_600) + 1) * 3_600;
+    hourSeconds - startSeconds < durationSeconds;
+    hourSeconds += 3_600
+  ) {
+    hours.push({
+      coordinate: locationAtElapsed(points, elapsed, hourSeconds - startSeconds)
+        .coordinate,
+      time: hoursAndMinutes(hourSeconds, !relative),
+    });
+  }
+  return {
+    start: hoursAndMinutes(startSeconds, !relative),
+    finish: hoursAndMinutes(startSeconds + durationSeconds, !relative),
+    hours,
+  };
+}
+
+/**
+ * Passage times at each marker's nearest discrete profile point, provided it is within
+ * 500 m. This association only supplies timing; marker coordinates remain unchanged.
+ * Equal-distance points keep the first passage in profile order.
+ */
+export function planTrackMarkerTimes(
+  profile: TrackTimingRoute,
+  metrics: TrackTimingMetrics,
+  settings: TrackWeatherTimelineSettings,
+  markers: readonly TrackMarker[],
+): ReadonlyMap<string, string> {
+  const times = new Map<string, string>();
+  if (settings.timeMarkers === false || markers.length === 0) return times;
+
+  const { points } = profile;
+  const { elapsed } = routeElapsedSeconds(points, metrics, settings);
+  const relative = settings.relativeTimeMarkers;
+  const startSeconds = relative ? 0 : settings.startHour * 3_600;
+  for (const marker of markers) {
+    let nearestDistance = Infinity;
+    let nearestIndex = -1;
+    for (let index = 0; index < points.length; index += 1) {
+      const point = requiredPoint(points, index);
+      const distance = geodesicDistanceMeters(marker.coordinate, point.coordinate);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    }
+    const seconds = elapsed[nearestIndex];
+    if (nearestDistance <= 500 && seconds !== undefined) {
+      times.set(
+        marker.id,
+        hoursAndMinutes(startSeconds + Math.round(seconds), !relative),
+      );
+    }
+  }
+  return times;
 }
 
 function parseLocalDate(date: string): number {

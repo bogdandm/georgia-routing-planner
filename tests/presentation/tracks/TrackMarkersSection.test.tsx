@@ -25,6 +25,7 @@ function renderSection(
   overrides: {
     readonly elevationProvider?: ElevationProvider | null;
     readonly markers?: readonly TrackMarker[];
+    readonly markerTimes?: ReadonlyMap<string, string>;
     readonly onAdd?: () => void;
     readonly onRename?: (markerId: string, name: string) => Promise<void>;
     readonly onDelete?: (markerId: string) => Promise<void>;
@@ -35,6 +36,7 @@ function renderSection(
       <TrackMarkersSection
         elevationProvider={overrides.elevationProvider ?? null}
         markers={overrides.markers ?? []}
+        markerTimes={overrides.markerTimes ?? new Map()}
         onAdd={overrides.onAdd ?? vi.fn()}
         onRename={overrides.onRename ?? vi.fn().mockResolvedValue(undefined)}
         onDelete={overrides.onDelete ?? vi.fn().mockResolvedValue(undefined)}
@@ -106,6 +108,7 @@ describe('TrackMarkersSection', () => {
         <TrackMarkersSection
           elevationProvider={elevationProvider}
           markers={[{ ...marker, name: 'Renamed summit' }]}
+          markerTimes={new Map()}
           onAdd={vi.fn()}
           onRename={vi.fn()}
           onDelete={vi.fn()}
@@ -121,6 +124,7 @@ describe('TrackMarkersSection', () => {
         <TrackMarkersSection
           elevationProvider={elevationProvider}
           markers={[{ ...marker, coordinate: [44.6, 42.3] }]}
+          markerTimes={new Map()}
           onAdd={vi.fn()}
           onRename={vi.fn()}
           onDelete={vi.fn()}
@@ -134,6 +138,20 @@ describe('TrackMarkersSection', () => {
       [{ longitude: 44.6, latitude: 42.3 }],
       expect.any(AbortSignal),
     );
+  });
+
+  it('navigates to the marker when its passage time is clicked', async () => {
+    const user = userEvent.setup();
+    renderSection({
+      markers: [marker],
+      markerTimes: new Map([[marker.id, '11:30']]),
+    });
+    await user.click(screen.getByRole('button', { name: 'Markers' }));
+    await user.click(screen.getByText('11:30'));
+    expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
+      longitude: marker.coordinate[0],
+      latitude: marker.coordinate[1],
+    });
   });
 
   it('renames inline with the shared field, Save, Cancel, Enter, and Escape contract', async () => {

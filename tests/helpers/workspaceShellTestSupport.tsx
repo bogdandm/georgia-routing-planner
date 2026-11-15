@@ -214,6 +214,7 @@ export function setupWorkspaceShellTest(): void {
       settingsOpen: false,
       markerSort: 'created',
       trackSort: 'created',
+      trackSectionExpanded: {},
     });
   });
 

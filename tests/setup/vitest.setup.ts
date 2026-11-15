@@ -5,6 +5,7 @@ import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 
 import { mswServer } from './mswServer';
+import { useUiStore } from '@/presentation/shell/uiStore';
 
 // WorkspaceShell hydration crosses fake IndexedDB, GPX parsing, and several React
 // commits. The one-second default for findBy*/waitFor expires on loaded CI runners and
@@ -17,6 +18,7 @@ beforeAll(() => {
 
 afterEach(() => {
   cleanup();
+  useUiStore.setState({ trackSectionExpanded: {} });
   mswServer.resetHandlers();
   vi.restoreAllMocks();
 });

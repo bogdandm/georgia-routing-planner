@@ -8,6 +8,17 @@ import type { MapDebugOptions } from '@/presentation/map/mapTypes';
 export type WorkspaceTab =
   'tracks' | 'satellite' | 'weather' | 'markers' | 'layers' | 'user';
 
+export type TrackSection =
+  | 'summary'
+  | 'elevation'
+  | 'climbs'
+  | 'markers'
+  | 'timing'
+  | 'points'
+  | 'metadata'
+  | 'weather-elevation'
+  | 'weather-route';
+
 interface UiState {
   readonly activeTab: WorkspaceTab;
   readonly developerDrawerOpen: boolean;
@@ -16,6 +27,7 @@ interface UiState {
   readonly mapDebugOptions: MapDebugOptions;
   readonly markerSort: MarkerSort;
   readonly trackSort: TrackSort;
+  readonly trackSectionExpanded: Readonly<Partial<Record<TrackSection, boolean>>>;
   readonly mobileWorkspaceOpen: boolean;
   readonly navigationCollapsed: boolean;
   /** Defaults to true so the tour only auto-starts after `main.tsx` hydrates it. */
@@ -28,6 +40,7 @@ interface UiState {
   readonly setMapDebugOptions: (value: MapDebugOptions) => void;
   readonly setMarkerSort: (value: MarkerSort) => void;
   readonly setTrackSort: (value: TrackSort) => void;
+  readonly setTrackSectionExpanded: (section: TrackSection, expanded: boolean) => void;
   readonly setMobileWorkspaceOpen: (value: boolean) => void;
   readonly setNavigationCollapsed: (value: boolean) => void;
   readonly setOnboardingCompleted: (value: boolean) => void;
@@ -46,6 +59,7 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   markerSort: 'created',
   trackSort: 'created',
+  trackSectionExpanded: {},
   mobileWorkspaceOpen: false,
   navigationCollapsed: false,
   onboardingCompleted: true,
@@ -70,6 +84,11 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setTrackSort: (trackSort) => {
     set({ trackSort });
+  },
+  setTrackSectionExpanded: (section, expanded) => {
+    set((state) => ({
+      trackSectionExpanded: { ...state.trackSectionExpanded, [section]: expanded },
+    }));
   },
   setMobileWorkspaceOpen: (mobileWorkspaceOpen) => {
     set({ mobileWorkspaceOpen });

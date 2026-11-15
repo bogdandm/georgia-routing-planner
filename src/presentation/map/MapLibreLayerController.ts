@@ -61,6 +61,7 @@ import { createBasemapImage } from '@/presentation/map/basemapSymbols';
 import {
   importedTrackEndpointImageIds,
   importedTrackLayerIds,
+  importedTrackTimeLabelImageId,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
@@ -107,18 +108,22 @@ import {
 } from '@/presentation/map/terrainOverlayStyle';
 import {
   createTrackEndpointIcon,
+  createTrackTimeLabelImage,
   trackEndpointIconPixelRatio,
 } from '@/presentation/map/trackEndpointIcons';
 import {
   createImportedTrackEndpointCollection,
   createImportedTrackEndpointLayer,
   createImportedTrackLineLayer,
+  createImportedTrackTimeLabelCollection,
+  createImportedTrackTimeLayer,
   importedTrackCasingWidth,
   importedTrackLineWidth,
   satelliteFootprintPaint,
   sentinelRasterPaint,
   type ImportedTrackEndpoint,
   type ImportedTrackOverlaySnapshot,
+  type ImportedTrackTimeLabel,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
@@ -610,6 +615,8 @@ const logicalNativeLayerGroups: Readonly<
     importedTrackLayerIds.focusCasingB,
     importedTrackLayerIds.focusLineB,
     importedTrackLayerIds.endpoints,
+    importedTrackLayerIds.hourTimes,
+    importedTrackLayerIds.endpointTimes,
     importedTrackLayerIds.trace,
   ],
   'track-elevation-gradient': [
@@ -740,9 +747,15 @@ interface MissingSavedMarkerImage extends Pick<SavedMarker, 'iconKey' | 'colorKe
   readonly imageId: string;
 }
 
+/** Transient map label data; passage times never become part of stored markers. */
+export interface TrackMapMarker extends TrackMarker {
+  readonly passageTime?: string;
+}
+
 interface RenderedMarker {
   readonly id: string;
   readonly name: string;
+  readonly passageTime?: string;
   readonly coordinate: readonly [number, number];
   readonly iconKey: SavedMarker['iconKey'];
   readonly colorKey: SavedMarker['colorKey'];
@@ -985,6 +998,7 @@ export class MapLibreLayerController {
     coordinates: [],
   };
   #importedTrackEndpoints: readonly ImportedTrackEndpoint[] = [];
+  #importedTrackTimeLabels: readonly ImportedTrackTimeLabel[] = [];
   #importedTrackHighlightSegments: readonly ImportedTrackHighlightSegment[] = [];
   /** Segment, current visibility, and target visibility (0–1) of each focus overlay. */
   readonly #importedTrackFocusSegments: [
@@ -1001,13 +1015,13 @@ export class MapLibreLayerController {
   };
   #routeSearchTrace: TrailRouteSearchTrace | null = null;
   #trackPointSelection: TrackPointSelectionGeometry | null = null;
-  /** Last opacity written per track layer; a recreated native layer is written again. */
+  /** Last value written per track layer paint property; a recreated layer is rewritten. */
   readonly #importedTrackPaint = new Map<
     string,
     { readonly layer: unknown; readonly value: number }
   >();
   #savedMarkers: readonly SavedMarker[] = [];
-  #trackMarkers: readonly TrackMarker[] = [];
+  #trackMarkers: readonly TrackMapMarker[] = [];
   #savedMarkerGeneration = 0;
   readonly #savedMarkerImages = new Map<string, SavedMarkerImageState>();
   readonly #savedMarkerImageIds = new Set<string>();
@@ -1558,6 +1572,12 @@ export class MapLibreLayerController {
     return { status: 'success' };
   }
 
+  /** The Layers default for tracks without their own time-marker choice. */
+  public setTrackTimeMarkers(enabled: boolean): void {
+    mapLayerStore.setState({ trackTimeMarkers: enabled });
+    this.persistStableState();
+  }
+
   /**
    * Renders tracks as one line source. Each track is a list of segments; its first and
    * last points receive the start and finish markers.
@@ -1620,6 +1640,17 @@ export class MapLibreLayerController {
     this.reconcileImportedTrack();
     this.reconcileImportedTrackHighlight();
     this.reconcileImportedTrackTrace();
+  }
+
+  /** Clock times drawn on the imported tracks; independent of their geometry. */
+  public setImportedTrackTimeLabels(labels: readonly ImportedTrackTimeLabel[]): void {
+    this.#importedTrackTimeLabels = labels.map((label) => ({
+      placement: label.placement,
+      coordinate: [label.coordinate[0], label.coordinate[1]],
+      time: label.time,
+    }));
+    this.#currentGeoJsonSources.delete(mapSourceIds.importedTrackTimeLabels);
+    this.reconcileImportedTrack();
   }
 
   public setImportedTrackHighlight(
@@ -1818,7 +1849,7 @@ export class MapLibreLayerController {
     this.reconcileSavedMarkers();
   }
 
-  public setTrackMarkers(markers: readonly TrackMarker[]): void {
+  public setTrackMarkers(markers: readonly TrackMapMarker[]): void {
     this.#trackMarkers = markers
       .map((marker) => ({
         ...marker,
@@ -2178,6 +2209,7 @@ export class MapLibreLayerController {
         visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
         importedTrackOpacity: persisted.importedTrackOpacity,
+        trackTimeMarkers: persisted.trackTimeMarkers,
         weatherMap: {
           ...mapLayerStore.getState().weatherMap,
           opacity: persisted.weatherMapOpacity,
@@ -3112,7 +3144,8 @@ export class MapLibreLayerController {
             ...state.visibility,
             ...this.#weatherSuppressedTerrainVisibility,
           };
-    const { openStreetMapOpacity, importedTrackOpacity, weatherMap } = state;
+    const { openStreetMapOpacity, importedTrackOpacity, trackTimeMarkers, weatherMap } =
+      state;
     const renderingTuning = { ...this.#renderingTuning };
     void this.preferences
       .saveMapLayerPreferences({
@@ -3121,6 +3154,7 @@ export class MapLibreLayerController {
           'natural-feature-patterns': this.#naturalFeaturePatternsByMode.flat,
         },
         naturalFeaturePatternsIn3d: this.#naturalFeaturePatternsByMode.terrain,
+        trackTimeMarkers,
         openStreetMapOpacity,
         importedTrackOpacity,
         weatherMapOpacity: weatherMap.opacity,
@@ -3671,7 +3705,10 @@ export class MapLibreLayerController {
           id: `${marker.kind}:${marker.id}`,
           properties: {
             id: marker.id,
-            name: marker.name,
+            name:
+              marker.passageTime === undefined
+                ? marker.name
+                : `${marker.name} · ${marker.passageTime}`,
             iconKey: marker.iconKey,
             colorKey: marker.colorKey,
             kind: marker.kind,
@@ -3722,11 +3759,15 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Point overlays above every other layer, bottom to top: selected track points, the
-   * elevation hover point, then saved markers.
+   * Point overlays above every other layer, bottom to top: track hourly times, endpoint
+   * times, and endpoint icons, so basemap labels yield to them instead of covering them;
+   * selected track points, the elevation hover point, then saved markers.
    */
   private ensureTopLayerOrder(map: MapLibreMap): void {
     const topLayerIds = [
+      importedTrackLayerIds.hourTimes,
+      importedTrackLayerIds.endpointTimes,
+      importedTrackLayerIds.endpoints,
       trackPointSelectionLayerIds.points,
       importedTrackLayerIds.trace,
       savedMarkerLayerIds.symbols,
@@ -4086,6 +4127,9 @@ export class MapLibreLayerController {
         ) &&
         this.syncGeoJsonSource(map, mapSourceIds.importedTrackEndpoints, () =>
           createImportedTrackEndpointCollection(this.#importedTrackEndpoints),
+        ) &&
+        this.syncGeoJsonSource(map, mapSourceIds.importedTrackTimeLabels, () =>
+          createImportedTrackTimeLabelCollection(this.#importedTrackTimeLabels),
         );
       if (!sourcesAreGeoJson) {
         throw new Error('The imported track source cannot update its data.');
@@ -4108,6 +4152,22 @@ export class MapLibreLayerController {
           map.addImage(imageId, createTrackEndpointIcon(kind), {
             pixelRatio: trackEndpointIconPixelRatio,
           });
+        }
+      }
+      if (!map.hasImage(importedTrackTimeLabelImageId)) {
+        const { image, ...options } = createTrackTimeLabelImage();
+        map.addImage(importedTrackTimeLabelImageId, image, options);
+      }
+      // Endpoint times follow hourly times so they are placed first and always win.
+      for (const labels of ['hour', 'endpoint'] as const) {
+        const layerId =
+          labels === 'hour'
+            ? importedTrackLayerIds.hourTimes
+            : importedTrackLayerIds.endpointTimes;
+        if (map.getLayer(layerId) === undefined) {
+          map.addLayer(
+            createImportedTrackTimeLayer(labels, visible, importedTrackOpacity),
+          );
         }
       }
       if (map.getLayer(importedTrackLayerIds.endpoints) === undefined) {
@@ -4356,7 +4416,6 @@ export class MapLibreLayerController {
       importedTrackLayerIds.highlight,
       ...importedTrackFocusSlots.flatMap(({ layerIds }) => layerIds),
       trackPointSelectionLayerIds.line,
-      importedTrackLayerIds.endpoints,
     ].filter((layerId) => map.getLayer(layerId) !== undefined);
     const layerIds = map.getLayersOrder();
     const labelIndex = layerIds.indexOf(mapInsertionPoints.importedTracksBeforeLayerId);
@@ -4394,7 +4453,7 @@ export class MapLibreLayerController {
     const trackOpacity = opacity * (1 - dimming);
     const opacityByLayer: readonly (readonly [
       string,
-      'line-opacity' | 'icon-opacity',
+      'line-opacity' | 'icon-opacity' | 'text-opacity',
       number,
     ])[] = [
       [importedTrackLayerIds.casing, 'line-opacity', trackOpacity],
@@ -4411,10 +4470,18 @@ export class MapLibreLayerController {
         ),
       ),
       [importedTrackLayerIds.endpoints, 'icon-opacity', opacity],
+      ...[importedTrackLayerIds.hourTimes, importedTrackLayerIds.endpointTimes].flatMap(
+        (layerId) =>
+          [
+            [layerId, 'icon-opacity', opacity],
+            [layerId, 'text-opacity', opacity],
+          ] as const,
+      ),
     ];
     for (const [layerId, property, value] of opacityByLayer) {
       const layer = map.getLayer(layerId);
-      const applied = this.#importedTrackPaint.get(layerId);
+      const key = `${layerId}/${property}`;
+      const applied = this.#importedTrackPaint.get(key);
       if (
         layer === undefined ||
         (applied?.layer === layer && applied.value === value)
@@ -4422,7 +4489,7 @@ export class MapLibreLayerController {
         continue;
       }
       map.setPaintProperty(layerId, property, value);
-      this.#importedTrackPaint.set(layerId, { layer, value });
+      this.#importedTrackPaint.set(key, { layer, value });
     }
   }
 

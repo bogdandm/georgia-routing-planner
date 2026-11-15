@@ -312,29 +312,77 @@ navigation, inline rename, and two-stage deletion. Only the active editable trac
 renders its markers, smaller than saved markers. Track markers are stored in track
 content and synchronize as track metadata without changing geometry or content hashes.
 
-Tracks with an elevation profile show a **Weather forecast** section below Markers. It
-starts collapsed; whether it is expanded is remembered in this browser for every track,
-and forecasts load only while it is open. It begins with seven forecast dates from
-today; choosing one remembers its weekday for all tracks, and the next Saturday is
-selected until then. **By elevation** shows the daytime forecast at the highest,
-median-elevation, and lowest profile points. **Along the route** starts at a chosen
-local time and shows where the hiker is every three hours and at the finish, each with
-the forecast at that location from its arrival hour until the next checkpoint; the
-finish covers its arrival hour. The pace follows recorded timestamps when the track has
-recorded time and otherwise the DIN 33466 estimate, so climbs advance more slowly than
-flat walking. The timeline is offered only for day hikes shorter than 30 km and 12
-hours. For those tracks a **Route start** slider above the pace sets the start from
-00:00 to 23:30 in half-hour steps, defaulting to 09:00; arrivals after midnight use the
-next date's forecast hours. An **Adjust pace** slider scales the timeline from ×0.5
-(faster) to ×2 (slower) and replans the checkpoints on release. Both are remembered in
-this browser for each saved track, and reset to the defaults for a reversed copy; an
-unsaved track keeps them while it is open and carries them over when it is saved. They
-are not synchronized to the account. Neither changes the track's recorded or estimated
-time. Slowing a track past 12 hours hides the timeline until the pace is reduced. Cards
-reuse the 7-day forecast rows from Weather and request each location with its profile
-elevation. Clicking a loaded forecast row opens Weather with the full forecast at that
-location and elevation, labelled with the card's point or time. Failed track forecasts
-retry automatically as in Weather when the app becomes visible again.
+With a profile, track marker names in the list and on the map include their passage time
+from **Route timing**. Each marker uses the nearest discrete route sample, not a
+projected position on a segment; ties use the first point in route order. A time is
+shown only when that point is at most 500 m away. This association does not move or
+rewrite the marker's saved coordinates. Start, pace, recorded-time choice, elapsed-time
+display, and the time-marker visibility setting all apply; hiding times keeps the
+markers.
+
+Tracks with an elevation profile show **Route timing** below Markers, independently of
+the **Weather forecast** section beneath it. Its map-time options, **Route start** and
+**Adjust pace** controls remain available while the forecast is collapsed. The timeline
+follows recorded timestamps when the track has recorded time and otherwise the DIN 33466
+estimate, so climbs advance more slowly than flat walking. **Ignore recorded time**,
+offered on timed tracks, selects the estimate instead, totalling the DIN 33466 time of
+the track's distance and stored ascent and descent. **Route start** sets the start from
+00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time,
+rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace** scales hiking
+time from ×0.5 (faster) to ×2 (slower) on release. These settings are remembered in this
+browser for each saved track and reset to the defaults for a reversed copy; an unsaved
+track keeps them while it is open and carries them over when saved. They are not
+synchronized to the account and do not change the track's recorded or estimated time.
+
+Timing includes the full route even if elevation is available only in its middle.
+Complete profiles reuse filtered elevation; incomplete profiles retain the original
+route points and timestamps. Estimated timing counts horizontal travel through missing
+elevation without inventing vertical changes. Disconnected segments never contribute a
+climb or descent between their endpoints.
+
+Every track detail section (Track details, Elevation profile, Climbs & Descents,
+Markers, Route timing, Points, Source details, and the forecast's **By elevation** and
+**Along the route**) is a disclosure whose state is remembered in this browser for all
+tracks. Editing points or revealing one from the chart opens **Points** without changing
+that choice.
+
+**Weather forecast** starts collapsed; whether it is expanded is remembered in this
+browser for every track, and forecasts load only while it is open. It begins with seven
+forecast dates from today; choosing one remembers its weekday for all tracks, and the
+next Saturday is selected until then. **By elevation** shows the daytime forecast at the
+highest, median-elevation, and lowest profile points. **Along the route** uses **Route
+timing** to show where the hiker is every three hours and at the finish, each with the
+forecast from its arrival hour until the next checkpoint; the finish covers its arrival
+hour. Arrivals after midnight use the next date's forecast hours. Forecast checkpoints
+are offered only for day hikes shorter than 30 km and 12 hours; slowing a track past 12
+hours hides them until the pace is reduced. This restriction does not hide the timing
+controls or map labels. Cards reuse the 7-day forecast rows from Weather and request
+each location with its profile elevation. Clicking a loaded forecast row opens Weather
+with the full forecast at that location and elevation, labelled with the card's point or
+time. Failed track forecasts retry automatically as in Weather when the app becomes
+visible again.
+
+#### Time markers
+
+A track with an elevation profile is labelled on the map with clock times from the same
+timeline as **Route timing**: its route start and pace, recorded timestamps unless
+**Ignore recorded time** is selected, and otherwise the DIN 33466 estimate. The start
+and finish show their exact `HH:mm` beside the Play and Stop markers, extending away
+from each other east or west; a loop shows the start time on the right and finish on the
+left. Each full hour between them shows `HH:00` where the hiker is at that time, and an
+hour in a break between recorded segments stays at the earlier segment's end. Unlike the
+forecast timeline, any track length qualifies. Clock times wrap at midnight; elapsed
+times keep counting past 24 hours. Labels are white text on white-bordered rounded
+rectangles in the track colour, follow the Local GPX opacity and visibility, and are not
+drawn in satellite comparison panes. They draw above map labels, which give way to them.
+Endpoint times always show; hourly times give way to the endpoints and each other.
+
+**Show times on the map**, the first control in **Route timing**, turns the labels on or
+off for one track and is remembered in this browser like its route start and pace.
+**Count map times from 00:00 at the start** shows elapsed rather than clock times on the
+map, without changing the forecast's arrival times. It is disabled when map times are
+off. Tracks without their own visibility choice follow **Time markers** in Layers, on by
+default. Multi-track view labels every selected track with its own stored settings.
 
 #### Track points
 
@@ -465,8 +513,9 @@ MapLibre layer IDs; native IDs never reach the UI.
 
 - **Weather:** turning the weather map on routes to the Weather tab; turning it off and
   its opacity work here.
-- **Local GPX:** Imported tracks, the default-on **Elevation gradient**, and one opacity
-  for the active preview, saved selection, and gradient.
+- **Local GPX:** Imported tracks, the default-on **Elevation gradient**, one opacity for
+  the active preview, saved selection, and gradient, and the default-on **Time markers**
+  for tracks without their own choice.
 - **Satellites:** **Google satellite imagery**, **Bing aerial imagery**, **Esri World
   Imagery**, **NAPR Orthophoto**, **Soviet topographic maps**, then Sentinel-2
   **Satellite imagery** and **Scene footprint**, enabled once a scene is applied. The

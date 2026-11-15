@@ -315,7 +315,10 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const persistUiPreferences = useCallback(
     async (nextPreferences: UiPreferenceValues): Promise<boolean> => {
       try {
-        await database.saveUiPreferences(nextPreferences);
+        await database.saveUiPreferences({
+          ...nextPreferences,
+          trackSectionExpanded: useUiStore.getState().trackSectionExpanded,
+        });
         return true;
       } catch {
         logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
@@ -323,6 +326,23 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       }
     },
     [database, logger],
+  );
+
+  useEffect(
+    () =>
+      useUiStore.subscribe((state, previous) => {
+        if (state.trackSectionExpanded === previous.trackSectionExpanded) return;
+        void persistUiPreferences({
+          developerMode: state.developerMode,
+          navigationCollapsed: state.navigationCollapsed,
+          elevationGradeLegendDismissed: state.elevationGradeLegendDismissed,
+          markerSort: state.markerSort,
+          trackSort: state.trackSort,
+          onboardingCompleted: state.onboardingCompleted,
+          locale,
+        });
+      }),
+    [locale, persistUiPreferences],
   );
 
   const handleSectionChange = useCallback(

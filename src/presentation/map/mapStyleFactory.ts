@@ -18,6 +18,7 @@ import {
   basemapImageIds,
   importedTrackEndpointImageIds,
   importedTrackLayerIds,
+  importedTrackTimeLabelImageId,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
@@ -107,7 +108,10 @@ export function createImportedTrackLineLayer(
   };
 }
 
-/** Start and finish icons; the map must provide `importedTrackEndpointImageIds`. */
+/**
+ * Start and finish icons; the map must provide `importedTrackEndpointImageIds`. They always
+ * show and, like the endpoint times, hide basemap labels they would overlap.
+ */
 export function createImportedTrackEndpointLayer(
   visible: boolean,
   opacity: number,
@@ -126,11 +130,87 @@ export function createImportedTrackEndpointLayer(
         importedTrackEndpointImageIds.finish,
       ],
       'icon-allow-overlap': true,
-      'icon-ignore-placement': true,
       // Source order, not screen position, decides which coincident icon is on top.
       'symbol-z-order': 'source',
     },
     paint: { 'icon-opacity': opacity },
+  };
+}
+
+/** A clock time on a track: beside its start or finish icon, or at a full hour. */
+export interface ImportedTrackTimeLabel {
+  /** Hourly times centre on their point; endpoint times extend to one side of the icon. */
+  readonly placement: 'hour' | 'left' | 'right';
+  readonly coordinate: readonly [number, number];
+  readonly time: string;
+}
+
+export function createImportedTrackTimeLabelCollection(
+  labels: readonly ImportedTrackTimeLabel[],
+): FeatureCollection<
+  Point,
+  { readonly placement: ImportedTrackTimeLabel['placement']; readonly time: string }
+> {
+  return {
+    type: 'FeatureCollection',
+    features: labels.map(({ placement, coordinate, time }) => ({
+      type: 'Feature',
+      properties: { placement, time },
+      geometry: { type: 'Point', coordinates: [...coordinate] },
+    })),
+  };
+}
+
+/** Ems from the endpoint icon centre to the label text; the icon covers the label's end. */
+const endpointTimeOffsetEms = 0.9;
+
+/**
+ * Time labels in white on track-coloured rounded rectangles; the map must provide
+ * `importedTrackTimeLabelImageId`. They sit above the basemap labels, so those yield to
+ * them. Endpoint times always show on their side of the icon. Hourly times yield to the
+ * endpoint icons and times.
+ */
+export function createImportedTrackTimeLayer(
+  labels: 'endpoint' | 'hour',
+  visible: boolean,
+  opacity: number,
+): SymbolLayerSpecification {
+  const endpoint = labels === 'endpoint';
+  const isHour: ExpressionSpecification = ['==', ['get', 'placement'], 'hour'];
+  const layout: NonNullable<SymbolLayerSpecification['layout']> = {
+    visibility: visible ? 'visible' : 'none',
+    'text-field': ['get', 'time'],
+    'text-font': ['Noto Sans Regular'],
+    'text-size': 12,
+    'icon-image': importedTrackTimeLabelImageId,
+    'icon-text-fit': 'both',
+    'icon-text-fit-padding': [1, 5, 1, 5],
+  };
+  if (endpoint) {
+    layout['text-anchor'] = ['match', ['get', 'placement'], 'right', 'left', 'right'];
+    layout['text-offset'] = [
+      'match',
+      ['get', 'placement'],
+      'right',
+      ['literal', [endpointTimeOffsetEms, 0]],
+      ['literal', [-endpointTimeOffsetEms, 0]],
+    ];
+    layout['text-allow-overlap'] = true;
+    layout['icon-allow-overlap'] = true;
+  }
+  return {
+    id: endpoint
+      ? importedTrackLayerIds.endpointTimes
+      : importedTrackLayerIds.hourTimes,
+    type: 'symbol',
+    source: mapSourceIds.importedTrackTimeLabels,
+    filter: endpoint ? ['!', isHour] : isHour,
+    layout,
+    paint: {
+      'text-color': mapVisualPalette.userGeometry.gpxTrackLabel,
+      'text-opacity': opacity,
+      'icon-opacity': opacity,
+    },
   };
 }
 

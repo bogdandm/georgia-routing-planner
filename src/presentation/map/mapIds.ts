@@ -20,6 +20,7 @@ export const mapSourceIds = {
   importedTrackFocusB: 'imported-track-focus-b',
   importedTrackTrace: 'imported-track-trace',
   importedTrackEndpoints: 'imported-track-endpoints',
+  importedTrackTimeLabels: 'imported-track-time-labels',
   routePlan: 'route-plan',
   routeSearch: 'route-search',
   measurement: 'measurement',
@@ -91,12 +92,16 @@ export const importedTrackLayerIds = {
   focusLineB: 'imported-track-focus-b-line',
   focusHighlightB: 'imported-track-focus-b-highlight',
   endpoints: 'imported-track-endpoints',
+  hourTimes: 'imported-track-hour-times',
+  endpointTimes: 'imported-track-endpoint-times',
   trace: 'imported-track-trace',
 } as const;
 export const importedTrackEndpointImageIds = {
   start: 'imported-track-start',
   finish: 'imported-track-finish',
 } as const;
+/** Stretchable rounded rectangle behind each track time label. */
+export const importedTrackTimeLabelImageId = 'imported-track-time-label';
 export const routePlanLayerIds = {
   routed: 'route-plan-routed',
   direct: 'route-plan-direct',

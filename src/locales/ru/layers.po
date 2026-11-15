@@ -416,6 +416,16 @@ msgstr "Не удалось показать выбранный кадр пог�
 msgid "The weather map provider is unavailable."
 msgstr "Поставщик карты погоды недоступен."
 
+#. js-lingui-id: -vD4Tz
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Time markers"
+msgstr "Отметки времени"
+
+#. js-lingui-id: mBpYkO
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Times on tracks and their markers; each track's Route timing settings take precedence."
+msgstr "Время на треках и их метках; настройки «Время прохождения» для отдельного трека имеют приоритет."
+
 #. js-lingui-id: W7HXf3
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Track opacity"

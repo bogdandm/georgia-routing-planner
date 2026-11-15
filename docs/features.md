@@ -707,11 +707,14 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   visible, the next map click only closes it.
 - **Sun shadows:** the sun button directly below the map-layer chooser opens a compact
   non-modal panel; opening it does not turn shadows on. It holds a **Sun shadows**
-  switch, a date field, a time-of-day slider from 00:00 to 23:50 in 10-minute steps that
-  applies on release or keyboard change, and **Now**. Date and time are local wall time
-  at the map center (the browser's zone until the first viewport settles), with the
-  zone's GMT offset and that day's sunrise and sunset at the center shown below; a note
-  appears when the sun is below the horizon there. Browsers that cannot render
+  switch, a date field, a time-of-day slider in 10-minute steps that applies on release
+  or keyboard change, and **Now**. Date and time are local wall time at the map center
+  (the browser's zone until the first viewport settles), with the zone's GMT offset and
+  that day's sunrise and sunset at the center shown below. The slider runs from the
+  first whole minute after sunrise to the last whole minute before sunset; on a day
+  without both (polar day or night) it spans 00:00 to 23:50. Any night instant (from
+  **Now**, a date change, or a session that starts at night) moves to the nearest
+  daylight minute at the map center before shadows draw. Browsers that cannot render
   floating-point targets in a worker (WebGL2 with `EXT_color_buffer_float` and
   `OffscreenCanvas`) see a disabled switch with an explanation. Only the switch persists
   (default off); the instant is session state that starts at the current time. The

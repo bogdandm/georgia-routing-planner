@@ -20,6 +20,7 @@ import type {
   OmProtocolSettings,
   omProtocol as runOmProtocol,
 } from '@openmeteo/weather-map-layer';
+import lookupTimeZone from '@photostructure/tz-lookup';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
@@ -123,6 +124,11 @@ import {
   type ImportedTrackOverlaySnapshot,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
+import {
+  clampToDaylight,
+  type DaylightWindow,
+  daylightWindow,
+} from '@/presentation/map/sunShadowDaylight';
 import type {
   TerrainShadowMetricsSnapshot,
   TerrainShadowTileProvider,
@@ -3510,6 +3516,18 @@ export class MapLibreLayerController {
         this.#appliedSunShadowTileUrl = null;
         return;
       }
+      // Every path that enables shadows or moves the instant passes here, including a
+      // persisted switch restored at night, so shadows never draw a night instant.
+      const instantMs = clampToDaylight(
+        this.#sunShadowInstantMs,
+        this.sunShadowDaylight(map, this.#sunShadowInstantMs),
+      );
+      if (instantMs !== this.#sunShadowInstantMs) {
+        this.#sunShadowInstantMs = instantMs;
+        mapLayerStore.setState({
+          sunShadow: { ...mapLayerStore.getState().sunShadow, instantMs },
+        });
+      }
       const tileUrl = this.sunShadowTiles.createTileUrl(this.#sunShadowInstantMs);
       const source = map.getSource(mapSourceIds.terrainSunShadow);
       if (source === undefined) {
@@ -3542,6 +3560,24 @@ export class MapLibreLayerController {
     } catch {
       this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
     }
+  }
+
+  /**
+   * Daylight of the local day containing `instantMs` at the map center, rounded like the
+   * sun panel (0.01°) so both agree on the zone and the sunrise and sunset minutes.
+   */
+  private sunShadowDaylight(
+    map: MapLibreMap,
+    instantMs: number,
+  ): DaylightWindow | null {
+    const center = map.getCenter();
+    const latitude = Math.round(center.lat * 100) / 100;
+    const longitude = Math.round(center.lng * 100) / 100;
+    return daylightWindow(
+      instantMs,
+      { latitude, longitude },
+      lookupTimeZone(latitude, longitude),
+    );
   }
 
   /**

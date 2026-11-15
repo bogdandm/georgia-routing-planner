@@ -481,11 +481,6 @@ msgstr "Не удалось открыть общее сравнение сни�
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "Не удалось восстановить общий спутниковый снимок. Общее местоположение на карте по-прежнему доступно."
 
-#. js-lingui-id: i16OQP
-#: src/presentation/map/SunShadowControl.tsx
-msgid "The sun is below the horizon at the map center."
-msgstr "В центре карты солнце за горизонтом."
-
 #. js-lingui-id: hoiu-9
 #: src/presentation/map/SunShadowControl.tsx
 msgid "This browser cannot compute shadows: WebGL2 float rendering is unavailable."

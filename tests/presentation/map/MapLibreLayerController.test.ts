@@ -42,6 +42,7 @@ import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
+import { daylightWindow } from '@/presentation/map/sunShadowDaylight';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
@@ -186,6 +187,10 @@ class FakeLayerMap {
 
   public setLayoutProperty(id: string, _name: string, value: unknown): void {
     this.visibility.set(id, String(value));
+  }
+
+  public getCenter(): { readonly lng: number; readonly lat: number } {
+    return { lng: 43.14, lat: 42.71 };
   }
 
   public setLayerZoomRange(id: string, minzoom: number, maxzoom: number): void {
@@ -2584,6 +2589,27 @@ describe('MapLibreLayerController', () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
         sunShadowEnabled: false,
       });
+    });
+  });
+
+  it('moves a night instant to the last daylight minute at the map center', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    // 23:00 in Tbilisi (UTC+4).
+    const nightMs = Date.UTC(2026, 6, 1, 19, 0);
+    const window = daylightWindow(
+      nightMs,
+      { latitude: 42.71, longitude: 43.14 },
+      'Asia/Tbilisi',
+    );
+
+    controller.setSunShadow({ enabled: true, instantMs: nightMs });
+
+    const sunsetMinuteMs = Math.floor((window?.sunsetMs ?? 0) / 60_000) * 60_000;
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(sunsetMinuteMs);
+    expect(map.sources.get(mapSourceIds.terrainSunShadow)).toMatchObject({
+      tiles: [`terrain-shadow://${String(sunsetMinuteMs / 60_000)}/{z}/{x}/{y}`],
     });
   });
 

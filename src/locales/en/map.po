@@ -481,11 +481,6 @@ msgstr "The shared image comparison could not be opened. The shared map location
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
 
-#. js-lingui-id: i16OQP
-#: src/presentation/map/SunShadowControl.tsx
-msgid "The sun is below the horizon at the map center."
-msgstr "The sun is below the horizon at the map center."
-
 #. js-lingui-id: hoiu-9
 #: src/presentation/map/SunShadowControl.tsx
 msgid "This browser cannot compute shadows: WebGL2 float rendering is unavailable."

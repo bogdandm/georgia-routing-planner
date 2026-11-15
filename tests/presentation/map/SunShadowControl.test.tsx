@@ -2,10 +2,12 @@ import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapViewControls } from '@/presentation/map/MapViewControls';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
+import { clampToDaylight, daylightWindow } from '@/presentation/map/sunShadowDaylight';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 // 12:00 in Tbilisi (UTC+4 all year).
@@ -18,6 +20,30 @@ function tbilisiViewport(): MapViewportSnapshotStore {
     center: { longitude: 44.79, latitude: 41.72 },
   });
   return viewport;
+}
+
+/** Slider bounds and the rounded-down sunset instant the panel offers in Tbilisi. */
+function tbilisiDaylightMinutes(instantMs: number): {
+  readonly sunsetMs: number;
+  readonly sunriseMinutes: number;
+  readonly sunsetMinutes: number;
+} {
+  const window = daylightWindow(
+    instantMs,
+    { latitude: 41.72, longitude: 44.79 },
+    'Asia/Tbilisi',
+  );
+  if (window === null) throw new Error('Tbilisi has a sunrise and sunset every day.');
+  const minutes = (ms: number) => {
+    const wall = instantToZonedWallTime(new Date(ms), 'Asia/Tbilisi');
+    return wall.hour * 60 + wall.minute;
+  };
+  const sunsetMs = clampToDaylight(window.sunsetMs, window);
+  return {
+    sunsetMs,
+    sunriseMinutes: minutes(clampToDaylight(window.sunriseMs, window)),
+    sunsetMinutes: minutes(sunsetMs),
+  };
 }
 
 function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
@@ -87,11 +113,11 @@ describe('SunShadowControl', () => {
     const slider = screen.getByRole('slider', { name: 'Time of day' });
     expect(slider).toHaveAttribute('aria-valuetext', '12:00');
     slider.focus();
-    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{End}');
 
     expect(onChange).toHaveBeenLastCalledWith({
       enabled: true,
-      instantMs: Date.UTC(2026, 6, 1, 8, 10),
+      instantMs: tbilisiDaylightMinutes(tbilisiNoonMs).sunsetMs,
     });
 
     fireEvent.change(screen.getByLabelText('Date'), {
@@ -104,15 +130,16 @@ describe('SunShadowControl', () => {
     });
   });
 
-  it('says when the sun is below the horizon at the map center', async () => {
+  it('offers only times between sunrise and sunset at the map center', async () => {
     const user = userEvent.setup();
-    renderSunShadowControls({ instantMs: Date.UTC(2026, 6, 1, 18, 0) });
+    renderSunShadowControls({});
 
     await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
 
-    expect(
-      screen.getByText('The sun is below the horizon at the map center.'),
-    ).toBeVisible();
+    const { sunriseMinutes, sunsetMinutes } = tbilisiDaylightMinutes(tbilisiNoonMs);
+    const slider = screen.getByRole('slider', { name: 'Time of day' });
+    expect(slider).toHaveAttribute('aria-valuemin', String(sunriseMinutes));
+    expect(slider).toHaveAttribute('aria-valuemax', String(sunsetMinutes));
   });
 
   it('disables the switch where the browser cannot compute shadows', async () => {

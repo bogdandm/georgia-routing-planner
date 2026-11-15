@@ -19,16 +19,17 @@ import lookupTimeZone from '@photostructure/tz-lookup';
 import { useState, useSyncExternalStore } from 'react';
 
 import {
-  solarDayEvents,
-  solarDiskRadiusDegrees,
-  solarPosition,
-} from '@/domain/terrain/solarPosition';
-import {
   instantToZonedWallTime,
   zonedWallTimeToInstant,
   type ZonedWallTime,
 } from '@/domain/time/zonedWallTime';
 import type { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
+import {
+  clampToDaylight,
+  type DaylightWindow,
+  daylightWindow,
+  localDayBounds,
+} from '@/presentation/map/sunShadowDaylight';
 import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
 
 export interface SunShadowChange {
@@ -74,6 +75,7 @@ function parseWallDate(
 
 interface PlaceDay {
   readonly offsetLabel: string;
+  readonly daylight: DaylightWindow | null;
   readonly sunrise: string | null;
   readonly sunset: string | null;
 }
@@ -87,36 +89,29 @@ const wallClockFormatOptions: Intl.DateTimeFormatOptions = {
 };
 /* eslint-enable lingui/no-unlocalized-strings */
 
-/** UTC offset and sunrise and sunset times of one local calendar day at a place. */
+/** UTC offset, daylight window, and sunrise and sunset times of the local day of `instantMs`. */
 function describePlaceDay(
   locale: string,
   timeZone: string,
-  date: Pick<ZonedWallTime, 'year' | 'month' | 'day'>,
+  instantMs: number,
   place: { readonly latitude: number; readonly longitude: number } | null,
 ): PlaceDay {
-  const dayStart = zonedWallTimeToInstant({ ...date, hour: 0, minute: 0 }, timeZone);
-  const nextDay = new Date(Date.UTC(date.year, date.month - 1, date.day + 1));
-  const dayEnd = zonedWallTimeToInstant(
-    {
-      year: nextDay.getUTCFullYear(),
-      month: nextDay.getUTCMonth() + 1,
-      day: nextDay.getUTCDate(),
-      hour: 0,
-      minute: 0,
-    },
+  const { startMs } = localDayBounds(
+    instantToZonedWallTime(new Date(instantMs), timeZone),
     timeZone,
   );
   const offsetLabel =
     new Intl.DateTimeFormat(locale, { ...offsetFormatOptions, timeZone })
-      .formatToParts(dayStart)
+      .formatToParts(startMs)
       .find((part) => part.type === 'timeZoneName')?.value ?? timeZone;
-  if (place === null) return { offsetLabel, sunrise: null, sunset: null };
-  const events = solarDayEvents(dayStart, dayEnd, place.latitude, place.longitude);
+  const daylight = place === null ? null : daylightWindow(instantMs, place, timeZone);
+  if (daylight === null) return { offsetLabel, daylight, sunrise: null, sunset: null };
   const time = new Intl.DateTimeFormat(locale, { ...wallClockFormatOptions, timeZone });
   return {
     offsetLabel,
-    sunrise: events.sunrise === null ? null : time.format(events.sunrise),
-    sunset: events.sunset === null ? null : time.format(events.sunset),
+    daylight,
+    sunrise: time.format(daylight.sunriseMs),
+    sunset: time.format(daylight.sunsetMs),
   };
 }
 
@@ -243,20 +238,31 @@ function SunShadowPanel({
       ? Intl.DateTimeFormat().resolvedOptions().timeZone
       : lookupTimeZone(latitude, longitude);
   const wall = instantToZonedWallTime(new Date(instantMs), timeZone);
-  const wallMinutes = wall.hour * 60 + wall.minute;
   const [draftMinutes, setDraftMinutes] = useState<number | null>(null);
   const unavailable = availability === 'unavailable';
-  const { offsetLabel, sunrise, sunset } = describePlaceDay(
+  const { offsetLabel, daylight, sunrise, sunset } = describePlaceDay(
     i18n.locale,
     timeZone,
-    wall,
+    instantMs,
     latitude === null || longitude === null ? null : { latitude, longitude },
   );
-  const sunBelowHorizon =
-    latitude !== null &&
-    longitude !== null &&
-    solarPosition(new Date(instantMs), latitude, longitude).apparentElevationDegrees <=
-      -solarDiskRadiusDegrees;
+  const toWallMinutes = (instant: number) => {
+    const time = instantToZonedWallTime(new Date(instant), timeZone);
+    return time.hour * 60 + time.minute;
+  };
+  // The slider only offers daylight; the layer controller clamps every commit the same way.
+  const minimumMinutes =
+    daylight === null
+      ? 0
+      : toWallMinutes(clampToDaylight(daylight.sunriseMs, daylight));
+  const maximumMinutes =
+    daylight === null
+      ? minutesPerDay - timeStepMinutes
+      : toWallMinutes(clampToDaylight(daylight.sunsetMs, daylight));
+  const wallMinutes = Math.min(
+    Math.max(wall.hour * 60 + wall.minute, minimumMinutes),
+    maximumMinutes,
+  );
 
   const commitWall = (next: ZonedWallTime) => {
     onChange({ enabled, instantMs: zonedWallTimeToInstant(next, timeZone).getTime() });
@@ -312,8 +318,8 @@ function SunShadowPanel({
         <Slider
           aria-label={t`Time of day`}
           getAriaValueText={formatWallMinutes}
-          max={minutesPerDay - timeStepMinutes}
-          min={0}
+          max={maximumMinutes}
+          min={minimumMinutes}
           onChange={(_event, value) => {
             setDraftMinutes(value);
           }}
@@ -347,11 +353,6 @@ function SunShadowPanel({
           </Typography>
         )}
       </Stack>
-      {sunBelowHorizon ? (
-        <Typography color="text.secondary" variant="caption">
-          {t`The sun is below the horizon at the map center.`}
-        </Typography>
-      ) : null}
     </Stack>
   );
 }

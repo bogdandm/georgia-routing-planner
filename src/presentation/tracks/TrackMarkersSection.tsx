@@ -4,11 +4,9 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteForeverOutlinedIcon from '@mui/icons-material/DeleteForeverOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Box,
   Button,
-  ButtonBase,
   ClickAwayListener,
   IconButton,
   List,
@@ -30,6 +28,7 @@ import { MAXIMUM_TRACK_MARKERS, type TrackMarker } from '@/domain/tracks/localTr
 import { requestMapNavigation } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { formatTrackElevation } from '@/presentation/tracks/trackFormatters';
+import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 
 function markerElevationKey(marker: TrackMarker): string {
   return `${marker.id}:${String(marker.coordinate[0])}:${String(marker.coordinate[1])}`;
@@ -53,7 +52,8 @@ export function TrackMarkersSection({
   onDelete,
 }: TrackMarkersSectionProps): ReactElement {
   const { i18n, t } = useLingui();
-  const [expanded, setExpanded] = useState(false);
+  const expanded = useUiStore((state) => state.trackSectionExpanded.markers ?? false);
+  const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renameError, setRenameError] = useState<MessageDescriptor | null>(null);
@@ -156,36 +156,15 @@ export function TrackMarkersSection({
           columnGap: 0.5,
         }}
       >
-        <ButtonBase
-          aria-label={t`Markers`}
-          aria-controls={detailsId}
-          aria-expanded={expanded}
-          onClick={() => {
-            setExpanded((current) => !current);
+        <TrackSectionHeading
+          title={t`Markers (${markerCount})`}
+          label={t`Markers`}
+          detailsId={detailsId}
+          expanded={expanded}
+          onToggle={() => {
+            setSectionExpanded('markers', !expanded);
           }}
-          sx={{
-            minWidth: 0,
-            minHeight: 44,
-            justifyContent: 'space-between',
-            px: 1,
-            textAlign: 'left',
-          }}
-        >
-          <Typography component="h3" variant="subtitle2">
-            <Trans>Markers ({markerCount})</Trans>
-          </Typography>
-          <ExpandMoreIcon
-            aria-hidden
-            fontSize="small"
-            sx={{
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: (theme) =>
-                theme.transitions.create('transform', {
-                  duration: theme.transitions.duration.shortest,
-                }),
-            }}
-          />
-        </ButtonBase>
+        />
         <Tooltip title={t`Add track marker`}>
           <span>
             <IconButton

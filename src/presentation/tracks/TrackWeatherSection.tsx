@@ -1,8 +1,6 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Box,
-  ButtonBase,
   Checkbox,
   FormControlLabel,
   Skeleton,
@@ -52,6 +50,7 @@ import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
+import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
 import {
@@ -138,11 +137,27 @@ export function TrackWeatherSection({
   const { clock, pointWeatherForecast } = useRuntimeServices();
   const current = preferences ?? defaultTrackWeatherPreferences;
   const expanded = preferences?.expanded ?? false;
+  const timingExpanded = useUiStore(
+    (state) => state.trackSectionExpanded.timing ?? true,
+  );
+  const elevationExpanded = useUiStore(
+    (state) => state.trackSectionExpanded['weather-elevation'] ?? true,
+  );
+  const routeExpanded = useUiStore(
+    (state) => state.trackSectionExpanded['weather-route'] ?? true,
+  );
+  const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
   const setNavigationCollapsed = useUiStore((state) => state.setNavigationCollapsed);
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const detailsId = `track-weather-${useId().replaceAll(':', '')}`;
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const timingDetailsId = `${detailsId}-timing`;
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const elevationDetailsId = `${detailsId}-elevation`;
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const routeDetailsId = `${detailsId}-route`;
   const dates = useMemo(() => trackWeatherDates(localDate(clock.now())), [clock]);
   const selectedDate = defaultTrackWeatherDate(dates, current.weekday);
   const elevationLocations = useMemo(
@@ -434,134 +449,128 @@ export function TrackWeatherSection({
 
   return (
     <>
-      <Stack component="section" spacing={1} sx={{ px: 1, pb: 2 }}>
-        <Typography component="h3" variant="subtitle2" sx={{ py: 1.5 }}>
-          <Trans>Route timing</Trans>
-        </Typography>
-        {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
-          ...timelineSettings,
-          timeMarkers: checked,
-        }))}
-        {timelineCheckbox(
-          t`Count map times from 00:00 at the start`,
-          timelineSettings.relativeTimeMarkers,
-          (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
-          !timeMarkers,
-        )}
-        {metrics.elapsedSeconds === undefined
-          ? null
-          : timelineCheckbox(
+      <Box component="section">
+        <TrackSectionHeading
+          title={t`Route timing`}
+          detailsId={timingDetailsId}
+          expanded={timingExpanded}
+          onToggle={() => {
+            setSectionExpanded('timing', !timingExpanded);
+          }}
+        />
+        {timingExpanded ? (
+          <Stack id={timingDetailsId} spacing={1} sx={{ px: 1, pb: 2 }}>
+            {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
+              ...timelineSettings,
+              timeMarkers: checked,
+            }))}
+            {timelineCheckbox(
+              t`Count map times from 00:00 at the start`,
+              timelineSettings.relativeTimeMarkers,
+              (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
+              !timeMarkers,
+            )}
+            {timelineCheckbox(
               t`Ignore recorded time`,
               timelineSettings.ignoreRecordedTime,
               (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
+              metrics.elapsedSeconds === undefined,
             )}
-        <Box>
-          <Typography id={startLabelId} variant="caption" color="text.secondary">
-            <Trans>Route start</Trans>
-          </Typography>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 0.5 }}>
+            <Box>
+              <Typography id={startLabelId} variant="caption" color="text.secondary">
+                <Trans>Route start</Trans>
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', px: 0.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  {formatStartHour(0)}
+                </Typography>
+                <Slider
+                  size="small"
+                  aria-labelledby={startLabelId}
+                  min={0}
+                  max={TRACK_WEATHER_LATEST_START_HOUR}
+                  step={TRACK_WEATHER_START_HOUR_STEP}
+                  marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
+                  value={startHour}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={formatStartHour}
+                  getAriaValueText={formatStartHour}
+                  onChange={(_event, value) => {
+                    setStartDraft(value);
+                  }}
+                  onChangeCommitted={(_event, value) => {
+                    setStartDraft(null);
+                    onTimelineSettingsChange({
+                      ...timelineSettings,
+                      startHour: value,
+                    });
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+                </Typography>
+              </Stack>
+            </Box>
+            <Box>
+              <Typography id={paceLabelId} variant="caption" color="text.secondary">
+                <Trans>Adjust pace</Trans>
+              </Typography>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', px: 0.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>Faster</Trans>
+                </Typography>
+                <Slider
+                  size="small"
+                  aria-labelledby={paceLabelId}
+                  min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
+                  max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
+                  step={TRACK_WEATHER_PACE_FACTOR_STEP}
+                  marks={[{ value: 1 }]}
+                  value={paceDraft ?? paceFactor}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={formatPace}
+                  getAriaValueText={formatPace}
+                  onChange={(_event, value) => {
+                    setPaceDraft(value);
+                  }}
+                  onChangeCommitted={(_event, value) => {
+                    setPaceDraft(null);
+                    // Keyboard steps accumulate floating-point error (×0.5 plus ten
+                    // steps is 1.0000000000000004); hundredths keep exact steps.
+                    onTimelineSettingsChange({
+                      ...timelineSettings,
+                      paceFactor: Math.round(value * 100) / 100,
+                    });
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>Slower</Trans>
+                </Typography>
+              </Stack>
+            </Box>
             <Typography variant="caption" color="text.secondary">
-              {formatStartHour(0)}
-            </Typography>
-            <Slider
-              size="small"
-              aria-labelledby={startLabelId}
-              min={0}
-              max={TRACK_WEATHER_LATEST_START_HOUR}
-              step={TRACK_WEATHER_START_HOUR_STEP}
-              marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
-              value={startHour}
-              valueLabelDisplay="auto"
-              valueLabelFormat={formatStartHour}
-              getAriaValueText={formatStartHour}
-              onChange={(_event, value) => {
-                setStartDraft(value);
-              }}
-              onChangeCommitted={(_event, value) => {
-                setStartDraft(null);
-                onTimelineSettingsChange({
-                  ...timelineSettings,
-                  startHour: value,
-                });
-              }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+              {timelineCaption}
             </Typography>
           </Stack>
-        </Box>
-        <Box>
-          <Typography id={paceLabelId} variant="caption" color="text.secondary">
-            <Trans>Adjust pace</Trans>
-          </Typography>
-          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 0.5 }}>
-            <Typography variant="caption" color="text.secondary">
-              <Trans>Faster</Trans>
-            </Typography>
-            <Slider
-              size="small"
-              aria-labelledby={paceLabelId}
-              min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
-              max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
-              step={TRACK_WEATHER_PACE_FACTOR_STEP}
-              marks={[{ value: 1 }]}
-              value={paceDraft ?? paceFactor}
-              valueLabelDisplay="auto"
-              valueLabelFormat={formatPace}
-              getAriaValueText={formatPace}
-              onChange={(_event, value) => {
-                setPaceDraft(value);
-              }}
-              onChangeCommitted={(_event, value) => {
-                setPaceDraft(null);
-                // Keyboard steps accumulate floating-point error (×0.5 plus ten
-                // steps is 1.0000000000000004); hundredths keep exact steps.
-                onTimelineSettingsChange({
-                  ...timelineSettings,
-                  paceFactor: Math.round(value * 100) / 100,
-                });
-              }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              <Trans>Slower</Trans>
-            </Typography>
-          </Stack>
-        </Box>
-        <Typography variant="caption" color="text.secondary">
-          {timelineCaption}
-        </Typography>
-      </Stack>
+        ) : null}
+      </Box>
       <Box component="section" data-tour="track-weather">
-        <ButtonBase
-          aria-label={t`Weather forecast`}
-          aria-controls={detailsId}
-          aria-expanded={expanded}
-          onClick={() => {
+        <TrackSectionHeading
+          title={t`Weather forecast`}
+          detailsId={detailsId}
+          expanded={expanded}
+          onToggle={() => {
             onPreferencesChange({ ...current, expanded: !expanded });
           }}
-          sx={{
-            width: '100%',
-            minHeight: 44,
-            justifyContent: 'space-between',
-            px: 1,
-            textAlign: 'left',
-          }}
-        >
-          <Typography component="h3" variant="subtitle2">
-            <Trans>Weather forecast</Trans>
-          </Typography>
-          <ExpandMoreIcon
-            aria-hidden
-            fontSize="small"
-            sx={{
-              transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: (theme) =>
-                theme.transitions.create('transform', {
-                  duration: theme.transitions.duration.shortest,
-                }),
-            }}
-          />
-        </ButtonBase>
+        />
         {expanded ? (
           <Stack id={detailsId} spacing={1.5} sx={{ px: 1, pb: 1 }}>
             <ToggleButtonGroup
@@ -594,30 +603,58 @@ export function TrackWeatherSection({
               ))}
             </ToggleButtonGroup>
             <Stack spacing={1}>
-              <Typography component="h4" variant="subtitle2">
-                <Trans>By elevation</Trans>
-              </Typography>
-              <Stack role="list" aria-label={t`Forecast by elevation`} spacing={1}>
-                {elevationCard(t`Highest`, elevationLocations.highest)}
-                {elevationCard(t`Median`, elevationLocations.median)}
-                {elevationCard(t`Lowest`, elevationLocations.lowest)}
-              </Stack>
+              <TrackSectionHeading
+                title={t`By elevation`}
+                detailsId={elevationDetailsId}
+                expanded={elevationExpanded}
+                onToggle={() => {
+                  setSectionExpanded('weather-elevation', !elevationExpanded);
+                }}
+                nested
+              />
+              {elevationExpanded ? (
+                <Stack
+                  id={elevationDetailsId}
+                  role="list"
+                  aria-label={t`Forecast by elevation`}
+                  spacing={1}
+                >
+                  {elevationCard(t`Highest`, elevationLocations.highest)}
+                  {elevationCard(t`Median`, elevationLocations.median)}
+                  {elevationCard(t`Lowest`, elevationLocations.lowest)}
+                </Stack>
+              ) : null}
             </Stack>
             <Stack spacing={1}>
-              <Typography component="h4" variant="subtitle2">
-                <Trans>Along the route</Trans>
-              </Typography>
-              {timeline.status === 'available' ? (
-                <Stack role="list" aria-label={t`Forecast along the route`} spacing={1}>
-                  {timeline.checkpoints.map(checkpointCard)}
-                </Stack>
-              ) : (
-                <Typography variant="caption" color="text.secondary">
-                  <Trans>
-                    Available for day hikes shorter than {maximumDistance} and 12 hours.
-                  </Trans>
-                </Typography>
-              )}
+              <TrackSectionHeading
+                title={t`Along the route`}
+                detailsId={routeDetailsId}
+                expanded={routeExpanded}
+                onToggle={() => {
+                  setSectionExpanded('weather-route', !routeExpanded);
+                }}
+                nested
+              />
+              {routeExpanded ? (
+                <Box id={routeDetailsId}>
+                  {timeline.status === 'available' ? (
+                    <Stack
+                      role="list"
+                      aria-label={t`Forecast along the route`}
+                      spacing={1}
+                    >
+                      {timeline.checkpoints.map(checkpointCard)}
+                    </Stack>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary">
+                      <Trans>
+                        Available for day hikes shorter than {maximumDistance} and 12
+                        hours.
+                      </Trans>
+                    </Typography>
+                  )}
+                </Box>
+              ) : null}
             </Stack>
           </Stack>
         ) : null}

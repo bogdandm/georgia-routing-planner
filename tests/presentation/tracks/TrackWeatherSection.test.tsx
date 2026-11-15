@@ -134,6 +134,13 @@ beforeEach(() => {
 });
 
 describe('TrackWeatherSection', () => {
+  it('keeps the recorded-time override available but disabled without recorded timing', () => {
+    renderSection(null);
+    expect(
+      screen.getByRole('checkbox', { name: 'Ignore recorded time' }),
+    ).toBeDisabled();
+  });
+
   it('stays collapsed without requests until expanded, then forecasts elevations and the route', async () => {
     const execute = vi.spyOn(services.pointWeatherForecast, 'execute');
     const user = userEvent.setup();

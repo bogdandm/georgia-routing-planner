@@ -812,6 +812,47 @@ describe('per-track timeline settings', () => {
   });
 });
 
+describe('recorded route-start defaults', () => {
+  it.each([
+    [8, 14, 8],
+    [8, 15, 8.5],
+    [8, 44, 8.5],
+    [8, 45, 9],
+    [23, 46, 0],
+  ])(
+    'rounds a local recorded start at %i:%i to %s hours',
+    (hours, minutes, expected) => {
+      const recordedStartAt = new Date(2026, 6, 22, hours, minutes).toISOString();
+      expect(trackWeatherTimeline(null, null, recordedStartAt).startHour).toBe(
+        expected,
+      );
+    },
+  );
+
+  it('retains a manual 09:00 override instead of treating it as the recorded default', () => {
+    const recordedStartAt = new Date(2026, 6, 22, 7, 16).toISOString();
+    const manual = withTrackWeatherTimeline(
+      defaultTrackWeatherPreferences,
+      'local:early',
+      defaultTrackWeatherTimelineSettings,
+      recordedStartAt,
+    );
+    expect(trackWeatherTimeline(manual, 'local:early', recordedStartAt).startHour).toBe(
+      9,
+    );
+    const reset = withTrackWeatherTimeline(
+      manual,
+      'local:early',
+      trackWeatherTimeline(null, null, recordedStartAt),
+      recordedStartAt,
+    );
+    expect(trackWeatherTimeline(reset, 'local:early', recordedStartAt).startHour).toBe(
+      7.5,
+    );
+    expect(Object.hasOwn(reset.timelines, 'local:early')).toBe(false);
+  });
+});
+
 describe('track weather dates', () => {
   it('offers seven local dates and opens the next preferred weekday', () => {
     const dates = trackWeatherDates('2026-07-28');

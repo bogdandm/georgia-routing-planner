@@ -71,6 +71,71 @@ async function createTrackFolder(
 
 describe('WorkspaceShell', () => {
   setupWorkspaceShellTest();
+  it('restores every track section disclosure from browser preferences', async () => {
+    const source = savedTrackSummary('local:disclosures', 'Disclosure trail');
+    await services.database.saveLocalTrack(source, savedTrackContent(source.id));
+    await services.database.saveLatestOpenedTrackId(source.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    const first = renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('button', { name: 'Route timing' });
+    await user.click(within(details).getByRole('button', { name: 'Weather forecast' }));
+    const expected: Record<string, boolean> = {};
+    const sections = [
+      ['Track details', 'summary'],
+      ['Elevation profile', 'elevation'],
+      ['Climbs & Descents', 'climbs'],
+      ['Markers', 'markers'],
+      ['Route timing', 'timing'],
+      ['Points', 'points'],
+      ['Source details', 'metadata'],
+      ['By elevation', 'weather-elevation'],
+      ['Along the route', 'weather-route'],
+    ] as const;
+    for (const [name, key] of sections) {
+      const button = within(details).getByRole('button', { name });
+      const next = button.getAttribute('aria-expanded') !== 'true';
+      await user.click(button);
+      // Toggling can remount a heading, so read the current one.
+      expect(within(details).getByRole('button', { name })).toHaveAttribute(
+        'aria-expanded',
+        String(next),
+      );
+      expected[key] = next;
+    }
+    await waitFor(async () => {
+      expect(
+        (await services.database.loadUiPreferences()).trackSectionExpanded,
+      ).toEqual(expected);
+    });
+    first.unmount();
+    const restored = await services.database.loadUiPreferences();
+    act(() => {
+      useUiStore.setState({ trackSectionExpanded: restored.trackSectionExpanded });
+    });
+    renderWorkspaceShell();
+    const reopened = await screen.findByRole('complementary', {
+      name: 'Track details',
+    });
+    await waitFor(() => {
+      expect(
+        within(reopened).getByRole('button', { name: 'Weather forecast' }),
+      ).toHaveAttribute('aria-expanded', 'true');
+    });
+    for (const [name, key] of sections) {
+      expect(within(reopened).getByRole('button', { name })).toHaveAttribute(
+        'aria-expanded',
+        String(expected[key]),
+      );
+    }
+    expect(
+      within(reopened).queryByRole('slider', { name: 'Route start' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(reopened).queryByRole('img', { name: /Elevation profile from/ }),
+    ).not.toBeInTheDocument();
+  });
 
   it('sorts saved tracks within favorite groups and persists the selected order', async () => {
     const summaries = [
@@ -2309,30 +2374,32 @@ describe('WorkspaceShell', () => {
     if (mapLayers === null) return;
     const labels = vi.spyOn(mapLayers, 'setImportedTrackTimeLabels');
     const base = savedTrackSummary('local:partial', 'Partial elevation');
+    // Browser-local hours, so the recorded 05:00 start reads 05:00 in any timezone.
+    const at = (hour: number) => new Date(2026, 6, 22, hour).toISOString();
     const source = {
       ...base,
       metrics: {
         ...base.metrics,
         elapsedSeconds: 10800,
-        recordedStartAt: '2026-07-22T05:00:00.000Z',
+        recordedStartAt: at(5),
       },
     };
     const content = {
       ...savedTrackContent(source.id),
       trackPoints: [
         [
-          { coordinate: [44, 42] as const, recordedAt: '2026-07-22T05:00:00.000Z' },
+          { coordinate: [44, 42] as const, recordedAt: at(5) },
           {
             coordinate: [44.02, 42] as const,
             elevationMeters: 1000,
-            recordedAt: '2026-07-22T06:00:00.000Z',
+            recordedAt: at(6),
           },
           {
             coordinate: [44.04, 42] as const,
             elevationMeters: 1000,
-            recordedAt: '2026-07-22T07:00:00.000Z',
+            recordedAt: at(7),
           },
-          { coordinate: [44.06, 42] as const, recordedAt: '2026-07-22T08:00:00.000Z' },
+          { coordinate: [44.06, 42] as const, recordedAt: at(8) },
         ],
       ],
       markers: [
@@ -2357,23 +2424,23 @@ describe('WorkspaceShell', () => {
     await within(details).findByRole('heading', { name: source.name });
     await user.click(within(details).getByRole('button', { name: 'Markers' }));
     const markerList = within(details).getByRole('list', { name: 'Track markers' });
-    expect(await within(markerList).findByText('09:00')).toBeVisible();
-    expect(within(markerList).getByText('10:00')).toBeVisible();
+    expect(await within(markerList).findByText('05:00')).toBeVisible();
+    expect(within(markerList).getByText('06:00')).toBeVisible();
     expect(within(details).getByText(/3h 0m in total/)).toBeVisible();
     await waitFor(() => {
       expect(labels).toHaveBeenLastCalledWith([
-        { placement: 'left', coordinate: [44, 42], time: '09:00' },
-        { placement: 'right', coordinate: [44.06, 42], time: '12:00' },
-        { placement: 'hour', coordinate: [44.02, 42], time: '10:00' },
-        { placement: 'hour', coordinate: [44.04, 42], time: '11:00' },
+        { placement: 'left', coordinate: [44, 42], time: '05:00' },
+        { placement: 'right', coordinate: [44.06, 42], time: '08:00' },
+        { placement: 'hour', coordinate: [44.02, 42], time: '06:00' },
+        { placement: 'hour', coordinate: [44.04, 42], time: '07:00' },
       ]);
     });
     await user.click(within(details).getByRole('button', { name: 'Weather forecast' }));
     const forecast = within(details).getByRole('list', {
       name: 'Forecast along the route',
     });
-    expect(within(forecast).getByText('09:00')).toBeVisible();
-    expect(within(forecast).getByText('12:00')).toBeVisible();
+    expect(within(forecast).getByText('05:00')).toBeVisible();
+    expect(within(forecast).getByText('08:00')).toBeVisible();
     expect(
       await within(forecast).findAllByRole('article', { name: /forecast$/ }),
     ).toHaveLength(2);
@@ -3053,11 +3120,11 @@ describe('WorkspaceShell', () => {
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(
       true,
     );
-    const savedMarkerDisclosure = within(details).getByRole('button', {
-      name: 'Markers',
-    });
-    expect(savedMarkerDisclosure).toHaveAttribute('aria-expanded', 'false');
-    await user.click(savedMarkerDisclosure);
+    // The disclosure opened on the preview stays open for every track.
+    expect(within(details).getByRole('button', { name: 'Markers' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     const savedMarkerRow = within(details).getByText('Renamed summit').closest('li');
     expect(savedMarkerRow).not.toBeNull();
     if (savedMarkerRow === null) return;

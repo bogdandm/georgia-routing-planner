@@ -483,6 +483,7 @@ const uiPreferencesSchema = z
     markerSort: z.enum(markerSorts).default('created'),
     trackSort: z.enum(trackSorts).default('created'),
     onboardingCompleted: z.boolean().default(false),
+    trackSectionExpanded: z.record(z.string(), z.boolean()).default({}),
   })
   .strict();
 
@@ -501,6 +502,7 @@ interface UiPreferences {
   readonly markerSort: MarkerSort;
   readonly trackSort: TrackSort;
   readonly onboardingCompleted: boolean;
+  readonly trackSectionExpanded: Readonly<Record<string, boolean>>;
 }
 
 const defaultUiPreferences: UiPreferences = {
@@ -511,6 +513,7 @@ const defaultUiPreferences: UiPreferences = {
   markerSort: 'created',
   trackSort: 'created',
   onboardingCompleted: false,
+  trackSectionExpanded: {},
 };
 const markerWeatherWeekdaySchema: z.ZodType<MarkerWeatherWeekday> = z.union([
   z.literal(0),

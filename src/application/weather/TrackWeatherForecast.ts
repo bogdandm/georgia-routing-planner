@@ -327,16 +327,29 @@ export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings =
 };
 
 /**
- * The saved track's timeline settings, or the defaults. Only own entries count, so a
- * track ID such as `constructor` never reads an `Object.prototype` member.
+ * Saved overrides win; otherwise use the recorded start's browser-local clock time,
+ * rounded to the nearest half-hour. Only own entries count for untrusted track IDs.
  */
 export function trackWeatherTimeline(
   preferences: TrackWeatherPreferences | null,
-  trackId: string,
+  trackId: string | null,
+  recordedStartAt?: string,
 ): TrackWeatherTimelineSettings {
-  return preferences !== null && Object.hasOwn(preferences.timelines, trackId)
-    ? (preferences.timelines[trackId] ?? defaultTrackWeatherTimelineSettings)
-    : defaultTrackWeatherTimelineSettings;
+  if (
+    preferences !== null &&
+    trackId !== null &&
+    Object.hasOwn(preferences.timelines, trackId)
+  ) {
+    const stored = preferences.timelines[trackId];
+    if (stored !== undefined) return stored;
+  }
+  if (recordedStartAt === undefined) return defaultTrackWeatherTimelineSettings;
+  const start = new Date(recordedStartAt);
+  if (!Number.isFinite(start.getTime())) return defaultTrackWeatherTimelineSettings;
+  const seconds =
+    start.getHours() * 3600 + start.getMinutes() * 60 + start.getSeconds();
+  const startHour = (Math.round(seconds / 1800) % 48) / 2;
+  return { ...defaultTrackWeatherTimelineSettings, startHour };
 }
 
 /**
@@ -347,9 +360,10 @@ export function withTrackWeatherTimeline(
   preferences: TrackWeatherPreferences,
   trackId: string,
   settings: TrackWeatherTimelineSettings | null,
+  recordedStartAt?: string,
 ): TrackWeatherPreferences {
   const others = Object.entries(preferences.timelines).filter(([id]) => id !== trackId);
-  const defaults = defaultTrackWeatherTimelineSettings;
+  const defaults = trackWeatherTimeline(null, null, recordedStartAt);
   const adjusted =
     settings !== null &&
     (settings.startHour !== defaults.startHour ||

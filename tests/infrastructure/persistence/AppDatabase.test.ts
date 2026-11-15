@@ -138,6 +138,7 @@ describe('AppDatabase', () => {
       markerSort: 'created',
       trackSort: 'created',
       onboardingCompleted: false,
+      trackSectionExpanded: {},
     });
 
     await database.saveUiPreferences({
@@ -148,6 +149,7 @@ describe('AppDatabase', () => {
       markerSort: 'distance',
       trackSort: 'distance',
       onboardingCompleted: true,
+      trackSectionExpanded: { timing: false, markers: true },
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
@@ -158,6 +160,7 @@ describe('AppDatabase', () => {
       markerSort: 'distance',
       trackSort: 'distance',
       onboardingCompleted: true,
+      trackSectionExpanded: { timing: false, markers: true },
     });
 
     await database.saveElevationGradeLegendDismissed(false);
@@ -169,6 +172,7 @@ describe('AppDatabase', () => {
       markerSort: 'distance',
       trackSort: 'distance',
       onboardingCompleted: true,
+      trackSectionExpanded: { timing: false, markers: true },
     });
   });
 
@@ -377,6 +381,7 @@ describe('AppDatabase', () => {
       markerSort: 'created',
       trackSort: 'created',
       onboardingCompleted: false,
+      trackSectionExpanded: {},
     });
   });
 

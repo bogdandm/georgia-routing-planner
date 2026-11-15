@@ -326,10 +326,11 @@ the **Weather forecast** section beneath it. Its map-time options, **Route start
 follows recorded timestamps when the track has recorded time and otherwise the DIN 33466
 estimate, so climbs advance more slowly than flat walking. **Ignore recorded time**,
 offered on timed tracks, selects the estimate instead. **Route start** sets the start
-from 00:00 to 23:30 in half-hour steps, defaulting to 09:00. **Adjust pace** scales
-hiking time from ×0.5 (faster) to ×2 (slower) on release. These settings are remembered
-in this browser for each saved track and reset to the defaults for a reversed copy; an
-unsaved track keeps them while it is open and carries them over when saved. They are not
+from 00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time,
+rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace** scales hiking
+time from ×0.5 (faster) to ×2 (slower) on release. These settings are remembered in this
+browser for each saved track and reset to the defaults for a reversed copy; an unsaved
+track keeps them while it is open and carries them over when saved. They are not
 synchronized to the account and do not change the track's recorded or estimated time.
 
 Timing includes the full route even if elevation is available only in its middle.
@@ -337,6 +338,12 @@ Complete profiles reuse filtered elevation; incomplete profiles retain the origi
 route points and timestamps. Estimated timing counts horizontal travel through missing
 elevation without inventing vertical changes. Disconnected segments never contribute a
 climb or descent between their endpoints.
+
+Every track detail section (Track details, Elevation profile, Climbs & Descents,
+Markers, Route timing, Points, Source details, and the forecast's **By elevation** and
+**Along the route**) is a disclosure whose state is remembered in this browser for all
+tracks. Editing points or revealing one from the chart opens **Points** without changing
+that choice.
 
 **Weather forecast** starts collapsed; whether it is expanded is remembered in this
 browser for every track, and forecasts load only while it is open. It begins with seven

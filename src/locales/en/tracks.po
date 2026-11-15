@@ -1292,6 +1292,11 @@ msgstr "Sort tracks. Current: {currentSortLabel}"
 msgid "Sort: {currentSortLabel}"
 msgstr "Sort: {currentSortLabel}"
 
+#. js-lingui-id: eHx-29
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Source details"
+msgstr "Source details"
+
 #. js-lingui-id: l9wI00
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Speed"

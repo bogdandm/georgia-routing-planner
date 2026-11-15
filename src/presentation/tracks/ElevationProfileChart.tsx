@@ -64,6 +64,8 @@ import {
   formatTrackGrade,
   formatTrackSpeed,
 } from '@/presentation/tracks/trackFormatters';
+import { useUiStore } from '@/presentation/shell/uiStore';
+import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 
 /** A press that travels this far along the chart is a range drag, never a click. */
 const RANGE_DRAG_THRESHOLD_PX = 4;
@@ -576,6 +578,10 @@ export function ElevationPreparationChart({
 }): ReactElement {
   const { i18n, t } = useLingui();
   const theme = useTheme();
+  const expanded = useUiStore((state) => state.trackSectionExpanded.elevation ?? true);
+  const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const detailsId = `preparing-elevation-${useId().replaceAll(':', '')}`;
   const totalSamples = progress?.totalSamples ?? 0;
   const completedFraction =
     totalSamples > 0 ? (progress?.completedSamples ?? 0) / totalSamples : null;
@@ -592,12 +598,21 @@ export function ElevationPreparationChart({
     percent === null
       ? t`Elevation profile loading`
       : t`Elevation profile loading: ${percent}`;
+  const heading = (
+    <TrackSectionHeading
+      title={t`Elevation profile`}
+      detailsId={detailsId}
+      expanded={expanded}
+      onToggle={() => {
+        setSectionExpanded('elevation', !expanded);
+      }}
+    />
+  );
+  if (!expanded) return heading;
 
   return (
     <Stack spacing={1.5}>
-      <Typography component="h3" variant="subtitle2">
-        <Trans>Elevation profile</Trans>
-      </Typography>
+      {heading}
       {showProgressStatus ? (
         <Stack spacing={0.75}>
           <LinearProgress
@@ -609,7 +624,12 @@ export function ElevationPreparationChart({
           </Typography>
         </Stack>
       ) : null}
-      <Box role="img" aria-label={accessibilityLabel} sx={{ height: 264, mx: -1 }}>
+      <Box
+        id={detailsId}
+        role="img"
+        aria-label={accessibilityLabel}
+        sx={{ height: 264, mx: -1 }}
+      >
         <AreaChart<TrackElevationPreparationProgress['points'][number]>
           aria-hidden
           accessibilityLayer={false}
@@ -683,6 +703,10 @@ export function ElevationProfileChart({
   const suppressClick = useRef(false);
   const { i18n, t } = useLingui();
   const theme = useTheme();
+  const expanded = useUiStore((state) => state.trackSectionExpanded.elevation ?? true);
+  const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const detailsId = `elevation-profile-${useId().replaceAll(':', '')}`;
   const sampledPoints = useMemo(() => sampleElevationProfilePoints(profile), [profile]);
   const timeline = useMemo(() => profileTimeline(profile), [profile]);
   // Plain component state: the chart remembers the view only while it stays mounted.
@@ -809,18 +833,24 @@ export function ElevationProfileChart({
             hoveredPoint.coordinate,
           )
         ];
+  const heading = (
+    <TrackSectionHeading
+      title={metric === 'speed' ? t`Speed profile` : t`Elevation profile`}
+      label={t`Elevation profile`}
+      detailsId={detailsId}
+      expanded={expanded}
+      onToggle={() => {
+        setSectionExpanded('elevation', !expanded);
+      }}
+    />
+  );
+  if (showHeading && !expanded) return heading;
 
   return (
     <Stack spacing={1.5} useFlexGap data-tour="track-profile">
       {showHeading ? (
-        <Box sx={{ position: 'relative' }}>
-          <Typography component="h3" variant="subtitle2">
-            {metric === 'speed' ? (
-              <Trans>Speed profile</Trans>
-            ) : (
-              <Trans>Elevation profile</Trans>
-            )}
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {heading}
           {trackGradeLegendDismissed ? (
             <MuiTooltip title={t`Show track grade legend`}>
               <IconButton
@@ -829,12 +859,6 @@ export function ElevationProfileChart({
                   onTrackGradeLegendDismissedChange(false);
                 }}
                 size="small"
-                sx={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                }}
               >
                 <HelpOutlineOutlinedIcon fontSize="small" />
               </IconButton>
@@ -843,6 +867,7 @@ export function ElevationProfileChart({
         </Box>
       ) : null}
       <Box
+        id={detailsId}
         role="img"
         aria-label={profileLabel}
         sx={{ height: 264, mx: -1, userSelect: 'none' }}

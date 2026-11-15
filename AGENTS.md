@@ -289,16 +289,11 @@ cannot be associated with the current workstream. A generic tool or skill workfl
 normally pauses for fix approval does not require a second approval in this specific
 maintainer-reported current-PR case.
 
-### Incremental commit cadence and optional planning
+### Incremental commit cadence and task tracking
 
 Commit implementation incrementally. Group commits around independently reviewable
 behavior or one focused structural change, with directly relevant tests and permanent
 documentation. Keep intermediate states buildable and internally consistent.
-
-Create or update a branch-local `PLAN.md` only when the work is substantive and
-multi-step, or when the intended commit sequence, work split, or verification plan is
-not obvious from the task. `PLAN.md` is optional for small features, bug fixes,
-documentation-only changes, and single atomic changes.
 
 For every multi-step request, maintain the agent task checklist as the live execution
 record: add every requested item before work begins, mark each item done immediately
@@ -309,11 +304,11 @@ activity. Do not begin finalization, create or update a pull request, or hand of
 the checklist contains stale pending or in-progress work; resolve it, explicitly mark it
 blocked, or remove it only when the maintainer has taken it out of scope.
 
-When a plan is used, each planned commit should:
+Each commit should:
 
 1. Complete one independently reviewable behavior or focused structural change.
 2. Run only the focused checks needed for that commit.
-3. Review the staged diff and commit it before starting the next planned scope.
+3. Review the staged diff and commit it before starting the next scope.
 
 Do not split commits merely to mirror architectural layers, and do not spread one
 coherent simplification across unnecessary commits. Do not wait for the final
@@ -335,7 +330,7 @@ dependency:
 2. Extend or simplify that owner when doing so preserves clarity.
 3. Add an abstraction only when it solves a concrete present-day problem and materially
    improves the code.
-4. Record the reason and immediate consumer in `PLAN.md` when a plan is required.
+4. Explain the reason and immediate consumer in the pull-request description.
 
 Do not add abstractions for consistency, architectural purity, design-pattern
 conformity, possible future reuse, or possible future implementations. Shared code must
@@ -423,9 +418,7 @@ already be distributed across coherent commits.
 After final verification:
 
 1. Commit only cleanup caused by final verification or documentation corrections.
-2. Remove branch-local `PLAN.md`, if present, and commit its removal. It must not appear
-   in the final pull-request state or on `main`.
-3. Before deciding that an existing pull request can deliver the current branch, run
+2. Before deciding that an existing pull request can deliver the current branch, run
    `gh pr view --json state,mergedAt,closedAt,mergeable,mergeStateStatus,url`. Evaluate
    `state` before interpreting either mergeability field. A `MERGED` or `CLOSED` pull
    request is historical and can never deliver commits pushed afterward, even when
@@ -434,17 +427,17 @@ After final verification:
    commits absent from `origin/main`, immediately open a new ready-for-review pull
    request targeting `main`; reuse the same branch only when the maintainer requests it.
    Use that new pull request for every remaining finalization check.
-4. Push the branch and open a ready-for-review pull request, or update the existing pull
-   request only when step 3 confirmed that it is still `OPEN`.
-5. Immediately after PR creation or update, and again after the final push, query the
+3. Push the branch and open a ready-for-review pull request, or update the existing pull
+   request only when step 2 confirmed that it is still `OPEN`.
+4. Immediately after PR creation or update, and again after the final push, query the
    current open PR's `mergeable` and `mergeStateStatus`. Do not hand off while
    `mergeable` is `CONFLICTING` or `mergeStateStatus` is `DIRTY`. Merge the latest
    `origin/main` into the feature branch without rebasing, resolve every conflict, rerun
-   only invalidated checks, push, and query the current PR again. Only when step 3
+   only invalidated checks, push, and query the current PR again. Only when step 2
    confirmed that the PR is `OPEN` may `UNKNOWN` be treated as a pending GitHub
    calculation: wait for the calculation and query that same open PR once more rather
    than assuming it is conflict-free.
-6. Give the user the pull-request link and report the active branch, commits, checks
+5. Give the user the pull-request link and report the active branch, commits, checks
    run, checks skipped as not applicable, and whether the branch is awaiting approval.
 
 This standing instruction authorizes feature-completion push and pull-request creation
@@ -538,20 +531,19 @@ mergeability query.
 
 Keep stable system documentation independent from work breakdown and delivery progress:
 
-| Location          | Owns                                                                                                                                | Must not contain                                                                                |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `README.md`       | Stable project overview, current capabilities, setup, and commands                                                                  | Feature stages, task IDs, estimates, branch/commit/PR status, or progress tracking              |
-| `docs/`           | Stable feature concepts, implemented behavior, architecture, and operation                                                          | Task ordering, estimates, branch/commit/PR status, or delivery history                          |
-| `AGENTS.md` files | Repository-wide or directory-specific agent workflow and engineering constraints                                                    | Product roadmap, duplicated feature specifications, or detailed design documentation            |
-| `PLAN.md`         | Optional branch-local tasks, work splits, commit sequence, verification plan, and detailed progress for substantive multi-step work | The only explanation of a feature's meaning, runtime contract, ownership, or operating behavior |
+| Location          | Owns                                                                             | Must not contain                                                                     |
+| ----------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `README.md`       | Stable project overview, current capabilities, setup, and commands               | Feature stages, task IDs, estimates, branch/commit/PR status, or progress tracking   |
+| `docs/`           | Stable feature concepts, implemented behavior, architecture, and operation       | Task ordering, estimates, branch/commit/PR status, or delivery history               |
+| `AGENTS.md` files | Repository-wide or directory-specific agent workflow and engineering constraints | Product roadmap, duplicated feature specifications, or detailed design documentation |
 
 Rules:
 
 - `README.md` and `docs/` may describe unavailable features needed to explain the
   reviewed system concept, but must not say when, in which stage, or through which task
   or branch they will be implemented.
-- Roadmap sequencing, estimates, branch tracking, approval progress, and implementation
-  history belong only in a temporary `PLAN.md` when one is used.
+- Keep task sequencing and delivery progress in the agent task checklist, not in
+  repository planning files.
 - Stable documentation must not depend on a planning section, task number, or
   implementation split to explain a lasting contract.
 - Move durable facts discovered during implementation into `README.md`, `docs/`, code

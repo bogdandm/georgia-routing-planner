@@ -226,9 +226,19 @@ tiles only, with a user-selected minor interval (default 50 m), 200 m index line
 above that, matching the DEM's native resolution. One application-owned module worker
 fetches the provider tiles, decodes them with `createImageBitmap`, and generates
 contours; contour requests wait until the camera settles. A broken worker is restarted
-once, then the identical inline engine takes over for the session. Only the contour
-protocol is registered with MapLibre; relief and 3D rendering stay on MapLibre's own
-workers and the GPU.
+once, then the identical inline engine takes over for the session. Relief and 3D
+rendering stay on MapLibre's own workers and the GPU.
+
+### Sun-shadow worker
+
+Sun shadows are rendered from the same DEM URLs by the `terrain-shadow` worker, with
+MapLibre's default request mode, so tiles already loaded for relief or 3D come from the
+HTTP cache. Each z7–12 shadow tile needs 3×3 DEM tiles at its own zoom, two zooms
+coarser, and four zooms coarser (27 requests, clamped to the configured DEM zoom range),
+heavily shared between neighbouring shadow tiles; the worker keeps about 64 decoded DEM
+tiles. A 404 is treated as sea level; other failures fail only that shadow tile. Shadows
+need the 512-pixel Terrarium configuration and are unavailable for other DEM encodings
+or tile sizes. Attribution is unchanged.
 
 ### Attribution, limits, and failure policy
 

@@ -20,6 +20,7 @@ import type {
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 import type { MapFailureReason } from '@/presentation/map/mapTypes';
+import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
 
 /**
  * Why Sentinel imagery could not be applied. Satellite UI maps each code to localized
@@ -161,6 +162,24 @@ export interface WeatherMapSnapshot {
   readonly problem: WeatherMapProblem | null;
 }
 
+/** Day playback of sun shadows; `progress` is the precomputed fraction from 0 to 1. */
+export type SunShadowPlayback =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading'; readonly progress: number }
+  | { readonly status: 'playing' }
+  | { readonly status: 'too-many-tiles' }
+  | { readonly status: 'failed' };
+
+/** Terrain-cast sun shadows as the layer controller applies them. */
+export interface SunShadowSnapshot {
+  readonly enabled: boolean;
+  /** Shadow instant in epoch milliseconds, whole minutes; session state, starts at now. */
+  readonly instantMs: number;
+  /** `unavailable` means this browser cannot render shadows (no WebGL2 float rendering). */
+  readonly availability: TerrainShadowAvailability;
+  readonly playback: SunShadowPlayback;
+}
+
 export interface MapLayerState {
   readonly appliedImagery: AppliedSatelliteImagerySnapshot;
   readonly appliedMosaic: AppliedSatelliteMosaicSnapshot;
@@ -180,6 +199,7 @@ export interface MapLayerState {
   readonly selectedScene: SatelliteScene | null;
   readonly terrainOverlays: TerrainOverlaySnapshot;
   readonly weatherMap: WeatherMapSnapshot;
+  readonly sunShadow: SunShadowSnapshot;
 }
 
 const initialMapLayerState: MapLayerState = {
@@ -236,6 +256,13 @@ const initialMapLayerState: MapLayerState = {
     selectedTimeIndex: null,
     renderProgress: null,
     problem: null,
+  },
+  // The layer controller replaces this with the session's start instant when constructed.
+  sunShadow: {
+    enabled: false,
+    instantMs: 0,
+    availability: 'unknown',
+    playback: { status: 'idle' },
   },
 };
 

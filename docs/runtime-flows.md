@@ -175,20 +175,20 @@ failed tile-cache entry. Final failure appears only in the shared operational st
 
 On style readiness, style data changes, imagery swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
-generated contour source, minor/index lines, and index labels. The order is base surface
-fills, relief/satellite in the selected order, waterways, contours, water-body polygons,
-then OSM boundaries, transport, ridges and cliffs, the Sentinel scene footprint, user
-routes and tracks, and finally icons and labels (contour labels included), so relief
-stays visible over opaque land-cover fills while water bodies mask isolines. 3D terrain
-draws consecutive line, fill, raster, and hillshade layers into one draped texture per
-terrain tile, and every icon or label layer between them would add another full set of
-textures and terrain passes; keeping all lines and fills below the first icon layer
-gives the main map one draped stack. A paint change redraws the draped textures only on
-its first frame, so the style disables paint transitions (`transition` of zero): a fade
-would freeze them at the previous value, leaving land-cover fills over imagery after a
-switch to satellite, or missing after a switch back, until the camera moves. Changing
-the contour interval updates the existing vector source's tiles without touching the
-camera.
+sun-shadow raster, generated contour source, minor/index lines, and index labels. The
+order is base surface fills, relief/satellite in the selected order, waterways,
+contours, water-body polygons, sun shadow, buildings, then OSM boundaries, transport,
+ridges and cliffs, the Sentinel scene footprint, user routes and tracks, and finally
+icons and labels (contour labels included), so relief and shadow stay visible over
+opaque land-cover fills while water bodies mask isolines and shadow. 3D terrain draws
+consecutive line, fill, raster, and hillshade layers into one draped texture per terrain
+tile, and every icon or label layer between them would add another full set of textures
+and terrain passes; keeping all lines and fills below the first icon layer gives the
+main map one draped stack. A paint change redraws the draped textures only on its first
+frame, so the style disables paint transitions (`transition` of zero): a fade would
+freeze them at the previous value, leaving land-cover fills over imagery after a switch
+to satellite, or missing after a switch back, until the camera moves. Changing the
+contour interval updates the existing vector source's tiles without touching the camera.
 
 The `terrain-dem` raster-dem source points at the provider URL, so MapLibre fetches,
 caches, and decodes relief and 3D terrain tiles on its own workers. Contours use a
@@ -222,6 +222,109 @@ Applying, hiding, replacing, or clearing satellite imagery reapplies the shared 
 mode on existing layers: opaque land-cover fills switch off over imagery while line
 features, hillshade strength, and label halos update atomically. The camera, sources,
 and user visibility choices are preserved.
+
+## Terrain sun shadows
+
+```mermaid
+sequenceDiagram
+  participant Map as MapLibre
+  participant Provider as MapLibreTerrainShadowTileProvider
+  participant Worker as terrain-shadow worker
+  participant DEM as Mapterhorn DEM
+  Map->>Provider: terrain-shadow://<epochMinute>/{z}/{x}/{y}
+  Provider->>Provider: wait until the camera settles
+  Provider->>Worker: renderTile (tile, instant, DEM URL, shade colors)
+  alt mask cached for tile and minute
+    Worker-->>Provider: ImageBitmap colored from the mask
+  else
+    Worker->>DEM: 3×3 mosaics at z, z−2, z−4 (cached tiles skipped)
+    Worker->>Worker: WebGL2 visibility and shade passes, fence wait, mask readback
+    Worker-->>Provider: ImageBitmap colored from the mask (transferred)
+  end
+  Provider-->>Map: raster tile data
+```
+
+While the switch is on and shadows are not known to be unavailable, the controller keeps
+the `terrain-sun-shadow` raster source (z7–12, overzoomed above) and its layer directly
+above the water polygons, so lakes and contours are shaded too. Once that layer exists
+it sets the relief hillshade's minimum zoom to 24 so the fixed-light shading does not
+double the real-sun relief; a failed shadow setup leaves the relief drawn. Turning the
+switch off removes the source and layer and restores the relief zoom range. The relief
+visibility preference is never written. The tile URL carries the instant as a whole
+epoch minute, so an unchanged minute changes nothing, and a new minute replaces the
+source tiles with `setTiles`: MapLibre requests only the visible tiles again. When a
+camera move settles, the instant is clamped again to the shown range at the new center,
+matching the panel. Otherwise camera moves (pan, rotate, pitch, 3D) never recompute,
+because MapLibre's tile cache and the worker's mask cache already hold the tiles;
+returning to an earlier minute hits the mask cache. Compare panes never add the source.
+
+The session instant starts at the current time. On the first reconciliation with a map,
+a start time outside sunrise–sunset at the map center becomes 11:00 of that local day,
+so the map never opens fully shaded; the panel's **Now** applies the same rule. An
+instant chosen in the panel is never replaced, only clamped to the range.
+
+`MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
+the module worker on the first tile request. Requests wait while the map is dragged,
+zoomed, or rotated, through the same interaction signal as contours; aborted requests
+leave the gate or cancel their worker job. The worker answers with an `ImageBitmap`,
+which MapLibre accepts directly, so no image is encoded.
+
+For an output tile at zoom z, the worker builds 3×3 DEM mosaics at z, z−2, and z−4
+(clamped to the DEM zoom range) around the tile, so occluders up to the 100 km cap are
+covered at z12; consecutive instants of the same tile reuse the assembled mosaics. Each
+horizon sample reads the finest mosaic that contains it, and a GPU reduction of each
+level's maximum elevation ends the march early once nothing ahead can rise above the
+Sun. The visibility pass computes, per pixel of the tile plus a 2 px margin, the Sun's
+azimuth and refracted elevation, marches along the great circle toward the Sun with
+Earth curvature and terrestrial refraction, and stores the visible fraction of the solar
+disk. The shade pass blurs that fraction with a 5×5 Gaussian (σ = 1 px) and multiplies
+it by Lambert lighting from finest-mosaic central differences, normalized so flat ground
+in full sun (or at 10° elevation for lower suns) is 1. The slope term reaches zero
+exactly where the march begins to report self-shadow, so terminators stay continuous.
+The worker reads the result back as one byte per pixel (brightness × 127) and colors it
+through a 256-entry table: shadow color with alpha 1 − brightness below 127, highlight
+color fading in above it. GPU jobs run one at a time and wait on a fence before the next
+starts, so at most one tile of shadow work competes with map frames.
+
+DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
+so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,
+or decode failure fails the shadow tile instead of drawing a truncated horizon. The
+worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
+and up to 3072 one-byte shade masks (768 MiB) keyed by DEM URL, tile, and minute in LRU
+caches; colors are applied per request, so they are not part of the key. A tile whose
+four corners see the Sun more than 1° below the solar disk is answered with a shared
+all-zero (full-shade) mask without DEM fetches, GPU work, or a cache entry. A lost WebGL
+context drops both caches, and the next request creates a fresh context.
+
+A failed tile fails only that tile; MapLibre leaves it blank. When the worker reports
+missing WebGL2 float support or its transport fails, availability becomes `unavailable`
+for the session: the controller removes the shadow layer and source, and the panel shows
+a disabled switch with an explanation. A failure to add or reorder the layer is logged
+and leaves relief and contours working. `domain/terrain/terrainShadow.ts` is the CPU
+reference for the shader model.
+
+**Play the day** (`MapLibreLayerController.playSunShadowDay`) takes the daylight window
+of the shown day at the map center, which spans two hours before sunrise to two hours
+after sunset (clamped to the local day), makes whole-minute frames from its start every
+10 minutes plus its last minute, and asks `map.coveringTiles` for the 512 px z7–12 tiles
+of the current view, deduplicated across world copies. That public coverage ignores
+terrain-aware culling; tiles it misses render on demand during playback. Only frames
+from 30 minutes before sunrise to 30 minutes after sunset hold cached masks, so when
+tiles × those frames exceed 2560, playback is refused as `too-many-tiles` and logged as
+`map.sun-shadow.playback-refused` with both counts. Otherwise the provider's `prefetch`
+sends `terrain-shadow.prefetch-tile` requests tile-major, at most four at a time and
+past the interaction gate, so the worker renders each mask into its cache and answers
+with metrics only; consecutive instants of a tile reuse the assembled mosaics. Progress
+is published to `mapLayerStore.sunShadow.playback` in whole percents. After the
+prefetch, a 150 ms timer shows the next frame by updating the instant and calling only
+the sun-shadow reconciliation, without persistence, and waits while the shadow source is
+still loading the shown frame. The animation loops until stopped. Play does nothing
+while the camera is already moving. A `movestart` event (the controller listens for the
+whole attachment, so it also clears a refusal or failure note), `setSunShadow` (every
+panel change, the switch, and the render benchmark), or detach aborts the prefetch,
+clears the timer, and returns the state to `idle`; a prefetch failure is logged as
+`map.sun-shadow.playback-failed` and published as `failed`, as is availability turning
+`unavailable` during playback.
 
 ## Sentinel search
 

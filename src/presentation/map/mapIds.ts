@@ -5,6 +5,7 @@ export const mapSourceIds = {
   basemapDetailVector: 'basemap-detail-vector',
   terrainDem: 'terrain-dem',
   terrainContours: 'terrain-contours',
+  terrainSunShadow: 'terrain-sun-shadow',
   weatherClouds: 'weather-clouds',
   weatherPrecipitation: 'weather-precipitation',
   weatherWind: 'weather-wind',
@@ -47,6 +48,7 @@ export const sovietTopographicSourceIds = {
 
 export const terrainOverlayLayerIds = {
   reliefShade: 'terrain-relief-shade',
+  sunShadow: 'terrain-sun-shadow',
   contourMinor: 'terrain-contour-minor',
   contourIndex: 'terrain-contour-index',
   contourLabels: 'terrain-contour-labels',
@@ -219,6 +221,8 @@ export const mapInsertionPoints = {
   terrainOverlaysBeforeLayerId: mapLayerIds.boundaries,
   // Water polygons mask generated terrain contours while waterways remain visible.
   contoursBeforeLayerId: mapLayerIds.water,
+  // Sun shadows sit directly above the water polygons, so lakes and contours are shaded.
+  sunShadowBeforeLayerId: mapLayerIds.buildings,
   contourLabelsBeforeLayerId: mapLayerIds.hikingPoiLabels,
   // Weather stays below roads, hiking paths, labels, user routes, and markers.
   weatherBeforeLayerId: mapLayerIds.roadCasings,

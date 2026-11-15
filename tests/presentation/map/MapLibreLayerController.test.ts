@@ -2,6 +2,7 @@ import type { ErrorEvent as MapLibreErrorEvent, Map as MapLibreMap } from 'mapli
 import { waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentBounds } from '@openmeteo/weather-map-layer';
+import lookupTimeZone from '@photostructure/tz-lookup';
 
 import {
   SAVED_MARKER_SCHEMA_VERSION,
@@ -43,7 +44,13 @@ import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
+import {
+  daylightFrameInstants,
+  daylightWindow,
+} from '@/presentation/map/sunShadowDaylight';
 import { createTestServices } from '@test/helpers/createTestServices';
+import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
+import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 
 type Listener = (event: never) => void;
 
@@ -77,6 +84,11 @@ class FakeLayerMap {
     }[];
   }[] = [];
   bounds = { west: 44, south: 41, east: 45, north: 42 };
+  coveringTileIds: { readonly z: number; readonly x: number; readonly y: number }[] =
+    [];
+  center = { lng: 43.14, lat: 42.71 };
+  moving = false;
+  readonly failingLayerAdds = new Set<string>();
 
   public constructor() {
     for (const id of Object.values(mapLayerIds)) this.layers.set(id, { id });
@@ -133,6 +145,7 @@ class FakeLayerMap {
 
   public addLayer(layer: Record<string, unknown>, beforeId?: string): void {
     const id = String(layer.id);
+    if (this.failingLayerAdds.has(id)) throw new Error(`Synthetic ${id} add failure.`);
     if (beforeId === undefined || !this.layers.has(beforeId)) {
       this.layers.set(id, layer);
       return;
@@ -185,6 +198,27 @@ class FakeLayerMap {
 
   public setLayoutProperty(id: string, _name: string, value: unknown): void {
     this.visibility.set(id, String(value));
+  }
+
+  public getCenter(): { readonly lng: number; readonly lat: number } {
+    return this.center;
+  }
+
+  public isMoving(): boolean {
+    return this.moving;
+  }
+
+  public coveringTiles(): {
+    readonly canonical: { readonly z: number; readonly x: number; readonly y: number };
+  }[] {
+    return this.coveringTileIds.map((canonical) => ({ canonical }));
+  }
+
+  public setLayerZoomRange(id: string, minzoom: number, maxzoom: number): void {
+    const layer = this.layers.get(id);
+    if (layer === undefined) throw new Error(`Layer ${id} is unavailable.`);
+    layer.minzoom = minzoom;
+    layer.maxzoom = maxzoom;
   }
 
   public setPaintProperty(id: string, name: string, value: unknown): void {
@@ -350,6 +384,63 @@ function scene(
     attribution: 'Synthetic test data',
   };
 }
+
+function createSunShadowController(
+  availability: 'available' | 'unavailable' = 'available',
+): {
+  readonly controller: MapLibreLayerController;
+  readonly shadows: FakeTerrainShadowTileProvider;
+  readonly services: RuntimeServices;
+} {
+  const services = createTestServices();
+  const configuration = services.mapProviderConfiguration;
+  if (configuration.status !== 'valid') throw new Error('Invalid test configuration.');
+  const shadows = new FakeTerrainShadowTileProvider(availability);
+  const controller = new MapLibreLayerController(
+    configuration.value.satellite.renderer,
+    configuration.value.terrain,
+    {
+      createTileUrl: () => 'test-contour://tiles/{z}/{x}/{y}',
+      setInteractionActive: () => undefined,
+      getStatus: () => 'worker',
+      getQueueState: () => ({
+        executionMode: 'worker',
+        activeCount: 0,
+        queuedContourCount: 0,
+        queueCapacity: 32,
+      }),
+      subscribeStatus: () => () => undefined,
+      subscribeQueueState: () => () => undefined,
+      subscribeMetrics: () => () => undefined,
+      dispose: () => undefined,
+    },
+    shadows,
+    {
+      registerScene: () => undefined,
+      createTileUrl: () => 'test-satellite-cog://tiles/{z}/{x}/{y}.webp',
+      dispose: () => undefined,
+    },
+    services.logger,
+    services.idGenerator,
+    services.sentinelQueryDiagnostics,
+    services.database,
+  );
+  return { controller, shadows, services };
+}
+
+/** Asserts relief → contours → water → sun shadow, with the shadow directly over water. */
+function expectReliefShadowContourStack(map: FakeLayerMap): void {
+  const order = [...map.layers.keys()];
+  const shadowIndex = order.indexOf(terrainOverlayLayerIds.sunShadow);
+  expect(order.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+    order.indexOf(terrainOverlayLayerIds.contourMinor),
+  );
+  expect(order.indexOf(terrainOverlayLayerIds.contourIndex)).toBeLessThan(shadowIndex);
+  expect(order[shadowIndex - 1]).toBe(mapLayerIds.water);
+  expect(order[shadowIndex + 1]).toBe(mapLayerIds.buildings);
+}
+
+const shadowInstantMs = Date.UTC(2026, 6, 1, 8, 30, 15);
 const mosaicViewport = {
   bounds: { west: 44, south: 42, east: 46, north: 43 },
   center: { longitude: 45, latitude: 42.5 },
@@ -698,6 +789,7 @@ describe('MapLibreLayerController', () => {
         subscribeMetrics: () => () => undefined,
         dispose: () => undefined,
       },
+      new FakeTerrainShadowTileProvider(),
       {
         registerScene: () => undefined,
         createTileUrl: (sceneKey) =>
@@ -930,6 +1022,7 @@ describe('MapLibreLayerController', () => {
         subscribeMetrics: () => () => undefined,
         dispose: () => undefined,
       },
+      new FakeTerrainShadowTileProvider(),
       {
         registerScene: () => undefined,
         createTileUrl: () => 'test-satellite-cog://tiles/{z}/{x}/{y}.webp',
@@ -2551,6 +2644,419 @@ describe('MapLibreLayerController', () => {
     });
   });
 
+  it('adds sun shadows over lakes and contours and redraws them only per minute', async () => {
+    const { controller, services } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+
+    const minute = Math.floor(shadowInstantMs / 60_000);
+    const source = map.sources.get(mapSourceIds.terrainSunShadow) as {
+      readonly tiles: readonly string[];
+      readonly setTiles: (tiles: string[]) => void;
+    };
+    expect(source.tiles).toEqual([`terrain-shadow://${String(minute)}/{z}/{x}/{y}`]);
+    expectReliefShadowContourStack(map);
+    expect(mapLayerStore.getState().sunShadow).toEqual({
+      enabled: true,
+      instantMs: minute * 60_000,
+      availability: 'available',
+      playback: { status: 'idle' },
+    });
+    const setTiles = vi.spyOn(source, 'setTiles');
+    const movesBefore = map.moves.length;
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs + 20_000 });
+    for (let index = 0; index < 3; index += 1) map.fire('styledata', {});
+    expect(setTiles).not.toHaveBeenCalled();
+    expect(map.moves).toHaveLength(movesBefore);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs + 600_000 });
+    expect(setTiles).toHaveBeenCalledExactlyOnceWith([
+      `terrain-shadow://${String(minute + 10)}/{z}/{x}/{y}`,
+    ]);
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        sunShadowEnabled: true,
+      });
+    });
+
+    controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs + 600_000 });
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(false);
+    expect(map.sources.has(mapSourceIds.terrainSunShadow)).toBe(false);
+    const order = [...map.layers.keys()];
+    expect(order[order.indexOf(terrainOverlayLayerIds.reliefShade) + 1]).toBe(
+      terrainOverlayLayerIds.contourMinor,
+    );
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        sunShadowEnabled: false,
+      });
+    });
+  });
+
+  it('starts a session that opens at night at 11:00 on that day at the map center', () => {
+    vi.useFakeTimers();
+    // 23:15 in Tbilisi (UTC+4).
+    vi.setSystemTime(Date.UTC(2026, 6, 1, 19, 15));
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+      Date.UTC(2026, 6, 1, 7, 0),
+    );
+    // A time the user picks afterwards is never replaced, only kept within the range.
+    const userEveningMs = Date.UTC(2026, 6, 1, 17, 0);
+    controller.setSunShadow({ enabled: true, instantMs: userEveningMs });
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(userEveningMs);
+    controller.dispose();
+  });
+
+  it('moves a night instant to two hours after sunset at the map center', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    // 23:30 in Tbilisi (UTC+4).
+    const nightMs = Date.UTC(2026, 6, 1, 19, 30);
+    const window = daylightWindow(
+      nightMs,
+      { latitude: 42.71, longitude: 43.14 },
+      'Asia/Tbilisi',
+    );
+
+    controller.setSunShadow({ enabled: true, instantMs: nightMs });
+
+    const lastMinuteMs =
+      Math.floor((window?.sunsetMs ?? 0) / 60_000) * 60_000 + 2 * 60 * 60_000;
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(lastMinuteMs);
+    expect(map.sources.get(mapSourceIds.terrainSunShadow)).toMatchObject({
+      tiles: [`terrain-shadow://${String(lastMinuteMs / 60_000)}/{z}/{x}/{y}`],
+    });
+  });
+
+  it('hides the fixed-light relief through its zoom range only while sun shadows draw', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    const reliefVisibility = map.visibility.get(terrainOverlayLayerIds.reliefShade);
+    const storedVisibility = mapLayerStore.getState().visibility['terrain-relief'];
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)).toMatchObject({
+      minzoom: 24,
+    });
+
+    controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)).toMatchObject({
+      minzoom: 0,
+    });
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe(
+      reliefVisibility,
+    );
+    expect(mapLayerStore.getState().visibility['terrain-relief']).toBe(
+      storedVisibility,
+    );
+  });
+
+  describe('day playback', () => {
+    const center = { latitude: 42.71, longitude: 43.14 };
+
+    function startPlayback(tileIds = [{ z: 12, x: 2541, y: 1514 }]) {
+      vi.useFakeTimers();
+      const { controller, shadows } = createSunShadowController();
+      const map = new FakeLayerMap();
+      map.coveringTileIds = tileIds;
+      controller.attach(map as unknown as MapLibreMap);
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
+      if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
+      const frames = daylightFrameInstants(window, 10);
+      controller.playSunShadowDay();
+      return { controller, shadows, map, frames };
+    }
+
+    it('precomputes deduplicated tiles for every daylight frame, then plays them', async () => {
+      const { controller, shadows, frames } = startPlayback([
+        { z: 12, x: 2541, y: 1514 },
+        { z: 12, x: 2541, y: 1514 },
+        { z: 12, x: 2542, y: 1514 },
+      ]);
+
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({
+        status: 'loading',
+        progress: 0,
+      });
+      const call = shadows.prefetchCalls[0];
+      expect(call?.tiles).toEqual([
+        { z: 12, x: 2541, y: 1514 },
+        { z: 12, x: 2542, y: 1514 },
+      ]);
+      expect(call?.instantsMs).toEqual(frames);
+      call?.onProgress(1, 3);
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({
+        status: 'loading',
+        progress: 1 / 3,
+      });
+
+      call?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const startIndex = frames.findIndex(
+        (frame) => frame >= Math.floor(shadowInstantMs / 60_000) * 60_000,
+      );
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: frames[startIndex],
+        playback: { status: 'playing' },
+      });
+      await vi.advanceTimersByTimeAsync(150);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames[startIndex + 1]);
+      controller.dispose();
+    });
+
+    it('waits for the shown frame to load and wraps from sunset to sunrise', async () => {
+      const { controller, shadows, map, frames } = startPlayback();
+      shadows.prefetchCalls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      map.sourceLoaded = false;
+      const shown = mapLayerStore.getState().sunShadow.instantMs;
+      await vi.advanceTimersByTimeAsync(450);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(shown);
+
+      map.sourceLoaded = true;
+      const remaining = frames.length - 1 - frames.indexOf(shown);
+      await vi.advanceTimersByTimeAsync(150 * remaining);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames.at(-1));
+      await vi.advanceTimersByTimeAsync(150);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames[0]);
+      controller.dispose();
+    });
+
+    it('stops on a camera move and cancels the precomputation', () => {
+      const { controller, shadows, map } = startPlayback();
+
+      map.fire('movestart', {});
+
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      expect(shadows.prefetchCalls[0]?.signal.aborted).toBe(true);
+      controller.dispose();
+    });
+
+    it('stops when the user changes the instant', async () => {
+      const { controller, shadows } = startPlayback();
+      shadows.prefetchCalls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      const shown = mapLayerStore.getState().sunShadow.instantMs;
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: shown,
+        playback: { status: 'idle' },
+      });
+      controller.dispose();
+    });
+
+    it('refuses views needing more than the playback tile limit until the camera moves', () => {
+      const { controller, shadows, map } = startPlayback(
+        Array.from({ length: 40 }, (_, x) => ({ z: 12, x, y: 1514 })),
+      );
+
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({
+        status: 'too-many-tiles',
+      });
+      expect(shadows.prefetchCalls).toHaveLength(0);
+
+      // The note describes the refused view, so a new view clears it.
+      map.fire('movestart', {});
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      controller.dispose();
+    });
+
+    it('budgets only frames near daylight, since darker twilight tiles cost no memory', () => {
+      const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
+      if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
+      const frames = daylightFrameInstants(window, 10);
+      const litFrames = frames.filter(
+        (frame) =>
+          frame >= window.sunriseMs - 30 * 60_000 &&
+          frame <= window.sunsetMs + 30 * 60_000,
+      ).length;
+      const tileCount = Math.floor(2560 / litFrames);
+      expect(tileCount * frames.length).toBeGreaterThan(2560);
+
+      const { controller, shadows } = startPlayback(
+        Array.from({ length: tileCount }, (_, x) => ({ z: 12, x, y: 1514 })),
+      );
+
+      expect(shadows.prefetchCalls[0]?.instantsMs).toEqual(frames);
+      expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
+      controller.dispose();
+    });
+
+    it('does not start while the camera is already moving', () => {
+      vi.useFakeTimers();
+      const { controller, shadows } = createSunShadowController();
+      const map = new FakeLayerMap();
+      controller.attach(map as unknown as MapLibreMap);
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      map.moving = true;
+
+      controller.playSunShadowDay();
+
+      expect(shadows.prefetchCalls).toHaveLength(0);
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      controller.dispose();
+    });
+
+    it('stops with a failure when shadows become unavailable while playing', async () => {
+      const { controller, shadows } = startPlayback();
+      shadows.prefetchCalls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      shadows.setAvailability('unavailable');
+      const shown = mapLayerStore.getState().sunShadow.instantMs;
+      await vi.advanceTimersByTimeAsync(600);
+
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: shown,
+        playback: { status: 'failed' },
+      });
+      controller.dispose();
+    });
+  });
+
+  it('clamps the instant again for the center a camera move settles on', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    // 21:30 in Tbilisi: within two hours after sunset there, after it farther east.
+    const eveningMs = Date.UTC(2026, 6, 1, 17, 30);
+    controller.setSunShadow({ enabled: true, instantMs: eveningMs });
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(eveningMs);
+
+    map.center = { lng: 70, lat: 42.71 };
+    controller.setTerrainInteractionActive(true);
+    controller.setTerrainInteractionActive(false);
+
+    const eastWindow = daylightWindow(
+      eveningMs,
+      { latitude: 42.71, longitude: 70 },
+      lookupTimeZone(42.71, 70),
+    );
+    expect(eastWindow?.lastMinuteMs).toBeLessThan(eveningMs);
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(eastWindow?.lastMinuteMs);
+  });
+
+  it('keeps the fixed-light relief when the sun-shadow layer cannot be added', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    map.failingLayerAdds.add(terrainOverlayLayerIds.sunShadow);
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(false);
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)?.minzoom).not.toBe(24);
+  });
+
+  it('re-adds sun shadows after a style reload at the current instant', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs + 3_600_000 });
+
+    for (const layerId of Object.values(terrainOverlayLayerIds))
+      map.layers.delete(layerId);
+    for (const sourceId of [
+      mapSourceIds.terrainDem,
+      mapSourceIds.terrainContours,
+      mapSourceIds.terrainSunShadow,
+    ]) {
+      map.sources.delete(sourceId);
+    }
+    map.fire('styledata', {});
+
+    const minute = Math.floor(shadowInstantMs / 60_000) + 60;
+    expect(map.sources.get(mapSourceIds.terrainSunShadow)).toMatchObject({
+      tiles: [`terrain-shadow://${String(minute)}/{z}/{x}/{y}`],
+    });
+    expectReliefShadowContourStack(map);
+  });
+
+  it('keeps sun shadows above satellite imagery without moving layers on every styledata', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(controller.setLayerVisibility('google-satellite', true).status).toBe(
+      'success',
+    );
+    map.fire('sourcedata', {
+      sourceId: mapSourceIds.satelliteBasemap,
+      sourceDataType: 'content',
+    });
+
+    const belowOrder = [...map.layers.keys()];
+    const imageryIndex = belowOrder.indexOf(satelliteBasemapLayerIds.imagery);
+    expect(belowOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+      imageryIndex,
+    );
+    expect(belowOrder.indexOf(terrainOverlayLayerIds.sunShadow)).toBeGreaterThan(
+      imageryIndex,
+    );
+    expect(belowOrder[belowOrder.indexOf(terrainOverlayLayerIds.sunShadow) - 1]).toBe(
+      mapLayerIds.water,
+    );
+    let movesBefore = map.moves.length;
+    for (let index = 0; index < 3; index += 1) map.fire('styledata', {});
+    expect(map.moves).toHaveLength(movesBefore);
+
+    expect(
+      controller.setTerrainOverlayPreferences({
+        contourIntervalMeters: 50,
+        shadeAboveSatellite: true,
+        demTileSize: 512,
+      }),
+    ).toEqual({ status: 'success' });
+    const aboveOrder = [...map.layers.keys()];
+    expect(aboveOrder.indexOf(terrainOverlayLayerIds.reliefShade)).toBeGreaterThan(
+      aboveOrder.indexOf(satelliteBasemapLayerIds.imagery),
+    );
+    expectReliefShadowContourStack(map);
+    movesBefore = map.moves.length;
+    for (let index = 0; index < 3; index += 1) map.fire('styledata', {});
+    expect(map.moves).toHaveLength(movesBefore);
+  });
+
+  it('draws no shadows while the browser cannot render them and forwards interaction', () => {
+    const { controller, shadows } = createSunShadowController('unavailable');
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(false);
+    expect(mapLayerStore.getState().sunShadow).toMatchObject({
+      enabled: true,
+      availability: 'unavailable',
+    });
+
+    shadows.setAvailability('available');
+    expect(mapLayerStore.getState().sunShadow.availability).toBe('available');
+    expectReliefShadowContourStack(map);
+
+    controller.setTerrainInteractionActive(true);
+    expect(shadows.interactionActive).toBe(true);
+    controller.dispose();
+    expect(shadows.interactionActive).toBe(false);
+    expect(shadows.disposed).toBe(true);
+  });
+
   it('renders bounded minor, index, and labeled contours and updates their interval atomically', () => {
     const services = createTestServices();
     const controller = services.mapLayers;
@@ -2879,6 +3385,7 @@ describe('MapLibreLayerController', () => {
         subscribeMetrics: () => () => undefined,
         dispose: () => undefined,
       },
+      new FakeTerrainShadowTileProvider(),
       {
         registerScene: () => undefined,
         createTileUrl: (sceneKey) =>
@@ -3542,6 +4049,7 @@ describe('MapLibreLayerController', () => {
         shadeAboveSatellite: true,
         demTileSize: 256,
       },
+      sunShadowEnabled: true,
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -3553,6 +4061,8 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(true);
+    expect(mapLayerStore.getState().sunShadow.enabled).toBe(true);
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: {
@@ -3597,6 +4107,7 @@ describe('MapLibreLayerController', () => {
       satelliteRenderingMode: controller.getRenderingMode(),
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
+      sunShadowEnabled: false,
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -3632,6 +4143,7 @@ describe('MapLibreLayerController', () => {
       satelliteRenderingMode: controller.getRenderingMode(),
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
+      sunShadowEnabled: false,
     });
     // Keep the stored Google choice so a repeated load would visibly revert Esri.
     vi.spyOn(services.database, 'saveMapLayerPreferences').mockResolvedValue(undefined);
@@ -3662,6 +4174,7 @@ describe('MapLibreLayerController', () => {
       satelliteRenderingMode: 'auto',
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
+      sunShadowEnabled: false,
     });
     const map = new FakeLayerMap();
     map.styleLoaded = false;

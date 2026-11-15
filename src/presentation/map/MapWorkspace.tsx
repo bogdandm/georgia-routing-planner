@@ -61,6 +61,7 @@ import {
   MapViewControlsControl,
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
+import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
 import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
@@ -468,6 +469,7 @@ export function MapWorkspace({
   const appliedImagery = useStore(mapLayerStore, (state) => state.appliedImagery);
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
+  const sunShadow = useStore(mapLayerStore, (state) => state.sunShadow);
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
@@ -1286,7 +1288,8 @@ export function MapWorkspace({
   // current run may write state and the effect below stops it on unmount.
   const renderBenchmarkRun = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (renderBenchmarkStatus !== 'requested') return;
+    const request = mapInteractionStore.getState().renderBenchmark;
+    if (renderBenchmarkStatus !== 'requested' || request.status !== 'requested') return;
     // A map that failed fatally never becomes runnable; degraded maps still render.
     if (snapshot.lifecycle === 'fatal') {
       setRenderBenchmarkState({
@@ -1300,16 +1303,27 @@ export function MapWorkspace({
     const run = new AbortController();
     renderBenchmarkRun.current = run;
     const isCurrent = () => renderBenchmarkRun.current === run;
+    const { options } = request;
     setRenderBenchmarkState({
       status: 'running',
+      options,
       step: 'settle',
       stepStartedAt: Date.now(),
     });
     facade
-      .runRenderBenchmark((step) => {
-        if (!isCurrent()) return;
-        setRenderBenchmarkState({ status: 'running', step, stepStartedAt: Date.now() });
-      }, run.signal)
+      .runRenderBenchmark(
+        (step) => {
+          if (!isCurrent()) return;
+          setRenderBenchmarkState({
+            status: 'running',
+            options,
+            step,
+            stepStartedAt: Date.now(),
+          });
+        },
+        run.signal,
+        options,
+      )
       .then(
         (report) => {
           if (isCurrent()) setRenderBenchmarkState({ status: 'complete', report });
@@ -1818,6 +1832,25 @@ export function MapWorkspace({
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);
+  const sunShadowControl: SunShadowControlProps | null =
+    mapLayers === null
+      ? null
+      : {
+          enabled: sunShadow.enabled,
+          instantMs: sunShadow.instantMs,
+          availability: sunShadow.availability,
+          playback: sunShadow.playback,
+          mapViewport,
+          onChange: (value) => {
+            mapLayers.setSunShadow(value);
+          },
+          onPlay: () => {
+            mapLayers.playSunShadowDay();
+          },
+          onStop: () => {
+            mapLayers.stopSunShadowPlayback();
+          },
+        };
 
   // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.
   const mainMapHidden =
@@ -2011,6 +2044,7 @@ export function MapWorkspace({
               weatherMapEnabled={weatherMap.enabled}
               measurementActive={measurementActive}
               onMeasurementActiveChange={handleMeasurementActiveChange}
+              sunShadow={sunShadowControl}
             />
             {selectionCoordinate === null ||
             selectionCoordinate === undefined ||
@@ -2151,6 +2185,7 @@ export function MapWorkspace({
           weatherMapEnabled={weatherMap.enabled}
           measurementActive={measurementActive}
           onMeasurementActiveChange={handleMeasurementActiveChange}
+          sunShadow={sunShadowControl}
         />
       ) : null}
       <ElevationGradeLegend

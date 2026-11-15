@@ -44,11 +44,12 @@ src/
   main.tsx                 browser entry, preference restore, and provider nesting
   bootstrap/               composition root, configuration validation, lifecycle
   domain/                  framework-free values: tracks, markers, satellite, weather,
-                           elevation, and localization
+                           elevation, terrain (solar position, terrain shadow model),
+                           time zones, and localization
   application/             use cases and ports: map search, satellite, tracks, user,
                            and weather
   infrastructure/          HTTP, STAC, geocoding, weather, persistence, Supabase, and
-                           routing/elevation/satellite workers
+                           routing/elevation/terrain-shadow/satellite workers
   diagnostics/             bounded logging, redaction, health, snapshots, and export
   locales/{en,ru}/         feature-split Lingui PO catalogs
   presentation/
@@ -79,8 +80,8 @@ stores).
 [`createRuntimeServices.ts`](../src/bootstrap/createRuntimeServices.ts) is the only
 place that constructs runtime adapters. It validates the map, geocoding, and Supabase
 configuration, then creates the clock, ID generator, bounded logger, `AppDatabase`,
-shared HTTP client, snapshot stores, layer controller with its contour and COG
-protocols, trail router, DEM elevation provider, weather use case, place search,
+shared HTTP client, snapshot stores, layer controller with its contour, terrain-shadow,
+and COG protocols, trail router, DEM elevation provider, weather use case, place search,
 satellite search use cases, and health/diagnostics services. When Supabase is configured
 it creates the official client with a persistent session plus `SupabaseUserDataService`
 and `SupabaseTrackShareService`; otherwise it supplies an unconfigured local-only user
@@ -125,6 +126,7 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 | Settled viewport for search controls                              | `MapViewportSnapshotStore`                                      |
 | Direct visual-COG scene registry and raster worker                | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
 | Contour DEM fetch, parse, contour caches, worker fallback         | `TerrainComputeEngine` / `TerrainComputeBackend`                |
+| Sun-shadow protocol, worker lifecycle, interaction gate, support  | `MapLibreTerrainShadowTileProvider`                             |
 | Tracks, folders, markers, camera, layer and UI preferences        | `AppDatabase` behind the application ports                      |
 | Loaded folders, previews, route plan, selection, multi-view       | `TracksWorkspaceProvider` React state                           |
 | Marker collection, editor draft, per-marker forecasts             | `MarkersWorkspaceProvider` React state                          |
@@ -161,7 +163,7 @@ file actions. `KeyboardShortcutKeys.tsx` renders the same bindings as tooltip ke
 
 ## Workers
 
-Four Vite module workers share the request-correlated `WorkerRpc` transport
+Five Vite module workers share the request-correlated `WorkerRpc` transport
 (`infrastructure/runtime/WorkerRpc.ts`):
 
 - `infrastructure/routing` — `BrowserTrailRouter` implements `TrailRouter`; per request
@@ -172,6 +174,12 @@ Four Vite module workers share the request-correlated `WorkerRpc` transport
   (contour DEM fetch and parse, `maplibre-contour`); `InlineTerrainComputeBackend` runs
   the same engine on the window thread after repeated worker failure.
   `TerrainComputeConfiguration` is the strict, versioned worker DTO.
+- `infrastructure/terrainShadow` — `TerrainShadowWorkerServer` validates
+  `TerrainShadowProtocol` requests and transfers `ImageBitmap` results;
+  `TerrainShadowRenderer` fetches and caches DEM tiles and masks and renders cast
+  shadows with WebGL2 on an `OffscreenCanvas` (GLSL in `terrainShadowShaders.ts`, tile
+  and mosaic math in `terrainShadowTiles.ts`). The worker is created on the first shadow
+  tile request.
 - `infrastructure/satellite` — direct visual-COG range reads with `geotiff` and UTM to
   Web Mercator reprojection with `proj4`.
 - `infrastructure/supabase` — `TrackSyncWorkerClient` runs synchronization in
@@ -195,12 +203,23 @@ semantic map colors and vector/satellite contrast paints.
 `MapLibreLayerController` attaches to the same native map through the facade. It owns
 the basemap preset (Vector OSM; Google, Bing, Esri, NAPR orthophoto, Soviet topographic,
 or Sentinel-2), Sentinel scene and Mosaic rasters, DEM relief, its loading state,
-generated contours, Open-Meteo weather layers and the `om://` protocol, track,
-route-plan, and marker overlays, and allowlisted logical visibility commands. It
-validates and persists layer preferences and projects its state into `mapLayerStore`.
-`ContourTileGenerator` registers the contour protocol and adapts the terrain backend to
-`maplibre-contour`; `SatelliteCogTileProvider` registers the `georgia-satellite-cog`
-protocol. Runtime behavior is described in [runtime-flows.md](runtime-flows.md).
+generated contours, the sun-shadow switch and instant, Open-Meteo weather layers and the
+`om://` protocol, track, route-plan, and marker overlays, and allowlisted logical
+visibility commands. It validates and persists layer preferences and projects its state
+into `mapLayerStore`. `ContourTileGenerator` registers the contour protocol and adapts
+the terrain backend to `maplibre-contour`; `SatelliteCogTileProvider` registers the
+`georgia-satellite-cog` protocol; `MapLibreTerrainShadowTileProvider` registers the
+`terrain-shadow` protocol. `SunShadowControl.tsx` renders the rail button and its panel.
+Runtime behavior is described in [runtime-flows.md](runtime-flows.md).
+
+The solar and shadow model is independent of MapLibre and reusable for other terrain
+analysis, such as classifying track points as sunlit or shaded:
+`domain/terrain/solarPosition.ts` computes subsolar points, solar position with
+atmospheric refraction, and sunrise and sunset; `domain/terrain/terrainShadow.ts` holds
+the shared model constants, a `TerrainElevationSampler` contract, and the CPU reference
+that the GLSL shader mirrors (`horizonAngleTowardSun`, `visibleSolarDiskFraction`,
+`evaluateTerrainSunlight`); `domain/time/zonedWallTime.ts` converts between instants and
+wall time in an IANA zone.
 
 `SatelliteCompareMaps` renders the comparison grid as separate lightweight maps, keyed
 by grid position, that never attach to the facade or the controller's map. Each pane's
@@ -212,5 +231,5 @@ The main map stays mounted and hidden underneath.
 
 `BrowserStorageUsageReader` implements `StorageUsageReader` for Settings; missing
 browser capabilities produce unavailable values rather than failing the dialog.
-Satellite and Weather presentation resolve IANA time zones locally with
+Satellite, Weather, and sun-shadow presentation resolve IANA time zones locally with
 `@photostructure/tz-lookup`; no location is sent to a time-zone service.

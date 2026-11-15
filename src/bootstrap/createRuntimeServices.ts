@@ -51,6 +51,7 @@ import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshot
 import { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
 import { MapLibreContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import { MapLibreSatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
+import { MapLibreTerrainShadowTileProvider } from '@/presentation/map/TerrainShadowTileProvider';
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseTrackShareService } from '@/infrastructure/supabase/SupabaseTrackShareService';
 import { SupabaseUserDataService } from '@/infrastructure/user/SupabaseUserDataService';
@@ -179,6 +180,10 @@ export function createRuntimeServices(): RuntimeServices {
           logger,
         )
       : null;
+  const sunShadowTiles =
+    mapProviderConfiguration.status === 'valid'
+      ? new MapLibreTerrainShadowTileProvider(mapProviderConfiguration.value.terrain)
+      : null;
   const satelliteCogTiles =
     mapProviderConfiguration.status === 'valid'
       ? new MapLibreSatelliteCogTileProvider()
@@ -186,11 +191,13 @@ export function createRuntimeServices(): RuntimeServices {
   const mapLayers =
     mapProviderConfiguration.status === 'valid' &&
     contourTiles !== null &&
+    sunShadowTiles !== null &&
     satelliteCogTiles !== null
       ? new MapLibreLayerController(
           mapProviderConfiguration.value.satellite.renderer,
           mapProviderConfiguration.value.terrain,
           contourTiles,
+          sunShadowTiles,
           satelliteCogTiles,
           logger,
           idGenerator,

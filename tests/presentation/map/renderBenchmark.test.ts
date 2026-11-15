@@ -1,12 +1,24 @@
-import { describe, expect, it } from 'vitest';
+import type { Map as MapLibreMap } from 'maplibre-gl';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   countDrapedStacks,
   phaseFrameIntervals,
+  runRenderBenchmark,
   summarizeRenderBenchmark,
+  summarizeSunShadowScene,
   type RenderBenchmarkPhase,
   type RenderBenchmarkReport,
+  type RenderBenchmarkStep,
+  type SunShadowBenchmarkHooks,
+  type SunShadowStepResult,
 } from '@/presentation/map/renderBenchmark';
+import type { TerrainShadowMetricsSnapshot } from '@/presentation/map/TerrainShadowTileProvider';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 function phase(
   name: RenderBenchmarkPhase['name'],
@@ -70,8 +82,132 @@ function report(phases: readonly RenderBenchmarkPhase[]): RenderBenchmarkReport 
       allocatedTextureSizes: {},
     },
     phases,
+    sunShadows: null,
     synthetic: null,
   };
+}
+
+const emptyShadowMetrics: TerrainShadowMetricsSnapshot = {
+  tilesRendered: 0,
+  tilesFromCache: 0,
+  tilesFailed: 0,
+  pendingTiles: 0,
+  totalComputeMs: 0,
+  maxComputeMs: 0,
+  totalDemFetchMs: 0,
+  demTilesFetched: 0,
+  memoryBytes: 0,
+};
+
+function shadowStep(
+  wallMs: number,
+  metrics: Partial<TerrainShadowMetricsSnapshot>,
+): SunShadowStepResult {
+  return {
+    instant: '2026-12-21T05:30:00.000Z',
+    wallMs,
+    settled: true,
+    metrics: { ...emptyShadowMetrics, ...metrics },
+  };
+}
+
+/** Goes idle one frame after every repaint and records camera jumps in `events`. */
+class BenchmarkMap {
+  readonly #listeners = new Map<string, Set<() => void>>();
+  readonly #gl = {
+    drawingBufferWidth: 800,
+    drawingBufferHeight: 600,
+    getExtension: () => null,
+    getParameter: () => 0,
+  };
+  readonly #canvas = {
+    clientWidth: 800,
+    clientHeight: 600,
+    getContext: () => this.#gl,
+  };
+
+  public constructor(private readonly events: string[]) {}
+
+  public getCanvas() {
+    return this.#canvas;
+  }
+
+  public on(type: string, listener: () => void): void {
+    const listeners = this.#listeners.get(type) ?? new Set<() => void>();
+    listeners.add(listener);
+    this.#listeners.set(type, listeners);
+  }
+
+  public off(type: string, listener: () => void): void {
+    this.#listeners.get(type)?.delete(listener);
+  }
+
+  public triggerRepaint(): void {
+    setTimeout(() => {
+      for (const type of ['render', 'idle']) {
+        for (const listener of [...(this.#listeners.get(type) ?? [])]) listener();
+      }
+    }, 16);
+  }
+
+  public jumpTo(options: { readonly center: readonly [number, number] }): void {
+    this.events.push(`jump ${String(options.center[0])}`);
+  }
+
+  public readonly easeTo = vi.fn();
+
+  public readonly stop = vi.fn();
+
+  public getZoom(): number {
+    return 14;
+  }
+
+  public getStyle() {
+    return { layers: [] };
+  }
+
+  public getLayoutProperty(): undefined {
+    return undefined;
+  }
+}
+
+async function runFakeBenchmark(
+  events: string[],
+  sunShadow: SunShadowBenchmarkHooks | null,
+): Promise<{
+  readonly report: RenderBenchmarkReport;
+  readonly steps: readonly RenderBenchmarkStep[];
+}> {
+  vi.useFakeTimers({
+    toFake: [
+      'setTimeout',
+      'clearTimeout',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'performance',
+      'Date',
+    ],
+  });
+  vi.stubGlobal(
+    'PerformanceObserver',
+    class {
+      public readonly observe = vi.fn();
+      public readonly disconnect = vi.fn();
+    },
+  );
+  // The synthetic test's own context; jsdom has no WebGL.
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const steps: RenderBenchmarkStep[] = [];
+  const run = runRenderBenchmark(
+    new BenchmarkMap(events) as unknown as MapLibreMap,
+    (step) => {
+      steps.push(step);
+    },
+    new AbortController().signal,
+    sunShadow,
+  );
+  await vi.advanceTimersByTimeAsync(120_000);
+  return { report: await run, steps };
 }
 
 describe('render benchmark', () => {
@@ -139,5 +275,133 @@ describe('render benchmark', () => {
     expect(phaseFrameIntervals(1_000, [], 5_000)).toEqual([4_000]);
     // Rendering that stops early leaves the remaining time as the last interval.
     expect(phaseFrameIntervals(0, [10, 30], 900)).toEqual([10, 20, 870]);
+  });
+
+  it('summarizes each sun-shadow scene from its steps and orbit', () => {
+    const summary = summarizeSunShadowScene({
+      name: 'kazbegi',
+      longitude: 44.643,
+      latitude: 42.6573,
+      zoom: 12.6,
+      bearing: 200,
+      pitch: 60,
+      initial: shadowStep(1_840, {
+        tilesRendered: 3,
+        totalComputeMs: 100,
+        maxComputeMs: 52.34,
+        demTilesFetched: 12,
+      }),
+      timeChange: shadowStep(920, { tilesRendered: 3 }),
+      revisit: shadowStep(40, { tilesFromCache: 3 }),
+      orbit: phase('orbit', { p95: 48, freezes: 0, frames: 24 }),
+      jsHeapUsedMb: null,
+      memoryBytes: 25 * 2 ** 20,
+    });
+
+    expect(summary).toEqual({
+      name: 'kazbegi',
+      settled: true,
+      initialWallMs: 1_840,
+      initialTilesRendered: 3,
+      gpuMsPerTile: { mean: 33.3, max: 52.3 },
+      demTilesFetched: 12,
+      timeChangeWallMs: 920,
+      timeChangeTilesRendered: 3,
+      revisitWallMs: 40,
+      revisitTilesFromCache: 3,
+      orbitFramesPerSecond: 24,
+      orbitFrameIntervalP95Ms: 48,
+      memoryMegabytes: 25,
+    });
+    // Without computed tiles, there is no per-tile GPU time to average.
+    expect(
+      summarizeSunShadowScene({
+        name: 'ushba',
+        longitude: 42.68,
+        latitude: 43.095,
+        zoom: 12.6,
+        bearing: 150,
+        pitch: 60,
+        jsHeapUsedMb: null,
+        memoryBytes: 0,
+        initial: shadowStep(10, {}),
+        timeChange: { ...shadowStep(30_000, {}), settled: false },
+        revisit: shadowStep(10, {}),
+        orbit: phase('orbit', { p95: 20, freezes: 0 }),
+      }),
+    ).toMatchObject({ settled: false, gpuMsPerTile: { mean: 0, max: 0 } });
+  });
+
+  it('leaves sun shadows alone and reports none in a plain run', async () => {
+    const events: string[] = [];
+
+    const { report: result, steps } = await runFakeBenchmark(events, null);
+
+    expect(result.sunShadows).toBeNull();
+    expect(steps).toEqual([
+      'settle',
+      'warm-up',
+      'static',
+      'orbit',
+      'zoom',
+      'pan',
+      'synthetic',
+    ]);
+    expect(new Set(events)).toEqual(new Set(['jump 44.74552']));
+  });
+
+  it('measures every phase with shadows on, then each mountain scene', async () => {
+    const events: string[] = [];
+    const hooks: SunShadowBenchmarkHooks = {
+      setInstant: (instantMs) => {
+        events.push(`instant ${new Date(instantMs).toISOString()}`);
+      },
+      metrics: () => ({
+        ...emptyShadowMetrics,
+        tilesRendered: 4,
+        memoryBytes: 2 ** 23,
+      }),
+      resetMetrics: () => {
+        events.push('reset');
+      },
+    };
+
+    const { report: result, steps } = await runFakeBenchmark(events, hooks);
+
+    const first = 'instant 2026-12-21T05:30:00.000Z';
+    const later = 'instant 2026-12-21T05:40:00.000Z';
+    // Shadows are on before the Tbilisi scene loads.
+    expect(events.slice(0, 2)).toEqual([first, 'jump 44.74552']);
+    expect(events.slice(events.indexOf('reset'))).toEqual([
+      ...['reset', first, 'jump 44.643', 'reset', later, 'reset', first, 'jump 44.643'],
+      ...['reset', first, 'jump 42.68', 'reset', later, 'reset', first, 'jump 42.68'],
+    ]);
+    const sceneSteps = [
+      'shadow-initial',
+      'shadow-time-change',
+      'shadow-time-revisit',
+      'shadow-orbit',
+    ];
+    expect(steps).toEqual([
+      ...['settle', 'warm-up', 'static', 'orbit', 'zoom', 'pan'],
+      ...sceneSteps,
+      ...sceneSteps,
+      'synthetic',
+    ]);
+    expect(result.phases.map((measured) => measured.name)).toEqual([
+      'static',
+      'orbit',
+      'zoom',
+      'pan',
+    ]);
+    const scenes = result.sunShadows?.scenes ?? [];
+    expect(scenes.map((scene) => scene.name)).toEqual(['kazbegi', 'ushba']);
+    expect(scenes[0]).toMatchObject({
+      initial: { instant: '2026-12-21T05:30:00.000Z', settled: true },
+      timeChange: { instant: '2026-12-21T05:40:00.000Z', settled: true },
+      revisit: { instant: '2026-12-21T05:30:00.000Z', settled: true },
+      orbit: { name: 'orbit', startedSettled: true },
+      memoryBytes: 2 ** 23,
+    });
   });
 });

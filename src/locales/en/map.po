@@ -66,6 +66,7 @@ msgstr "Bing Aerial"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/map/MapWorkspace.tsx
+#: src/presentation/map/SunShadowControl.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -115,6 +116,11 @@ msgstr "Clouds, precipitation, and wind"
 msgid "Compare images from different dates side by side"
 msgstr "Compare images from different dates side by side"
 
+#. js-lingui-id: E4xaOs
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Computing shadows for the day: {percent}%"
+msgstr "Computing shadows for the day: {percent}%"
+
 #. js-lingui-id: EOv8gS
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Coordinates"
@@ -159,6 +165,11 @@ msgstr "Create marker here"
 #: src/presentation/map/MapWorkspace.tsx
 msgid "Current weather: {temperature}, {precipitation} precipitation"
 msgstr "Current weather: {temperature}, {precipitation} precipitation"
+
+#. js-lingui-id: mYGY3B
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Date"
+msgstr "Date"
 
 #. js-lingui-id: -fptTM
 #: src/presentation/map/MapWorkspace.tsx
@@ -329,6 +340,11 @@ msgstr "No satellite layer is shown on the map."
 msgid "No Sentinel-2 image is shown on the map."
 msgstr "No Sentinel-2 image is shown on the map."
 
+#. js-lingui-id: cH5kXP
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Now"
+msgstr "Now"
+
 #. js-lingui-id: YJQPdw
 #: src/presentation/map/MapViewControls.tsx
 msgid "Open image comparison"
@@ -359,6 +375,11 @@ msgstr "OSM overlay"
 msgid "Pick image date"
 msgstr "Pick image date"
 
+#. js-lingui-id: bmT7Do
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Play the day"
+msgstr "Play the day"
+
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Satellite layer"
@@ -378,6 +399,11 @@ msgstr "Sentinel-2 image"
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Sentinel-2 image from {date}"
 msgstr "Sentinel-2 image from {date}"
+
+#. js-lingui-id: -1oTrp
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Shadows for the day could not be computed."
+msgstr "Shadows for the day could not be computed."
 
 #. js-lingui-id: Z8lGw6
 #: src/presentation/map/MapShareDialog.tsx
@@ -409,6 +435,26 @@ msgstr "Show weather forecast"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Soviet Topographic"
 msgstr "Soviet Topographic"
+
+#. js-lingui-id: ygCKqB
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Stop"
+msgstr "Stop"
+
+#. js-lingui-id: 6TGtTn
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sun shadows"
+msgstr "Sun shadows"
+
+#. js-lingui-id: 5HL4bJ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sunrise {sunrise}"
+msgstr "Sunrise {sunrise}"
+
+#. js-lingui-id: YnRO0w
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sunset {sunset}"
+msgstr "Sunset {sunset}"
 
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -456,16 +502,31 @@ msgstr "The shared image comparison could not be opened. The shared map location
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
 
+#. js-lingui-id: hoiu-9
+#: src/presentation/map/SunShadowControl.tsx
+msgid "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
+msgstr "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
+
 #. js-lingui-id: HUfyUv
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "This scene has no supported true-color asset."
 msgstr "This scene has no supported true-color asset."
+
+#. js-lingui-id: lWvGF7
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Time of day"
+msgstr "Time of day"
 
 #. js-lingui-id: Tm0RL6
 #: src/presentation/map/MapWorkspace.tsx
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Toggle attribution"
 msgstr "Toggle attribution"
+
+#. js-lingui-id: 6IuztJ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Too much of the map is in view to animate the day. Zoom in and try again."
+msgstr "Too much of the map is in view to animate the day. Zoom in and try again."
 
 #. js-lingui-id: gd3dhq
 #: src/presentation/map/MapViewControls.tsx

@@ -36,6 +36,11 @@ import {
   type MapLayerPreset,
   type TerrainMode,
 } from '@/presentation/map/mapTypes';
+import {
+  SunShadowButton,
+  SunShadowPopover,
+  type SunShadowControlProps,
+} from '@/presentation/map/SunShadowControl';
 
 export type TerrainControlState =
   'flat' | 'enabling' | 'terrain' | 'disabling' | 'failed';
@@ -59,6 +64,8 @@ interface MapViewControlsProps {
   /** Opens the satellite image comparison; null hides the button where it is unavailable. */
   readonly onOpenComparison: (() => void) | null;
   readonly onMeasurementActiveChange: (active: boolean) => void;
+  /** Null hides the sun-shadow button where no layer controller exists. */
+  readonly sunShadow: SunShadowControlProps | null;
 }
 
 const basemapLabels: Readonly<Record<BasemapPreset, MessageDescriptor>> = {
@@ -111,10 +118,13 @@ export function MapViewControls({
   onOpenLayersTab,
   onOpenComparison,
   onMeasurementActiveChange,
+  sunShadow,
 }: MapViewControlsProps) {
   const { t } = useLingui();
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
   const menuId = useId();
+  const [sunShadowButton, setSunShadowButton] = useState<HTMLElement | null>(null);
+  const sunShadowPanelId = useId();
   const pending = terrainState === 'enabling' || terrainState === 'disabling';
   const selectedMode: TerrainMode =
     terrainState === 'terrain' || terrainState === 'enabling' ? 'terrain' : 'flat';
@@ -259,6 +269,16 @@ export function MapViewControls({
             </ToggleButton>
           </Box>
         </Tooltip>
+        {sunShadow === null ? null : (
+          <SunShadowButton
+            enabled={sunShadow.enabled}
+            onToggle={(button) => {
+              setSunShadowButton(sunShadowButton === null ? button : null);
+            }}
+            open={sunShadowButton !== null}
+            panelId={sunShadowPanelId}
+          />
+        )}
         {onOpenComparison === null ? null : (
           <Tooltip
             disableInteractive
@@ -509,6 +529,16 @@ export function MapViewControls({
           </Paper>
         </ClickAwayListener>
       </Popper>
+      {sunShadow === null ? null : (
+        <SunShadowPopover
+          {...sunShadow}
+          anchorEl={sunShadowButton}
+          onClose={() => {
+            setSunShadowButton(null);
+          }}
+          panelId={sunShadowPanelId}
+        />
+      )}
     </>
   );
 }

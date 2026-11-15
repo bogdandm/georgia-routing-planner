@@ -36,9 +36,12 @@ import type { TrackPathProjection } from '@/presentation/tracks/trackPathEditor'
 import { createTerrainDemSource } from '@/presentation/map/terrainOverlayStyle';
 import {
   runRenderBenchmark,
+  type RenderBenchmarkOptions,
   type RenderBenchmarkReport,
   type RenderBenchmarkStep,
+  type SunShadowBenchmarkHooks,
 } from '@/presentation/map/renderBenchmark';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import type {
   MapLibreLayerController,
@@ -163,10 +166,28 @@ type MapLayerControllerLifecycle = Pick<
     Pick<
       MapLibreLayerController,
       | 'getRasterSourceId'
+      | 'getSunShadowMetrics'
       | 'getTerrainOverlayPreferences'
       | 'isExpectedRasterCancellation'
+      | 'resetSunShadowMetrics'
+      | 'setSunShadow'
     >
   >;
+
+type SunShadowController = Pick<
+  MapLibreLayerController,
+  'getSunShadowMetrics' | 'resetSunShadowMetrics' | 'setSunShadow'
+>;
+
+function hasSunShadowControl(
+  controller: MapLayerControllerLifecycle | undefined,
+): controller is MapLayerControllerLifecycle & SunShadowController {
+  return (
+    controller?.setSunShadow !== undefined &&
+    controller.getSunShadowMetrics !== undefined &&
+    controller.resetSunShadowMetrics !== undefined
+  );
+}
 
 const sourceRecoveryStabilityMs = 2_000;
 
@@ -873,17 +894,45 @@ export class MapLibreFacade implements MapFacade {
 
   /**
    * Runs the developer render benchmark in 3D at its fixed scene, then restores the
-   * user's terrain mode and camera. Neither the temporary 3D mode nor benchmark camera
-   * moves are persisted; `signal` and detaching the map stop the run.
+   * user's terrain mode, camera, and, after a sun-shadow run, sun-shadow settings.
+   * Neither the temporary 3D mode nor benchmark camera moves are persisted; `signal`
+   * and detaching the map stop the run.
    */
   public async runRenderBenchmark(
     onStep: (step: RenderBenchmarkStep) => void,
     signal: AbortSignal,
+    options: RenderBenchmarkOptions,
   ): Promise<RenderBenchmarkReport> {
     const map = this.#map;
     if (map === null || this.#renderBenchmark !== null) {
       throw new Error('The map is not ready for a render benchmark.');
     }
+    const layers = this.layerController;
+    const sunShadowControl =
+      options.sunShadows && hasSunShadowControl(layers) ? layers : null;
+    if (options.sunShadows) {
+      if (
+        sunShadowControl === null ||
+        mapLayerStore.getState().sunShadow.availability === 'unavailable'
+      ) {
+        throw new Error(
+          'This browser cannot render sun shadows, so the sun-shadow benchmark cannot run.',
+        );
+      }
+    }
+    const previousSunShadow = mapLayerStore.getState().sunShadow;
+    const sunShadowHooks: SunShadowBenchmarkHooks | null =
+      sunShadowControl === null
+        ? null
+        : {
+            setInstant: (instantMs) => {
+              sunShadowControl.setSunShadow({ enabled: true, instantMs });
+            },
+            metrics: () => sunShadowControl.getSunShadowMetrics(),
+            resetMetrics: () => {
+              sunShadowControl.resetSunShadowMetrics();
+            },
+          };
     const camera = this.readCamera(map);
     const previousMode = this.#snapshot.terrainMode;
     const controller = new AbortController();
@@ -897,8 +946,13 @@ export class MapLibreFacade implements MapFacade {
         map,
         onStep,
         AbortSignal.any([signal, controller.signal]),
+        sunShadowHooks,
       );
     } finally {
+      sunShadowControl?.setSunShadow({
+        enabled: previousSunShadow.enabled,
+        instantMs: previousSunShadow.instantMs,
+      });
       const attached = this.#map === map;
       if (attached && previousMode !== 'terrain')
         await this.setTerrainMode(previousMode);

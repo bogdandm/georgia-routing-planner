@@ -17,6 +17,8 @@ _This project was built 100% with LLMs._
 ## Features
 
 - Explore a detailed hiking map in 2D or 3D with terrain, contours, and relief.
+- Show where mountains cast shadows for any date and time, computed from the real Sun
+  position and the terrain horizon.
 - Switch to Google, Bing, Esri, Georgian NAPR aerial imagery, or official Soviet-era
   topographic scans, or apply a recent Sentinel-2 satellite scene. Compare up to four
   Sentinel-2 scenes from different dates side by side.
@@ -80,7 +82,8 @@ marker list.
 ## Maps and satellite imagery
 
 The map combines hiking-focused OpenStreetMap data with relief shading, elevation
-contours, and optional 3D terrain. Search moves the map to a place or coordinate, and
+contours, and optional 3D terrain. The sun button beside the map shows terrain-cast
+shadows for a chosen date and time. Search moves the map to a place or coordinate, and
 Layers controls map detail, terrain overlays, imagery, weather, and track visibility.
 
 You can use one raster basemap at a time: Google, Bing, Esri, the Georgian NAPR

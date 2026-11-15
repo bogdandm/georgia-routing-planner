@@ -29,6 +29,7 @@ import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
 import UploadFileOutlinedIcon from '@mui/icons-material/UploadFileOutlined';
 import ViewInArOutlinedIcon from '@mui/icons-material/ViewInArOutlined';
 import WbCloudyOutlinedIcon from '@mui/icons-material/WbCloudyOutlined';
+import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
 import {
   Box,
   Button,
@@ -132,6 +133,10 @@ const tourSteps: readonly TourStep[] = [
           {
             icon: LayersOutlinedIcon,
             text: msg`Base map: vector, satellite, orthophoto, or Soviet topographic maps.`,
+          },
+          {
+            icon: WbSunnyOutlinedIcon,
+            text: msg`Sun shadows: see where mountains cast shade at any date and time.`,
           },
           {
             icon: StraightenIcon,

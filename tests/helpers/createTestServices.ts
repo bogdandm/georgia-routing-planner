@@ -36,6 +36,7 @@ import {
 } from '@/presentation/map/MapLibreLayerController';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
 import type { SatelliteCogTileProvider } from '@/presentation/map/SatelliteCogTileProvider';
+import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
 
 class TestClock implements Clock {
   #monotonic = 0;
@@ -199,6 +200,7 @@ export function createTestServices(
       subscribeMetrics: () => () => undefined,
       dispose: () => undefined,
     } satisfies ContourTileGenerator,
+    new FakeTerrainShadowTileProvider(),
     {
       registerScene: (sceneKey) => {
         registeredSatelliteScenes.add(sceneKey);

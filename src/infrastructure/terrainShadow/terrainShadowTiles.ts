@@ -104,12 +104,14 @@ export function terrainShadowTileGeometry(
 }
 
 /**
- * Apparent solar elevation at which the whole disk is below the sea-level horizon of
- * Everest's summit (about −3.1°), so no terrain anywhere can be lit; the shade shader
- * fades twilight out by this elevation.
+ * Apparent solar elevation at which the shade shader has faded twilight out: the end of
+ * civil twilight (−6°). It must also lie below the sea-level horizon of Everest's summit
+ * (about −3.1°), so no terrain anywhere is still lit directly.
  */
-export const terrainShadowNightElevationDegrees =
-  seaLevelHorizonDegrees(8_849) - solarDiskRadiusDegrees;
+export const terrainShadowNightElevationDegrees = Math.min(
+  -6,
+  seaLevelHorizonDegrees(8_849) - solarDiskRadiusDegrees,
+);
 /**
  * Over one z7–12 tile the solar elevation departs from its corner values by far less
  * than this margin, so corners this far below the night elevation prove the tile is dark.

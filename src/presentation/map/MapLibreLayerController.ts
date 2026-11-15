@@ -434,11 +434,11 @@ const sunShadowPlaybackStepMinutes = 10;
 const sunShadowPlaybackFrameMs = 150;
 /**
  * Frames this close to sunrise or sunset at the center still cache masks somewhere in
- * view: tiles differ by minutes, and the worker's night test waits for the Sun about 4°
- * below the horizon (summit sea-level horizon plus a 1° margin), roughly 25 minutes in
+ * view: tiles differ by minutes, and the worker's night test waits until civil twilight
+ * has ended plus a 1° margin (the Sun about 7° below the horizon), roughly 40 minutes in
  * Georgia.
  */
-const sunShadowLitFrameSlackMs = 30 * 60_000;
+const sunShadowLitFrameSlackMs = 45 * 60_000;
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }

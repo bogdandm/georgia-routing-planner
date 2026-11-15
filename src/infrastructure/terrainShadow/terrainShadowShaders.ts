@@ -80,18 +80,24 @@ export const terrainShadeFlatReferenceElevationDegrees = 10;
 export const terrainShadowSoftEdgeSigmaPixels = 1;
 /**
  * Share of flat ground's full-sun brightness that comes from the sky rather than the
- * direct Sun. The sky term keeps relief inside shadows; it fades out between the horizon
- * and the night elevation, so night tiles stay plain shade.
+ * direct Sun. The sky term keeps relief inside shadows; it fades out smoothly over civil
+ * twilight down to the night elevation, so night tiles stay plain shade.
  */
 export const terrainShadeSkyLightShare = 0.35;
 /**
- * The sky is brightest toward the Sun, so its light is modeled as a softly wrapped Lambert
+ * The sky is brightest toward the Sun, so part of its light is a softly wrapped Lambert
  * light from the Sun's azimuth at this elevation, on slopes exaggerated by
  * `skyLightReliefExaggeration` so gentle relief still reads inside shadows.
  */
 export const terrainShadeSkyLightElevationDegrees = 30;
 const skyLightWrap = 0.2;
 const skyLightReliefExaggeration = 1.5;
+/**
+ * The rest of the sky light is diffuse, as from a thin cloud layer that keeps scattering
+ * light after sunset: it depends only on how much sky a slope faces, not on the Sun's
+ * azimuth, which softens the change of direction and the fade into night.
+ */
+export const terrainShadeDiffuseSkyFraction = 0.5;
 
 /**
  * The sunlight code says how low the Sun stands for a pixel, so the lookup table can tint
@@ -362,6 +368,7 @@ const float skyLightShare = ${glslFloat(terrainShadeSkyLightShare)};
 const float skyLightElevationDegrees = ${glslFloat(terrainShadeSkyLightElevationDegrees)};
 const float skyLightWrap = ${glslFloat(skyLightWrap)};
 const float skyLightReliefExaggeration = ${glslFloat(skyLightReliefExaggeration)};
+const float diffuseSkyFraction = ${glslFloat(terrainShadeDiffuseSkyFraction)};
 
 float kastenYoungAirMass(float apparentElevationDegrees) {
   return 1.0 / (sin(radians(apparentElevationDegrees)) + 0.50572 * pow(apparentElevationDegrees + 6.07995, -1.6364));
@@ -425,11 +432,12 @@ void main() {
     / max(toSun.z, sin(radians(flatReferenceElevationDegrees)));
   float skyElevation = radians(skyLightElevationDegrees);
   vec3 toSky = vec3(sin(azimuth) * cos(skyElevation), cos(azimuth) * cos(skyElevation), sin(skyElevation));
-  float skyTwilight = clamp(
-    (sun.apparentElevationDegrees - nightElevationDegrees) / -nightElevationDegrees, 0.0, 1.0
-  );
+  float skyTwilight = smoothstep(nightElevationDegrees, 0.0, sun.apparentElevationDegrees);
   vec3 skyNormal = normalize(vec3(-dzEast, -dzNorth, 1.0 / skyLightReliefExaggeration));
-  float sky = skyTwilight * max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
+  float sunSideSky = max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
+  // Visible sky fraction of a slope, 1 on flat ground.
+  float diffuseSky = 0.5 * (1.0 + skyNormal.z);
+  float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseSkyFraction);
   float brightness = (1.0 - skyLightShare) * direct + skyLightShare * sky;
   float code = sunlightCode(sun.apparentElevationDegrees, mosaicElevation(0, texels));
   outValue = vec4(clamp(brightness * brightnessScale / 255.0, 0.0, 1.0), code / 255.0, 0.0, 1.0);
@@ -456,15 +464,18 @@ interface SunlightTone {
 
 /**
  * Decodes a sunlight code. Above the sea-level horizon `lowSun` is the blue deficit of the
- * sunlight color, so it follows the same atmosphere; below it fades out over the twilight
- * codes, so night returns to the plain shadow.
+ * sunlight color, so it follows the same atmosphere; below it eases out (smoothstep) over
+ * the twilight codes, so night returns to the plain shadow without a visible step.
  */
 function sunlightTone(code: number): SunlightTone {
   if (code > sunlightAirMassMaximumCode) {
     const depth =
       (code - sunlightAirMassMaximumCode - 1) /
       (sunlightNightCode - sunlightAirMassMaximumCode - 1);
-    return { color: directSunlightColor(horizonAirMass), lowSun: 1 - depth };
+    return {
+      color: directSunlightColor(horizonAirMass),
+      lowSun: 1 - depth * depth * (3 - 2 * depth),
+    };
   }
   const airMass =
     sunlightMinimumAirMass *

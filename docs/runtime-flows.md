@@ -280,9 +280,11 @@ beyond the 100 km march cap still hides it. The shade pass blurs that fraction w
 differences, normalized so flat ground in full sun (or at 10° elevation for lower suns)
 is 1. The slope term reaches zero exactly where the march begins to report self-shadow,
 so terminators stay continuous. That direct light makes up 65% of the brightness; the
-other 35% is sky light, a softly wrapped Lambert light from the Sun's azimuth at 30°
-elevation on 1.5× exaggerated slopes, which keeps relief inside shadows and fades out
-between the horizon and the night elevation. The same pass writes a sunlight code: the
+other 35% is sky light, which keeps relief inside shadows: half a softly wrapped Lambert
+light from the Sun's azimuth at 30° elevation, half diffuse light proportional to the
+visible sky, as from thin cloud that keeps scattering light after sunset, both on 1.5×
+exaggerated slopes. It eases out (smoothstep) between the horizon and the night
+elevation, the end of civil twilight (−6°). The same pass writes a sunlight code: the
 logarithm of the relative optical air mass of the direct-sun path (Kasten–Young, scaled
 by the pressure at the pixel's height, or through the tangent height when the Sun is
 below the pixel's level), or, once the Sun is below the sea-level horizon, how far
@@ -303,8 +305,8 @@ or decode failure fails the shadow tile instead of drawing a truncated horizon. 
 worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
 and up to 3072 shade masks of 272 KiB (816 MiB) keyed by DEM URL, tile, and minute in
 LRU caches; colors are applied per request, so they are not part of the key. A tile
-whose four corners see the Sun more than 1° below the night elevation (the whole disk
-below the sea-level horizon of Everest's summit, about −3.1°) is answered with a shared
+whose four corners see the Sun more than 1° below the night elevation (−6°, also below
+the sea-level horizon of Everest's summit, about −3.1°) is answered with a shared
 full-shade night mask without DEM fetches, GPU work, or a cache entry. A lost WebGL
 context drops both caches, and the next request creates a fresh context.
 
@@ -321,7 +323,7 @@ after sunset (clamped to the local day), makes whole-minute frames from its star
 10 minutes plus its last minute, and asks `map.coveringTiles` for the 512 px z7–12 tiles
 of the current view, deduplicated across world copies. That public coverage ignores
 terrain-aware culling; tiles it misses render on demand during playback. Only frames
-from 30 minutes before sunrise to 30 minutes after sunset hold cached masks, so when
+from 45 minutes before sunrise to 45 minutes after sunset hold cached masks, so when
 tiles × those frames exceed 2560, playback is refused as `too-many-tiles` and logged as
 `map.sun-shadow.playback-refused` with both counts. Otherwise the provider's `prefetch`
 sends `terrain-shadow.prefetch-tile` requests tile-major, at most four at a time and

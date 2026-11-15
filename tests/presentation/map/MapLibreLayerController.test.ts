@@ -2860,8 +2860,8 @@ describe('MapLibreLayerController', () => {
       const frames = daylightFrameInstants(window, 10);
       const litFrames = frames.filter(
         (frame) =>
-          frame >= window.sunriseMs - 30 * 60_000 &&
-          frame <= window.sunsetMs + 30 * 60_000,
+          frame >= window.sunriseMs - 45 * 60_000 &&
+          frame <= window.sunsetMs + 45 * 60_000,
       ).length;
       const tileCount = Math.floor(2560 / litFrames);
       expect(tileCount * frames.length).toBeGreaterThan(2560);

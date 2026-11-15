@@ -285,6 +285,7 @@ export function LayersPanel() {
         visibility: layerState.visibility,
         openStreetMapOpacity: layerState.openStreetMapOpacity,
         importedTrackOpacity: layerState.importedTrackOpacity,
+        trackTimeMarkers: layerState.trackTimeMarkers,
         layerProblem: layerState.layerProblem,
       };
     }),
@@ -766,6 +767,33 @@ export function LayersPanel() {
                     </Box>
                   );
                 })}
+                {group.id === 'imported-tracks' ? (
+                  <Box>
+                    <FormControlLabel
+                      sx={{ m: 0 }}
+                      slotProps={{ typography: { variant: 'body2' } }}
+                      disabled={mapLayers === null}
+                      control={
+                        <Checkbox
+                          size="small"
+                          sx={{ p: 0, mr: 1 }}
+                          checked={state.trackTimeMarkers}
+                          onChange={(event) => {
+                            mapLayers?.setTrackTimeMarkers(event.target.checked);
+                          }}
+                        />
+                      }
+                      label={t`Time markers`}
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', pl: 3.5, mt: 0.5 }}
+                    >
+                      {t`Start, finish, and full-hour times on tracks; each track's weather forecast can override this.`}
+                    </Typography>
+                  </Box>
+                ) : null}
               </FormGroup>
             </Box>
           </Box>

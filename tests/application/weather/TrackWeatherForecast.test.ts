@@ -9,6 +9,7 @@ import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherFo
 import {
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  planTrackClockTimes,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
@@ -302,25 +303,81 @@ describe('planTrackWeatherTimeline', () => {
   });
 });
 
+describe('planTrackClockTimes', () => {
+  const settings = { startHour: 9.5, paceFactor: 1, timeMarkers: null };
+
+  it('labels the start, the finish, and every full hour strictly between them', () => {
+    const times = planTrackClockTimes(
+      ridgeProfile(),
+      { estimatedSeconds: 5.5 * hour },
+      settings,
+    );
+
+    expect(times.start).toBe('09:30');
+    // The scaled estimate ends a hair off 5.5 h; the finish still reads 15:00, unlabelled.
+    expect(times.finish).toBe('15:00');
+    expect(times.hours.map((value) => value.time)).toEqual([
+      '10:00',
+      '11:00',
+      '12:00',
+      '13:00',
+      '14:00',
+    ]);
+    // Half an hour into the climb: 1 km takes 0.5 h of ascent plus 0.125 h walking.
+    expect(times.hours[0]?.coordinate[0]).toBeCloseTo(44 + 0.8 / 100, 9);
+  });
+
+  it('wraps past midnight on recorded time and ignores the forecast length limit', () => {
+    const recorded = profile([
+      { distanceMeters: 0, elevationMeters: 1_000, recordedAt: '2026-06-01T05:00:00Z' },
+      {
+        distanceMeters: 4_000,
+        elevationMeters: 1_400,
+        recordedAt: '2026-06-01T07:00:00Z',
+      },
+    ]);
+
+    const times = planTrackClockTimes(
+      recorded,
+      { elapsedSeconds: 2 * hour },
+      { startHour: 23, paceFactor: 1, timeMarkers: null },
+    );
+    expect(times).toMatchObject({ start: '23:00', finish: '01:00' });
+    expect(times.hours).toEqual([
+      { coordinate: [expect.closeTo(44.02, 9) as number, 42], time: '00:00' },
+    ]);
+
+    // 5.5 h × 2.5 is past the 12-hour forecast limit; labels still cover it.
+    const slow = planTrackClockTimes(
+      ridgeProfile(),
+      { estimatedSeconds: 5.5 * hour },
+      { startHour: 6, paceFactor: 2.5, timeMarkers: null },
+    );
+    expect(slow.finish).toBe('19:45');
+    expect(slow.hours).toHaveLength(13);
+  });
+});
+
 describe('per-track timeline settings', () => {
-  const other = { startHour: 6, paceFactor: 1.5 };
+  const other = { startHour: 6, paceFactor: 1.5, timeMarkers: null };
 
   it('stores adjusted tracks only and keeps other tracks', () => {
     const adjusted = withTrackWeatherTimeline(
       { ...defaultTrackWeatherPreferences, timelines: { 'local:other': other } },
       'local:ridge',
-      { startHour: 7, paceFactor: 1 },
+      { startHour: 7, paceFactor: 1, timeMarkers: null },
     );
     expect(adjusted.timelines).toEqual({
       'local:other': other,
-      'local:ridge': { startHour: 7, paceFactor: 1 },
+      'local:ridge': { startHour: 7, paceFactor: 1, timeMarkers: null },
     });
     expect(trackWeatherTimeline(adjusted, 'local:ridge')).toEqual({
       startHour: 7,
       paceFactor: 1,
+      timeMarkers: null,
     });
 
-    const reset = { startHour: 9, paceFactor: 1 };
+    const reset = { startHour: 9, paceFactor: 1, timeMarkers: null };
     expect(withTrackWeatherTimeline(adjusted, 'local:ridge', reset).timelines).toEqual({
       'local:other': other,
     });
@@ -330,11 +387,26 @@ describe('per-track timeline settings', () => {
     expect(trackWeatherTimeline(null, 'local:ridge')).toEqual(reset);
   });
 
+  it('keeps an explicit time-marker choice even when it matches the default', () => {
+    const hidden = { startHour: 9, paceFactor: 1, timeMarkers: false };
+    const shown = { startHour: 9, paceFactor: 1, timeMarkers: true };
+
+    expect(
+      withTrackWeatherTimeline(defaultTrackWeatherPreferences, 'local:ridge', hidden)
+        .timelines,
+    ).toEqual({ 'local:ridge': hidden });
+    expect(
+      withTrackWeatherTimeline(defaultTrackWeatherPreferences, 'local:ridge', shown)
+        .timelines,
+    ).toEqual({ 'local:ridge': shown });
+  });
+
   it('treats prototype-named track IDs as ordinary entries', () => {
     expect(trackWeatherTimeline(defaultTrackWeatherPreferences, 'constructor')).toEqual(
       {
         startHour: 9,
         paceFactor: 1,
+        timeMarkers: null,
       },
     );
     const stored = withTrackWeatherTimeline(

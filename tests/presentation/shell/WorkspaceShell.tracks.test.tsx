@@ -2027,11 +2027,14 @@ describe('WorkspaceShell', () => {
     const source = savedTrackSummary('local:ridge', 'Ridge trail');
     await services.database.saveLocalTrack(source, savedTrackContent(source.id));
     await services.database.saveLatestOpenedTrackId(source.id);
-    const other = { startHour: 6, paceFactor: 1.5 };
+    const other = { startHour: 6, paceFactor: 1.5, timeMarkers: null };
     await services.database.saveTrackWeatherPreferences({
       expanded: false,
       weekday: 6,
-      timelines: { [source.id]: { startHour: 7, paceFactor: 1 }, 'local:other': other },
+      timelines: {
+        [source.id]: { startHour: 7, paceFactor: 1, timeMarkers: null },
+        'local:other': other,
+      },
     });
     useUiStore.setState({ activeTab: 'tracks' });
     const user = userEvent.setup();
@@ -2059,7 +2062,7 @@ describe('WorkspaceShell', () => {
     const stored: TrackWeatherPreferences = {
       expanded: false,
       weekday: 6,
-      timelines: { [source.id]: { startHour: 7, paceFactor: 1 } },
+      timelines: { [source.id]: { startHour: 7, paceFactor: 1, timeMarkers: null } },
     };
     const load = deferred<TrackWeatherPreferences>();
     vi.spyOn(services.database, 'loadTrackWeatherPreferences').mockReturnValueOnce(
@@ -2114,9 +2117,60 @@ describe('WorkspaceShell', () => {
     expect(saved).toBeDefined();
     await waitFor(async () => {
       expect((await services.database.loadTrackWeatherPreferences()).timelines).toEqual(
-        { [saved?.id ?? '']: { startHour: 8, paceFactor: 1 } },
+        { [saved?.id ?? '']: { startHour: 8, paceFactor: 1, timeMarkers: null } },
       );
     });
+  });
+
+  it('labels the open track with clock times unless the track turns them off', async () => {
+    const mapLayers = services.mapLayers;
+    expect(mapLayers).not.toBeNull();
+    if (mapLayers === null) return;
+    const setImportedTrackTimeLabels = vi.spyOn(
+      mapLayers,
+      'setImportedTrackTimeLabels',
+    );
+    const source = savedTrackSummary('local:ridge', 'Ridge trail');
+    const content = savedTrackContent(source.id);
+    await services.database.saveLocalTrack(source, content);
+    await services.database.saveLatestOpenedTrackId(source.id);
+    useUiStore.setState({ activeTab: 'tracks' });
+    const user = userEvent.setup();
+    renderWorkspaceShell();
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    await within(details).findByRole('heading', { name: 'Ridge trail' });
+
+    const points = content.trackPoints.flat();
+    await waitFor(() => {
+      expect(setImportedTrackTimeLabels.mock.lastCall?.[0]).toEqual(
+        expect.arrayContaining([
+          { kind: 'start', coordinate: points[0]?.coordinate, time: '09:00' },
+          expect.objectContaining({
+            kind: 'finish',
+            coordinate: points.at(-1)?.coordinate,
+          }),
+        ]),
+      );
+    });
+
+    await user.click(within(details).getByRole('button', { name: 'Weather forecast' }));
+    const toggle = await within(details).findByRole('checkbox', {
+      name: 'Show times on the map',
+    });
+    expect(toggle).toBeChecked();
+    await user.click(toggle);
+
+    expect(setImportedTrackTimeLabels).toHaveBeenLastCalledWith([]);
+    await waitFor(async () => {
+      expect(
+        (await services.database.loadTrackWeatherPreferences()).timelines[source.id],
+      ).toEqual({ startHour: 9, paceFactor: 1, timeMarkers: false });
+    });
+    // The track's own choice outlives a change of the Layers default.
+    act(() => {
+      mapLayers.setTrackTimeMarkers(true);
+    });
+    expect(toggle).not.toBeChecked();
   });
 
   it('publishes whole-track grade colors for flat macro ranges', async () => {

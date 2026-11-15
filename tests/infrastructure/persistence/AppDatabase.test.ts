@@ -218,7 +218,10 @@ describe('AppDatabase', () => {
     const saved = {
       expanded: true,
       weekday: 3,
-      timelines: { 'local:kazbegi': { startHour: 6.5, paceFactor: 1.25 } },
+      timelines: {
+        'local:kazbegi': { startHour: 6.5, paceFactor: 1.25, timeMarkers: null },
+        'local:gudauri': { startHour: 9, paceFactor: 1, timeMarkers: false },
+      },
     } as const;
     await database.saveTrackWeatherPreferences(saved);
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual(saved);
@@ -234,6 +237,21 @@ describe('AppDatabase', () => {
       weekday: 2,
       timelines: {},
     });
+
+    // Track entries stored before map time markers follow the Layers default.
+    await database.settings.put({
+      key: 'weather.track-preferences',
+      value: {
+        expanded: true,
+        weekday: 2,
+        timelines: { 'local:kazbegi': { startHour: 7, paceFactor: 1 } },
+      },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toHaveProperty(
+      'timelines',
+      { 'local:kazbegi': { startHour: 7, paceFactor: 1, timeMarkers: null } },
+    );
 
     for (const value of [
       { expanded: true, weekday: 7 },
@@ -510,6 +528,7 @@ describe('AppDatabase', () => {
         'track-elevation-gradient': false,
       },
       naturalFeaturePatternsIn3d: true,
+      trackTimeMarkers: false,
       openStreetMapOpacity: 0.65,
       importedTrackOpacity: 0.7,
       weatherMapOpacity: 0.8,
@@ -582,6 +601,7 @@ describe('AppDatabase', () => {
         'track-elevation-gradient': true,
       },
       naturalFeaturePatternsIn3d: false,
+      trackTimeMarkers: true,
       importedTrackOpacity: 1,
       weatherMapOpacity: 1,
       satelliteRenderingMode: 'auto',

@@ -18,12 +18,17 @@ import {
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 
-/** Route timeline adjustments for one track; they never change its recorded time. */
+/**
+ * Route timeline adjustments for one track; they never change its recorded time. They
+ * also decide whether the map labels the track with these times.
+ */
 export interface TrackWeatherTimelineSettings {
   /** Fractional local hour of the day at which the hike starts. */
   readonly startHour: number;
   /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
   readonly paceFactor: number;
+  /** Clock times on the map line; null follows the Layers default. */
+  readonly timeMarkers: boolean | null;
 }
 
 /** Browser-local track forecast view state. */
@@ -213,6 +218,7 @@ export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
 export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
   startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
   paceFactor: 1,
+  timeMarkers: null,
 };
 
 /**
@@ -241,7 +247,8 @@ export function withTrackWeatherTimeline(
   const adjusted =
     settings !== null &&
     (settings.startHour !== defaultTrackWeatherTimelineSettings.startHour ||
-      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor);
+      settings.paceFactor !== defaultTrackWeatherTimelineSettings.paceFactor ||
+      settings.timeMarkers !== defaultTrackWeatherTimelineSettings.timeMarkers);
   // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
   return {
     ...preferences,
@@ -252,10 +259,27 @@ export function withTrackWeatherTimeline(
 }
 
 /**
- * Places the hiker on the route every three hours from the start and at the finish.
- * Recorded timestamps drive the pace when the track has a recorded duration; otherwise
- * the DIN 33466 estimate adds climbing and descending time to horizontal walking time.
- * `paceFactor` stretches (above 1) or compresses that time for the forecast only.
+ * Elapsed seconds at each profile point. Recorded timestamps drive the pace when the
+ * track has a recorded duration; otherwise the DIN 33466 estimate adds climbing and
+ * descending time to horizontal walking time. `paceFactor` stretches (above 1) or
+ * compresses that time.
+ */
+function routeElapsedSeconds(
+  points: readonly ElevationProfilePoint[],
+  metrics: Pick<TrackMetrics, 'elapsedSeconds' | 'estimatedSeconds'>,
+  paceFactor: number,
+): { readonly elapsed: readonly number[]; readonly recorded: boolean } {
+  const recorded =
+    metrics.elapsedSeconds === undefined ? null : recordedElapsedSeconds(points);
+  const elapsed = (
+    recorded ?? estimatedElapsedSeconds(points, metrics.estimatedSeconds)
+  ).map((seconds) => seconds * paceFactor);
+  return { elapsed, recorded: recorded !== null };
+}
+
+/**
+ * Places the hiker on the route every three hours from the start and at the finish,
+ * timed by `routeElapsedSeconds`; `paceFactor` adjusts the time for the forecast only.
  * Only day hikes qualify: shorter than 30 km and, after the adjustment, 12 hours.
  */
 export function planTrackWeatherTimeline(
@@ -264,11 +288,7 @@ export function planTrackWeatherTimeline(
   paceFactor = 1,
 ): TrackWeatherTimeline {
   const { points } = profile;
-  const recorded =
-    metrics.elapsedSeconds === undefined ? null : recordedElapsedSeconds(points);
-  const elapsed = (
-    recorded ?? estimatedElapsedSeconds(points, metrics.estimatedSeconds)
-  ).map((seconds) => seconds * paceFactor);
+  const { elapsed, recorded } = routeElapsedSeconds(points, metrics, paceFactor);
   const durationSeconds = elapsed.at(-1) ?? 0;
   if (
     metrics.distanceMeters >= TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS ||
@@ -301,9 +321,67 @@ export function planTrackWeatherTimeline(
   });
   return {
     status: 'available',
-    durationSource: recorded === null ? 'estimated' : 'recorded',
+    durationSource: recorded ? 'recorded' : 'estimated',
     durationSeconds,
     checkpoints,
+  };
+}
+
+/** Where the hiker is at one full local hour. */
+export interface TrackHourMarker {
+  readonly coordinate: TrackCoordinate;
+  /** Local `HH:00`. */
+  readonly time: string;
+}
+
+/** Local clock times along a route; times past midnight wrap to the next day. */
+export interface TrackClockTimes {
+  /** Local `HH:mm` at the start and at the finish. */
+  readonly start: string;
+  readonly finish: string;
+  /** Every full hour strictly between the start and the finish, in route order. */
+  readonly hours: readonly TrackHourMarker[];
+}
+
+/** `HH:mm` of a second of the local day; whole minutes are truncated. */
+function clockTime(secondsOfDay: number): string {
+  const minutes = Math.floor(secondsOfDay / 60) % 1_440;
+  return [Math.floor(minutes / 60), minutes % 60]
+    .map((part) => String(part).padStart(2, '0'))
+    .join(':');
+}
+
+/**
+ * Clock times for the map on the forecast's timeline, at the track's route start and
+ * pace. Unlike the forecast, any length qualifies: these are labels, not forecasts.
+ */
+export function planTrackClockTimes(
+  profile: ElevationProfile,
+  metrics: Pick<TrackMetrics, 'elapsedSeconds' | 'estimatedSeconds'>,
+  settings: TrackWeatherTimelineSettings,
+): TrackClockTimes {
+  const { points } = profile;
+  const { elapsed } = routeElapsedSeconds(points, metrics, settings.paceFactor);
+  // Whole seconds, so a scaled estimate a hair short of a full hour still finishes on
+  // it rather than a minute earlier, and that hour is not also labelled on the way.
+  const durationSeconds = Math.round(elapsed.at(-1) ?? 0);
+  const startSeconds = settings.startHour * 3_600;
+  const hours: TrackHourMarker[] = [];
+  for (
+    let hourSeconds = (Math.floor(settings.startHour) + 1) * 3_600;
+    hourSeconds - startSeconds < durationSeconds;
+    hourSeconds += 3_600
+  ) {
+    hours.push({
+      coordinate: locationAtElapsed(points, elapsed, hourSeconds - startSeconds)
+        .coordinate,
+      time: clockTime(hourSeconds),
+    });
+  }
+  return {
+    start: clockTime(startSeconds),
+    finish: clockTime(startSeconds + durationSeconds),
+    hours,
   };
 }
 

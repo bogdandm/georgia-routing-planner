@@ -266,6 +266,7 @@ describe('TrackWeatherSection', () => {
     expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
       startHour: 23.5,
       paceFactor: 1,
+      timeMarkers: null,
     });
   });
 
@@ -274,6 +275,7 @@ describe('TrackWeatherSection', () => {
     const { onTimelineSettingsChange } = renderSection(expandedPreferences, dayHike, {
       startHour: 7,
       paceFactor: 2,
+      timeMarkers: null,
     });
     const pace = screen.getByRole('slider', { name: 'Adjust pace' });
     expect(screen.getByRole('slider', { name: 'Route start' })).toHaveAttribute(
@@ -294,6 +296,7 @@ describe('TrackWeatherSection', () => {
     expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
       startHour: 7,
       paceFactor: 1,
+      timeMarkers: null,
     });
     expect(
       screen.getByText(

@@ -19,6 +19,7 @@ import {
   basemapImageIds,
   importedTrackEndpointImageIds,
   importedTrackLayerIds,
+  importedTrackTimeLabelImageId,
   mapLayerIds,
   mapSourceIds,
   measurementLayerIds,
@@ -1450,6 +1451,76 @@ describe('MapLibreLayerController', () => {
       'data.features',
       [],
     );
+  });
+
+  it('draws track time labels between the lines and endpoint icons with track opacity', async () => {
+    const services = createTestServices();
+    const controller = services.mapLayers;
+    if (controller === null) return;
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setImportedTrackGeometry([
+      [
+        [
+          [44, 42],
+          [44.1, 42.1],
+        ],
+      ],
+    ]);
+
+    controller.setImportedTrackTimeLabels([
+      { kind: 'start', coordinate: [44, 42], time: '09:00' },
+      { kind: 'finish', coordinate: [44.1, 42.1], time: '10:30' },
+      { kind: 'hour', coordinate: [44.07, 42.07], time: '10:00' },
+    ]);
+
+    expect(map.sources.get(mapSourceIds.importedTrackTimeLabels)).toHaveProperty(
+      'data.features',
+      [
+        ['start', [44, 42], '09:00'],
+        ['finish', [44.1, 42.1], '10:30'],
+        ['hour', [44.07, 42.07], '10:00'],
+      ].map(([kind, coordinates, time]) => ({
+        type: 'Feature',
+        properties: { kind, time },
+        geometry: { type: 'Point', coordinates },
+      })),
+    );
+    expect(map.hasImage(importedTrackTimeLabelImageId)).toBe(true);
+    // Endpoint times always show; hourly times give way to labels placed before them.
+    expect(map.layers.get(importedTrackLayerIds.endpointTimes)).toHaveProperty(
+      'layout.text-allow-overlap',
+      true,
+    );
+    expect(map.layers.get(importedTrackLayerIds.hourTimes)).not.toHaveProperty(
+      'layout.text-allow-overlap',
+    );
+    const layerOrder = [
+      importedTrackLayerIds.line,
+      importedTrackLayerIds.hourTimes,
+      importedTrackLayerIds.endpointTimes,
+      importedTrackLayerIds.endpoints,
+      mapLayerIds.fords,
+    ].map((layerId) => [...map.layers.keys()].indexOf(layerId));
+    expect(layerOrder).toEqual([...layerOrder].sort((left, right) => left - right));
+
+    expect(controller.setImportedTrackOpacity(0.4)).toEqual({ status: 'success' });
+    for (const layerId of [
+      importedTrackLayerIds.hourTimes,
+      importedTrackLayerIds.endpointTimes,
+    ]) {
+      expect(map.paintProperties.get(`${layerId}.text-opacity`)).toBe(0.4);
+      expect(map.paintProperties.get(`${layerId}.icon-opacity`)).toBe(0.4);
+    }
+    controller.setLayerVisibility('imported-tracks', false);
+    expect(map.visibility.get(importedTrackLayerIds.hourTimes)).toBe('none');
+    expect(map.visibility.get(importedTrackLayerIds.endpointTimes)).toBe('none');
+
+    controller.setTrackTimeMarkers(false);
+    expect(mapLayerStore.getState().trackTimeMarkers).toBe(false);
+    await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+      trackTimeMarkers: false,
+    });
   });
 
   it('pushes GeoJSON data only when it changed or the style recreated the source', () => {
@@ -3452,6 +3523,7 @@ describe('MapLibreLayerController', () => {
         'track-elevation-gradient': false,
       },
       naturalFeaturePatternsIn3d: false,
+      trackTimeMarkers: false,
       openStreetMapOpacity: 0.55,
       importedTrackOpacity: 0.6,
       weatherMapOpacity: 0.7,
@@ -3482,6 +3554,7 @@ describe('MapLibreLayerController', () => {
         'track-elevation-gradient': false,
       },
       importedTrackOpacity: 0.6,
+      trackTimeMarkers: false,
       weatherMap: { opacity: 0.7 },
       appliedImagery: { status: 'empty' },
     });
@@ -3509,6 +3582,7 @@ describe('MapLibreLayerController', () => {
         'napr-orthophoto': true,
       },
       naturalFeaturePatternsIn3d: false,
+      trackTimeMarkers: true,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
@@ -3543,6 +3617,7 @@ describe('MapLibreLayerController', () => {
     await services.database.saveMapLayerPreferences({
       visibility: { ...mapLayerStore.getState().visibility, 'google-satellite': true },
       naturalFeaturePatternsIn3d: false,
+      trackTimeMarkers: true,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,
@@ -3572,6 +3647,7 @@ describe('MapLibreLayerController', () => {
     await services.database.saveMapLayerPreferences({
       visibility: mapLayerStore.getState().visibility,
       naturalFeaturePatternsIn3d: false,
+      trackTimeMarkers: true,
       openStreetMapOpacity: mapLayerStore.getState().openStreetMapOpacity,
       importedTrackOpacity: mapLayerStore.getState().importedTrackOpacity,
       weatherMapOpacity: mapLayerStore.getState().weatherMap.opacity,

@@ -346,6 +346,11 @@ msgstr "Населённые пункты, вершины и туристиче�
 msgid "Soviet topographic maps"
 msgstr "Советские топографические карты"
 
+#. js-lingui-id: qZhJKx
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Start, finish, and full-hour times on tracks; each track's weather forecast can override this."
+msgstr "Время старта, финиша и каждого полного часа на треках; в прогнозе погоды трека можно задать своё."
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Terrain elevation"
@@ -415,6 +420,11 @@ msgstr "Не удалось показать выбранный кадр пог�
 #: src/presentation/layers/LayersPanel.tsx
 msgid "The weather map provider is unavailable."
 msgstr "Поставщик карты погоды недоступен."
+
+#. js-lingui-id: -vD4Tz
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Time markers"
+msgstr "Отметки времени"
 
 #. js-lingui-id: W7HXf3
 #: src/presentation/layers/LayersPanel.tsx

@@ -173,6 +173,8 @@ export interface MapLayerState {
   readonly visibility: Readonly<Record<LogicalMapLayerId, boolean>>;
   readonly openStreetMapOpacity: number;
   readonly importedTrackOpacity: number;
+  /** Default for tracks without their own time-marker choice. */
+  readonly trackTimeMarkers: boolean;
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly satelliteRenderingTuning: SatelliteRenderingTuning;
   readonly selectedScene: SatelliteScene | null;
@@ -216,6 +218,7 @@ const initialMapLayerState: MapLayerState = {
   },
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,
+  trackTimeMarkers: true,
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   satelliteRenderingTuning: defaultSatelliteRenderingTuning,
   selectedScene: null,

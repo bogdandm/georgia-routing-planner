@@ -3,6 +3,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Box,
   ButtonBase,
+  Checkbox,
+  FormControlLabel,
   Skeleton,
   Slider,
   Stack,
@@ -19,6 +21,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { useStore } from 'zustand';
 
 import type { PointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
@@ -44,6 +47,7 @@ import {
 } from '@/application/weather/TrackWeatherForecast';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
@@ -141,6 +145,7 @@ export function TrackWeatherSection({
     [profile],
   );
   const { paceFactor } = timelineSettings;
+  const defaultTimeMarkers = useStore(mapLayerStore, (state) => state.trackTimeMarkers);
   // Drafts show slider positions while dragging; only released values are stored. The
   // start draft already moves the checkpoint times, since it only reselects loaded
   // hours, while the pace waits for release so it does not start forecast requests.
@@ -466,6 +471,24 @@ export function TrackWeatherSection({
             <Typography component="h4" variant="subtitle2">
               <Trans>Along the route</Trans>
             </Typography>
+            <FormControlLabel
+              sx={{ m: 0 }}
+              slotProps={{ typography: { variant: 'body2' } }}
+              control={
+                <Checkbox
+                  size="small"
+                  sx={{ p: 0, mr: 1 }}
+                  checked={timelineSettings.timeMarkers ?? defaultTimeMarkers}
+                  onChange={(event) => {
+                    onTimelineSettingsChange({
+                      ...timelineSettings,
+                      timeMarkers: event.target.checked,
+                    });
+                  }}
+                />
+              }
+              label={t`Show times on the map`}
+            />
             {timelineAdjustable ? (
               <>
                 <Box>

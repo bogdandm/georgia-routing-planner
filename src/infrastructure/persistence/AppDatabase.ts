@@ -573,6 +573,8 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
               .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
               .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
               .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
+            // Entries saved before map time markers follow the Layers default.
+            timeMarkers: z.boolean().nullable().default(null),
           })
           .strict(),
       )
@@ -652,6 +654,7 @@ const mapLayerPreferencesSchema = z
       })
       .strict(),
     naturalFeaturePatternsIn3d: z.boolean().default(false),
+    trackTimeMarkers: z.boolean().default(true),
     openStreetMapOpacity: z.number().min(0).max(1).default(1),
     importedTrackOpacity: z.number().min(0).max(1).default(1),
     weatherMapOpacity: z.number().min(0).max(1).default(defaultWeatherMapOpacity),
@@ -722,6 +725,7 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
     'track-elevation-gradient': true,
   },
   naturalFeaturePatternsIn3d: false,
+  trackTimeMarkers: true,
   openStreetMapOpacity: 1,
   importedTrackOpacity: 1,
   weatherMapOpacity: defaultWeatherMapOpacity,

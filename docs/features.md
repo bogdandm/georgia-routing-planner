@@ -336,6 +336,24 @@ elevation. Clicking a loaded forecast row opens Weather with the full forecast a
 location and elevation, labelled with the card's point or time. Failed track forecasts
 retry automatically as in Weather when the app becomes visible again.
 
+#### Time markers
+
+A track with an elevation profile is labelled on the map with clock times from the same
+timeline as **Along the route**: its route start and pace, recorded timestamps when the
+track has recorded time, and otherwise the DIN 33466 estimate. The start and finish show
+their exact `HH:mm` beside the Play and Stop markers, the start to the right and the
+finish to the left so a loop shows both; each full hour between them shows `HH:00` where
+the hiker is at that time. Unlike the forecast timeline, any track length qualifies, and
+times past midnight wrap. Labels are white text on white-bordered rounded rectangles in
+the track colour, follow the Local GPX opacity and visibility, and are not drawn in
+satellite comparison panes. Endpoint times always show; hourly times give way to map
+labels and each other where they would overlap.
+
+**Show times on the map**, the first control in **Along the route**, turns the labels on
+or off for one track and is remembered in this browser like its route start and pace.
+Tracks without their own choice follow **Time markers** in Layers, on by default.
+Multi-track view labels every selected track with its own stored settings.
+
 #### Track points
 
 Saved tracks end with a collapsed **Points** section after Weather on desktop and
@@ -465,8 +483,9 @@ MapLibre layer IDs; native IDs never reach the UI.
 
 - **Weather:** turning the weather map on routes to the Weather tab; turning it off and
   its opacity work here.
-- **Local GPX:** Imported tracks, the default-on **Elevation gradient**, and one opacity
-  for the active preview, saved selection, and gradient.
+- **Local GPX:** Imported tracks, the default-on **Elevation gradient**, one opacity for
+  the active preview, saved selection, and gradient, and the default-on **Time markers**
+  for tracks without their own choice.
 - **Satellites:** **Google satellite imagery**, **Bing aerial imagery**, **Esri World
   Imagery**, **NAPR Orthophoto**, **Soviet topographic maps**, then Sentinel-2
   **Satellite imagery** and **Scene footprint**, enabled once a scene is applied. The

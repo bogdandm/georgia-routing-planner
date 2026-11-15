@@ -69,6 +69,8 @@ export interface PersistedMapLayerPreferences {
   readonly visibility: MapLayerVisibilityPreferences;
   /** Area patterns in 3D, off by default because they add work to every draped texture. */
   readonly naturalFeaturePatternsIn3d: boolean;
+  /** Clock times on timed track lines for every track without its own choice. */
+  readonly trackTimeMarkers: boolean;
   readonly openStreetMapOpacity: number;
   readonly importedTrackOpacity: number;
   readonly weatherMapOpacity: number;

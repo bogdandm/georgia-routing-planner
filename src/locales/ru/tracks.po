@@ -1240,6 +1240,11 @@ msgstr "Не удалось обновить общий доступ. Повто
 msgid "Sharing status could not be loaded."
 msgstr "Не удалось загрузить статус общего доступа."
 
+#. js-lingui-id: oG5653
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Show times on the map"
+msgstr "Показывать время на карте"
+
 #. js-lingui-id: qh04VC
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Show track grade legend"

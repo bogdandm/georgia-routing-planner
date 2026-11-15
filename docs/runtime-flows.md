@@ -435,13 +435,14 @@ reselects hours from the loaded forecasts; collapsing or unmounting aborts pendi
 requests. Results stay in component state, keyed by the section's track, and failed
 locations retry on the next expansion. `TracksWorkspaceProvider` loads
 `weather.track-preferences` once and saves every disclosure or weekday change and every
-released start or pace slider of a saved track; changes made before the record loads are
-merged over it, keeping its per-track entries, and then saved. The record's `timelines`
-map holds only tracks whose start or pace differs from the defaults, keyed by saved
-track ID. The provider owns the active track's settings: a preview or shared track keeps
-them in memory and they move to the new saved ID on save. Deleting a track from the
-Tracks workspace removes its entry; tracks removed by synchronization leave an unused
-entry that reattaches if the same ID returns.
+released start or pace slider or time-marker choice of a saved track; changes made
+before the record loads are merged over it, keeping its per-track entries, and then
+saved. The record's `timelines` map holds only tracks whose start, pace, or time-marker
+choice differs from the defaults (a null choice follows Layers), keyed by saved track
+ID. The provider owns the active track's settings: a preview or shared track keeps them
+in memory and they move to the new saved ID on save. Deleting a track from the Tracks
+workspace removes its entry; tracks removed by synchronization leave an unused entry
+that reattaches if the same ID returns.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
@@ -573,6 +574,15 @@ multi-track mode the provider passes every ready selected track and fits their c
 bounds. Route plans and the ruler use `setPlannedLineGeometry` with separate
 `route-plan` and `measurement` sources that share one blue layer structure with numbered
 waypoints.
+
+Time markers are a separate source fed by `setImportedTrackTimeLabels`, so a new route
+start or pace never resends geometry. The provider resolves each shown track's choice
+(its own, else `trackTimeMarkers` in `mapLayerStore` from `map.layers`), runs
+`planTrackClockTimes` on its profile and settings, and places the start and finish times
+on the drawn endpoints. Two symbol layers above the lines and below the endpoint icons
+draw them on a stretchable rounded-rectangle image with `icon-text-fit`: endpoint times
+allow overlap and are placed first; hourly times keep collision detection. Path editing,
+route plans, and tracks without a profile send no labels.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

@@ -346,6 +346,11 @@ msgstr "Settlements, peaks, and hiking places."
 msgid "Soviet topographic maps"
 msgstr "Soviet topographic maps"
 
+#. js-lingui-id: qZhJKx
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Start, finish, and full-hour times on tracks; each track's weather forecast can override this."
+msgstr "Start, finish, and full-hour times on tracks; each track's weather forecast can override this."
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Terrain elevation"
@@ -415,6 +420,11 @@ msgstr "The selected weather frame could not be shown."
 #: src/presentation/layers/LayersPanel.tsx
 msgid "The weather map provider is unavailable."
 msgstr "The weather map provider is unavailable."
+
+#. js-lingui-id: -vD4Tz
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Time markers"
+msgstr "Time markers"
 
 #. js-lingui-id: W7HXf3
 #: src/presentation/layers/LayersPanel.tsx

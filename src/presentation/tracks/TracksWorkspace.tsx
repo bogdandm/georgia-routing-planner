@@ -196,11 +196,15 @@ import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
   defaultTrackWeatherPreferences,
   defaultTrackWeatherTimelineSettings,
+  planTrackClockTimes,
   trackWeatherTimeline,
   withTrackWeatherTimeline,
+  type TrackClockTimes,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import type { ImportedTrackTimeLabel } from '@/presentation/map/mapStyleFactory';
 import {
   formatTrackDistance,
   formatTrackDuration,
@@ -3488,6 +3492,66 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     multiTrackMode,
     readyMultiTrackSelections,
   ]);
+  // A track's own choice wins over the Layers default; times follow its route start
+  // and pace, so multi-track mode shows each track at its own stored settings.
+  const defaultTimeMarkers = useStore(mapLayerStore, (state) => state.trackTimeMarkers);
+  const timeLabels = useMemo((): readonly ImportedTrackTimeLabel[] => {
+    if (multiTrackMode) {
+      return readyMultiTrackSelections.flatMap((selection) => {
+        const settings = trackWeatherTimeline(
+          trackWeatherPreferences,
+          selection.summary.id,
+        );
+        if (
+          selection.profile === null ||
+          !(settings.timeMarkers ?? defaultTimeMarkers)
+        ) {
+          return [];
+        }
+        return trackTimeLabels(
+          localTrackSegments(selection.content),
+          planTrackClockTimes(selection.profile, selection.summary.metrics, settings),
+        );
+      });
+    }
+    if (
+      active === null ||
+      active.kind === 'route-plan' ||
+      activePath !== null ||
+      activeProfile === null ||
+      activeStatsMetrics === null ||
+      !(activeTrackWeatherTimeline.timeMarkers ?? defaultTimeMarkers)
+    ) {
+      return [];
+    }
+    return trackTimeLabels(
+      trackFitInput(active).segments,
+      planTrackClockTimes(
+        activeProfile,
+        activeStatsMetrics,
+        activeTrackWeatherTimeline,
+      ),
+    );
+  }, [
+    active,
+    activePath,
+    activeProfile,
+    activeStatsMetrics,
+    activeTrackWeatherTimeline,
+    defaultTimeMarkers,
+    multiTrackMode,
+    readyMultiTrackSelections,
+    trackWeatherPreferences,
+  ]);
+  useEffect(() => {
+    mapLayers?.setImportedTrackTimeLabels(timeLabels);
+  }, [mapLayers, timeLabels]);
+  useEffect(
+    () => () => {
+      mapLayers?.setImportedTrackTimeLabels([]);
+    },
+    [mapLayers],
+  );
 
   const errorMessage = error === null ? null : i18n._(error);
   const importErrorMessage = importError === null ? null : i18n._(importError.message);
@@ -5140,6 +5204,21 @@ function trackFitInput(
         ? active.sourceMetrics.bounds
         : calculateTrackMetrics(active.parsed.segments).bounds,
   };
+}
+
+/** Map time labels of one drawn track; its endpoint times sit on its endpoint icons. */
+function trackTimeLabels(
+  segments: readonly (readonly TrackCoordinate[])[],
+  times: TrackClockTimes,
+): ImportedTrackTimeLabel[] {
+  const start = segments[0]?.[0];
+  const finish = segments.at(-1)?.at(-1);
+  if (start === undefined || finish === undefined) return [];
+  return [
+    { kind: 'start', coordinate: start, time: times.start },
+    { kind: 'finish', coordinate: finish, time: times.finish },
+    ...times.hours.map((hour) => ({ kind: 'hour' as const, ...hour })),
+  ];
 }
 
 function requestTrackMapFit(

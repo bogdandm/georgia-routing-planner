@@ -18,6 +18,7 @@ import {
   basemapImageIds,
   importedTrackEndpointImageIds,
   importedTrackLayerIds,
+  importedTrackTimeLabelImageId,
   mapInsertionPoints,
   mapLayerIds,
   mapSourceIds,
@@ -131,6 +132,83 @@ export function createImportedTrackEndpointLayer(
       'symbol-z-order': 'source',
     },
     paint: { 'icon-opacity': opacity },
+  };
+}
+
+/** A clock time on a track: beside its start or finish icon, or at a full hour. */
+export interface ImportedTrackTimeLabel {
+  readonly kind: TrackEndpointKind | 'hour';
+  readonly coordinate: readonly [number, number];
+  /** Local `HH:mm`. */
+  readonly time: string;
+}
+
+export function createImportedTrackTimeLabelCollection(
+  labels: readonly ImportedTrackTimeLabel[],
+): FeatureCollection<
+  Point,
+  { readonly kind: ImportedTrackTimeLabel['kind']; readonly time: string }
+> {
+  return {
+    type: 'FeatureCollection',
+    features: labels.map(({ kind, coordinate, time }) => ({
+      type: 'Feature',
+      properties: { kind, time },
+      geometry: { type: 'Point', coordinates: [...coordinate] },
+    })),
+  };
+}
+
+/** Ems from the endpoint icon centre to the label text; the icon covers the label's end. */
+const endpointTimeOffsetEms = 0.9;
+
+/**
+ * Time labels in white on track-coloured rounded rectangles; the map must provide
+ * `importedTrackTimeLabelImageId`. Endpoint times always show, the start's to the right
+ * of its icon and the finish's to the left, so a loop's shared point shows both. Hourly
+ * times yield to every label placed before them, endpoint times included.
+ */
+export function createImportedTrackTimeLayer(
+  labels: 'endpoint' | 'hour',
+  visible: boolean,
+  opacity: number,
+): SymbolLayerSpecification {
+  const endpoint = labels === 'endpoint';
+  const isHour: ExpressionSpecification = ['==', ['get', 'kind'], 'hour'];
+  const layout: NonNullable<SymbolLayerSpecification['layout']> = {
+    visibility: visible ? 'visible' : 'none',
+    'text-field': ['get', 'time'],
+    'text-font': ['Noto Sans Regular'],
+    'text-size': 12,
+    'icon-image': importedTrackTimeLabelImageId,
+    'icon-text-fit': 'both',
+    'icon-text-fit-padding': [1, 5, 1, 5],
+  };
+  if (endpoint) {
+    layout['text-anchor'] = ['match', ['get', 'kind'], 'start', 'left', 'right'];
+    layout['text-offset'] = [
+      'match',
+      ['get', 'kind'],
+      'start',
+      ['literal', [endpointTimeOffsetEms, 0]],
+      ['literal', [-endpointTimeOffsetEms, 0]],
+    ];
+    layout['text-allow-overlap'] = true;
+    layout['icon-allow-overlap'] = true;
+  }
+  return {
+    id: endpoint
+      ? importedTrackLayerIds.endpointTimes
+      : importedTrackLayerIds.hourTimes,
+    type: 'symbol',
+    source: mapSourceIds.importedTrackTimeLabels,
+    filter: endpoint ? ['!', isHour] : isHour,
+    layout,
+    paint: {
+      'text-color': mapVisualPalette.userGeometry.gpxTrackLabel,
+      'text-opacity': opacity,
+      'icon-opacity': opacity,
+    },
   };
 }
 

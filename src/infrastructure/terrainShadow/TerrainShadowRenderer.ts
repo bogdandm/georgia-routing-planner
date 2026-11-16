@@ -731,6 +731,8 @@ export class TerrainShadowRenderer {
       palette.lowSunShadowColor,
       palette.lowSunShadowLift,
       palette.lowSunGlowOpacity,
+      palette.alpenglowColor,
+      palette.alpenglowOpacity,
     ]);
     if (this.#shadeTable?.key !== key) {
       this.#shadeTable = { key, table: createShadeLookupTable(palette) };

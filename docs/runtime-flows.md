@@ -338,9 +338,12 @@ follows the sunlight code: from the day color toward the golden-hour lilac as th
 deficit of the sunlight grows, then over the twilight codes to the deep twilight blue at
 half depth and back to the day color by night. As the Sun sinks, shadows lose part of
 their opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows
-with the direct share of the brightness up to 2. GPU jobs run one at a time and wait on
-a fence before the next starts, so at most one tile of shadow work competes with map
-frames.
+with the direct share of the brightness up to 2. Over the first part of the twilight
+codes, a rose alpenglow is composited over shade with an opacity that peaks about 15% of
+the way to the night elevation, is gone by 55%, and scales with the square of brightness
+relative to the sky share, so open slopes glow and gorges do not. GPU jobs run one at a
+time and wait on a fence before the next starts, so at most one tile of shadow work
+competes with map frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,

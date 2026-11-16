@@ -38,6 +38,8 @@ export const terrainShadowTileRequestSchema = z
     lowSunShadowColor: colorSchema,
     lowSunShadowLift: z.number().min(0).max(1),
     lowSunGlowOpacity: z.number().min(0).max(1),
+    alpenglowColor: colorSchema,
+    alpenglowOpacity: z.number().min(0).max(1),
   })
   .strict()
   .refine(

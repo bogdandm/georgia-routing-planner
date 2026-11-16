@@ -571,6 +571,9 @@ export interface ShadePalette {
   readonly lowSunShadowColor: Rgb;
   readonly lowSunShadowLift: number;
   readonly lowSunGlowOpacity: number;
+  /** Rose light the twilight sky casts on open slopes just after sunset. */
+  readonly alpenglowColor: Rgb;
+  readonly alpenglowOpacity: number;
 }
 
 function mixRgb(from: Rgb, to: Rgb, weight: number): Rgb {
@@ -625,6 +628,19 @@ export const shadeNeutralBrightness = 1.45;
 const shadeMaximumBrightness = 2;
 
 /**
+ * Alpenglow, as a fraction of the way from the sea-level horizon to the night elevation:
+ * it peaks at `alpenglowPeakTwilightDepth` (about 2° below the horizon) and is gone by
+ * `alpenglowEndTwilightDepth`.
+ */
+const alpenglowPeakTwilightDepth = 0.15;
+const alpenglowEndTwilightDepth = 0.55;
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
+/**
  * RGBA8 colors indexed by `sunlightCode × 256 + shadeByte`, written byte-wise so the table
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
@@ -639,12 +655,21 @@ const shadeMaximumBrightness = 2;
  * maximum of 2, so slopes facing a low Sun keep their relief instead of one saturated
  * tone. As the Sun sinks, shade loses up to `lowSunShadowLift` of its opacity, as the sky
  * lights shadows more than the dimming Sun lights the slopes. Light is composited over
- * shade. A high Sun keeps the plain shadow and highlight.
+ * shade. A high Sun keeps the plain shadow and highlight. In early civil twilight open
+ * slopes (those still lit by most of the sky, `brightness` near the sky share) get a rose
+ * `alpenglowColor` glow of up to `alpenglowOpacity`; it rises just past the sea-level
+ * horizon and fades before the middle of twilight, while gorges stay plain shade.
  */
 export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
   const table = new Uint32Array(256 * 256);
   const bytes = new Uint8Array(table.buffer);
-  const { shadowColor, highlightColor, goldenShadowColor, lowSunShadowColor } = palette;
+  const {
+    shadowColor,
+    highlightColor,
+    goldenShadowColor,
+    lowSunShadowColor,
+    alpenglowColor,
+  } = palette;
   const tint = (sunlight: number) =>
     1 - sunlightTintStrength + sunlightTintStrength * sunlight;
   for (let code = 0; code < 256; code += 1) {
@@ -668,6 +693,15 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
       shadeColor = mixRgb(lowSunShadowColor, shadowColor, (twilightDepth - 0.5) / 0.5);
     }
     const shadeOpacity = 1 - lowSun * palette.lowSunShadowLift;
+    const alpenglow =
+      palette.alpenglowOpacity *
+      smoothstep(0, alpenglowPeakTwilightDepth, twilightDepth) *
+      (1 -
+        smoothstep(
+          alpenglowPeakTwilightDepth,
+          alpenglowEndTwilightDepth,
+          twilightDepth,
+        ));
     const neutral = shadeNeutralBrightness;
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
@@ -679,7 +713,7 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
         ),
         1,
       );
-      const lightAlpha = Math.min(
+      const sunAlpha = Math.min(
         1,
         directShare * lowSun * palette.lowSunGlowOpacity +
           Math.min(
@@ -688,14 +722,19 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
           ) *
             palette.highlightOpacity,
       );
+      const openSky = Math.min(brightness / terrainShadeSkyLightShare, 1);
+      const roseAlpha = alpenglow * openSky * openSky;
+      const lightAlpha = Math.min(1, sunAlpha + roseAlpha);
       const shadeWeight =
         Math.max(1 - brightness / neutral, 0) * shadeOpacity * (1 - lightAlpha);
       const alpha = lightAlpha + shadeWeight;
       if (alpha === 0) continue;
       const blend = (channel: 0 | 1 | 2) =>
         Math.round(
-          (lightColor[channel] * lightAlpha + shadeColor[channel] * shadeWeight) /
-            alpha,
+          (lightColor[channel] * sunAlpha +
+            alpenglowColor[channel] * roseAlpha +
+            shadeColor[channel] * shadeWeight) /
+            (sunAlpha + roseAlpha + shadeWeight),
         );
       bytes.set(
         [blend(0), blend(1), blend(2), Math.round(alpha * 255)],

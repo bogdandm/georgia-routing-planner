@@ -190,6 +190,8 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       lowSunShadowColor: [0x2e, 0x3f, 0x7a],
       lowSunShadowLift: 0.25,
       lowSunGlowOpacity: 0.5,
+      alpenglowColor: [0xf0, 0xa3, 0xb8],
+      alpenglowOpacity: 0.6,
     });
 
     const second = loadTile();

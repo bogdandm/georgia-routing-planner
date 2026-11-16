@@ -68,8 +68,9 @@ export const mapVisualPalette = {
      * blue-grey `sunShadow` by day and at night, lilac `sunGoldenShadow` with the Sun on
      * the horizon, deep blue `sunLowShadow` mid civil twilight. As the Sun sinks, shade
      * loses up to `sunLowShadowLift` of its opacity, and ground in direct sun gains a
-     * sunlight-colored glow of up to `sunLowGlowOpacity`. Colors are opaque `#RRGGBB`;
-     * `sunShadowOpacity` is the layer `raster-opacity`.
+     * sunlight-colored glow of up to `sunLowGlowOpacity`. In early twilight open slopes
+     * glow rose (`sunAlpenglow`, at most `sunAlpenglowOpacity`). Colors are opaque
+     * `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
      */
     sunShadow: '#1C2A40',
     sunShadowOpacity: 0.5,
@@ -79,6 +80,8 @@ export const mapVisualPalette = {
     sunLowShadow: '#2E3F7A',
     sunLowShadowLift: 0.25,
     sunLowGlowOpacity: 0.5,
+    sunAlpenglow: '#F0A3B8',
+    sunAlpenglowOpacity: 0.6,
     /**
      * 3D sky while sun shadows draw: the `sky` color overhead, the `horizon` band, and the
      * distant `fog` over terrain, for full day, the twilight blue around sunset, and night.

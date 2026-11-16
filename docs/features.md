@@ -900,15 +900,17 @@ highlight in a softened color of direct sunlight: white at midday, then yellow, 
 and red as the Sun sinks, computed from clear-air Rayleigh extinction along the path
 through the atmosphere, so summits stay whiter than valleys. As the Sun sinks, shadows
 also turn lighter and ground in direct sun gains a sunlight-colored glow; both fade out
-in twilight. While sun shadows draw, the fixed-light relief shading is hidden without
-changing its saved visibility, and it returns when they are turned off. The raster is
-drawn above relief, satellite imagery, land cover, contours, and lakes, so water bodies
-are shaded too, but below buildings, labels, and tracks; it drapes over 3D terrain,
-stays on while the weather map is shown, and is not drawn in comparison panes. Relief
-and cast shadows are computed from z7 up to z12, then overzoomed. Below z7, which in 3D
-also covers the distance toward the horizon, the layer shades flat sea-level ground for
-the same instant, without relief, so distant terrain and low zooms still follow
-daylight, sunset, and night.
+in twilight. Shortly after sunset, open slopes and summits that still see most of the
+sky glow rose (alpenglow) while gorges stay in plain shade; the glow is gone before the
+middle of civil twilight. While sun shadows draw, the fixed-light relief shading is
+hidden without changing its saved visibility, and it returns when they are turned off.
+The raster is drawn above relief, satellite imagery, land cover, contours, and lakes, so
+water bodies are shaded too, but below buildings, labels, and tracks; it drapes over 3D
+terrain, stays on while the weather map is shown, and is not drawn in comparison panes.
+Relief and cast shadows are computed from z7 up to z12, then overzoomed. Below z7, which
+in 3D also covers the distance toward the horizon, the layer shades flat sea-level
+ground for the same instant, without relief, so distant terrain and low zooms still
+follow daylight, sunset, and night.
 
 While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
 follow the Sun at the map center for the same instant: blue by day, twilight blue after

@@ -25,6 +25,8 @@ const palette: ShadePalette = {
   lowSunShadowColor: [46, 63, 122],
   lowSunShadowLift: 0.4,
   lowSunGlowOpacity: 0.35,
+  alpenglowColor: [240, 163, 184],
+  alpenglowOpacity: 0.4,
 };
 /** Sunlight code of the zenith Sun at sea level (relative air mass 1). */
 const zenithCode = Math.round(
@@ -111,6 +113,24 @@ describe('createShadeLookupTable', () => {
     expect(
       largestByteDifference([red, green, blue], palette.goldenShadowColor),
     ).toBeLessThanOrEqual(1);
+  });
+
+  it('glows rose on open slopes in early twilight but not in gorges or at night', () => {
+    const earlyTwilightCode =
+      horizonCode + 1 + Math.round(0.15 * (sunlightNightCode - horizonCode - 1));
+    const openSlope = Math.floor(terrainShadeSkyLightShare * shadeBrightnessScale);
+    const redOverBlue = (code: number, shade: number) => {
+      const [red = 0, , blue = 0] = entryBytes(table, code, shade);
+      return red - blue;
+    };
+
+    // Rose is composited over the twilight shade, so it shifts the hue rather than replacing it.
+    expect(redOverBlue(earlyTwilightCode, openSlope)).toBeGreaterThan(
+      redOverBlue(earlyTwilightCode, 4) + 25,
+    );
+    expect(redOverBlue(earlyTwilightCode, openSlope)).toBeGreaterThan(
+      redOverBlue(sunlightNightCode, openSlope) + 25,
+    );
   });
 
   it('continues across the sea-level horizon and returns to the plain night shade', () => {

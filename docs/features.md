@@ -768,14 +768,14 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   and the sky, horizon, and fog colors with their glow, antisolar, and fog/horizon
   blends. Values named after their project constants are kept in `localStorage` across
   reloads; **Before** shows the defaults without losing them, **After** restores them,
-  and any edit returns to **After**. **Reset all**, **Reset section**, and **Copy
-  configuration** (a JSON object of every value) complete it; values marked GPU
-  recompute shadows once the slider is released. `D` turns shadows on or off from
-  anywhere. `[` and `]` move the time one minute earlier or later, 10 minutes with
-  Shift, also while held, never past either end of the shown day's range; they turn
-  hidden shadows on, and a closed panel appears without taking focus until a second
-  after the last key release, unless the sun button is pressed meanwhile to keep it
-  open. While shadows for one minute are still being drawn, further changes from the
+  and any edit returns to **After**. Double-clicking an item resets it; **Reset all**,
+  **Reset section**, and **Copy configuration** (a JSON object of every value) complete
+  it; values marked GPU recompute shadows once the slider is released. `D` turns shadows
+  on or off from anywhere. `[` and `]` move the time one minute earlier or later, 10
+  minutes with Shift, also while held, never past either end of the shown day's range;
+  they turn hidden shadows on, and a closed panel appears without taking focus until a
+  second after the last key release, unless the sun button is pressed meanwhile to keep
+  it open. While shadows for one minute are still being drawn, further changes from the
   keys or the panel only move the shown time, and shadows then draw for the latest
   minute, so holding a key moves at key-repeat speed; with Alt (Option on macOS) every
   step is drawn in turn. Date and time are local wall time at the map center (the

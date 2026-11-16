@@ -48,6 +48,35 @@ describe('TerrainLightingTuningPanel', () => {
     expect(terrainLightingTuningStore.getState().showDefaults).toBe(false);
   });
 
+  it('resets one item to its default on a double-click anywhere on its row', async () => {
+    const user = userEvent.setup();
+    renderWithI18n(<TerrainLightingTuningPanel anchorEl={document.body} />);
+    act(() => {
+      terrainLightingTuningStore.setState({
+        values: {
+          ...defaultTerrainLightingTuning,
+          sunShadowOpacity: 0.9,
+          terrainShadeSkyLightShare: 0.6,
+        },
+      });
+    });
+
+    await user.dblClick(screen.getByText('sunShadowOpacity'));
+    expect(terrainLightingTuningStore.getState().values).toMatchObject({
+      sunShadowOpacity: defaultTerrainLightingTuning.sunShadowOpacity,
+      terrainShadeSkyLightShare: 0.6,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Colors' }));
+    fireEvent.change(screen.getByLabelText('sunAlpenglow'), {
+      target: { value: '#123456' },
+    });
+    await user.dblClick(screen.getByText('#123456'));
+    expect(terrainLightingTuningStore.getState().values.sunAlpenglow).toBe(
+      defaultTerrainLightingTuning.sunAlpenglow,
+    );
+  });
+
   it('edits colors, resets a section or everything, and copies the configuration', async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();

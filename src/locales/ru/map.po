@@ -269,10 +269,10 @@ msgstr "Плоская карта"
 msgid "Google Satellite"
 msgstr "Снимки Google"
 
-#. js-lingui-id: HoQRPP
+#. js-lingui-id: cTcQ3M
 #: src/presentation/map/TerrainLightingTuningPanel.tsx
-msgid "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once."
-msgstr "Значения GPU пересчитывают маски теней после отпускания ползунка; остальные перекрашивают кэшированные маски или применяются сразу."
+msgid "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once. Double-click an item to reset it."
+msgstr "Значения GPU пересчитывают маски теней после отпускания ползунка; остальные перекрашивают кэшированные маски или применяются сразу. Двойной щелчок сбрасывает параметр к значению по умолчанию."
 
 #. js-lingui-id: ddStAP
 #: src/presentation/map/ElevationGradeLegend.tsx

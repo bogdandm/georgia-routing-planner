@@ -155,7 +155,7 @@ export function TerrainLightingTuningPanel({
             </Button>
           </Stack>
           <Typography color="text.secondary" variant="caption">
-            {t`GPU values recompute shadow masks once released; the others recolor cached masks or apply at once.`}
+            {t`GPU values recompute shadow masks once released; the others recolor cached masks or apply at once. Double-click an item to reset it.`}
           </Typography>
           <Box>
             {sections.map((section) => (
@@ -212,6 +212,11 @@ function TuningRow({
   const parameter = terrainLightingParameters[name];
   // GPU values apply on release; the slider shows the dragged value meanwhile.
   const [draft, setDraft] = useState<number | null>(null);
+  // Double-clicking anywhere on the row restores the default.
+  const resetToDefault = () => {
+    setDraft(null);
+    setTerrainLightingValue(name, parameter.defaultValue);
+  };
   const label = (
     <Typography
       component="span"
@@ -224,7 +229,12 @@ function TuningRow({
 
   if (parameter.kind === 'color' || typeof value === 'string') {
     return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+      <Stack
+        direction="row"
+        onDoubleClick={resetToDefault}
+        spacing={1}
+        sx={{ alignItems: 'center' }}
+      >
         {label}
         <Typography sx={{ fontFamily: 'monospace' }} variant="caption">
           {String(value).toUpperCase()}
@@ -246,7 +256,7 @@ function TuningRow({
   const gpu = parameter.apply === 'gpu';
   const shown = draft ?? value;
   return (
-    <Box>
+    <Box onDoubleClick={resetToDefault}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         {label}
         {gpu ? (

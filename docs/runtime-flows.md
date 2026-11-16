@@ -415,36 +415,40 @@ reference for the shader model.
 
 **Play the day** (`MapLibreLayerController.playSunShadowDay`) takes the daylight window
 of the shown day at the map center, which spans two hours before sunrise to two hours
-after sunset (clamped to the local day), makes whole-minute frames from its start every
-10 minutes plus its last minute, rotated to start at the current time, and asks
-`map.coveringTiles` for the 512 px z7–12 tiles of the current view, deduplicated across
-world copies. That public coverage ignores terrain-aware culling; tiles it misses, and
-the flat-ground tiles below z7, render on demand during playback. Only frames from 45
-minutes before sunrise to 45 minutes after sunset (lit frames) hold cached masks, so
-when tiles × those frames exceed 2560, playback is refused as `too-many-tiles` and
-logged as `map.sun-shadow.playback-refused` with both counts. Otherwise the provider's
-`prefetch` sends `terrain-shadow.prefetch-tile` requests in playback order in blocks of
-six frames, tile-major inside a block and with the tile order reversed every other
-block, at most four at a time and past the interaction gate. The worker renders each
-mask into its cache and answers with metrics only; a block's consecutive instants of a
-tile reuse the assembled mosaics, and the reversal starts each block with the tiles
-whose DEM tiles are still cached. Progress, including the count of leading frames whose
-tiles are all cached, is published to `mapLayerStore.sunShadow.playback` in whole
-percents. The rate per lit frame is measured from the end of the first block on, because
-that block also waited for DEM downloads and its frames become ready only with its last
-tile. Whenever more frames become ready, the controller starts the animation if, at that
-rate times 1.25, every remaining block is estimated to be cached before the animation
-reaches its first frame; otherwise it starts when the prefetch ends. A 150 ms timer
-shows the next frame by updating the instant and calling only the sun-shadow
-reconciliation, without persistence, and waits while the shadow source is still loading
-the shown frame, so an optimistic estimate pauses the animation instead of tearing it.
-The animation loops until stopped. Play does nothing while the camera is already moving.
-A `movestart` event (the controller listens for the whole attachment, so it also clears
-a refusal or failure note), `setSunShadow` (every panel change, the switch, the
-sun-shadow keys, and the render benchmark), or detach aborts the prefetch, clears the
-timer, and returns the state to `idle`; a prefetch failure is logged as
-`map.sun-shadow.playback-failed` and published as `failed`, as is availability turning
-`unavailable` during playback.
+after sunset (clamped to the local day), makes whole-minute frames from its start to its
+last minute (`daylightFrameInstants`): as many as one every 10 minutes would give, but a
+frame d minutes from the nearer sunrise or sunset steps min(30, 1 + k·d²) minutes,
+rounded and at least one, with the smallest k whose schedule fits that count
+(bisection), so about ±10 minutes around each event are every minute and midday moves in
+30-minute steps. The frames are rotated to start at the current time, and the controller
+asks `map.coveringTiles` for the 512 px z7–12 tiles of the current view, deduplicated
+across world copies. That public coverage ignores terrain-aware culling; tiles it
+misses, and the flat-ground tiles below z7, render on demand during playback. Only
+frames from 45 minutes before sunrise to 45 minutes after sunset (lit frames) hold
+cached masks, so when tiles × those frames exceed 2560, playback is refused as
+`too-many-tiles` and logged as `map.sun-shadow.playback-refused` with both counts.
+Otherwise the provider's `prefetch` sends `terrain-shadow.prefetch-tile` requests in
+playback order in blocks of six frames, tile-major inside a block and with the tile
+order reversed every other block, at most four at a time and past the interaction gate.
+The worker renders each mask into its cache and answers with metrics only; a block's
+consecutive instants of a tile reuse the assembled mosaics, and the reversal starts each
+block with the tiles whose DEM tiles are still cached. Progress, including the count of
+leading frames whose tiles are all cached, is published to
+`mapLayerStore.sunShadow.playback` in whole percents. The rate per lit frame is measured
+from the end of the first block on, because that block also waited for DEM downloads and
+its frames become ready only with its last tile. Whenever more frames become ready, the
+controller starts the animation if, at that rate times 1.25, every remaining block is
+estimated to be cached before the animation reaches its first frame; otherwise it starts
+when the prefetch ends. A 150 ms timer shows the next frame by updating the instant and
+calling only the sun-shadow reconciliation, without persistence, and waits while the
+shadow source is still loading the shown frame, so an optimistic estimate pauses the
+animation instead of tearing it. The animation loops until stopped. Play does nothing
+while the camera is already moving. A `movestart` event (the controller listens for the
+whole attachment, so it also clears a refusal or failure note), `setSunShadow` (every
+panel change, the switch, the sun-shadow keys, and the render benchmark), or detach
+aborts the prefetch, clears the timer, and returns the state to `idle`; a prefetch
+failure is logged as `map.sun-shadow.playback-failed` and published as `failed`, as is
+availability turning `unavailable` during playback.
 
 ## Sentinel search
 

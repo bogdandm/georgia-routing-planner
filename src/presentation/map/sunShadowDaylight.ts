@@ -110,22 +110,55 @@ export function sunlitNow(
   return zonedWallTimeToInstant({ ...date, hour: 11, minute: 0 }, timeZone).getTime();
 }
 
+/** The longest step between frames, as a multiple of the average step. */
+const frameMaximumStepFactor = 3;
+
 /**
- * Whole-minute frames from `firstMinuteMs` every `stepMinutes`, plus `lastMinuteMs` when
- * not already last.
+ * Day playback frames: whole minutes from `firstMinuteMs` to `lastMinuteMs`, as many as
+ * an even schedule every `averageStepMinutes` would have (from the first minute, plus the
+ * last), packed around sunrise and sunset. A frame d minutes from the nearer event steps
+ * min(3 × average, 1 + k·d²) minutes ahead, rounded and at least one, so the minutes
+ * around each event are all shown and the step grows smoothly to its maximum over the
+ * middle of the day. k is the smallest value whose schedule fits that frame count, found
+ * by bisection; a window too short to need it gets every minute.
  */
 export function daylightFrameInstants(
   window: DaylightWindow,
-  stepMinutes: number,
+  averageStepMinutes: number,
 ): readonly number[] {
-  const frames: number[] = [];
-  for (
-    let instant = window.firstMinuteMs;
-    instant <= window.lastMinuteMs;
-    instant += stepMinutes * millisecondsPerMinute
-  ) {
-    frames.push(instant);
+  const { firstMinuteMs, lastMinuteMs, sunriseMs, sunsetMs } = window;
+  const frameBudget =
+    Math.ceil(
+      (lastMinuteMs - firstMinuteMs) / (averageStepMinutes * millisecondsPerMinute),
+    ) + 1;
+  const maximumStepMinutes = frameMaximumStepFactor * averageStepMinutes;
+  const schedule = (growth: number): number[] => {
+    const frames: number[] = [];
+    let instant = firstMinuteMs;
+    while (instant < lastMinuteMs) {
+      frames.push(instant);
+      const eventMinutes =
+        Math.min(Math.abs(instant - sunriseMs), Math.abs(instant - sunsetMs)) /
+        millisecondsPerMinute;
+      const stepMinutes = Math.min(
+        maximumStepMinutes,
+        1 + growth * eventMinutes * eventMinutes,
+      );
+      instant += Math.max(1, Math.round(stepMinutes)) * millisecondsPerMinute;
+    }
+    frames.push(lastMinuteMs);
+    return frames;
+  };
+  const everyMinute = schedule(0);
+  if (everyMinute.length <= frameBudget) return everyMinute;
+  // At growth 1 the step reaches its maximum about 5 minutes from each event, so that
+  // schedule has the fewest frames.
+  let fits = 1;
+  let tooMany = 0;
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const growth = (fits + tooMany) / 2;
+    if (schedule(growth).length <= frameBudget) fits = growth;
+    else tooMany = growth;
   }
-  if (frames.at(-1) !== window.lastMinuteMs) frames.push(window.lastMinuteMs);
-  return frames;
+  return schedule(fits);
 }

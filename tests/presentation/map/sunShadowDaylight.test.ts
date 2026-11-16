@@ -80,23 +80,45 @@ describe('clampToDaylight', () => {
 });
 
 describe('daylightFrameInstants', () => {
-  it('steps from two hours before sunrise to two hours after sunset without duplicates', () => {
+  it('keeps the even schedule frame count but packs whole minutes around sunrise and sunset', () => {
     const window = novemberWindow();
     const frames = daylightFrameInstants(window, 10);
+    const evenCount =
+      Math.ceil((window.lastMinuteMs - window.firstMinuteMs) / (10 * minute)) + 1;
 
-    expect(frames[0]).toBe(
-      Math.ceil(window.sunriseMs / minute) * minute - 120 * minute,
-    );
-    expect(frames.at(-1)).toBe(
-      Math.floor(window.sunsetMs / minute) * minute + 120 * minute,
-    );
-    expect(new Set(frames).size).toBe(frames.length);
-    for (let index = 1; index < frames.length - 1; index += 1) {
-      expect((frames[index] ?? 0) - (frames[index - 1] ?? 0)).toBe(10 * minute);
+    expect(frames[0]).toBe(window.firstMinuteMs);
+    expect(frames.at(-1)).toBe(window.lastMinuteMs);
+    expect(frames.length).toBeLessThanOrEqual(evenCount);
+    expect(frames.length).toBeGreaterThanOrEqual(evenCount - 3);
+    const steps = frames.slice(1).map((frame, index) => frame - (frames[index] ?? 0));
+    for (const step of steps) {
+      expect(step % minute).toBe(0);
+      expect(step).toBeGreaterThan(0);
+      expect(step).toBeLessThanOrEqual(30 * minute);
     }
-    const lastStep = (frames.at(-1) ?? 0) - (frames.at(-2) ?? 0);
-    expect(lastStep).toBeGreaterThan(0);
-    expect(lastStep).toBeLessThanOrEqual(10 * minute);
+    // Every minute within a few minutes of either event is a frame.
+    for (const event of [window.sunriseMs, window.sunsetMs]) {
+      const eventMinute = Math.floor(event / minute) * minute;
+      for (let offset = -3; offset <= 3; offset += 1) {
+        expect(frames).toContain(eventMinute + offset * minute);
+      }
+    }
+    // Midday moves in the longest steps.
+    const noon = (window.sunriseMs + window.sunsetMs) / 2;
+    const middayIndex = frames.findIndex((frame) => frame >= noon);
+    expect(steps[middayIndex]).toBe(30 * minute);
+  });
+
+  it('shows every minute of a window shorter than the frame count needs', () => {
+    const window: DaylightWindow = {
+      sunriseMs: 10 * minute,
+      sunsetMs: 15 * minute,
+      firstMinuteMs: 9 * minute,
+      lastMinuteMs: 13 * minute,
+    };
+    expect(daylightFrameInstants(window, 1)).toEqual(
+      [9, 10, 11, 12, 13].map((m) => m * minute),
+    );
   });
 });
 

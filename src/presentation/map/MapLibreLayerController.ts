@@ -453,8 +453,12 @@ function quantizeSunShadowInstant(instantMs: number): number {
  * and their many writers stay untouched.
  */
 const sunHiddenReliefMinZoom = 24;
-/** Day playback frames: sun instants 10 minutes apart, shown for 150 ms each (~6.7 fps). */
-const sunShadowPlaybackStepMinutes = 10;
+/**
+ * Day playback frames: as many as sun instants 10 minutes apart would give, but whole
+ * minutes around sunrise and sunset and up to 30 minutes apart at midday
+ * (`daylightFrameInstants`); each shows for 150 ms (~6.7 fps).
+ */
+const sunShadowPlaybackAverageStepMinutes = 10;
 const sunShadowPlaybackFrameMs = 150;
 /**
  * Frames this close to sunrise or sunset at the center still cache masks somewhere in
@@ -1439,7 +1443,7 @@ export class MapLibreLayerController {
       this.publishSunShadowPlayback({ status: 'failed' });
       return;
     }
-    const frames = daylightFrameInstants(window, sunShadowPlaybackStepMinutes);
+    const frames = daylightFrameInstants(window, sunShadowPlaybackAverageStepMinutes);
     // Playback runs from the current time to the end and wraps; the prefetch follows it.
     const startIndex = Math.max(
       frames.findIndex((frame) => frame >= this.#sunShadowInstantMs),

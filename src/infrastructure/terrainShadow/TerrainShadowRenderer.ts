@@ -88,6 +88,8 @@ const shadeUniformNames = [
   'uSkyLightShare',
   'uSkyOcclusionStrength',
   'uNightSkyLight',
+  'uNightTopLight',
+  'uNightTopLightFocus',
   'uDiffuseSkyFraction',
   'uSoftEdgeSigma',
 ] as const;
@@ -656,6 +658,8 @@ function drawShade(
   gl.uniform1f(uniforms.uSkyLightShare, lighting.skyLightShare);
   gl.uniform1f(uniforms.uSkyOcclusionStrength, lighting.skyOcclusionStrength);
   gl.uniform1f(uniforms.uNightSkyLight, lighting.nightSkyLight);
+  gl.uniform1f(uniforms.uNightTopLight, lighting.nightTopLight);
+  gl.uniform1f(uniforms.uNightTopLightFocus, lighting.nightTopLightFocus);
   gl.uniform1f(uniforms.uDiffuseSkyFraction, lighting.diffuseSkyFraction);
   gl.uniform1f(uniforms.uSoftEdgeSigma, lighting.softEdgeSigmaPixels);
   drawFullscreen(gpu);
@@ -714,6 +718,8 @@ export function terrainShadowMaskKey(
     lighting.skyLightShare,
     lighting.skyOcclusionStrength,
     lighting.nightSkyLight,
+    lighting.nightTopLight,
+    lighting.nightTopLightFocus,
     lighting.diffuseSkyFraction,
     lighting.softEdgeSigmaPixels,
   ].join('|');
@@ -865,7 +871,11 @@ export class TerrainShadowRenderer {
     const gpu = this.ensureGpu();
     const generation = this.#generation;
     const night = isTerrainShadowNightTile(request, request.instantMs);
-    if (night && request.lighting.nightSkyLight === 0) {
+    if (
+      night &&
+      request.lighting.nightSkyLight === 0 &&
+      request.lighting.nightTopLight === 0
+    ) {
       return {
         mask: nightMask,
         metrics: this.metrics({

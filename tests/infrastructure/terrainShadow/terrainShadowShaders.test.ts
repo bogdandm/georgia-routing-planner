@@ -151,6 +151,16 @@ describe('createShadeLookupTable', () => {
     expect(entryBytes(table, sunlightNightCode, neutralByte)[3]).toBeLessThanOrEqual(1);
   });
 
+  it('lights night relief above the neutral in the plain highlight color, without sunset hue', () => {
+    const [red = 0, green = 0, blue = 0, alpha = 0] = entryBytes(
+      table,
+      sunlightNightCode,
+      254,
+    );
+    expect(alpha).toBeGreaterThan(0);
+    expect(largestByteDifference([red, green, blue], palette.highlightColor)).toBe(0);
+  });
+
   it('moves the untouched neutral and the sky-only shade with the tuned values', () => {
     const tuned = createShadeLookupTable({ ...palette, neutralBrightness: 1 }, 0.5);
     // A neutral at full sun leaves flat ground in full sun untouched.
@@ -249,14 +259,37 @@ describe('createFlatShadeMask', () => {
     const dark = createFlatShadeMask(tile, nightMs, {
       skyLightShare: terrainShadeSkyLightShare,
       nightSkyLight: 0,
+      nightTopLight: 0,
     });
     expect(new Set(brightness(dark))).toEqual(new Set([0]));
     const brighter = createFlatShadeMask(tile, nightMs, {
       skyLightShare: 0.5,
       nightSkyLight: 1,
+      nightTopLight: 0,
     });
     expect(new Set(brightness(brighter))).toEqual(
       new Set([Math.round(0.5 * shadeBrightnessScale)]),
+    );
+  });
+
+  it('adds the night top light after the blue hour only, outside the sky-light share', () => {
+    const topLit = { skyLightShare: 0.5, nightSkyLight: 0, nightTopLight: 0.8 };
+    const night = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 22), topLit);
+    expect(new Set(brightness(night))).toEqual(
+      new Set([Math.round(0.8 * shadeBrightnessScale)]),
+    );
+    // Above full sun it is compressed like the shade pass: 1.6 → 1 + 0.6 / 1.6.
+    const bright = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 22), {
+      ...topLit,
+      nightTopLight: 1.6,
+    });
+    expect(new Set(brightness(bright))).toEqual(
+      new Set([Math.round((1 + 0.6 / 1.6) * shadeBrightnessScale)]),
+    );
+    // Daylight shading is unchanged.
+    const noonMs = Date.UTC(2026, 6, 1, 8, 30);
+    expect(createFlatShadeMask(tile, noonMs, topLit)).toEqual(
+      createFlatShadeMask(tile, noonMs, { ...topLit, nightTopLight: 0 }),
     );
   });
 });

@@ -31,6 +31,8 @@ const request: TerrainShadowTileRequest = {
     skyLightShare: 0.35,
     skyOcclusionStrength: 1.75,
     nightSkyLight: 0.6,
+    nightTopLight: 0,
+    nightTopLightFocus: 2,
     diffuseSkyFraction: 0.5,
     softEdgeSigmaPixels: 1,
   },

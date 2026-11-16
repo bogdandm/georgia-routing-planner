@@ -50,6 +50,9 @@ export const terrainShadowTileRequestSchema = z
         skyLightShare: z.number().gt(0).lt(1),
         skyOcclusionStrength: z.number().min(0).max(10),
         nightSkyLight: z.number().min(0).max(1),
+        nightTopLight: z.number().min(0).max(10),
+        // Exponent of a sky occlusion that may be 0, so it must stay above 0.
+        nightTopLightFocus: z.number().gt(0).max(20),
         diffuseSkyFraction: z.number().min(0).max(1),
         softEdgeSigmaPixels: z.number().min(0).max(10),
       })

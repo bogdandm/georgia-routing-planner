@@ -124,6 +124,17 @@ const diffuseSkyTransitionDegrees = 2;
  * of a tile shares one mask while gorges stay darker than ridges and open ground.
  */
 export const terrainShadeNightSkyLight = 0.6;
+/**
+ * Optional light from overhead after the blue hour, so peaks and ridges stay readable at
+ * night. Unlike the night sky it adds to the brightness directly, not through the sky-light
+ * share, so it never changes daylight shading. It lights a slope by its (1.5×
+ * exaggerated) zenith Lambert term times the terrain's sky occlusion raised to
+ * `focus`: higher focus keeps it on open crests and out of valleys. It fades in from half
+ * the night elevation (−3°) to the night elevation (−6°) and is constant below, so night
+ * tiles still share one mask. 0 by default.
+ */
+export const terrainShadeNightTopLight = 0;
+export const terrainShadeNightTopLightFocus = 2;
 
 /**
  * Shade-pass lighting the GPU reads as uniforms, so new values recompute shade masks
@@ -133,8 +144,11 @@ export const terrainShadeNightSkyLight = 0.6;
 export interface ShadeLighting {
   readonly skyLightShare: number;
   readonly skyOcclusionStrength: number;
-  /** 0 lights night relief by nothing, so night tiles take the plain night mask. */
+  /** With `nightTopLight` 0, 0 lights night relief by nothing: the plain night mask. */
   readonly nightSkyLight: number;
+  readonly nightTopLight: number;
+  /** Exponent of the sky occlusion in the night top light; above 0. */
+  readonly nightTopLightFocus: number;
   readonly diffuseSkyFraction: number;
   /** Truncated at `terrainShadowVisibilityMarginPixels`. */
   readonly softEdgeSigmaPixels: number;
@@ -144,6 +158,8 @@ export const defaultShadeLighting: ShadeLighting = {
   skyLightShare: terrainShadeSkyLightShare,
   skyOcclusionStrength,
   nightSkyLight: terrainShadeNightSkyLight,
+  nightTopLight: terrainShadeNightTopLight,
+  nightTopLightFocus: terrainShadeNightTopLightFocus,
   diffuseSkyFraction: terrainShadeDiffuseSkyFraction,
   softEdgeSigmaPixels: terrainShadowSoftEdgeSigmaPixels,
 };
@@ -485,6 +501,8 @@ uniform sampler2D uSkyView;
 uniform float uSkyLightShare;
 uniform float uSkyOcclusionStrength;
 uniform float uNightSkyLight;
+uniform float uNightTopLight;
+uniform float uNightTopLightFocus;
 uniform float uDiffuseSkyFraction;
 uniform float uSoftEdgeSigma;
 
@@ -582,7 +600,13 @@ void main() {
   ));
   float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare)
     + (1.0 - skyTwilight) * uNightSkyLight * diffuseSky;
-  float brightness = (1.0 - uSkyLightShare) * direct + uSkyLightShare * sky;
+  // Overhead light after the blue hour: none above half the night elevation, full from
+  // the night elevation down, so night masks stay independent of the instant.
+  float nightTop = 1.0 - smoothstep(
+    nightElevationDegrees, 0.5 * nightElevationDegrees, sun.apparentElevationDegrees
+  );
+  float brightness = (1.0 - uSkyLightShare) * direct + uSkyLightShare * sky
+    + uNightTopLight * nightTop * pow(occlusion, uNightTopLightFocus) * skyNormal.z;
   // Above full sun, x ↦ 1 + x / (1 + x) keeps sun-facing slopes ordered below 2 instead
   // of clipping them all to one tone.
   float overExposure = max(brightness - 1.0, 0.0);
@@ -691,7 +715,9 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * sky that lights it: `shadowColor` under a high Sun, turning to the lilac
  * `goldenShadowColor` as the Sun reaches the pixel's horizon, then over civil twilight to
  * the deep blue `lowSunShadowColor` and back to `shadowColor` by night. Light
- * is the highlight color tinted by the sunlight color, up to `highlightOpacity` from the
+ * is the highlight color tinted by the sunlight color (the tint fades out over the second
+ * half of the twilight codes, where only the night top light can still reach it), up to
+ * `highlightOpacity` from the
  * neutral to the compressed maximum of 2, plus a glow of up to `lowSunGlowOpacity` ×
  * `lowSun` that grows with the direct share of the brightness up to the compressed
  * maximum of 2, so slopes facing a low Sun keep their relief instead of one saturated
@@ -717,19 +743,19 @@ export function createShadeLookupTable(
     alpenglowColor,
     sunlightTintStrength: tintStrength,
   } = palette;
-  const tint = (sunlight: number) => 1 - tintStrength + tintStrength * sunlight;
   for (let code = 0; code < 256; code += 1) {
     const { color: sunlight, lowSun } = sunlightTone(code);
-    const lightColor: Rgb = [
-      highlightColor[0] * tint(sunlight[0]),
-      highlightColor[1] * tint(sunlight[1]),
-      highlightColor[2] * tint(sunlight[2]),
-    ];
     const twilightDepth =
       code > sunlightAirMassMaximumCode
         ? (code - sunlightAirMassMaximumCode - 1) /
           (sunlightNightCode - sunlightAirMassMaximumCode - 1)
         : 0;
+    const tint = tintStrength * (1 - smoothstep(0.5, 1, twilightDepth));
+    const lightColor: Rgb = [
+      highlightColor[0] * (1 - tint + tint * sunlight[0]),
+      highlightColor[1] * (1 - tint + tint * sunlight[1]),
+      highlightColor[2] * (1 - tint + tint * sunlight[2]),
+    ];
     let shadeColor: Rgb;
     if (code <= sunlightAirMassMaximumCode) {
       shadeColor = mixRgb(shadowColor, goldenShadowColor, lowSun);
@@ -840,16 +866,17 @@ export function expandShadeMask(
  * Shade mask of flat sea-level ground for a tile below `terrainShadowReliefMinZoom`,
  * without DEM, slopes, or cast shadows: the shade pass's terms for a flat pixel whose
  * horizon is the sea-level horizon (0°), so the direct Sun is the visible disk fraction
- * normalized like the GPU and the sky term is its twilight fade. Brightness and sunlight
+ * normalized like the GPU and the sky term is its twilight fade, plus the full night top
+ * light, compressed above 1 like the GPU. Brightness and sunlight
  * codes are evaluated at the sunlight grid samples, as the GPU codes are, and brightness
  * is interpolated bilinearly to pixels, so a tile costs 128² solar positions on the CPU.
  */
 export function createFlatShadeMask(
   tile: TerrainShadowTileAddress,
   instantMs: number,
-  lighting: Pick<ShadeLighting, 'skyLightShare' | 'nightSkyLight'>,
+  lighting: Pick<ShadeLighting, 'skyLightShare' | 'nightSkyLight' | 'nightTopLight'>,
 ): Uint8Array {
-  const { skyLightShare, nightSkyLight } = lighting;
+  const { skyLightShare, nightSkyLight, nightTopLight } = lighting;
   const mask = new Uint8Array(shadeMaskBytes);
   const gridBrightness = new Float32Array(sunlightGridSize * sunlightGridSize);
   const sun = subsolarPoint(new Date(instantMs));
@@ -886,10 +913,16 @@ export function createFlatShadeMask(
         Math.max(sine, flatReferenceSine);
       const twilight = Math.min(Math.max((elevation - night) / -night, 0), 1);
       const twilightSky = twilight * twilight * (3 - 2 * twilight);
-      // Flat ground sees the whole sky, so the night sky adds its full share.
+      // Flat ground sees the whole sky, so the night sky and the top light add in full.
       const sky = twilightSky + (1 - twilightSky) * nightSkyLight;
       const index = row * sunlightGridSize + column;
-      gridBrightness[index] = (1 - skyLightShare) * direct + skyLightShare * sky;
+      const brightness =
+        (1 - skyLightShare) * direct +
+        skyLightShare * sky +
+        nightTopLight * (1 - smoothstep(night, night / 2, elevation));
+      const overExposure = Math.max(brightness - 1, 0);
+      gridBrightness[index] =
+        Math.min(brightness, 1) + overExposure / (1 + overExposure);
       // `sunlightCode` of the shade shader at sea level, where the horizon is 0°.
       mask[tilePixels + index] =
         elevation < 0

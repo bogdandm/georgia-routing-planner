@@ -12,6 +12,7 @@ import {
   isTerrainShadowTileResult,
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
+  terrainShadowReliefMinZoom,
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { terrainShadowWorkerMethods } from '@/infrastructure/terrainShadow/TerrainShadowWorkerServer';
@@ -66,7 +67,9 @@ export interface TerrainShadowShading {
 
 export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
-  createTileUrl(instantMs: number): string;
+  createTileUrl(instantMs: number, fullQuality?: boolean): string;
+  /** Consumes a loaded draft once; its refresh must request the full tile. */
+  takeDraftTile(tileUrl: string, tile: TerrainShadowTileAddress): boolean;
   /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
   setInteractionActive(active: boolean): void;
   /**
@@ -111,6 +114,7 @@ interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly epochMinute: number;
   /** Index into the provider's shadings; 0 is `defaultTerrainShadowShading`. */
   readonly shading: number;
+  readonly fullQuality: boolean;
 }
 
 interface GateWaiter {
@@ -128,7 +132,7 @@ type MutableMetrics = {
 const millisecondsPerMinute = 60_000;
 /** Tiles of a shading other than the default end in `?shading=<index>`. */
 const tileAddressPattern = new RegExp(
-  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(?:\\?shading=(\\d+))?$`,
+  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(?:\\?shading=(\\d+))?((?:\\?|&)quality=full)?$`,
   'u',
 );
 
@@ -185,7 +189,14 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   ) {
     return null;
   }
-  return { epochMinute, z, x, y, shading: Number(match[5] ?? 0) };
+  return {
+    epochMinute,
+    z,
+    x,
+    y,
+    shading: Number(match[5] ?? 0),
+    fullQuality: match[6] !== undefined,
+  };
 }
 
 function emptyMetrics(memoryBytes: number): MutableMetrics {
@@ -217,6 +228,11 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     (value: TerrainShadowAvailability) => void
   >();
   readonly #gateWaiters = new Set<GateWaiter>();
+  /** Bounded camera history: minute replacements and refreshes never start with a draft. */
+  readonly #servedTiles = new Map<
+    string,
+    { url: string; tile: TerrainShadowTileAddress; draft: boolean; relief: boolean }
+  >();
   #rpc: WorkerRpcClient | null = null;
   #availability: TerrainShadowAvailability;
   #metrics = emptyMetrics(0);
@@ -247,12 +263,25 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     addProtocol(terrainShadowProtocolId, this.loadTile);
   }
 
-  public createTileUrl(instantMs: number): string {
+  public createTileUrl(instantMs: number, fullQuality = false): string {
     if (!Number.isFinite(instantMs))
       throw new RangeError('The sun instant must be finite.');
     const epochMinute = Math.floor(instantMs / millisecondsPerMinute);
     const shading = this.#shading === 0 ? '' : `?shading=${String(this.#shading)}`;
-    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${shading}`;
+    const quality = fullQuality ? `${shading === '' ? '?' : '&'}quality=full` : '';
+    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${shading}${quality}`;
+  }
+
+  public takeDraftTile(tileUrl: string, tile: TerrainShadowTileAddress): boolean {
+    const key = `${String(tile.z)}/${String(tile.x)}/${String(tile.y)}`;
+    const served = this.#servedTiles.get(key);
+    const url = tileUrl
+      .replace('{z}', String(tile.z))
+      .replace('{x}', String(tile.x))
+      .replace('{y}', String(tile.y));
+    if (served?.url !== url || !served.draft) return false;
+    served.draft = false;
+    return true;
   }
 
   public setShading(shading: TerrainShadowShading): void {
@@ -305,6 +334,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     this.#rpc?.dispose();
     this.#rpc = null;
     this.#availabilityListeners.clear();
+    this.#servedTiles.clear();
   }
 
   private readonly loadTile: AddProtocolAction = async (
@@ -321,19 +351,48 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (this.#availability === 'unavailable') {
       throw new Error('Terrain shadows are unavailable in this browser.');
     }
+    const key = `${String(address.z)}/${String(address.x)}/${String(address.y)}`;
+    const previous = this.#servedTiles.get(key);
+    const draft =
+      !address.fullQuality &&
+      previous === undefined &&
+      !this.hasReliefCoverage(address);
+    const served = {
+      url: parameters.url,
+      tile: address,
+      draft: false,
+      relief: previous?.relief ?? false,
+    };
+    this.#servedTiles.delete(key);
+    this.#servedTiles.set(key, served);
+    if (this.#servedTiles.size > 1024) {
+      const oldest = this.#servedTiles.keys().next().value;
+      if (oldest !== undefined) this.#servedTiles.delete(oldest);
+    }
     this.#pendingTiles += 1;
     try {
-      await this.waitForInteractionEnd(signal);
+      if (signal.aborted) throw abortError();
+      if (!draft) await this.waitForInteractionEnd(signal);
       const result = await this.ensureRpc().request<unknown>(
-        terrainShadowWorkerMethods.renderTile,
+        draft
+          ? terrainShadowWorkerMethods.renderDraft
+          : terrainShadowWorkerMethods.renderTile,
         this.createRequest(address, address.epochMinute, shading),
         signal,
       );
       if (!isTerrainShadowTileResult(result)) {
         throw new Error('The terrain shadow worker returned an invalid tile.');
       }
-      this.recordTile(result.metrics);
-      this.setAvailability('available');
+      if (draft && (!('draft' in result) || typeof result.draft !== 'boolean')) {
+        result.bitmap.close();
+        throw new Error('The terrain shadow worker returned an invalid draft.');
+      }
+      served.draft = draft && 'draft' in result && result.draft === true;
+      if (!served.draft) {
+        served.relief = address.z >= terrainShadowReliefMinZoom;
+        this.recordTile(result.metrics);
+        this.setAvailability('available');
+      }
       return { data: result.bitmap };
     } catch (error) {
       this.recordTileFailure(error, signal);
@@ -342,6 +401,23 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       this.#pendingTiles -= 1;
     }
   };
+
+  /** Keep MapLibre's parent/child relief until a new zoom has its full-resolution tile. */
+  private hasReliefCoverage(tile: TerrainShadowTileAddress): boolean {
+    for (const entry of this.#servedTiles.values()) {
+      if (!entry.relief) continue;
+      const zoom = Math.min(tile.z, entry.tile.z);
+      const tileScale = 2 ** (tile.z - zoom);
+      const entryScale = 2 ** (entry.tile.z - zoom);
+      if (
+        Math.floor(tile.x / tileScale) === Math.floor(entry.tile.x / entryScale) &&
+        Math.floor(tile.y / tileScale) === Math.floor(entry.tile.y / entryScale)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   public async prefetch(
     tiles: readonly TerrainShadowTileAddress[],

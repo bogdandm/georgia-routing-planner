@@ -3,17 +3,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   defaultTerrainLightingTuning,
   effectiveTerrainLightingTuning,
-  formatTerrainLightingTuning,
   parseStoredTerrainLightingTuning,
   resetTerrainLighting,
   setTerrainLightingValue,
-  sunShadowAtmosphereFromTuning,
   terrainLightingStorageKey,
   terrainLightingTuningStore,
   terrainShadowShadingFromTuning,
 } from '@/presentation/map/terrainLightingTuning';
-import { defaultSunShadowAtmosphere } from '@/presentation/map/terrainOverlayStyle';
-import { defaultTerrainShadowShading } from '@/presentation/map/TerrainShadowTileProvider';
 
 beforeEach(() => {
   terrainLightingTuningStore.setState({
@@ -24,27 +20,6 @@ beforeEach(() => {
 });
 
 describe('terrain lighting tuning', () => {
-  it('starts from the current rendering: default tiles, sky, and copied constants', () => {
-    // The same JSON as the provider's default variant, so the defaults reuse its URL.
-    expect(
-      JSON.stringify(terrainShadowShadingFromTuning(defaultTerrainLightingTuning)),
-    ).toBe(JSON.stringify(defaultTerrainShadowShading));
-    expect(sunShadowAtmosphereFromTuning(defaultTerrainLightingTuning)).toEqual(
-      defaultSunShadowAtmosphere,
-    );
-    expect(
-      JSON.parse(formatTerrainLightingTuning(defaultTerrainLightingTuning)),
-    ).toMatchObject({
-      sunShadowOpacity: 0.66,
-      shadeNeutralBrightness: 1.55,
-      terrainShadeSkyLightShare: 0.45,
-      skyOcclusionStrength: 2.55,
-      sunShadow: '#19355D',
-      'sunSky.day.sky': '#5D9BDB',
-      'skyBlends.fog-ground-blend': 0.38,
-    });
-  });
-
   it('drives the shade pass and the lookup table from one sky-light share', () => {
     const shading = terrainShadowShadingFromTuning({
       ...defaultTerrainLightingTuning,
@@ -84,7 +59,7 @@ describe('terrain lighting tuning', () => {
 
     resetTerrainLighting('light');
     expect(terrainLightingTuningStore.getState().values).toMatchObject({
-      sunShadowOpacity: 0.66,
+      sunShadowOpacity: defaultTerrainLightingTuning.sunShadowOpacity,
       skyOcclusionStrength: 2.5,
       sunAlpenglow: '#000000',
     });

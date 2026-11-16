@@ -3798,6 +3798,24 @@ export class MapLibreLayerController {
   private readonly handleSourceData = (event: MapSourceDataEvent): void => {
     if (event.sourceId === mapSourceIds.terrainSunShadow) {
       const map = this.#map;
+      // Metadata/content events omit coord, despite MapLibre declaring it as required.
+      const tile = (event as Partial<MapSourceDataEvent>).coord?.canonical;
+      if (
+        map !== null &&
+        tile !== undefined &&
+        this.#appliedSunShadowTileUrl !== null &&
+        this.sunShadowTiles.takeDraftTile(this.#appliedSunShadowTileUrl, tile)
+      ) {
+        const tileUrl = this.#appliedSunShadowTileUrl;
+        // refreshTiles only reloads renderable tiles. Wait until MapLibre has drawn the
+        // new draft; it then retains that image while the gated full render runs.
+        map.once('render', () => {
+          if (this.#map === map && this.#appliedSunShadowTileUrl === tileUrl) {
+            map.refreshTiles(mapSourceIds.terrainSunShadow, [tile]);
+          }
+        });
+        return;
+      }
       if (
         this.#sunShadowTilesDeferred &&
         map?.isSourceLoaded(mapSourceIds.terrainSunShadow) === true
@@ -4041,7 +4059,10 @@ export class MapLibreLayerController {
         this.sunShadowDaylight(map, this.#sunShadowInstantMs),
       );
       this.setSunShadowInstant(instantMs);
-      const tileUrl = this.sunShadowTiles.createTileUrl(this.#sunShadowInstantMs);
+      const tileUrl = this.sunShadowTiles.createTileUrl(
+        this.#sunShadowInstantMs,
+        this.#sunShadowPlaybackAbort !== null,
+      );
       const source = map.getSource(mapSourceIds.terrainSunShadow);
       if (source === undefined) {
         map.addSource(

@@ -297,10 +297,18 @@ uses 11:00 of that day after dark. An instant chosen in the panel is never repla
 only clamped to the range.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
-the module worker on the first tile request. Requests wait while the map is dragged,
-zoomed, or rotated, through the same interaction signal as contours; aborted requests
-leave the gate or cancel their worker job. The worker answers with an `ImageBitmap`,
-which MapLibre accepts directly, so no image is encoded.
+the module worker on the first tile request. A newly encountered camera tile first asks
+for `renderDraft`: a cached mask is final; otherwise flat sea-level shade is returned
+without DEM fetches or GPU setup, even during a drag. After its first map render, the
+controller calls `refreshTiles` for that canonical tile. MapLibre retains the draft
+while the full request waits for the interaction gate and the DEM/GPU calculation. A
+bounded 1024-coordinate history prevents another draft on refresh or a minute
+replacement. It also suppresses drafts wherever an already computed parent or child
+relief tile overlaps: zoom changes retain MapLibre's existing detail transition, never
+replacing relief with a flat preview. Play and GIF URLs carry `quality=full`, so even
+cache misses never show draft frames. Aborted requests leave the gate or cancel their
+worker job. The worker answers with an `ImageBitmap`, which MapLibre accepts directly,
+so no image is encoded.
 
 For an output tile at zoom z, the worker builds 3×3 DEM mosaics at z, z−2, and z−4
 (clamped to the DEM zoom range) around the tile, so occluders up to the 100 km cap are

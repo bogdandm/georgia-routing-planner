@@ -49,6 +49,7 @@ describe('TerrainShadowWorkerServer', () => {
     const render = vi.fn();
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render,
+      renderDraft: vi.fn(),
       prefetch: vi.fn(),
       dispose: vi.fn(),
     });
@@ -83,6 +84,7 @@ describe('TerrainShadowWorkerServer', () => {
     );
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render,
+      renderDraft: vi.fn(),
       prefetch: vi.fn(),
       dispose: vi.fn(),
     });
@@ -125,6 +127,7 @@ describe('TerrainShadowWorkerServer', () => {
     const prefetch = vi.fn(() => Promise.resolve(metrics));
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render: vi.fn(),
+      renderDraft: vi.fn(),
       prefetch,
       dispose: vi.fn(),
     });

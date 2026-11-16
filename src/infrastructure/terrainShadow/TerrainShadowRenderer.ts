@@ -136,6 +136,11 @@ interface GpuResources {
   readonly staticBytes: number;
 }
 
+interface ShadeMaskResult {
+  readonly mask: Uint8Array;
+  readonly metrics: TerrainShadowTileMetrics;
+}
+
 /** Decoded DEM tile; `texture === null` is a 404 tile treated as sea level 0 m. */
 interface DemTileEntry {
   readonly texture: WebGLTexture | null;
@@ -776,7 +781,41 @@ export class TerrainShadowRenderer {
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
   ): Promise<TerrainShadowTileResult> {
-    const { mask, metrics } = await this.ensureMask(request, signal);
+    return this.colorize(request, await this.ensureMask(request, signal));
+  }
+
+  /**
+   * The finished tile when it needs no GPU pass (a coarse tile, plain night, or a cached
+   * mask), otherwise a flat-ground draft (`createFlatShadeMask`) that MapLibre can show
+   * at once while the real tile waits for the DEM and the GPU queue.
+   */
+  public async renderDraft(
+    request: TerrainShadowTileRequest,
+    signal: AbortSignal,
+  ): Promise<TerrainShadowTileResult & { readonly draft: boolean }> {
+    throwIfAborted(signal);
+    if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
+    const ready = this.readyMask(request);
+    if (ready !== null)
+      return { ...(await this.colorize(request, ready)), draft: false };
+    return {
+      ...(await this.colorize(request, this.flatMask(request))),
+      draft: true,
+    };
+  }
+
+  /** Computes and caches the shade mask of `request` without producing a bitmap. */
+  public async prefetch(
+    request: TerrainShadowTileRequest,
+    signal: AbortSignal,
+  ): Promise<TerrainShadowTileMetrics> {
+    return (await this.ensureMask(request, signal)).metrics;
+  }
+
+  private async colorize(
+    request: TerrainShadowTileRequest,
+    { mask, metrics }: ShadeMaskResult,
+  ): Promise<TerrainShadowTileResult> {
     const startedAt = performance.now();
     const table = this.shadeTable(request);
     const bitmap = await createImageBitmap(
@@ -793,14 +832,6 @@ export class TerrainShadowRenderer {
         computeMs: metrics.computeMs + performance.now() - startedAt,
       },
     };
-  }
-
-  /** Computes and caches the shade mask of `request` without producing a bitmap. */
-  public async prefetch(
-    request: TerrainShadowTileRequest,
-    signal: AbortSignal,
-  ): Promise<TerrainShadowTileMetrics> {
-    return (await this.ensureMask(request, signal)).metrics;
   }
 
   private shadeTable(request: TerrainShadowTileRequest): Uint32Array {
@@ -845,64 +876,58 @@ export class TerrainShadowRenderer {
     return { texture, fresh: true };
   }
 
-  private async ensureMask(
-    request: TerrainShadowTileRequest,
-    signal: AbortSignal,
-  ): Promise<{
-    readonly mask: Uint8Array;
-    readonly metrics: TerrainShadowTileMetrics;
-  }> {
-    throwIfAborted(signal);
-    if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
-    // Coarse tiles shade flat ground on the CPU: no GPU context, DEM, or cache memory.
-    if (request.z < terrainShadowReliefMinZoom) {
-      const startedAt = performance.now();
-      const mask = createFlatShadeMask(request, request.instantMs, request.lighting);
-      return {
-        mask,
-        metrics: this.metrics({
-          computeMs: performance.now() - startedAt,
-          demFetchMs: 0,
-          cacheHit: false,
-          demTilesFetched: 0,
-        }),
-      };
-    }
-    const gpu = this.ensureGpu();
-    const generation = this.#generation;
+  /** Flat sea-level ground on the CPU: no GPU context, DEM, or cache memory. */
+  private flatMask(request: TerrainShadowTileRequest): ShadeMaskResult {
+    const startedAt = performance.now();
+    const mask = createFlatShadeMask(request, request.instantMs, request.lighting);
+    return {
+      mask,
+      metrics: this.metrics({
+        computeMs: performance.now() - startedAt,
+        demFetchMs: 0,
+        cacheHit: false,
+        demTilesFetched: 0,
+      }),
+    };
+  }
+
+  /**
+   * The final mask of `request` when it needs no DEM or GPU pass: a coarse tile's flat
+   * ground, the shared plain night mask, or a cached mask; otherwise null.
+   */
+  private readyMask(request: TerrainShadowTileRequest): ShadeMaskResult | null {
+    if (request.z < terrainShadowReliefMinZoom) return this.flatMask(request);
     const night = isTerrainShadowNightTile(request, request.instantMs);
+    const hitMetrics = () =>
+      this.metrics({ computeMs: 0, demFetchMs: 0, cacheHit: true, demTilesFetched: 0 });
     if (
       night &&
       request.lighting.nightSkyLight === 0 &&
       request.lighting.nightTopLight === 0
     ) {
-      return {
-        mask: nightMask,
-        metrics: this.metrics({
-          computeMs: 0,
-          demFetchMs: 0,
-          cacheHit: true,
-          demTilesFetched: 0,
-        }),
-      };
+      return { mask: nightMask, metrics: hitMetrics() };
     }
     // Night shade lit only by the faint night sky does not depend on the instant, so every
     // night frame of a tile shares one cached mask.
     const maskKey = terrainShadowMaskKey(request, night);
     const cached = this.#masks.get(maskKey);
-    if (cached !== undefined) {
-      this.storeMask(maskKey, cached);
-      return {
-        mask: cached,
-        metrics: this.metrics({
-          computeMs: 0,
-          demFetchMs: 0,
-          cacheHit: true,
-          demTilesFetched: 0,
-        }),
-      };
-    }
+    if (cached === undefined) return null;
+    this.storeMask(maskKey, cached);
+    return { mask: cached, metrics: hitMetrics() };
+  }
 
+  private async ensureMask(
+    request: TerrainShadowTileRequest,
+    signal: AbortSignal,
+  ): Promise<ShadeMaskResult> {
+    throwIfAborted(signal);
+    if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
+    const ready = this.readyMask(request);
+    if (ready !== null) return ready;
+    const gpu = this.ensureGpu();
+    const generation = this.#generation;
+    const night = isTerrainShadowNightTile(request, request.instantMs);
+    const maskKey = terrainShadowMaskKey(request, night);
     const levels = terrainShadowLevelZooms(
       request.z,
       request.demMinZoom,

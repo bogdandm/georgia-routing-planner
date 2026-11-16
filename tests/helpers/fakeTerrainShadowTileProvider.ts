@@ -48,12 +48,17 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
   }
 
   /** Like the real provider, every distinct shading gets its own `?shading=` URL. */
-  public createTileUrl(instantMs: number): string {
+  public createTileUrl(instantMs: number, fullQuality = false): string {
     const key = JSON.stringify(this.shading);
     const index = this.#shadingIndexByKey.get(key) ?? this.#shadingIndexByKey.size;
     this.#shadingIndexByKey.set(key, index);
     const shading = index === 0 ? '' : `?shading=${String(index)}`;
-    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}${shading}`;
+    const quality = fullQuality ? `${shading === '' ? '?' : '&'}quality=full` : '';
+    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}${shading}${quality}`;
+  }
+
+  public takeDraftTile(_tileUrl: string, _tile: TerrainShadowTileAddress): boolean {
+    return false;
   }
 
   public setInteractionActive(active: boolean): void {

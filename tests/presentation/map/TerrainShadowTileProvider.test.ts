@@ -87,7 +87,16 @@ class FakeShadowWorker implements WorkerRpcEndpoint {
   }
 
   public respond(index: number, value: unknown): void {
-    this.dispatchMessage({ type: 'result', requestId: this.requestId(index), value });
+    // Ordinary responses model a completed mask; draft-specific tests override the flag.
+    const response =
+      typeof value === 'object' && value !== null && 'bitmap' in value
+        ? { draft: false, ...value }
+        : value;
+    this.dispatchMessage({
+      type: 'result',
+      requestId: this.requestId(index),
+      value: response,
+    });
   }
 
   public fail(
@@ -263,11 +272,113 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.dispose();
   });
 
-  it('holds tile requests during map interaction and releases them afterwards', async () => {
+  it('shows a draft during a drag, then gates its full refresh without drafting later minutes', async () => {
+    const { provider, worker } = createProvider();
+    const tile = { z: 12, x: 2541, y: 1514 };
+    provider.setInteractionActive(true);
+    const initial = loadTile();
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+    expect(worker.requests[0]?.method).toBe('terrain-shadow.render-draft');
+    worker.respond(0, {
+      bitmap: new FakeImageBitmap(),
+      metrics: renderedMetrics,
+      draft: true,
+    });
+    await initial;
+    expect(provider.getMetrics().tilesRendered).toBe(0);
+    expect(provider.getAvailability()).toBe('unknown');
+    expect(
+      provider.takeDraftTile(provider.createTileUrl(instantMs + 60_000), tile),
+    ).toBe(false);
+    expect(provider.takeDraftTile(provider.createTileUrl(instantMs), tile)).toBe(true);
+    expect(provider.takeDraftTile(provider.createTileUrl(instantMs), tile)).toBe(false);
+
+    const refresh = loadTile();
+    await Promise.resolve();
+    expect(worker.requests).toHaveLength(1);
+    provider.setInteractionActive(false);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(2);
+    });
+    expect(worker.requests[1]?.method).toBe('terrain-shadow.render-tile');
+    worker.respond(1, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await refresh;
+    expect(provider.getAvailability()).toBe('available');
+    const next = loadTile(
+      tileUrl.replace(String(epochMinute), String(epochMinute + 1)),
+    );
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(3);
+    });
+    expect(worker.requests[2]?.method).toBe('terrain-shadow.render-tile');
+    worker.respond(2, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await next;
+    provider.dispose();
+  });
+
+  it('never drafts a full-quality playback tile, even outside the camera history', async () => {
+    const { provider, worker } = createProvider();
+    const url = provider
+      .createTileUrl(instantMs, true)
+      .replace('{z}', '12')
+      .replace('{x}', '2541')
+      .replace('{y}', '1514');
+    const tile = loadTile(url);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+    expect(worker.requests[0]?.method).toBe('terrain-shadow.render-tile');
+    worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await tile;
+    expect(
+      provider.takeDraftTile(provider.createTileUrl(instantMs, true), {
+        z: 12,
+        x: 2541,
+        y: 1514,
+      }),
+    ).toBe(false);
+    provider.dispose();
+  });
+
+  it.each([
+    ['in', '11/1270/757', 12, 2541, 1514],
+    ['out', '12/2541/1514', 11, 1270, 757],
+  ] as const)(
+    'keeps existing relief when zooming %s instead of replacing it with flat shade',
+    async (_direction, initialAddress, z, x, y) => {
+      const { provider, worker } = createProvider();
+      const initial = loadTile(
+        `terrain-shadow://${String(epochMinute)}/${initialAddress}`,
+      );
+      await vi.waitFor(() => {
+        expect(worker.requests).toHaveLength(1);
+      });
+      worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+      await initial;
+      provider.setInteractionActive(true);
+      const zoomed = loadTile(
+        `terrain-shadow://${String(epochMinute)}/${String(z)}/${String(x)}/${String(y)}`,
+      );
+      await Promise.resolve();
+      expect(worker.requests).toHaveLength(1);
+      provider.setInteractionActive(false);
+      await vi.waitFor(() => {
+        expect(worker.requests).toHaveLength(2);
+      });
+      expect(worker.requests[1]?.method).toBe('terrain-shadow.render-tile');
+      worker.respond(1, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+      await zoomed;
+      provider.dispose();
+    },
+  );
+
+  it('holds full-quality tile requests during map interaction and releases them afterwards', async () => {
     const { provider, worker } = createProvider();
     provider.setInteractionActive(true);
 
-    const tile = loadTile();
+    const tile = loadTile(`${tileUrl}?quality=full`);
     await Promise.resolve();
     await Promise.resolve();
     expect(worker.requests).toHaveLength(0);
@@ -288,7 +399,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.setInteractionActive(true);
     const controller = new AbortController();
 
-    const tile = loadTile(tileUrl, controller);
+    const tile = loadTile(`${tileUrl}?quality=full`, controller);
     controller.abort();
 
     await expect(tile).rejects.toMatchObject({ name: 'AbortError' });

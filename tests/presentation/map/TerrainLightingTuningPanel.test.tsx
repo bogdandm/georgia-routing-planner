@@ -27,8 +27,8 @@ describe('TerrainLightingTuningPanel', () => {
     const opacity = screen.getByRole('slider', { name: 'sunShadowOpacity' });
     opacity.focus();
     await user.keyboard('{ArrowRight}');
-    expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.67);
-    expect(screen.getByText('0.67')).toBeInTheDocument();
+    expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.63);
+    expect(screen.getByText('0.63')).toBeInTheDocument();
 
     // GPU values carry a marker and land in the store once the keyboard step commits.
     const share = screen.getByRole('slider', { name: 'terrainShadeSkyLightShare' });
@@ -42,7 +42,7 @@ describe('TerrainLightingTuningPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Before' }));
     expect(terrainLightingTuningStore.getState()).toMatchObject({
       showDefaults: true,
-      values: { sunShadowOpacity: 0.67 },
+      values: { sunShadowOpacity: 0.63 },
     });
     await user.click(screen.getByRole('button', { name: 'After' }));
     expect(terrainLightingTuningStore.getState().showDefaults).toBe(false);

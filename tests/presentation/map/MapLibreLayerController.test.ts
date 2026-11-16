@@ -163,6 +163,14 @@ class FakeLayerMap {
     return this;
   }
 
+  public once(type: string, listener: Listener): this {
+    const once: Listener = (event) => {
+      this.off(type, once);
+      listener(event);
+    };
+    return this.on(type, once);
+  }
+
   public off(type: string, listener: Listener): this {
     this.#listeners.get(type)?.delete(listener);
     return this;
@@ -2819,6 +2827,39 @@ describe('MapLibreLayerController', () => {
     });
   });
 
+  it.each([false, true])(
+    'refines only after a draft is drawn and skips replaced sources (replace=%s)',
+    (replace) => {
+      const { controller, shadows } = createSunShadowController();
+      const map = new FakeLayerMap();
+      controller.attach(map as unknown as MapLibreMap);
+      controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+      vi.spyOn(shadows, 'takeDraftTile').mockReturnValueOnce(true);
+      const tile = { z: 12, x: 2541, y: 1514 };
+      map.fire('sourcedata', {
+        sourceId: mapSourceIds.terrainSunShadow,
+        coord: { canonical: tile },
+      });
+      expect(map.refreshTilesCalls).toEqual([]);
+      if (replace)
+        controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+      map.fire('render', {});
+      expect(map.refreshTilesCalls).toEqual(
+        replace
+          ? []
+          : [
+              {
+                sourceId: mapSourceIds.terrainSunShadow,
+                tileIds: [tile],
+              },
+            ],
+      );
+      map.fire('render', {});
+      expect(map.refreshTilesCalls).toHaveLength(replace ? 0 : 1);
+      controller.dispose();
+    },
+  );
+
   it('hides the fixed-light relief through its zoom range only while sun shadows draw', () => {
     const { controller } = createSunShadowController();
     const map = new FakeLayerMap();
@@ -2931,7 +2972,7 @@ describe('MapLibreLayerController', () => {
     // Before draws the defaults at once and keeps the tuned values; After restores them.
     terrainLightingTuningStore.setState({ showDefaults: true });
     expect(setTiles).toHaveBeenLastCalledWith([defaultUrl]);
-    expect(opacity()).toBe(0.66);
+    expect(opacity()).toBe(defaultTerrainLightingTuning.sunShadowOpacity);
     expect(map.sky).toMatchObject({ 'sky-color': 'rgb(93, 155, 219)' });
     expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.8);
     terrainLightingTuningStore.setState({ showDefaults: false });

@@ -73,7 +73,7 @@ export const mapVisualPalette = {
      * `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
      */
     sunShadow: '#19355D',
-    sunShadowOpacity: 0.66,
+    sunShadowOpacity: 0.62,
     sunHighlight: '#FFF7E6',
     sunHighlightOpacity: 0.8,
     sunGoldenShadow: '#3B2867',

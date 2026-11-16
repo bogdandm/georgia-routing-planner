@@ -784,27 +784,29 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   day's sunrise and sunset at the center shown below. The slider runs from two hours
   before the first whole minute after sunrise to two hours after the last whole minute
   before sunset, kept within the local day; on a day without both (polar day or night)
-  it spans 00:00 to 23:59. **Now** and a session that starts after dark (outside
-  sunrise–sunset at the map center) use 11:00 of that day instead, so the map never
-  opens fully shaded. Any other instant outside the range (such as a date change or a
-  key step past its end) moves to its nearest end at the map center before shadows draw;
-  while the Sun is below the horizon the whole map is in shade. **Play the day**, left
-  of the slider and available while shadows are on, computes shadows for as many frames
-  as a 10-minute schedule would have, but spaced unevenly: every minute around sunrise
-  and sunset, growing to 30 minutes at midday and toward the dark ends of the range, for
-  the shown day over the visible tiles, from the current time to the end of the range
-  and then from its start, showing a percentage and a cancel button. It loops the frames
-  in that order at about 6–7 frames per second, each frame shown only once its tiles are
-  drawn, and starts before the computation ends once the remaining frames are estimated
-  to be ready before the animation reaches them; **Stop** ends it. Any map move, a
-  change in the panel or by key, or turning shadows off stops playback. A view needing
-  more than 2560 tile frames between half an hour before sunrise and half an hour after
-  sunset shows a note to zoom in instead, until the map moves, and a failed computation
-  shows an error note. Browsers that cannot render floating-point targets in a worker
-  (WebGL2 with `EXT_color_buffer_float` and `OffscreenCanvas`) see a disabled switch
-  with an explanation. Only the switch persists (default off); the instant and playback
-  are session state, and the instant starts at the current time (11:00 after dark). The
-  overlay is described in [Map, terrain, and persistence](#map-terrain-and-persistence).
+  it spans 00:00 to 23:59. **Now** after dark (outside sunrise–sunset at the map center)
+  uses 11:00 of that day instead, so the map never shows fully shaded. Any other instant
+  outside the range (such as a date change or a key step past its end) moves to its
+  nearest end at the map center before shadows draw; while the Sun is below the horizon
+  the whole map is in shade. **Play the day**, left of the slider and available while
+  shadows are on, computes shadows for as many frames as a 10-minute schedule would
+  have, but spaced unevenly: every minute around sunrise and sunset, growing to 30
+  minutes at midday and toward the dark ends of the range, for the shown day over the
+  visible tiles, from the current time to the end of the range and then from its start,
+  showing a percentage and a cancel button. It loops the frames in that order at about
+  6–7 frames per second, each frame shown only once its tiles are drawn, and starts
+  before the computation ends once the remaining frames are estimated to be ready before
+  the animation reaches them; **Stop** ends it. Any map move, a change in the panel or
+  by key, or turning shadows off stops playback. A view needing more than 2560 tile
+  frames between half an hour before sunrise and half an hour after sunset shows a note
+  to zoom in instead, until the map moves, and a failed computation shows an error note.
+  Browsers that cannot render floating-point targets in a worker (WebGL2 with
+  `EXT_color_buffer_float` and `OffscreenCanvas`) see a disabled switch with an
+  explanation. Only the switch persists (default off); the instant and playback are
+  session state, and every session, including one after a reload with the switch on,
+  starts three hours after today's sunrise at the map center (11:00 on a day without
+  sunrise and sunset), whatever the user's clock says. The overlay is described in
+  [Map, terrain, and persistence](#map-terrain-and-persistence).
 - **Image comparison:** on desktop, the compare button below the sun button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

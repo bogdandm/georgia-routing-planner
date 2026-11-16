@@ -94,8 +94,8 @@ export function clampToDaylight(
 
 /**
  * The current instant while the Sun is up at `place`; otherwise 11:00 on the same local
- * day, so a session or **Now** at night never opens with the whole map in shade.
- * Unchanged on a day without sunrise and sunset.
+ * day, so **Now** at night never shows the whole map in shade. Unchanged on a day without
+ * sunrise and sunset.
  */
 export function sunlitNow(
   nowMs: number,
@@ -106,8 +106,31 @@ export function sunlitNow(
   if (window === null || (nowMs >= window.sunriseMs && nowMs <= window.sunsetMs)) {
     return nowMs;
   }
-  const date = instantToZonedWallTime(new Date(nowMs), timeZone);
+  return elevenOClock(nowMs, timeZone);
+}
+
+function elevenOClock(dayMs: number, timeZone: string): number {
+  const date = instantToZonedWallTime(new Date(dayMs), timeZone);
   return zonedWallTimeToInstant({ ...date, hour: 11, minute: 0 }, timeZone).getTime();
+}
+
+/** How long after sunrise a session opens sun shadows. */
+const sessionStartAfterSunriseMilliseconds = 3 * 60 * millisecondsPerMinute;
+
+/**
+ * The instant a session opens sun shadows on: three hours after sunrise on the local day
+ * of `dayMs` at `place`, so every reload shows the same morning light whatever the user's
+ * clock says. 11:00 of that day when it has no sunrise and sunset.
+ */
+export function sessionStartInstant(
+  dayMs: number,
+  place: { readonly latitude: number; readonly longitude: number },
+  timeZone: string,
+): number {
+  const window = daylightWindow(dayMs, place, timeZone);
+  return window === null
+    ? elevenOClock(dayMs, timeZone)
+    : window.sunriseMs + sessionStartAfterSunriseMilliseconds;
 }
 
 /** The longest step between frames, as a multiple of the average step. */

@@ -289,10 +289,12 @@ coverage index, flat mercator terrain without curvature, clipped at the far plan
 clips the element with a polygon along that skyline; the halo fades by the visible disk
 fraction. It hides without 3D terrain and below −1° apparent elevation.
 
-The session instant starts at the current time. On the first reconciliation with a map,
-a start time outside sunrise–sunset at the map center becomes 11:00 of that local day,
-so the map never opens fully shaded; the panel's **Now** applies the same rule. An
-instant chosen in the panel is never replaced, only clamped to the range.
+On the first reconciliation with a map, the session instant moves to three hours after
+sunrise of today at the map center (`sessionStartInstant`; 11:00 on a day without
+sunrise and sunset), so every page load opens on the same morning light regardless of
+the user's clock. The panel's **Now** keeps the current time while the Sun is up and
+uses 11:00 of that day after dark. An instant chosen in the panel is never replaced,
+only clamped to the range.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
 the module worker on the first tile request. Requests wait while the map is dragged,

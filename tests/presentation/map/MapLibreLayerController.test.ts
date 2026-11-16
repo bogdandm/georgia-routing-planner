@@ -2749,17 +2749,22 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('starts a session that opens at night at 11:00 on that day at the map center', () => {
+  it('starts a session three hours after sunrise of today at the map center', () => {
     vi.useFakeTimers();
-    // 23:15 in Tbilisi (UTC+4).
-    vi.setSystemTime(Date.UTC(2026, 6, 1, 19, 15));
+    // 14:20 in Tbilisi (UTC+4): the user's clock no longer picks the instant.
+    vi.setSystemTime(Date.UTC(2026, 6, 1, 10, 20));
     const { controller } = createSunShadowController();
     const map = new FakeLayerMap();
 
     controller.attach(map as unknown as MapLibreMap);
 
+    const window = daylightWindow(
+      Date.UTC(2026, 6, 1, 10, 20),
+      { latitude: 42.71, longitude: 43.14 },
+      'Asia/Tbilisi',
+    );
     expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
-      Date.UTC(2026, 6, 1, 7, 0),
+      Math.floor(((window?.sunriseMs ?? 0) + 3 * 60 * 60_000) / 60_000) * 60_000,
     );
     // A time the user picks afterwards is never replaced, only kept within the range.
     const userEveningMs = Date.UTC(2026, 6, 1, 17, 0);
@@ -2902,7 +2907,7 @@ describe('MapLibreLayerController', () => {
     // Before draws the defaults at once and keeps the tuned values; After restores them.
     terrainLightingTuningStore.setState({ showDefaults: true });
     expect(setTiles).toHaveBeenLastCalledWith([defaultUrl]);
-    expect(opacity()).toBe(0.5);
+    expect(opacity()).toBe(0.66);
     expect(map.sky).toMatchObject({ 'sky-color': 'rgb(93, 155, 219)' });
     expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.8);
     terrainLightingTuningStore.setState({ showDefaults: false });

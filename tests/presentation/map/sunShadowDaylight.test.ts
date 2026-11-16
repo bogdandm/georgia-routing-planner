@@ -5,6 +5,7 @@ import {
   type DaylightWindow,
   daylightFrameInstants,
   daylightWindow,
+  sessionStartInstant,
   sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
 
@@ -147,5 +148,29 @@ describe('sunlitNow', () => {
     expect(sunlitNow(polarNight, { latitude: 78.2, longitude: 15.6 }, 'UTC')).toBe(
       polarNight,
     );
+  });
+});
+
+describe('sessionStartInstant', () => {
+  it('opens every session of a local day three hours after its sunrise', () => {
+    // November sunrise at Tchkhutkharo is about 07:58.
+    for (const nowMs of [tbilisiTime(0, 5), tbilisiTime(13, 40), tbilisiTime(23, 55)]) {
+      expect(
+        Math.abs(
+          sessionStartInstant(nowMs, tchkhutkharo, 'Asia/Tbilisi') -
+            tbilisiTime(10, 58),
+        ),
+      ).toBeLessThanOrEqual(minute);
+    }
+  });
+
+  it('opens at 11:00 on a day without sunrise and sunset', () => {
+    expect(
+      sessionStartInstant(
+        Date.UTC(2026, 11, 21, 3),
+        { latitude: 78.2, longitude: 15.6 },
+        'UTC',
+      ),
+    ).toBe(Date.UTC(2026, 11, 21, 11));
   });
 });

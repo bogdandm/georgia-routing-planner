@@ -144,7 +144,7 @@ import {
   daylightFrameInstants,
   daylightWindow,
   localDayBounds,
-  sunlitNow,
+  sessionStartInstant,
 } from '@/presentation/map/sunShadowDaylight';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
@@ -1089,7 +1089,7 @@ export class MapLibreLayerController {
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
   #sunShadowPlaybackFrames: readonly number[] = [];
   #sunShadowPlaybackIndex = 0;
-  /** True until the session's start instant (now) was checked against the map's night. */
+  /** True until the session's start instant was moved to the map center's morning. */
   #sunShadowInstantIsSessionStart = true;
   /** Sun disk over the 3D map while shadows draw; present while a map is attached. */
   #sunDisk: SunDiskOverlay | null = null;
@@ -3958,13 +3958,13 @@ export class MapLibreLayerController {
       );
     };
     try {
-      // The session starts at the current time; at night that would open fully shaded.
+      // The session opens three hours after sunrise of today at the map center.
       if (this.#sunShadowInstantIsSessionStart) {
         this.#sunShadowInstantIsSessionStart = false;
         const { place, timeZone } = this.sunShadowPlace(map);
         this.setSunShadowInstant(
           quantizeSunShadowInstant(
-            sunlitNow(this.#sunShadowInstantMs, place, timeZone),
+            sessionStartInstant(this.#sunShadowInstantMs, place, timeZone),
           ),
         );
       }

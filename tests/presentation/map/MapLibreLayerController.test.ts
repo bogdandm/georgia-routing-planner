@@ -8,6 +8,7 @@ import {
   SAVED_MARKER_SCHEMA_VERSION,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
+import { solarPosition } from '@/domain/terrain/solarPosition';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
@@ -73,6 +74,7 @@ class FakeLayerMap {
   readonly terrainCalls: unknown[] = [];
   sky: unknown = undefined;
   skyCalls = 0;
+  bearing = 17;
   loadSourceOnNextSourceDataSubscription = false;
   styleLoaded = true;
   directRasterSourceAdds = 0;
@@ -352,7 +354,7 @@ class FakeLayerMap {
   }
 
   public getBearing(): number {
-    return 17;
+    return this.bearing;
   }
 
   public getPitch(): number {
@@ -2777,13 +2779,25 @@ describe('MapLibreLayerController', () => {
       'Asia/Tbilisi',
     );
     if (window === null) throw new Error('The Caucasus has a sunset.');
-    controller.setSunShadow({ enabled: true, instantMs: window.sunsetMs });
-    const horizon = /^rgb\((\d+), (\d+), (\d+)\)$/u
-      .exec(String((map.sky as Record<string, unknown>)['horizon-color']))
-      ?.slice(1)
-      .map(Number);
-    // Warm sunset glow: red well above blue, unlike the pale blue noon horizon.
-    expect((horizon?.[0] ?? 0) - (horizon?.[2] ?? 0)).toBeGreaterThan(80);
+    const sunsetGlowMs = window.sunsetMs - 5 * 60_000;
+    map.bearing = solarPosition(new Date(sunsetGlowMs), 42.71, 43.14).azimuthDegrees;
+    controller.setSunShadow({ enabled: true, instantMs: sunsetGlowMs });
+    const horizon = () =>
+      /^rgb\((\d+), (\d+), (\d+)\)$/u
+        .exec(String((map.sky as Record<string, unknown>)['horizon-color']))
+        ?.slice(1)
+        .map(Number) ?? [];
+    // Facing the Sun: warm sunset glow, red well above blue, unlike the pale noon horizon.
+    const [sunRed = 0, sunGreen = 0, sunBlue = 0] = horizon();
+    expect(sunRed - sunBlue).toBeGreaterThan(80);
+    expect(sunGreen).toBeGreaterThan(sunBlue);
+
+    // Rotating to face away turns the horizon rose without waiting for the camera to settle.
+    map.bearing += 180;
+    map.fire('rotate', {});
+    const [awayRed = 0, awayGreen = 0, awayBlue = 0] = horizon();
+    expect(awayRed).toBeLessThan(sunRed);
+    expect(awayBlue).toBeGreaterThan(awayGreen);
 
     controller.setSunShadow({ enabled: false, instantMs: window.sunsetMs });
     expect(map.sky).toMatchObject({

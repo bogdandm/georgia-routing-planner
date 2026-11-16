@@ -261,10 +261,14 @@ hits the mask cache. Compare panes never add the source.
 The same reconciliation sets the style `sky` while shadows draw (`createSunShadowSky` in
 `terrainOverlayStyle.ts`): the Sun's apparent elevation at the map center and the shadow
 instant blends the day, twilight, and night `sunSky` palette colors (day above 10°,
-twilight from −1° to the −6° night elevation), and between 14° and −4° the horizon and
-fog colors mix in up to 85% and 60% of `directSunlightColor` for the relative optical
-air mass at the center's terrain height (exaggeration removed), strongest about 1° above
-the horizon. Channels are rounded and an unchanged sky is not set again, because
+twilight from −1° to the −6° night elevation). MapLibre's sky and fog have no azimuth,
+so direction comes from the camera: with c the cosine between the bearing and the Sun's
+azimuth, between 14° and −4° the horizon and fog mix in `directSunlightColor` for the
+relative optical air mass at the center's terrain height (exaggeration removed), up to
+15% + 70% · ((1 + c) / 2)² and 35% + 25% · ((1 + c) / 2)², strongest about 1° above the
+horizon; from 6° above to 5° below the horizon the horizon also mixes in up to 60% · ((1
+− c) / 2)² of the rose `antisolarHorizon`. A `rotate` listener reapplies the sky while
+the camera turns. Channels are rounded and an unchanged sky is not set again, because
 `setSky` repaints. The style's zero `transition` makes each playback frame's sky apply
 at once. Turning shadows off sets a transparent sky without fog, which draws like a
 style without `sky`; a map that never drew shadows keeps no sky. Every sky property is

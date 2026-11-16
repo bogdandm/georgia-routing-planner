@@ -64,24 +64,43 @@ describe('terrain overlay style contracts', () => {
   });
 
   it('turns the sky from day blue to a warm sunset horizon and dark night', () => {
-    const day = createSunShadowSky(45, 0);
-    expect(day).toMatchObject({
-      'sky-color': 'rgb(93, 155, 219)',
-      'horizon-color': 'rgb(213, 228, 240)',
-      'fog-color': 'rgb(207, 220, 231)',
-    });
+    // By day and night the camera direction does not matter.
+    for (const cosineToSun of [1, -1]) {
+      expect(createSunShadowSky(45, 0, cosineToSun)).toMatchObject({
+        'sky-color': 'rgb(93, 155, 219)',
+        'horizon-color': 'rgb(213, 228, 240)',
+        'fog-color': 'rgb(207, 220, 231)',
+      });
+      expect(createSunShadowSky(-8, 0, cosineToSun)).toMatchObject({
+        'sky-color': 'rgb(10, 15, 30)',
+        'horizon-color': 'rgb(22, 30, 54)',
+        'fog-color': 'rgb(18, 26, 44)',
+      });
+    }
 
-    const [red, green, blue] = skyChannels(createSunShadowSky(1, 0)['horizon-color']);
+    const [red, green, blue] = skyChannels(
+      createSunShadowSky(1, 0, 1)['horizon-color'],
+    );
     expect(red).toBeGreaterThan(green ?? 255);
     expect(green).toBeGreaterThan(blue ?? 255);
     // Thinner air above a summit reddens the same low Sun less.
-    const summit = skyChannels(createSunShadowSky(1, 6000)['horizon-color']);
+    const summit = skyChannels(createSunShadowSky(1, 6000, 1)['horizon-color']);
     expect(summit[1]).toBeGreaterThan(green ?? 255);
+  });
 
-    expect(createSunShadowSky(-8, 0)).toMatchObject({
-      'sky-color': 'rgb(10, 15, 30)',
-      'horizon-color': 'rgb(22, 30, 54)',
-      'fog-color': 'rgb(18, 26, 44)',
-    });
+  it('puts the sunset glow on the Sun side and a rose band on the far side', () => {
+    const toward = createSunShadowSky(1, 0, 1);
+    const away = createSunShadowSky(1, 0, -1);
+    const [towardRed = 0, , towardBlue = 0] = skyChannels(toward['horizon-color']);
+    const [awayRed = 0, awayGreen = 0, awayBlue = 0] = skyChannels(
+      away['horizon-color'],
+    );
+    expect(towardRed - towardBlue).toBeGreaterThan(awayRed - awayBlue);
+    expect(awayBlue).toBeGreaterThan(awayGreen);
+    // Sunlit haze stays warmer than blue on both sides, most of all toward the Sun.
+    const [towardFogRed = 0, , towardFogBlue = 0] = skyChannels(toward['fog-color']);
+    const [awayFogRed = 0, , awayFogBlue = 0] = skyChannels(away['fog-color']);
+    expect(awayFogRed).toBeGreaterThan(awayFogBlue);
+    expect(towardFogRed - towardFogBlue).toBeGreaterThan(awayFogRed - awayFogBlue);
   });
 });

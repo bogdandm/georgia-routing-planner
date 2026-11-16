@@ -79,12 +79,14 @@ export const mapVisualPalette = {
     /**
      * 3D sky while sun shadows draw: the `sky` color overhead, the `horizon` band, and the
      * distant `fog` over terrain, for full day, the twilight blue around sunset, and night.
-     * Near sunset the horizon and fog also take on the direct sunlight color.
+     * Near sunset the horizon and fog toward the Sun take on the direct sunlight color, and
+     * the horizon facing away turns toward the rose `antisolarHorizon` (Belt of Venus).
      */
     sunSky: {
       day: { sky: '#5D9BDB', horizon: '#D5E4F0', fog: '#CFDCE7' },
       twilight: { sky: '#2D4278', horizon: '#7D7FAE', fog: '#5A6390' },
       night: { sky: '#0A0F1E', horizon: '#161E36', fog: '#121A2C' },
+      antisolarHorizon: '#D9A6B3',
     },
   },
   restricted: {

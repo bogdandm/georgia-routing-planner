@@ -895,11 +895,15 @@ layer shades flat sea-level ground for the same instant, without relief, so dist
 terrain and low zooms still follow daylight, sunset, and night.
 
 While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
-follow the Sun at the map center for the same instant: blue by day, a horizon and haze
-in the color of direct sunlight near sunset and sunrise (the same atmosphere as the
-shadow tones, seen from the center's height), twilight blue after sunset, and dark by
-the end of civil twilight. MapLibre shows the haze only from about 60° pitch, fully from
-70°. Without sun shadows the map keeps its plain background above the horizon.
+follow the Sun at the map center for the same instant: blue by day, twilight blue after
+sunset, and dark by the end of civil twilight. Near sunset and sunrise they also follow
+the camera direction: looking toward the Sun, the horizon and haze take the color of
+direct sunlight (the same atmosphere as the shadow tones, seen from the center's
+height); looking away, the horizon turns rose like the Belt of Venus and the haze stays
+only faintly warm. MapLibre draws one gradient for the whole screen, so the sky changes
+as the camera rotates rather than across one view. MapLibre shows the haze only from
+about 60° pitch, fully from 70°. Without sun shadows the map keeps its plain background
+above the horizon.
 
 Shadow accuracy is limited by the data and the model:
 

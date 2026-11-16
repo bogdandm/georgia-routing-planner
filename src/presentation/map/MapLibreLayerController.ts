@@ -1189,6 +1189,7 @@ export class MapLibreLayerController {
     map.setMissingStyleImageResolver(this.resolveBasemapImage);
     map.on('styledata', this.handleStyleData);
     map.on('movestart', this.handleSunShadowPlaybackMove);
+    map.on('rotate', this.handleSunShadowSkyRotate);
     map.on('error', this.handleTerrainOverlayError);
     map.on('sourcedata', this.handleSourceData);
     map.on('dataloading', this.handleWeatherMapDataLoading);
@@ -1446,6 +1447,7 @@ export class MapLibreLayerController {
     this.#appliedSunShadowTileUrl = null;
     map.off('styledata', this.handleStyleData);
     map.off('movestart', this.handleSunShadowPlaybackMove);
+    map.off('rotate', this.handleSunShadowSkyRotate);
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);
@@ -3797,12 +3799,13 @@ export class MapLibreLayerController {
 
   /**
    * Tints the sky and distant haze for the Sun at the map center and the shadow instant,
-   * seen from the center's terrain height, while shadows draw. Turning shadows off sets the
-   * transparent `sunShadowSkyOff`, which draws like a style without sky; a map that never
-   * drew shadows keeps its style untouched. Only a pitched 3D camera shows the horizon,
-   * and MapLibre draws fog only over 3D terrain from 60° pitch, so 2D needs no separate
-   * rule. The style's zero `transition` also applies to the sky, so day playback never
-   * fades between frames. `setSky` repaints on every call, so an unchanged sky is skipped.
+   * seen from the center's terrain height and the camera bearing, while shadows draw.
+   * Turning shadows off sets the transparent `sunShadowSkyOff`, which draws like a style
+   * without sky; a map that never drew shadows keeps its style untouched. Only a pitched
+   * 3D camera shows the horizon, and MapLibre draws fog only over 3D terrain from 60°
+   * pitch, so 2D needs no separate rule. The style's zero `transition` also applies to
+   * the sky, so day playback never fades between frames. `setSky` repaints on every call,
+   * so an unchanged sky is skipped.
    */
   private reconcileSunShadowSky(map: MapLibreMap, wanted: boolean): void {
     // MapLibre types omit it, but a style without `sky` returns undefined.
@@ -3819,6 +3822,7 @@ export class MapLibreLayerController {
       sky = createSunShadowSky(
         sun.apparentElevationDegrees,
         terrain === null ? 0 : map.getCenterElevation() / (terrain.exaggeration ?? 1),
+        Math.cos(((map.getBearing() - sun.azimuthDegrees) * Math.PI) / 180),
       );
     } else {
       if (applied === undefined) return;
@@ -3827,6 +3831,21 @@ export class MapLibreLayerController {
     if (JSON.stringify(applied) === JSON.stringify(sky)) return;
     map.setSky(sky);
   }
+
+  /** The sky follows the camera bearing while it rotates, not only once it settles. */
+  private readonly handleSunShadowSkyRotate = (): void => {
+    const map = this.#map;
+    if (map === null) return;
+    try {
+      this.reconcileSunShadowSky(
+        map,
+        this.#sunShadowEnabled &&
+          this.sunShadowTiles.getAvailability() !== 'unavailable',
+      );
+    } catch {
+      this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
+    }
+  };
 
   /**
    * Daylight of the local day containing `instantMs` at the map center, rounded like the

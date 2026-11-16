@@ -900,7 +900,8 @@ highlight in a softened color of direct sunlight: white at midday, then yellow, 
 and red as the Sun sinks, computed from clear-air Rayleigh extinction along the path
 through the atmosphere, so summits stay whiter than valleys. As the Sun sinks, shadows
 also turn lighter and ground in direct sun gains a sunlight-colored glow; both fade out
-in twilight. Shortly after sunset, open slopes and summits that still see most of the
+in twilight. With a low Sun, ridges it sets behind get a thin warm rim of light along
+their crests. Shortly after sunset, open slopes and summits that still see most of the
 sky glow rose (alpenglow) while gorges stay in plain shade; the glow is gone before the
 middle of civil twilight. While sun shadows draw, the fixed-light relief shading is
 hidden without changing its saved visibility, and it returns when they are turned off.

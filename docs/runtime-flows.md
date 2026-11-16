@@ -323,11 +323,15 @@ elevation, the end of civil twilight (−6°). The same pass writes a sunlight c
 logarithm of the relative optical air mass of the direct-sun path (Kasten–Young, scaled
 by the pressure at the pixel's height, or through the tangent height when the Sun is
 below the pixel's level), or, once the Sun is below the sea-level horizon, how far
-twilight has faded toward the night elevation. Brightness above 1 (slopes facing a low
-Sun reach several times flat ground) is compressed as 1 + x / (1 + x), so it stays below
-2 and lit slopes keep their order. The worker reads the result back as one brightness
-byte per pixel (brightness × 127) plus a 128 × 128 grid of sunlight codes, interpolates
-the codes bilinearly, and colors each pixel through a 256 × 256 table built once per
+twilight has faded toward the night elevation. With the Sun below 12°, crests the Sun
+sets behind get a rim light: a lit pixel whose unblurred visibility two pixels farther
+from the Sun is shadowed sits on the crest that casts that shadow, and its direct term
+grows by up to 1.5, at full strength once the Sun is below 3°. The far end of a cast
+shadow runs the other way and gets no rim. Brightness above 1 (slopes facing a low Sun
+reach several times flat ground) is compressed as 1 + x / (1 + x), so it stays below 2
+and lit slopes keep their order. The worker reads the result back as one brightness byte
+per pixel (brightness × 127) plus a 128 × 128 grid of sunlight codes, interpolates the
+codes bilinearly, and colors each pixel through a 256 × 256 table built once per
 palette. The neutral level, where the overlay is transparent, is brightness 1.45
 (`shadeNeutralBrightness`), above flat ground in full sun: below it the shadow color
 fades in with alpha 1 − brightness / 1.45, so flat sunlit ground keeps a light shade and

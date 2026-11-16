@@ -116,6 +116,17 @@ const skyOcclusionStrength = 1.75;
  */
 export const terrainShadeDiffuseSkyFraction = 0.5;
 const diffuseSkyTransitionDegrees = 2;
+/**
+ * Rim light: where a low Sun sets behind a ridge, its lit crest glows as a thin bright
+ * edge. A crest is a lit pixel whose neighbor `rimEdgeDistancePixels` farther from the
+ * Sun is in the ridge's own shadow; the far end of a cast shadow runs the other way and
+ * gets no rim. Its direct light grows by up to `rimLightGain`, fading out as the Sun
+ * climbs from `rimLightFullElevationDegrees` to `rimLightEndElevationDegrees`.
+ */
+const rimLightGain = 1.5;
+const rimEdgeDistancePixels = 2;
+const rimLightFullElevationDegrees = 3;
+const rimLightEndElevationDegrees = 12;
 
 /**
  * The sunlight code says how low the Sun stands for a pixel, so the lookup table can tint
@@ -468,6 +479,10 @@ const float skyLightWrap = ${glslFloat(skyLightWrap)};
 const float skyLightReliefExaggeration = ${glslFloat(skyLightReliefExaggeration)};
 const float diffuseSkyFraction = ${glslFloat(terrainShadeDiffuseSkyFraction)};
 const float diffuseSkyTransitionDegrees = ${glslFloat(diffuseSkyTransitionDegrees)};
+const float rimLightGain = ${glslFloat(rimLightGain)};
+const float rimEdgeDistancePixels = ${glslFloat(rimEdgeDistancePixels)};
+const float rimLightFullElevationDegrees = ${glslFloat(rimLightFullElevationDegrees)};
+const float rimLightEndElevationDegrees = ${glslFloat(rimLightEndElevationDegrees)};
 
 float kastenYoungAirMass(float apparentElevationDegrees) {
   return 1.0 / (sin(radians(apparentElevationDegrees)) + 0.50572 * pow(apparentElevationDegrees + 6.07995, -1.6364));
@@ -529,6 +544,12 @@ void main() {
   vec3 toSun = vec3(sin(azimuth) * cos(elevation), cos(azimuth) * cos(elevation), sin(elevation));
   float direct = visibility * max(dot(normal, toSun), 0.0)
     / max(toSun.z, sin(radians(flatReferenceElevationDegrees)));
+  // Output rows grow south, so the step away from the Sun is (-east, +north).
+  ivec2 awayFromSun = ivec2(round(normalize(vec2(-toSun.x, toSun.y)) * rimEdgeDistancePixels));
+  float crest = texelFetch(uVisibility, center, 0).r
+    * (1.0 - texelFetch(uVisibility, center + awayFromSun, 0).r);
+  direct += rimLightGain * crest
+    * (1.0 - smoothstep(rimLightFullElevationDegrees, rimLightEndElevationDegrees, sun.apparentElevationDegrees));
   float skyElevation = radians(skyLightElevationDegrees);
   vec3 toSky = vec3(sin(azimuth) * cos(skyElevation), cos(azimuth) * cos(skyElevation), sin(skyElevation));
   float skyTwilight = smoothstep(nightElevationDegrees, 0.0, sun.apparentElevationDegrees);

@@ -21,6 +21,7 @@ const palette: ShadePalette = {
   shadowColor: [27, 36, 51],
   highlightColor: [255, 247, 230],
   highlightOpacity: 0.6,
+  goldenShadowColor: [70, 53, 110],
   lowSunShadowColor: [46, 63, 122],
   lowSunShadowLift: 0.4,
   lowSunGlowOpacity: 0.35,
@@ -63,14 +64,24 @@ describe('createShadeLookupTable', () => {
     ]);
   });
 
-  it('lifts and cools shadows when the Sun is on the horizon', () => {
+  it('lifts shadows and turns them lilac when the Sun is on the horizon', () => {
     const [red = 0, green = 0, blue = 0, alpha = 0] = entryBytes(table, horizonCode, 0);
 
     expect(alpha).toBeLessThan(255 * 0.65);
     expect(alpha).toBeGreaterThan(255 * 0.55);
     expect(
-      largestByteDifference([red, green, blue], palette.lowSunShadowColor),
+      largestByteDifference([red, green, blue], palette.goldenShadowColor),
     ).toBeLessThanOrEqual(1);
+  });
+
+  it('turns shadows deep blue in the middle of civil twilight', () => {
+    // The twilight codes span an even count, so the nearest code is half a step away.
+    const middleTwilightCode = Math.round((horizonCode + 1 + sunlightNightCode) / 2);
+    const [red = 0, green = 0, blue = 0] = entryBytes(table, middleTwilightCode, 0);
+
+    expect(
+      largestByteDifference([red, green, blue], palette.lowSunShadowColor),
+    ).toBeLessThanOrEqual(2);
   });
 
   it('warms slopes lit by a low Sun and their highlights', () => {
@@ -98,7 +109,7 @@ describe('createShadeLookupTable', () => {
     const [red = 0, green = 0, blue = 0] = entryBytes(table, horizonCode, skyOnly);
 
     expect(
-      largestByteDifference([red, green, blue], palette.lowSunShadowColor),
+      largestByteDifference([red, green, blue], palette.goldenShadowColor),
     ).toBeLessThanOrEqual(1);
   });
 

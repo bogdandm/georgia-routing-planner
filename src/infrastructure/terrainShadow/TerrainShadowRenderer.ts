@@ -727,6 +727,7 @@ export class TerrainShadowRenderer {
       palette.shadowColor,
       palette.highlightColor,
       palette.highlightOpacity,
+      palette.goldenShadowColor,
       palette.lowSunShadowColor,
       palette.lowSunShadowLift,
       palette.lowSunGlowOpacity,

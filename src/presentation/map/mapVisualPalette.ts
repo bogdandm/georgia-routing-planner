@@ -62,17 +62,20 @@ export const mapVisualPalette = {
     pass: '#29343A',
     scree: '#A39B91',
     /**
-     * Real-sun relief: the worker expands each shade pixel into `sunShadow` (darker than
-     * flat ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter),
-     * tinted by the sunlight color. As the Sun sinks, shade turns toward `sunLowShadow` and
+     * Real-sun relief: the worker expands each shade pixel into shade (darker than flat
+     * ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter),
+     * tinted by the sunlight color. Shade takes the color of the sky that lights it:
+     * blue-grey `sunShadow` by day and at night, lilac `sunGoldenShadow` with the Sun on
+     * the horizon, deep blue `sunLowShadow` mid civil twilight. As the Sun sinks, shade
      * loses up to `sunLowShadowLift` of its opacity, and ground in direct sun gains a
      * sunlight-colored glow of up to `sunLowGlowOpacity`. Colors are opaque `#RRGGBB`;
      * `sunShadowOpacity` is the layer `raster-opacity`.
      */
-    sunShadow: '#1B2433',
+    sunShadow: '#1C2A40',
     sunShadowOpacity: 0.5,
     sunHighlight: '#FFF7E6',
     sunHighlightOpacity: 0.6,
+    sunGoldenShadow: '#46356E',
     sunLowShadow: '#2E3F7A',
     sunLowShadowLift: 0.25,
     sunLowGlowOpacity: 0.5,

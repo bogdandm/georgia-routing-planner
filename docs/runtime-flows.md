@@ -333,11 +333,14 @@ palette. The neutral level, where the overlay is transparent, is brightness 1.45
 fades in with alpha 1 − brightness / 1.45, so flat sunlit ground keeps a light shade and
 slopes turned to the Sun can still brighten; above it the highlight color fades in up to
 the compressed maximum of 2. The highlight is tinted by the Rayleigh-extinction sunlight
-color (`domain/terrain/atmosphericSunlight.ts`) at 75% strength; as the Sun sinks,
-shadows turn toward the low-Sun shadow color and lose part of their opacity, and ground
-lit by the direct Sun gains a sunlight-colored glow that grows with the direct share of
-the brightness up to 2. GPU jobs run one at a time and wait on a fence before the next
-starts, so at most one tile of shadow work competes with map frames.
+color (`domain/terrain/atmosphericSunlight.ts`) at 75% strength. The shadow color
+follows the sunlight code: from the day color toward the golden-hour lilac as the blue
+deficit of the sunlight grows, then over the twilight codes to the deep twilight blue at
+half depth and back to the day color by night. As the Sun sinks, shadows lose part of
+their opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows
+with the direct share of the brightness up to 2. GPU jobs run one at a time and wait on
+a fence before the next starts, so at most one tile of shadow work competes with map
+frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,

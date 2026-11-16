@@ -34,6 +34,7 @@ export const terrainShadowTileRequestSchema = z
     shadowColor: colorSchema,
     highlightColor: colorSchema,
     highlightOpacity: z.number().min(0).max(1),
+    goldenShadowColor: colorSchema,
     lowSunShadowColor: colorSchema,
     lowSunShadowLift: z.number().min(0).max(1),
     lowSunGlowOpacity: z.number().min(0).max(1),

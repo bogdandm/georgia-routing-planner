@@ -561,12 +561,24 @@ type Rgb = readonly [number, number, number];
 
 /** Colors the worker applies to shade masks; `#RRGGBB` channels and 0–1 opacities. */
 export interface ShadePalette {
+  /** Shade under a high Sun and at night: the blue-grey of a clear daytime sky. */
   readonly shadowColor: Rgb;
   readonly highlightColor: Rgb;
   readonly highlightOpacity: number;
+  /** Shade with the Sun on the horizon: the lilac of the golden-hour sky. */
+  readonly goldenShadowColor: Rgb;
+  /** Shade in the middle of civil twilight: the deep blue of the twilight sky. */
   readonly lowSunShadowColor: Rgb;
   readonly lowSunShadowLift: number;
   readonly lowSunGlowOpacity: number;
+}
+
+function mixRgb(from: Rgb, to: Rgb, weight: number): Rgb {
+  return [
+    from[0] + (to[0] - from[0]) * weight,
+    from[1] + (to[1] - from[1]) * weight,
+    from[2] + (to[2] - from[2]) * weight,
+  ];
 }
 
 interface SunlightTone {
@@ -617,20 +629,22 @@ const shadeMaximumBrightness = 2;
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
  *
- * Shade fades `shadowColor` in as brightness drops below `shadeNeutralBrightness`. Light
+ * Shade fades in as brightness drops below `shadeNeutralBrightness`, in the color of the
+ * sky that lights it: `shadowColor` under a high Sun, turning to the lilac
+ * `goldenShadowColor` as the Sun reaches the pixel's horizon, then over civil twilight to
+ * the deep blue `lowSunShadowColor` and back to `shadowColor` by night. Light
  * is the highlight color tinted by the sunlight color, up to `highlightOpacity` from the
  * neutral to the compressed maximum of 2, plus a glow of up to `lowSunGlowOpacity` ×
- * `lowSun` that grows with the direct
- * share of the brightness up to the compressed maximum of 2, so slopes facing a low Sun
- * keep their relief instead of one saturated tone. As the Sun sinks, shade turns toward
- * `lowSunShadowColor` and loses up to `lowSunShadowLift` of its opacity, as the sky lights
- * shadows more than the dimming Sun lights the slopes. Light is composited over shade. A
- * high Sun keeps the plain shadow and highlight.
+ * `lowSun` that grows with the direct share of the brightness up to the compressed
+ * maximum of 2, so slopes facing a low Sun keep their relief instead of one saturated
+ * tone. As the Sun sinks, shade loses up to `lowSunShadowLift` of its opacity, as the sky
+ * lights shadows more than the dimming Sun lights the slopes. Light is composited over
+ * shade. A high Sun keeps the plain shadow and highlight.
  */
 export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
   const table = new Uint32Array(256 * 256);
   const bytes = new Uint8Array(table.buffer);
-  const { shadowColor, highlightColor, lowSunShadowColor } = palette;
+  const { shadowColor, highlightColor, goldenShadowColor, lowSunShadowColor } = palette;
   const tint = (sunlight: number) =>
     1 - sunlightTintStrength + sunlightTintStrength * sunlight;
   for (let code = 0; code < 256; code += 1) {
@@ -640,11 +654,19 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
       highlightColor[1] * tint(sunlight[1]),
       highlightColor[2] * tint(sunlight[2]),
     ];
-    const shadeColor: Rgb = [
-      shadowColor[0] + (lowSunShadowColor[0] - shadowColor[0]) * lowSun,
-      shadowColor[1] + (lowSunShadowColor[1] - shadowColor[1]) * lowSun,
-      shadowColor[2] + (lowSunShadowColor[2] - shadowColor[2]) * lowSun,
-    ];
+    const twilightDepth =
+      code > sunlightAirMassMaximumCode
+        ? (code - sunlightAirMassMaximumCode - 1) /
+          (sunlightNightCode - sunlightAirMassMaximumCode - 1)
+        : 0;
+    let shadeColor: Rgb;
+    if (code <= sunlightAirMassMaximumCode) {
+      shadeColor = mixRgb(shadowColor, goldenShadowColor, lowSun);
+    } else if (twilightDepth < 0.5) {
+      shadeColor = mixRgb(goldenShadowColor, lowSunShadowColor, twilightDepth / 0.5);
+    } else {
+      shadeColor = mixRgb(lowSunShadowColor, shadowColor, (twilightDepth - 0.5) / 0.5);
+    }
     const shadeOpacity = 1 - lowSun * palette.lowSunShadowLift;
     const neutral = shadeNeutralBrightness;
     for (let value = 0; value < 256; value += 1) {

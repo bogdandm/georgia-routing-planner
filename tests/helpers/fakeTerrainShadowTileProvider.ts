@@ -1,11 +1,9 @@
-import {
-  defaultTerrainShadowTuning,
-  type TerrainShadowAvailability,
-  type TerrainShadowMetricsSnapshot,
-  type TerrainShadowPrefetchProgress,
-  type TerrainShadowTileAddress,
-  type TerrainShadowTileProvider,
-  type TerrainShadowTuning,
+import type {
+  TerrainShadowAvailability,
+  TerrainShadowMetricsSnapshot,
+  TerrainShadowPrefetchProgress,
+  TerrainShadowTileAddress,
+  TerrainShadowTileProvider,
 } from '@/presentation/map/TerrainShadowTileProvider';
 
 /** One recorded prefetch; the test settles it, and aborting its signal rejects it. */
@@ -33,7 +31,6 @@ const emptyMetrics: TerrainShadowMetricsSnapshot = {
 /** Shadow provider without a worker; tests switch availability and read interaction. */
 export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider {
   public interactionActive = false;
-  public tuning: TerrainShadowTuning = defaultTerrainShadowTuning;
   public disposed = false;
   public readonly prefetchCalls: FakePrefetchCall[] = [];
   public metrics: TerrainShadowMetricsSnapshot = emptyMetrics;
@@ -46,10 +43,6 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
 
   public createTileUrl(instantMs: number): string {
     return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}`;
-  }
-
-  public setTuning(tuning: TerrainShadowTuning): void {
-    this.tuning = tuning;
   }
 
   public setInteractionActive(active: boolean): void {

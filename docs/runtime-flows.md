@@ -316,24 +316,19 @@ instant, marches 16 azimuths up to 20 km (steps growing by 8% of the distance) f
 every fourth output pixel into a 128 × 128 R8 texture holding the mean cos²(max(h, 0))
 of the highest 1.5×-exaggerated terrain angle h; the shade pass samples it bilinearly
 and divides it by the visible sky of the slope's own plane, ½(1 + n_z), capped at 1, so
-a slope's own tilt is not counted twice and only terrain beyond it darkens gorges. The
-temporary panel checkbox and numeric fields set a session-only tuning that every tile
-request carries: `neutralBrightness` (default 1.45), `lowSunGlowOpacity` (0.5), and
-`skyOcclusionStrength` (1.75; the shade pass uses max(1 − s · (1 − occlusion), 0), and
-the unchecked box sends 0). After a change the provider keeps the tuning under a new
-version and tile URLs end in `?tuning=<version>`, so MapLibre requests every tile again;
-masks are cached per occlusion strength, while neutral and glow only change the lookup
-table. The sky term eases out (smoothstep) between the horizon and the night elevation,
-the end of civil twilight (−6°). The same pass writes a sunlight code: the logarithm of
-the relative optical air mass of the direct-sun path (Kasten–Young, scaled by the
-pressure at the pixel's height, or through the tangent height when the Sun is below the
-pixel's level), or, once the Sun is below the sea-level horizon, how far twilight has
-faded toward the night elevation. Brightness above 1 (slopes facing a low Sun reach
-several times flat ground) is compressed as 1 + x / (1 + x), so it stays below 2 and lit
-slopes keep their order. The worker reads the result back as one brightness byte per
-pixel (brightness × 127) plus a 128 × 128 grid of sunlight codes, interpolates the codes
-bilinearly, and colors each pixel through a 256 × 256 table built once per palette. The
-neutral level, where the overlay is transparent, is brightness 1.45
+a slope's own tilt is not counted twice and only terrain beyond it darkens gorges; the
+missing share is amplified 1.75 times, max(1 − 1.75 · (1 − occlusion), 0), so gorges
+read clearly. The sky term eases out (smoothstep) between the horizon and the night
+elevation, the end of civil twilight (−6°). The same pass writes a sunlight code: the
+logarithm of the relative optical air mass of the direct-sun path (Kasten–Young, scaled
+by the pressure at the pixel's height, or through the tangent height when the Sun is
+below the pixel's level), or, once the Sun is below the sea-level horizon, how far
+twilight has faded toward the night elevation. Brightness above 1 (slopes facing a low
+Sun reach several times flat ground) is compressed as 1 + x / (1 + x), so it stays below
+2 and lit slopes keep their order. The worker reads the result back as one brightness
+byte per pixel (brightness × 127) plus a 128 × 128 grid of sunlight codes, interpolates
+the codes bilinearly, and colors each pixel through a 256 × 256 table built once per
+palette. The neutral level, where the overlay is transparent, is brightness 1.45
 (`shadeNeutralBrightness`), above flat ground in full sun: below it the shadow color
 fades in with alpha 1 − brightness / 1.45, so flat sunlit ground keeps a light shade and
 slopes turned to the Sun can still brighten; above it the highlight color fades in up to

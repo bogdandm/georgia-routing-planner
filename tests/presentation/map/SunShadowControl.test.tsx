@@ -8,7 +8,6 @@ import { MapViewControls } from '@/presentation/map/MapViewControls';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
 import { daylightWindow } from '@/presentation/map/sunShadowDaylight';
-import { defaultTerrainShadowTuning } from '@/presentation/map/TerrainShadowTileProvider';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 // 12:00 in Tbilisi (UTC+4 all year).
@@ -69,10 +68,6 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
         onChange,
         onPlay,
         onStop,
-        skyOcclusion: true,
-        onSkyOcclusionChange: vi.fn(),
-        tuning: defaultTerrainShadowTuning,
-        onTuningChange: vi.fn(),
         peek: false,
         ...sunShadow,
       }}

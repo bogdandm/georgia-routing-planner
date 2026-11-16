@@ -1855,14 +1855,6 @@ export function MapWorkspace({
           onStop: () => {
             mapLayers.stopSunShadowPlayback();
           },
-          skyOcclusion: sunShadow.skyOcclusion,
-          onSkyOcclusionChange: (enabled) => {
-            mapLayers.setSunShadowSkyOcclusion(enabled);
-          },
-          tuning: sunShadow.tuning,
-          onTuningChange: (tuning) => {
-            mapLayers.setSunShadowTuning(tuning);
-          },
           peek: sunShadowPeek,
         };
 

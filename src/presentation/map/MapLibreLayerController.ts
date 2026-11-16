@@ -147,8 +147,6 @@ import {
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
-  type TerrainShadowTuning,
-  defaultTerrainShadowTuning,
   terrainShadowPrefetchBlockFrames,
 } from '@/presentation/map/TerrainShadowTileProvider';
 import {
@@ -1193,8 +1191,6 @@ export class MapLibreLayerController {
         instantMs: this.#sunShadowInstantMs,
         availability: sunShadowTiles.getAvailability(),
         playback: { status: 'idle' },
-        skyOcclusion: true,
-        tuning: defaultTerrainShadowTuning,
       },
     });
     this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
@@ -1278,34 +1274,6 @@ export class MapLibreLayerController {
     // The settled center may have another sunrise, sunset, or time zone, so the instant
     // is clamped again for it, as the panel does for its displayed time.
     if (!active && this.#map !== null) this.reconcileSunShadow(this.#map);
-  }
-
-  /**
-   * Temporary experiment switch: terrain sky-view occlusion of the shadows' sky light.
-   * The shadow tile URL changes with it, so visible tiles are requested again; it does
-   * not persist.
-   */
-  public setSunShadowSkyOcclusion(enabled: boolean): void {
-    this.applySunShadowTuning(enabled, mapLayerStore.getState().sunShadow.tuning);
-  }
-
-  /** Temporary shading parameters from the panel, applied like the switch above. */
-  public setSunShadowTuning(tuning: TerrainShadowTuning): void {
-    this.applySunShadowTuning(mapLayerStore.getState().sunShadow.skyOcclusion, tuning);
-  }
-
-  private applySunShadowTuning(
-    skyOcclusion: boolean,
-    tuning: TerrainShadowTuning,
-  ): void {
-    this.sunShadowTiles.setTuning({
-      ...tuning,
-      skyOcclusionStrength: skyOcclusion ? tuning.skyOcclusionStrength : 0,
-    });
-    mapLayerStore.setState({
-      sunShadow: { ...mapLayerStore.getState().sunShadow, skyOcclusion, tuning },
-    });
-    if (this.#map !== null) this.reconcileSunShadow(this.#map);
   }
 
   /**

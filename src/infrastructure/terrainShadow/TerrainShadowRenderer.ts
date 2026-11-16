@@ -75,7 +75,6 @@ const shadeUniformNames = [
   ...sunUniformNames,
   'uVisibility',
   'uSkyView',
-  'uSkyOcclusion',
 ] as const;
 const reductionUniformNames = ['uSource', 'uSourceSize', 'uTargetOrigin'] as const;
 /** Texture units of the shade pass's own inputs, after the four mosaic units. */
@@ -631,7 +630,6 @@ function drawShadePasses(
   setSunUniforms(gl, shadeProgram.uniforms, request);
   gl.uniform1i(shadeProgram.uniforms.uVisibility, visibilityTextureUnit);
   gl.uniform1i(shadeProgram.uniforms.uSkyView, skyViewTextureUnit);
-  gl.uniform1f(shadeProgram.uniforms.uSkyOcclusion, request.skyOcclusionStrength);
   drawFullscreen(gpu);
 }
 
@@ -732,7 +730,6 @@ export class TerrainShadowRenderer {
       palette.lowSunShadowColor,
       palette.lowSunShadowLift,
       palette.lowSunGlowOpacity,
-      palette.neutralBrightness,
     ]);
     if (this.#shadeTable?.key !== key) {
       this.#shadeTable = { key, table: createShadeLookupTable(palette) };
@@ -777,8 +774,7 @@ export class TerrainShadowRenderer {
         }),
       };
     }
-    // Neutral and glow only color the mask, so they are not part of its key.
-    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}|${String(request.skyOcclusionStrength)}`;
+    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`;
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);

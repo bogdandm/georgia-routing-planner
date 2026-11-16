@@ -49,7 +49,6 @@ import {
   daylightFrameInstants,
   daylightWindow,
 } from '@/presentation/map/sunShadowDaylight';
-import { defaultTerrainShadowTuning } from '@/presentation/map/TerrainShadowTileProvider';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
@@ -2682,8 +2681,6 @@ describe('MapLibreLayerController', () => {
       instantMs: minute * 60_000,
       availability: 'available',
       playback: { status: 'idle' },
-      skyOcclusion: true,
-      tuning: defaultTerrainShadowTuning,
     });
     const setTiles = vi.spyOn(source, 'setTiles');
     const movesBefore = map.moves.length;

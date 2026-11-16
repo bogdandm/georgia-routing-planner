@@ -102,6 +102,12 @@ export const terrainShadeSkyLightElevationDegrees = 30;
 const skyLightWrap = 0.2;
 const skyLightReliefExaggeration = 1.5;
 /**
+ * How strongly the terrain's occlusion of the sky dims the sky light: the shade pass uses
+ * max(1 − strength · (1 − occlusion), 0), so above 1 gorges darken faster than the open
+ * sky share alone would.
+ */
+const skyOcclusionStrength = 1.75;
+/**
  * After sunset part of the sky light becomes diffuse, as from a thin cloud layer that
  * keeps scattering light: it depends only on how much sky a slope faces, not on the Sun's
  * azimuth, which softens the fade into night. While the Sun is up, the sun-side sky keeps
@@ -444,9 +450,7 @@ export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShad
 uniform sampler2D uVisibility;
 // Open-sky share of a level surface on the 4 × 4 pixel sky-view grid, linearly filtered.
 uniform sampler2D uSkyView;
-// Scales the sky-view occlusion: 0 keeps the slope-only sky light, 1 the full share
-// (temporary tuning).
-uniform float uSkyOcclusion;
+const float skyOcclusionStrength = ${glslFloat(skyOcclusionStrength)};
 
 const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
 const float softEdgeSigma = ${glslFloat(terrainShadowSoftEdgeSigmaPixels)};
@@ -534,7 +538,7 @@ void main() {
   // cos²(max(h, 0)) already includes the slope itself, so it is compared to the plane.
   float planeSky = 0.5 * (1.0 + skyNormal.z);
   float occlusion = max(
-    1.0 - uSkyOcclusion * (1.0 - min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0)),
+    1.0 - skyOcclusionStrength * (1.0 - min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0)),
     0.0
   );
   float sunSideSky = occlusion * max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
@@ -563,8 +567,6 @@ export interface ShadePalette {
   readonly lowSunShadowColor: Rgb;
   readonly lowSunShadowLift: number;
   readonly lowSunGlowOpacity: number;
-  /** Brightness the overlay leaves untouched; see `shadeNeutralBrightness`. */
-  readonly neutralBrightness: number;
 }
 
 interface SunlightTone {
@@ -615,7 +617,7 @@ const shadeMaximumBrightness = 2;
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
  *
- * Shade fades `shadowColor` in as brightness drops below `neutralBrightness`. Light
+ * Shade fades `shadowColor` in as brightness drops below `shadeNeutralBrightness`. Light
  * is the highlight color tinted by the sunlight color, up to `highlightOpacity` from the
  * neutral to the compressed maximum of 2, plus a glow of up to `lowSunGlowOpacity` ×
  * `lowSun` that grows with the direct
@@ -644,7 +646,7 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
       shadowColor[2] + (lowSunShadowColor[2] - shadowColor[2]) * lowSun,
     ];
     const shadeOpacity = 1 - lowSun * palette.lowSunShadowLift;
-    const neutral = palette.neutralBrightness;
+    const neutral = shadeNeutralBrightness;
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(

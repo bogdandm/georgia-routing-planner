@@ -222,21 +222,6 @@ msgstr "Find my location"
 msgid "Flat map"
 msgstr "Flat map"
 
-#. js-lingui-id: MwoEvV
-#: src/presentation/map/SunShadowControl.tsx
-msgid "GI strength"
-msgstr "GI strength"
-
-#. js-lingui-id: DPULZ4
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Global illumination (experiment)"
-msgstr "Global illumination (experiment)"
-
-#. js-lingui-id: zkQNdT
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Glow"
-msgstr "Glow"
-
 #. js-lingui-id: ud5TUo
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -339,11 +324,6 @@ msgstr "Nearby map data could not be inspected."
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Nearby map feature"
 msgstr "Nearby map feature"
-
-#. js-lingui-id: proQUv
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Neutral"
-msgstr "Neutral"
 
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx

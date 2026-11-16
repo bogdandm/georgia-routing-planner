@@ -93,11 +93,14 @@ export const terrainShadeSkyLightElevationDegrees = 30;
 const skyLightWrap = 0.2;
 const skyLightReliefExaggeration = 1.5;
 /**
- * The rest of the sky light is diffuse, as from a thin cloud layer that keeps scattering
- * light after sunset: it depends only on how much sky a slope faces, not on the Sun's
- * azimuth, which softens the change of direction and the fade into night.
+ * After sunset part of the sky light becomes diffuse, as from a thin cloud layer that
+ * keeps scattering light: it depends only on how much sky a slope faces, not on the Sun's
+ * azimuth, which softens the fade into night. While the Sun is up, the sun-side sky keeps
+ * full contrast; the diffuse share grows to this fraction as the Sun crosses
+ * ±`diffuseSkyTransitionDegrees` around the horizon.
  */
 export const terrainShadeDiffuseSkyFraction = 0.5;
+const diffuseSkyTransitionDegrees = 2;
 
 /**
  * The sunlight code says how low the Sun stands for a pixel, so the lookup table can tint
@@ -369,6 +372,7 @@ const float skyLightElevationDegrees = ${glslFloat(terrainShadeSkyLightElevation
 const float skyLightWrap = ${glslFloat(skyLightWrap)};
 const float skyLightReliefExaggeration = ${glslFloat(skyLightReliefExaggeration)};
 const float diffuseSkyFraction = ${glslFloat(terrainShadeDiffuseSkyFraction)};
+const float diffuseSkyTransitionDegrees = ${glslFloat(diffuseSkyTransitionDegrees)};
 
 float kastenYoungAirMass(float apparentElevationDegrees) {
   return 1.0 / (sin(radians(apparentElevationDegrees)) + 0.50572 * pow(apparentElevationDegrees + 6.07995, -1.6364));
@@ -437,7 +441,10 @@ void main() {
   float sunSideSky = max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
   // Visible sky fraction of a slope, 1 on flat ground.
   float diffuseSky = 0.5 * (1.0 + skyNormal.z);
-  float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseSkyFraction);
+  float diffuseShare = diffuseSkyFraction * (1.0 - smoothstep(
+    -diffuseSkyTransitionDegrees, diffuseSkyTransitionDegrees, sun.apparentElevationDegrees
+  ));
+  float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare);
   float brightness = (1.0 - skyLightShare) * direct + skyLightShare * sky;
   float code = sunlightCode(sun.apparentElevationDegrees, mosaicElevation(0, texels));
   outValue = vec4(clamp(brightness * brightnessScale / 255.0, 0.0, 1.0), code / 255.0, 0.0, 1.0);

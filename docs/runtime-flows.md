@@ -280,9 +280,10 @@ beyond the 100 km march cap still hides it. The shade pass blurs that fraction w
 differences, normalized so flat ground in full sun (or at 10° elevation for lower suns)
 is 1. The slope term reaches zero exactly where the march begins to report self-shadow,
 so terminators stay continuous. That direct light makes up 65% of the brightness; the
-other 35% is sky light, which keeps relief inside shadows: half a softly wrapped Lambert
-light from the Sun's azimuth at 30° elevation, half diffuse light proportional to the
-visible sky, as from thin cloud that keeps scattering light after sunset, both on 1.5×
+other 35% is sky light, which keeps relief inside shadows: a softly wrapped Lambert
+light from the Sun's azimuth at 30° elevation while the Sun is up, turning into an even
+mix with diffuse light proportional to the visible sky (as from thin cloud that keeps
+scattering light after sunset) as the Sun crosses ±2° around the horizon, both on 1.5×
 exaggerated slopes. It eases out (smoothstep) between the horizon and the night
 elevation, the end of civil twilight (−6°). The same pass writes a sunlight code: the
 logarithm of the relative optical air mass of the direct-sun path (Kasten–Young, scaled

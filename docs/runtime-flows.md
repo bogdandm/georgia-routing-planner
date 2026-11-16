@@ -310,21 +310,30 @@ other 35% is sky light, which keeps relief inside shadows: a softly wrapped Lamb
 light from the Sun's azimuth at 30° elevation while the Sun is up, turning into an even
 mix with diffuse light proportional to the visible sky (as from thin cloud that keeps
 scattering light after sunset) as the Sun crosses ±2° around the horizon, both on 1.5×
-exaggerated slopes. It eases out (smoothstep) between the horizon and the night
-elevation, the end of civil twilight (−6°). The same pass writes a sunlight code: the
-logarithm of the relative optical air mass of the direct-sun path (Kasten–Young, scaled
-by the pressure at the pixel's height, or through the tangent height when the Sun is
-below the pixel's level), or, once the Sun is below the sea-level horizon, how far
-twilight has faded toward the night elevation. The worker reads the result back as one
-brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of sunlight codes,
-interpolates the codes bilinearly, and colors each pixel through a 256 × 256 table built
-once per palette. Below 127 the shadow color fades in with alpha 1 − brightness; above
-it the highlight color fades in. The highlight is tinted by the Rayleigh-extinction
-sunlight color (`domain/terrain/atmosphericSunlight.ts`) at 60% strength; as the Sun
-sinks, shadows turn toward the low-Sun shadow color and lose part of their opacity, and
-ground lit by the direct Sun gains a sunlight-colored glow. GPU jobs run one at a time
-and wait on a fence before the next starts, so at most one tile of shadow work competes
-with map frames.
+exaggerated slopes. Both are scaled by the terrain's occlusion of that sky: a sky-view
+pass, run once whenever the mosaics are assembled for a tile and reused for every
+instant, marches 16 azimuths up to 20 km (steps growing by 8% of the distance) from
+every fourth output pixel into a 128 × 128 R8 texture holding the mean cos²(max(h, 0))
+of the highest 1.5×-exaggerated terrain angle h; the shade pass samples it bilinearly
+and divides it by the visible sky of the slope's own plane, ½(1 + n_z), capped at 1, so
+a slope's own tilt is not counted twice and only terrain beyond it darkens gorges. The
+temporary panel checkbox sends `skyOcclusion: false` in the tile request (tile URLs end
+in `?sky=flat`, masks are cached per setting) to skip that factor. The sky term eases
+out (smoothstep) between the horizon and the night elevation, the end of civil twilight
+(−6°). The same pass writes a sunlight code: the logarithm of the relative optical air
+mass of the direct-sun path (Kasten–Young, scaled by the pressure at the pixel's height,
+or through the tangent height when the Sun is below the pixel's level), or, once the Sun
+is below the sea-level horizon, how far twilight has faded toward the night elevation.
+The worker reads the result back as one brightness byte per pixel (brightness × 127)
+plus a 128 × 128 grid of sunlight codes, interpolates the codes bilinearly, and colors
+each pixel through a 256 × 256 table built once per palette. Below 127 the shadow color
+fades in with alpha 1 − brightness; above it the highlight color fades in. The highlight
+is tinted by the Rayleigh-extinction sunlight color
+(`domain/terrain/atmosphericSunlight.ts`) at 60% strength; as the Sun sinks, shadows
+turn toward the low-Sun shadow color and lose part of their opacity, and ground lit by
+the direct Sun gains a sunlight-colored glow. GPU jobs run one at a time and wait on a
+fence before the next starts, so at most one tile of shadow work competes with map
+frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,

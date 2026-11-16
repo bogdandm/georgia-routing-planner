@@ -51,6 +51,11 @@ export interface TerrainShadowPrefetchProgress {
 export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
   createTileUrl(instantMs: number): string;
+  /**
+   * Temporary experiment switch for the terrain sky-view occlusion of sky light. Later
+   * tile URLs and prefetches carry it, so a change requests every tile again.
+   */
+  setSkyOcclusion(enabled: boolean): void;
   /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
   setInteractionActive(active: boolean): void;
   /**
@@ -88,6 +93,7 @@ type TerrainShadowWorkerFactory = () => WorkerRpcEndpoint;
 
 interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly epochMinute: number;
+  readonly skyOcclusion: boolean;
 }
 
 interface GateWaiter {
@@ -103,8 +109,9 @@ type MutableMetrics = {
 };
 
 const millisecondsPerMinute = 60_000;
+/** Tiles without sky-view occlusion end in `?sky=flat`; see `setSkyOcclusion`. */
 const tileAddressPattern = new RegExp(
-  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)$`,
+  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(\\?sky=flat)?$`,
   'u',
 );
 
@@ -138,7 +145,7 @@ function defaultWorkerFactory(): WorkerRpcEndpoint {
 function parseTileAddress(url: string): ParsedTileAddress | null {
   const match = tileAddressPattern.exec(url);
   if (match === null) return null;
-  const [epochMinute, z, x, y] = match.slice(1).map(Number);
+  const [epochMinute, z, x, y] = match.slice(1, 5).map(Number);
   if (
     epochMinute === undefined ||
     z === undefined ||
@@ -148,7 +155,7 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   ) {
     return null;
   }
-  return { epochMinute, z, x, y };
+  return { epochMinute, z, x, y, skyOcclusion: match[5] === undefined };
 }
 
 function emptyMetrics(memoryBytes: number): MutableMetrics {
@@ -185,6 +192,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   #metrics = emptyMetrics(0);
   #pendingTiles = 0;
   #interactionActive = false;
+  #skyOcclusion = true;
   #disposed = false;
 
   public constructor(
@@ -205,7 +213,12 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (!Number.isFinite(instantMs))
       throw new RangeError('The sun instant must be finite.');
     const epochMinute = Math.floor(instantMs / millisecondsPerMinute);
-    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}`;
+    const variant = this.#skyOcclusion ? '' : '?sky=flat';
+    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${variant}`;
+  }
+
+  public setSkyOcclusion(enabled: boolean): void {
+    this.#skyOcclusion = enabled;
   }
 
   public setInteractionActive(active: boolean): void {
@@ -266,7 +279,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       await this.waitForInteractionEnd(signal);
       const result = await this.ensureRpc().request<unknown>(
         terrainShadowWorkerMethods.renderTile,
-        this.createRequest(address, address.epochMinute),
+        this.createRequest(address, address.epochMinute, address.skyOcclusion),
         signal,
       );
       if (!isTerrainShadowTileResult(result)) {
@@ -322,6 +335,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
             request: this.createRequest(
               tile,
               Math.floor(instantMs / millisecondsPerMinute),
+              this.#skyOcclusion,
             ),
           });
         });
@@ -389,6 +403,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   private createRequest(
     address: TerrainShadowTileAddress,
     epochMinute: number,
+    skyOcclusion: boolean,
   ): TerrainShadowTileRequest {
     return {
       z: address.z,
@@ -405,6 +420,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       lowSunShadowColor,
       lowSunShadowLift: mapVisualPalette.terrain.sunLowShadowLift,
       lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
+      skyOcclusion,
     };
   }
 

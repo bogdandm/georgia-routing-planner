@@ -37,6 +37,8 @@ export const terrainShadowTileRequestSchema = z
     lowSunShadowColor: colorSchema,
     lowSunShadowLift: z.number().min(0).max(1),
     lowSunGlowOpacity: z.number().min(0).max(1),
+    /** Temporary experiment switch: terrain hides part of the sky light (sky view). */
+    skyOcclusion: z.boolean(),
   })
   .strict()
   .refine(

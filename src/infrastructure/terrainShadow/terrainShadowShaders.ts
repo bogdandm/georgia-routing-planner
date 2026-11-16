@@ -352,17 +352,98 @@ void main() {
 }
 `;
 
+/** Sky-view grid: one sample per 4 × 4 output pixels, read back with linear filtering. */
+export const terrainSkyViewSize = terrainShadowTileSize / 4;
+/** Horizon directions per sky-view sample. */
+const skyViewDirections = 16;
+/** Terrain farther than this does not hide sky; deep valleys are a few kilometres wide. */
+const skyViewMaximumDistanceMeters = 20_000;
+/** Each sky-view march step grows by this fraction of the distance travelled. */
+const skyViewStepFraction = 0.08;
+
+/**
+ * Share of a level surface's cosine-weighted sky that the surrounding terrain leaves
+ * open, sampled every 4th output pixel: 1 on open ground and ridges, lower in valleys
+ * and gorges. Each of 16 azimuths marches out to 20 km (straight lines, which over this
+ * distance differ from the great circle by far less than a texel) and keeps its highest
+ * terrain elevation angle h, with heights exaggerated like the sky light's slopes; the
+ * sample averages cos²(max(h, 0)). It depends only on the DEM, so it is computed once
+ * per assembled mosaic and read by every shade pass of that tile.
+ */
+export const terrainSkyViewFragmentShaderSource = `${terrainShadowCommonShaderSource}
+const float skyViewScale = tileSize / ${glslFloat(terrainSkyViewSize)};
+const int skyViewDirections = ${String(skyViewDirections)};
+const float skyViewMaximumDistanceMeters = ${glslFloat(skyViewMaximumDistanceMeters)};
+const float skyViewStepFraction = ${glslFloat(skyViewStepFraction)};
+const float skyLightReliefExaggeration = ${glslFloat(skyLightReliefExaggeration)};
+
+void main() {
+  vec2 outputPixel = gl_FragCoord.xy * skyViewScale;
+  vec2 latitudeLongitude = pixelLatitudeLongitude(outputPixel);
+  float cosLatitude = cos(latitudeLongitude.x);
+  vec2 observerTexels[3];
+  for (int level = 0; level < 3; ++level) {
+    observerTexels[level] = uLevelOrigin[level] + outputPixel * uLevelTexelsPerOutputPixel[level];
+  }
+  float observerElevation = mosaicElevation(0, observerTexels[0]);
+  float reachableMaximum = texelFetch(uLevelMaximum, ivec2(0, 0), 0).r;
+  reachableMaximum = max(reachableMaximum, texelFetch(uLevelMaximum, ivec2(1, 0), 0).r);
+  reachableMaximum = max(reachableMaximum, texelFetch(uLevelMaximum, ivec2(2, 0), 0).r);
+  float baseStep = uBaseResolutionEquatorMeters * cosLatitude;
+
+  float openSky = 0.0;
+  for (int direction = 0; direction < skyViewDirections; ++direction) {
+    float azimuth = 2.0 * pi * (float(direction) + 0.5) / float(skyViewDirections);
+    // East and south offsets in radians of longitude and Mercator y per metre.
+    vec2 radiansPerMeter = vec2(sin(azimuth), -cos(azimuth)) / (earthRadiusMeters * cosLatitude);
+    float horizonSlope = 0.0;
+    int level = 0;
+    for (
+      float distanceMeters = baseStep;
+      distanceMeters <= skyViewMaximumDistanceMeters;
+      distanceMeters += max(baseStep, distanceMeters * skyViewStepFraction)
+    ) {
+      // Nothing farther can rise above the horizon found so far.
+      if (
+        (distanceMeters * horizonSlope / skyLightReliefExaggeration)
+          + curvatureDropMeters(distanceMeters) > reachableMaximum - observerElevation
+      ) {
+        break;
+      }
+      vec2 eastSouthRadians = radiansPerMeter * distanceMeters;
+      vec2 texels = observerTexels[level] + eastSouthRadians * uLevelTexelsPerRadian[level];
+      while (level < 3 && !mosaicContainsWithMargin(texels)) {
+        level += 1;
+        if (level < 3) texels = observerTexels[level] + eastSouthRadians * uLevelTexelsPerRadian[level];
+      }
+      if (level >= 3) break;
+      float relativeHeight = mosaicElevation(level, texels) - observerElevation - curvatureDropMeters(distanceMeters);
+      horizonSlope = max(horizonSlope, skyLightReliefExaggeration * relativeHeight / distanceMeters);
+    }
+    // cos²(atan(s)) = 1 / (1 + s²).
+    openSky += 1.0 / (1.0 + horizonSlope * horizonSlope);
+  }
+  outValue = vec4(openSky / float(skyViewDirections), 0.0, 0.0, 1.0);
+}
+`;
+
 /**
  * Real-sun relief brightness, normalized so flat ground in full sun is 1. The direct part
  * is blurred cast-shadow visibility times Lambert slope lighting; its slope term reaches 0
  * exactly where the horizon march starts reporting self-shadow, so terminators stay
  * continuous. The sky part is a wrapped Lambert light from the Sun's azimuth, so relief
- * stays visible inside shadows. Output is brightness × `shadeBrightnessScale` / 255 in the
+ * stays visible inside shadows, dimmed by the terrain that hides sky beyond the slope's
+ * own plane (`terrainSkyViewFragmentShaderSource`), so gorges darken and ridges stay
+ * lit. Output is brightness × `shadeBrightnessScale` / 255 in the
  * red channel and the sunlight code / 255 in the green channel. `kastenYoungAirMass` and
  * `relativeOpticalAirMass` mirror `@/domain/terrain/atmosphericSunlight`.
  */
 export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShaderSource}
 uniform sampler2D uVisibility;
+// Open-sky share of a level surface on the 4 × 4 pixel sky-view grid, linearly filtered.
+uniform sampler2D uSkyView;
+// 1 applies the sky-view occlusion, 0 keeps the slope-only sky light (temporary switch).
+uniform float uSkyOcclusion;
 
 const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
 const float softEdgeSigma = ${glslFloat(terrainShadowSoftEdgeSigmaPixels)};
@@ -445,9 +526,15 @@ void main() {
   vec3 toSky = vec3(sin(azimuth) * cos(skyElevation), cos(azimuth) * cos(skyElevation), sin(skyElevation));
   float skyTwilight = smoothstep(nightElevationDegrees, 0.0, sun.apparentElevationDegrees);
   vec3 skyNormal = normalize(vec3(-dzEast, -dzNorth, 1.0 / skyLightReliefExaggeration));
-  float sunSideSky = max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
-  // Visible sky fraction of a slope, 1 on flat ground.
-  float diffuseSky = 0.5 * (1.0 + skyNormal.z);
+  // Visible sky of the slope's own plane, 1 on flat ground. Terrain beyond that plane hides
+  // the share of it that the sky-view pass found missing; the sky-view average of
+  // cos²(max(h, 0)) already includes the slope itself, so it is compared to the plane.
+  float planeSky = 0.5 * (1.0 + skyNormal.z);
+  float occlusion = mix(
+    1.0, min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0), uSkyOcclusion
+  );
+  float sunSideSky = occlusion * max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
+  float diffuseSky = occlusion * planeSky;
   float diffuseShare = diffuseSkyFraction * (1.0 - smoothstep(
     -diffuseSkyTransitionDegrees, diffuseSkyTransitionDegrees, sun.apparentElevationDegrees
   ));

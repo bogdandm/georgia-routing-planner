@@ -2949,6 +2949,7 @@ describe('MapLibreFacade', () => {
           instantMs: previousInstantMs,
           availability: 'available',
           playback: { status: 'idle' },
+          skyOcclusion: true,
         },
       });
       vi.mocked(runRenderBenchmark).mockImplementation(
@@ -2986,6 +2987,7 @@ describe('MapLibreFacade', () => {
           instantMs: previousInstantMs,
           availability: 'unavailable',
           playback: { status: 'idle' },
+          skyOcclusion: true,
         },
       });
 

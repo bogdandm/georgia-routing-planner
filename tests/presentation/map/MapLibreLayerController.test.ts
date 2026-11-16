@@ -2681,6 +2681,7 @@ describe('MapLibreLayerController', () => {
       instantMs: minute * 60_000,
       availability: 'available',
       playback: { status: 'idle' },
+      skyOcclusion: true,
     });
     const setTiles = vi.spyOn(source, 'setTiles');
     const movesBefore = map.moves.length;
@@ -2853,8 +2854,8 @@ describe('MapLibreLayerController', () => {
       ];
       const litFrames = playbackFrames.map(
         (frame) =>
-          frame >= window.sunriseMs - 30 * 60_000 &&
-          frame <= window.sunsetMs + 30 * 60_000,
+          frame >= window.sunriseMs - 45 * 60_000 &&
+          frame <= window.sunsetMs + 45 * 60_000,
       );
       controller.playSunShadowDay();
       return { controller, shadows, map, frames, playbackFrames, litFrames };

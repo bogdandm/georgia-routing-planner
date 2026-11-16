@@ -5,6 +5,7 @@ import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
 import {
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   ClickAwayListener,
   FormControlLabel,
@@ -56,6 +57,9 @@ export interface SunShadowControlProps {
   readonly onPlay: () => void;
   /** Cancels the precomputation or stops the animation. */
   readonly onStop: () => void;
+  /** Temporary experiment switch for terrain sky-view occlusion of sky light. */
+  readonly skyOcclusion: boolean;
+  readonly onSkyOcclusionChange: (enabled: boolean) => void;
   /**
    * True while the time keys briefly show the panel: it opens without taking focus, so
    * the held key keeps reaching the global shortcuts.
@@ -251,6 +255,8 @@ function SunShadowPanel({
   onChange,
   onPlay,
   onStop,
+  skyOcclusion,
+  onSkyOcclusionChange,
   peek,
 }: SunShadowControlProps) {
   const { i18n, t } = useLingui();
@@ -314,6 +320,22 @@ function SunShadowPanel({
           />
         }
         label={<Typography variant="body2">{t`Sun shadows`}</Typography>}
+        sx={{ mx: 0 }}
+      />
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={skyOcclusion}
+            disabled={!enabled || unavailable}
+            onChange={(_event, checked) => {
+              onSkyOcclusionChange(checked);
+            }}
+            size="small"
+          />
+        }
+        label={
+          <Typography variant="body2">{t`Global illumination (experiment)`}</Typography>
+        }
         sx={{ mx: 0 }}
       />
       {unavailable ? (

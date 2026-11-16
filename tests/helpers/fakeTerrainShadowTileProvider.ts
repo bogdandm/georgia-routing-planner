@@ -31,6 +31,7 @@ const emptyMetrics: TerrainShadowMetricsSnapshot = {
 /** Shadow provider without a worker; tests switch availability and read interaction. */
 export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider {
   public interactionActive = false;
+  public skyOcclusion = true;
   public disposed = false;
   public readonly prefetchCalls: FakePrefetchCall[] = [];
   public metrics: TerrainShadowMetricsSnapshot = emptyMetrics;
@@ -42,7 +43,12 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
   }
 
   public createTileUrl(instantMs: number): string {
-    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}`;
+    const variant = this.skyOcclusion ? '' : '?sky=flat';
+    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}${variant}`;
+  }
+
+  public setSkyOcclusion(enabled: boolean): void {
+    this.skyOcclusion = enabled;
   }
 
   public setInteractionActive(active: boolean): void {

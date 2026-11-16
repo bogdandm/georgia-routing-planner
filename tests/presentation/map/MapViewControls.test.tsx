@@ -385,6 +385,8 @@ describe('MapViewControls', () => {
           onChange: vi.fn(),
           onPlay: vi.fn(),
           onStop: vi.fn(),
+          skyOcclusion: true,
+          onSkyOcclusionChange: vi.fn(),
           peek: false,
         }}
         onLayerPresetChange={() => 'map'}

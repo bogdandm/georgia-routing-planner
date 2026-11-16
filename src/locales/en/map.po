@@ -222,6 +222,11 @@ msgstr "Find my location"
 msgid "Flat map"
 msgstr "Flat map"
 
+#. js-lingui-id: DPULZ4
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Global illumination (experiment)"
+msgstr "Global illumination (experiment)"
+
 #. js-lingui-id: ud5TUo
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx

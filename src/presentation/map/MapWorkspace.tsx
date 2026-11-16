@@ -1855,6 +1855,10 @@ export function MapWorkspace({
           onStop: () => {
             mapLayers.stopSunShadowPlayback();
           },
+          skyOcclusion: sunShadow.skyOcclusion,
+          onSkyOcclusionChange: (enabled) => {
+            mapLayers.setSunShadowSkyOcclusion(enabled);
+          },
           peek: sunShadowPeek,
         };
 

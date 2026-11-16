@@ -758,34 +758,36 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   map click only closes it.
 - **Sun shadows:** the sun button directly below the map-layer chooser opens a compact
   non-modal panel; opening it does not turn shadows on. It holds a **Sun shadows**
-  switch, a date field, a time-of-day slider in whole minutes that applies on release or
-  keyboard change, and **Now**. `D` turns shadows on or off from anywhere. `[` and `]`
-  move the time one minute earlier or later, 10 minutes with Shift, also while held,
-  never past either end of the shown day's range; they turn hidden shadows on, and a
-  closed panel appears without taking focus until a second after the last key release,
-  unless the sun button is pressed meanwhile to keep it open. While shadows for one
-  minute are still being drawn, further changes from the keys or the panel only move the
-  shown time, and shadows then draw for the latest minute, so holding a key moves at
-  key-repeat speed; with Alt (Option on macOS) every step is drawn in turn. Date and
-  time are local wall time at the map center (the browser's zone until the first
-  viewport settles), with the zone's GMT offset and that day's sunrise and sunset at the
-  center shown below. The slider runs from two hours before the first whole minute after
-  sunrise to two hours after the last whole minute before sunset, kept within the local
-  day; on a day without both (polar day or night) it spans 00:00 to 23:59. **Now** and a
-  session that starts after dark (outside sunrise–sunset at the map center) use 11:00 of
-  that day instead, so the map never opens fully shaded. Any other instant outside the
-  range (such as a date change or a key step past its end) moves to its nearest end at
-  the map center before shadows draw; while the Sun is below the horizon the whole map
-  is in shade. **Play the day**, left of the slider and available while shadows are on,
-  computes shadows for every 10-minute frame of that range for the shown day over the
-  visible tiles, from the current time to the end of the range and then from its start,
-  showing a percentage and a cancel button. It loops the frames in that order at about
-  6–7 frames per second, each frame shown only once its tiles are drawn, and starts
-  before the computation ends once the remaining frames are estimated to be ready before
-  the animation reaches them; **Stop** ends it. Any map move, a change in the panel or
-  by key, or turning shadows off stops playback. A view needing more than 2560 tile
-  frames between half an hour before sunrise and half an hour after sunset shows a note
-  to zoom in instead, until the map moves, and a failed computation shows an error note.
+  switch, a temporary **Global illumination (experiment)** checkbox (on by default, not
+  saved) that turns the terrain's hiding of sky light on and off, a date field, a
+  time-of-day slider in whole minutes that applies on release or keyboard change, and
+  **Now**. `D` turns shadows on or off from anywhere. `[` and `]` move the time one
+  minute earlier or later, 10 minutes with Shift, also while held, never past either end
+  of the shown day's range; they turn hidden shadows on, and a closed panel appears
+  without taking focus until a second after the last key release, unless the sun button
+  is pressed meanwhile to keep it open. While shadows for one minute are still being
+  drawn, further changes from the keys or the panel only move the shown time, and
+  shadows then draw for the latest minute, so holding a key moves at key-repeat speed;
+  with Alt (Option on macOS) every step is drawn in turn. Date and time are local wall
+  time at the map center (the browser's zone until the first viewport settles), with the
+  zone's GMT offset and that day's sunrise and sunset at the center shown below. The
+  slider runs from two hours before the first whole minute after sunrise to two hours
+  after the last whole minute before sunset, kept within the local day; on a day without
+  both (polar day or night) it spans 00:00 to 23:59. **Now** and a session that starts
+  after dark (outside sunrise–sunset at the map center) use 11:00 of that day instead,
+  so the map never opens fully shaded. Any other instant outside the range (such as a
+  date change or a key step past its end) moves to its nearest end at the map center
+  before shadows draw; while the Sun is below the horizon the whole map is in shade.
+  **Play the day**, left of the slider and available while shadows are on, computes
+  shadows for every 10-minute frame of that range for the shown day over the visible
+  tiles, from the current time to the end of the range and then from its start, showing
+  a percentage and a cancel button. It loops the frames in that order at about 6–7
+  frames per second, each frame shown only once its tiles are drawn, and starts before
+  the computation ends once the remaining frames are estimated to be ready before the
+  animation reaches them; **Stop** ends it. Any map move, a change in the panel or by
+  key, or turning shadows off stops playback. A view needing more than 2560 tile frames
+  between half an hour before sunrise and half an hour after sunset shows a note to zoom
+  in instead, until the map moves, and a failed computation shows an error note.
   Browsers that cannot render floating-point targets in a worker (WebGL2 with
   `EXT_color_buffer_float` and `OffscreenCanvas`) see a disabled switch with an
   explanation. Only the switch persists (default off); the instant and playback are
@@ -890,21 +892,22 @@ horizon, so high summits keep the first and last light for several minutes while
 valleys are already below the Sun's level. About a third of the brightness is sky light,
 from the Sun's side of the sky, joined after sunset by diffuse light as from thin cloud,
 so relief stays readable inside shadows; it fades out gradually over civil twilight.
-Cast-shadow edges are softened over a few pixels, and night is full shade. Darker pixels
-draw a semitransparent dark-blue shade and sunlit slopes a faint highlight in a softened
-color of direct sunlight: white at midday, then yellow, orange, and red as the Sun
-sinks, computed from clear-air Rayleigh extinction along the path through the
-atmosphere, so summits stay whiter than valleys. As the Sun sinks, shadows also turn
-bluer and lighter and ground in direct sun gains a sunlight-colored glow; both fade out
-in twilight. While sun shadows draw, the fixed-light relief shading is hidden without
-changing its saved visibility, and it returns when they are turned off. The raster is
-drawn above relief, satellite imagery, land cover, contours, and lakes, so water bodies
-are shaded too, but below buildings, labels, and tracks; it drapes over 3D terrain,
-stays on while the weather map is shown, and is not drawn in comparison panes. Relief
-and cast shadows are computed from z7 up to z12, then overzoomed. Below z7, which in 3D
-also covers the distance toward the horizon, the layer shades flat sea-level ground for
-the same instant, without relief, so distant terrain and low zooms still follow
-daylight, sunset, and night.
+Surrounding terrain hides part of that sky, so gorges and deep valleys get less of it
+than ridges and open slopes. Cast-shadow edges are softened over a few pixels, and night
+is full shade. Darker pixels draw a semitransparent dark-blue shade and sunlit slopes a
+faint highlight in a softened color of direct sunlight: white at midday, then yellow,
+orange, and red as the Sun sinks, computed from clear-air Rayleigh extinction along the
+path through the atmosphere, so summits stay whiter than valleys. As the Sun sinks,
+shadows also turn bluer and lighter and ground in direct sun gains a sunlight-colored
+glow; both fade out in twilight. While sun shadows draw, the fixed-light relief shading
+is hidden without changing its saved visibility, and it returns when they are turned
+off. The raster is drawn above relief, satellite imagery, land cover, contours, and
+lakes, so water bodies are shaded too, but below buildings, labels, and tracks; it
+drapes over 3D terrain, stays on while the weather map is shown, and is not drawn in
+comparison panes. Relief and cast shadows are computed from z7 up to z12, then
+overzoomed. Below z7, which in 3D also covers the distance toward the horizon, the layer
+shades flat sea-level ground for the same instant, without relief, so distant terrain
+and low zooms still follow daylight, sunset, and night.
 
 While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
 follow the Sun at the map center for the same instant: blue by day, twilight blue after

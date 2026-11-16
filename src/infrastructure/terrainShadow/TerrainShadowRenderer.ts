@@ -23,6 +23,8 @@ import {
   terrainShadowShadeFragmentShaderSource,
   terrainShadowVisibilityFragmentShaderSource,
   terrainShadowVisibilitySize,
+  terrainSkyViewFragmentShaderSource,
+  terrainSkyViewSize,
   terrariumDecodeFragmentShaderSource,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import {
@@ -46,27 +48,39 @@ const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
 /** Shared mask answered for every night tile (full shade, night sunlight); never cached. */
 const nightMask = new Uint8Array(shadeMaskBytes).fill(sunlightNightCode, tilePixels);
 
-/** Uniforms both shadow passes read; the rest are only active in one pass. */
+/** Uniforms every tile pass reads; the rest are only active in some passes. */
 const tileUniformNames = [
   'uMosaic0',
   'uLevelOrigin',
   'uLevelTexelsPerOutputPixel',
-  'uTileLongitude',
   'uTileMercatorY',
-  'uSubsolar',
   'uBaseResolutionEquatorMeters',
 ] as const;
-const visibilityUniformNames = [
+/**
+ * Longitude only matters for the Sun's position, so drivers drop `uTileLongitude` from
+ * the sky-view pass, which needs neither.
+ */
+const sunUniformNames = ['uTileLongitude', 'uSubsolar'] as const;
+/** Passes that march across every mosaic level. */
+const marchUniformNames = [
   ...tileUniformNames,
   'uMosaic1',
   'uMosaic2',
   'uLevelMaximum',
   'uLevelTexelsPerRadian',
 ] as const;
-const shadeUniformNames = [...tileUniformNames, 'uVisibility'] as const;
+const visibilityUniformNames = [...marchUniformNames, ...sunUniformNames] as const;
+const shadeUniformNames = [
+  ...tileUniformNames,
+  ...sunUniformNames,
+  'uVisibility',
+  'uSkyView',
+  'uSkyOcclusion',
+] as const;
 const reductionUniformNames = ['uSource', 'uSourceSize', 'uTargetOrigin'] as const;
-/** Texture unit of the visibility texture in the shade pass, after the four mosaic units. */
+/** Texture units of the shade pass's own inputs, after the four mosaic units. */
 const visibilityTextureUnit = 4;
+const skyViewTextureUnit = 5;
 
 type UniformLocations<TName extends string> = Readonly<
   Record<TName, WebGLUniformLocation>
@@ -89,6 +103,8 @@ interface GpuResources {
   readonly reductionProgram: ShaderProgram<(typeof reductionUniformNames)[number]>;
   readonly visibilityProgram: ShaderProgram<(typeof visibilityUniformNames)[number]>;
   readonly shadeProgram: ShaderProgram<(typeof shadeUniformNames)[number]>;
+  /** Marches every mosaic level like the visibility pass, without the Sun. */
+  readonly skyViewProgram: ShaderProgram<(typeof marchUniformNames)[number]>;
   /** RGBA8 staging texture for one encoded DEM upload. */
   readonly encodedTexture: WebGLTexture;
   readonly readFramebuffer: WebGLFramebuffer;
@@ -99,6 +115,11 @@ interface GpuResources {
   readonly levelMaximum: WebGLTexture;
   /** R8 visible solar-disk fraction for the tile plus the blur margin. */
   readonly visibilityTexture: WebGLTexture;
+  /**
+   * R8 open-sky share on the `terrainSkyViewSize` grid, linearly filtered; valid for the
+   * assembled mosaics, so every instant of the tile reuses it.
+   */
+  readonly skyViewTexture: WebGLTexture;
   /** RGBA8 shade pass target: red carries the brightness byte, green the sunlight code. */
   readonly shadeTexture: WebGLTexture;
   /** Reused RGBA readback of `shadeTexture`. */
@@ -282,6 +303,11 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     terrainShadowShadeFragmentShaderSource,
     shadeUniformNames,
   );
+  const skyViewProgram = createProgram(
+    gl,
+    terrainSkyViewFragmentShaderSource,
+    marchUniformNames,
+  );
   const mosaicSize = terrainShadowMosaicSize;
   const mosaics = [
     createTexture(gl, gl.R32F, mosaicSize, mosaicSize),
@@ -311,6 +337,14 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     terrainShadowVisibilitySize,
     terrainShadowVisibilitySize,
   );
+  const skyViewTexture = createTexture(
+    gl,
+    gl.R8,
+    terrainSkyViewSize,
+    terrainSkyViewSize,
+  );
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   const shadeTexture = createTexture(
     gl,
     gl.RGBA8,
@@ -322,6 +356,7 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     // Encoded staging texture, shade target, and its CPU readback.
     3 * tileBytes +
     terrainShadowVisibilitySize * terrainShadowVisibilitySize +
+    terrainSkyViewSize * terrainSkyViewSize +
     mosaics.length * mosaicSize * mosaicSize * bytesPerTexel +
     reductionStages.reduce(
       (sum, stage) => sum + stage.size * stage.size * bytesPerTexel,
@@ -336,6 +371,7 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     reductionProgram,
     visibilityProgram,
     shadeProgram,
+    skyViewProgram,
     encodedTexture,
     readFramebuffer: gl.createFramebuffer(),
     drawFramebuffer: gl.createFramebuffer(),
@@ -343,6 +379,7 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     reductionStages,
     levelMaximum,
     visibilityTexture,
+    skyViewTexture,
     shadeTexture,
     readback,
     staticBytes,
@@ -473,15 +510,14 @@ function reduceMaximum(gpu: GpuResources, mosaic: WebGLTexture, level: number): 
   }
 }
 
-/** Sets the tile, sun, and finest-level uniforms both shadow passes read. */
-function setShadowUniforms(
+/** Sets the tile and finest-level uniforms every tile pass reads. */
+function setTileUniforms(
   gl: WebGL2RenderingContext,
   uniforms: UniformLocations<(typeof tileUniformNames)[number]>,
   request: TerrainShadowTileRequest,
   levels: readonly TerrainShadowMosaicLevel[],
 ): void {
   const geometry = terrainShadowTileGeometry(request);
-  const sun = subsolarPoint(new Date(request.instantMs));
   const finestZoom = levels[0]?.zoom ?? request.z;
   gl.uniform1i(uniforms.uMosaic0, 0);
   gl.uniform2fv(
@@ -493,16 +529,10 @@ function setShadowUniforms(
     levels.map((level) => level.texelsPerOutputPixel),
   );
   gl.uniform2f(
-    uniforms.uTileLongitude,
-    geometry.westLongitudeRadians,
-    geometry.longitudeSpanRadians,
-  );
-  gl.uniform2f(
     uniforms.uTileMercatorY,
     geometry.northMercatorY,
     geometry.mercatorYSpan,
   );
-  gl.uniform2f(uniforms.uSubsolar, sun.declinationRadians, sun.longitudeRadians);
   gl.uniform1f(
     uniforms.uBaseResolutionEquatorMeters,
     (2 * Math.PI * terrainShadowModel.earthRadiusMeters) /
@@ -510,24 +540,41 @@ function setShadowUniforms(
   );
 }
 
-/** Marches the horizon into `visibilityTexture`, then lights the slopes into `shadeTexture`. */
-function drawShadePasses(
+/** Sets the tile's longitude and the subsolar point of the request's instant. */
+function setSunUniforms(
+  gl: WebGL2RenderingContext,
+  uniforms: UniformLocations<(typeof sunUniformNames)[number]>,
+  request: TerrainShadowTileRequest,
+): void {
+  const geometry = terrainShadowTileGeometry(request);
+  const sun = subsolarPoint(new Date(request.instantMs));
+  gl.uniform2f(
+    uniforms.uTileLongitude,
+    geometry.westLongitudeRadians,
+    geometry.longitudeSpanRadians,
+  );
+  gl.uniform2f(uniforms.uSubsolar, sun.declinationRadians, sun.longitudeRadians);
+}
+
+/**
+ * Binds the mosaic levels and their maxima to texture units 0–3 and selects `program`
+ * with every uniform of a pass that marches across the levels.
+ */
+function bindMarchProgram(
   gpu: GpuResources,
+  program: ShaderProgram<(typeof marchUniformNames)[number]>,
   request: TerrainShadowTileRequest,
   levels: readonly TerrainShadowMosaicLevel[],
 ): void {
-  const { gl, visibilityProgram, shadeProgram } = gpu;
+  const { gl } = gpu;
   const textures = [gpu.mosaics[0], gpu.mosaics[1], gpu.mosaics[2], gpu.levelMaximum];
   textures.forEach((texture, unit) => {
     gl.activeTexture(gl.TEXTURE0 + unit);
     gl.bindTexture(gl.TEXTURE_2D, texture);
   });
-
-  attachDrawTarget(gpu, gpu.visibilityTexture);
-  gl.viewport(0, 0, terrainShadowVisibilitySize, terrainShadowVisibilitySize);
-  gl.useProgram(visibilityProgram.program);
-  const uniforms = visibilityProgram.uniforms;
-  setShadowUniforms(gl, uniforms, request, levels);
+  gl.useProgram(program.program);
+  const { uniforms } = program;
+  setTileUniforms(gl, uniforms, request, levels);
   gl.uniform1i(uniforms.uMosaic1, 1);
   gl.uniform1i(uniforms.uMosaic2, 2);
   gl.uniform1i(uniforms.uLevelMaximum, 3);
@@ -535,6 +582,35 @@ function drawShadePasses(
     uniforms.uLevelTexelsPerRadian,
     levels.map((level) => level.texelsPerRadian),
   );
+}
+
+/** Computes the tile's open-sky share into `skyViewTexture` from the assembled mosaics. */
+function drawSkyView(
+  gpu: GpuResources,
+  request: TerrainShadowTileRequest,
+  levels: readonly TerrainShadowMosaicLevel[],
+): void {
+  attachDrawTarget(gpu, gpu.skyViewTexture);
+  gpu.gl.viewport(0, 0, terrainSkyViewSize, terrainSkyViewSize);
+  bindMarchProgram(gpu, gpu.skyViewProgram, request, levels);
+  drawFullscreen(gpu);
+  gpu.gl.flush();
+}
+
+/**
+ * Marches the horizon into `visibilityTexture`, then lights the slopes into
+ * `shadeTexture`, reading the tile's `skyViewTexture`.
+ */
+function drawShadePasses(
+  gpu: GpuResources,
+  request: TerrainShadowTileRequest,
+  levels: readonly TerrainShadowMosaicLevel[],
+): void {
+  const { gl, visibilityProgram, shadeProgram } = gpu;
+  attachDrawTarget(gpu, gpu.visibilityTexture);
+  gl.viewport(0, 0, terrainShadowVisibilitySize, terrainShadowVisibilitySize);
+  bindMarchProgram(gpu, visibilityProgram, request, levels);
+  setSunUniforms(gl, visibilityProgram.uniforms, request);
   const bandHeight = Math.ceil(terrainShadowVisibilitySize / shadowPassBands);
   gl.enable(gl.SCISSOR_TEST);
   for (let band = 0; band < shadowPassBands; band += 1) {
@@ -548,9 +624,14 @@ function drawShadePasses(
   gl.viewport(0, 0, terrainShadowTileSize, terrainShadowTileSize);
   gl.activeTexture(gl.TEXTURE0 + visibilityTextureUnit);
   gl.bindTexture(gl.TEXTURE_2D, gpu.visibilityTexture);
+  gl.activeTexture(gl.TEXTURE0 + skyViewTextureUnit);
+  gl.bindTexture(gl.TEXTURE_2D, gpu.skyViewTexture);
   gl.useProgram(shadeProgram.program);
-  setShadowUniforms(gl, shadeProgram.uniforms, request, levels);
+  setTileUniforms(gl, shadeProgram.uniforms, request, levels);
+  setSunUniforms(gl, shadeProgram.uniforms, request);
   gl.uniform1i(shadeProgram.uniforms.uVisibility, visibilityTextureUnit);
+  gl.uniform1i(shadeProgram.uniforms.uSkyView, skyViewTextureUnit);
+  gl.uniform1f(shadeProgram.uniforms.uSkyOcclusion, request.skyOcclusion ? 1 : 0);
   drawFullscreen(gpu);
 }
 
@@ -695,7 +776,7 @@ export class TerrainShadowRenderer {
         }),
       };
     }
-    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`;
+    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}${request.skyOcclusion ? '' : '|no-sky-occlusion'}`;
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);
@@ -748,6 +829,9 @@ export class TerrainShadowRenderer {
             );
             reduceMaximum(gpu, mosaic, level);
           });
+          // Level 0 is the 3×3 block around this tile at its own zoom, so the mosaic key
+          // also identifies the tile, and its sky view holds for every instant.
+          drawSkyView(gpu, request, levels);
           this.#assembledMosaicKey = mosaicKey;
         }
         drawShadePasses(gpu, request, levels);

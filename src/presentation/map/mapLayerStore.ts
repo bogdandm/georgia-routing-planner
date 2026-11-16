@@ -178,6 +178,8 @@ export interface SunShadowSnapshot {
   /** `unavailable` means this browser cannot render shadows (no WebGL2 float rendering). */
   readonly availability: TerrainShadowAvailability;
   readonly playback: SunShadowPlayback;
+  /** Temporary experiment switch for terrain sky-view occlusion; session only. */
+  readonly skyOcclusion: boolean;
 }
 
 export interface MapLayerState {
@@ -263,6 +265,7 @@ const initialMapLayerState: MapLayerState = {
     instantMs: 0,
     availability: 'unknown',
     playback: { status: 'idle' },
+    skyOcclusion: true,
   },
 };
 

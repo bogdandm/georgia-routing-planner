@@ -27,6 +27,7 @@ const request: TerrainShadowTileRequest = {
   lowSunShadowColor: [46, 63, 122],
   lowSunShadowLift: 0.4,
   lowSunGlowOpacity: 0.35,
+  skyOcclusion: true,
 };
 
 describe('TerrainShadowWorkerServer', () => {

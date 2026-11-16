@@ -68,6 +68,8 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
         onChange,
         onPlay,
         onStop,
+        skyOcclusion: true,
+        onSkyOcclusionChange: vi.fn(),
         peek: false,
         ...sunShadow,
       }}

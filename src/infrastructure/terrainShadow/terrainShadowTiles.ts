@@ -120,7 +120,7 @@ const nightCornerMarginDegrees = 1;
 
 /**
  * True when the Sun is below `terrainShadowNightElevationDegrees` at every pixel of the
- * tile at `instantMs`, so its shade mask is all night without any DEM or GPU work.
+ * tile at `instantMs`: only the night sky lights it, so one mask serves every such instant.
  */
 export function isTerrainShadowNightTile(
   output: TerrainShadowTileAddress,

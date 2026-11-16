@@ -19,7 +19,6 @@ import {
   shadeMaskBytes,
   sunlightGridSize,
   sunlightGridStride,
-  sunlightNightCode,
   terrainShadowShadeFragmentShaderSource,
   terrainShadowVisibilityFragmentShaderSource,
   terrainShadowVisibilitySize,
@@ -45,8 +44,6 @@ const shadowPassBands = 8;
 const bytesPerTexel = 4;
 const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
 const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
-/** Shared mask answered for every night tile (full shade, night sunlight); never cached. */
-const nightMask = new Uint8Array(shadeMaskBytes).fill(sunlightNightCode, tilePixels);
 
 /** Uniforms every tile pass reads; the rest are only active in some passes. */
 const tileUniformNames = [
@@ -765,19 +762,12 @@ export class TerrainShadowRenderer {
     }
     const gpu = this.ensureGpu();
     const generation = this.#generation;
-    // Twilight playback frames are dark everywhere: no DEM, GPU work, or cache memory.
-    if (isTerrainShadowNightTile(request, request.instantMs)) {
-      return {
-        mask: nightMask,
-        metrics: this.metrics({
-          computeMs: 0,
-          demFetchMs: 0,
-          cacheHit: true,
-          demTilesFetched: 0,
-        }),
-      };
-    }
-    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}`;
+    // Night shade lit only by the faint night sky does not depend on the instant, so every
+    // night frame of a tile shares one cached mask.
+    const maskInstant = isTerrainShadowNightTile(request, request.instantMs)
+      ? 'night'
+      : String(Math.floor(request.instantMs / 60_000));
+    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${maskInstant}`;
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);

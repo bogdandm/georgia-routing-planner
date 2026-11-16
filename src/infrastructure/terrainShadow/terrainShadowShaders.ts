@@ -89,8 +89,9 @@ export const terrainShadeFlatReferenceElevationDegrees = 10;
 export const terrainShadowSoftEdgeSigmaPixels = 1;
 /**
  * Share of flat ground's full-sun brightness that comes from the sky rather than the
- * direct Sun. The sky term keeps relief inside shadows; it fades out smoothly over civil
- * twilight down to the night elevation, so night tiles stay plain shade.
+ * direct Sun. The sky term keeps relief inside shadows; the twilight sky fades out
+ * smoothly over civil twilight down to the night elevation, giving way to the faint
+ * `terrainShadeNightSkyLight`.
  */
 export const terrainShadeSkyLightShare = 0.35;
 /**
@@ -116,6 +117,13 @@ const skyOcclusionStrength = 1.75;
  */
 export const terrainShadeDiffuseSkyFraction = 0.5;
 const diffuseSkyTransitionDegrees = 2;
+/**
+ * Share of the sky light that remains at night (airglow, starlight, and city glow seen as
+ * one faint uniform sky). It replaces the twilight sky as that fades, lights a slope by
+ * its diffuse visible sky only, and no longer depends on the Sun, so every night instant
+ * of a tile shares one mask while gorges stay darker than ridges and open ground.
+ */
+export const terrainShadeNightSkyLight = 0.6;
 /**
  * Rim light: where a low Sun sets behind a ridge, its lit crest glows as a thin bright
  * edge. A crest is a lit pixel whose neighbor `rimEdgeDistancePixels` farther from the
@@ -479,6 +487,7 @@ const float skyLightWrap = ${glslFloat(skyLightWrap)};
 const float skyLightReliefExaggeration = ${glslFloat(skyLightReliefExaggeration)};
 const float diffuseSkyFraction = ${glslFloat(terrainShadeDiffuseSkyFraction)};
 const float diffuseSkyTransitionDegrees = ${glslFloat(diffuseSkyTransitionDegrees)};
+const float nightSkyLight = ${glslFloat(terrainShadeNightSkyLight)};
 const float rimLightGain = ${glslFloat(rimLightGain)};
 const float rimEdgeDistancePixels = ${glslFloat(rimEdgeDistancePixels)};
 const float rimLightFullElevationDegrees = ${glslFloat(rimLightFullElevationDegrees)};
@@ -567,7 +576,8 @@ void main() {
   float diffuseShare = diffuseSkyFraction * (1.0 - smoothstep(
     -diffuseSkyTransitionDegrees, diffuseSkyTransitionDegrees, sun.apparentElevationDegrees
   ));
-  float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare);
+  float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare)
+    + (1.0 - skyTwilight) * nightSkyLight * diffuseSky;
   float brightness = (1.0 - skyLightShare) * direct + skyLightShare * sky;
   // Above full sun, x ↦ 1 + x / (1 + x) keeps sun-facing slopes ordered below 2 instead
   // of clipping them all to one tone.
@@ -859,7 +869,9 @@ export function createFlatShadeMask(
         (visibleSolarDiskFraction(elevation, 0) * Math.max(sine, 0)) /
         Math.max(sine, flatReferenceSine);
       const twilight = Math.min(Math.max((elevation - night) / -night, 0), 1);
-      const sky = twilight * twilight * (3 - 2 * twilight);
+      const twilightSky = twilight * twilight * (3 - 2 * twilight);
+      // Flat ground sees the whole sky, so the night sky adds its full share.
+      const sky = twilightSky + (1 - twilightSky) * terrainShadeNightSkyLight;
       const index = row * sunlightGridSize + column;
       gridBrightness[index] =
         (1 - terrainShadeSkyLightShare) * direct + terrainShadeSkyLightShare * sky;

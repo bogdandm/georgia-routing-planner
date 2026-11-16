@@ -8,9 +8,11 @@ import {
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
+  defaultTerrainShadowShading,
   MapLibreTerrainShadowTileProvider,
   type TerrainShadowAvailability,
   type TerrainShadowPrefetchProgress,
+  type TerrainShadowShading,
   terrainShadowProtocolId,
 } from '@/presentation/map/TerrainShadowTileProvider';
 
@@ -192,7 +194,15 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       lowSunGlowOpacity: 0.5,
       alpenglowColor: [0xf0, 0xa3, 0xb8],
       alpenglowOpacity: 0.6,
-      nightSky: true,
+      neutralBrightness: 1.45,
+      sunlightTintStrength: 0.75,
+      lighting: {
+        skyLightShare: 0.35,
+        skyOcclusionStrength: 1.75,
+        nightSkyLight: 0.6,
+        diffuseSkyFraction: 0.5,
+        softEdgeSigmaPixels: 1,
+      },
     });
 
     const second = loadTile();
@@ -202,6 +212,42 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     worker.respond(1, { bitmap, metrics: { ...renderedMetrics, cacheHit: true } });
     await second;
     expect(workerFactory).toHaveBeenCalledOnce();
+    provider.dispose();
+  });
+
+  it('gives each shading its own tile URL and keeps older URLs on their shading', async () => {
+    const { provider, worker } = createProvider();
+    const defaultUrl = provider.createTileUrl(instantMs);
+    const tuned: TerrainShadowShading = {
+      palette: { ...defaultTerrainShadowShading.palette, highlightOpacity: 0.2 },
+      lighting: { ...defaultTerrainShadowShading.lighting, skyOcclusionStrength: 2.5 },
+    };
+
+    provider.setShading(tuned);
+    const tunedUrl = provider.createTileUrl(instantMs);
+    expect(tunedUrl).not.toBe(defaultUrl);
+    // Back to the defaults (an equal object): the first URL again, then the tuned one.
+    provider.setShading({ ...defaultTerrainShadowShading });
+    expect(provider.createTileUrl(instantMs)).toBe(defaultUrl);
+    provider.setShading({ ...tuned });
+    expect(provider.createTileUrl(instantMs)).toBe(tunedUrl);
+
+    provider.setShading(defaultTerrainShadowShading);
+    const tile = loadTile(tunedUrl.replace('{z}/{x}/{y}', '12/2541/1514'));
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+    expect(worker.requests[0]?.payload).toMatchObject({
+      highlightOpacity: 0.2,
+      lighting: { skyOcclusionStrength: 2.5 },
+    });
+    worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await tile;
+    await expect(
+      loadTile(
+        tunedUrl.replace('{z}/{x}/{y}', '12/2541/1514').replace(/=\d+$/u, '=99'),
+      ),
+    ).rejects.toThrow('Invalid terrain shadow tile address.');
     provider.dispose();
   });
 

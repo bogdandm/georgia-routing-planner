@@ -40,8 +40,20 @@ export const terrainShadowTileRequestSchema = z
     lowSunGlowOpacity: z.number().min(0).max(1),
     alpenglowColor: colorSchema,
     alpenglowOpacity: z.number().min(0).max(1),
-    /** Temporary experiment switch; see `TerrainShadowExperiments`. */
-    nightSky: z.boolean(),
+    // Below 2, the compressed maximum brightness the lookup table divides by.
+    neutralBrightness: z.number().gt(0).lt(2),
+    sunlightTintStrength: z.number().min(0).max(1),
+    /** `ShadeLighting`: shade-pass uniforms; part of the cached mask's key. */
+    lighting: z
+      .object({
+        // The lookup table divides by the share and by 2 minus it.
+        skyLightShare: z.number().gt(0).lt(1),
+        skyOcclusionStrength: z.number().min(0).max(10),
+        nightSkyLight: z.number().min(0).max(1),
+        diffuseSkyFraction: z.number().min(0).max(1),
+        softEdgeSigmaPixels: z.number().min(0).max(10),
+      })
+      .strict(),
   })
   .strict()
   .refine(

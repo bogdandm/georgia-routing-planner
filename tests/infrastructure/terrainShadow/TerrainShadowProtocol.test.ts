@@ -25,7 +25,15 @@ const request: TerrainShadowTileRequest = {
   lowSunGlowOpacity: 0.35,
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.4,
-  nightSky: true,
+  neutralBrightness: 1.45,
+  sunlightTintStrength: 0.75,
+  lighting: {
+    skyLightShare: 0.35,
+    skyOcclusionStrength: 1.75,
+    nightSkyLight: 0.6,
+    diffuseSkyFraction: 0.5,
+    softEdgeSigmaPixels: 1,
+  },
 };
 
 const metrics: TerrainShadowTileMetrics = {
@@ -69,6 +77,12 @@ describe('terrainShadowTileRequestSchema', () => {
     ['a 256 px tile', { ...request, tileSize: 256 }],
     ['a color channel above 255', { ...request, shadowColor: [27, 36, 256] }],
     ['a highlight opacity above 1', { ...request, highlightOpacity: 1.5 }],
+    // The lookup table divides by 2 minus the neutral and by the sky-light share.
+    ['a neutral at the maximum brightness', { ...request, neutralBrightness: 2 }],
+    [
+      'no sky-light share',
+      { ...request, lighting: { ...request.lighting, skyLightShare: 0 } },
+    ],
     [
       'a relief tile below the DEM minimum zoom',
       { ...request, z: 8, x: 0, y: 0, demMinZoom: 9 },

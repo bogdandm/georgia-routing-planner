@@ -124,6 +124,30 @@ const diffuseSkyTransitionDegrees = 2;
  * of a tile shares one mask while gorges stay darker than ridges and open ground.
  */
 export const terrainShadeNightSkyLight = 0.6;
+
+/**
+ * Shade-pass lighting the GPU reads as uniforms, so new values recompute shade masks
+ * without recompiling shaders or redrawing the tile's sky view and cast-shadow visibility.
+ * `skyLightShare` also shapes the lookup table; the request carries it once for both.
+ */
+export interface ShadeLighting {
+  readonly skyLightShare: number;
+  readonly skyOcclusionStrength: number;
+  /** 0 lights night relief by nothing, so night tiles take the plain night mask. */
+  readonly nightSkyLight: number;
+  readonly diffuseSkyFraction: number;
+  /** Truncated at `terrainShadowVisibilityMarginPixels`. */
+  readonly softEdgeSigmaPixels: number;
+}
+
+export const defaultShadeLighting: ShadeLighting = {
+  skyLightShare: terrainShadeSkyLightShare,
+  skyOcclusionStrength,
+  nightSkyLight: terrainShadeNightSkyLight,
+  diffuseSkyFraction: terrainShadeDiffuseSkyFraction,
+  softEdgeSigmaPixels: terrainShadowSoftEdgeSigmaPixels,
+};
+
 /**
  * The sunlight code says how low the Sun stands for a pixel, so the lookup table can tint
  * it. Codes 0…`sunlightAirMassMaximumCode` map the relative optical air mass from
@@ -457,12 +481,14 @@ export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShad
 uniform sampler2D uVisibility;
 // Open-sky share of a level surface on the 4 × 4 pixel sky-view grid, linearly filtered.
 uniform sampler2D uSkyView;
-// Temporary experiment switches, 0 or 1.
-uniform float uNightSky;
-const float skyOcclusionStrength = ${glslFloat(skyOcclusionStrength)};
+// ShadeLighting; uSoftEdgeSigma is clamped above 0, so 0 means no blur.
+uniform float uSkyLightShare;
+uniform float uSkyOcclusionStrength;
+uniform float uNightSkyLight;
+uniform float uDiffuseSkyFraction;
+uniform float uSoftEdgeSigma;
 
 const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
-const float softEdgeSigma = ${glslFloat(terrainShadowSoftEdgeSigmaPixels)};
 const float flatReferenceElevationDegrees = ${glslFloat(terrainShadeFlatReferenceElevationDegrees)};
 const float brightnessScale = ${glslFloat(shadeBrightnessScale)};
 const float rayleighScaleHeightMeters = ${glslFloat(atmosphericSunlightModel.rayleighScaleHeightMeters)};
@@ -471,13 +497,10 @@ const float minimumAirMass = ${glslFloat(sunlightMinimumAirMass)};
 const float airMassMaximumCode = ${glslFloat(sunlightAirMassMaximumCode)};
 const float nightCode = ${glslFloat(sunlightNightCode)};
 const float nightElevationDegrees = ${glslFloat(terrainShadowNightElevationDegrees)};
-const float skyLightShare = ${glslFloat(terrainShadeSkyLightShare)};
 const float skyLightElevationDegrees = ${glslFloat(terrainShadeSkyLightElevationDegrees)};
 const float skyLightWrap = ${glslFloat(skyLightWrap)};
 const float skyLightReliefExaggeration = ${glslFloat(skyLightReliefExaggeration)};
-const float diffuseSkyFraction = ${glslFloat(terrainShadeDiffuseSkyFraction)};
 const float diffuseSkyTransitionDegrees = ${glslFloat(diffuseSkyTransitionDegrees)};
-const float nightSkyLight = ${glslFloat(terrainShadeNightSkyLight)};
 
 float kastenYoungAirMass(float apparentElevationDegrees) {
   return 1.0 / (sin(radians(apparentElevationDegrees)) + 0.50572 * pow(apparentElevationDegrees + 6.07995, -1.6364));
@@ -516,11 +539,12 @@ void main() {
   SolarPosition sun = solarPositionAt(latitudeLongitude.x, latitudeLongitude.y);
 
   ivec2 center = ivec2(gl_FragCoord.xy) + visibilityMargin;
+  float sigma = max(uSoftEdgeSigma, 0.01);
   float weightSum = 0.0;
   float visibility = 0.0;
   for (int dy = -visibilityMargin; dy <= visibilityMargin; ++dy) {
     for (int dx = -visibilityMargin; dx <= visibilityMargin; ++dx) {
-      float weight = exp(-float(dx * dx + dy * dy) / (2.0 * softEdgeSigma * softEdgeSigma));
+      float weight = exp(-float(dx * dx + dy * dy) / (2.0 * sigma * sigma));
       visibility += weight * texelFetch(uVisibility, center + ivec2(dx, dy), 0).r;
       weightSum += weight;
     }
@@ -548,17 +572,17 @@ void main() {
   // cos²(max(h, 0)) already includes the slope itself, so it is compared to the plane.
   float planeSky = 0.5 * (1.0 + skyNormal.z);
   float occlusion = max(
-    1.0 - skyOcclusionStrength * (1.0 - min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0)),
+    1.0 - uSkyOcclusionStrength * (1.0 - min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0)),
     0.0
   );
   float sunSideSky = occlusion * max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
   float diffuseSky = occlusion * planeSky;
-  float diffuseShare = diffuseSkyFraction * (1.0 - smoothstep(
+  float diffuseShare = uDiffuseSkyFraction * (1.0 - smoothstep(
     -diffuseSkyTransitionDegrees, diffuseSkyTransitionDegrees, sun.apparentElevationDegrees
   ));
   float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare)
-    + (1.0 - skyTwilight) * uNightSky * nightSkyLight * diffuseSky;
-  float brightness = (1.0 - skyLightShare) * direct + skyLightShare * sky;
+    + (1.0 - skyTwilight) * uNightSkyLight * diffuseSky;
+  float brightness = (1.0 - uSkyLightShare) * direct + uSkyLightShare * sky;
   // Above full sun, x ↦ 1 + x / (1 + x) keeps sun-facing slopes ordered below 2 instead
   // of clipping them all to one tone.
   float overExposure = max(brightness - 1.0, 0.0);
@@ -570,7 +594,10 @@ void main() {
 
 type Rgb = readonly [number, number, number];
 
-/** Colors the worker applies to shade masks; `#RRGGBB` channels and 0–1 opacities. */
+/**
+ * Colors and tone the worker applies to shade masks; `#RRGGBB` channels and 0–1
+ * opacities. Changing them rebuilds the lookup table and reuses every cached mask.
+ */
 export interface ShadePalette {
   /** Shade under a high Sun and at night: the blue-grey of a clear daytime sky. */
   readonly shadowColor: Rgb;
@@ -585,6 +612,10 @@ export interface ShadePalette {
   /** Rose light the twilight sky casts on open slopes just after sunset. */
   readonly alpenglowColor: Rgb;
   readonly alpenglowOpacity: number;
+  /** Brightness left untouched, below 2; see `shadeNeutralBrightness`. */
+  readonly neutralBrightness: number;
+  /** Share of the sunlight hue in the highlight, 0–1; see `sunlightTintStrength`. */
+  readonly sunlightTintStrength: number;
 }
 
 function mixRgb(from: Rgb, to: Rgb, weight: number): Rgb {
@@ -627,7 +658,7 @@ function sunlightTone(code: number): SunlightTone {
  * How much of the physical sunlight hue reaches the overlay. Eyes and cameras adapt to the
  * warm light, and a fully saturated tint reads as orange paint over imagery.
  */
-const sunlightTintStrength = 0.75;
+export const sunlightTintStrength = 0.75;
 
 /**
  * Default brightness the overlay leaves untouched. It sits above flat ground in full sun
@@ -656,7 +687,7 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
  *
- * Shade fades in as brightness drops below `shadeNeutralBrightness`, in the color of the
+ * Shade fades in as brightness drops below `neutralBrightness`, in the color of the
  * sky that lights it: `shadowColor` under a high Sun, turning to the lilac
  * `goldenShadowColor` as the Sun reaches the pixel's horizon, then over civil twilight to
  * the deep blue `lowSunShadowColor` and back to `shadowColor` by night. Light
@@ -667,11 +698,15 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * tone. As the Sun sinks, shade loses up to `lowSunShadowLift` of its opacity, as the sky
  * lights shadows more than the dimming Sun lights the slopes. Light is composited over
  * shade. A high Sun keeps the plain shadow and highlight. In early civil twilight open
- * slopes (those still lit by most of the sky, `brightness` near the sky share) get a rose
- * `alpenglowColor` glow of up to `alpenglowOpacity`; it rises just past the sea-level
- * horizon and fades before the middle of twilight, while gorges stay plain shade.
+ * slopes (those still lit by most of the sky, `brightness` near `skyLightShare`, the
+ * shade pass's `ShadeLighting.skyLightShare`) get a rose `alpenglowColor` glow of up to
+ * `alpenglowOpacity`; it rises just past the sea-level horizon and fades before the
+ * middle of twilight, while gorges stay plain shade.
  */
-export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
+export function createShadeLookupTable(
+  palette: ShadePalette,
+  skyLightShare: number,
+): Uint32Array {
   const table = new Uint32Array(256 * 256);
   const bytes = new Uint8Array(table.buffer);
   const {
@@ -680,9 +715,9 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
     goldenShadowColor,
     lowSunShadowColor,
     alpenglowColor,
+    sunlightTintStrength: tintStrength,
   } = palette;
-  const tint = (sunlight: number) =>
-    1 - sunlightTintStrength + sunlightTintStrength * sunlight;
+  const tint = (sunlight: number) => 1 - tintStrength + tintStrength * sunlight;
   for (let code = 0; code < 256; code += 1) {
     const { color: sunlight, lowSun } = sunlightTone(code);
     const lightColor: Rgb = [
@@ -713,13 +748,12 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
           alpenglowEndTwilightDepth,
           twilightDepth,
         ));
-    const neutral = shadeNeutralBrightness;
+    const neutral = palette.neutralBrightness;
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(
         Math.max(
-          (brightness - terrainShadeSkyLightShare) /
-            (shadeMaximumBrightness - terrainShadeSkyLightShare),
+          (brightness - skyLightShare) / (shadeMaximumBrightness - skyLightShare),
           0,
         ),
         1,
@@ -733,7 +767,7 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
           ) *
             palette.highlightOpacity,
       );
-      const openSky = Math.min(brightness / terrainShadeSkyLightShare, 1);
+      const openSky = Math.min(brightness / skyLightShare, 1);
       const roseAlpha = alpenglow * openSky * openSky;
       const lightAlpha = Math.min(1, sunAlpha + roseAlpha);
       const shadeWeight =
@@ -813,9 +847,9 @@ export function expandShadeMask(
 export function createFlatShadeMask(
   tile: TerrainShadowTileAddress,
   instantMs: number,
-  /** Temporary night-sky experiment switch. */
-  nightSky = true,
+  lighting: Pick<ShadeLighting, 'skyLightShare' | 'nightSkyLight'>,
 ): Uint8Array {
+  const { skyLightShare, nightSkyLight } = lighting;
   const mask = new Uint8Array(shadeMaskBytes);
   const gridBrightness = new Float32Array(sunlightGridSize * sunlightGridSize);
   const sun = subsolarPoint(new Date(instantMs));
@@ -853,11 +887,9 @@ export function createFlatShadeMask(
       const twilight = Math.min(Math.max((elevation - night) / -night, 0), 1);
       const twilightSky = twilight * twilight * (3 - 2 * twilight);
       // Flat ground sees the whole sky, so the night sky adds its full share.
-      const sky =
-        twilightSky + (1 - twilightSky) * (nightSky ? terrainShadeNightSkyLight : 0);
+      const sky = twilightSky + (1 - twilightSky) * nightSkyLight;
       const index = row * sunlightGridSize + column;
-      gridBrightness[index] =
-        (1 - terrainShadeSkyLightShare) * direct + terrainShadeSkyLightShare * sky;
+      gridBrightness[index] = (1 - skyLightShare) * direct + skyLightShare * sky;
       // `sunlightCode` of the shade shader at sea level, where the horizon is 0°.
       mask[tilePixels + index] =
         elevation < 0

@@ -88,13 +88,14 @@ export function createSunShadowSource(
   };
 }
 
-export function createSunShadowLayer(): RasterLayerSpecification {
+/** `opacity` is the layer's `raster-opacity`; the palette's `sunShadowOpacity` by default. */
+export function createSunShadowLayer(opacity: number): RasterLayerSpecification {
   return {
     id: terrainOverlayLayerIds.sunShadow,
     type: 'raster',
     source: mapSourceIds.terrainSunShadow,
     paint: {
-      'raster-opacity': mapVisualPalette.terrain.sunShadowOpacity,
+      'raster-opacity': opacity,
       'raster-fade-duration': 0,
       'raster-resampling': 'linear',
     },
@@ -103,11 +104,13 @@ export function createSunShadowLayer(): RasterLayerSpecification {
 
 type SkyRgb = readonly [red: number, green: number, blue: number];
 
-function parseSkyTone(tone: {
+interface SkyTone {
   readonly sky: string;
   readonly horizon: string;
   readonly fog: string;
-}): Record<'sky' | 'horizon' | 'fog', SkyRgb> {
+}
+
+function parseSkyTone(tone: SkyTone): Record<keyof SkyTone, SkyRgb> {
   return {
     sky: parseShadowColor(tone.sky),
     horizon: parseShadowColor(tone.horizon),
@@ -115,46 +118,66 @@ function parseSkyTone(tone: {
   };
 }
 
-const skyTones = {
-  day: parseSkyTone(mapVisualPalette.terrain.sunSky.day),
-  twilight: parseSkyTone(mapVisualPalette.terrain.sunSky.twilight),
-  night: parseSkyTone(mapVisualPalette.terrain.sunSky.night),
-};
-const antisolarHorizon = parseShadowColor(
-  mapVisualPalette.terrain.sunSky.antisolarHorizon,
-);
 /** The day sky turns into the twilight blue as the Sun sinks through this range. */
 const skyDayDegrees = { full: 10, end: -1 };
 /** The sunlight-colored horizon glow fades in below `fadeIn` and out below `fadeOut`. */
 const skyGlowDegrees = { fadeIn: 14, full: 1, fadeOut: -4 };
 /**
- * Share of the direct sunlight color in the horizon band and the haze at full glow when
- * looking at the Sun, and the part of it that remains when looking away: sunlit haze still
- * warms the far side a little, while the glow of the horizon belongs to the Sun's side.
- */
-const skyGlowStrength = {
-  horizon: 0.85,
-  fog: 0.6,
-  awayHorizon: 0.15,
-  awayFog: 0.35,
-};
-/**
  * The rose antisolar band rises from 6° above the horizon, is strongest from just before
  * sunset to 2° below it, and sinks into the Earth's shadow by 5° below.
  */
 const skyAntisolarDegrees = { fadeIn: 6, full: 1, fullEnd: -2, fadeOut: -5 };
-/** Share of `antisolarHorizon` in the horizon band when looking straight away from the Sun. */
-const skyAntisolarStrength = 0.6;
+
+/**
+ * Colors and strengths of the 3D sky while sun shadows draw. The tones and the rose
+ * `antisolarHorizon` are `mapVisualPalette.terrain.sunSky` `#RRGGBB` colors.
+ */
+export interface SunShadowAtmosphere {
+  readonly day: SkyTone;
+  readonly twilight: SkyTone;
+  readonly night: SkyTone;
+  readonly antisolarHorizon: string;
+  /**
+   * Share of the direct sunlight color in the horizon band and the haze at full glow when
+   * looking at the Sun, and the part of it that remains when looking away: sunlit haze
+   * still warms the far side a little, while the glow of the horizon belongs to the Sun's
+   * side.
+   */
+  readonly glowStrength: {
+    readonly horizon: number;
+    readonly fog: number;
+    readonly awayHorizon: number;
+    readonly awayFog: number;
+  };
+  /** Share of `antisolarHorizon` in the horizon band when looking straight away from the Sun. */
+  readonly antisolarStrength: number;
+  /**
+   * Fog starts at `fogGround` of the way to the far plane and turns toward the horizon
+   * color over its last `1 − horizonFog`; the sky blends from the horizon color over
+   * `skyHorizon` of the half screen above the horizon.
+   */
+  readonly blends: {
+    readonly fogGround: number;
+    readonly horizonFog: number;
+    readonly skyHorizon: number;
+  };
+}
+
+export const defaultSunShadowAtmosphere: SunShadowAtmosphere = {
+  ...mapVisualPalette.terrain.sunSky,
+  glowStrength: { horizon: 0.85, fog: 0.6, awayHorizon: 0.15, awayFog: 0.35 },
+  antisolarStrength: 0.6,
+  blends: { fogGround: 0.5, horizonFog: 0.8, skyHorizon: 0.8 },
+};
+
 /**
  * MapLibre keeps every sky property that a later `setSky` omits, so both specifications
- * below set all of them. Fog starts halfway to the far plane and turns toward the horizon
- * color over its last fifth; the sky blends from the horizon color over 80% of the half
- * screen above the horizon. The atmosphere only draws on the globe.
+ * below set all of them. The atmosphere only draws on the globe.
  */
 const skyBlends = {
-  'fog-ground-blend': 0.5,
-  'horizon-fog-blend': 0.8,
-  'sky-horizon-blend': 0.8,
+  'fog-ground-blend': defaultSunShadowAtmosphere.blends.fogGround,
+  'horizon-fog-blend': defaultSunShadowAtmosphere.blends.horizonFog,
+  'sky-horizon-blend': defaultSunShadowAtmosphere.blends.skyHorizon,
   'atmosphere-blend': 0,
 } as const satisfies SkySpecification;
 
@@ -195,14 +218,22 @@ function skyColor(rgb: SkyRgb): string {
  * down to 4° below the horizon, strongest about 1° above it, the horizon band and the haze
  * take on the direct sunlight color of `directSunlightColor`, the same Rayleigh extinction
  * that tints the shadows; the glow follows the square of how much the camera faces the
- * Sun. Facing away near sunset, the horizon turns rose instead. Channels are rounded, so
- * nearby instants and bearings give an identical specification.
+ * Sun. Facing away near sunset, the horizon turns rose instead. `atmosphere` supplies the
+ * colors, glow and antisolar strengths, and blends. Channels are rounded, so nearby
+ * instants and bearings give an identical specification.
  */
 export function createSunShadowSky(
   apparentElevationDegrees: number,
   elevationMeters: number,
   cosineToSun: number,
+  atmosphere: SunShadowAtmosphere,
 ): SkySpecification {
+  const { glowStrength, blends } = atmosphere;
+  const tones = {
+    day: parseSkyTone(atmosphere.day),
+    twilight: parseSkyTone(atmosphere.twilight),
+    night: parseSkyTone(atmosphere.night),
+  };
   const elevation = apparentElevationDegrees;
   const twilight = smoothstep(
     terrainShadowNightElevationDegrees,
@@ -222,31 +253,33 @@ export function createSunShadowSky(
     relativeOpticalAirMass(elevation, elevationMeters),
   );
   const sunlight: SkyRgb = [red * 255, green * 255, blue * 255];
-  const tone = (part: 'sky' | 'horizon' | 'fog') =>
+  const tone = (part: keyof SkyTone) =>
     mixSkyRgb(
-      mixSkyRgb(skyTones.night[part], skyTones.twilight[part], twilight),
-      skyTones.day[part],
+      mixSkyRgb(tones.night[part], tones.twilight[part], twilight),
+      tones.day[part],
       day,
     );
   const horizonGlow =
     glow *
-    (skyGlowStrength.awayHorizon +
-      (skyGlowStrength.horizon - skyGlowStrength.awayHorizon) * towardSun);
+    (glowStrength.awayHorizon +
+      (glowStrength.horizon - glowStrength.awayHorizon) * towardSun);
   const fogGlow =
     glow *
-    (skyGlowStrength.awayFog +
-      (skyGlowStrength.fog - skyGlowStrength.awayFog) * towardSun);
+    (glowStrength.awayFog + (glowStrength.fog - glowStrength.awayFog) * towardSun);
   return {
     'sky-color': skyColor(tone('sky')),
     'horizon-color': skyColor(
       mixSkyRgb(
         mixSkyRgb(tone('horizon'), sunlight, horizonGlow),
-        antisolarHorizon,
-        skyAntisolarStrength * antisolar * awayFromSun,
+        parseShadowColor(atmosphere.antisolarHorizon),
+        atmosphere.antisolarStrength * antisolar * awayFromSun,
       ),
     ),
     'fog-color': skyColor(mixSkyRgb(tone('fog'), sunlight, fogGlow)),
     ...skyBlends,
+    'fog-ground-blend': blends.fogGround,
+    'horizon-fog-blend': blends.horizonFog,
+    'sky-horizon-blend': blends.skyHorizon,
   };
 }
 

@@ -58,10 +58,20 @@ msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
 msgid "3D terrain with bearing {bearing}° and pitch {pitch}°."
 msgstr "3D terrain with bearing {bearing}° and pitch {pitch}°."
 
-#. js-lingui-id: dSsPCs
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Alpenglow"
-msgstr "Alpenglow"
+#. js-lingui-id: NawEr2
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "After"
+msgstr "After"
+
+#. js-lingui-id: GTAQdJ
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Ambient & twilight"
+msgstr "Ambient & twilight"
+
+#. js-lingui-id: EmSrGB
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Before"
+msgstr "Before"
 
 #. js-lingui-id: X4GABr
 #: src/presentation/map/mapShareUrl.ts
@@ -106,6 +116,11 @@ msgstr "Clipboard access failed. Try again or use the Share dialog."
 msgid "Close"
 msgstr "Close"
 
+#. js-lingui-id: W0no_b
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Close lighting tuning"
+msgstr "Close lighting tuning"
+
 #. js-lingui-id: ucYcTY
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Close map point details"
@@ -116,10 +131,20 @@ msgstr "Close map point details"
 msgid "Clouds, precipitation, and wind"
 msgstr "Clouds, precipitation, and wind"
 
+#. js-lingui-id: 1HfW_F
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Colors"
+msgstr "Colors"
+
 #. js-lingui-id: lMoJUA
 #: src/presentation/map/MapViewControls.tsx
 msgid "Compare images from different dates side by side"
 msgstr "Compare images from different dates side by side"
+
+#. js-lingui-id: P_2vKs
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Compare with the defaults"
+msgstr "Compare with the defaults"
 
 #. js-lingui-id: E4xaOs
 #: src/presentation/map/SunShadowControl.tsx
@@ -138,13 +163,24 @@ msgstr "Coordinates copied"
 
 #. js-lingui-id: 6V3Ea3
 #: src/presentation/map/CopyLinkButton.tsx
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
 msgid "Copied"
 msgstr "Copied"
+
+#. js-lingui-id: 0Rj7YG
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Copy configuration"
+msgstr "Copy configuration"
 
 #. js-lingui-id: hAvoLY
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Copy coordinates"
 msgstr "Copy coordinates"
+
+#. js-lingui-id: 9sj0G8
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Copy failed"
+msgstr "Copy failed"
 
 #. js-lingui-id: y1eoq1
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -233,6 +269,11 @@ msgstr "Flat map"
 msgid "Google Satellite"
 msgstr "Google Satellite"
 
+#. js-lingui-id: HoQRPP
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once."
+msgstr "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once."
+
 #. js-lingui-id: ddStAP
 #: src/presentation/map/ElevationGradeLegend.tsx
 msgid "Hide track grade legend"
@@ -247,6 +288,17 @@ msgstr "Include in link"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Layers tab"
 msgstr "Layers tab"
+
+#. js-lingui-id: 6Wa6-I
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Light & contrast"
+msgstr "Light & contrast"
+
+#. js-lingui-id: 0_gaE7
+#: src/presentation/map/SunShadowControl.tsx
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Lighting tuning"
+msgstr "Lighting tuning"
 
 #. js-lingui-id: yzF66j
 #: src/presentation/map/MapShareDialog.tsx
@@ -314,6 +366,11 @@ msgstr "Measure distance"
 msgid "Measure distance and elevation"
 msgstr "Measure distance and elevation"
 
+#. js-lingui-id: mko1Mf
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Mountain effects"
+msgstr "Mountain effects"
+
 #. js-lingui-id: WlrBzh
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -329,11 +386,6 @@ msgstr "Nearby map data could not be inspected."
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Nearby map feature"
 msgstr "Nearby map feature"
-
-#. js-lingui-id: bj8Kgj
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Night sky"
-msgstr "Night sky"
 
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -390,6 +442,21 @@ msgstr "Pick image date"
 msgid "Play the day"
 msgstr "Play the day"
 
+#. js-lingui-id: JnOBHb
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Recomputes shadow masks on the GPU once released"
+msgstr "Recomputes shadow masks on the GPU once released"
+
+#. js-lingui-id: 5FOB1h
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Reset all"
+msgstr "Reset all"
+
+#. js-lingui-id: zdJkhc
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Reset section"
+msgstr "Reset section"
+
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Satellite layer"
@@ -440,10 +507,10 @@ msgstr "Show flat 2D map"
 msgid "Show weather forecast"
 msgstr "Show weather forecast"
 
-#. js-lingui-id: wdq0VE
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Sky-tinted shadows"
-msgstr "Sky-tinted shadows"
+#. js-lingui-id: 7-RyoQ
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Sky & atmosphere"
+msgstr "Sky & atmosphere"
 
 #. js-lingui-id: qy1-46
 #: src/presentation/map/mapShareUrl.ts
@@ -455,11 +522,6 @@ msgstr "Soviet Topographic"
 #: src/presentation/map/SunShadowControl.tsx
 msgid "Stop"
 msgstr "Stop"
-
-#. js-lingui-id: sgINc_
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Sun disk"
-msgstr "Sun disk"
 
 #. js-lingui-id: 6TGtTn
 #: src/presentation/map/SunShadowControl.tsx

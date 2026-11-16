@@ -41,6 +41,7 @@ import {
   SunShadowPopover,
   type SunShadowControlProps,
 } from '@/presentation/map/SunShadowControl';
+import { TerrainLightingTuningPanel } from '@/presentation/map/TerrainLightingTuningPanel';
 
 export type TerrainControlState =
   'flat' | 'enabling' | 'terrain' | 'disabling' | 'failed';
@@ -131,6 +132,8 @@ export function MapViewControls({
   const sunShadowAnchor =
     sunShadowButton ?? (sunShadow?.peek === true ? sunShadowRailButton : null);
   const sunShadowPanelId = useId();
+  // The lighting tuning panel opens below the rail.
+  const [rail, setRail] = useState<HTMLElement | null>(null);
   const pending = terrainState === 'enabling' || terrainState === 'disabling';
   const selectedMode: TerrainMode =
     terrainState === 'terrain' || terrainState === 'enabling' ? 'terrain' : 'flat';
@@ -157,6 +160,7 @@ export function MapViewControls({
     <>
       <Paper
         elevation={0}
+        ref={setRail}
         sx={{
           borderRadius: '0 0 10px 10px',
           overflow: 'hidden',
@@ -546,6 +550,7 @@ export function MapViewControls({
           panelId={sunShadowPanelId}
         />
       )}
+      {sunShadow === null ? null : <TerrainLightingTuningPanel anchorEl={rail} />}
     </>
   );
 }

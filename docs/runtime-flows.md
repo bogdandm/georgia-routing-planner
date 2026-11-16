@@ -321,25 +321,20 @@ light from the Sun's azimuth at 30° elevation while the Sun is up, turning into
 mix with diffuse light proportional to the visible sky (as from thin cloud that keeps
 scattering light after sunset) as the Sun crosses ±2° around the horizon, both on 1.5×
 exaggerated slopes. Both are scaled by the terrain's occlusion of that sky: a sky-view
-pass, run once whenever the mosaics are assembled for a tile and reused for every
-instant, marches 16 azimuths up to 20 km (steps growing by 8% of the distance) from
-every fourth output pixel into a 128 × 128 R8 texture holding the mean cos²(max(h, 0))
-of the highest 1.5×-exaggerated terrain angle h; the shade pass samples it bilinearly
-and divides it by the visible sky of the slope's own plane, ½(1 + n_z), capped at 1, so
-a slope's own tilt is not counted twice and only terrain beyond it darkens gorges; the
-missing share is amplified 1.75 times, max(1 − 1.75 · (1 − occlusion), 0), so gorges
-read clearly. The twilight sky term eases out (smoothstep) between the horizon and the
-night elevation, the end of civil twilight (−6°), and hands over to a night sky at 0.6
-of the sky share that lights slopes only by their occluded diffuse sky. Night output no
-longer depends on the Sun, so a tile whose every pixel is past the night elevation is
-cached under one `night` key instead of its minute, and night playback frames reuse that
-single mask. Temporary panel checkboxes switch the newest visuals for comparison: the
-provider keeps every switch set under a version, tile URLs end in
-`?experiments=<version>` after a change so MapLibre requests every tile again,
-sky-tinted shadows off sends the earlier day shade and no golden-hour lilac, alpenglow
-off sends a zero alpenglow opacity, and the request carries a `nightSky` flag that
-scales the night-sky term and joins the mask cache key (night tiles without the night
-sky are full shade without GPU work). The Sun disk switch only hides the overlay. The
+pass, run once per tile and reused for every instant and lighting, marches 16 azimuths
+up to 20 km (steps growing by 8% of the distance) from every fourth output pixel into a
+128 × 128 R8 texture holding the mean cos²(max(h, 0)) of the highest 1.5×-exaggerated
+terrain angle h; the shade pass samples it bilinearly and divides it by the visible sky
+of the slope's own plane, ½(1 + n_z), capped at 1, so a slope's own tilt is not counted
+twice and only terrain beyond it darkens gorges; the missing share is amplified 1.75
+times, max(1 − 1.75 · (1 − occlusion), 0), so gorges read clearly. The twilight sky term
+eases out (smoothstep) between the horizon and the night elevation, the end of civil
+twilight (−6°), and hands over to a night sky at 0.6 of the sky share that lights slopes
+only by their occluded diffuse sky. Night output no longer depends on the Sun, so a tile
+whose every pixel is past the night elevation is cached under one `night` key instead of
+its minute, and night playback frames reuse that single mask. The shade-pass lighting
+(sky-light share, occlusion strength, night and diffuse sky light, soft-edge σ) is a set
+of uniforms carried by each request (`ShadeLighting`), not compiled into the shader. The
 same pass writes a sunlight code: the logarithm of the relative optical air mass of the
 direct-sun path (Kasten–Young, scaled by the pressure at the pixel's height, or through
 the tangent height when the Sun is below the pixel's level), or, once the Sun is below
@@ -348,35 +343,57 @@ above 1 (slopes facing a low Sun reach several times flat ground) is compressed 
 / (1 + x), so it stays below 2 and lit slopes keep their order. The worker reads the
 result back as one brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of
 sunlight codes, interpolates the codes bilinearly, and colors each pixel through a 256 ×
-256 table built once per palette. The neutral level, where the overlay is transparent,
-is brightness 1.45 (`shadeNeutralBrightness`), above flat ground in full sun: below it
-the shadow color fades in with alpha 1 − brightness / 1.45, so flat sunlit ground keeps
-a light shade and slopes turned to the Sun can still brighten; above it the highlight
-color fades in up to the compressed maximum of 2. The highlight is tinted by the
-Rayleigh-extinction sunlight color (`domain/terrain/atmosphericSunlight.ts`) at 75%
-strength. The shadow color follows the sunlight code: from the day color toward the
-golden-hour lilac as the blue deficit of the sunlight grows, then over the twilight
-codes to the deep twilight blue at half depth and back to the day color by night. As the
-Sun sinks, shadows lose part of their opacity, and ground lit by the direct Sun gains a
-sunlight-colored glow that grows with the direct share of the brightness up to 2. Over
-the first part of the twilight codes, a rose alpenglow is composited over shade with an
-opacity that peaks about 15% of the way to the night elevation, is gone by 55%, and
-scales with the square of brightness relative to the sky share, so open slopes glow and
-gorges do not. GPU jobs run one at a time and wait on a fence before the next starts, so
-at most one tile of shadow work competes with map frames.
+256 table built once per palette and sky-light share (the last four are kept). The
+neutral level, where the overlay is transparent, is brightness 1.45
+(`shadeNeutralBrightness`), above flat ground in full sun: below it the shadow color
+fades in with alpha 1 − brightness / 1.45, so flat sunlit ground keeps a light shade and
+slopes turned to the Sun can still brighten; above it the highlight color fades in up to
+the compressed maximum of 2. The highlight is tinted by the Rayleigh-extinction sunlight
+color (`domain/terrain/atmosphericSunlight.ts`) at 75% strength. The shadow color
+follows the sunlight code: from the day color toward the golden-hour lilac as the blue
+deficit of the sunlight grows, then over the twilight codes to the deep twilight blue at
+half depth and back to the day color by night. As the Sun sinks, shadows lose part of
+their opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows
+with the direct share of the brightness up to 2. Over the first part of the twilight
+codes, a rose alpenglow is composited over shade with an opacity that peaks about 15% of
+the way to the night elevation, is gone by 55%, and scales with the square of brightness
+relative to the sky share, so open slopes glow and gorges do not. GPU jobs run one at a
+time and wait on a fence before the next starts, so at most one tile of shadow work
+competes with map frames.
+
+Geometry and lighting are cached apart. Per tile the worker keeps up to 48 sky-view
+textures (keyed by the DEM mosaic) and 48 cast-shadow visibility textures (keyed by the
+mosaic and minute, or `night`) on the GPU, about 13 MiB, so a new shade-pass lighting
+for the tiles in view only reassembles mosaics from cached DEM tiles and reruns the
+shade pass. Shade masks are keyed by DEM, tile, minute, and the shade-pass lighting, so
+masks of several lightings coexist; colors, opacities, the neutral, and the sunlight
+tint only select another lookup table over the same masks.
+
+The temporary **Lighting tuning** panel (`presentation/map/terrainLightingTuning.ts` and
+`TerrainLightingTuningPanel.tsx`) owns a Zustand store of tuned values, mirrored to
+`localStorage`, and a Before/After flag that draws the defaults without discarding them.
+The layer controller subscribes to it: shadow opacity goes straight to the layer's
+`raster-opacity` and sky values through `createSunShadowSky` and `setSky`, both at once;
+tile shading (`TerrainShadowShading`: palette plus `ShadeLighting`, with one sky-light
+share for the shade pass and the lookup table) reaches the provider 200 ms after the
+last edit, or at once for Before/After. The panel sends GPU values only on slider
+release. The provider gives each distinct shading an index and ends its tile URLs in
+`?shading=<index>`, reusing the index of an equal shading, so a change requests every
+tile again while tiles in flight keep theirs, and an unchanged shading keeps the URL.
+Removing the two files and the controller subscription leaves the defaults.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,
 or decode failure fails the shadow tile instead of drawing a truncated horizon. The
 worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
-and up to 3072 shade masks of 272 KiB (816 MiB) keyed by DEM URL, tile, and minute in
-LRU caches; colors are applied per request, so they are not part of the key. A tile
-whose four corners see the Sun more than 1° below the night elevation (−6°, also below
-the sea-level horizon of Everest's summit, about −3.1°) is answered with a shared
-full-shade night mask without DEM fetches, GPU work, or a cache entry. A lost WebGL
-context drops both caches, and the next request creates a fresh context.
+and up to 3072 shade masks of 272 KiB (816 MiB) keyed as above in LRU caches. A night
+tile (its four corners see the Sun more than 1° below the night elevation, −6°, also
+below the sea-level horizon of Everest's summit, about −3.1°) whose request carries no
+night-sky light is answered with a shared full-shade night mask without DEM fetches, GPU
+work, or a cache entry. A lost WebGL context drops every cache, and the next request
+creates a fresh context.
 
-Tiles below z7 (`terrainShadowReliefMinZoom`) skip the DEM, the GPU, and both caches:
+Tiles below z7 (`terrainShadowReliefMinZoom`) skip the DEM, the GPU, and every cache:
 `createFlatShadeMask` evaluates the shade pass's terms for flat sea-level ground (the
 visible solar disk over a 0° horizon with the same flat-ground normalization, plus the
 twilight-faded sky light) and the sea-level sunlight code at the 128 × 128 grid samples

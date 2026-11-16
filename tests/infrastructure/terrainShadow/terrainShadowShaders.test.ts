@@ -4,6 +4,7 @@ import { horizonAirMass } from '@/domain/terrain/atmosphericSunlight';
 import {
   createFlatShadeMask,
   createShadeLookupTable,
+  defaultShadeLighting,
   expandShadeMask,
   shadeNeutralBrightness,
   shadeBrightnessScale,
@@ -28,6 +29,8 @@ const palette: ShadePalette = {
   lowSunGlowOpacity: 0.35,
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.4,
+  neutralBrightness: shadeNeutralBrightness,
+  sunlightTintStrength: 0.75,
 };
 /** Sunlight code of the zenith Sun at sea level (relative air mass 1). */
 const zenithCode = Math.round(
@@ -48,7 +51,7 @@ function largestByteDifference(
 }
 
 describe('createShadeLookupTable', () => {
-  const table = createShadeLookupTable(palette);
+  const table = createShadeLookupTable(palette, terrainShadeSkyLightShare);
   const neutralByte = Math.round(shadeNeutralBrightness * shadeBrightnessScale);
 
   it('keeps the plain shadow and highlight for a high Sun around a neutral above full sun', () => {
@@ -147,6 +150,20 @@ describe('createShadeLookupTable', () => {
     ]);
     expect(entryBytes(table, sunlightNightCode, neutralByte)[3]).toBeLessThanOrEqual(1);
   });
+
+  it('moves the untouched neutral and the sky-only shade with the tuned values', () => {
+    const tuned = createShadeLookupTable({ ...palette, neutralBrightness: 1 }, 0.5);
+    // A neutral at full sun leaves flat ground in full sun untouched.
+    expect(entryBytes(tuned, zenithCode, shadeBrightnessScale)[3]).toBe(0);
+    // Half of full sun is now lit by the sky alone, so the low Sun adds no warm glow.
+    const halfSun = Math.floor(0.5 * shadeBrightnessScale);
+    const [red = 0, green = 0, blue = 0] = entryBytes(tuned, horizonCode, halfSun);
+    expect(
+      largestByteDifference([red, green, blue], palette.goldenShadowColor),
+    ).toBeLessThanOrEqual(1);
+    const [defaultRed = 0, , defaultBlue = 0] = entryBytes(table, horizonCode, halfSun);
+    expect(defaultRed - defaultBlue).toBeGreaterThan(red - blue);
+  });
 });
 
 describe('expandShadeMask', () => {
@@ -184,11 +201,19 @@ describe('createFlatShadeMask', () => {
   const brightness = (mask: Uint8Array) => [...mask.subarray(0, tilePixels)];
 
   it('shades flat ground in full sun as the neutral level and night by the night sky', () => {
-    const noon = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 8, 30));
+    const noon = createFlatShadeMask(
+      tile,
+      Date.UTC(2026, 6, 1, 8, 30),
+      defaultShadeLighting,
+    );
     expect(new Set(brightness(noon))).toEqual(new Set([shadeBrightnessScale]));
     expect(Math.max(...codes(noon))).toBeLessThan(sunlightAirMassMaximumCode / 2);
 
-    const night = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 22));
+    const night = createFlatShadeMask(
+      tile,
+      Date.UTC(2026, 6, 1, 22),
+      defaultShadeLighting,
+    );
     expect(new Set(brightness(night))).toEqual(
       new Set([
         Math.round(
@@ -200,7 +225,11 @@ describe('createFlatShadeMask', () => {
   });
 
   it('darkens and reddens toward the east while the Sun sets across the tile', () => {
-    const mask = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 17));
+    const mask = createFlatShadeMask(
+      tile,
+      Date.UTC(2026, 6, 1, 17),
+      defaultShadeLighting,
+    );
     const middleRow = (terrainShadowTileSize / 2) * terrainShadowTileSize;
     const middleGridRow = tilePixels + (sunlightGridSize / 2) * sunlightGridSize;
 
@@ -212,6 +241,22 @@ describe('createFlatShadeMask', () => {
     expect(mask[middleGridRow] ?? 255).toBeLessThanOrEqual(sunlightAirMassMaximumCode);
     expect(mask[middleGridRow + sunlightGridSize - 1] ?? 0).toBeGreaterThan(
       sunlightAirMassMaximumCode,
+    );
+  });
+
+  it('takes the night sky and the sky-light share from the given lighting', () => {
+    const nightMs = Date.UTC(2026, 6, 1, 22);
+    const dark = createFlatShadeMask(tile, nightMs, {
+      skyLightShare: terrainShadeSkyLightShare,
+      nightSkyLight: 0,
+    });
+    expect(new Set(brightness(dark))).toEqual(new Set([0]));
+    const brighter = createFlatShadeMask(tile, nightMs, {
+      skyLightShare: 0.5,
+      nightSkyLight: 1,
+    });
+    expect(new Set(brightness(brighter))).toEqual(
+      new Set([Math.round(0.5 * shadeBrightnessScale)]),
     );
   });
 });

@@ -40,12 +40,22 @@ import {
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
 const maximumCachedDemTiles = 64;
+/**
+ * Cast-shadow visibility (per tile and minute) and sky view (per tile) textures kept on
+ * the GPU, so new shade-pass lighting redraws only the shade pass of the tiles in view:
+ * 48 × (266 KiB + 16 KiB) ≈ 13 MiB.
+ */
+const maximumCachedGeometryTextures = 48;
+/** Shade lookup tables kept, so switching between a few palettes reuses them. */
+const maximumCachedShadeTables = 4;
 /** Horizontal bands per visibility pass, flushed separately to keep GPU submissions short. */
 const shadowPassBands = 8;
 const bytesPerTexel = 4;
 const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
 const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
-/** Temporary: full night shade for tiles drawn with the night-sky experiment off. */
+const visibilityBytes = terrainShadowVisibilitySize * terrainShadowVisibilitySize;
+const skyViewBytes = terrainSkyViewSize * terrainSkyViewSize;
+/** Plain night shade, for night tiles without night-sky light. */
 const nightMask = new Uint8Array(shadeMaskBytes).fill(sunlightNightCode, tilePixels);
 
 /** Uniforms every tile pass reads; the rest are only active in some passes. */
@@ -75,7 +85,11 @@ const shadeUniformNames = [
   ...sunUniformNames,
   'uVisibility',
   'uSkyView',
-  'uNightSky',
+  'uSkyLightShare',
+  'uSkyOcclusionStrength',
+  'uNightSkyLight',
+  'uDiffuseSkyFraction',
+  'uSoftEdgeSigma',
 ] as const;
 const reductionUniformNames = ['uSource', 'uSourceSize', 'uTargetOrigin'] as const;
 /** Texture units of the shade pass's own inputs, after the four mosaic units. */
@@ -113,13 +127,6 @@ interface GpuResources {
   readonly reductionStages: readonly ReductionStage[];
   /** 3×1 R32F: texel i holds the maximum elevation of LOD level i. */
   readonly levelMaximum: WebGLTexture;
-  /** R8 visible solar-disk fraction for the tile plus the blur margin. */
-  readonly visibilityTexture: WebGLTexture;
-  /**
-   * R8 open-sky share on the `terrainSkyViewSize` grid, linearly filtered; valid for the
-   * assembled mosaics, so every instant of the tile reuses it.
-   */
-  readonly skyViewTexture: WebGLTexture;
   /** RGBA8 shade pass target: red carries the brightness byte, green the sunlight code. */
   readonly shadeTexture: WebGLTexture;
   /** Reused RGBA readback of `shadeTexture`. */
@@ -331,20 +338,6 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     terrainShadowTileSize,
     terrainShadowTileSize,
   );
-  const visibilityTexture = createTexture(
-    gl,
-    gl.R8,
-    terrainShadowVisibilitySize,
-    terrainShadowVisibilitySize,
-  );
-  const skyViewTexture = createTexture(
-    gl,
-    gl.R8,
-    terrainSkyViewSize,
-    terrainSkyViewSize,
-  );
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   const shadeTexture = createTexture(
     gl,
     gl.RGBA8,
@@ -355,8 +348,6 @@ function createGpuResources(onContextLost: () => void): GpuResources {
   const staticBytes =
     // Encoded staging texture, shade target, and its CPU readback.
     3 * tileBytes +
-    terrainShadowVisibilitySize * terrainShadowVisibilitySize +
-    terrainSkyViewSize * terrainSkyViewSize +
     mosaics.length * mosaicSize * mosaicSize * bytesPerTexel +
     reductionStages.reduce(
       (sum, stage) => sum + stage.size * stage.size * bytesPerTexel,
@@ -378,12 +369,28 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     mosaics,
     reductionStages,
     levelMaximum,
-    visibilityTexture,
-    skyViewTexture,
     shadeTexture,
     readback,
     staticBytes,
   };
+}
+
+/** R8 visible solar-disk fraction for the tile plus the blur margin. */
+function createVisibilityTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  return createTexture(
+    gl,
+    gl.R8,
+    terrainShadowVisibilitySize,
+    terrainShadowVisibilitySize,
+  );
+}
+
+/** R8 open-sky share on the `terrainSkyViewSize` grid, read with linear filtering. */
+function createSkyViewTexture(gl: WebGL2RenderingContext): WebGLTexture {
+  const texture = createTexture(gl, gl.R8, terrainSkyViewSize, terrainSkyViewSize);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  return texture;
 }
 
 function attachDrawTarget(gpu: GpuResources, texture: WebGLTexture): void {
@@ -584,30 +591,29 @@ function bindMarchProgram(
   );
 }
 
-/** Computes the tile's open-sky share into `skyViewTexture` from the assembled mosaics. */
+/** Computes the tile's open-sky share into `target` from the assembled mosaics. */
 function drawSkyView(
   gpu: GpuResources,
+  target: WebGLTexture,
   request: TerrainShadowTileRequest,
   levels: readonly TerrainShadowMosaicLevel[],
 ): void {
-  attachDrawTarget(gpu, gpu.skyViewTexture);
+  attachDrawTarget(gpu, target);
   gpu.gl.viewport(0, 0, terrainSkyViewSize, terrainSkyViewSize);
   bindMarchProgram(gpu, gpu.skyViewProgram, request, levels);
   drawFullscreen(gpu);
   gpu.gl.flush();
 }
 
-/**
- * Marches the horizon into `visibilityTexture`, then lights the slopes into
- * `shadeTexture`, reading the tile's `skyViewTexture`.
- */
-function drawShadePasses(
+/** Marches the horizon toward the request's Sun into `target`. */
+function drawVisibility(
   gpu: GpuResources,
+  target: WebGLTexture,
   request: TerrainShadowTileRequest,
   levels: readonly TerrainShadowMosaicLevel[],
 ): void {
-  const { gl, visibilityProgram, shadeProgram } = gpu;
-  attachDrawTarget(gpu, gpu.visibilityTexture);
+  const { gl, visibilityProgram } = gpu;
+  attachDrawTarget(gpu, target);
   gl.viewport(0, 0, terrainShadowVisibilitySize, terrainShadowVisibilitySize);
   bindMarchProgram(gpu, visibilityProgram, request, levels);
   setSunUniforms(gl, visibilityProgram.uniforms, request);
@@ -619,19 +625,39 @@ function drawShadePasses(
     gl.flush();
   }
   gl.disable(gl.SCISSOR_TEST);
+}
 
+/** Lights the slopes into `shadeTexture` from the tile's visibility and sky view. */
+function drawShade(
+  gpu: GpuResources,
+  visibility: WebGLTexture,
+  skyView: WebGLTexture,
+  request: TerrainShadowTileRequest,
+  levels: readonly TerrainShadowMosaicLevel[],
+): void {
+  const { gl, shadeProgram } = gpu;
+  const { uniforms } = shadeProgram;
+  const { lighting } = request;
   attachDrawTarget(gpu, gpu.shadeTexture);
   gl.viewport(0, 0, terrainShadowTileSize, terrainShadowTileSize);
+  // Unit 0 must hold the finest mosaic even when cached geometry skipped every march pass,
+  // which would otherwise have bound it.
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, gpu.mosaics[0]);
   gl.activeTexture(gl.TEXTURE0 + visibilityTextureUnit);
-  gl.bindTexture(gl.TEXTURE_2D, gpu.visibilityTexture);
+  gl.bindTexture(gl.TEXTURE_2D, visibility);
   gl.activeTexture(gl.TEXTURE0 + skyViewTextureUnit);
-  gl.bindTexture(gl.TEXTURE_2D, gpu.skyViewTexture);
+  gl.bindTexture(gl.TEXTURE_2D, skyView);
   gl.useProgram(shadeProgram.program);
-  setTileUniforms(gl, shadeProgram.uniforms, request, levels);
-  setSunUniforms(gl, shadeProgram.uniforms, request);
-  gl.uniform1i(shadeProgram.uniforms.uVisibility, visibilityTextureUnit);
-  gl.uniform1i(shadeProgram.uniforms.uSkyView, skyViewTextureUnit);
-  gl.uniform1f(shadeProgram.uniforms.uNightSky, request.nightSky ? 1 : 0);
+  setTileUniforms(gl, uniforms, request, levels);
+  setSunUniforms(gl, uniforms, request);
+  gl.uniform1i(uniforms.uVisibility, visibilityTextureUnit);
+  gl.uniform1i(uniforms.uSkyView, skyViewTextureUnit);
+  gl.uniform1f(uniforms.uSkyLightShare, lighting.skyLightShare);
+  gl.uniform1f(uniforms.uSkyOcclusionStrength, lighting.skyOcclusionStrength);
+  gl.uniform1f(uniforms.uNightSkyLight, lighting.nightSkyLight);
+  gl.uniform1f(uniforms.uDiffuseSkyFraction, lighting.diffuseSkyFraction);
+  gl.uniform1f(uniforms.uSoftEdgeSigma, lighting.softEdgeSigmaPixels);
   drawFullscreen(gpu);
 }
 
@@ -672,10 +698,54 @@ function readShadeMask(gpu: GpuResources): Uint8Array {
 }
 
 /**
+ * Cache key of a tile's shade mask: DEM, tile, minute (or `night`, whose shade does not
+ * depend on the instant), and shade-pass lighting. Palette fields are not part of it, so
+ * new colors recolor the cached masks through another lookup table.
+ */
+export function terrainShadowMaskKey(
+  request: TerrainShadowTileRequest,
+  night: boolean,
+): string {
+  const { lighting } = request;
+  const instant = night ? 'night' : String(Math.floor(request.instantMs / 60_000));
+  return [
+    request.demTileUrl,
+    `${String(request.z)}/${String(request.x)}/${String(request.y)}@${instant}`,
+    lighting.skyLightShare,
+    lighting.skyOcclusionStrength,
+    lighting.nightSkyLight,
+    lighting.diffuseSkyFraction,
+    lighting.softEdgeSigmaPixels,
+  ].join('|');
+}
+
+/** Cache key of a shade lookup table: every palette field and the sky-light share. */
+function shadeTableKey(request: TerrainShadowTileRequest): string {
+  const palette: ShadePalette = request;
+  return JSON.stringify([
+    palette.shadowColor,
+    palette.highlightColor,
+    palette.highlightOpacity,
+    palette.goldenShadowColor,
+    palette.lowSunShadowColor,
+    palette.lowSunShadowLift,
+    palette.lowSunGlowOpacity,
+    palette.alpenglowColor,
+    palette.alpenglowOpacity,
+    palette.neutralBrightness,
+    palette.sunlightTintStrength,
+    request.lighting.skyLightShare,
+  ]);
+}
+
+/**
  * Worker-owned WebGL2 terrain-shadow renderer. One OffscreenCanvas context is created on
- * the first request and recreated after a context loss; decoded DEM tiles and shade masks
- * live in bounded LRU caches. GPU work runs one tile at a time; DEM fetches
- * run concurrently and are shared between requests for the same tile.
+ * the first request and recreated after a context loss; decoded DEM tiles, per-tile sky
+ * view and cast-shadow visibility textures, shade masks, and lookup tables live in
+ * bounded LRU caches. Geometry (DEM, sky view, visibility) never depends on lighting or
+ * colors, so new shade-pass lighting reruns only the shade pass, and a new palette only
+ * recolors cached masks. GPU work runs one tile at a time; DEM fetches run concurrently
+ * and are shared between requests for the same tile.
  */
 export class TerrainShadowRenderer {
   #gpu: GpuResources | null = null;
@@ -685,12 +755,15 @@ export class TerrainShadowRenderer {
   readonly #demPins = new Map<string, number>();
   readonly #inflightDem = new Map<string, InflightDemFetch>();
   readonly #masks = new Map<string, Uint8Array>();
+  /** Sky view per mosaic key: it depends on the DEM around the tile only. */
+  readonly #skyViews = new Map<string, WebGLTexture>();
+  /** Visibility per mosaic key and minute (or `night`): the DEM and the Sun only. */
+  readonly #visibilities = new Map<string, WebGLTexture>();
+  readonly #shadeTables = new Map<string, Uint32Array>();
   /** DEM URLs the mosaics currently hold, so consecutive instants of a tile reuse them. */
   #assembledMosaicKey: string | null = null;
   #gpuQueue: Promise<void> = Promise.resolve();
   #disposed = false;
-  /** The lookup table of the last palette; every request carries the same palette. */
-  #shadeTable: { readonly key: string; readonly table: Uint32Array } | null = null;
 
   /** Colors the cached shade mask of `request` into a transferable bitmap. */
   public async render(
@@ -724,22 +797,46 @@ export class TerrainShadowRenderer {
     return (await this.ensureMask(request, signal)).metrics;
   }
 
-  private shadeTable(palette: ShadePalette): Uint32Array {
-    const key = JSON.stringify([
-      palette.shadowColor,
-      palette.highlightColor,
-      palette.highlightOpacity,
-      palette.goldenShadowColor,
-      palette.lowSunShadowColor,
-      palette.lowSunShadowLift,
-      palette.lowSunGlowOpacity,
-      palette.alpenglowColor,
-      palette.alpenglowOpacity,
-    ]);
-    if (this.#shadeTable?.key !== key) {
-      this.#shadeTable = { key, table: createShadeLookupTable(palette) };
+  private shadeTable(request: TerrainShadowTileRequest): Uint32Array {
+    const key = shadeTableKey(request);
+    const table =
+      this.#shadeTables.get(key) ??
+      createShadeLookupTable(request, request.lighting.skyLightShare);
+    this.#shadeTables.delete(key);
+    this.#shadeTables.set(key, table);
+    for (const oldestKey of this.#shadeTables.keys()) {
+      if (this.#shadeTables.size <= maximumCachedShadeTables) break;
+      this.#shadeTables.delete(oldestKey);
     }
-    return this.#shadeTable.table;
+    return table;
+  }
+
+  /**
+   * The texture `cache` holds for `key`, now most recently used. On a miss it claims the
+   * least recently used texture once the cache is full, otherwise a new one, and `fresh`
+   * says the caller must draw it.
+   */
+  private claimGeometryTexture(
+    gl: WebGL2RenderingContext,
+    cache: Map<string, WebGLTexture>,
+    key: string,
+    create: (gl: WebGL2RenderingContext) => WebGLTexture,
+  ): { readonly texture: WebGLTexture; readonly fresh: boolean } {
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      cache.delete(key);
+      cache.set(key, cached);
+      return { texture: cached, fresh: false };
+    }
+    let texture: WebGLTexture | undefined;
+    if (cache.size >= maximumCachedGeometryTextures) {
+      const [oldestKey, oldest] = cache.entries().next().value ?? [];
+      if (oldestKey !== undefined) cache.delete(oldestKey);
+      texture = oldest;
+    }
+    texture ??= create(gl);
+    cache.set(key, texture);
+    return { texture, fresh: true };
   }
 
   private async ensureMask(
@@ -754,7 +851,7 @@ export class TerrainShadowRenderer {
     // Coarse tiles shade flat ground on the CPU: no GPU context, DEM, or cache memory.
     if (request.z < terrainShadowReliefMinZoom) {
       const startedAt = performance.now();
-      const mask = createFlatShadeMask(request, request.instantMs, request.nightSky);
+      const mask = createFlatShadeMask(request, request.instantMs, request.lighting);
       return {
         mask,
         metrics: this.metrics({
@@ -768,7 +865,7 @@ export class TerrainShadowRenderer {
     const gpu = this.ensureGpu();
     const generation = this.#generation;
     const night = isTerrainShadowNightTile(request, request.instantMs);
-    if (night && !request.nightSky) {
+    if (night && request.lighting.nightSkyLight === 0) {
       return {
         mask: nightMask,
         metrics: this.metrics({
@@ -781,10 +878,7 @@ export class TerrainShadowRenderer {
     }
     // Night shade lit only by the faint night sky does not depend on the instant, so every
     // night frame of a tile shares one cached mask.
-    const maskInstant = night
-      ? 'night'
-      : String(Math.floor(request.instantMs / 60_000));
-    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${maskInstant}|${String(request.nightSky)}`;
+    const maskKey = terrainShadowMaskKey(request, night);
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);
@@ -837,12 +931,28 @@ export class TerrainShadowRenderer {
             );
             reduceMaximum(gpu, mosaic, level);
           });
-          // Level 0 is the 3×3 block around this tile at its own zoom, so the mosaic key
-          // also identifies the tile, and its sky view holds for every instant.
-          drawSkyView(gpu, request, levels);
           this.#assembledMosaicKey = mosaicKey;
         }
-        drawShadePasses(gpu, request, levels);
+        // Level 0 is the 3×3 block around this tile at its own zoom, so the mosaic key
+        // also identifies the tile: its sky view holds for every instant and lighting,
+        // its visibility for every lighting of one minute (or of the whole night).
+        const skyView = this.claimGeometryTexture(
+          gpu.gl,
+          this.#skyViews,
+          mosaicKey,
+          createSkyViewTexture,
+        );
+        if (skyView.fresh) drawSkyView(gpu, skyView.texture, request, levels);
+        const visibility = this.claimGeometryTexture(
+          gpu.gl,
+          this.#visibilities,
+          `${mosaicKey}@${night ? 'night' : String(Math.floor(request.instantMs / 60_000))}`,
+          createVisibilityTexture,
+        );
+        if (visibility.fresh) {
+          drawVisibility(gpu, visibility.texture, request, levels);
+        }
+        drawShade(gpu, visibility.texture, skyView.texture, request, levels);
         // Holding the queue until the GPU finishes keeps at most one tile of shadow work
         // competing with map frames, and makes `computeMs` the real GPU time.
         await waitForGpu(gpu.gl);
@@ -895,6 +1005,9 @@ export class TerrainShadowRenderer {
     this.#inflightDem.clear();
     this.#demTiles.clear();
     this.#masks.clear();
+    // The textures died with the context.
+    this.#skyViews.clear();
+    this.#visibilities.clear();
     this.#assembledMosaicKey = null;
   }
 
@@ -1032,6 +1145,8 @@ export class TerrainShadowRenderer {
       memoryBytes:
         (this.#gpu?.staticBytes ?? 0) +
         decodedTiles * tileBytes +
+        this.#visibilities.size * visibilityBytes +
+        this.#skyViews.size * skyViewBytes +
         this.#masks.size * shadeMaskBytes,
       cachedMasks: this.#masks.size,
       cachedDemTiles: this.#demTiles.size,

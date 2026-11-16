@@ -1855,10 +1855,6 @@ export function MapWorkspace({
           onStop: () => {
             mapLayers.stopSunShadowPlayback();
           },
-          experiments: sunShadow.experiments,
-          onExperimentsChange: (experiments) => {
-            mapLayers.setSunShadowExperiments(experiments);
-          },
           peek: sunShadowPeek,
         };
 

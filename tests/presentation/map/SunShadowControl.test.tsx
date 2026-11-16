@@ -8,7 +8,7 @@ import { MapViewControls } from '@/presentation/map/MapViewControls';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
 import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
 import { daylightWindow } from '@/presentation/map/sunShadowDaylight';
-import { defaultTerrainShadowExperiments } from '@/presentation/map/TerrainShadowTileProvider';
+import { terrainLightingTuningStore } from '@/presentation/map/terrainLightingTuning';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 // 12:00 in Tbilisi (UTC+4 all year).
@@ -65,8 +65,6 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
         instantMs: tbilisiNoonMs,
         availability: 'available',
         playback: { status: 'idle' },
-        experiments: defaultTerrainShadowExperiments,
-        onExperimentsChange: vi.fn(),
         mapViewport: tbilisiViewport(),
         onChange,
         onPlay,
@@ -103,6 +101,20 @@ describe('SunShadowControl', () => {
       enabled: true,
       instantMs: tbilisiNoonMs,
     });
+  });
+
+  it('opens the lighting tuning panel below the rail, open beside the sun panel', async () => {
+    const user = userEvent.setup();
+    terrainLightingTuningStore.setState({ panelOpen: false });
+    renderSunShadowControls({ enabled: true });
+    await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
+
+    await user.click(screen.getByRole('button', { name: 'Lighting tuning' }));
+
+    expect(screen.getByRole('region', { name: 'Lighting tuning' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: 'Sun shadows' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Close lighting tuning' }));
+    expect(terrainLightingTuningStore.getState().panelOpen).toBe(false);
   });
 
   it('commits date and time of day as wall time at the map center', async () => {

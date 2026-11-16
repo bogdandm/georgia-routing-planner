@@ -30,7 +30,15 @@ const request: TerrainShadowTileRequest = {
   lowSunGlowOpacity: 0.35,
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.4,
-  nightSky: true,
+  neutralBrightness: 1.45,
+  sunlightTintStrength: 0.75,
+  lighting: {
+    skyLightShare: 0.35,
+    skyOcclusionStrength: 1.75,
+    nightSkyLight: 0.6,
+    diffuseSkyFraction: 0.5,
+    softEdgeSigmaPixels: 1,
+  },
 };
 
 describe('TerrainShadowWorkerServer', () => {

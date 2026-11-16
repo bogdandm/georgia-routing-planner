@@ -49,7 +49,11 @@ import {
   daylightFrameInstants,
   daylightWindow,
 } from '@/presentation/map/sunShadowDaylight';
-import { defaultTerrainShadowExperiments } from '@/presentation/map/TerrainShadowTileProvider';
+import {
+  defaultTerrainLightingTuning,
+  setTerrainLightingValue,
+  terrainLightingTuningStore,
+} from '@/presentation/map/terrainLightingTuning';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
@@ -494,6 +498,11 @@ beforeEach(async () => {
   const services = createTestServices();
   await services.database.delete();
   resetMapLayerStore();
+  terrainLightingTuningStore.setState({
+    values: defaultTerrainLightingTuning,
+    showDefaults: false,
+    panelOpen: false,
+  });
 });
 
 afterEach(() => {
@@ -2707,7 +2716,6 @@ describe('MapLibreLayerController', () => {
       instantMs: minute * 60_000,
       availability: 'available',
       playback: { status: 'idle' },
-      experiments: defaultTerrainShadowExperiments,
     });
     const setTiles = vi.spyOn(source, 'setTiles');
     const movesBefore = map.moves.length;
@@ -2855,6 +2863,59 @@ describe('MapLibreLayerController', () => {
       'fog-color': 'transparent',
       'fog-ground-blend': 1,
     });
+  });
+
+  it('applies lighting tuning: opacity and sky at once, tile shading once edits settle', () => {
+    vi.useFakeTimers();
+    const { controller, shadows } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    const source = map.sources.get(mapSourceIds.terrainSunShadow) as {
+      readonly tiles: readonly string[];
+      readonly setTiles: (tiles: string[]) => void;
+    };
+    const defaultUrl = source.tiles[0];
+    const setTiles = vi.spyOn(source, 'setTiles');
+    const opacity = () =>
+      map.paintProperties.get(`${terrainOverlayLayerIds.sunShadow}.raster-opacity`);
+
+    setTerrainLightingValue('sunShadowOpacity', 0.8);
+    setTerrainLightingValue('sunSky.day.sky', '#102030');
+    expect(opacity()).toBe(0.8);
+    expect(map.sky).toMatchObject({ 'sky-color': 'rgb(16, 32, 48)' });
+    vi.runAllTimers();
+    // Layer and sky values leave the tiles alone.
+    expect(setTiles).not.toHaveBeenCalled();
+
+    setTerrainLightingValue('sunHighlightOpacity', 0.3);
+    setTerrainLightingValue('skyOcclusionStrength', 2.5);
+    vi.advanceTimersByTime(199);
+    expect(setTiles).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(shadows.shading.palette.highlightOpacity).toBe(0.3);
+    expect(shadows.shading.lighting.skyOcclusionStrength).toBe(2.5);
+    expect(setTiles).toHaveBeenCalledOnce();
+    const tunedUrl = setTiles.mock.lastCall?.[0][0];
+    expect(tunedUrl).not.toBe(defaultUrl);
+
+    // Before draws the defaults at once and keeps the tuned values; After restores them.
+    terrainLightingTuningStore.setState({ showDefaults: true });
+    expect(setTiles).toHaveBeenLastCalledWith([defaultUrl]);
+    expect(opacity()).toBe(0.5);
+    expect(map.sky).toMatchObject({ 'sky-color': 'rgb(93, 155, 219)' });
+    expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.8);
+    terrainLightingTuningStore.setState({ showDefaults: false });
+    expect(setTiles).toHaveBeenLastCalledWith([tunedUrl]);
+    expect(opacity()).toBe(0.8);
+
+    // A layer added later starts at the tuned opacity.
+    controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(map.layers.get(terrainOverlayLayerIds.sunShadow)).toMatchObject({
+      paint: { 'raster-opacity': 0.8 },
+    });
+    controller.dispose();
   });
 
   describe('day playback', () => {

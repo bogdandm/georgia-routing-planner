@@ -148,13 +148,18 @@ import {
 } from '@/presentation/map/sunShadowDaylight';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
-  defaultTerrainShadowExperiments,
-  type TerrainShadowExperiments,
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
   terrainShadowPrefetchBlockFrames,
 } from '@/presentation/map/TerrainShadowTileProvider';
+import {
+  effectiveTerrainLightingTuning,
+  sunShadowAtmosphereFromTuning,
+  terrainLightingTuningStore,
+  type TerrainLightingTuningState,
+  terrainShadowShadingFromTuning,
+} from '@/presentation/map/terrainLightingTuning';
 import {
   terrainShadowPlaybackTileLimit,
   terrainShadowReliefMinZoom,
@@ -434,6 +439,8 @@ const canceledDirectSourceErrorWindowMs = 5_000;
 const terrainQueuePublishIntervalMs = 250;
 // Quick pans load a few DEM tiles from cache; only sustained loading reaches the status.
 const terrainDemLoadingIndicatorDelayMs = 300;
+/** Tile shading from a lighting tuning edit waits this long for further edits. */
+const lightingTuningTileDelayMs = 200;
 
 /** Shadow tiles are keyed by whole minutes, so finer instant changes redraw nothing. */
 function quantizeSunShadowInstant(instantMs: number): number {
@@ -1083,6 +1090,9 @@ export class MapLibreLayerController {
   /** Sun disk over the 3D map while shadows draw; present while a map is attached. */
   #sunDisk: SunDiskOverlay | null = null;
   readonly #releaseSunShadowAvailability: () => void;
+  readonly #releaseLightingTuning: () => void;
+  /** Debounces tile shading from lighting tuning edits; see `handleLightingTuning`. */
+  #lightingTuningTimer: ReturnType<typeof setTimeout> | undefined = undefined;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
   readonly #readySatelliteBasemapSourceIds = new Set<string>();
@@ -1200,7 +1210,6 @@ export class MapLibreLayerController {
         instantMs: this.#sunShadowInstantMs,
         availability: sunShadowTiles.getAvailability(),
         playback: { status: 'idle' },
-        experiments: defaultTerrainShadowExperiments,
       },
     });
     this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
@@ -1215,7 +1224,61 @@ export class MapLibreLayerController {
         if (this.#map !== null) this.reconcileTerrainOverlays();
       },
     );
+    this.sunShadowTiles.setShading(
+      terrainShadowShadingFromTuning(
+        effectiveTerrainLightingTuning(terrainLightingTuningStore.getState()),
+      ),
+    );
+    this.#releaseLightingTuning = terrainLightingTuningStore.subscribe(
+      this.handleLightingTuning,
+    );
   }
+
+  /**
+   * Applies the lighting tuning panel: shadow opacity and sky at once, tile shading after
+   * `lightingTuningTileDelayMs` without further edits, and the Before/After toggle at once.
+   * Unchanged shading keeps the tile URL, so sky and opacity edits request no tiles.
+   */
+  private readonly handleLightingTuning = (
+    state: TerrainLightingTuningState,
+    previous: TerrainLightingTuningState,
+  ): void => {
+    const tuning = effectiveTerrainLightingTuning(state);
+    if (tuning === effectiveTerrainLightingTuning(previous)) return;
+    const map = this.#map;
+    if (map?.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
+      try {
+        map.setPaintProperty(
+          terrainOverlayLayerIds.sunShadow,
+          'raster-opacity',
+          tuning.sunShadowOpacity,
+        );
+        this.reconcileSunShadowSky(map, true);
+      } catch {
+        this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
+      }
+    }
+    clearTimeout(this.#lightingTuningTimer);
+    this.#lightingTuningTimer = undefined;
+    if (state.showDefaults === previous.showDefaults) {
+      this.#lightingTuningTimer = setTimeout(
+        this.applyLightingTuningTiles,
+        lightingTuningTileDelayMs,
+      );
+    } else {
+      this.applyLightingTuningTiles();
+    }
+  };
+
+  private readonly applyLightingTuningTiles = (): void => {
+    this.#lightingTuningTimer = undefined;
+    this.sunShadowTiles.setShading(
+      terrainShadowShadingFromTuning(
+        effectiveTerrainLightingTuning(terrainLightingTuningStore.getState()),
+      ),
+    );
+    if (this.#map !== null) this.reconcileSunShadow(this.#map);
+  };
 
   private readonly publishPendingTerrainQueue = (): void => {
     this.#terrainQueuePublishTimer = null;
@@ -1286,18 +1349,6 @@ export class MapLibreLayerController {
     // The settled center may have another sunrise, sunset, or time zone, so the instant
     // is clamped again for it, as the panel does for its displayed time.
     if (!active && this.#map !== null) this.reconcileSunShadow(this.#map);
-  }
-
-  /**
-   * Temporary feature switches from the sun panel. The shadow tile URL changes with them,
-   * so visible tiles are requested again; they do not persist.
-   */
-  public setSunShadowExperiments(experiments: TerrainShadowExperiments): void {
-    this.sunShadowTiles.setExperiments(experiments);
-    mapLayerStore.setState({
-      sunShadow: { ...mapLayerStore.getState().sunShadow, experiments },
-    });
-    if (this.#map !== null) this.reconcileSunShadow(this.#map);
   }
 
   /**
@@ -1658,6 +1709,8 @@ export class MapLibreLayerController {
     this.#releaseTerrainComputeStatus();
     this.#releaseTerrainComputeQueue();
     this.#releaseSunShadowAvailability();
+    this.#releaseLightingTuning();
+    clearTimeout(this.#lightingTuningTimer);
     if (this.#terrainQueuePublishTimer !== null) {
       clearTimeout(this.#terrainQueuePublishTimer);
       this.#terrainQueuePublishTimer = null;
@@ -3959,7 +4012,13 @@ export class MapLibreLayerController {
         }
       }
       if (map.getLayer(terrainOverlayLayerIds.sunShadow) === undefined) {
-        map.addLayer(createSunShadowLayer(), mapInsertionPoints.sunShadowBeforeLayerId);
+        map.addLayer(
+          createSunShadowLayer(
+            effectiveTerrainLightingTuning(terrainLightingTuningStore.getState())
+              .sunShadowOpacity,
+          ),
+          mapInsertionPoints.sunShadowBeforeLayerId,
+        );
       } else {
         // moveLayer emits styledata, so the layer only moves when it is out of place.
         const layerIds = map.getLayersOrder();
@@ -4018,24 +4077,20 @@ export class MapLibreLayerController {
       );
       const centerElevationMeters =
         terrain === null ? 0 : map.getCenterElevation() / (terrain.exaggeration ?? 1);
-      this.#sunDisk?.setSun(
-        mapLayerStore.getState().sunShadow.experiments.sunDisk
-          ? {
-              azimuthDegrees: sun.azimuthDegrees,
-              apparentElevationDegrees: sun.apparentElevationDegrees,
-              color: directSunlightColor(
-                relativeOpticalAirMass(
-                  sun.apparentElevationDegrees,
-                  centerElevationMeters,
-                ),
-              ),
-            }
-          : null,
-      );
+      this.#sunDisk?.setSun({
+        azimuthDegrees: sun.azimuthDegrees,
+        apparentElevationDegrees: sun.apparentElevationDegrees,
+        color: directSunlightColor(
+          relativeOpticalAirMass(sun.apparentElevationDegrees, centerElevationMeters),
+        ),
+      });
       sky = createSunShadowSky(
         sun.apparentElevationDegrees,
         centerElevationMeters,
         Math.cos(((map.getBearing() - sun.azimuthDegrees) * Math.PI) / 180),
+        sunShadowAtmosphereFromTuning(
+          effectiveTerrainLightingTuning(terrainLightingTuningStore.getState()),
+        ),
       );
     } else {
       this.#sunDisk?.setSun(null);

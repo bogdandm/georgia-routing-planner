@@ -1,11 +1,11 @@
 import { useLingui } from '@lingui/react/macro';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
 import {
   Box,
   Button,
-  Checkbox,
   CircularProgress,
   ClickAwayListener,
   FormControlLabel,
@@ -37,10 +37,8 @@ import {
   localDayBounds,
   sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
-import type {
-  TerrainShadowAvailability,
-  TerrainShadowExperiments,
-} from '@/presentation/map/TerrainShadowTileProvider';
+import { terrainLightingTuningStore } from '@/presentation/map/terrainLightingTuning';
+import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
 
 export interface SunShadowChange {
   readonly enabled: boolean;
@@ -60,9 +58,6 @@ export interface SunShadowControlProps {
   readonly onPlay: () => void;
   /** Cancels the precomputation or stops the animation. */
   readonly onStop: () => void;
-  /** Temporary switches for the latest visual features, shown below the main switch. */
-  readonly experiments: TerrainShadowExperiments;
-  readonly onExperimentsChange: (experiments: TerrainShadowExperiments) => void;
   /**
    * True while the time keys briefly show the panel: it opens without taking focus, so
    * the held key keeps reaching the global shortcuts.
@@ -258,8 +253,6 @@ function SunShadowPanel({
   onChange,
   onPlay,
   onStop,
-  experiments,
-  onExperimentsChange,
   peek,
 }: SunShadowControlProps) {
   const { i18n, t } = useLingui();
@@ -305,14 +298,6 @@ function SunShadowPanel({
   const commitWall = (next: ZonedWallTime) => {
     onChange({ enabled, instantMs: zonedWallTimeToInstant(next, timeZone).getTime() });
   };
-  /* eslint-disable lingui/no-unlocalized-strings -- Experiment keys, not UI text. */
-  const experimentLabels = [
-    ['skyTintedShadows', t`Sky-tinted shadows`],
-    ['alpenglow', t`Alpenglow`],
-    ['nightSky', t`Night sky`],
-    ['sunDisk', t`Sun disk`],
-  ] as const;
-  /* eslint-enable lingui/no-unlocalized-strings */
   const percent =
     playback.status === 'loading' ? Math.round(playback.progress * 100) : 0;
 
@@ -333,25 +318,16 @@ function SunShadowPanel({
         label={<Typography variant="body2">{t`Sun shadows`}</Typography>}
         sx={{ mx: 0 }}
       />
-      <Stack direction="row" sx={{ columnGap: 1, flexWrap: 'wrap' }}>
-        {experimentLabels.map(([key, label]) => (
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={experiments[key]}
-                disabled={!enabled || unavailable}
-                onChange={(_event, checked) => {
-                  onExperimentsChange({ ...experiments, [key]: checked });
-                }}
-                size="small"
-              />
-            }
-            key={key}
-            label={<Typography variant="body2">{label}</Typography>}
-            sx={{ mx: 0 }}
-          />
-        ))}
-      </Stack>
+      <Button
+        onClick={() => {
+          terrainLightingTuningStore.setState({ panelOpen: true });
+        }}
+        size="small"
+        startIcon={<TuneRoundedIcon fontSize="small" />}
+        sx={{ alignSelf: 'flex-start' }}
+      >
+        {t`Lighting tuning`}
+      </Button>
       {unavailable ? (
         <Typography color="text.secondary" variant="caption">
           {t`This browser cannot compute shadows: WebGL2 float rendering is unavailable.`}

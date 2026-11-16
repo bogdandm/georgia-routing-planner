@@ -15,6 +15,13 @@ import {
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { terrainShadowWorkerMethods } from '@/infrastructure/terrainShadow/TerrainShadowWorkerServer';
+import {
+  defaultShadeLighting,
+  type ShadeLighting,
+  type ShadePalette,
+  shadeNeutralBrightness,
+  sunlightTintStrength,
+} from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 
 export type TerrainShadowAvailability = 'unknown' | 'available' | 'unavailable';
@@ -49,22 +56,13 @@ export interface TerrainShadowPrefetchProgress {
 }
 
 /**
- * Temporary switches for the latest visual features, so they can be compared live; session
- * only. `sunDisk` is drawn by the layer controller, the rest by the shadow tiles.
+ * Colors and shade-pass lighting of the shadow tiles. Palette changes recolor cached
+ * shade masks; lighting changes recompute masks from cached tile geometry.
  */
-export interface TerrainShadowExperiments {
-  readonly skyTintedShadows: boolean;
-  readonly alpenglow: boolean;
-  readonly nightSky: boolean;
-  readonly sunDisk: boolean;
+export interface TerrainShadowShading {
+  readonly palette: ShadePalette;
+  readonly lighting: ShadeLighting;
 }
-
-export const defaultTerrainShadowExperiments: TerrainShadowExperiments = {
-  skyTintedShadows: true,
-  alpenglow: true,
-  nightSky: true,
-  sunDisk: true,
-};
 
 export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
@@ -72,10 +70,10 @@ export interface TerrainShadowTileProvider {
   /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
   setInteractionActive(active: boolean): void;
   /**
-   * Temporary feature switches. Later tile URLs and prefetches carry them, so a change
-   * requests every tile again.
+   * Colors and lighting of later tile URLs and prefetches. A change gives tiles a new URL,
+   * so MapLibre requests every tile again.
    */
-  setExperiments(experiments: TerrainShadowExperiments): void;
+  setShading(shading: TerrainShadowShading): void;
   /**
    * Renders and caches every tile for every instant without handing tiles to MapLibre; at
    * most `terrainShadowPrefetchConcurrency` requests in flight. Instants are taken in the
@@ -111,8 +109,8 @@ type TerrainShadowWorkerFactory = () => WorkerRpcEndpoint;
 
 interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly epochMinute: number;
-  /** Index into the provider's experiment sets; 0 is `defaultTerrainShadowExperiments`. */
-  readonly experimentsVersion: number;
+  /** Index into the provider's shadings; 0 is `defaultTerrainShadowShading`. */
+  readonly shading: number;
 }
 
 interface GateWaiter {
@@ -128,9 +126,9 @@ type MutableMetrics = {
 };
 
 const millisecondsPerMinute = 60_000;
-/** Tiles drawn with changed experiments end in `?experiments=<version>`. */
+/** Tiles of a shading other than the default end in `?shading=<index>`. */
 const tileAddressPattern = new RegExp(
-  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(?:\\?experiments=(\\d+))?$`,
+  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(?:\\?shading=(\\d+))?$`,
   'u',
 );
 
@@ -147,13 +145,22 @@ export function parseShadowColor(hex: string): readonly [number, number, number]
   ];
 }
 
-const shadowColor = parseShadowColor(mapVisualPalette.terrain.sunShadow);
-const highlightColor = parseShadowColor(mapVisualPalette.terrain.sunHighlight);
-const goldenShadowColor = parseShadowColor(mapVisualPalette.terrain.sunGoldenShadow);
-const lowSunShadowColor = parseShadowColor(mapVisualPalette.terrain.sunLowShadow);
-const alpenglowColor = parseShadowColor(mapVisualPalette.terrain.sunAlpenglow);
-/** Temporary: the day shade color before sky-tinted shadows, for the experiment switch. */
-const untintedShadowColor = parseShadowColor('#1B2433');
+export const defaultTerrainShadowShading: TerrainShadowShading = {
+  palette: {
+    shadowColor: parseShadowColor(mapVisualPalette.terrain.sunShadow),
+    highlightColor: parseShadowColor(mapVisualPalette.terrain.sunHighlight),
+    highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
+    goldenShadowColor: parseShadowColor(mapVisualPalette.terrain.sunGoldenShadow),
+    lowSunShadowColor: parseShadowColor(mapVisualPalette.terrain.sunLowShadow),
+    lowSunShadowLift: mapVisualPalette.terrain.sunLowShadowLift,
+    lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
+    alpenglowColor: parseShadowColor(mapVisualPalette.terrain.sunAlpenglow),
+    alpenglowOpacity: mapVisualPalette.terrain.sunAlpenglowOpacity,
+    neutralBrightness: shadeNeutralBrightness,
+    sunlightTintStrength,
+  },
+  lighting: defaultShadeLighting,
+};
 
 function defaultWorkerFactory(): WorkerRpcEndpoint {
   return new Worker(
@@ -178,7 +185,7 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   ) {
     return null;
   }
-  return { epochMinute, z, x, y, experimentsVersion: Number(match[5] ?? 0) };
+  return { epochMinute, z, x, y, shading: Number(match[5] ?? 0) };
 }
 
 function emptyMetrics(memoryBytes: number): MutableMetrics {
@@ -215,8 +222,15 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   #metrics = emptyMetrics(0);
   #pendingTiles = 0;
   #interactionActive = false;
-  /** Every experiment set so far, so tiles of older URLs still in flight keep theirs. */
-  readonly #experiments: TerrainShadowExperiments[] = [defaultTerrainShadowExperiments];
+  /**
+   * Every shading so far, so tiles of older URLs still in flight keep theirs; an equal
+   * shading reuses its index, so switching back and forth stays bounded.
+   */
+  readonly #shadings: TerrainShadowShading[] = [defaultTerrainShadowShading];
+  readonly #shadingIndexByKey = new Map<string, number>([
+    [JSON.stringify(defaultTerrainShadowShading), 0],
+  ]);
+  #shading = 0;
   #disposed = false;
 
   public constructor(
@@ -237,13 +251,18 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (!Number.isFinite(instantMs))
       throw new RangeError('The sun instant must be finite.');
     const epochMinute = Math.floor(instantMs / millisecondsPerMinute);
-    const version = this.#experiments.length - 1;
-    const variant = version === 0 ? '' : `?experiments=${String(version)}`;
-    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${variant}`;
+    const shading = this.#shading === 0 ? '' : `?shading=${String(this.#shading)}`;
+    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${shading}`;
   }
 
-  public setExperiments(experiments: TerrainShadowExperiments): void {
-    this.#experiments.push(experiments);
+  public setShading(shading: TerrainShadowShading): void {
+    const key = JSON.stringify(shading);
+    let index = this.#shadingIndexByKey.get(key);
+    if (index === undefined) {
+      index = this.#shadings.push(shading) - 1;
+      this.#shadingIndexByKey.set(key, index);
+    }
+    this.#shading = index;
   }
 
   public setInteractionActive(active: boolean): void {
@@ -294,7 +313,10 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   ) => {
     const signal = abortController.signal;
     const address = parseTileAddress(parameters.url);
-    if (address === null) throw new Error('Invalid terrain shadow tile address.');
+    const shading = address === null ? undefined : this.#shadings[address.shading];
+    if (address === null || shading === undefined) {
+      throw new Error('Invalid terrain shadow tile address.');
+    }
     if (this.#disposed) throw new Error('The terrain shadow provider was disposed.');
     if (this.#availability === 'unavailable') {
       throw new Error('Terrain shadows are unavailable in this browser.');
@@ -304,12 +326,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       await this.waitForInteractionEnd(signal);
       const result = await this.ensureRpc().request<unknown>(
         terrainShadowWorkerMethods.renderTile,
-        this.createRequest(
-          address,
-          address.epochMinute,
-          this.#experiments[address.experimentsVersion] ??
-            defaultTerrainShadowExperiments,
-        ),
+        this.createRequest(address, address.epochMinute, shading),
         signal,
       );
       if (!isTerrainShadowTileResult(result)) {
@@ -341,6 +358,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     // Every other block walks the tiles backwards, so the tiles just computed, whose DEM
     // tiles the worker still caches, start the next block.
     const reversedTiles = [...tiles].reverse();
+    const shading = this.#shadings[this.#shading] ?? defaultTerrainShadowShading;
     const requests: {
       readonly frame: number;
       readonly request: TerrainShadowTileRequest;
@@ -365,7 +383,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
             request: this.createRequest(
               tile,
               Math.floor(instantMs / millisecondsPerMinute),
-              this.#experiments.at(-1) ?? defaultTerrainShadowExperiments,
+              shading,
             ),
           });
         });
@@ -433,7 +451,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   private createRequest(
     address: TerrainShadowTileAddress,
     epochMinute: number,
-    experiments: TerrainShadowExperiments,
+    { palette, lighting }: TerrainShadowShading,
   ): TerrainShadowTileRequest {
     return {
       z: address.z,
@@ -444,20 +462,8 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       demTileUrl: this.#terrain.tileUrl,
       demMinZoom: this.#terrain.minZoom,
       demMaxZoom: this.#terrain.maxZoom,
-      shadowColor: experiments.skyTintedShadows ? shadowColor : untintedShadowColor,
-      highlightColor,
-      highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
-      goldenShadowColor: experiments.skyTintedShadows
-        ? goldenShadowColor
-        : lowSunShadowColor,
-      lowSunShadowColor,
-      lowSunShadowLift: mapVisualPalette.terrain.sunLowShadowLift,
-      lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
-      alpenglowColor,
-      alpenglowOpacity: experiments.alpenglow
-        ? mapVisualPalette.terrain.sunAlpenglowOpacity
-        : 0,
-      nightSky: experiments.nightSky,
+      ...palette,
+      lighting,
     };
   }
 

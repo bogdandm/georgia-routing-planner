@@ -10,7 +10,6 @@ import {
   MapViewControlsControl,
 } from '@/presentation/map/MapViewControls';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
-import { defaultTerrainShadowExperiments } from '@/presentation/map/TerrainShadowTileProvider';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const mapControlHost = document.createElement('div');
@@ -382,8 +381,6 @@ describe('MapViewControls', () => {
           instantMs: 0,
           availability: 'available',
           playback: { status: 'idle' },
-          experiments: defaultTerrainShadowExperiments,
-          onExperimentsChange: vi.fn(),
           mapViewport: new MapViewportSnapshotStore(),
           onChange: vi.fn(),
           onPlay: vi.fn(),

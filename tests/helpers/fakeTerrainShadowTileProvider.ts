@@ -1,9 +1,9 @@
 import {
-  defaultTerrainShadowExperiments,
+  defaultTerrainShadowShading,
   type TerrainShadowAvailability,
-  type TerrainShadowExperiments,
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowPrefetchProgress,
+  type TerrainShadowShading,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
 } from '@/presentation/map/TerrainShadowTileProvider';
@@ -36,24 +36,32 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
   public disposed = false;
   public readonly prefetchCalls: FakePrefetchCall[] = [];
   public metrics: TerrainShadowMetricsSnapshot = emptyMetrics;
-  public experiments: TerrainShadowExperiments = defaultTerrainShadowExperiments;
+  public shading: TerrainShadowShading = defaultTerrainShadowShading;
   #availability: TerrainShadowAvailability;
   readonly #listeners = new Set<(value: TerrainShadowAvailability) => void>();
+  readonly #shadingIndexByKey = new Map([
+    [JSON.stringify(defaultTerrainShadowShading), 0],
+  ]);
 
   public constructor(availability: TerrainShadowAvailability = 'available') {
     this.#availability = availability;
   }
 
+  /** Like the real provider, every distinct shading gets its own `?shading=` URL. */
   public createTileUrl(instantMs: number): string {
-    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}`;
+    const key = JSON.stringify(this.shading);
+    const index = this.#shadingIndexByKey.get(key) ?? this.#shadingIndexByKey.size;
+    this.#shadingIndexByKey.set(key, index);
+    const shading = index === 0 ? '' : `?shading=${String(index)}`;
+    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}${shading}`;
   }
 
   public setInteractionActive(active: boolean): void {
     this.interactionActive = active;
   }
 
-  public setExperiments(experiments: TerrainShadowExperiments): void {
-    this.experiments = experiments;
+  public setShading(shading: TerrainShadowShading): void {
+    this.shading = shading;
   }
 
   public prefetch(

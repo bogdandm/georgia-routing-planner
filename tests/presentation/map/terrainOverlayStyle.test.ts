@@ -36,7 +36,7 @@ describe('terrain overlay style contracts', () => {
     expect(new Set(layerIds).size).toBe(layerIds.length);
   });
 
-  it('serves sun shadows from the shadow zoom up to the DEM maximum without fading', () => {
+  it('serves sun shadows from the world view up to the DEM maximum without fading', () => {
     const configuration = parseMapProviderConfiguration(
       defaultMapProviderConfigurationInput,
       'https://example.test/app/',
@@ -47,7 +47,6 @@ describe('terrain overlay style contracts', () => {
       type: 'raster',
       tiles: [tileUrl],
       tileSize: 512,
-      minzoom: 7,
       maxzoom: 12,
       attribution: configuration.terrain.attribution,
     });

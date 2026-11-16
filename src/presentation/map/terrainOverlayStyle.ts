@@ -15,7 +15,6 @@ import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
-import { terrainShadowMinZoom } from '@/presentation/map/TerrainShadowTileProvider';
 
 // Contour vector tiles stop at the DEM's z12 and are overzoomed; line widths keep growing
 // to this display zoom so close-up contours stay as legible as before.
@@ -64,7 +63,10 @@ export function createTerrainContourSource(
   };
 }
 
-/** Cast-shadow raster for one sun instant; `tileUrl` comes from the shadow tile provider. */
+/**
+ * Sun-shadow raster for one sun instant; `tileUrl` comes from the shadow tile provider.
+ * Every zoom loads: tiles below the terrain-shadow zoom shade flat ground only.
+ */
 export function createSunShadowSource(
   terrain: MapProviderConfiguration['terrain'],
   tileUrl: string,
@@ -73,7 +75,6 @@ export function createSunShadowSource(
     type: 'raster',
     tiles: [tileUrl],
     tileSize: 512,
-    minzoom: terrainShadowMinZoom,
     maxzoom: terrain.maxZoom,
     attribution: terrain.attribution,
   };

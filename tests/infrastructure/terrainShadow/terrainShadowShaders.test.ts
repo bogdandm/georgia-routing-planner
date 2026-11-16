@@ -5,6 +5,7 @@ import {
   createFlatShadeMask,
   createShadeLookupTable,
   expandShadeMask,
+  shadeNeutralBrightness,
   shadeBrightnessScale,
   type ShadePalette,
   shadeMaskBytes,
@@ -44,9 +45,15 @@ function largestByteDifference(
 
 describe('createShadeLookupTable', () => {
   const table = createShadeLookupTable(palette);
+  const neutralByte = Math.round(shadeNeutralBrightness * shadeBrightnessScale);
 
-  it('keeps the plain shadow and highlight for a high Sun', () => {
-    expect(entryBytes(table, zenithCode, 127)[3]).toBe(0);
+  it('keeps the plain shadow and highlight for a high Sun around a neutral above full sun', () => {
+    // The neutral falls between two bytes, so its nearest byte is clear to one unit.
+    expect(entryBytes(table, zenithCode, neutralByte)[3]).toBeLessThanOrEqual(1);
+    // Flat ground in full sun keeps a light shade, so lit slopes can still brighten.
+    const [, , , flatAlpha = 0] = entryBytes(table, zenithCode, shadeBrightnessScale);
+    expect(flatAlpha).toBeGreaterThan(0);
+    expect(flatAlpha).toBeLessThan(255 * 0.3);
     expect(entryBytes(table, zenithCode, 0)).toEqual([...palette.shadowColor, 255]);
     expect(entryBytes(table, zenithCode, 254)).toEqual([
       ...palette.highlightColor,
@@ -64,11 +71,11 @@ describe('createShadeLookupTable', () => {
     ).toBeLessThanOrEqual(1);
   });
 
-  it('warms sunlit ground and highlights when the Sun is low', () => {
-    const [flatRed = 0, , flatBlue = 0, flatAlpha = 0] = entryBytes(
+  it('warms slopes lit by a low Sun and their highlights', () => {
+    const [litRed = 0, , litBlue = 0, litAlpha = 0] = entryBytes(
       table,
       horizonCode,
-      127,
+      neutralByte,
     );
     const [highlightRed = 0, , highlightBlue = 0, highlightAlpha = 0] = entryBytes(
       table,
@@ -76,12 +83,12 @@ describe('createShadeLookupTable', () => {
       254,
     );
 
-    expect(flatAlpha).toBeGreaterThan(0);
-    expect(flatRed).toBeGreaterThan(200);
-    expect(flatRed - flatBlue).toBeGreaterThan(120);
+    expect(litAlpha).toBeGreaterThan(0);
+    expect(litRed).toBeGreaterThan(200);
+    expect(litRed - litBlue).toBeGreaterThan(120);
     expect(highlightRed).toBeGreaterThan(200);
     expect(highlightRed - highlightBlue).toBeGreaterThan(120);
-    expect(highlightAlpha).toBeGreaterThan(Math.round(0.6 * 255));
+    expect(highlightAlpha).toBeGreaterThan(litAlpha);
   });
 
   it('keeps shadow lit only by the sky free of the warm sunlight glow', () => {
@@ -104,7 +111,7 @@ describe('createShadeLookupTable', () => {
       ...palette.shadowColor,
       255,
     ]);
-    expect(entryBytes(table, sunlightNightCode, 127)[3]).toBe(0);
+    expect(entryBytes(table, sunlightNightCode, neutralByte)[3]).toBeLessThanOrEqual(1);
   });
 });
 

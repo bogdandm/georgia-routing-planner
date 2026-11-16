@@ -81,6 +81,8 @@ export const shadeBrightnessScale = 127;
 /**
  * Sun elevation whose flat-ground brightness counts as full sun. Lower suns divide by
  * this floor instead of their own sine, so dawn and dusk darken flat ground gradually.
+ * Slopes facing a low Sun then exceed 1 several times; the shade pass compresses
+ * brightness above 1 into [1, 2) so they keep their order instead of clipping.
  */
 export const terrainShadeFlatReferenceElevationDegrees = 10;
 /** Gaussian σ of the cast-shadow soft edge, in output pixels. */
@@ -540,6 +542,10 @@ void main() {
   ));
   float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare);
   float brightness = (1.0 - skyLightShare) * direct + skyLightShare * sky;
+  // Above full sun, x ↦ 1 + x / (1 + x) keeps sun-facing slopes ordered below 2 instead
+  // of clipping them all to one tone.
+  float overExposure = max(brightness - 1.0, 0.0);
+  brightness = min(brightness, 1.0) + overExposure / (1.0 + overExposure);
   float code = sunlightCode(sun.apparentElevationDegrees, mosaicElevation(0, texels));
   outValue = vec4(clamp(brightness * brightnessScale / 255.0, 0.0, 1.0), code / 255.0, 0.0, 1.0);
 }
@@ -592,14 +598,25 @@ function sunlightTone(code: number): SunlightTone {
 const sunlightTintStrength = 0.6;
 
 /**
+ * Brightness the overlay leaves untouched. It sits above flat ground in full sun (1), so
+ * flat ground keeps a light shade and slopes turned to the Sun can still brighten in two
+ * steps: first the shade fades, then the highlight grows up to the compressed maximum of
+ * 2. With the neutral at 1, every lit slope already had no shade left to lose.
+ */
+export const shadeNeutralBrightness = 1.35;
+const shadeMaximumBrightness = 2;
+
+/**
  * RGBA8 colors indexed by `sunlightCode × 256 + shadeByte`, written byte-wise so the table
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
  *
- * Shade fades `shadowColor` in as brightness drops below flat ground in full sun. Light is
- * the highlight color tinted by the sunlight color, up to `highlightOpacity` for brighter
- * slopes plus a glow of up to `lowSunGlowOpacity` × `lowSun` where the Sun lights the
- * ground directly (brightness above the sky share). As the Sun sinks, shade turns toward
+ * Shade fades `shadowColor` in as brightness drops below `shadeNeutralBrightness`. Light
+ * is the highlight color tinted by the sunlight color, up to `highlightOpacity` from the
+ * neutral to the compressed maximum of 2, plus a glow of up to `lowSunGlowOpacity` ×
+ * `lowSun` that grows with the direct
+ * share of the brightness up to the compressed maximum of 2, so slopes facing a low Sun
+ * keep their relief instead of one saturated tone. As the Sun sinks, shade turns toward
  * `lowSunShadowColor` and loses up to `lowSunShadowLift` of its opacity, as the sky lights
  * shadows more than the dimming Sun lights the slopes. Light is composited over shade. A
  * high Sun keeps the plain shadow and highlight.
@@ -627,7 +644,8 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(
         Math.max(
-          (brightness - terrainShadeSkyLightShare) / (1 - terrainShadeSkyLightShare),
+          (brightness - terrainShadeSkyLightShare) /
+            (shadeMaximumBrightness - terrainShadeSkyLightShare),
           0,
         ),
         1,
@@ -635,9 +653,20 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
       const lightAlpha = Math.min(
         1,
         directShare * lowSun * palette.lowSunGlowOpacity +
-          Math.min(Math.max(brightness - 1, 0), 1) * palette.highlightOpacity,
+          Math.min(
+            Math.max(
+              (brightness - shadeNeutralBrightness) /
+                (shadeMaximumBrightness - shadeNeutralBrightness),
+              0,
+            ),
+            1,
+          ) *
+            palette.highlightOpacity,
       );
-      const shadeWeight = Math.max(1 - brightness, 0) * shadeOpacity * (1 - lightAlpha);
+      const shadeWeight =
+        Math.max(1 - brightness / shadeNeutralBrightness, 0) *
+        shadeOpacity *
+        (1 - lightAlpha);
       const alpha = lightAlpha + shadeWeight;
       if (alpha === 0) continue;
       const blend = (channel: 0 | 1 | 2) =>

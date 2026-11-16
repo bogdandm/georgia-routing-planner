@@ -188,7 +188,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       highlightOpacity: 0.6,
       lowSunShadowColor: [0x2e, 0x3f, 0x7a],
       lowSunShadowLift: 0.25,
-      lowSunGlowOpacity: 0.25,
+      lowSunGlowOpacity: 0.4,
       skyOcclusion: true,
     });
 

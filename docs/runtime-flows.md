@@ -327,20 +327,16 @@ single mask. The same pass writes a sunlight code: the logarithm of the relative
 air mass of the direct-sun path (Kasten–Young, scaled by the pressure at the pixel's
 height, or through the tangent height when the Sun is below the pixel's level), or, once
 the Sun is below the sea-level horizon, how far twilight has faded toward the night
-elevation. With the Sun below 12°, crests the Sun sets behind get a rim light: a lit
-pixel whose unblurred visibility two pixels farther from the Sun is shadowed sits on the
-crest that casts that shadow, and its direct term grows by up to 1.5, at full strength
-once the Sun is below 3°. The far end of a cast shadow runs the other way and gets no
-rim. Brightness above 1 (slopes facing a low Sun reach several times flat ground) is
-compressed as 1 + x / (1 + x), so it stays below 2 and lit slopes keep their order. The
-worker reads the result back as one brightness byte per pixel (brightness × 127) plus a
-128 × 128 grid of sunlight codes, interpolates the codes bilinearly, and colors each
-pixel through a 256 × 256 table built once per palette. The neutral level, where the
-overlay is transparent, is brightness 1.45 (`shadeNeutralBrightness`), above flat ground
-in full sun: below it the shadow color fades in with alpha 1 − brightness / 1.45, so
-flat sunlit ground keeps a light shade and slopes turned to the Sun can still brighten;
-above it the highlight color fades in up to the compressed maximum of 2. The highlight
-is tinted by the Rayleigh-extinction sunlight color
+elevation. Brightness above 1 (slopes facing a low Sun reach several times flat ground)
+is compressed as 1 + x / (1 + x), so it stays below 2 and lit slopes keep their order.
+The worker reads the result back as one brightness byte per pixel (brightness × 127)
+plus a 128 × 128 grid of sunlight codes, interpolates the codes bilinearly, and colors
+each pixel through a 256 × 256 table built once per palette. The neutral level, where
+the overlay is transparent, is brightness 1.45 (`shadeNeutralBrightness`), above flat
+ground in full sun: below it the shadow color fades in with alpha 1 − brightness / 1.45,
+so flat sunlit ground keeps a light shade and slopes turned to the Sun can still
+brighten; above it the highlight color fades in up to the compressed maximum of 2. The
+highlight is tinted by the Rayleigh-extinction sunlight color
 (`domain/terrain/atmosphericSunlight.ts`) at 75% strength. The shadow color follows the
 sunlight code: from the day color toward the golden-hour lilac as the blue deficit of
 the sunlight grows, then over the twilight codes to the deep twilight blue at half depth

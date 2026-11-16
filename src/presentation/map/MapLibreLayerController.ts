@@ -1053,6 +1053,13 @@ export class MapLibreLayerController {
   /** Shadow instant in epoch milliseconds, quantized to whole minutes. */
   #sunShadowInstantMs = quantizeSunShadowInstant(Date.now());
   #appliedSunShadowTileUrl: string | null = null;
+  /**
+   * True while a newer minute waits for the shadow source to finish loading the applied
+   * one; the source's next loaded `sourcedata` applies the latest minute.
+   */
+  #sunShadowTilesDeferred = false;
+  /** From the last `setSunShadow`: apply each minute at once even while one still loads. */
+  #sunShadowDrawEveryStep = false;
   /** Present from Play until stop; aborting it cancels the day prefetch. */
   #sunShadowPlaybackAbort: AbortController | null = null;
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1266,16 +1273,20 @@ export class MapLibreLayerController {
    * Shows or hides terrain-cast sun shadows for one instant, quantized to whole minutes.
    * Only `enabled` persists; an unchanged switch and minute leaves the map untouched.
    * Every call stops day playback first, so user changes always win over the animation.
+   * While the previous minute still loads, a new one waits and only the latest is drawn,
+   * unless `drawEveryStep` asks MapLibre to render every minute in turn.
    */
   public setSunShadow(value: {
     readonly enabled: boolean;
     readonly instantMs: number;
+    readonly drawEveryStep?: boolean;
   }): void {
     this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
     const instantMs = quantizeSunShadowInstant(value.instantMs);
     const enabledChanged = this.#sunShadowEnabled !== value.enabled;
     if (!enabledChanged && this.#sunShadowInstantMs === instantMs) return;
+    this.#sunShadowDrawEveryStep = value.drawEveryStep === true;
     this.#sunShadowEnabled = value.enabled;
     // A chosen instant replaces the session start time; toggling the switch keeps it.
     if (instantMs !== this.#sunShadowInstantMs)
@@ -1297,7 +1308,10 @@ export class MapLibreLayerController {
    * panel shows for the current local day at the map center, so a step past either end
    * never changes the date. Like every `setSunShadow`, it stops day playback.
    */
-  public stepSunShadow(minutes: number): void {
+  public stepSunShadow(
+    minutes: number,
+    options: { readonly drawEveryStep: boolean },
+  ): void {
     const map = this.#map;
     let instantMs = this.#sunShadowInstantMs + minutes * 60_000;
     if (map !== null) {
@@ -1313,7 +1327,11 @@ export class MapLibreLayerController {
           ? Math.min(Math.max(instantMs, day.startMs), day.endMs - 60_000)
           : clampToDaylight(instantMs, window);
     }
-    this.setSunShadow({ enabled: true, instantMs });
+    this.setSunShadow({
+      enabled: true,
+      instantMs,
+      drawEveryStep: options.drawEveryStep,
+    });
   }
 
   /**
@@ -1477,8 +1495,9 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null || this.#sunShadowPlaybackAbort === null) return;
     const frameLoading =
-      map.getSource(mapSourceIds.terrainSunShadow) !== undefined &&
-      !map.isSourceLoaded(mapSourceIds.terrainSunShadow);
+      this.#sunShadowTilesDeferred ||
+      (map.getSource(mapSourceIds.terrainSunShadow) !== undefined &&
+        !map.isSourceLoaded(mapSourceIds.terrainSunShadow));
     if (!frameLoading) {
       this.#sunShadowPlaybackIndex =
         (this.#sunShadowPlaybackIndex + 1) % this.#sunShadowPlaybackFrames.length;
@@ -3631,6 +3650,16 @@ export class MapLibreLayerController {
   }
 
   private readonly handleSourceData = (event: MapSourceDataEvent): void => {
+    if (event.sourceId === mapSourceIds.terrainSunShadow) {
+      const map = this.#map;
+      if (
+        this.#sunShadowTilesDeferred &&
+        map?.isSourceLoaded(mapSourceIds.terrainSunShadow) === true
+      ) {
+        this.reconcileSunShadow(map);
+      }
+      return;
+    }
     if (isSatelliteBasemapSourceId(event.sourceId)) {
       if (event.sourceDataType !== 'content') return;
       const map = this.#map;
@@ -3854,6 +3883,7 @@ export class MapLibreLayerController {
           map.removeSource(mapSourceIds.terrainSunShadow);
         }
         this.#appliedSunShadowTileUrl = null;
+        this.#sunShadowTilesDeferred = false;
         return;
       }
       // Every path that enables shadows or moves the instant passes here, including a
@@ -3871,13 +3901,24 @@ export class MapLibreLayerController {
           createSunShadowSource(this.terrain, tileUrl),
         );
         this.#appliedSunShadowTileUrl = tileUrl;
-      } else if (this.#appliedSunShadowTileUrl !== tileUrl) {
-        const raster = source as { setTiles?: (tiles: string[]) => void };
-        if (raster.setTiles === undefined) {
-          throw new Error('The sun-shadow source cannot update its tiles.');
+        this.#sunShadowTilesDeferred = false;
+      } else if (this.#appliedSunShadowTileUrl === tileUrl) {
+        this.#sunShadowTilesDeferred = false;
+      } else {
+        // MapLibre renders every replaced minute in full, so held time keys or a fast
+        // slider would queue one complete render per minute. While the applied minute
+        // still loads, the newest one waits and `handleSourceData` applies it once loaded.
+        this.#sunShadowTilesDeferred =
+          !this.#sunShadowDrawEveryStep &&
+          !map.isSourceLoaded(mapSourceIds.terrainSunShadow);
+        if (!this.#sunShadowTilesDeferred) {
+          const raster = source as { setTiles?: (tiles: string[]) => void };
+          if (raster.setTiles === undefined) {
+            throw new Error('The sun-shadow source cannot update its tiles.');
+          }
+          raster.setTiles([tileUrl]);
+          this.#appliedSunShadowTileUrl = tileUrl;
         }
-        raster.setTiles([tileUrl]);
-        this.#appliedSunShadowTileUrl = tileUrl;
       }
       if (map.getLayer(terrainOverlayLayerIds.sunShadow) === undefined) {
         map.addLayer(createSunShadowLayer(), mapInsertionPoints.sunShadowBeforeLayerId);

@@ -3017,14 +3017,49 @@ describe('MapLibreLayerController', () => {
     const lateMs = Date.UTC(2026, 6, 1, 21, 55); // 23:55 CEST
     controller.setSunShadow({ enabled: false, instantMs: lateMs });
 
-    controller.stepSunShadow(1);
+    controller.stepSunShadow(1, { drawEveryStep: false });
     expect(mapLayerStore.getState().sunShadow).toMatchObject({
       enabled: true,
       instantMs: lateMs + 60_000,
     });
 
-    controller.stepSunShadow(10);
+    controller.stepSunShadow(10, { drawEveryStep: false });
     expect(mapLayerStore.getState().sunShadow.instantMs).toBe(lateMs + 4 * 60_000);
+  });
+
+  it('draws only the latest minute once the previous one has loaded, unless every step is asked for', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    const minute = Math.floor(shadowInstantMs / 60_000);
+    const tileUrl = (epochMinute: number) =>
+      `terrain-shadow://${String(epochMinute)}/{z}/{x}/{y}`;
+    const source = map.sources.get(mapSourceIds.terrainSunShadow) as {
+      readonly setTiles: (tiles: string[]) => void;
+    };
+    const setTiles = vi.spyOn(source, 'setTiles');
+
+    // The first minute is still loading: held keys only move the shown time.
+    map.sourceLoaded = false;
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    expect(setTiles).not.toHaveBeenCalled();
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe((minute + 3) * 60_000);
+
+    map.sourceLoaded = true;
+    map.fire('sourcedata', { sourceId: mapSourceIds.terrainSunShadow });
+    expect(setTiles).toHaveBeenCalledExactlyOnceWith([tileUrl(minute + 3)]);
+
+    // Alt keeps the earlier behavior: every minute replaces the tiles at once.
+    map.sourceLoaded = false;
+    controller.stepSunShadow(1, { drawEveryStep: true });
+    controller.stepSunShadow(1, { drawEveryStep: true });
+    expect(setTiles.mock.calls.slice(1)).toEqual([
+      [[tileUrl(minute + 4)]],
+      [[tileUrl(minute + 5)]],
+    ]);
   });
 
   it('keeps the fixed-light relief when the sun-shadow layer cannot be added', () => {

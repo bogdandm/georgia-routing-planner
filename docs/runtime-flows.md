@@ -253,11 +253,15 @@ drawn. Turning the switch off removes the source and layer and restores the reli
 range. The relief visibility preference is never written. The tile URL carries the
 instant as a whole epoch minute, so an unchanged minute changes nothing, and a new
 minute replaces the source tiles with `setTiles`: MapLibre requests only the visible
-tiles again. When a camera move settles, the instant is clamped again to the shown range
-at the new center, matching the panel. Otherwise camera moves (pan, rotate, pitch, 3D)
-never recompute, because MapLibre's tile cache and the worker's mask cache already hold
-the tiles; returning to an earlier minute hits the mask cache. Compare panes never add
-the source.
+tiles again, but renders every replaced minute in full. So while the shadow source is
+still loading the applied minute, a newer one only updates the store and waits; the
+source's next `sourcedata` event with the source loaded applies the latest minute, and
+day playback counts a waiting minute as still loading. `setSunShadow` with
+`drawEveryStep` (the Alt time keys) applies each minute at once instead. When a camera
+move settles, the instant is clamped again to the shown range at the new center,
+matching the panel. Otherwise camera moves (pan, rotate, pitch, 3D) never recompute,
+because MapLibre's tile cache and the worker's mask cache already hold the tiles;
+returning to an earlier minute hits the mask cache. Compare panes never add the source.
 
 The session instant starts at the current time. On the first reconciliation with a map,
 a start time outside sunrise–sunset at the map center becomes 11:00 of that local day,

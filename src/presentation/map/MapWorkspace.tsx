@@ -1949,7 +1949,9 @@ export function MapWorkspace({
         break;
       case 'step-sun-time':
         if (mapLayers === null || sunShadow.availability === 'unavailable') return;
-        mapLayers.stepSunShadow(shortcut.minutes);
+        mapLayers.stepSunShadow(shortcut.minutes, {
+          drawEveryStep: shortcut.drawEveryStep,
+        });
         window.clearTimeout(sunShadowPeekTimer.current);
         setSunShadowPeek(true);
         break;

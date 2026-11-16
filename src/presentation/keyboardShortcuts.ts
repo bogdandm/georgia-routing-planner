@@ -36,10 +36,21 @@ export type KeyboardShortcut =
   | { readonly action: KeyboardShortcutAction }
   | { readonly action: 'select-basemap'; readonly preset: BasemapPreset }
   | { readonly action: 'move-camera'; readonly step: MapCameraStep }
-  | { readonly action: 'step-sun-time'; readonly minutes: SunShadowTimeStep };
+  | {
+      readonly action: 'step-sun-time';
+      readonly minutes: SunShadowTimeStep;
+      /**
+       * Alt: draw the shadows of every step even while the previous one still renders,
+       * instead of only the latest once it has.
+       */
+      readonly drawEveryStep: boolean;
+    };
 
-/** `mod` is Cmd on macOS and Ctrl elsewhere; the other key of the pair must not be held. */
-type ShortcutModifier = 'none' | 'shift' | 'mod';
+/**
+ * `mod` is Cmd on macOS and Ctrl elsewhere; the other key of the pair must not be held.
+ * `alt` is Option on macOS and never combines with either command key.
+ */
+type ShortcutModifier = 'none' | 'shift' | 'mod' | 'alt' | 'alt-shift';
 
 interface ShortcutBinding {
   /** Physical key (`KeyboardEvent.code`), so bindings ignore the keyboard layout. */
@@ -90,7 +101,7 @@ function camera(
 
 function sunTime(
   code: string,
-  modifier: 'none' | 'shift',
+  modifier: 'none' | 'shift' | 'alt' | 'alt-shift',
   key: string,
   minutes: SunShadowTimeStep,
 ): ShortcutBinding {
@@ -100,7 +111,11 @@ function sunTime(
     inEditable: false,
     repeatable: true,
     key,
-    shortcut: { action: 'step-sun-time', minutes },
+    shortcut: {
+      action: 'step-sun-time',
+      minutes,
+      drawEveryStep: modifier === 'alt' || modifier === 'alt-shift',
+    },
   };
 }
 
@@ -123,6 +138,10 @@ const bindings: readonly ShortcutBinding[] = [
   sunTime('BracketRight', 'none', ']', 1),
   sunTime('BracketLeft', 'shift', '[', -10),
   sunTime('BracketRight', 'shift', ']', 10),
+  sunTime('BracketLeft', 'alt', '[', -1),
+  sunTime('BracketRight', 'alt', ']', 1),
+  sunTime('BracketLeft', 'alt-shift', '[', -10),
+  sunTime('BracketRight', 'alt-shift', ']', 10),
   plain('Home', 'Home', 'geolocate'),
   plain('KeyG', 'G', 'open-google-maps'),
   plain('KeyY', 'Y', 'open-yandex-maps'),
@@ -174,11 +193,14 @@ export function isMacPlatform(): boolean {
 }
 
 function eventModifier(event: KeyboardEvent): ShortcutModifier | null {
-  if (event.altKey) return null;
   const mac = isMacPlatform();
   const mod = mac ? event.metaKey : event.ctrlKey;
   const otherMod = mac ? event.ctrlKey : event.metaKey;
   if (otherMod) return null;
+  if (event.altKey) {
+    if (mod) return null;
+    return event.shiftKey ? 'alt-shift' : 'alt';
+  }
   if (mod) return event.shiftKey ? null : 'mod';
   return event.shiftKey ? 'shift' : 'none';
 }
@@ -252,7 +274,11 @@ function sameShortcut(a: KeyboardShortcut, b: KeyboardShortcut): boolean {
     return b.action === 'move-camera' && a.step === b.step;
   }
   if (a.action === 'step-sun-time') {
-    return b.action === 'step-sun-time' && a.minutes === b.minutes;
+    return (
+      b.action === 'step-sun-time' &&
+      a.minutes === b.minutes &&
+      a.drawEveryStep === b.drawEveryStep
+    );
   }
   return a.action === b.action;
 }
@@ -270,6 +296,10 @@ export function keyboardShortcutKeyCombinations(
           return [mac ? '⌘' : 'Ctrl', binding.key];
         case 'shift':
           return [shiftKeyLabel(), binding.key];
+        case 'alt':
+          return [mac ? '⌥' : 'Alt', binding.key];
+        case 'alt-shift':
+          return [mac ? '⌥' : 'Alt', shiftKeyLabel(), binding.key];
         case 'none':
           return [binding.key];
       }

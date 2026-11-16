@@ -1419,6 +1419,16 @@ msgstr "Тени от солнца: где горы отбрасывают те�
 msgid "Sun time 10 minutes earlier or later"
 msgstr "Время теней на 10 минут раньше или позже"
 
+#. js-lingui-id: mYJgGp
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time by 10 minutes, drawing every step"
+msgstr "Время теней на 10 минут, с отрисовкой каждого шага"
+
+#. js-lingui-id: pR20JI
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time by one minute, drawing every step"
+msgstr "Время теней на минуту, с отрисовкой каждого шага"
+
 #. js-lingui-id: i11cpT
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Sun time one minute earlier or later"

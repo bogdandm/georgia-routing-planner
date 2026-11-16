@@ -763,17 +763,20 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   move the time one minute earlier or later, 10 minutes with Shift, also while held,
   never past either end of the shown day's range; they turn hidden shadows on, and a
   closed panel appears without taking focus until a second after the last key release,
-  unless the sun button is pressed meanwhile to keep it open. Date and time are local
-  wall time at the map center (the browser's zone until the first viewport settles),
-  with the zone's GMT offset and that day's sunrise and sunset at the center shown
-  below. The slider runs from two hours before the first whole minute after sunrise to
-  two hours after the last whole minute before sunset, kept within the local day; on a
-  day without both (polar day or night) it spans 00:00 to 23:59. **Now** and a session
-  that starts after dark (outside sunrise–sunset at the map center) use 11:00 of that
-  day instead, so the map never opens fully shaded. Any other instant outside the range
-  (such as a date change or a key step past its end) moves to its nearest end at the map
-  center before shadows draw; while the Sun is below the horizon the whole map is in
-  shade. **Play the day**, left of the slider and available while shadows are on,
+  unless the sun button is pressed meanwhile to keep it open. While shadows for one
+  minute are still being drawn, further changes from the keys or the panel only move the
+  shown time, and shadows then draw for the latest minute, so holding a key moves at
+  key-repeat speed; with Alt (Option on macOS) every step is drawn in turn. Date and
+  time are local wall time at the map center (the browser's zone until the first
+  viewport settles), with the zone's GMT offset and that day's sunrise and sunset at the
+  center shown below. The slider runs from two hours before the first whole minute after
+  sunrise to two hours after the last whole minute before sunset, kept within the local
+  day; on a day without both (polar day or night) it spans 00:00 to 23:59. **Now** and a
+  session that starts after dark (outside sunrise–sunset at the map center) use 11:00 of
+  that day instead, so the map never opens fully shaded. Any other instant outside the
+  range (such as a date change or a key step past its end) moves to its nearest end at
+  the map center before shadows draw; while the Sun is below the horizon the whole map
+  is in shade. **Play the day**, left of the slider and available while shadows are on,
   computes shadows for every 10-minute frame of that range for the shown day over the
   visible tiles, from the current time to the end of the range and then from its start,
   showing a percentage and a cancel button. It loops the frames in that order at about

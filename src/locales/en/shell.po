@@ -1419,6 +1419,16 @@ msgstr "Sun shadows: see where mountains cast shade at any date and time."
 msgid "Sun time 10 minutes earlier or later"
 msgstr "Sun time 10 minutes earlier or later"
 
+#. js-lingui-id: mYJgGp
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time by 10 minutes, drawing every step"
+msgstr "Sun time by 10 minutes, drawing every step"
+
+#. js-lingui-id: pR20JI
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time by one minute, drawing every step"
+msgstr "Sun time by one minute, drawing every step"
+
 #. js-lingui-id: i11cpT
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Sun time one minute earlier or later"

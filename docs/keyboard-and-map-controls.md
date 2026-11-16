@@ -14,7 +14,7 @@ pair must not be held. Ctrl+F, Ctrl+E, and Ctrl+O stay text-editing keys on macO
 | Windows and Linux | macOS           | Action                                                                                                                                                                             | Does nothing when                                                          |
 | ----------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Ctrl+F, `/`       | ⌘F, `/`         | Focuses and selects the map search; on phones the open workspace closes first                                                                                                      | Focus is already in the map search, so the browser's own find opens        |
-| `[`               | `[`             | Collapses or expands the desktop navigation, or opens or closes the phone workspace                                                                                                | —                                                                          |
+| `B`               | `B`             | Collapses or expands the desktop navigation, or opens or closes the phone workspace                                                                                                | —                                                                          |
 | `T`               | `T`             | Opens Tracks and starts **Plan route**                                                                                                                                             | Map routing data is not configured                                         |
 | `P`               | `P`             | Opens Markers and starts placing a new marker, like **New marker**                                                                                                                 | The map or the saved markers are not ready                                 |
 | `W`               | `W`             | Opens Weather and starts or cancels forecast-point selection                                                                                                                       | —                                                                          |
@@ -23,6 +23,9 @@ pair must not be held. Ctrl+F, Ctrl+E, and Ctrl+O stay text-editing keys on macO
 | `N`               | `N`             | Turns the map north; 2D also resets the pitch, 3D keeps the 45° pitch of a track fit                                                                                               | —                                                                          |
 | `O`               | `O`             | Switches between 2D and 3D                                                                                                                                                         | Terrain is changing, the map is loading, or Mosaic blocks 3D               |
 | `R`               | `R`             | Turns the ruler on or off                                                                                                                                                          | —                                                                          |
+| `D`               | `D`             | Turns sun shadows on or off                                                                                                                                                        | The browser cannot compute shadows                                         |
+| `[`, `]`          | `[`, `]`        | Moves the sun-shadow time one minute earlier or later within the shown day's range, turning shadows on and briefly showing the sun panel                                           | The browser cannot compute shadows                                         |
+| Shift+`[`, `]`    | ⇧`[`, `]`       | Moves the sun-shadow time 10 minutes earlier or later, like `[` and `]`                                                                                                            | The browser cannot compute shadows                                         |
 | `L`, Home         | `L`, Home       | Finds my location                                                                                                                                                                  | —                                                                          |
 | `G`               | `G`             | Opens the current center and zoom in Google Maps                                                                                                                                   | —                                                                          |
 | `Y`               | `Y`             | Opens the current center and zoom in Yandex Maps                                                                                                                                   | —                                                                          |
@@ -46,36 +49,37 @@ While the Tracks point editor is open, Delete removes the shared point selection
 Escape clears it, regardless of whether it came from the map, list, or profile. Delete
 does not act in text fields, menus, or modal dialogs, and does not repeat while held.
 
-Shortcuts are inactive while focus is in a text field, except Ctrl/⌘+F, S, O, and E, and
-inside a modal dialog, including the onboarding tour. Inside menus and listboxes, plain
-and Shift shortcuts are inactive so type-to-select and arrow navigation keep working,
-while Ctrl/⌘ shortcuts still work. The map-layer chooser is the exception: the digit
-keys keep switching layers while it has focus. Controls that handle a key themselves,
-such as tabs with their arrows, keep it. Everywhere else the camera keys move the map
-wherever focus is, so the arrows do not scroll a focused panel. Map shortcuts are
-inactive while the map is hidden behind the phone workspace or the desktop comparison
-grid. Auto-repeated keys are ignored, except the camera keys, which keep moving the map
-while held. Ctrl/⌘+S never opens the browser's **Save page**, even where shortcuts are
-inactive.
+Shortcuts are inactive while focus is in a text field (switches and sliders do not
+count; a slider keeps its own arrow keys), except Ctrl/⌘+F, S, O, and E, and inside a
+modal dialog, including the onboarding tour. Inside menus and listboxes, plain and Shift
+shortcuts are inactive so type-to-select and arrow navigation keep working, while Ctrl/⌘
+shortcuts still work. The map-layer chooser is the exception: the digit keys keep
+switching layers while it has focus. Controls that handle a key themselves, such as tabs
+with their arrows, keep it. Everywhere else the camera keys move the map wherever focus
+is, so the arrows do not scroll a focused panel. Map shortcuts are inactive while the
+map is hidden behind the phone workspace or the desktop comparison grid. Auto-repeated
+keys are ignored, except the camera keys, which keep moving the map while held, and the
+sun-time keys, which keep moving the time. Ctrl/⌘+S never opens the browser's **Save
+page**, even where shortcuts are inactive.
 
 Buttons with a shortcut show its keys as keycaps in their tooltip: 2D and 3D, the layer
-chooser, the ruler, **Plan route**, **New marker**, forecast-point selection, **Undo**,
-**Save** and **Save a copy**, **Browse track file**, **Download GPX**, and the
-navigation collapse and restore buttons. MapLibre's own zoom, compass, and **Find my
-location** buttons use the same tooltip instead of the browser's, with `+`, `−`, N, and
-L. Every tooltip of the map control column opens to the left of its button, vertically
-centered on it. The layer-chooser menu shows each row's key in one column at its right
-edge, and the empty map search shows Ctrl/⌘+F. The map's right-click menu hints
-Ctrl/⌘+C, P, S, W, G, and Y beside **Copy link**, **Create marker here**, **Search
-satellite scenes here**, **Show weather forecast**, **Google Maps**, and **Yandex
-Maps**; these are reminders of the related global shortcuts, which act on the current
-view, through the next map click, or at the map center, not keys of the menu. External
-maps use a supported integer zoom converted from MapLibre's zoom scale. Their view URLs
-preserve the center, not exact viewport bounds, rotation, or pitch. Google's view mode
-has no point marker; Yandex's point action can mark the clicked point without
-recentering, while the global shortcut opens only the view. Devices whose primary
-pointer is coarse, such as phones and tablets, usually have no keyboard and show no
-keycaps. The [help screen](./features.md#help-screen) lists every shortcut with its
+chooser, the sun-shadow button, the ruler, **Plan route**, **New marker**,
+forecast-point selection, **Undo**, **Save** and **Save a copy**, **Browse track file**,
+**Download GPX**, and the navigation collapse and restore buttons. MapLibre's own zoom,
+compass, and **Find my location** buttons use the same tooltip instead of the browser's,
+with `+`, `−`, N, and L. Every tooltip of the map control column opens to the left of
+its button, vertically centered on it. The layer-chooser menu shows each row's key in
+one column at its right edge, and the empty map search shows Ctrl/⌘+F. The map's
+right-click menu hints Ctrl/⌘+C, P, S, W, G, and Y beside **Copy link**, **Create marker
+here**, **Search satellite scenes here**, **Show weather forecast**, **Google Maps**,
+and **Yandex Maps**; these are reminders of the related global shortcuts, which act on
+the current view, through the next map click, or at the map center, not keys of the
+menu. External maps use a supported integer zoom converted from MapLibre's zoom scale.
+Their view URLs preserve the center, not exact viewport bounds, rotation, or pitch.
+Google's view mode has no point marker; Yandex's point action can mark the clicked point
+without recentering, while the global shortcut opens only the view. Devices whose
+primary pointer is coarse, such as phones and tablets, usually have no keyboard and show
+no keycaps. The [help screen](./features.md#help-screen) lists every shortcut with its
 keys.
 
 ## Map controls

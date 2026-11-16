@@ -385,6 +385,7 @@ describe('MapViewControls', () => {
           onChange: vi.fn(),
           onPlay: vi.fn(),
           onStop: vi.fn(),
+          peek: false,
         }}
         onLayerPresetChange={() => 'map'}
         onTerrainModeChange={() => undefined}

@@ -177,4 +177,40 @@ describe('keyboard shortcut matching', () => {
       matchOn(document.body, { code: 'KeyN', key: 'N', shiftKey: true }),
     ).toBeNull();
   });
+
+  it('steps the sun time with brackets, by 10 minutes with Shift, also while held', () => {
+    // Russian layout: the bracket keys type х and ъ.
+    expect(matchOn(document.body, { code: 'BracketLeft', key: 'х' })).toEqual({
+      action: 'step-sun-time',
+      minutes: -1,
+    });
+    expect(
+      matchOn(document.body, { code: 'BracketRight', key: ']', repeat: true }),
+    ).toEqual({ action: 'step-sun-time', minutes: 1 });
+    expect(
+      matchOn(document.body, { code: 'BracketLeft', key: '{', shiftKey: true }),
+    ).toEqual({ action: 'step-sun-time', minutes: -10 });
+    expect(
+      matchOn(document.body, { code: 'BracketRight', key: '}', shiftKey: true }),
+    ).toEqual({ action: 'step-sun-time', minutes: 10 });
+    expect(keyboardShortcutKeys({ action: 'step-sun-time', minutes: 10 })).toEqual([
+      'Shift',
+      ']',
+    ]);
+  });
+
+  it('keeps shortcuts on focused switches and sliders, which are not text fields', () => {
+    const checkbox = mountTarget('<input type="checkbox" data-target />');
+    const range = mountTarget('<input type="range" data-target />');
+    const date = mountTarget('<input type="date" data-target />');
+
+    expect(matchOn(checkbox, { code: 'KeyD', key: 'd' })).toEqual({
+      action: 'toggle-sun-shadows',
+    });
+    expect(matchOn(range, { code: 'BracketRight', key: ']' })).toEqual({
+      action: 'step-sun-time',
+      minutes: 1,
+    });
+    expect(matchOn(date, { code: 'BracketRight', key: ']' })).toBeNull();
+  });
 });

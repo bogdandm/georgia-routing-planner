@@ -131,14 +131,13 @@ describe('WorkspaceShell', () => {
     expect(trackSearch).toHaveValue('/');
   });
 
-  it('collapses and restores the navigation with the bracket key', async () => {
+  it('collapses and restores the navigation with B', async () => {
     const user = userEvent.setup();
     renderWorkspaceShell();
 
-    // user-event escapes a literal bracket by doubling it.
-    await user.keyboard('[[');
+    await user.keyboard('b');
     expect(useUiStore.getState().navigationCollapsed).toBe(true);
-    await user.keyboard('[[');
+    await user.keyboard('b');
     expect(useUiStore.getState().navigationCollapsed).toBe(false);
   });
 

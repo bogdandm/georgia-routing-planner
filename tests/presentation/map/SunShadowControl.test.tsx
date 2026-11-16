@@ -68,6 +68,7 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
         onChange,
         onPlay,
         onStop,
+        peek: false,
         ...sunShadow,
       }}
     />,
@@ -184,6 +185,17 @@ describe('SunShadowControl', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(button).toHaveFocus();
     expect(windowEscape).not.toHaveBeenCalled();
+  });
+
+  it('shows a peeking panel without taking focus', () => {
+    renderSunShadowControls({ enabled: true, peek: true });
+
+    expect(screen.getByRole('dialog', { name: 'Sun shadows' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Sun shadows' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('switch', { name: 'Sun shadows' })).not.toHaveFocus();
   });
 
   it('asks to play the day from the Play button', async () => {

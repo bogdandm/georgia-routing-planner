@@ -1414,6 +1414,16 @@ msgstr "Ручей"
 msgid "Sun shadows: see where mountains cast shade at any date and time."
 msgstr "Тени от солнца: где горы отбрасывают тень в любой день и час."
 
+#. js-lingui-id: I4uR5E
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time 10 minutes earlier or later"
+msgstr "Время теней на 10 минут раньше или позже"
+
+#. js-lingui-id: i11cpT
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time one minute earlier or later"
+msgstr "Время теней на минуту раньше или позже"
+
 #. js-lingui-id: SMpAF6
 #: src/presentation/shell/MapLegend.tsx
 msgid "Swamp"
@@ -1501,6 +1511,11 @@ msgstr "Название трека"
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Tracks"
 msgstr "Треки"
+
+#. js-lingui-id: w6-xSA
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Turn sun shadows on or off"
+msgstr "Включить или выключить тени от солнца"
 
 #. js-lingui-id: TgfW9j
 #: src/presentation/shell/HelpScreen.tsx

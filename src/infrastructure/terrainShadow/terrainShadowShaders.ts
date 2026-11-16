@@ -215,8 +215,8 @@ float curvatureDropMeters(float distanceMeters) {
   return distanceMeters * distanceMeters * curvatureFactor;
 }
 
-float visibleSolarDiskFraction(float apparentElevationDegrees, float horizonDegrees) {
-  float u = clamp((apparentElevationDegrees - horizonDegrees) / solarDiskRadiusDegrees, -1.0, 1.0);
+float visibleSolarDiskFraction(float apparentElevationDegrees, float horizonDegrees, float diskRadiusDegrees) {
+  float u = clamp((apparentElevationDegrees - horizonDegrees) / diskRadiusDegrees, -1.0, 1.0);
   return 0.5 + (u * sqrt(1.0 - u * u) + asin(u)) / pi;
 }
 
@@ -247,12 +247,15 @@ bool mosaicContainsWithMargin(vec2 texels) {
   return all(greaterThanEqual(texels, vec2(mosaicLow))) && all(lessThanEqual(texels, vec2(mosaicHigh)));
 }
 
-float horizonAngleTowardSun(
+// Returns the horizon angle and the distance of the sample that set it. Early exits treat
+// the solar disk as \`diskRadiusDegrees\` wide, the largest radius the caller may use.
+vec2 horizonAngleTowardSun(
   vec2 outputPixel,
   float latitude,
   float azimuthRadians,
   float apparentSunElevationDegrees,
-  float observerElevation
+  float observerElevation,
+  float diskRadiusDegrees
 ) {
   vec2 observerTexels[3];
   for (int level = 0; level < 3; ++level) {
@@ -272,10 +275,11 @@ float horizonAngleTowardSun(
   float travelledMeters = 0.0;
   float cosLatitude = cos(latitude);
   float baseStep = uBaseResolutionEquatorMeters * cosLatitude;
-  float fullyHiddenDegrees = apparentSunElevationDegrees + solarDiskRadiusDegrees;
-  float firstHidingDegrees = apparentSunElevationDegrees - solarDiskRadiusDegrees;
+  float fullyHiddenDegrees = apparentSunElevationDegrees + diskRadiusDegrees;
+  float firstHidingDegrees = apparentSunElevationDegrees - diskRadiusDegrees;
 
   float horizonDegrees = -90.0;
+  float horizonMeters = 0.0;
   int level = 0;
   float distanceMeters = baseStep;
   for (int stepIndex = 0; stepIndex < maximumSteps && distanceMeters <= maximumShadowDistanceMeters; ++stepIndex) {
@@ -309,11 +313,15 @@ float horizonAngleTowardSun(
     if (level >= 3) break;
 
     float relativeHeight = mosaicElevation(level, texels) - observerElevation - curvatureDropMeters(distanceMeters);
-    horizonDegrees = max(horizonDegrees, degrees(atan(relativeHeight, distanceMeters)));
+    float angleDegrees = degrees(atan(relativeHeight, distanceMeters));
+    if (angleDegrees > horizonDegrees) {
+      horizonDegrees = angleDegrees;
+      horizonMeters = distanceMeters;
+    }
     if (horizonDegrees >= fullyHiddenDegrees) break;
     distanceMeters += max(baseStep, distanceMeters * angularStepRadians);
   }
-  return horizonDegrees;
+  return vec2(horizonDegrees, horizonMeters);
 }
 
 // (latitude, longitude) in radians of an output pixel measured from the tile's north-west corner.
@@ -328,9 +336,13 @@ vec2 pixelLatitudeLongitude(vec2 outputPixel) {
  * Visible solar-disk fraction per pixel of the tile plus a blur margin. Texture row 0 is
  * the northern edge minus the margin; the shade pass reads it with matching offsets. The
  * horizon never sinks below the sea-level horizon, so summits keep the last light while
- * the Sun is already below the observer's level.
+ * the Sun is already below the observer's level. The disk's radius grows by
+ * `uPenumbraDegreesPerKm` per kilometre to the sample that sets the horizon (the
+ * 100 km cap for the sea-level horizon), so shadows of distant ridges soften (temporary
+ * tuning; 0 keeps the geometric disk).
  */
 export const terrainShadowVisibilityFragmentShaderSource = `${terrainShadowCommonShaderSource}
+uniform float uPenumbraDegreesPerKm;
 const float visibilityMargin = ${glslFloat(terrainShadowVisibilityMarginPixels)};
 
 void main() {
@@ -339,16 +351,18 @@ void main() {
   SolarPosition sun = solarPositionAt(latitudeLongitude.x, latitudeLongitude.y);
   float observerElevation = mosaicElevation(0, uLevelOrigin[0] + outputPixel * uLevelTexelsPerOutputPixel[0]);
   float seaLevelHorizon = seaLevelHorizonDegrees(observerElevation);
+  float maximumRadius = solarDiskRadiusDegrees + uPenumbraDegreesPerKm * maximumShadowDistanceMeters / 1000.0;
   float sunlitFraction = 0.0;
-  if (sun.apparentElevationDegrees + solarDiskRadiusDegrees > seaLevelHorizon) {
-    float horizonDegrees = max(
-      horizonAngleTowardSun(
-        outputPixel, latitudeLongitude.x, sun.azimuthRadians, sun.apparentElevationDegrees,
-        observerElevation
-      ),
-      seaLevelHorizon
+  if (sun.apparentElevationDegrees + maximumRadius > seaLevelHorizon) {
+    vec2 terrainHorizon = horizonAngleTowardSun(
+      outputPixel, latitudeLongitude.x, sun.azimuthRadians, sun.apparentElevationDegrees,
+      observerElevation, maximumRadius
     );
-    sunlitFraction = visibleSolarDiskFraction(sun.apparentElevationDegrees, horizonDegrees);
+    bool terrainSetsHorizon = terrainHorizon.x >= seaLevelHorizon;
+    float horizonDegrees = terrainSetsHorizon ? terrainHorizon.x : seaLevelHorizon;
+    float horizonMeters = terrainSetsHorizon ? terrainHorizon.y : maximumShadowDistanceMeters;
+    float radius = solarDiskRadiusDegrees + uPenumbraDegreesPerKm * horizonMeters / 1000.0;
+    sunlitFraction = visibleSolarDiskFraction(sun.apparentElevationDegrees, horizonDegrees, radius);
   }
   outValue = vec4(sunlitFraction, 0.0, 0.0, 1.0);
 }
@@ -444,7 +458,8 @@ export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShad
 uniform sampler2D uVisibility;
 // Open-sky share of a level surface on the 4 × 4 pixel sky-view grid, linearly filtered.
 uniform sampler2D uSkyView;
-// 1 applies the sky-view occlusion, 0 keeps the slope-only sky light (temporary switch).
+// Scales the sky-view occlusion: 0 keeps the slope-only sky light, 1 the full share
+// (temporary tuning).
 uniform float uSkyOcclusion;
 
 const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
@@ -532,8 +547,9 @@ void main() {
   // the share of it that the sky-view pass found missing; the sky-view average of
   // cos²(max(h, 0)) already includes the slope itself, so it is compared to the plane.
   float planeSky = 0.5 * (1.0 + skyNormal.z);
-  float occlusion = mix(
-    1.0, min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0), uSkyOcclusion
+  float occlusion = max(
+    1.0 - uSkyOcclusion * (1.0 - min(texture(uSkyView, outputPixel / tileSize).r / planeSky, 1.0)),
+    0.0
   );
   float sunSideSky = occlusion * max(dot(skyNormal, toSky) + skyLightWrap, 0.0) / (toSky.z + skyLightWrap);
   float diffuseSky = occlusion * planeSky;
@@ -561,6 +577,8 @@ export interface ShadePalette {
   readonly lowSunShadowColor: Rgb;
   readonly lowSunShadowLift: number;
   readonly lowSunGlowOpacity: number;
+  /** Brightness the overlay leaves untouched; see `shadeNeutralBrightness`. */
+  readonly neutralBrightness: number;
 }
 
 interface SunlightTone {
@@ -598,10 +616,10 @@ function sunlightTone(code: number): SunlightTone {
 const sunlightTintStrength = 0.6;
 
 /**
- * Brightness the overlay leaves untouched. It sits above flat ground in full sun (1), so
- * flat ground keeps a light shade and slopes turned to the Sun can still brighten in two
- * steps: first the shade fades, then the highlight grows up to the compressed maximum of
- * 2. With the neutral at 1, every lit slope already had no shade left to lose.
+ * Default brightness the overlay leaves untouched. It sits above flat ground in full sun
+ * (1), so flat ground keeps a light shade and slopes turned to the Sun can still brighten
+ * in two steps: first the shade fades, then the highlight grows up to the compressed
+ * maximum of 2. With the neutral at 1, every lit slope already had no shade left to lose.
  */
 export const shadeNeutralBrightness = 1.35;
 const shadeMaximumBrightness = 2;
@@ -611,7 +629,7 @@ const shadeMaximumBrightness = 2;
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
  *
- * Shade fades `shadowColor` in as brightness drops below `shadeNeutralBrightness`. Light
+ * Shade fades `shadowColor` in as brightness drops below `neutralBrightness`. Light
  * is the highlight color tinted by the sunlight color, up to `highlightOpacity` from the
  * neutral to the compressed maximum of 2, plus a glow of up to `lowSunGlowOpacity` ×
  * `lowSun` that grows with the direct
@@ -640,6 +658,7 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
       shadowColor[2] + (lowSunShadowColor[2] - shadowColor[2]) * lowSun,
     ];
     const shadeOpacity = 1 - lowSun * palette.lowSunShadowLift;
+    const neutral = palette.neutralBrightness;
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(
@@ -654,19 +673,13 @@ export function createShadeLookupTable(palette: ShadePalette): Uint32Array {
         1,
         directShare * lowSun * palette.lowSunGlowOpacity +
           Math.min(
-            Math.max(
-              (brightness - shadeNeutralBrightness) /
-                (shadeMaximumBrightness - shadeNeutralBrightness),
-              0,
-            ),
+            Math.max((brightness - neutral) / (shadeMaximumBrightness - neutral), 0),
             1,
           ) *
             palette.highlightOpacity,
       );
       const shadeWeight =
-        Math.max(1 - brightness / shadeNeutralBrightness, 0) *
-        shadeOpacity *
-        (1 - lightAlpha);
+        Math.max(1 - brightness / neutral, 0) * shadeOpacity * (1 - lightAlpha);
       const alpha = lightAlpha + shadeWeight;
       if (alpha === 0) continue;
       const blend = (channel: 0 | 1 | 2) =>

@@ -20,7 +20,10 @@ import {
 } from '@/presentation/map/mapIds';
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { runRenderBenchmark } from '@/presentation/map/renderBenchmark';
-import type { TerrainShadowMetricsSnapshot } from '@/presentation/map/TerrainShadowTileProvider';
+import {
+  defaultTerrainShadowTuning,
+  type TerrainShadowMetricsSnapshot,
+} from '@/presentation/map/TerrainShadowTileProvider';
 import { createTestServices } from '@test/helpers/createTestServices';
 import {
   applyTrackPathDrag,
@@ -2950,6 +2953,7 @@ describe('MapLibreFacade', () => {
           availability: 'available',
           playback: { status: 'idle' },
           skyOcclusion: true,
+          tuning: defaultTerrainShadowTuning,
         },
       });
       vi.mocked(runRenderBenchmark).mockImplementation(
@@ -2988,6 +2992,7 @@ describe('MapLibreFacade', () => {
           availability: 'unavailable',
           playback: { status: 'idle' },
           skyOcclusion: true,
+          tuning: defaultTerrainShadowTuning,
         },
       });
 

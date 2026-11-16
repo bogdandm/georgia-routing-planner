@@ -222,10 +222,20 @@ msgstr "Показать моё местоположение"
 msgid "Flat map"
 msgstr "Плоская карта"
 
+#. js-lingui-id: MwoEvV
+#: src/presentation/map/SunShadowControl.tsx
+msgid "GI strength"
+msgstr "Сила ГО"
+
 #. js-lingui-id: DPULZ4
 #: src/presentation/map/SunShadowControl.tsx
 msgid "Global illumination (experiment)"
 msgstr "Глобальное освещение (эксперимент)"
+
+#. js-lingui-id: zkQNdT
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Glow"
+msgstr "Свечение"
 
 #. js-lingui-id: ud5TUo
 #: src/presentation/map/mapShareUrl.ts
@@ -330,6 +340,11 @@ msgstr "Не удалось проверить данные карты побл�
 msgid "Nearby map feature"
 msgstr "Ближайший объект"
 
+#. js-lingui-id: proQUv
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Neutral"
+msgstr "Нейтраль"
+
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "No named map feature found."
@@ -374,6 +389,11 @@ msgstr "Открыть windy.com"
 #: src/presentation/map/MapViewControls.tsx
 msgid "OSM overlay"
 msgstr "OSM поверх снимков"
+
+#. js-lingui-id: GWmbLZ
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Penumbra °/km"
+msgstr "Полутень, °/км"
 
 #. js-lingui-id: m-QLEF
 #: src/presentation/map/SatelliteCompareMaps.tsx

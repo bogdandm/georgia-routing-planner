@@ -317,28 +317,35 @@ every fourth output pixel into a 128 × 128 R8 texture holding the mean cos²(ma
 of the highest 1.5×-exaggerated terrain angle h; the shade pass samples it bilinearly
 and divides it by the visible sky of the slope's own plane, ½(1 + n_z), capped at 1, so
 a slope's own tilt is not counted twice and only terrain beyond it darkens gorges. The
-temporary panel checkbox sends `skyOcclusion: false` in the tile request (tile URLs end
-in `?sky=flat`, masks are cached per setting) to skip that factor. The sky term eases
-out (smoothstep) between the horizon and the night elevation, the end of civil twilight
-(−6°). The same pass writes a sunlight code: the logarithm of the relative optical air
-mass of the direct-sun path (Kasten–Young, scaled by the pressure at the pixel's height,
-or through the tangent height when the Sun is below the pixel's level), or, once the Sun
-is below the sea-level horizon, how far twilight has faded toward the night elevation.
-Brightness above 1 (slopes facing a low Sun reach several times flat ground) is
-compressed as 1 + x / (1 + x), so it stays below 2 and lit slopes keep their order. The
-worker reads the result back as one brightness byte per pixel (brightness × 127) plus a
-128 × 128 grid of sunlight codes, interpolates the codes bilinearly, and colors each
-pixel through a 256 × 256 table built once per palette. The neutral level, where the
-overlay is transparent, is brightness 1.35 (`shadeNeutralBrightness`), above flat ground
-in full sun: below it the shadow color fades in with alpha 1 − brightness / 1.35, so
-flat sunlit ground keeps a light shade and slopes turned to the Sun can still brighten;
-above it the highlight color fades in up to the compressed maximum of 2. The highlight
-is tinted by the Rayleigh-extinction sunlight color
-(`domain/terrain/atmosphericSunlight.ts`) at 60% strength; as the Sun sinks, shadows
-turn toward the low-Sun shadow color and lose part of their opacity, and ground lit by
-the direct Sun gains a sunlight-colored glow that grows with the direct share of the
-brightness up to 2. GPU jobs run one at a time and wait on a fence before the next
-starts, so at most one tile of shadow work competes with map frames.
+temporary panel checkbox and numeric fields set a session-only tuning that every tile
+request carries: `neutralBrightness` (default 1.35), `lowSunGlowOpacity` (0.4),
+`skyOcclusionStrength` (1; the shade pass uses max(1 − s · (1 − occlusion), 0), and the
+unchecked box sends 0), and `penumbraDegreesPerKm` (0; the visibility pass widens the
+solar disk by that many degrees per kilometre to the sample that sets the horizon, and
+its early exits use the radius at the 100 km cap). After a change the provider keeps the
+tuning under a new version and tile URLs end in `?tuning=<version>`, so MapLibre
+requests every tile again; masks are cached per occlusion strength and penumbra, while
+neutral and glow only change the lookup table. The sky term eases out (smoothstep)
+between the horizon and the night elevation, the end of civil twilight (−6°). The same
+pass writes a sunlight code: the logarithm of the relative optical air mass of the
+direct-sun path (Kasten–Young, scaled by the pressure at the pixel's height, or through
+the tangent height when the Sun is below the pixel's level), or, once the Sun is below
+the sea-level horizon, how far twilight has faded toward the night elevation. Brightness
+above 1 (slopes facing a low Sun reach several times flat ground) is compressed as 1 + x
+/ (1 + x), so it stays below 2 and lit slopes keep their order. The worker reads the
+result back as one brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of
+sunlight codes, interpolates the codes bilinearly, and colors each pixel through a 256 ×
+256 table built once per palette. The neutral level, where the overlay is transparent,
+is brightness 1.35 (`shadeNeutralBrightness`), above flat ground in full sun: below it
+the shadow color fades in with alpha 1 − brightness / 1.35, so flat sunlit ground keeps
+a light shade and slopes turned to the Sun can still brighten; above it the highlight
+color fades in up to the compressed maximum of 2. The highlight is tinted by the
+Rayleigh-extinction sunlight color (`domain/terrain/atmosphericSunlight.ts`) at 60%
+strength; as the Sun sinks, shadows turn toward the low-Sun shadow color and lose part
+of their opacity, and ground lit by the direct Sun gains a sunlight-colored glow that
+grows with the direct share of the brightness up to 2. GPU jobs run one at a time and
+wait on a fence before the next starts, so at most one tile of shadow work competes with
+map frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,

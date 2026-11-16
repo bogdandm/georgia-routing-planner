@@ -37,8 +37,12 @@ export const terrainShadowTileRequestSchema = z
     lowSunShadowColor: colorSchema,
     lowSunShadowLift: z.number().min(0).max(1),
     lowSunGlowOpacity: z.number().min(0).max(1),
-    /** Temporary experiment switch: terrain hides part of the sky light (sky view). */
-    skyOcclusion: z.boolean(),
+    /** Temporary tuning: brightness the overlay leaves untouched (flat full sun is 1). */
+    neutralBrightness: z.number().min(1).max(1.95),
+    /** Temporary tuning: scale of the terrain's occlusion of sky light; 0 turns it off. */
+    skyOcclusionStrength: z.number().min(0).max(4),
+    /** Temporary tuning: solar-disk radius added per km to the horizon-setting ridge. */
+    penumbraDegreesPerKm: z.number().min(0).max(0.2),
   })
   .strict()
   .refine(

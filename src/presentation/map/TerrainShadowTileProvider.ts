@@ -15,7 +15,26 @@ import {
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { terrainShadowWorkerMethods } from '@/infrastructure/terrainShadow/TerrainShadowWorkerServer';
+import { shadeNeutralBrightness } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
+
+/**
+ * Temporary shading parameters from the sun panel; every tile request carries them.
+ * `skyOcclusionStrength` 0 turns the terrain's occlusion of sky light off.
+ */
+export interface TerrainShadowTuning {
+  readonly neutralBrightness: number;
+  readonly lowSunGlowOpacity: number;
+  readonly skyOcclusionStrength: number;
+  readonly penumbraDegreesPerKm: number;
+}
+
+export const defaultTerrainShadowTuning: TerrainShadowTuning = {
+  neutralBrightness: shadeNeutralBrightness,
+  lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
+  skyOcclusionStrength: 1,
+  penumbraDegreesPerKm: 0,
+};
 
 export type TerrainShadowAvailability = 'unknown' | 'available' | 'unavailable';
 
@@ -52,10 +71,10 @@ export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
   createTileUrl(instantMs: number): string;
   /**
-   * Temporary experiment switch for the terrain sky-view occlusion of sky light. Later
-   * tile URLs and prefetches carry it, so a change requests every tile again.
+   * Temporary shading parameters. Later tile URLs and prefetches carry them, so a change
+   * requests every tile again.
    */
-  setSkyOcclusion(enabled: boolean): void;
+  setTuning(tuning: TerrainShadowTuning): void;
   /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
   setInteractionActive(active: boolean): void;
   /**
@@ -93,7 +112,8 @@ type TerrainShadowWorkerFactory = () => WorkerRpcEndpoint;
 
 interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly epochMinute: number;
-  readonly skyOcclusion: boolean;
+  /** Index into the provider's tunings; 0 is `defaultTerrainShadowTuning`. */
+  readonly tuningVersion: number;
 }
 
 interface GateWaiter {
@@ -109,9 +129,9 @@ type MutableMetrics = {
 };
 
 const millisecondsPerMinute = 60_000;
-/** Tiles without sky-view occlusion end in `?sky=flat`; see `setSkyOcclusion`. */
+/** Tiles drawn with a changed tuning end in `?tuning=<version>`; see `setTuning`. */
 const tileAddressPattern = new RegExp(
-  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(\\?sky=flat)?$`,
+  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(?:\\?tuning=(\\d+))?$`,
   'u',
 );
 
@@ -155,7 +175,7 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   ) {
     return null;
   }
-  return { epochMinute, z, x, y, skyOcclusion: match[5] === undefined };
+  return { epochMinute, z, x, y, tuningVersion: Number(match[5] ?? 0) };
 }
 
 function emptyMetrics(memoryBytes: number): MutableMetrics {
@@ -192,7 +212,8 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   #metrics = emptyMetrics(0);
   #pendingTiles = 0;
   #interactionActive = false;
-  #skyOcclusion = true;
+  /** Every tuning set so far, so tiles of older URLs still in flight keep theirs. */
+  readonly #tunings: TerrainShadowTuning[] = [defaultTerrainShadowTuning];
   #disposed = false;
 
   public constructor(
@@ -213,12 +234,15 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (!Number.isFinite(instantMs))
       throw new RangeError('The sun instant must be finite.');
     const epochMinute = Math.floor(instantMs / millisecondsPerMinute);
-    const variant = this.#skyOcclusion ? '' : '?sky=flat';
+    const version = this.#tunings.length - 1;
+    const variant = version === 0 ? '' : `?tuning=${String(version)}`;
     return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${variant}`;
   }
 
-  public setSkyOcclusion(enabled: boolean): void {
-    this.#skyOcclusion = enabled;
+  public setTuning(tuning: TerrainShadowTuning): void {
+    const current = this.#tunings.at(-1);
+    if (JSON.stringify(current) === JSON.stringify(tuning)) return;
+    this.#tunings.push(tuning);
   }
 
   public setInteractionActive(active: boolean): void {
@@ -279,7 +303,11 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       await this.waitForInteractionEnd(signal);
       const result = await this.ensureRpc().request<unknown>(
         terrainShadowWorkerMethods.renderTile,
-        this.createRequest(address, address.epochMinute, address.skyOcclusion),
+        this.createRequest(
+          address,
+          address.epochMinute,
+          this.#tunings[address.tuningVersion] ?? defaultTerrainShadowTuning,
+        ),
         signal,
       );
       if (!isTerrainShadowTileResult(result)) {
@@ -335,7 +363,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
             request: this.createRequest(
               tile,
               Math.floor(instantMs / millisecondsPerMinute),
-              this.#skyOcclusion,
+              this.#tunings.at(-1) ?? defaultTerrainShadowTuning,
             ),
           });
         });
@@ -403,7 +431,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   private createRequest(
     address: TerrainShadowTileAddress,
     epochMinute: number,
-    skyOcclusion: boolean,
+    tuning: TerrainShadowTuning,
   ): TerrainShadowTileRequest {
     return {
       z: address.z,
@@ -419,8 +447,10 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
       lowSunShadowColor,
       lowSunShadowLift: mapVisualPalette.terrain.sunLowShadowLift,
-      lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
-      skyOcclusion,
+      lowSunGlowOpacity: tuning.lowSunGlowOpacity,
+      neutralBrightness: tuning.neutralBrightness,
+      skyOcclusionStrength: tuning.skyOcclusionStrength,
+      penumbraDegreesPerKm: tuning.penumbraDegreesPerKm,
     };
   }
 

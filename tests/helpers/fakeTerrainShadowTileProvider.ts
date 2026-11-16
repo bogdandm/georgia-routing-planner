@@ -1,9 +1,11 @@
-import type {
-  TerrainShadowAvailability,
-  TerrainShadowMetricsSnapshot,
-  TerrainShadowPrefetchProgress,
-  TerrainShadowTileAddress,
-  TerrainShadowTileProvider,
+import {
+  defaultTerrainShadowTuning,
+  type TerrainShadowAvailability,
+  type TerrainShadowMetricsSnapshot,
+  type TerrainShadowPrefetchProgress,
+  type TerrainShadowTileAddress,
+  type TerrainShadowTileProvider,
+  type TerrainShadowTuning,
 } from '@/presentation/map/TerrainShadowTileProvider';
 
 /** One recorded prefetch; the test settles it, and aborting its signal rejects it. */
@@ -31,7 +33,7 @@ const emptyMetrics: TerrainShadowMetricsSnapshot = {
 /** Shadow provider without a worker; tests switch availability and read interaction. */
 export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider {
   public interactionActive = false;
-  public skyOcclusion = true;
+  public tuning: TerrainShadowTuning = defaultTerrainShadowTuning;
   public disposed = false;
   public readonly prefetchCalls: FakePrefetchCall[] = [];
   public metrics: TerrainShadowMetricsSnapshot = emptyMetrics;
@@ -43,12 +45,11 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
   }
 
   public createTileUrl(instantMs: number): string {
-    const variant = this.skyOcclusion ? '' : '?sky=flat';
-    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}${variant}`;
+    return `terrain-shadow://${String(Math.floor(instantMs / 60_000))}/{z}/{x}/{y}`;
   }
 
-  public setSkyOcclusion(enabled: boolean): void {
-    this.skyOcclusion = enabled;
+  public setTuning(tuning: TerrainShadowTuning): void {
+    this.tuning = tuning;
   }
 
   public setInteractionActive(active: boolean): void {

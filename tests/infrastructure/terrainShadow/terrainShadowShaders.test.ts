@@ -24,6 +24,7 @@ const palette: ShadePalette = {
   lowSunShadowColor: [46, 63, 122],
   lowSunShadowLift: 0.4,
   lowSunGlowOpacity: 0.35,
+  neutralBrightness: shadeNeutralBrightness,
 };
 /** Sunlight code of the zenith Sun at sea level (relative air mass 1). */
 const zenithCode = Math.round(

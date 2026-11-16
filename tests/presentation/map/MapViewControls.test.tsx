@@ -10,6 +10,7 @@ import {
   MapViewControlsControl,
 } from '@/presentation/map/MapViewControls';
 import { MapViewportSnapshotStore } from '@/presentation/map/MapViewportSnapshotStore';
+import { defaultTerrainShadowTuning } from '@/presentation/map/TerrainShadowTileProvider';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const mapControlHost = document.createElement('div');
@@ -387,6 +388,8 @@ describe('MapViewControls', () => {
           onStop: vi.fn(),
           skyOcclusion: true,
           onSkyOcclusionChange: vi.fn(),
+          tuning: defaultTerrainShadowTuning,
+          onTuningChange: vi.fn(),
           peek: false,
         }}
         onLayerPresetChange={() => 'map'}

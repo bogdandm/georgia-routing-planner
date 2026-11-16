@@ -37,7 +37,10 @@ import {
   localDayBounds,
   sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
-import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
+import type {
+  TerrainShadowAvailability,
+  TerrainShadowTuning,
+} from '@/presentation/map/TerrainShadowTileProvider';
 
 export interface SunShadowChange {
   readonly enabled: boolean;
@@ -60,6 +63,9 @@ export interface SunShadowControlProps {
   /** Temporary experiment switch for terrain sky-view occlusion of sky light. */
   readonly skyOcclusion: boolean;
   readonly onSkyOcclusionChange: (enabled: boolean) => void;
+  /** Temporary shading parameters, edited in numeric fields below the switch. */
+  readonly tuning: TerrainShadowTuning;
+  readonly onTuningChange: (tuning: TerrainShadowTuning) => void;
   /**
    * True while the time keys briefly show the panel: it opens without taking focus, so
    * the held key keeps reaching the global shortcuts.
@@ -257,6 +263,8 @@ function SunShadowPanel({
   onStop,
   skyOcclusion,
   onSkyOcclusionChange,
+  tuning,
+  onTuningChange,
   peek,
 }: SunShadowControlProps) {
   const { i18n, t } = useLingui();
@@ -338,6 +346,36 @@ function SunShadowPanel({
         }
         sx={{ mx: 0 }}
       />
+      <Stack direction="row" sx={{ columnGap: 1, flexWrap: 'wrap', rowGap: 1.5 }}>
+        {/* eslint-disable lingui/no-unlocalized-strings -- Tuning keys, not UI text. */
+        (
+          [
+            ['neutralBrightness', t`Neutral`, 1, 1.95, 0.05],
+            ['lowSunGlowOpacity', t`Glow`, 0, 1, 0.05],
+            ['skyOcclusionStrength', t`GI strength`, 0, 4, 0.25],
+            ['penumbraDegreesPerKm', t`Penumbra °/km`, 0, 0.2, 0.005],
+          ] as const
+        )
+          /* eslint-enable lingui/no-unlocalized-strings */
+          .map(([key, label, min, max, step]) => (
+            <TextField
+              defaultValue={tuning[key]}
+              disabled={!enabled || unavailable}
+              key={key}
+              label={label}
+              onChange={(event) => {
+                const value = Number(event.target.value);
+                if (event.target.value === '' || !(value >= min && value <= max))
+                  return;
+                onTuningChange({ ...tuning, [key]: value });
+              }}
+              size="small"
+              slotProps={{ htmlInput: { max, min, step } }}
+              sx={{ width: 120 }}
+              type="number"
+            />
+          ))}
+      </Stack>
       {unavailable ? (
         <Typography color="text.secondary" variant="caption">
           {t`This browser cannot compute shadows: WebGL2 float rendering is unavailable.`}

@@ -69,7 +69,11 @@ const marchUniformNames = [
   'uLevelMaximum',
   'uLevelTexelsPerRadian',
 ] as const;
-const visibilityUniformNames = [...marchUniformNames, ...sunUniformNames] as const;
+const visibilityUniformNames = [
+  ...marchUniformNames,
+  ...sunUniformNames,
+  'uPenumbraDegreesPerKm',
+] as const;
 const shadeUniformNames = [
   ...tileUniformNames,
   ...sunUniformNames,
@@ -611,6 +615,10 @@ function drawShadePasses(
   gl.viewport(0, 0, terrainShadowVisibilitySize, terrainShadowVisibilitySize);
   bindMarchProgram(gpu, visibilityProgram, request, levels);
   setSunUniforms(gl, visibilityProgram.uniforms, request);
+  gl.uniform1f(
+    visibilityProgram.uniforms.uPenumbraDegreesPerKm,
+    request.penumbraDegreesPerKm,
+  );
   const bandHeight = Math.ceil(terrainShadowVisibilitySize / shadowPassBands);
   gl.enable(gl.SCISSOR_TEST);
   for (let band = 0; band < shadowPassBands; band += 1) {
@@ -631,7 +639,7 @@ function drawShadePasses(
   setSunUniforms(gl, shadeProgram.uniforms, request);
   gl.uniform1i(shadeProgram.uniforms.uVisibility, visibilityTextureUnit);
   gl.uniform1i(shadeProgram.uniforms.uSkyView, skyViewTextureUnit);
-  gl.uniform1f(shadeProgram.uniforms.uSkyOcclusion, request.skyOcclusion ? 1 : 0);
+  gl.uniform1f(shadeProgram.uniforms.uSkyOcclusion, request.skyOcclusionStrength);
   drawFullscreen(gpu);
 }
 
@@ -732,6 +740,7 @@ export class TerrainShadowRenderer {
       palette.lowSunShadowColor,
       palette.lowSunShadowLift,
       palette.lowSunGlowOpacity,
+      palette.neutralBrightness,
     ]);
     if (this.#shadeTable?.key !== key) {
       this.#shadeTable = { key, table: createShadeLookupTable(palette) };
@@ -776,7 +785,8 @@ export class TerrainShadowRenderer {
         }),
       };
     }
-    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}${request.skyOcclusion ? '' : '|no-sky-occlusion'}`;
+    // Neutral and glow only color the mask, so they are not part of its key.
+    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${String(Math.floor(request.instantMs / 60_000))}|${String(request.skyOcclusionStrength)}|${String(request.penumbraDegreesPerKm)}`;
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);

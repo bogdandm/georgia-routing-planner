@@ -147,6 +147,8 @@ import {
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
+  type TerrainShadowTuning,
+  defaultTerrainShadowTuning,
   terrainShadowPrefetchBlockFrames,
 } from '@/presentation/map/TerrainShadowTileProvider';
 import {
@@ -1192,6 +1194,7 @@ export class MapLibreLayerController {
         availability: sunShadowTiles.getAvailability(),
         playback: { status: 'idle' },
         skyOcclusion: true,
+        tuning: defaultTerrainShadowTuning,
       },
     });
     this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
@@ -1283,10 +1286,24 @@ export class MapLibreLayerController {
    * not persist.
    */
   public setSunShadowSkyOcclusion(enabled: boolean): void {
-    if (mapLayerStore.getState().sunShadow.skyOcclusion === enabled) return;
-    this.sunShadowTiles.setSkyOcclusion(enabled);
+    this.applySunShadowTuning(enabled, mapLayerStore.getState().sunShadow.tuning);
+  }
+
+  /** Temporary shading parameters from the panel, applied like the switch above. */
+  public setSunShadowTuning(tuning: TerrainShadowTuning): void {
+    this.applySunShadowTuning(mapLayerStore.getState().sunShadow.skyOcclusion, tuning);
+  }
+
+  private applySunShadowTuning(
+    skyOcclusion: boolean,
+    tuning: TerrainShadowTuning,
+  ): void {
+    this.sunShadowTiles.setTuning({
+      ...tuning,
+      skyOcclusionStrength: skyOcclusion ? tuning.skyOcclusionStrength : 0,
+    });
     mapLayerStore.setState({
-      sunShadow: { ...mapLayerStore.getState().sunShadow, skyOcclusion: enabled },
+      sunShadow: { ...mapLayerStore.getState().sunShadow, skyOcclusion, tuning },
     });
     if (this.#map !== null) this.reconcileSunShadow(this.#map);
   }

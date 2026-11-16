@@ -177,4 +177,74 @@ describe('keyboard shortcut matching', () => {
       matchOn(document.body, { code: 'KeyN', key: 'N', shiftKey: true }),
     ).toBeNull();
   });
+
+  it('steps the sun time with brackets, by 10 minutes with Shift, also while held', () => {
+    const step = (minutes: number, drawEveryStep = false) => ({
+      action: 'step-sun-time',
+      minutes,
+      drawEveryStep,
+    });
+    // Russian layout: the bracket keys type х and ъ.
+    expect(matchOn(document.body, { code: 'BracketLeft', key: 'х' })).toEqual(step(-1));
+    expect(
+      matchOn(document.body, { code: 'BracketRight', key: ']', repeat: true }),
+    ).toEqual(step(1));
+    expect(
+      matchOn(document.body, { code: 'BracketLeft', key: '{', shiftKey: true }),
+    ).toEqual(step(-10));
+    expect(
+      matchOn(document.body, { code: 'BracketRight', key: '}', shiftKey: true }),
+    ).toEqual(step(10));
+    // Alt draws every step; Alt with the command key matches nothing (AltGr is Ctrl+Alt).
+    expect(
+      matchOn(document.body, { code: 'BracketRight', key: ']', altKey: true }),
+    ).toEqual(step(1, true));
+    expect(
+      matchOn(document.body, {
+        code: 'BracketLeft',
+        key: '{',
+        altKey: true,
+        shiftKey: true,
+      }),
+    ).toEqual(step(-10, true));
+    expect(
+      matchOn(document.body, {
+        code: 'BracketRight',
+        key: ']',
+        altKey: true,
+        ctrlKey: true,
+      }),
+    ).toBeNull();
+    expect(matchOn(document.body, { code: 'KeyD', key: 'd', altKey: true })).toBeNull();
+    expect(
+      keyboardShortcutKeys({
+        action: 'step-sun-time',
+        minutes: 10,
+        drawEveryStep: false,
+      }),
+    ).toEqual(['Shift', ']']);
+    expect(
+      keyboardShortcutKeys({
+        action: 'step-sun-time',
+        minutes: -10,
+        drawEveryStep: true,
+      }),
+    ).toEqual(['Alt', 'Shift', '[']);
+  });
+
+  it('keeps shortcuts on focused switches and sliders, which are not text fields', () => {
+    const checkbox = mountTarget('<input type="checkbox" data-target />');
+    const range = mountTarget('<input type="range" data-target />');
+    const date = mountTarget('<input type="date" data-target />');
+
+    expect(matchOn(checkbox, { code: 'KeyD', key: 'd' })).toEqual({
+      action: 'toggle-sun-shadows',
+    });
+    expect(matchOn(range, { code: 'BracketRight', key: ']' })).toEqual({
+      action: 'step-sun-time',
+      minutes: 1,
+      drawEveryStep: false,
+    });
+    expect(matchOn(date, { code: 'BracketRight', key: ']' })).toBeNull();
+  });
 });

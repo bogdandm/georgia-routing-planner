@@ -446,12 +446,16 @@ function createSunShadowController(
   return { controller, shadows, services };
 }
 
-/** Asserts relief → sun shadow → minor contours as three adjacent layers. */
+/** Asserts relief → contours → water → sun shadow, with the shadow directly over water. */
 function expectReliefShadowContourStack(map: FakeLayerMap): void {
   const order = [...map.layers.keys()];
   const shadowIndex = order.indexOf(terrainOverlayLayerIds.sunShadow);
-  expect(order[shadowIndex - 1]).toBe(terrainOverlayLayerIds.reliefShade);
-  expect(order[shadowIndex + 1]).toBe(terrainOverlayLayerIds.contourMinor);
+  expect(order.indexOf(terrainOverlayLayerIds.reliefShade)).toBeLessThan(
+    order.indexOf(terrainOverlayLayerIds.contourMinor),
+  );
+  expect(order.indexOf(terrainOverlayLayerIds.contourIndex)).toBeLessThan(shadowIndex);
+  expect(order[shadowIndex - 1]).toBe(mapLayerIds.water);
+  expect(order[shadowIndex + 1]).toBe(mapLayerIds.buildings);
 }
 
 const shadowInstantMs = Date.UTC(2026, 6, 1, 8, 30, 15);
@@ -2658,7 +2662,7 @@ describe('MapLibreLayerController', () => {
     });
   });
 
-  it('adds sun shadows between relief and contours and redraws them only per minute', async () => {
+  it('adds sun shadows over lakes and contours and redraws them only per minute', async () => {
     const { controller, services } = createSunShadowController();
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -2708,6 +2712,25 @@ describe('MapLibreLayerController', () => {
         sunShadowEnabled: false,
       });
     });
+  });
+
+  it('starts a session that opens at night at 11:00 on that day at the map center', () => {
+    vi.useFakeTimers();
+    // 23:15 in Tbilisi (UTC+4).
+    vi.setSystemTime(Date.UTC(2026, 6, 1, 19, 15));
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+
+    controller.attach(map as unknown as MapLibreMap);
+
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+      Date.UTC(2026, 6, 1, 7, 0),
+    );
+    // A time the user picks afterwards is never replaced, only kept within the range.
+    const userEveningMs = Date.UTC(2026, 6, 1, 17, 0);
+    controller.setSunShadow({ enabled: true, instantMs: userEveningMs });
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(userEveningMs);
+    controller.dispose();
   });
 
   it('moves a night instant to two hours after sunset at the map center', () => {
@@ -2820,12 +2843,25 @@ describe('MapLibreLayerController', () => {
       const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
       if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
       const frames = daylightFrameInstants(window, 10);
+      // Playback and its prefetch run from the current frame to sunset, then from sunrise.
+      const startIndex = frames.findIndex(
+        (frame) => frame >= Math.floor(shadowInstantMs / 60_000) * 60_000,
+      );
+      const playbackFrames = [
+        ...frames.slice(startIndex),
+        ...frames.slice(0, startIndex),
+      ];
+      const litFrames = playbackFrames.map(
+        (frame) =>
+          frame >= window.sunriseMs - 30 * 60_000 &&
+          frame <= window.sunsetMs + 30 * 60_000,
+      );
       controller.playSunShadowDay();
-      return { controller, shadows, map, frames };
+      return { controller, shadows, map, frames, playbackFrames, litFrames };
     }
 
     it('precomputes deduplicated tiles for every daylight frame, then plays them', async () => {
-      const { controller, shadows, frames } = startPlayback([
+      const { controller, shadows, playbackFrames } = startPlayback([
         { z: 12, x: 2541, y: 1514 },
         { z: 12, x: 2541, y: 1514 },
         { z: 12, x: 2542, y: 1514 },
@@ -2840,8 +2876,8 @@ describe('MapLibreLayerController', () => {
         { z: 12, x: 2541, y: 1514 },
         { z: 12, x: 2542, y: 1514 },
       ]);
-      expect(call?.instantsMs).toEqual(frames);
-      call?.onProgress(1, 3);
+      expect(call?.instantsMs).toEqual(playbackFrames);
+      call?.onProgress({ completed: 1, total: 3, readyFrames: 0 });
       expect(mapLayerStore.getState().sunShadow.playback).toEqual({
         status: 'loading',
         progress: 1 / 3,
@@ -2850,15 +2886,50 @@ describe('MapLibreLayerController', () => {
       call?.resolve();
       await vi.advanceTimersByTimeAsync(0);
 
-      const startIndex = frames.findIndex(
-        (frame) => frame >= Math.floor(shadowInstantMs / 60_000) * 60_000,
-      );
       expect(mapLayerStore.getState().sunShadow).toMatchObject({
-        instantMs: frames[startIndex],
+        instantMs: playbackFrames[0],
         playback: { status: 'playing' },
       });
       await vi.advanceTimersByTimeAsync(150);
-      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(frames[startIndex + 1]);
+      expect(mapLayerStore.getState().sunShadow.instantMs).toBe(playbackFrames[1]);
+      controller.dispose();
+    });
+
+    it('starts before the precomputation ends once the rest is estimated to be ready in time', async () => {
+      const { controller, shadows, playbackFrames, litFrames } = startPlayback();
+      const call = shadows.prefetchCalls[0];
+      const total = playbackFrames.length;
+      const progress = (readyFrames: number) => {
+        call?.onProgress({ completed: readyFrames, total, readyFrames });
+      };
+      const litBetween = (from: number, to: number) =>
+        litFrames.slice(from, to).filter(Boolean).length;
+
+      // The first block also waited for DEM downloads, so it only starts the measurement.
+      progress(6);
+      expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
+
+      // One second per lit frame is far slower than the 150 ms animation.
+      vi.advanceTimersByTime(1000 * litBetween(6, 12));
+      progress(12);
+      expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
+
+      // At that rate only the last block remains, and the animation needs longer to get there.
+      vi.advanceTimersByTime(1000 * litBetween(12, total - 6));
+      progress(total - 6);
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: playbackFrames[0],
+        playback: { status: 'playing' },
+      });
+
+      // The finished prefetch neither restarts nor rewinds the animation.
+      await vi.advanceTimersByTimeAsync(150);
+      call?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mapLayerStore.getState().sunShadow).toMatchObject({
+        instantMs: playbackFrames[1],
+        playback: { status: 'playing' },
+      });
       controller.dispose();
     });
 
@@ -2935,11 +3006,11 @@ describe('MapLibreLayerController', () => {
       const tileCount = Math.floor(2560 / litFrames);
       expect(tileCount * frames.length).toBeGreaterThan(2560);
 
-      const { controller, shadows } = startPlayback(
+      const { controller, shadows, playbackFrames } = startPlayback(
         Array.from({ length: tileCount }, (_, x) => ({ z: 12, x, y: 1514 })),
       );
 
-      expect(shadows.prefetchCalls[0]?.instantsMs).toEqual(frames);
+      expect(shadows.prefetchCalls[0]?.instantsMs).toEqual(playbackFrames);
       expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
       controller.dispose();
     });
@@ -2996,6 +3067,68 @@ describe('MapLibreLayerController', () => {
     );
     expect(eastWindow?.lastMinuteMs).toBeLessThan(eveningMs);
     expect(mapLayerStore.getState().sunShadow.instantMs).toBe(eastWindow?.lastMinuteMs);
+  });
+
+  it('steps the instant on with shadows off and never past the shown local day', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    // Svalbard in July: the Sun never sets, so the whole local day is offered.
+    map.center = { lng: 15.6, lat: 78.2 };
+    controller.attach(map as unknown as MapLibreMap);
+    const timeZone = lookupTimeZone(78.2, 15.6);
+    expect(
+      daylightWindow(
+        Date.UTC(2026, 6, 1, 12),
+        { latitude: 78.2, longitude: 15.6 },
+        timeZone,
+      ),
+    ).toBeNull();
+    const lateMs = Date.UTC(2026, 6, 1, 21, 55); // 23:55 CEST
+    controller.setSunShadow({ enabled: false, instantMs: lateMs });
+
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    expect(mapLayerStore.getState().sunShadow).toMatchObject({
+      enabled: true,
+      instantMs: lateMs + 60_000,
+    });
+
+    controller.stepSunShadow(10, { drawEveryStep: false });
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(lateMs + 4 * 60_000);
+  });
+
+  it('draws only the latest minute once the previous one has loaded, unless every step is asked for', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    const minute = Math.floor(shadowInstantMs / 60_000);
+    const tileUrl = (epochMinute: number) =>
+      `terrain-shadow://${String(epochMinute)}/{z}/{x}/{y}`;
+    const source = map.sources.get(mapSourceIds.terrainSunShadow) as {
+      readonly setTiles: (tiles: string[]) => void;
+    };
+    const setTiles = vi.spyOn(source, 'setTiles');
+
+    // The first minute is still loading: held keys only move the shown time.
+    map.sourceLoaded = false;
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    controller.stepSunShadow(1, { drawEveryStep: false });
+    expect(setTiles).not.toHaveBeenCalled();
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe((minute + 3) * 60_000);
+
+    map.sourceLoaded = true;
+    map.fire('sourcedata', { sourceId: mapSourceIds.terrainSunShadow });
+    expect(setTiles).toHaveBeenCalledExactlyOnceWith([tileUrl(minute + 3)]);
+
+    // Alt keeps the earlier behavior: every minute replaces the tiles at once.
+    map.sourceLoaded = false;
+    controller.stepSunShadow(1, { drawEveryStep: true });
+    controller.stepSunShadow(1, { drawEveryStep: true });
+    expect(setTiles.mock.calls.slice(1)).toEqual([
+      [[tileUrl(minute + 4)]],
+      [[tileUrl(minute + 5)]],
+    ]);
   });
 
   it('keeps the fixed-light relief when the sun-shadow layer cannot be added', () => {
@@ -3056,8 +3189,8 @@ describe('MapLibreLayerController', () => {
     expect(belowOrder.indexOf(terrainOverlayLayerIds.sunShadow)).toBeGreaterThan(
       imageryIndex,
     );
-    expect(belowOrder[belowOrder.indexOf(terrainOverlayLayerIds.sunShadow) + 1]).toBe(
-      terrainOverlayLayerIds.contourMinor,
+    expect(belowOrder[belowOrder.indexOf(terrainOverlayLayerIds.sunShadow) - 1]).toBe(
+      mapLayerIds.water,
     );
     let movesBefore = map.moves.length;
     for (let index = 0; index < 3; index += 1) map.fire('styledata', {});

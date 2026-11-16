@@ -11,12 +11,6 @@ export const terrainShadowMosaicSize = terrainShadowMosaicTiles * terrainShadowT
 /** Bilinear sampling needs one texel of mosaic data around every sample position. */
 export const terrainShadowMosaicMarginTexels = 1;
 
-/**
- * Lowest zoom whose shadow tiles trace terrain from the DEM. Coarser tiles, which only
- * fill low zooms and the distance of pitched 3D views, shade flat sea-level ground.
- */
-export const terrainShadowReliefMinZoom = 7;
-
 export interface TerrainShadowTileAddress {
   readonly z: number;
   readonly x: number;

@@ -27,6 +27,7 @@ import {
   isMacPlatform,
   shiftKeyLabel,
   type KeyboardShortcutAction,
+  type SunShadowTimeStep,
 } from '@/presentation/keyboardShortcuts';
 import { basemapPresets } from '@/presentation/map/mapTypes';
 import { MapLegend } from '@/presentation/shell/MapLegend';
@@ -104,6 +105,27 @@ function shortcutRow(
   };
 }
 
+/** The earlier and later sun-time keys of one step size and drawing mode. */
+function sunTimeRow(
+  label: MessageDescriptor,
+  minutes: 1 | 10,
+  drawEveryStep: boolean,
+): KeyGuideRow {
+  const earlier: SunShadowTimeStep = minutes === 1 ? -1 : -10;
+  return {
+    label,
+    combinations: [
+      keyboardShortcutKeys({
+        action: 'step-sun-time',
+        minutes: earlier,
+        drawEveryStep,
+      }),
+      keyboardShortcutKeys({ action: 'step-sun-time', minutes, drawEveryStep }),
+    ],
+    join: 'or',
+  };
+}
+
 /* eslint-disable lingui/no-unlocalized-strings -- Keycap labels are machine tokens. */
 /**
  * Every global shortcut, Escape, and the mouse gestures. The keys form two columns, the
@@ -174,6 +196,11 @@ function keyGuide(): {
         shortcutRow(msg`Show Sentinel-2 imagery`, 'show-sentinel-2'),
         shortcutRow(msg`Turn the OSM overlay on or off`, 'toggle-osm-overlay'),
         shortcutRow(msg`Turn the ruler on or off`, 'toggle-ruler'),
+        shortcutRow(msg`Turn sun shadows on or off`, 'toggle-sun-shadows'),
+        sunTimeRow(msg`Sun time one minute earlier or later`, 1, false),
+        sunTimeRow(msg`Sun time 10 minutes earlier or later`, 10, false),
+        sunTimeRow(msg`Sun time by one minute, drawing every step`, 1, true),
+        sunTimeRow(msg`Sun time by 10 minutes, drawing every step`, 10, true),
         shortcutRow(msg`Open this view in Google Maps`, 'open-google-maps'),
         shortcutRow(msg`Open this view in Yandex Maps`, 'open-yandex-maps'),
       ],
@@ -256,21 +283,32 @@ function tokenKey(token: InputToken): string {
 }
 
 function KeyCombinations({ row }: { readonly row: KeyGuideRow }) {
+  // Alternatives of three or more keys stack one per line around a compact "or", so the
+  // row stays narrow enough to keep its label beside it.
+  const stacked =
+    row.join === 'or' && row.combinations.some((tokens) => tokens.length >= 3);
   return (
     <Box
       component="span"
       sx={{
         display: 'inline-flex',
-        alignItems: 'center',
+        flexDirection: stacked ? 'column' : 'row',
+        alignItems: stacked ? 'flex-end' : 'center',
         justifyContent: 'flex-end',
         columnGap: 0.75,
+        rowGap: 0.25,
         whiteSpace: 'nowrap',
       }}
     >
       {row.combinations.map((tokens, index) => (
         <Fragment key={tokens.map(tokenKey).join(' ')}>
           {index === 0 || row.join === 'list' ? null : (
-            <Typography component="span" variant="caption" color="text.secondary">
+            <Typography
+              component="span"
+              variant="caption"
+              color="text.secondary"
+              sx={stacked ? { lineHeight: 1 } : undefined}
+            >
               {row.join === 'range' ? '–' : <Trans>or</Trans>}
             </Typography>
           )}
@@ -290,36 +328,46 @@ function KeyCombinations({ row }: { readonly row: KeyGuideRow }) {
 
 /* eslint-disable lingui/no-unlocalized-strings -- CSS grid tracks and breakpoint names. */
 const guideColumns = { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' };
+/** Narrowest label a row keeps beside its keys before they move under it. */
+const labelMinWidth = '7rem';
 /* eslint-enable lingui/no-unlocalized-strings */
 const guideColumnGap = 4;
 
+/**
+ * Each row puts its keys right of the label while both fit; a row whose keys would
+ * squeeze the label below `labelMinWidth` moves its keys under the label instead, so one
+ * wide combination never narrows the labels of the other rows.
+ */
 function KeyRowList({ rows }: { readonly rows: readonly KeyGuideRow[] }) {
   const { i18n } = useLingui();
   return (
     <Box
       component="dl"
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) auto',
-        alignItems: 'center',
-        alignContent: 'start',
-        columnGap: 2,
-        rowGap: 0.5,
-        m: 0,
-      }}
+      sx={{ display: 'flex', flexDirection: 'column', rowGap: 0.5, m: 0 }}
     >
       {rows.map((row) => (
-        <Fragment key={row.label.id}>
-          <Typography component="dt" variant="body2">
+        <Box
+          key={row.label.id}
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            columnGap: 2,
+            rowGap: 0.25,
+          }}
+        >
+          <Typography
+            component="dt"
+            variant="body2"
+            // A label shorter than the minimum only claims its own width.
+            sx={{ flex: `1 1 ${labelMinWidth}`, minWidth: 0, maxWidth: 'max-content' }}
+          >
             {i18n._(row.label)}
           </Typography>
-          <Box
-            component="dd"
-            sx={{ m: 0, display: 'flex', justifyContent: 'flex-end' }}
-          >
+          <Box component="dd" sx={{ m: 0, ml: 'auto', display: 'flex' }}>
             <KeyCombinations row={row} />
           </Box>
-        </Fragment>
+        </Box>
       ))}
     </Box>
   );

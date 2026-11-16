@@ -168,6 +168,8 @@ const unavailableMapStyle: StyleSpecification = {
 
 const cameraRestoreTimeoutMs = 2_000;
 const terrainRetryDelaysMs = [1_000, 3_000] as const;
+/** How long the sun panel stays after the last key release once the time keys showed it. */
+const sunShadowPeekHideDelayMs = 1_000;
 /**
  * MapLibre's drag-pan inertia covering the same distance in half the time. Its coast
  * lasts velocity / deceleration and covers velocity² × linearity / (2 × deceleration),
@@ -1832,6 +1834,9 @@ export function MapWorkspace({
   const handleMeasurementActiveChange = useCallback((active: boolean) => {
     setMeasurementPoints(active ? [] : null);
   }, []);
+  // The time keys show the sun panel without focus until shortly after their release.
+  const [sunShadowPeek, setSunShadowPeek] = useState(false);
+  const sunShadowPeekTimer = useRef<number | undefined>(undefined);
   const sunShadowControl: SunShadowControlProps | null =
     mapLayers === null
       ? null
@@ -1850,6 +1855,7 @@ export function MapWorkspace({
           onStop: () => {
             mapLayers.stopSunShadowPlayback();
           },
+          peek: sunShadowPeek,
         };
 
   // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.
@@ -1934,6 +1940,21 @@ export function MapWorkspace({
         handleLayerPresetChange(next);
         break;
       }
+      case 'toggle-sun-shadows':
+        if (mapLayers === null || sunShadow.availability === 'unavailable') return;
+        mapLayers.setSunShadow({
+          enabled: !sunShadow.enabled,
+          instantMs: sunShadow.instantMs,
+        });
+        break;
+      case 'step-sun-time':
+        if (mapLayers === null || sunShadow.availability === 'unavailable') return;
+        mapLayers.stepSunShadow(shortcut.minutes, {
+          drawEveryStep: shortcut.drawEveryStep,
+        });
+        window.clearTimeout(sunShadowPeekTimer.current);
+        setSunShadowPeek(true);
+        break;
       default:
         // Workspace, search, and track shortcuts belong to their own listeners.
         return;
@@ -1944,9 +1965,22 @@ export function MapWorkspace({
     const listener = (event: KeyboardEvent) => {
       handleMapShortcut(event);
     };
+    // Any release starts the delay; a held or repeated time key cancels it again.
+    const hidePeekSoon = () => {
+      window.clearTimeout(sunShadowPeekTimer.current);
+      sunShadowPeekTimer.current = window.setTimeout(() => {
+        setSunShadowPeek(false);
+      }, sunShadowPeekHideDelayMs);
+    };
     window.addEventListener('keydown', listener);
+    window.addEventListener('keyup', hidePeekSoon);
+    // A key released in another window never reports its keyup here.
+    window.addEventListener('blur', hidePeekSoon);
     return () => {
       window.removeEventListener('keydown', listener);
+      window.removeEventListener('keyup', hidePeekSoon);
+      window.removeEventListener('blur', hidePeekSoon);
+      window.clearTimeout(sunShadowPeekTimer.current);
     };
   }, []);
 

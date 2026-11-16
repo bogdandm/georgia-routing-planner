@@ -43,7 +43,7 @@ describe('terrain overlay style contracts', () => {
     expect(new Set(layerIds).size).toBe(layerIds.length);
   });
 
-  it('serves sun shadows at every zoom up to the DEM maximum without fading', () => {
+  it('serves sun shadows from the world view up to the DEM maximum without fading', () => {
     const configuration = parseMapProviderConfiguration(
       defaultMapProviderConfigurationInput,
       'https://example.test/app/',

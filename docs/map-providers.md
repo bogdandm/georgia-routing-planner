@@ -236,9 +236,10 @@ MapLibre's default request mode, so tiles already loaded for relief or 3D come f
 HTTP cache. Each z7–12 shadow tile needs 3×3 DEM tiles at its own zoom, two zooms
 coarser, and four zooms coarser (27 requests, clamped to the configured DEM zoom range),
 heavily shared between neighbouring shadow tiles; the worker keeps about 64 decoded DEM
-tiles. A 404 is treated as sea level; other failures fail only that shadow tile. Shadows
-need the 512-pixel Terrarium configuration and are unavailable for other DEM encodings
-or tile sizes. Attribution is unchanged.
+tiles. Flat-ground shading below z7 requests no DEM tiles. A 404 is treated as sea
+level; other failures fail only that shadow tile. Shadows need the 512-pixel Terrarium
+configuration and are unavailable for other DEM encodings or tile sizes. Attribution is
+unchanged.
 
 ### Attribution, limits, and failure policy
 

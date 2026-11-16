@@ -1414,6 +1414,26 @@ msgstr "Stream"
 msgid "Sun shadows: see where mountains cast shade at any date and time."
 msgstr "Sun shadows: see where mountains cast shade at any date and time."
 
+#. js-lingui-id: I4uR5E
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time 10 minutes earlier or later"
+msgstr "Sun time 10 minutes earlier or later"
+
+#. js-lingui-id: mYJgGp
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time by 10 minutes, drawing every step"
+msgstr "Sun time by 10 minutes, drawing every step"
+
+#. js-lingui-id: pR20JI
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time by one minute, drawing every step"
+msgstr "Sun time by one minute, drawing every step"
+
+#. js-lingui-id: i11cpT
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Sun time one minute earlier or later"
+msgstr "Sun time one minute earlier or later"
+
 #. js-lingui-id: SMpAF6
 #: src/presentation/shell/MapLegend.tsx
 msgid "Swamp"
@@ -1501,6 +1521,11 @@ msgstr "Track name"
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Tracks"
 msgstr "Tracks"
+
+#. js-lingui-id: w6-xSA
+#: src/presentation/shell/HelpScreen.tsx
+msgid "Turn sun shadows on or off"
+msgstr "Turn sun shadows on or off"
 
 #. js-lingui-id: TgfW9j
 #: src/presentation/shell/HelpScreen.tsx

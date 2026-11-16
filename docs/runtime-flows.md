@@ -176,11 +176,11 @@ failed tile-cache entry. Final failure appears only in the shared operational st
 On style readiness, style data changes, imagery swaps, preference changes, and 3D
 transitions, the layer controller idempotently restores the DEM source, relief shade,
 sun-shadow raster, generated contour source, minor/index lines, and index labels. The
-order is base surface fills, relief/satellite in the selected order, waterways, sun
-shadow, contours, water-body polygons, then OSM boundaries, transport, ridges and
-cliffs, the Sentinel scene footprint, user routes and tracks, and finally icons and
-labels (contour labels included), so relief and shadow stay visible over opaque
-land-cover fills while water bodies mask isolines and shadow. 3D terrain draws
+order is base surface fills, relief/satellite in the selected order, waterways,
+contours, water-body polygons, sun shadow, buildings, then OSM boundaries, transport,
+ridges and cliffs, the Sentinel scene footprint, user routes and tracks, and finally
+icons and labels (contour labels included), so relief and shadow stay visible over
+opaque land-cover fills while water bodies mask isolines and shadow. 3D terrain draws
 consecutive line, fill, raster, and hillshade layers into one draped texture per terrain
 tile, and every icon or label layer between them would add another full set of textures
 and terrain passes; keeping all lines and fills below the first icon layer gives the
@@ -245,18 +245,23 @@ sequenceDiagram
 ```
 
 While the switch is on and shadows are not known to be unavailable, the controller keeps
-the `terrain-sun-shadow` raster source (all zooms to z12, overzoomed above) and its
-layer directly below the minor contours. Once that layer exists it sets the relief
-hillshade's minimum zoom to 24 so the fixed-light shading does not double the real-sun
-relief; a failed shadow setup leaves the relief drawn. Turning the switch off removes
-the source and layer and restores the relief zoom range. The relief visibility
-preference is never written. The tile URL carries the instant as a whole epoch minute,
-so an unchanged minute changes nothing, and a new minute replaces the source tiles with
-`setTiles`: MapLibre requests only the visible tiles again. When a camera move settles,
-the instant is clamped again to the shown range at the new center, matching the panel.
-Otherwise camera moves (pan, rotate, pitch, 3D) never recompute, because MapLibre's tile
-cache and the worker's mask cache already hold the tiles; returning to an earlier minute
-hits the mask cache. Compare panes never add the source.
+the `terrain-sun-shadow` raster source (every zoom up to z12, overzoomed above) and its
+layer directly above the water polygons, so lakes and contours are shaded too. Once that
+layer exists it sets the relief hillshade's minimum zoom to 24 so the fixed-light
+shading does not double the real-sun relief; a failed shadow setup leaves the relief
+drawn. Turning the switch off removes the source and layer and restores the relief zoom
+range. The relief visibility preference is never written. The tile URL carries the
+instant as a whole epoch minute, so an unchanged minute changes nothing, and a new
+minute replaces the source tiles with `setTiles`: MapLibre requests only the visible
+tiles again, but renders every replaced minute in full. So while the shadow source is
+still loading the applied minute, a newer one only updates the store and waits; the
+source's next `sourcedata` event with the source loaded applies the latest minute, and
+day playback counts a waiting minute as still loading. `setSunShadow` with
+`drawEveryStep` (the Alt time keys) applies each minute at once instead. When a camera
+move settles, the instant is clamped again to the shown range at the new center,
+matching the panel. Otherwise camera moves (pan, rotate, pitch, 3D) never recompute,
+because MapLibre's tile cache and the worker's mask cache already hold the tiles;
+returning to an earlier minute hits the mask cache. Compare panes never add the source.
 
 The same reconciliation sets the style `sky` while shadows draw (`createSunShadowSky` in
 `terrainOverlayStyle.ts`): the Sun's apparent elevation at the map center and the shadow
@@ -273,6 +278,11 @@ the camera turns. Channels are rounded and an unchanged sky is not set again, be
 at once. Turning shadows off sets a transparent sky without fog, which draws like a
 style without `sky`; a map that never drew shadows keeps no sky. Every sky property is
 set each time because MapLibre keeps properties a later `setSky` omits.
+
+The session instant starts at the current time. On the first reconciliation with a map,
+a start time outside sunrise–sunset at the map center becomes 11:00 of that local day,
+so the map never opens fully shaded; the panel's **Now** applies the same rule. An
+instant chosen in the panel is never replaced, only clamped to the range.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
 the module worker on the first tile request. Requests wait while the map is dragged,
@@ -344,23 +354,33 @@ reference for the shader model.
 **Play the day** (`MapLibreLayerController.playSunShadowDay`) takes the daylight window
 of the shown day at the map center, which spans two hours before sunrise to two hours
 after sunset (clamped to the local day), makes whole-minute frames from its start every
-10 minutes plus its last minute, and asks `map.coveringTiles` for the 512 px z7–12
-relief tiles of the current view, deduplicated across world copies. That public coverage
-ignores terrain-aware culling; tiles it misses render on demand during playback. Only
-frames from 45 minutes before sunrise to 45 minutes after sunset hold cached masks, so
+10 minutes plus its last minute, rotated to start at the current time, and asks
+`map.coveringTiles` for the 512 px z7–12 tiles of the current view, deduplicated across
+world copies. That public coverage ignores terrain-aware culling; tiles it misses, and
+the flat-ground tiles below z7, render on demand during playback. Only frames from 45
+minutes before sunrise to 45 minutes after sunset (lit frames) hold cached masks, so
 when tiles × those frames exceed 2560, playback is refused as `too-many-tiles` and
 logged as `map.sun-shadow.playback-refused` with both counts. Otherwise the provider's
-`prefetch` sends `terrain-shadow.prefetch-tile` requests tile-major, at most four at a
-time and past the interaction gate, so the worker renders each mask into its cache and
-answers with metrics only; consecutive instants of a tile reuse the assembled mosaics.
-Progress is published to `mapLayerStore.sunShadow.playback` in whole percents. After the
-prefetch, a 150 ms timer shows the next frame by updating the instant and calling only
-the sun-shadow reconciliation, without persistence, and waits while the shadow source is
-still loading the shown frame. The animation loops until stopped. Play does nothing
-while the camera is already moving. A `movestart` event (the controller listens for the
-whole attachment, so it also clears a refusal or failure note), `setSunShadow` (every
-panel change, the switch, and the render benchmark), or detach aborts the prefetch,
-clears the timer, and returns the state to `idle`; a prefetch failure is logged as
+`prefetch` sends `terrain-shadow.prefetch-tile` requests in playback order in blocks of
+six frames, tile-major inside a block and with the tile order reversed every other
+block, at most four at a time and past the interaction gate. The worker renders each
+mask into its cache and answers with metrics only; a block's consecutive instants of a
+tile reuse the assembled mosaics, and the reversal starts each block with the tiles
+whose DEM tiles are still cached. Progress, including the count of leading frames whose
+tiles are all cached, is published to `mapLayerStore.sunShadow.playback` in whole
+percents. The rate per lit frame is measured from the end of the first block on, because
+that block also waited for DEM downloads and its frames become ready only with its last
+tile. Whenever more frames become ready, the controller starts the animation if, at that
+rate times 1.25, every remaining block is estimated to be cached before the animation
+reaches its first frame; otherwise it starts when the prefetch ends. A 150 ms timer
+shows the next frame by updating the instant and calling only the sun-shadow
+reconciliation, without persistence, and waits while the shadow source is still loading
+the shown frame, so an optimistic estimate pauses the animation instead of tearing it.
+The animation loops until stopped. Play does nothing while the camera is already moving.
+A `movestart` event (the controller listens for the whole attachment, so it also clears
+a refusal or failure note), `setSunShadow` (every panel change, the switch, the
+sun-shadow keys, and the render benchmark), or detach aborts the prefetch, clears the
+timer, and returns the state to `idle`; a prefetch failure is logged as
 `map.sun-shadow.playback-failed` and published as `failed`, as is availability turning
 `unavailable` during playback.
 

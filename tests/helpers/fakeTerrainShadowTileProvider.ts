@@ -1,6 +1,7 @@
 import type {
   TerrainShadowAvailability,
   TerrainShadowMetricsSnapshot,
+  TerrainShadowPrefetchProgress,
   TerrainShadowTileAddress,
   TerrainShadowTileProvider,
 } from '@/presentation/map/TerrainShadowTileProvider';
@@ -10,7 +11,7 @@ export interface FakePrefetchCall {
   readonly tiles: readonly TerrainShadowTileAddress[];
   readonly instantsMs: readonly number[];
   readonly signal: AbortSignal;
-  readonly onProgress: (completed: number, total: number) => void;
+  readonly onProgress: (progress: TerrainShadowPrefetchProgress) => void;
   readonly resolve: () => void;
   readonly reject: (error: Error) => void;
 }
@@ -52,7 +53,7 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
     tiles: readonly TerrainShadowTileAddress[],
     instantsMs: readonly number[],
     signal: AbortSignal,
-    onProgress: (completed: number, total: number) => void,
+    onProgress: (progress: TerrainShadowPrefetchProgress) => void,
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       signal.addEventListener(

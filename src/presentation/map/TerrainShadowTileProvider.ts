@@ -40,21 +40,31 @@ export interface TerrainShadowTileAddress {
   readonly y: number;
 }
 
+export interface TerrainShadowPrefetchProgress {
+  /** Completed tile requests out of `total` (tiles × instants). */
+  readonly completed: number;
+  readonly total: number;
+  /** Leading instants whose tiles are all cached, so playback may show them. */
+  readonly readyFrames: number;
+}
+
 export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
   createTileUrl(instantMs: number): string;
   /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
   setInteractionActive(active: boolean): void;
   /**
-   * Renders and caches every tile for every instant (tile-major) without handing tiles to
-   * MapLibre; at most `terrainShadowPrefetchConcurrency` requests in flight. Rejects with
-   * an AbortError on `signal`, or with the first tile failure.
+   * Renders and caches every tile for every instant without handing tiles to MapLibre; at
+   * most `terrainShadowPrefetchConcurrency` requests in flight. Instants are taken in the
+   * given order in blocks of `terrainShadowPrefetchBlockFrames`, tile-major inside each
+   * block, so leading frames become ready first. Rejects with an AbortError on `signal`, or
+   * with the first tile failure.
    */
   prefetch(
     tiles: readonly TerrainShadowTileAddress[],
     instantsMs: readonly number[],
     signal: AbortSignal,
-    onProgress: (completed: number, total: number) => void,
+    onProgress: (progress: TerrainShadowPrefetchProgress) => void,
   ): Promise<void>;
   getAvailability(): TerrainShadowAvailability;
   subscribeAvailability(
@@ -68,6 +78,11 @@ export interface TerrainShadowTileProvider {
 export const terrainShadowProtocolId = 'terrain-shadow';
 /** Prefetch keeps the single GPU queue fed while the next DEM tiles download. */
 const terrainShadowPrefetchConcurrency = 4;
+/**
+ * Consecutive instants a prefetch block computes per tile. Larger blocks reuse a tile's
+ * mosaics and DEM tiles longer; smaller ones make the first frames ready sooner.
+ */
+export const terrainShadowPrefetchBlockFrames = 6;
 
 type TerrainShadowWorkerFactory = () => WorkerRpcEndpoint;
 
@@ -272,7 +287,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     tiles: readonly TerrainShadowTileAddress[],
     instantsMs: readonly number[],
     signal: AbortSignal,
-    onProgress: (completed: number, total: number) => void,
+    onProgress: (progress: TerrainShadowPrefetchProgress) => void,
   ): Promise<void> {
     if (this.#disposed) throw new Error('The terrain shadow provider was disposed.');
     if (this.#availability === 'unavailable') {
@@ -280,11 +295,40 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     }
     signal.throwIfAborted();
     // The interaction gate is ignored: a camera move cancels the whole prefetch instead.
-    const requests = tiles.flatMap((tile) =>
-      instantsMs.map((instantMs) =>
-        this.createRequest(tile, Math.floor(instantMs / millisecondsPerMinute)),
-      ),
-    );
+    // Every other block walks the tiles backwards, so the tiles just computed, whose DEM
+    // tiles the worker still caches, start the next block.
+    const reversedTiles = [...tiles].reverse();
+    const requests: {
+      readonly frame: number;
+      readonly request: TerrainShadowTileRequest;
+    }[] = [];
+    for (
+      let blockStart = 0;
+      blockStart < instantsMs.length;
+      blockStart += terrainShadowPrefetchBlockFrames
+    ) {
+      const block = instantsMs.slice(
+        blockStart,
+        blockStart + terrainShadowPrefetchBlockFrames,
+      );
+      const blockTiles =
+        (blockStart / terrainShadowPrefetchBlockFrames) % 2 === 0
+          ? tiles
+          : reversedTiles;
+      for (const tile of blockTiles) {
+        block.forEach((instantMs, offset) => {
+          requests.push({
+            frame: blockStart + offset,
+            request: this.createRequest(
+              tile,
+              Math.floor(instantMs / millisecondsPerMinute),
+            ),
+          });
+        });
+      }
+    }
+    const pendingTilesByFrame = instantsMs.map(() => tiles.length);
+    let readyFrames = 0;
     // One internal signal cancels the remaining requests after the first failure too.
     const controller = new AbortController();
     const forwardAbort = () => {
@@ -293,15 +337,16 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     signal.addEventListener('abort', forwardAbort, { once: true });
     let nextIndex = 0;
     let completed = 0;
-    // Each runner takes the next request in order, so requests start tile-major.
+    // Each runner takes the next request in order, so requests start in block order.
     const runQueue = async () => {
       while (nextIndex < requests.length && !controller.signal.aborted) {
-        const request = requests[nextIndex];
+        const entry = requests[nextIndex];
         nextIndex += 1;
+        if (entry === undefined) return;
         try {
           const metrics = await this.ensureRpc().request<unknown>(
             terrainShadowWorkerMethods.prefetchTile,
-            request,
+            entry.request,
             controller.signal,
           );
           if (!isTerrainShadowTileMetrics(metrics)) {
@@ -314,7 +359,14 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
           throw error;
         }
         completed += 1;
-        onProgress(completed, requests.length);
+        pendingTilesByFrame[entry.frame] = (pendingTilesByFrame[entry.frame] ?? 1) - 1;
+        while (
+          readyFrames < pendingTilesByFrame.length &&
+          pendingTilesByFrame[readyFrames] === 0
+        ) {
+          readyFrames += 1;
+        }
+        onProgress({ completed, total: requests.length, readyFrames });
       }
     };
     try {

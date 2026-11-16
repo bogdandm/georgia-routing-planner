@@ -221,6 +221,8 @@ export const mapInsertionPoints = {
   terrainOverlaysBeforeLayerId: mapLayerIds.boundaries,
   // Water polygons mask generated terrain contours while waterways remain visible.
   contoursBeforeLayerId: mapLayerIds.water,
+  // Sun shadows sit directly above the water polygons, so lakes and contours are shaded.
+  sunShadowBeforeLayerId: mapLayerIds.buildings,
   contourLabelsBeforeLayerId: mapLayerIds.hikingPoiLabels,
   // Weather stays below roads, hiking paths, labels, user routes, and markers.
   weatherBeforeLayerId: mapLayerIds.roadCasings,

@@ -795,6 +795,10 @@ export function createShadeLookupTable(
           twilightDepth,
         ));
     const glow = lowSun * palette.lowSunGlowOpacity;
+    // Once sunlight has lost more than half its blue, carry its glow through neutral.
+    // The tone curves intentionally vanish there; otherwise blurred shadow edges expose
+    // a pale basemap strip. High-Sun lighting and sky-only shade keep their old response.
+    const neutralGlowBlend = smoothstep(0.5, 1, lowSun);
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(
@@ -804,7 +808,12 @@ export function createShadeLookupTable(
         ),
         1,
       );
-      const sunAlpha = 1 - (1 - (highlights[value] ?? 0)) * (1 - directShare * glow);
+      const glowShare =
+        neutralGlowBlend === 0
+          ? directShare
+          : directShare +
+            neutralGlowBlend * (smoothstep(skyLightShare, 1, brightness) - directShare);
+      const sunAlpha = 1 - (1 - (highlights[value] ?? 0)) * (1 - glowShare * glow);
       const openSky = Math.min(brightness / skyLightShare, 1);
       const roseAlpha = alpenglow * openSky * openSky;
       const sunWeight = sunAlpha * (1 - roseAlpha);

@@ -377,13 +377,18 @@ highlight is tinted by the Rayleigh-extinction sunlight color
 sunlight code: from the day color toward the golden-hour lilac as the blue deficit of
 the sunlight grows, then over the twilight codes to the deep twilight blue at half depth
 and back to the day color by night. As the Sun sinks, shadows lose part of their
-opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows with
-the direct share of the brightness up to 2. Over the first part of the twilight codes, a
-rose alpenglow is composited over shade with an opacity that peaks about 15% of the way
-to the night elevation, is gone by 55%, and scales with the square of brightness
-relative to the sky share, so open slopes glow and gorges do not. GPU jobs run one at a
-time and wait on a fence before the next starts, so at most one tile of shadow work
-competes with map frames.
+opacity, and ground lit by the direct Sun gains a sunlight-colored glow. Its usual
+brightness response grows from the sky share to the compressed maximum of 2. Once
+sunlight has lost more than half its blue, that response smoothly blends toward a
+smoothstep from the sky share to brightness 1, reaching full glow at neutral when the
+Sun is on the horizon. This carries warm color through the neutral opacity minimum
+instead of exposing a pale basemap fringe along blurred shadow edges. High-Sun tone
+curves, sky-only shade, the visibility blur, and cached masks are unchanged. Over the
+first part of the twilight codes, a rose alpenglow is composited over shade with an
+opacity that peaks about 15% of the way to the night elevation, is gone by 55%, and
+scales with the square of brightness relative to the sky share, so open slopes glow and
+gorges do not. GPU jobs run one at a time and wait on a fence before the next starts, so
+at most one tile of shadow work competes with map frames.
 
 Geometry and lighting are cached apart. Per tile the worker keeps up to 48 sky-view
 textures (keyed by the DEM mosaic) and 48 cast-shadow visibility textures (keyed by the

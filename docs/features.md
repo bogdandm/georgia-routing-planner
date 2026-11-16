@@ -925,25 +925,28 @@ from the Sun's side of the sky, joined after sunset by diffuse light as from thi
 so relief stays readable inside shadows; it fades out gradually over civil twilight into
 a faint night sky. Surrounding terrain hides part of that sky, so gorges and deep
 valleys get less of it than ridges and open slopes, also at night. Cast-shadow edges are
-softened over a few pixels. Flat ground in full sun keeps a light shade, so slopes
-turned to the Sun can still brighten. Darker pixels draw a semitransparent shade in the
-color of the sky that lights it: blue-grey by day, lilac with the Sun on the horizon,
-deep blue in the middle of civil twilight, and blue-grey again by night. Sunlit slopes
-get a faint highlight in a softened color of direct sunlight: white at midday, then
-yellow, orange, and red as the Sun sinks, computed from clear-air Rayleigh extinction
-along the path through the atmosphere, so summits stay whiter than valleys. As the Sun
-sinks, shadows also turn lighter and ground in direct sun gains a sunlight-colored glow;
-both fade out in twilight. Shortly after sunset, open slopes and summits that still see
-most of the sky glow rose (alpenglow) while gorges stay in plain shade; the glow is gone
-before the middle of civil twilight. While sun shadows draw, the fixed-light relief
-shading is hidden without changing its saved visibility, and it returns when they are
-turned off. The raster is drawn above relief, satellite imagery, land cover, contours,
-and lakes, so water bodies are shaded too, but below buildings, labels, and tracks; it
-drapes over 3D terrain, stays on while the weather map is shown, and is not drawn in
-comparison panes. Relief and cast shadows are computed from z7 up to z12, then
-overzoomed. Below z7, which in 3D also covers the distance toward the horizon, the layer
-shades flat sea-level ground for the same instant, without relief, so distant terrain
-and low zooms still follow daylight, sunset, and night.
+softened over a few pixels. Normally illuminated ground keeps the original basemap
+colors by day; brighter slopes gain highlights. Darker pixels draw a semitransparent
+shade in the color of the sky that lights it: blue-grey by day, lilac with the Sun on
+the horizon, deep blue in the middle of civil twilight, and blue-grey again by night.
+Sunlit slopes get a faint highlight in a softened color of direct sunlight: white at
+midday, then yellow, orange, and red as the Sun sinks, computed from clear-air Rayleigh
+extinction along the path through the atmosphere, so summits stay whiter than valleys.
+As the Sun sinks, shadows also turn lighter and ground in direct sun gains a
+sunlight-colored glow. Near the horizon that warm glow carries color through the neutral
+brightness transition without changing the shadow geometry or exposing a pale band
+between shade and light; daytime highlighting stays unchanged. Both effects fade out in
+twilight. Shortly after sunset, open slopes and summits that still see most of the sky
+glow rose (alpenglow) while gorges stay in plain shade; the glow is gone before the
+middle of civil twilight. While sun shadows draw, the fixed-light relief shading is
+hidden without changing its saved visibility, and it returns when they are turned off.
+The raster is drawn above relief, satellite imagery, land cover, contours, and lakes, so
+water bodies are shaded too, but below buildings, labels, and tracks; it drapes over 3D
+terrain, stays on while the weather map is shown, and is not drawn in comparison panes.
+Relief and cast shadows are computed from z7 up to z12, then overzoomed. Below z7, which
+in 3D also covers the distance toward the horizon, the layer shades flat sea-level
+ground for the same instant, without relief, so distant terrain and low zooms still
+follow daylight, sunset, and night.
 
 While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
 follow the Sun at the map center for the same instant: blue by day, twilight blue after

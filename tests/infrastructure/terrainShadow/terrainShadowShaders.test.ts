@@ -194,6 +194,52 @@ describe('createShadeLookupTable', () => {
     expect(highlightAlpha).toBeGreaterThan(litAlpha);
   });
 
+  it('keeps a warm sunset transition through neutral brightness instead of exposing a pale fringe', () => {
+    const sunset = {
+      ...palette,
+      highlightOpacity: 0.8,
+      highlightRolloff: 0.5,
+      shadowStrength: 1.4,
+      lowSunGlowOpacity: 0.43,
+    };
+    const skyShare = 0.45;
+    // A sunset boundary crosses these shade bytes even when visibility is blurred.
+    const code = 207;
+    for (const highlightOpacity of [sunset.highlightOpacity, 0]) {
+      const lookup = createShadeLookupTable({ ...sunset, highlightOpacity }, skyShare);
+      for (const shade of [110, 120, 127, 131, 134, 145]) {
+        const [red = 0, , blue = 0, alpha = 0] = entryBytes(lookup, code, shade);
+        expect(alpha).toBeGreaterThan(0.75 * sunset.lowSunGlowOpacity * 255);
+        expect(red - blue).toBeGreaterThan(100);
+      }
+      // The bridge must not warm terrain lit only by the sky.
+      expect(
+        entryBytes(lookup, code, Math.floor(skyShare * shadeBrightnessScale)),
+      ).toEqual(
+        entryBytes(
+          createShadeLookupTable(
+            { ...sunset, highlightOpacity, lowSunGlowOpacity: 0 },
+            skyShare,
+          ),
+          code,
+          Math.floor(skyShare * shadeBrightnessScale),
+        ),
+      );
+      const base = [230, 230, 220];
+      let previous: number[] | undefined;
+      for (let shade = 0; shade < 256; shade += 1) {
+        const rgba = entryBytes(lookup, code, shade);
+        const alpha = (rgba[3] ?? 0) / 255;
+        const composite = base.map(
+          (channel, index) => channel * (1 - alpha) + (rgba[index] ?? 0) * alpha,
+        );
+        if (previous !== undefined)
+          expect(largestByteDifference(previous, composite)).toBeLessThan(5);
+        previous = composite;
+      }
+    }
+  });
+
   it('keeps shadow lit only by the sky free of the warm sunlight glow', () => {
     const skyOnly = Math.floor(terrainShadeSkyLightShare * shadeBrightnessScale);
     const [red = 0, green = 0, blue = 0] = entryBytes(table, horizonCode, skyOnly);

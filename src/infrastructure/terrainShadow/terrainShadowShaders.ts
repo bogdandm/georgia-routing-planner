@@ -2,13 +2,20 @@ import {
   atmosphericSunlightModel,
   directSunlightColor,
   horizonAirMass,
+  kastenYoungAirMass,
   type SunlightColor,
 } from '@/domain/terrain/atmosphericSunlight';
-import { terrainShadowModel } from '@/domain/terrain/terrainShadow';
+import { solarPositionAt, subsolarPoint } from '@/domain/terrain/solarPosition';
 import {
+  terrainShadowModel,
+  visibleSolarDiskFraction,
+} from '@/domain/terrain/terrainShadow';
+import {
+  type TerrainShadowTileAddress,
   terrainShadowMosaicMarginTexels,
   terrainShadowMosaicSize,
   terrainShadowNightElevationDegrees,
+  terrainShadowTileGeometry,
   terrainShadowTileSize,
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
@@ -604,4 +611,103 @@ export function expandShadeMask(
     }
   }
   return pixels;
+}
+
+/**
+ * Shade mask of flat sea-level ground for a tile below `terrainShadowReliefMinZoom`,
+ * without DEM, slopes, or cast shadows: the shade pass's terms for a flat pixel whose
+ * horizon is the sea-level horizon (0°), so the direct Sun is the visible disk fraction
+ * normalized like the GPU and the sky term is its twilight fade. Brightness and sunlight
+ * codes are evaluated at the sunlight grid samples, as the GPU codes are, and brightness
+ * is interpolated bilinearly to pixels, so a tile costs 128² solar positions on the CPU.
+ */
+export function createFlatShadeMask(
+  tile: TerrainShadowTileAddress,
+  instantMs: number,
+): Uint8Array {
+  const mask = new Uint8Array(shadeMaskBytes);
+  const gridBrightness = new Float32Array(sunlightGridSize * sunlightGridSize);
+  const sun = subsolarPoint(new Date(instantMs));
+  const geometry = terrainShadowTileGeometry(tile);
+  const degreesPerRadian = 180 / Math.PI;
+  const flatReferenceSine = Math.sin(
+    terrainShadeFlatReferenceElevationDegrees / degreesPerRadian,
+  );
+  const night = terrainShadowNightElevationDegrees;
+  // GPU pixel centers sit at 0.5; grid samples are pixel (4i + 2, 4j + 2).
+  const sampleOffset = sunlightGridStride / 2 + 0.5;
+  for (let row = 0; row < sunlightGridSize; row += 1) {
+    const mercatorY =
+      geometry.northMercatorY -
+      (geometry.mercatorYSpan * (row * sunlightGridStride + sampleOffset)) /
+        terrainShadowTileSize;
+    const latitude =
+      (2 * Math.atan(Math.exp(mercatorY)) - Math.PI / 2) * degreesPerRadian;
+    for (let column = 0; column < sunlightGridSize; column += 1) {
+      const longitude =
+        (geometry.westLongitudeRadians +
+          (geometry.longitudeSpanRadians *
+            (column * sunlightGridStride + sampleOffset)) /
+            terrainShadowTileSize) *
+        degreesPerRadian;
+      const elevation = solarPositionAt(
+        sun,
+        latitude,
+        longitude,
+      ).apparentElevationDegrees;
+      const sine = Math.sin(elevation / degreesPerRadian);
+      const direct =
+        (visibleSolarDiskFraction(elevation, 0) * Math.max(sine, 0)) /
+        Math.max(sine, flatReferenceSine);
+      const twilight = Math.min(Math.max((elevation - night) / -night, 0), 1);
+      const sky = twilight * twilight * (3 - 2 * twilight);
+      const index = row * sunlightGridSize + column;
+      gridBrightness[index] =
+        (1 - terrainShadeSkyLightShare) * direct + terrainShadeSkyLightShare * sky;
+      // `sunlightCode` of the shade shader at sea level, where the horizon is 0°.
+      mask[tilePixels + index] =
+        elevation < 0
+          ? sunlightAirMassMaximumCode +
+            1 +
+            Math.floor(
+              (sunlightNightCode - sunlightAirMassMaximumCode - 1) * (1 - twilight) +
+                0.5,
+            )
+          : Math.floor(
+              sunlightAirMassMaximumCode *
+                Math.min(
+                  Math.max(
+                    Math.log(kastenYoungAirMass(elevation) / sunlightMinimumAirMass) /
+                      Math.log(horizonAirMass / sunlightMinimumAirMass),
+                    0,
+                  ),
+                  1,
+                ) +
+                0.5,
+            );
+    }
+  }
+  const weightSum = sunlightGridStride * sunlightGridStride;
+  for (let row = 0; row < terrainShadowTileSize; row += 1) {
+    const southWeight = sunlightGridWeight[row] ?? 0;
+    const northStart = (sunlightGridLower[row] ?? 0) * sunlightGridSize;
+    const southStart = northStart + (southWeight === 0 ? 0 : sunlightGridSize);
+    const northWeight = sunlightGridStride - southWeight;
+    for (let column = 0; column < terrainShadowTileSize; column += 1) {
+      const eastWeight = sunlightGridWeight[column] ?? 0;
+      const west = sunlightGridLower[column] ?? 0;
+      const east = west + (eastWeight === 0 ? 0 : 1);
+      const westWeight = sunlightGridStride - eastWeight;
+      const brightness =
+        ((gridBrightness[northStart + west] ?? 0) * westWeight * northWeight +
+          (gridBrightness[northStart + east] ?? 0) * eastWeight * northWeight +
+          (gridBrightness[southStart + west] ?? 0) * westWeight * southWeight +
+          (gridBrightness[southStart + east] ?? 0) * eastWeight * southWeight) /
+        weightSum;
+      mask[row * terrainShadowTileSize + column] = Math.round(
+        brightness * shadeBrightnessScale,
+      );
+    }
+  }
+  return mask;
 }

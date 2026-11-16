@@ -889,8 +889,10 @@ in twilight. While sun shadows draw, the fixed-light relief shading is hidden wi
 changing its saved visibility, and it returns when they are turned off. The raster is
 drawn above relief, satellite imagery, and land cover but below water, contours, labels,
 and tracks; it drapes over 3D terrain, stays on while the weather map is shown, and is
-not drawn in comparison panes. It appears from z7 and is computed up to z12, then
-overzoomed.
+not drawn in comparison panes. Relief and cast shadows are computed from z7 up to z12,
+then overzoomed. Below z7, which in 3D also covers the distance toward the horizon, the
+layer shades flat sea-level ground for the same instant, without relief, so distant
+terrain and low zooms still follow daylight, sunset, and night.
 
 While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
 follow the Sun at the map center for the same instant: blue by day, a horizon and haze

@@ -8,6 +8,7 @@ import {
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
+  createFlatShadeMask,
   createShadeLookupTable,
   expandShadeMask,
   fullscreenVertexShaderSource,
@@ -31,6 +32,7 @@ import {
   terrainShadowMosaicLevel,
   terrainShadowMosaicSize,
   terrainShadowMosaicTiles,
+  terrainShadowReliefMinZoom,
   terrainShadowTileGeometry,
   terrainShadowTileSize,
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
@@ -667,6 +669,20 @@ export class TerrainShadowRenderer {
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
     const gpu = this.ensureGpu();
     const generation = this.#generation;
+    // Coarse tiles shade flat ground on the CPU in a few milliseconds, so they never use
+    // the DEM, the GPU, or the mask cache.
+    if (request.z < terrainShadowReliefMinZoom) {
+      const startedAt = performance.now();
+      return {
+        mask: createFlatShadeMask(request, request.instantMs),
+        metrics: this.metrics({
+          computeMs: performance.now() - startedAt,
+          demFetchMs: 0,
+          cacheHit: false,
+          demTilesFetched: 0,
+        }),
+      };
+    }
     // Twilight playback frames are dark everywhere: no DEM, GPU work, or cache memory.
     if (isTerrainShadowNightTile(request, request.instantMs)) {
       return {

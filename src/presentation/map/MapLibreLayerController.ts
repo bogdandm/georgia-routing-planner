@@ -144,9 +144,9 @@ import {
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
-  terrainShadowMinZoom,
 } from '@/presentation/map/TerrainShadowTileProvider';
 import { terrainShadowPlaybackTileLimit } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
+import { terrainShadowReliefMinZoom } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type {
   MapLayerPreset,
@@ -1271,14 +1271,15 @@ export class MapLibreLayerController {
     }
     const frames = daylightFrameInstants(window, sunShadowPlaybackStepMinutes);
     // Public coverage ignores terrain-aware culling; tiles it misses load on demand.
+    // Coarser tiles shade flat ground without a cached mask, so only relief tiles prefetch.
     const tiles = new Map<string, TerrainShadowTileAddress>();
     for (const tile of map.coveringTiles({
       tileSize: 512,
-      minzoom: terrainShadowMinZoom,
       maxzoom: this.terrain.maxZoom,
       roundZoom: true,
     })) {
       const { z, x, y } = tile.canonical;
+      if (z < terrainShadowReliefMinZoom) continue;
       tiles.set(`${String(z)}/${String(x)}/${String(y)}`, { z, x, y });
     }
     // Only frames with the Sun near or above the horizon cache a mask; the worker answers

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { horizonAirMass } from '@/domain/terrain/atmosphericSunlight';
 import {
+  createFlatShadeMask,
   createShadeLookupTable,
   expandShadeMask,
   shadeBrightnessScale,
@@ -131,5 +132,39 @@ describe('expandShadeMask', () => {
       ),
     ).toEqual([0, 0, 1, 2, 254, 254, 254]);
     expect((pixels[rowStart + 4] ?? 0) & 0xff).toBe(7);
+  });
+});
+
+describe('createFlatShadeMask', () => {
+  // The z6 tile around Tbilisi: 39.4°–45° E, 41°–45.1° N.
+  const tile = { z: 6, x: 39, y: 23 };
+  const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
+  const codes = (mask: Uint8Array) => [...mask.subarray(tilePixels)];
+  const brightness = (mask: Uint8Array) => [...mask.subarray(0, tilePixels)];
+
+  it('shades flat ground in full sun as the neutral level and night as full shade', () => {
+    const noon = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 8, 30));
+    expect(new Set(brightness(noon))).toEqual(new Set([shadeBrightnessScale]));
+    expect(Math.max(...codes(noon))).toBeLessThan(sunlightAirMassMaximumCode / 2);
+
+    const night = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 22));
+    expect(new Set(brightness(night))).toEqual(new Set([0]));
+    expect(new Set(codes(night))).toEqual(new Set([sunlightNightCode]));
+  });
+
+  it('darkens and reddens toward the east while the Sun sets across the tile', () => {
+    const mask = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 17));
+    const middleRow = (terrainShadowTileSize / 2) * terrainShadowTileSize;
+    const middleGridRow = tilePixels + (sunlightGridSize / 2) * sunlightGridSize;
+
+    // The western edge still has a low Sun; the eastern one is past the sea-level sunset.
+    expect(mask[middleRow] ?? 0).toBeGreaterThan(terrainShadeSkyLightShare * 127);
+    expect(mask[middleRow + terrainShadowTileSize - 1] ?? 255).toBeLessThan(
+      terrainShadeSkyLightShare * 127,
+    );
+    expect(mask[middleGridRow] ?? 255).toBeLessThanOrEqual(sunlightAirMassMaximumCode);
+    expect(mask[middleGridRow + sunlightGridSize - 1] ?? 0).toBeGreaterThan(
+      sunlightAirMassMaximumCode,
+    );
   });
 });

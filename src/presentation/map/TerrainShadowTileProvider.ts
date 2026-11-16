@@ -66,7 +66,6 @@ export interface TerrainShadowTileProvider {
 }
 
 export const terrainShadowProtocolId = 'terrain-shadow';
-export const terrainShadowMinZoom = 7;
 /** Prefetch keeps the single GPU queue fed while the next DEM tiles download. */
 const terrainShadowPrefetchConcurrency = 4;
 

@@ -85,6 +85,11 @@ msgstr "Bing Aerial"
 msgid "Cancel"
 msgstr "Cancel"
 
+#. js-lingui-id: fBBDRJ
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Capture the map"
+msgstr "Capture the map"
+
 #. js-lingui-id: ROXMZ9
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Change image date, {date}"
@@ -331,6 +336,11 @@ msgstr "Map"
 msgid "Map dimension"
 msgstr "Map dimension"
 
+#. js-lingui-id: wYB6zw
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Map image copied to the clipboard"
+msgstr "Map image copied to the clipboard"
+
 #. js-lingui-id: 2TeMfD
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Map point"
@@ -538,6 +548,11 @@ msgstr "Sunrise {sunrise}"
 msgid "Sunset {sunset}"
 msgstr "Sunset {sunset}"
 
+#. js-lingui-id: TZglEu
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Take a screenshot"
+msgstr "Take a screenshot"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -552,6 +567,11 @@ msgstr "The current camera could not be saved. Map interaction is still availabl
 #: src/presentation/map/MapShareDialog.tsx
 msgid "The link could not be copied. Select it and copy it manually."
 msgstr "The link could not be copied. Select it and copy it manually."
+
+#. js-lingui-id: 9YnIgb
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The map image could not be copied."
+msgstr "The map image could not be copied."
 
 #. js-lingui-id: wvC5Wi
 #: src/presentation/map/MapShareDialog.tsx

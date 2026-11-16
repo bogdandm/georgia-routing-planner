@@ -85,6 +85,11 @@ msgstr "Аэроснимки Bing"
 msgid "Cancel"
 msgstr "Отмена"
 
+#. js-lingui-id: fBBDRJ
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Capture the map"
+msgstr "Снимок карты"
+
 #. js-lingui-id: ROXMZ9
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Change image date, {date}"
@@ -331,6 +336,11 @@ msgstr "Карта"
 msgid "Map dimension"
 msgstr "Режим карты"
 
+#. js-lingui-id: wYB6zw
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Map image copied to the clipboard"
+msgstr "Изображение карты скопировано в буфер обмена"
+
 #. js-lingui-id: 2TeMfD
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Map point"
@@ -538,6 +548,11 @@ msgstr "Восход {sunrise}"
 msgid "Sunset {sunset}"
 msgstr "Закат {sunset}"
 
+#. js-lingui-id: TZglEu
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Take a screenshot"
+msgstr "Сделать скриншот"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -552,6 +567,11 @@ msgstr "Не удалось сохранить текущий вид карты.
 #: src/presentation/map/MapShareDialog.tsx
 msgid "The link could not be copied. Select it and copy it manually."
 msgstr "Не удалось скопировать ссылку. Выделите её и скопируйте вручную."
+
+#. js-lingui-id: 9YnIgb
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The map image could not be copied."
+msgstr "Не удалось скопировать изображение карты."
 
 #. js-lingui-id: wvC5Wi
 #: src/presentation/map/MapShareDialog.tsx

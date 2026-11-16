@@ -42,6 +42,7 @@ import {
   type SunShadowBenchmarkHooks,
 } from '@/presentation/map/renderBenchmark';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import { captureMapPng } from '@/presentation/map/mapCapture';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import type {
   MapLibreLayerController,
@@ -716,6 +717,13 @@ export class MapLibreFacade implements MapFacade {
       name: 'map.navigation.requested',
       data: { status: 'accepted' },
     });
+  }
+
+  /** PNG of the map as drawn in the next frame, without controls; see `captureMapPng`. */
+  public captureMapImage(): Promise<Blob> {
+    const map = this.#map;
+    if (map === null) return Promise.reject(new Error('The map is not ready.'));
+    return captureMapPng(map);
   }
 
   public resetNorth(): void {

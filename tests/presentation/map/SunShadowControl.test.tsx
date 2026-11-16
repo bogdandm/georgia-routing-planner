@@ -60,6 +60,7 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
       onLayerPresetChange={() => 'map'}
       onTerrainModeChange={vi.fn()}
       terrainState="flat"
+      mapCapture={null}
       sunShadow={{
         enabled: false,
         instantMs: tbilisiNoonMs,

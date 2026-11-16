@@ -807,7 +807,12 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   starts three hours after today's sunrise at the map center (11:00 on a day without
   sunrise and sunset), whatever the user's clock says. The overlay is described in
   [Map, terrain, and persistence](#map-terrain-and-persistence).
-- **Image comparison:** on desktop, the compare button below the sun button opens the
+- **Map capture:** the camera button below the sun button opens a compact panel. **Take
+  a screenshot** copies a PNG of the map as currently drawn to the clipboard: the
+  rendered map with its labels, tracks, and shading, without controls, panels, markers,
+  popups, or the Sun disk overlay, at the canvas's device-pixel size. The panel reports
+  whether the copy succeeded.
+- **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing
   it again ends and discards the measurement. While it is on, primary map clicks add

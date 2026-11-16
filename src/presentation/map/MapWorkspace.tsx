@@ -62,6 +62,7 @@ import {
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
 import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
+import type { MapCaptureControlProps } from '@/presentation/map/MapCaptureControl';
 import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
@@ -1857,6 +1858,14 @@ export function MapWorkspace({
           },
           peek: sunShadowPeek,
         };
+  const mapCapture: MapCaptureControlProps = {
+    // The PNG promise goes straight into the clipboard item, so the write keeps the
+    // click's user activation while the next frame is read and encoded.
+    onCopyScreenshot: () =>
+      navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': facade.captureMapImage() }),
+      ]),
+  };
 
   // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.
   const mainMapHidden =
@@ -2079,6 +2088,7 @@ export function MapWorkspace({
               measurementActive={measurementActive}
               onMeasurementActiveChange={handleMeasurementActiveChange}
               sunShadow={sunShadowControl}
+              mapCapture={mapCapture}
             />
             {selectionCoordinate === null ||
             selectionCoordinate === undefined ||
@@ -2220,6 +2230,7 @@ export function MapWorkspace({
           measurementActive={measurementActive}
           onMeasurementActiveChange={handleMeasurementActiveChange}
           sunShadow={sunShadowControl}
+          mapCapture={mapCapture}
         />
       ) : null}
       <ElevationGradeLegend

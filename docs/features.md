@@ -923,6 +923,11 @@ as the camera rotates rather than across one view. MapLibre shows the haze only 
 about 60° pitch, fully from 70°. Without sun shadows the map keeps its plain background
 above the horizon.
 
+In 3D the Sun itself is drawn as a disk with a soft glow in the color of its light, at
+its true position for the camera. It is cut along the skyline of the terrain the map
+actually draws, so it sets behind ridges, and it fades as less of the disk stays
+visible.
+
 Shadow accuracy is limited by the data and the model:
 
 - The DEM is the Copernicus GLO-30 surface model via Mapterhorn (about 30 m source), so

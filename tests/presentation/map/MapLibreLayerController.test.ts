@@ -360,6 +360,31 @@ class FakeLayerMap {
   public getPitch(): number {
     return 34;
   }
+
+  readonly #canvasContainer = document.createElement('div');
+  readonly #canvas = this.#canvasContainer.appendChild(
+    document.createElement('canvas'),
+  );
+
+  public getCanvasContainer(): HTMLElement {
+    return this.#canvasContainer;
+  }
+
+  public getCanvas(): HTMLCanvasElement {
+    return this.#canvas;
+  }
+
+  public getRoll(): number {
+    return 0;
+  }
+
+  public getVerticalFieldOfView(): number {
+    return 36.87;
+  }
+
+  public getPadding(): Record<'top' | 'right' | 'bottom' | 'left', number> {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
 }
 
 function scene(

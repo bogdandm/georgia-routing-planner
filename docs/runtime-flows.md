@@ -279,6 +279,16 @@ at once. Turning shadows off sets a transparent sky without fog, which draws lik
 style without `sky`; a map that never drew shadows keeps no sky. Every sky property is
 set each time because MapLibre keeps properties a later `setSky` omits.
 
+The Sun disk (`presentation/map/sunDiskOverlay.ts`) is one `pointer-events: none`
+element right above the map canvas, created by the layer controller for each attached
+map and fed the same Sun as the sky. On every `move` it projects the Sun's direction
+with MapLibre's camera rotation, field of view, and padded center. At most every 100 ms,
+and on `moveend`, `terrain`, and a new Sun, it marches the skyline in seven screen
+columns across the halo over the DEM tiles MapLibre currently draws (its terrain
+coverage index, flat mercator terrain without curvature, clipped at the far plane) and
+clips the element with a polygon along that skyline; the halo fades by the visible disk
+fraction. It hides without 3D terrain and below −1° apparent elevation.
+
 The session instant starts at the current time. On the first reconciliation with a map,
 a start time outside sunrise–sunset at the map center becomes 11:00 of that local day,
 so the map never opens fully shaded; the panel's **Now** applies the same rule. An

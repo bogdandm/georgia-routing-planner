@@ -57,6 +57,10 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 import { selectNearestForecastTimeIndex } from '@/domain/weather/selectNearestForecastTime';
+import {
+  directSunlightColor,
+  relativeOpticalAirMass,
+} from '@/domain/terrain/atmosphericSunlight';
 import { solarPosition } from '@/domain/terrain/solarPosition';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
@@ -153,6 +157,7 @@ import {
   terrainShadowPlaybackTileLimit,
   terrainShadowReliefMinZoom,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
+import { SunDiskOverlay } from '@/presentation/map/sunDiskOverlay';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type {
   MapLayerPreset,
@@ -1073,6 +1078,8 @@ export class MapLibreLayerController {
   #sunShadowPlaybackIndex = 0;
   /** True until the session's start instant (now) was checked against the map's night. */
   #sunShadowInstantIsSessionStart = true;
+  /** Sun disk over the 3D map while shadows draw; present while a map is attached. */
+  #sunDisk: SunDiskOverlay | null = null;
   readonly #releaseSunShadowAvailability: () => void;
   #appliedVisualMode: MapVisualMode | null = null;
   readonly #satelliteBasemapSources = new Map<string, Source>();
@@ -1245,6 +1252,8 @@ export class MapLibreLayerController {
     map.on('styledata', this.handleStyleData);
     map.on('movestart', this.handleSunShadowPlaybackMove);
     map.on('rotate', this.handleSunShadowSkyRotate);
+    this.#sunDisk?.dispose();
+    this.#sunDisk = new SunDiskOverlay(map);
     map.on('error', this.handleTerrainOverlayError);
     map.on('sourcedata', this.handleSourceData);
     map.on('dataloading', this.handleWeatherMapDataLoading);
@@ -1579,6 +1588,8 @@ export class MapLibreLayerController {
     map.off('styledata', this.handleStyleData);
     map.off('movestart', this.handleSunShadowPlaybackMove);
     map.off('rotate', this.handleSunShadowSkyRotate);
+    this.#sunDisk?.dispose();
+    this.#sunDisk = null;
     map.off('error', this.handleTerrainOverlayError);
     map.off('sourcedata', this.handleSourceData);
     map.off('dataloading', this.handleWeatherMapDataLoading);
@@ -3975,7 +3986,8 @@ export class MapLibreLayerController {
    * 3D camera shows the horizon, and MapLibre draws fog only over 3D terrain from 60°
    * pitch, so 2D needs no separate rule. The style's zero `transition` also applies to
    * the sky, so day playback never fades between frames. `setSky` repaints on every call,
-   * so an unchanged sky is skipped.
+   * so an unchanged sky is skipped. The Sun disk follows the same Sun; it shows itself
+   * only over 3D terrain.
    */
   private reconcileSunShadowSky(map: MapLibreMap, wanted: boolean): void {
     // MapLibre types omit it, but a style without `sky` returns undefined.
@@ -3989,12 +4001,22 @@ export class MapLibreLayerController {
         center.lat,
         center.lng,
       );
+      const centerElevationMeters =
+        terrain === null ? 0 : map.getCenterElevation() / (terrain.exaggeration ?? 1);
+      this.#sunDisk?.setSun({
+        azimuthDegrees: sun.azimuthDegrees,
+        apparentElevationDegrees: sun.apparentElevationDegrees,
+        color: directSunlightColor(
+          relativeOpticalAirMass(sun.apparentElevationDegrees, centerElevationMeters),
+        ),
+      });
       sky = createSunShadowSky(
         sun.apparentElevationDegrees,
-        terrain === null ? 0 : map.getCenterElevation() / (terrain.exaggeration ?? 1),
+        centerElevationMeters,
         Math.cos(((map.getBearing() - sun.azimuthDegrees) * Math.PI) / 180),
       );
     } else {
+      this.#sunDisk?.setSun(null);
       if (applied === undefined) return;
       sky = sunShadowSkyOff;
     }

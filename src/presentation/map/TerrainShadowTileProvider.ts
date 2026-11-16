@@ -94,7 +94,8 @@ const tileAddressPattern = new RegExp(
   'u',
 );
 
-function parseShadowColor(hex: string): readonly [number, number, number] {
+/** Channels 0–255 of an opaque `#RRGGBB` sun-shadow or sun-sky palette color. */
+export function parseShadowColor(hex: string): readonly [number, number, number] {
   const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/iu.exec(hex);
   if (match?.[1] === undefined || match[2] === undefined || match[3] === undefined) {
     throw new Error('The sun shadow palette color must be #RRGGBB.');

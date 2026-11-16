@@ -892,6 +892,13 @@ and tracks; it drapes over 3D terrain, stays on while the weather map is shown, 
 not drawn in comparison panes. It appears from z7 and is computed up to z12, then
 overzoomed.
 
+While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
+follow the Sun at the map center for the same instant: blue by day, a horizon and haze
+in the color of direct sunlight near sunset and sunrise (the same atmosphere as the
+shadow tones, seen from the center's height), twilight blue after sunset, and dark by
+the end of civil twilight. MapLibre shows the haze only from about 60° pitch, fully from
+70°. Without sun shadows the map keeps its plain background above the horizon.
+
 Shadow accuracy is limited by the data and the model:
 
 - The DEM is the Copernicus GLO-30 surface model via Mapterhorn (about 30 m source), so

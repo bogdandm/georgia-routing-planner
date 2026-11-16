@@ -258,6 +258,18 @@ camera moves (pan, rotate, pitch, 3D) never recompute, because MapLibre's tile c
 the worker's mask cache already hold the tiles; returning to an earlier minute hits the
 mask cache. Compare panes never add the source.
 
+The same reconciliation sets the style `sky` while shadows draw (`createSunShadowSky` in
+`terrainOverlayStyle.ts`): the Sun's apparent elevation at the map center and the shadow
+instant blends the day, twilight, and night `sunSky` palette colors (day above 10°,
+twilight from −1° to the −6° night elevation), and between 14° and −4° the horizon and
+fog colors mix in up to 85% and 60% of `directSunlightColor` for the relative optical
+air mass at the center's terrain height (exaggeration removed), strongest about 1° above
+the horizon. Channels are rounded and an unchanged sky is not set again, because
+`setSky` repaints. The style's zero `transition` makes each playback frame's sky apply
+at once. Turning shadows off sets a transparent sky without fog, which draws like a
+style without `sky`; a map that never drew shadows keeps no sky. Every sky property is
+set each time because MapLibre keeps properties a later `setSky` omits.
+
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates
 the module worker on the first tile request. Requests wait while the map is dragged,
 zoomed, or rotated, through the same interaction signal as contours; aborted requests

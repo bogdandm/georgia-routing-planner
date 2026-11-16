@@ -5,6 +5,7 @@ import {
   type GeoJSONSource,
   type Map as MapLibreMap,
   type MapSourceDataEvent,
+  type SkySpecification,
   type Source,
 } from 'maplibre-gl';
 import type {
@@ -56,6 +57,7 @@ import {
   type SatelliteScene,
 } from '@/domain/satellite/SatelliteScene';
 import { selectNearestForecastTimeIndex } from '@/domain/weather/selectNearestForecastTime';
+import { solarPosition } from '@/domain/terrain/solarPosition';
 import type { SavedMarker } from '@/domain/markers/savedMarker';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import { createBasemapImage } from '@/presentation/map/basemapSymbols';
@@ -105,9 +107,11 @@ import {
   createContourLineLayer,
   createReliefShadeLayer,
   createSunShadowLayer,
+  createSunShadowSky,
   createSunShadowSource,
   createTerrainContourSource,
   createTerrainDemSource,
+  sunShadowSkyOff,
   type TerrainOverlaySnapshot,
 } from '@/presentation/map/terrainOverlayStyle';
 import {
@@ -3708,8 +3712,8 @@ export class MapLibreLayerController {
    * Keeps the sun-shadow raster directly below the minor contours while shadows are on
    * and the browser can render them, and removes it otherwise. Once it draws, the
    * fixed-light relief hillshade is excluded through its zoom range because the shadow
-   * layer already shades relief for the real sun. A failure only logs: the relief and
-   * contours keep working without shadows.
+   * layer already shades relief for the real sun, and the 3D sky follows the same instant.
+   * A failure only logs: the relief and contours keep working without shadows.
    */
   private reconcileSunShadow(map: MapLibreMap): void {
     const wanted =
@@ -3738,6 +3742,7 @@ export class MapLibreLayerController {
           map.removeSource(mapSourceIds.terrainSunShadow);
         }
         this.#appliedSunShadowTileUrl = null;
+        this.reconcileSunShadowSky(map, false);
         return;
       }
       // Every path that enables shadows or moves the instant passes here, including a
@@ -3783,9 +3788,43 @@ export class MapLibreLayerController {
       }
       // Last, so a failed shadow setup never leaves the map without any relief shading.
       setReliefHidden(true);
+      this.reconcileSunShadowSky(map, true);
     } catch {
       this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
     }
+  }
+
+  /**
+   * Tints the sky and distant haze for the Sun at the map center and the shadow instant,
+   * seen from the center's terrain height, while shadows draw. Turning shadows off sets the
+   * transparent `sunShadowSkyOff`, which draws like a style without sky; a map that never
+   * drew shadows keeps its style untouched. Only a pitched 3D camera shows the horizon,
+   * and MapLibre draws fog only over 3D terrain from 60° pitch, so 2D needs no separate
+   * rule. The style's zero `transition` also applies to the sky, so day playback never
+   * fades between frames. `setSky` repaints on every call, so an unchanged sky is skipped.
+   */
+  private reconcileSunShadowSky(map: MapLibreMap, wanted: boolean): void {
+    // MapLibre types omit it, but a style without `sky` returns undefined.
+    const applied = map.getSky() as SkySpecification | undefined;
+    let sky: SkySpecification;
+    if (wanted) {
+      const center = map.getCenter();
+      const terrain = map.getTerrain();
+      const sun = solarPosition(
+        new Date(this.#sunShadowInstantMs),
+        center.lat,
+        center.lng,
+      );
+      sky = createSunShadowSky(
+        sun.apparentElevationDegrees,
+        terrain === null ? 0 : map.getCenterElevation() / (terrain.exaggeration ?? 1),
+      );
+    } else {
+      if (applied === undefined) return;
+      sky = sunShadowSkyOff;
+    }
+    if (JSON.stringify(applied) === JSON.stringify(sky)) return;
+    map.setSky(sky);
   }
 
   /**

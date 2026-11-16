@@ -4,18 +4,27 @@ import type {
   RasterDEMSourceSpecification,
   RasterLayerSpecification,
   RasterSourceSpecification,
+  SkySpecification,
   SymbolLayerSpecification,
   VectorSourceSpecification,
 } from 'maplibre-gl';
 
 import type { TerrainDemTileSize } from '@/application/ports/MapLayerPreferencesRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
+import {
+  directSunlightColor,
+  relativeOpticalAirMass,
+} from '@/domain/terrain/atmosphericSunlight';
+import { terrainShadowNightElevationDegrees } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 import { mapSourceIds, terrainOverlayLayerIds } from '@/presentation/map/mapIds';
 import {
   mapVisualModePaint,
   mapVisualPalette,
 } from '@/presentation/map/mapVisualPalette';
-import { terrainShadowMinZoom } from '@/presentation/map/TerrainShadowTileProvider';
+import {
+  parseShadowColor,
+  terrainShadowMinZoom,
+} from '@/presentation/map/TerrainShadowTileProvider';
 
 // Contour vector tiles stop at the DEM's z12 and are overzoomed; line widths keep growing
 // to this display zoom so close-up contours stay as legible as before.
@@ -89,6 +98,113 @@ export function createSunShadowLayer(): RasterLayerSpecification {
       'raster-fade-duration': 0,
       'raster-resampling': 'linear',
     },
+  };
+}
+
+type SkyRgb = readonly [red: number, green: number, blue: number];
+
+function parseSkyTone(tone: {
+  readonly sky: string;
+  readonly horizon: string;
+  readonly fog: string;
+}): Record<'sky' | 'horizon' | 'fog', SkyRgb> {
+  return {
+    sky: parseShadowColor(tone.sky),
+    horizon: parseShadowColor(tone.horizon),
+    fog: parseShadowColor(tone.fog),
+  };
+}
+
+const skyTones = {
+  day: parseSkyTone(mapVisualPalette.terrain.sunSky.day),
+  twilight: parseSkyTone(mapVisualPalette.terrain.sunSky.twilight),
+  night: parseSkyTone(mapVisualPalette.terrain.sunSky.night),
+};
+/** The day sky turns into the twilight blue as the Sun sinks through this range. */
+const skyDayDegrees = { full: 10, end: -1 };
+/** The sunlight-colored horizon glow fades in below `fadeIn` and out below `fadeOut`. */
+const skyGlowDegrees = { fadeIn: 14, full: 1, fadeOut: -4 };
+/** Share of the direct sunlight color in the horizon band and the haze at full glow. */
+const skyGlowStrength = { horizon: 0.85, fog: 0.6 };
+/**
+ * MapLibre keeps every sky property that a later `setSky` omits, so both specifications
+ * below set all of them. Fog starts halfway to the far plane and turns toward the horizon
+ * color over its last fifth; the sky blends from the horizon color over 80% of the half
+ * screen above the horizon. The atmosphere only draws on the globe.
+ */
+const skyBlends = {
+  'fog-ground-blend': 0.5,
+  'horizon-fog-blend': 0.8,
+  'sky-horizon-blend': 0.8,
+  'atmosphere-blend': 0,
+} as const satisfies SkySpecification;
+
+/** Transparent sky and no fog: what MapLibre draws for a style without `sky`. */
+export const sunShadowSkyOff: SkySpecification = {
+  'sky-color': 'transparent',
+  'horizon-color': 'transparent',
+  'fog-color': 'transparent',
+  ...skyBlends,
+  'fog-ground-blend': 1,
+};
+
+function smoothstep(edge0: number, edge1: number, value: number): number {
+  const t = Math.min(Math.max((value - edge0) / (edge1 - edge0), 0), 1);
+  return t * t * (3 - 2 * t);
+}
+
+function mixSkyRgb(from: SkyRgb, to: SkyRgb, weight: number): SkyRgb {
+  return [
+    from[0] + (to[0] - from[0]) * weight,
+    from[1] + (to[1] - from[1]) * weight,
+    from[2] + (to[2] - from[2]) * weight,
+  ];
+}
+
+function skyColor(rgb: SkyRgb): string {
+  return `rgb(${rgb.map((channel) => String(Math.round(channel))).join(', ')})`;
+}
+
+/**
+ * 3D sky and distant haze for the Sun at `apparentElevationDegrees` seen from
+ * `elevationMeters`. The day palette turns into twilight blue as the Sun sinks from 10° to
+ * 1° below the horizon and into night by the shadows' night elevation (end of civil
+ * twilight). The horizon band and the haze take on the direct sunlight color of
+ * `directSunlightColor`, the same Rayleigh extinction that tints the shadows, from 14°
+ * down to 4° below the horizon, strongest about 1° above it. Channels are rounded, so
+ * nearby instants give an identical specification.
+ */
+export function createSunShadowSky(
+  apparentElevationDegrees: number,
+  elevationMeters: number,
+): SkySpecification {
+  const elevation = apparentElevationDegrees;
+  const twilight = smoothstep(
+    terrainShadowNightElevationDegrees,
+    skyDayDegrees.end,
+    elevation,
+  );
+  const day = smoothstep(skyDayDegrees.end, skyDayDegrees.full, elevation);
+  const glow =
+    smoothstep(skyGlowDegrees.fadeOut, skyGlowDegrees.full, elevation) *
+    (1 - smoothstep(skyGlowDegrees.full, skyGlowDegrees.fadeIn, elevation));
+  const [red, green, blue] = directSunlightColor(
+    relativeOpticalAirMass(elevation, elevationMeters),
+  );
+  const sunlight: SkyRgb = [red * 255, green * 255, blue * 255];
+  const tone = (part: 'sky' | 'horizon' | 'fog') =>
+    mixSkyRgb(
+      mixSkyRgb(skyTones.night[part], skyTones.twilight[part], twilight),
+      skyTones.day[part],
+      day,
+    );
+  return {
+    'sky-color': skyColor(tone('sky')),
+    'horizon-color': skyColor(
+      mixSkyRgb(tone('horizon'), sunlight, skyGlowStrength.horizon * glow),
+    ),
+    'fog-color': skyColor(mixSkyRgb(tone('fog'), sunlight, skyGlowStrength.fog * glow)),
+    ...skyBlends,
   };
 }
 

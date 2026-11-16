@@ -71,6 +71,8 @@ class FakeLayerMap {
   sourceLoaded = true;
   terrain: unknown = null;
   readonly terrainCalls: unknown[] = [];
+  sky: unknown = undefined;
+  skyCalls = 0;
   loadSourceOnNextSourceDataSubscription = false;
   styleLoaded = true;
   directRasterSourceAdds = 0;
@@ -304,6 +306,20 @@ class FakeLayerMap {
     this.terrain = terrain;
     this.fire('terrain', { terrain });
   }
+
+  public getSky(): unknown {
+    return this.sky;
+  }
+
+  public setSky(sky: unknown): void {
+    this.skyCalls += 1;
+    this.sky = sky;
+  }
+
+  public getCenterElevation(): number {
+    return 0;
+  }
+
   public getBounds(): {
     readonly getWest: () => number;
     readonly getSouth: () => number;
@@ -2736,6 +2752,45 @@ describe('MapLibreLayerController', () => {
     expect(mapLayerStore.getState().visibility['terrain-relief']).toBe(
       storedVisibility,
     );
+  });
+
+  it('tints the sky for the shadow instant, skips unchanged skies, and clears it when off', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+    // A map that never drew shadows keeps a style without sky.
+    expect(map.skyCalls).toBe(0);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(map.sky).toMatchObject({
+      'sky-color': 'rgb(93, 155, 219)',
+      'horizon-color': 'rgb(213, 228, 240)',
+    });
+    const callsAtNoon = map.skyCalls;
+    for (let index = 0; index < 3; index += 1) map.fire('styledata', {});
+    expect(map.skyCalls).toBe(callsAtNoon);
+
+    const window = daylightWindow(
+      shadowInstantMs,
+      { latitude: 42.71, longitude: 43.14 },
+      'Asia/Tbilisi',
+    );
+    if (window === null) throw new Error('The Caucasus has a sunset.');
+    controller.setSunShadow({ enabled: true, instantMs: window.sunsetMs });
+    const horizon = /^rgb\((\d+), (\d+), (\d+)\)$/u
+      .exec(String((map.sky as Record<string, unknown>)['horizon-color']))
+      ?.slice(1)
+      .map(Number);
+    // Warm sunset glow: red well above blue, unlike the pale blue noon horizon.
+    expect((horizon?.[0] ?? 0) - (horizon?.[2] ?? 0)).toBeGreaterThan(80);
+
+    controller.setSunShadow({ enabled: false, instantMs: window.sunsetMs });
+    expect(map.sky).toMatchObject({
+      'sky-color': 'transparent',
+      'fog-color': 'transparent',
+      'fog-ground-blend': 1,
+    });
   });
 
   describe('day playback', () => {

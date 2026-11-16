@@ -86,14 +86,14 @@ export const shadeBrightnessScale = 127;
  */
 export const terrainShadeFlatReferenceElevationDegrees = 10;
 /** Gaussian σ of the cast-shadow soft edge, in output pixels. */
-export const terrainShadowSoftEdgeSigmaPixels = 1;
+export const terrainShadowSoftEdgeSigmaPixels = 1.7;
 /**
  * Share of flat ground's full-sun brightness that comes from the sky rather than the
  * direct Sun. The sky term keeps relief inside shadows; the twilight sky fades out
  * smoothly over civil twilight down to the night elevation, giving way to the faint
  * `terrainShadeNightSkyLight`.
  */
-export const terrainShadeSkyLightShare = 0.35;
+export const terrainShadeSkyLightShare = 0.45;
 /**
  * The sky is brightest toward the Sun, so part of its light is a softly wrapped Lambert
  * light from the Sun's azimuth at this elevation, on slopes exaggerated by
@@ -107,7 +107,7 @@ const skyLightReliefExaggeration = 1.5;
  * max(1 − strength · (1 − occlusion), 0), so above 1 gorges darken faster than the open
  * sky share alone would.
  */
-const skyOcclusionStrength = 1.75;
+const skyOcclusionStrength = 2.55;
 /**
  * After sunset part of the sky light becomes diffuse, as from a thin cloud layer that
  * keeps scattering light: it depends only on how much sky a slope faces, not on the Sun's
@@ -115,7 +115,7 @@ const skyOcclusionStrength = 1.75;
  * full contrast; the diffuse share grows to this fraction as the Sun crosses
  * ±`diffuseSkyTransitionDegrees` around the horizon.
  */
-export const terrainShadeDiffuseSkyFraction = 0.5;
+export const terrainShadeDiffuseSkyFraction = 0.52;
 const diffuseSkyTransitionDegrees = 2;
 /**
  * Share of the sky light that remains at night (airglow, starlight, and city glow seen as
@@ -123,18 +123,18 @@ const diffuseSkyTransitionDegrees = 2;
  * its diffuse visible sky only, and no longer depends on the Sun, so every night instant
  * of a tile shares one mask while gorges stay darker than ridges and open ground.
  */
-export const terrainShadeNightSkyLight = 0.6;
+export const terrainShadeNightSkyLight = 0.58;
 /**
- * Optional light from overhead after the blue hour, so peaks and ridges stay readable at
+ * Light from overhead after the blue hour, so peaks and ridges stay readable at
  * night. Unlike the night sky it adds to the brightness directly, not through the sky-light
  * share, so it never changes daylight shading. It lights a slope by its (1.5×
  * exaggerated) zenith Lambert term times the terrain's sky occlusion raised to
  * `focus`: higher focus keeps it on open crests and out of valleys. It fades in from half
  * the night elevation (−3°) to the night elevation (−6°) and is constant below, so night
- * tiles still share one mask. 0 by default.
+ * tiles still share one mask.
  */
-export const terrainShadeNightTopLight = 0;
-export const terrainShadeNightTopLightFocus = 2;
+export const terrainShadeNightTopLight = 0.25;
+export const terrainShadeNightTopLightFocus = 3.9;
 
 /**
  * Shade-pass lighting the GPU reads as uniforms, so new values recompute shade masks
@@ -682,7 +682,7 @@ function sunlightTone(code: number): SunlightTone {
  * How much of the physical sunlight hue reaches the overlay. Eyes and cameras adapt to the
  * warm light, and a fully saturated tint reads as orange paint over imagery.
  */
-export const sunlightTintStrength = 0.75;
+export const sunlightTintStrength = 0.56;
 
 /**
  * Default brightness the overlay leaves untouched. It sits above flat ground in full sun
@@ -690,7 +690,7 @@ export const sunlightTintStrength = 0.75;
  * in two steps: first the shade fades, then the highlight grows up to the compressed
  * maximum of 2. With the neutral at 1, every lit slope already had no shade left to lose.
  */
-export const shadeNeutralBrightness = 1.45;
+export const shadeNeutralBrightness = 1.55;
 const shadeMaximumBrightness = 2;
 
 /**

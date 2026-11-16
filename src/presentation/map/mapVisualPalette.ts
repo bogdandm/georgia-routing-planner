@@ -72,16 +72,16 @@ export const mapVisualPalette = {
      * glow rose (`sunAlpenglow`, at most `sunAlpenglowOpacity`). Colors are opaque
      * `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
      */
-    sunShadow: '#1C2A40',
-    sunShadowOpacity: 0.5,
+    sunShadow: '#19355D',
+    sunShadowOpacity: 0.66,
     sunHighlight: '#FFF7E6',
-    sunHighlightOpacity: 0.6,
-    sunGoldenShadow: '#46356E',
+    sunHighlightOpacity: 0.8,
+    sunGoldenShadow: '#3B2867',
     sunLowShadow: '#2E3F7A',
     sunLowShadowLift: 0.25,
-    sunLowGlowOpacity: 0.5,
+    sunLowGlowOpacity: 0.43,
     sunAlpenglow: '#F0A3B8',
-    sunAlpenglowOpacity: 0.6,
+    sunAlpenglowOpacity: 0.32,
     /**
      * 3D sky while sun shadows draw: the `sky` color overhead, the `horizon` band, and the
      * distant `fog` over terrain, for full day, the twilight blue around sunset, and night.
@@ -92,7 +92,7 @@ export const mapVisualPalette = {
       day: { sky: '#5D9BDB', horizon: '#D5E4F0', fog: '#CFDCE7' },
       twilight: { sky: '#2D4278', horizon: '#7D7FAE', fog: '#5A6390' },
       night: { sky: '#0A0F1E', horizon: '#161E36', fog: '#121A2C' },
-      antisolarHorizon: '#D9A6B3',
+      antisolarHorizon: '#AE98EC',
     },
   },
   restricted: {

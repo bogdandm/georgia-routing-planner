@@ -35,13 +35,13 @@ describe('terrain lighting tuning', () => {
     expect(
       JSON.parse(formatTerrainLightingTuning(defaultTerrainLightingTuning)),
     ).toMatchObject({
-      sunShadowOpacity: 0.5,
-      shadeNeutralBrightness: 1.45,
-      terrainShadeSkyLightShare: 0.35,
-      skyOcclusionStrength: 1.75,
-      sunShadow: '#1C2A40',
+      sunShadowOpacity: 0.66,
+      shadeNeutralBrightness: 1.55,
+      terrainShadeSkyLightShare: 0.45,
+      skyOcclusionStrength: 2.55,
+      sunShadow: '#19355D',
       'sunSky.day.sky': '#5D9BDB',
-      'skyBlends.fog-ground-blend': 0.5,
+      'skyBlends.fog-ground-blend': 0.38,
     });
   });
 
@@ -84,7 +84,7 @@ describe('terrain lighting tuning', () => {
 
     resetTerrainLighting('light');
     expect(terrainLightingTuningStore.getState().values).toMatchObject({
-      sunShadowOpacity: 0.5,
+      sunShadowOpacity: 0.66,
       skyOcclusionStrength: 2.5,
       sunAlpenglow: '#000000',
     });

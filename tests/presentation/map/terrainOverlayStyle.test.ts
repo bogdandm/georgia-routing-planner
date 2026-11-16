@@ -107,11 +107,23 @@ describe('terrain overlay style contracts', () => {
     );
     expect(towardRed - towardBlue).toBeGreaterThan(awayRed - awayBlue);
     expect(awayBlue).toBeGreaterThan(awayGreen);
-    // Sunlit haze stays warmer than blue on both sides, most of all toward the Sun.
-    const [towardFogRed = 0, , towardFogBlue = 0] = skyChannels(toward['fog-color']);
+    // Sunlit haze stays warmer than blue on both sides; with a stronger glow toward the
+    // Sun than away from it, it is warmest toward the Sun.
     const [awayFogRed = 0, , awayFogBlue = 0] = skyChannels(away['fog-color']);
     expect(awayFogRed).toBeGreaterThan(awayFogBlue);
-    expect(towardFogRed - towardFogBlue).toBeGreaterThan(awayFogRed - awayFogBlue);
+    const directional: SunShadowAtmosphere = {
+      ...atmosphere,
+      glowStrength: { ...atmosphere.glowStrength, fog: 0.8, awayFog: 0.3 },
+    };
+    const [towardFogRed = 0, , towardFogBlue = 0] = skyChannels(
+      createSunShadowSky(1, 0, 1, directional)['fog-color'],
+    );
+    const [directionalAwayRed = 0, , directionalAwayBlue = 0] = skyChannels(
+      createSunShadowSky(1, 0, -1, directional)['fog-color'],
+    );
+    expect(towardFogRed - towardFogBlue).toBeGreaterThan(
+      directionalAwayRed - directionalAwayBlue,
+    );
   });
 
   it('draws a tuned atmosphere: its colors, glow strengths, and blends', () => {

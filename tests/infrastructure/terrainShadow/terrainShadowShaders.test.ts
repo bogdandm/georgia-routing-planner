@@ -15,6 +15,7 @@ import {
   sunlightMinimumAirMass,
   sunlightNightCode,
   terrainShadeNightSkyLight,
+  terrainShadeNightTopLight,
   terrainShadeSkyLightShare,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { terrainShadowTileSize } from '@/infrastructure/terrainShadow/terrainShadowTiles';
@@ -210,7 +211,7 @@ describe('createFlatShadeMask', () => {
   const codes = (mask: Uint8Array) => [...mask.subarray(tilePixels)];
   const brightness = (mask: Uint8Array) => [...mask.subarray(0, tilePixels)];
 
-  it('shades flat ground in full sun as the neutral level and night by the night sky', () => {
+  it('shades flat ground in full sun as the neutral level and night by the night lights', () => {
     const noon = createFlatShadeMask(
       tile,
       Date.UTC(2026, 6, 1, 8, 30),
@@ -227,7 +228,9 @@ describe('createFlatShadeMask', () => {
     expect(new Set(brightness(night))).toEqual(
       new Set([
         Math.round(
-          terrainShadeSkyLightShare * terrainShadeNightSkyLight * shadeBrightnessScale,
+          (terrainShadeSkyLightShare * terrainShadeNightSkyLight +
+            terrainShadeNightTopLight) *
+            shadeBrightnessScale,
         ),
       ]),
     );

@@ -270,14 +270,14 @@ twilight from −1° to the −6° night elevation). MapLibre's sky and fog have
 so direction comes from the camera: with c the cosine between the bearing and the Sun's
 azimuth, between 14° and −4° the horizon and fog mix in `directSunlightColor` for the
 relative optical air mass at the center's terrain height (exaggeration removed), up to
-15% + 70% · ((1 + c) / 2)² and 35% + 25% · ((1 + c) / 2)², strongest about 1° above the
-horizon; from 6° above to 5° below the horizon the horizon also mixes in up to 60% · ((1
-− c) / 2)² of the rose `antisolarHorizon`. A `rotate` listener reapplies the sky while
-the camera turns. Channels are rounded and an unchanged sky is not set again, because
-`setSky` repaints. The style's zero `transition` makes each playback frame's sky apply
-at once. Turning shadows off sets a transparent sky without fog, which draws like a
-style without `sky`; a map that never drew shadows keeps no sky. Every sky property is
-set each time because MapLibre keeps properties a later `setSky` omits.
+22% + 40% · ((1 + c) / 2)² and an even 53%, strongest about 1° above the horizon; from
+6° above to 5° below the horizon the horizon also mixes in up to 76% · ((1 − c) / 2)² of
+the rose `antisolarHorizon`. A `rotate` listener reapplies the sky while the camera
+turns. Channels are rounded and an unchanged sky is not set again, because `setSky`
+repaints. The style's zero `transition` makes each playback frame's sky apply at once.
+Turning shadows off sets a transparent sky without fog, which draws like a style without
+`sky`; a map that never drew shadows keeps no sky. Every sky property is set each time
+because MapLibre keeps properties a later `setSky` omits.
 
 The Sun disk (`presentation/map/sunDiskOverlay.ts`) is one `pointer-events: none`
 element right above the map canvas, created by the layer controller for each attached
@@ -312,60 +312,61 @@ disk. The horizon is never taken below the pixel's sea-level horizon (the tangen
 sea-level sphere under the same curvature model, about 2.1° below a 5000 m summit), so
 summits keep the last light while the Sun is already below their level and the sea
 beyond the 100 km march cap still hides it. The shade pass blurs that fraction with a
-5×5 Gaussian (σ = 1 px) and multiplies it by Lambert lighting from finest-mosaic central
-differences, normalized so flat ground in full sun (or at 10° elevation for lower suns)
-is 1. The slope term reaches zero exactly where the march begins to report self-shadow,
-so terminators stay continuous. That direct light makes up 65% of the brightness; the
-other 35% is sky light, which keeps relief inside shadows: a softly wrapped Lambert
-light from the Sun's azimuth at 30° elevation while the Sun is up, turning into an even
-mix with diffuse light proportional to the visible sky (as from thin cloud that keeps
-scattering light after sunset) as the Sun crosses ±2° around the horizon, both on 1.5×
-exaggerated slopes. Both are scaled by the terrain's occlusion of that sky: a sky-view
-pass, run once per tile and reused for every instant and lighting, marches 16 azimuths
-up to 20 km (steps growing by 8% of the distance) from every fourth output pixel into a
-128 × 128 R8 texture holding the mean cos²(max(h, 0)) of the highest 1.5×-exaggerated
-terrain angle h; the shade pass samples it bilinearly and divides it by the visible sky
-of the slope's own plane, ½(1 + n_z), capped at 1, so a slope's own tilt is not counted
-twice and only terrain beyond it darkens gorges; the missing share is amplified 1.75
-times, max(1 − 1.75 · (1 − occlusion), 0), so gorges read clearly. The twilight sky term
-eases out (smoothstep) between the horizon and the night elevation, the end of civil
-twilight (−6°), and hands over to a night sky at 0.6 of the sky share that lights slopes
-only by their occluded diffuse sky. An optional night top light (0 by default) adds
-directly to the brightness, outside the sky share, so it never changes daylight shading:
-the zenith Lambert term of the exaggerated slope times the sky occlusion raised to a
-focus exponent, so open crests keep it and valleys lose it; it fades in from −3° to the
-night elevation and stays constant below. The lookup table drops the sunlight hue from
-highlights over the second half of the twilight codes, so top-lit crests above the
-neutral take the plain highlight color. Night output no longer depends on the Sun, so a
-tile whose every pixel is past the night elevation is cached under one `night` key
-instead of its minute, and night playback frames reuse that single mask. The shade-pass
-lighting (sky-light share, occlusion strength, night sky and top light, diffuse sky
-light, soft-edge σ) is a set of uniforms carried by each request (`ShadeLighting`), not
-compiled into the shader. The same pass writes a sunlight code: the logarithm of the
-relative optical air mass of the direct-sun path (Kasten–Young, scaled by the pressure
-at the pixel's height, or through the tangent height when the Sun is below the pixel's
-level), or, once the Sun is below the sea-level horizon, how far twilight has faded
-toward the night elevation. Brightness above 1 (slopes facing a low Sun reach several
-times flat ground) is compressed as 1 + x / (1 + x), so it stays below 2 and lit slopes
-keep their order. The worker reads the result back as one brightness byte per pixel
-(brightness × 127) plus a 128 × 128 grid of sunlight codes, interpolates the codes
-bilinearly, and colors each pixel through a 256 × 256 table built once per palette and
-sky-light share (the last four are kept). The neutral level, where the overlay is
-transparent, is brightness 1.45 (`shadeNeutralBrightness`), above flat ground in full
-sun: below it the shadow color fades in with alpha 1 − brightness / 1.45, so flat sunlit
-ground keeps a light shade and slopes turned to the Sun can still brighten; above it the
-highlight color fades in up to the compressed maximum of 2. The highlight is tinted by
-the Rayleigh-extinction sunlight color (`domain/terrain/atmosphericSunlight.ts`) at 75%
-strength. The shadow color follows the sunlight code: from the day color toward the
-golden-hour lilac as the blue deficit of the sunlight grows, then over the twilight
-codes to the deep twilight blue at half depth and back to the day color by night. As the
-Sun sinks, shadows lose part of their opacity, and ground lit by the direct Sun gains a
-sunlight-colored glow that grows with the direct share of the brightness up to 2. Over
-the first part of the twilight codes, a rose alpenglow is composited over shade with an
-opacity that peaks about 15% of the way to the night elevation, is gone by 55%, and
-scales with the square of brightness relative to the sky share, so open slopes glow and
-gorges do not. GPU jobs run one at a time and wait on a fence before the next starts, so
-at most one tile of shadow work competes with map frames.
+5×5 Gaussian (σ = 1.7 px, truncated at the 2 px margin) and multiplies it by Lambert
+lighting from finest-mosaic central differences, normalized so flat ground in full sun
+(or at 10° elevation for lower suns) is 1. The slope term reaches zero exactly where the
+march begins to report self-shadow, so terminators stay continuous. That direct light
+makes up 55% of the brightness; the other 45% is sky light, which keeps relief inside
+shadows: a softly wrapped Lambert light from the Sun's azimuth at 30° elevation while
+the Sun is up, turning into a mix with 52% diffuse light proportional to the visible sky
+(as from thin cloud that keeps scattering light after sunset) as the Sun crosses ±2°
+around the horizon, both on 1.5× exaggerated slopes. Both are scaled by the terrain's
+occlusion of that sky: a sky-view pass, run once per tile and reused for every instant
+and lighting, marches 16 azimuths up to 20 km (steps growing by 8% of the distance) from
+every fourth output pixel into a 128 × 128 R8 texture holding the mean cos²(max(h, 0))
+of the highest 1.5×-exaggerated terrain angle h; the shade pass samples it bilinearly
+and divides it by the visible sky of the slope's own plane, ½(1 + n_z), capped at 1, so
+a slope's own tilt is not counted twice and only terrain beyond it darkens gorges; the
+missing share is amplified 2.55 times, max(1 − 2.55 · (1 − occlusion), 0), so gorges
+read clearly. The twilight sky term eases out (smoothstep) between the horizon and the
+night elevation, the end of civil twilight (−6°), and hands over to a night sky at 0.58
+of the sky share that lights slopes only by their occluded diffuse sky. A night top
+light (0.25, focus 3.9 by default) adds directly to the brightness, outside the sky
+share, so it never changes daylight shading: the zenith Lambert term of the exaggerated
+slope times the sky occlusion raised to a focus exponent, so open crests keep it and
+valleys lose it; it fades in from −3° to the night elevation and stays constant below.
+The lookup table drops the sunlight hue from highlights over the second half of the
+twilight codes, so top-lit crests above the neutral take the plain highlight color.
+Night output no longer depends on the Sun, so a tile whose every pixel is past the night
+elevation is cached under one `night` key instead of its minute, and night playback
+frames reuse that single mask. The shade-pass lighting (sky-light share, occlusion
+strength, night sky and top light, diffuse sky light, soft-edge σ) is a set of uniforms
+carried by each request (`ShadeLighting`), not compiled into the shader. The same pass
+writes a sunlight code: the logarithm of the relative optical air mass of the direct-sun
+path (Kasten–Young, scaled by the pressure at the pixel's height, or through the tangent
+height when the Sun is below the pixel's level), or, once the Sun is below the sea-level
+horizon, how far twilight has faded toward the night elevation. Brightness above 1
+(slopes facing a low Sun reach several times flat ground) is compressed as 1 + x / (1 +
+x), so it stays below 2 and lit slopes keep their order. The worker reads the result
+back as one brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of
+sunlight codes, interpolates the codes bilinearly, and colors each pixel through a 256 ×
+256 table built once per palette and sky-light share (the last four are kept). The
+neutral level, where the overlay is transparent, is brightness 1.55
+(`shadeNeutralBrightness`), above flat ground in full sun: below it the shadow color
+fades in with alpha 1 − brightness / 1.55, so flat sunlit ground keeps a light shade and
+slopes turned to the Sun can still brighten; above it the highlight color fades in up to
+the compressed maximum of 2. The highlight is tinted by the Rayleigh-extinction sunlight
+color (`domain/terrain/atmosphericSunlight.ts`) at 56% strength. The shadow color
+follows the sunlight code: from the day color toward the golden-hour lilac as the blue
+deficit of the sunlight grows, then over the twilight codes to the deep twilight blue at
+half depth and back to the day color by night. As the Sun sinks, shadows lose part of
+their opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows
+with the direct share of the brightness up to 2. Over the first part of the twilight
+codes, a rose alpenglow is composited over shade with an opacity that peaks about 15% of
+the way to the night elevation, is gone by 55%, and scales with the square of brightness
+relative to the sky share, so open slopes glow and gorges do not. GPU jobs run one at a
+time and wait on a fence before the next starts, so at most one tile of shadow work
+competes with map frames.
 
 Geometry and lighting are cached apart. Per tile the worker keeps up to 48 sky-view
 textures (keyed by the DEM mosaic) and 48 cast-shadow visibility textures (keyed by the

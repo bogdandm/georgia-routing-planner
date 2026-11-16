@@ -165,9 +165,9 @@ export interface SunShadowAtmosphere {
 
 export const defaultSunShadowAtmosphere: SunShadowAtmosphere = {
   ...mapVisualPalette.terrain.sunSky,
-  glowStrength: { horizon: 0.85, fog: 0.6, awayHorizon: 0.15, awayFog: 0.35 },
-  antisolarStrength: 0.6,
-  blends: { fogGround: 0.5, horizonFog: 0.8, skyHorizon: 0.8 },
+  glowStrength: { horizon: 0.62, fog: 0.53, awayHorizon: 0.22, awayFog: 0.53 },
+  antisolarStrength: 0.76,
+  blends: { fogGround: 0.38, horizonFog: 0.87, skyHorizon: 0.57 },
 };
 
 /**

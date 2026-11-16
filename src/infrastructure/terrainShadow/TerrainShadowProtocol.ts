@@ -9,6 +9,11 @@ const colorSchema = z
 export const terrainShadowMaskCacheLimit = 3072;
 /** Most tiles × frames one day playback may precompute; stays below the mask cache. */
 export const terrainShadowPlaybackTileLimit = 2560;
+/**
+ * Lowest tile zoom with terrain-cast shadows. Lower tiles cover too much ground for the
+ * DEM march and shade flat ground for the Sun's elevation only.
+ */
+export const terrainShadowReliefMinZoom = 7;
 
 export const terrainShadowTileRequestSchema = z
   .object({
@@ -36,8 +41,10 @@ export const terrainShadowTileRequestSchema = z
     'The tile address is outside the zoom level.',
   )
   .refine(
+    // Flat-ground tiles below the relief zoom read no DEM, so any provider zoom range works.
     (request) =>
-      request.demMinZoom <= request.demMaxZoom && request.z >= request.demMinZoom,
+      request.demMinZoom <= request.demMaxZoom &&
+      (request.z < terrainShadowReliefMinZoom || request.z >= request.demMinZoom),
     'The tile zoom is outside the DEM zoom range.',
   );
 

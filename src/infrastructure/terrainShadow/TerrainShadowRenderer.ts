@@ -5,11 +5,13 @@ import {
   type TerrainShadowTileRequest,
   type TerrainShadowTileResult,
   terrainShadowMaskCacheLimit,
+  terrainShadowReliefMinZoom,
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
   createShadeLookupTable,
   expandShadeMask,
+  flatGroundShadeMask,
   fullscreenVertexShaderSource,
   maximumReductionFactor,
   maximumReductionFragmentShaderSource,
@@ -638,6 +640,20 @@ export class TerrainShadowRenderer {
   }> {
     throwIfAborted(signal);
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
+    // Coarse tiles shade flat ground on the CPU: no GPU context, DEM, or cache memory.
+    if (request.z < terrainShadowReliefMinZoom) {
+      const startedAt = performance.now();
+      const mask = flatGroundShadeMask(request, request.instantMs);
+      return {
+        mask,
+        metrics: this.metrics({
+          computeMs: performance.now() - startedAt,
+          demFetchMs: 0,
+          cacheHit: false,
+          demTilesFetched: 0,
+        }),
+      };
+    }
     const gpu = this.ensureGpu();
     const generation = this.#generation;
     // Twilight playback frames are dark everywhere: no DEM, GPU work, or cache memory.

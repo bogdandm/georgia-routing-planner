@@ -20,8 +20,9 @@ import {
   Typography,
 } from '@mui/material';
 import lookupTimeZone from '@photostructure/tz-lookup';
-import { useState, useSyncExternalStore } from 'react';
+import { type Ref, useState, useSyncExternalStore } from 'react';
 
+import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
 import {
   instantToZonedWallTime,
   zonedWallTimeToInstant,
@@ -55,10 +56,14 @@ export interface SunShadowControlProps {
   readonly onPlay: () => void;
   /** Cancels the precomputation or stops the animation. */
   readonly onStop: () => void;
+  /**
+   * True while the time keys briefly show the panel: it opens without taking focus, so
+   * the held key keeps reaching the global shortcuts.
+   */
+  readonly peek: boolean;
 }
 
 const minutesPerDay = 24 * 60;
-const timeStepMinutes = 10;
 // Two decimals (~1 km) keep the zone and day events stable while the map pans.
 const centerPrecision = 100;
 
@@ -129,6 +134,8 @@ interface SunShadowButtonProps {
   readonly enabled: boolean;
   readonly open: boolean;
   readonly panelId: string;
+  /** Receives the button so a peeking panel can anchor to it while closed. */
+  readonly buttonRef: Ref<HTMLButtonElement>;
   readonly onToggle: (button: HTMLElement) => void;
 }
 
@@ -137,17 +144,29 @@ export function SunShadowButton({
   enabled,
   open,
   panelId,
+  buttonRef,
   onToggle,
 }: SunShadowButtonProps) {
   const { t } = useLingui();
   return (
-    <Tooltip describeChild disableInteractive placement="left" title={t`Sun shadows`}>
+    <Tooltip
+      describeChild
+      disableInteractive
+      placement="left"
+      title={
+        <ShortcutTooltipTitle
+          label={t`Sun shadows`}
+          shortcut={{ action: 'toggle-sun-shadows' }}
+        />
+      }
+    >
       <Box component="span" sx={{ display: 'block' }}>
         <ToggleButton
           aria-controls={open ? panelId : undefined}
           aria-expanded={open}
           aria-haspopup="dialog"
           aria-label={t`Sun shadows`}
+          ref={buttonRef}
           onClick={(event) => {
             onToggle(event.currentTarget);
           }}
@@ -232,6 +251,7 @@ function SunShadowPanel({
   onChange,
   onPlay,
   onStop,
+  peek,
 }: SunShadowControlProps) {
   const { i18n, t } = useLingui();
   const viewport = useSyncExternalStore(
@@ -263,13 +283,11 @@ function SunShadowPanel({
     const time = instantToZonedWallTime(new Date(instant), timeZone);
     return time.hour * 60 + time.minute;
   };
-  // The slider offers two hours around daylight; the layer controller clamps every
-  // commit to the same range.
+  // The slider offers two hours around daylight in whole minutes; the layer controller
+  // clamps every commit to the same range.
   const minimumMinutes = daylight === null ? 0 : toWallMinutes(daylight.firstMinuteMs);
   const maximumMinutes =
-    daylight === null
-      ? minutesPerDay - timeStepMinutes
-      : toWallMinutes(daylight.lastMinuteMs);
+    daylight === null ? minutesPerDay - 1 : toWallMinutes(daylight.lastMinuteMs);
   const wallMinutes = Math.min(
     Math.max(wall.hour * 60 + wall.minute, minimumMinutes),
     maximumMinutes,
@@ -287,7 +305,7 @@ function SunShadowPanel({
         control={
           <Switch
             // Focus enters the panel so Escape and Tab work from the keyboard.
-            autoFocus={!unavailable}
+            autoFocus={!peek && !unavailable}
             checked={enabled && !unavailable}
             disabled={unavailable}
             onChange={(_event, checked) => {
@@ -305,7 +323,7 @@ function SunShadowPanel({
       ) : null}
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <TextField
-          autoFocus={unavailable}
+          autoFocus={!peek && unavailable}
           label={t`Date`}
           onChange={(event) => {
             const date = parseWallDate(event.target.value);
@@ -378,7 +396,7 @@ function SunShadowPanel({
             commitWall({ ...wall, hour: Math.floor(value / 60), minute: value % 60 });
           }}
           size="small"
-          step={timeStepMinutes}
+          step={1}
           sx={{ flex: 1 }}
           value={draftMinutes ?? wallMinutes}
           valueLabelDisplay="auto"

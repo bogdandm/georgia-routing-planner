@@ -26,15 +26,31 @@ export type KeyboardShortcutAction =
   | 'download-gpx'
   | 'copy-map-link'
   | 'open-google-maps'
-  | 'open-yandex-maps';
+  | 'open-yandex-maps'
+  | 'toggle-sun-shadows';
+
+/** Sun-shadow time steps of `[` and `]`, in minutes; Shift selects the 10-minute step. */
+export type SunShadowTimeStep = -10 | -1 | 1 | 10;
 
 export type KeyboardShortcut =
   | { readonly action: KeyboardShortcutAction }
   | { readonly action: 'select-basemap'; readonly preset: BasemapPreset }
-  | { readonly action: 'move-camera'; readonly step: MapCameraStep };
+  | { readonly action: 'move-camera'; readonly step: MapCameraStep }
+  | {
+      readonly action: 'step-sun-time';
+      readonly minutes: SunShadowTimeStep;
+      /**
+       * Alt: draw the shadows of every step even while the previous one still renders,
+       * instead of only the latest once it has.
+       */
+      readonly drawEveryStep: boolean;
+    };
 
-/** `mod` is Cmd on macOS and Ctrl elsewhere; the other key of the pair must not be held. */
-type ShortcutModifier = 'none' | 'shift' | 'mod';
+/**
+ * `mod` is Cmd on macOS and Ctrl elsewhere; the other key of the pair must not be held.
+ * `alt` is Option on macOS and never combines with either command key.
+ */
+type ShortcutModifier = 'none' | 'shift' | 'mod' | 'alt' | 'alt-shift';
 
 interface ShortcutBinding {
   /** Physical key (`KeyboardEvent.code`), so bindings ignore the keyboard layout. */
@@ -42,7 +58,7 @@ interface ShortcutBinding {
   readonly modifier: ShortcutModifier;
   /** Whether the binding also fires while focus is in a text field. */
   readonly inEditable: boolean;
-  /** Whether auto-repeat fires it again, so a held key keeps moving the camera. */
+  /** Whether auto-repeat fires it again, so a held key keeps moving the camera or the time. */
   readonly repeatable?: true;
   /** Keycap label for the key itself. */
   readonly key: string;
@@ -83,10 +99,30 @@ function camera(
   };
 }
 
+function sunTime(
+  code: string,
+  modifier: 'none' | 'shift' | 'alt' | 'alt-shift',
+  key: string,
+  minutes: SunShadowTimeStep,
+): ShortcutBinding {
+  return {
+    code,
+    modifier,
+    inEditable: false,
+    repeatable: true,
+    key,
+    shortcut: {
+      action: 'step-sun-time',
+      minutes,
+      drawEveryStep: modifier === 'alt' || modifier === 'alt-shift',
+    },
+  };
+}
+
 const bindings: readonly ShortcutBinding[] = [
   withMod('KeyF', 'F', 'focus-search', true),
   plain('Slash', '/', 'focus-search'),
-  plain('BracketLeft', '[', 'toggle-navigation'),
+  plain('KeyB', 'B', 'toggle-navigation'),
   plain('KeyT', 'T', 'new-track'),
   plain('KeyP', 'P', 'place-marker'),
   plain('KeyW', 'W', 'select-forecast-point'),
@@ -96,6 +132,16 @@ const bindings: readonly ShortcutBinding[] = [
   plain('KeyO', 'O', 'toggle-terrain'),
   plain('KeyR', 'R', 'toggle-ruler'),
   plain('KeyL', 'L', 'geolocate'),
+  plain('KeyD', 'D', 'toggle-sun-shadows'),
+  // Adjacent keys: earlier on the left, later on the right.
+  sunTime('BracketLeft', 'none', '[', -1),
+  sunTime('BracketRight', 'none', ']', 1),
+  sunTime('BracketLeft', 'shift', '[', -10),
+  sunTime('BracketRight', 'shift', ']', 10),
+  sunTime('BracketLeft', 'alt', '[', -1),
+  sunTime('BracketRight', 'alt', ']', 1),
+  sunTime('BracketLeft', 'alt-shift', '[', -10),
+  sunTime('BracketRight', 'alt-shift', ']', 10),
   plain('Home', 'Home', 'geolocate'),
   plain('KeyG', 'G', 'open-google-maps'),
   plain('KeyY', 'Y', 'open-yandex-maps'),
@@ -147,11 +193,14 @@ export function isMacPlatform(): boolean {
 }
 
 function eventModifier(event: KeyboardEvent): ShortcutModifier | null {
-  if (event.altKey) return null;
   const mac = isMacPlatform();
   const mod = mac ? event.metaKey : event.ctrlKey;
   const otherMod = mac ? event.ctrlKey : event.metaKey;
   if (otherMod) return null;
+  if (event.altKey) {
+    if (mod) return null;
+    return event.shiftKey ? 'alt-shift' : 'alt';
+  }
   if (mod) return event.shiftKey ? null : 'mod';
   return event.shiftKey ? 'shift' : 'none';
 }
@@ -162,7 +211,7 @@ function eventModifier(event: KeyboardEvent): ShortcutModifier | null {
  * `inEditable`), or a menu/listbox whose typeahead and arrow navigation need plain keys. A
  * menu opts back in with the `data-keyboard-shortcuts` attribute. A control that handles a
  * key itself, such as tabs or a menu with its arrows, prevents its default and keeps it.
- * Auto-repeat fires only camera steps. Mod+C yields to the native copy while page text is
+ * Auto-repeat fires only camera and sun-time steps. Mod+C yields to the native copy while page text is
  * selected.
  *
  * Mod+S is reserved: where it is suppressed (a dialog, an auto-repeat, IME composition) this
@@ -190,7 +239,11 @@ export function matchKeyboardShortcut(event: KeyboardEvent): KeyboardShortcut | 
     !binding.inEditable &&
     target !== null &&
     ((target instanceof HTMLElement && target.isContentEditable) ||
-      target.closest('input, textarea, select') !== null)
+      // Switches and sliders are not text fields; a slider keeps its own keys by
+      // preventing their default.
+      target.closest(
+        'input:not([type="checkbox"]):not([type="range"]), textarea, select',
+      ) !== null)
   ) {
     return null;
   }
@@ -220,6 +273,13 @@ function sameShortcut(a: KeyboardShortcut, b: KeyboardShortcut): boolean {
   if (a.action === 'move-camera') {
     return b.action === 'move-camera' && a.step === b.step;
   }
+  if (a.action === 'step-sun-time') {
+    return (
+      b.action === 'step-sun-time' &&
+      a.minutes === b.minutes &&
+      a.drawEveryStep === b.drawEveryStep
+    );
+  }
   return a.action === b.action;
 }
 
@@ -236,6 +296,10 @@ export function keyboardShortcutKeyCombinations(
           return [mac ? '⌘' : 'Ctrl', binding.key];
         case 'shift':
           return [shiftKeyLabel(), binding.key];
+        case 'alt':
+          return [mac ? '⌥' : 'Alt', binding.key];
+        case 'alt-shift':
+          return [mac ? '⌥' : 'Alt', shiftKeyLabel(), binding.key];
         case 'none':
           return [binding.key];
       }

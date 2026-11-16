@@ -40,6 +40,11 @@ describe('terrainShadowTileRequestSchema', () => {
     expect(terrainShadowTileRequestSchema.parse(request)).toEqual(request);
   });
 
+  it('accepts flat-ground tiles below the DEM minimum zoom, which read no DEM', () => {
+    const flat = { ...request, z: 3, x: 0, y: 0, demMinZoom: 5 };
+    expect(terrainShadowTileRequestSchema.parse(flat)).toEqual(flat);
+  });
+
   it.each([
     ['an unknown property', { ...request, debug: true }],
     [
@@ -58,8 +63,8 @@ describe('terrainShadowTileRequestSchema', () => {
     ['a color channel above 255', { ...request, shadowColor: [27, 36, 256] }],
     ['a highlight opacity above 1', { ...request, highlightOpacity: 1.5 }],
     [
-      'a tile below the DEM minimum zoom',
-      { ...request, z: 3, x: 0, y: 0, demMinZoom: 4 },
+      'a relief tile below the DEM minimum zoom',
+      { ...request, z: 8, x: 0, y: 0, demMinZoom: 9 },
     ],
     ['an inverted DEM zoom range', { ...request, demMinZoom: 12, demMaxZoom: 10 }],
   ])('rejects %s', (_name, payload) => {

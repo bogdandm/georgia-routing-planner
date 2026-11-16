@@ -10,6 +10,7 @@ import {
 import {
   MapLibreTerrainShadowTileProvider,
   type TerrainShadowAvailability,
+  type TerrainShadowPrefetchProgress,
   terrainShadowProtocolId,
 } from '@/presentation/map/TerrainShadowTileProvider';
 
@@ -364,14 +365,18 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.dispose();
   });
 
-  it('prefetches every tile and instant tile-major with at most four requests in flight', async () => {
+  it('prefetches hour blocks in order, tile-major inside, with at most four requests in flight', async () => {
     const { provider, worker } = createProvider();
     const tiles = [
       { z: 12, x: 2541, y: 1514 },
       { z: 12, x: 2542, y: 1514 },
     ];
-    const instants = [0, 10, 20].map((minutes) => instantMs + minutes * 60_000);
-    const onProgress = vi.fn();
+    // Two blocks: six instants, then two.
+    const instants = Array.from(
+      { length: 8 },
+      (_, index) => instantMs + index * 10 * 60_000,
+    );
+    const onProgress = vi.fn<(progress: TerrainShadowPrefetchProgress) => void>();
 
     const prefetch = provider.prefetch(
       tiles,
@@ -382,7 +387,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     await vi.waitFor(() => {
       expect(worker.requests).toHaveLength(4);
     });
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 16; index += 1) {
       await vi.waitFor(() => {
         expect(worker.requests.length).toBeGreaterThan(index);
       });
@@ -392,20 +397,41 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     await expect(prefetch).resolves.toBeUndefined();
 
     expect(worker.requests.map((request) => request.method)).toEqual(
-      Array<string>(6).fill('terrain-shadow.prefetch-tile'),
+      Array<string>(16).fill('terrain-shadow.prefetch-tile'),
     );
+    const minute = (index: number) =>
+      Math.floor((instants[index] ?? 0) / 60_000) * 60_000;
+    const [first, second] = [tiles[0]?.x, tiles[1]?.x];
     expect(
       worker.requests.map((request) => {
         const payload = request.payload as { x: number; instantMs: number };
         return [payload.x, payload.instantMs];
       }),
+    ).toEqual([
+      ...[0, 1, 2, 3, 4, 5].map((index) => [first, minute(index)]),
+      ...[0, 1, 2, 3, 4, 5].map((index) => [second, minute(index)]),
+      // The second block starts with the tile the first one ended with.
+      ...[6, 7].map((index) => [second, minute(index)]),
+      ...[6, 7].map((index) => [first, minute(index)]),
+    ]);
+    // A frame is ready once both tiles have it, in order.
+    expect(
+      onProgress.mock.calls.map(([progress]) => [
+        progress.completed,
+        progress.readyFrames,
+      ]),
     ).toEqual(
-      tiles.flatMap((tile) =>
-        instants.map((instant) => [tile.x, Math.floor(instant / 60_000) * 60_000]),
-      ),
+      [0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 6, 6, 7, 8].map((ready, index) => [
+        index + 1,
+        ready,
+      ]),
     );
-    expect(onProgress).toHaveBeenLastCalledWith(6, 6);
-    expect(provider.getMetrics().tilesRendered).toBe(6);
+    expect(onProgress).toHaveBeenLastCalledWith({
+      completed: 16,
+      total: 16,
+      readyFrames: 8,
+    });
+    expect(provider.getMetrics().tilesRendered).toBe(16);
     provider.dispose();
   });
 

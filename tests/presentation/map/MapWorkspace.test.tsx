@@ -2630,6 +2630,50 @@ describe('MapWorkspace', () => {
     expect(input).toHaveValue('gy');
     expect(open).toHaveBeenCalledTimes(2);
   });
+
+  it('toggles sun shadows with D and steps their time with brackets, peeking at the panel', async () => {
+    const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    renderWithI18n(
+      <RuntimeServicesProvider services={createTestServices()}>
+        <MapWorkspace facade={facade} mapCanvas={<div>Sun keys map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('Sun keys map');
+    const startMs = mapLayerStore.getState().sunShadow.instantMs;
+
+    await user.keyboard('d');
+    expect(mapLayerStore.getState().sunShadow).toMatchObject({
+      enabled: true,
+      instantMs: startMs,
+    });
+    await user.keyboard('d');
+    expect(mapLayerStore.getState().sunShadow.enabled).toBe(false);
+
+    // A time key turns hidden shadows on and shows the panel while it is held.
+    await user.keyboard('[BracketRight>]');
+    expect(mapLayerStore.getState().sunShadow).toMatchObject({
+      enabled: true,
+      instantMs: startMs + 60_000,
+    });
+    const panel = screen.getByRole('dialog', { name: 'Sun shadows' });
+    expect(panel).toBeVisible();
+    expect(panel).not.toContainElement(document.activeElement as HTMLElement | null);
+    await user.keyboard('{Shift>}[BracketLeft]{/Shift}');
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(startMs - 9 * 60_000);
+
+    // Shortly after the keys are released the panel hides again.
+    await user.keyboard('[/BracketRight]');
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByRole('dialog', { name: 'Sun shadows' }),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 2_000 },
+    );
+  });
   it('turns north, toggles 3D, and runs the ruler from the keyboard', async () => {
     const user = userEvent.setup();
     const facade = new FakeMapFacade();

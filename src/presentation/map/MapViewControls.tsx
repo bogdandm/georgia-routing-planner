@@ -124,6 +124,12 @@ export function MapViewControls({
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
   const menuId = useId();
   const [sunShadowButton, setSunShadowButton] = useState<HTMLElement | null>(null);
+  // The rail button itself, so the time keys can show the panel while it is closed.
+  const [sunShadowRailButton, setSunShadowRailButton] = useState<HTMLElement | null>(
+    null,
+  );
+  const sunShadowAnchor =
+    sunShadowButton ?? (sunShadow?.peek === true ? sunShadowRailButton : null);
   const sunShadowPanelId = useId();
   const pending = terrainState === 'enabling' || terrainState === 'disabling';
   const selectedMode: TerrainMode =
@@ -271,11 +277,12 @@ export function MapViewControls({
         </Tooltip>
         {sunShadow === null ? null : (
           <SunShadowButton
+            buttonRef={setSunShadowRailButton}
             enabled={sunShadow.enabled}
             onToggle={(button) => {
               setSunShadowButton(sunShadowButton === null ? button : null);
             }}
-            open={sunShadowButton !== null}
+            open={sunShadowAnchor !== null}
             panelId={sunShadowPanelId}
           />
         )}
@@ -532,7 +539,7 @@ export function MapViewControls({
       {sunShadow === null ? null : (
         <SunShadowPopover
           {...sunShadow}
-          anchorEl={sunShadowButton}
+          anchorEl={sunShadowAnchor}
           onClose={() => {
             setSunShadowButton(null);
           }}

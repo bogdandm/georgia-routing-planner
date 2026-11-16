@@ -1,7 +1,16 @@
-import { terrainShadowModel } from '@/domain/terrain/terrainShadow';
 import {
+  atmosphericRefractionDegrees,
+  subsolarPoint,
+} from '@/domain/terrain/solarPosition';
+import {
+  terrainShadowModel,
+  visibleSolarDiskFraction,
+} from '@/domain/terrain/terrainShadow';
+import {
+  type TerrainShadowTileAddress,
   terrainShadowMosaicMarginTexels,
   terrainShadowMosaicSize,
+  terrainShadowTileGeometry,
   terrainShadowTileSize,
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
@@ -366,4 +375,62 @@ export function expandShadeMask(
     pixels32[index] = table[mask[index] ?? 0] ?? 0;
   }
   return pixels;
+}
+
+/** Below this true elevation even the refracted upper limb is under a flat horizon. */
+const flatGroundNightElevationDegrees = -2;
+
+/**
+ * The shade pass's flat-ground brightness, computed on the CPU for tiles too coarse for
+ * terrain shadows: the visible solar-disk fraction above a level horizon times the Sun's
+ * height normalized like the GPU pass, so zoomed-out maps show day, twilight, and night.
+ */
+export function flatGroundShadeMask(
+  output: TerrainShadowTileAddress,
+  instantMs: number,
+): Uint8Array {
+  const size = terrainShadowTileSize;
+  const geometry = terrainShadowTileGeometry(output);
+  const sun = subsolarPoint(new Date(instantMs));
+  const sinDeclination = Math.sin(sun.declinationRadians);
+  const cosDeclination = Math.cos(sun.declinationRadians);
+  const fullSunSine = Math.sin(
+    (terrainShadeFlatReferenceElevationDegrees * Math.PI) / 180,
+  );
+  const nightSine = Math.sin((flatGroundNightElevationDegrees * Math.PI) / 180);
+  // Pixel centers, as in the GPU passes: row 0 is the northern edge.
+  const cosHourAngles = Float64Array.from({ length: size }, (_, column) =>
+    Math.cos(
+      geometry.westLongitudeRadians +
+        (geometry.longitudeSpanRadians * (column + 0.5)) / size -
+        sun.longitudeRadians,
+    ),
+  );
+  const mask = new Uint8Array(size * size);
+  for (let row = 0; row < size; row += 1) {
+    const mercatorY =
+      geometry.northMercatorY - (geometry.mercatorYSpan * (row + 0.5)) / size;
+    const latitude = 2 * Math.atan(Math.exp(mercatorY)) - Math.PI / 2;
+    const sinTerm = Math.sin(latitude) * sinDeclination;
+    const cosTerm = Math.cos(latitude) * cosDeclination;
+    for (let column = 0; column < size; column += 1) {
+      const sinElevation = sinTerm + cosTerm * (cosHourAngles[column] ?? 0);
+      let value = 0;
+      if (sinElevation >= fullSunSine) {
+        // Refraction only raises the Sun, so flat ground is in full sun.
+        value = shadeBrightnessScale;
+      } else if (sinElevation > nightSine) {
+        const elevationDegrees = (Math.asin(sinElevation) * 180) / Math.PI;
+        const apparentDegrees =
+          elevationDegrees + atmosphericRefractionDegrees(elevationDegrees);
+        const apparentSine = Math.sin((apparentDegrees * Math.PI) / 180);
+        const brightness =
+          (visibleSolarDiskFraction(apparentDegrees, 0) * Math.max(apparentSine, 0)) /
+          Math.max(apparentSine, fullSunSine);
+        value = Math.round(Math.min(brightness * shadeBrightnessScale, 255));
+      }
+      mask[row * size + column] = value;
+    }
+  }
+  return mask;
 }

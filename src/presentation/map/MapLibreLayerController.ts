@@ -135,15 +135,20 @@ import {
   type DaylightWindow,
   daylightFrameInstants,
   daylightWindow,
+  localDayBounds,
   sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
+import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
-  terrainShadowMinZoom,
+  terrainShadowPrefetchBlockFrames,
 } from '@/presentation/map/TerrainShadowTileProvider';
-import { terrainShadowPlaybackTileLimit } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
+import {
+  terrainShadowPlaybackTileLimit,
+  terrainShadowReliefMinZoom,
+} from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { mapFailureDetails } from '@/presentation/map/mapFailureDetails';
 import type {
   MapLayerPreset,
@@ -438,6 +443,46 @@ const sunShadowPlaybackFrameMs = 150;
  * view (tiles differ by minutes, and the worker's night test keeps a 1° margin).
  */
 const sunShadowLitFrameSlackMs = 30 * 60_000;
+/**
+ * Playback may start before its prefetch ends; the estimated remaining computation is
+ * stretched by this factor so a slower stretch rarely makes the animation wait.
+ */
+const sunShadowPlaybackEstimateMargin = 1.25;
+
+/**
+ * Whether an animation starting now at frame 0, one frame per `sunShadowPlaybackFrameMs`,
+ * reaches every frame only after the prefetch cached it. A prefetch block's frames become
+ * ready together with its last tile, so each block must be done by its first unready
+ * frame's turn. Blocks cost their lit frames times `msPerLitFrame`; frames dark at the
+ * center cost nothing. Without a measured rate only frames without lit work may wait.
+ */
+function sunShadowPlaybackCanStart(
+  litFrames: readonly boolean[],
+  readyFrames: number,
+  msPerLitFrame: number | null,
+): boolean {
+  if (readyFrames === 0) return false;
+  let pendingLitFrames = 0;
+  for (let frame = readyFrames; frame < litFrames.length; frame += 1) {
+    if (litFrames[frame] === true) pendingLitFrames += 1;
+    const blockEnds =
+      (frame + 1) % terrainShadowPrefetchBlockFrames === 0 ||
+      frame === litFrames.length - 1;
+    if (!blockEnds || pendingLitFrames === 0) continue;
+    if (msPerLitFrame === null) return false;
+    const firstUnreadyFrame = Math.max(
+      readyFrames,
+      frame - (frame % terrainShadowPrefetchBlockFrames),
+    );
+    if (
+      pendingLitFrames * msPerLitFrame * sunShadowPlaybackEstimateMargin >
+      firstUnreadyFrame * sunShadowPlaybackFrameMs
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 type MapLayerCommandResult<Problem> =
   | { readonly status: 'success' }
@@ -1008,6 +1053,13 @@ export class MapLibreLayerController {
   /** Shadow instant in epoch milliseconds, quantized to whole minutes. */
   #sunShadowInstantMs = quantizeSunShadowInstant(Date.now());
   #appliedSunShadowTileUrl: string | null = null;
+  /**
+   * True while a newer minute waits for the shadow source to finish loading the applied
+   * one; the source's next loaded `sourcedata` applies the latest minute.
+   */
+  #sunShadowTilesDeferred = false;
+  /** From the last `setSunShadow`: apply each minute at once even while one still loads. */
+  #sunShadowDrawEveryStep = false;
   /** Present from Play until stop; aborting it cancels the day prefetch. */
   #sunShadowPlaybackAbort: AbortController | null = null;
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1221,16 +1273,20 @@ export class MapLibreLayerController {
    * Shows or hides terrain-cast sun shadows for one instant, quantized to whole minutes.
    * Only `enabled` persists; an unchanged switch and minute leaves the map untouched.
    * Every call stops day playback first, so user changes always win over the animation.
+   * While the previous minute still loads, a new one waits and only the latest is drawn,
+   * unless `drawEveryStep` asks MapLibre to render every minute in turn.
    */
   public setSunShadow(value: {
     readonly enabled: boolean;
     readonly instantMs: number;
+    readonly drawEveryStep?: boolean;
   }): void {
     this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
     const instantMs = quantizeSunShadowInstant(value.instantMs);
     const enabledChanged = this.#sunShadowEnabled !== value.enabled;
     if (!enabledChanged && this.#sunShadowInstantMs === instantMs) return;
+    this.#sunShadowDrawEveryStep = value.drawEveryStep === true;
     this.#sunShadowEnabled = value.enabled;
     // A chosen instant replaces the session start time; toggling the switch keeps it.
     if (instantMs !== this.#sunShadowInstantMs)
@@ -1248,9 +1304,41 @@ export class MapLibreLayerController {
   }
 
   /**
+   * Turns shadows on and moves the instant by whole minutes, kept within the range the
+   * panel shows for the current local day at the map center, so a step past either end
+   * never changes the date. Like every `setSunShadow`, it stops day playback.
+   */
+  public stepSunShadow(
+    minutes: number,
+    options: { readonly drawEveryStep: boolean },
+  ): void {
+    const map = this.#map;
+    let instantMs = this.#sunShadowInstantMs + minutes * 60_000;
+    if (map !== null) {
+      const { place, timeZone } = this.sunShadowPlace(map);
+      const window = daylightWindow(this.#sunShadowInstantMs, place, timeZone);
+      const day = localDayBounds(
+        instantToZonedWallTime(new Date(this.#sunShadowInstantMs), timeZone),
+        timeZone,
+      );
+      // Without sunrise and sunset the panel spans the whole local day.
+      instantMs =
+        window === null
+          ? Math.min(Math.max(instantMs, day.startMs), day.endMs - 60_000)
+          : clampToDaylight(instantMs, window);
+    }
+    this.setSunShadow({
+      enabled: true,
+      instantMs,
+      drawEveryStep: options.drawEveryStep,
+    });
+  }
+
+  /**
    * Precomputes shadows for every 10-minute frame of the shown day's range over the
-   * tiles covering the view, then loops through them until stopped. Any camera move,
-   * `setSunShadow`, or detach stops it.
+   * tiles covering the view, in playback order from the current time, then loops through
+   * them until stopped. The animation starts early once the remaining frames are estimated
+   * to be ready before it reaches them. Any camera move, `setSunShadow`, or detach stops it.
    */
   public playSunShadowDay(): void {
     this.stopSunShadowPlayback();
@@ -1270,11 +1358,20 @@ export class MapLibreLayerController {
       return;
     }
     const frames = daylightFrameInstants(window, sunShadowPlaybackStepMinutes);
+    // Playback runs from the current time to the end and wraps; the prefetch follows it.
+    const startIndex = Math.max(
+      frames.findIndex((frame) => frame >= this.#sunShadowInstantMs),
+      0,
+    );
+    const playbackFrames = [
+      ...frames.slice(startIndex),
+      ...frames.slice(0, startIndex),
+    ];
     // Public coverage ignores terrain-aware culling; tiles it misses load on demand.
     const tiles = new Map<string, TerrainShadowTileAddress>();
     for (const tile of map.coveringTiles({
       tileSize: 512,
-      minzoom: terrainShadowMinZoom,
+      minzoom: terrainShadowReliefMinZoom,
       maxzoom: this.terrain.maxZoom,
       roundZoom: true,
     })) {
@@ -1283,11 +1380,12 @@ export class MapLibreLayerController {
     }
     // Only frames with the Sun near or above the horizon cache a mask; the worker answers
     // darker twilight frames with a shared full-shade mask that costs no memory.
-    const litFrameCount = frames.filter(
+    const litFrames = playbackFrames.map(
       (frame) =>
         frame >= window.sunriseMs - sunShadowLitFrameSlackMs &&
         frame <= window.sunsetMs + sunShadowLitFrameSlackMs,
-    ).length;
+    );
+    const litFrameCount = litFrames.filter(Boolean).length;
     if (tiles.size * litFrameCount > terrainShadowPlaybackTileLimit) {
       this.logger.log({
         level: 'info',
@@ -1300,32 +1398,60 @@ export class MapLibreLayerController {
 
     const controller = new AbortController();
     this.#sunShadowPlaybackAbort = controller;
-    this.#sunShadowPlaybackFrames = frames;
+    this.#sunShadowPlaybackFrames = playbackFrames;
     this.publishSunShadowPlayback({ status: 'loading', progress: 0 });
     let percent = 0;
+    let playing = false;
+    let readyFrames = 0;
+    // The first block also waited for the DEM downloads, and its frames become ready one
+    // by one only as its last tile finishes, so the rate is measured from its end on.
+    let rateOrigin: { readonly atMs: number; readonly readyLitFrames: number } | null =
+      null;
+    const startPlaying = () => {
+      if (playing || controller.signal.aborted) return;
+      playing = true;
+      this.#sunShadowPlaybackIndex = 0;
+      this.publishSunShadowPlayback({ status: 'playing' });
+      this.showSunShadowPlaybackFrame(map);
+      this.#sunShadowPlaybackTimer = setTimeout(
+        this.tickSunShadowPlayback,
+        sunShadowPlaybackFrameMs,
+      );
+    };
     this.sunShadowTiles
-      .prefetch([...tiles.values()], frames, controller.signal, (completed, total) => {
-        const nextPercent = Math.floor((100 * completed) / total);
-        if (nextPercent === percent || controller.signal.aborted) return;
-        percent = nextPercent;
-        this.publishSunShadowPlayback({
-          status: 'loading',
-          progress: completed / total,
-        });
+      .prefetch([...tiles.values()], playbackFrames, controller.signal, (progress) => {
+        if (playing || controller.signal.aborted) return;
+        const nextPercent = Math.floor((100 * progress.completed) / progress.total);
+        if (nextPercent !== percent) {
+          percent = nextPercent;
+          this.publishSunShadowPlayback({
+            status: 'loading',
+            progress: progress.completed / progress.total,
+          });
+        }
+        if (progress.readyFrames === readyFrames) return;
+        readyFrames = progress.readyFrames;
+        const nowMs = Date.now();
+        const readyLitFrames = litFrames.slice(0, readyFrames).filter(Boolean).length;
+        if (
+          rateOrigin === null &&
+          readyFrames >= Math.min(terrainShadowPrefetchBlockFrames, litFrames.length)
+        ) {
+          rateOrigin = { atMs: nowMs, readyLitFrames };
+        }
+        const measuredLitFrames =
+          rateOrigin === null ? 0 : readyLitFrames - rateOrigin.readyLitFrames;
+        const msPerLitFrame =
+          rateOrigin !== null && measuredLitFrames > 0
+            ? (nowMs - rateOrigin.atMs) / measuredLitFrames
+            : null;
+        if (sunShadowPlaybackCanStart(litFrames, readyFrames, msPerLitFrame)) {
+          startPlaying();
+        }
       })
       .then(
         () => {
-          if (controller.signal.aborted) return;
-          const startIndex = frames.findIndex(
-            (frame) => frame >= this.#sunShadowInstantMs,
-          );
-          this.#sunShadowPlaybackIndex = Math.max(startIndex, 0);
-          this.publishSunShadowPlayback({ status: 'playing' });
-          this.showSunShadowPlaybackFrame(map);
-          this.#sunShadowPlaybackTimer = setTimeout(
-            this.tickSunShadowPlayback,
-            sunShadowPlaybackFrameMs,
-          );
+          startPlaying();
         },
         () => {
           // An aborted prefetch is a deliberate stop, not a failure.
@@ -1369,8 +1495,9 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null || this.#sunShadowPlaybackAbort === null) return;
     const frameLoading =
-      map.getSource(mapSourceIds.terrainSunShadow) !== undefined &&
-      !map.isSourceLoaded(mapSourceIds.terrainSunShadow);
+      this.#sunShadowTilesDeferred ||
+      (map.getSource(mapSourceIds.terrainSunShadow) !== undefined &&
+        !map.isSourceLoaded(mapSourceIds.terrainSunShadow));
     if (!frameLoading) {
       this.#sunShadowPlaybackIndex =
         (this.#sunShadowPlaybackIndex + 1) % this.#sunShadowPlaybackFrames.length;
@@ -3523,6 +3650,16 @@ export class MapLibreLayerController {
   }
 
   private readonly handleSourceData = (event: MapSourceDataEvent): void => {
+    if (event.sourceId === mapSourceIds.terrainSunShadow) {
+      const map = this.#map;
+      if (
+        this.#sunShadowTilesDeferred &&
+        map?.isSourceLoaded(mapSourceIds.terrainSunShadow) === true
+      ) {
+        this.reconcileSunShadow(map);
+      }
+      return;
+    }
     if (isSatelliteBasemapSourceId(event.sourceId)) {
       if (event.sourceDataType !== 'content') return;
       const map = this.#map;
@@ -3746,6 +3883,7 @@ export class MapLibreLayerController {
           map.removeSource(mapSourceIds.terrainSunShadow);
         }
         this.#appliedSunShadowTileUrl = null;
+        this.#sunShadowTilesDeferred = false;
         return;
       }
       // Every path that enables shadows or moves the instant passes here, including a
@@ -3763,13 +3901,24 @@ export class MapLibreLayerController {
           createSunShadowSource(this.terrain, tileUrl),
         );
         this.#appliedSunShadowTileUrl = tileUrl;
-      } else if (this.#appliedSunShadowTileUrl !== tileUrl) {
-        const raster = source as { setTiles?: (tiles: string[]) => void };
-        if (raster.setTiles === undefined) {
-          throw new Error('The sun-shadow source cannot update its tiles.');
+        this.#sunShadowTilesDeferred = false;
+      } else if (this.#appliedSunShadowTileUrl === tileUrl) {
+        this.#sunShadowTilesDeferred = false;
+      } else {
+        // MapLibre renders every replaced minute in full, so held time keys or a fast
+        // slider would queue one complete render per minute. While the applied minute
+        // still loads, the newest one waits and `handleSourceData` applies it once loaded.
+        this.#sunShadowTilesDeferred =
+          !this.#sunShadowDrawEveryStep &&
+          !map.isSourceLoaded(mapSourceIds.terrainSunShadow);
+        if (!this.#sunShadowTilesDeferred) {
+          const raster = source as { setTiles?: (tiles: string[]) => void };
+          if (raster.setTiles === undefined) {
+            throw new Error('The sun-shadow source cannot update its tiles.');
+          }
+          raster.setTiles([tileUrl]);
+          this.#appliedSunShadowTileUrl = tileUrl;
         }
-        raster.setTiles([tileUrl]);
-        this.#appliedSunShadowTileUrl = tileUrl;
       }
       if (map.getLayer(terrainOverlayLayerIds.sunShadow) === undefined) {
         map.addLayer(createSunShadowLayer(), mapInsertionPoints.sunShadowBeforeLayerId);

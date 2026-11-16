@@ -30,6 +30,20 @@ describe('TerrainLightingTuningPanel', () => {
     expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.63);
     expect(screen.getByText('0.63')).toBeInTheDocument();
 
+    for (const name of [
+      'terrainShadeExposure',
+      'terrainShadeShadowStrength',
+      'terrainShadeHighlightRolloff',
+    ]) {
+      screen.getByRole('slider', { name }).focus();
+      await user.keyboard('{ArrowRight}');
+    }
+    expect(terrainLightingTuningStore.getState().values).toMatchObject({
+      terrainShadeExposure: 0.05,
+      terrainShadeShadowStrength: 2.05,
+      terrainShadeHighlightRolloff: 2.05,
+    });
+
     // GPU values carry a marker and land in the store once the keyboard step commits.
     const share = screen.getByRole('slider', { name: 'terrainShadeSkyLightShare' });
     expect(screen.getAllByText('GPU').length).toBeGreaterThan(0);
@@ -92,13 +106,22 @@ describe('TerrainLightingTuningPanel', () => {
         values: {
           ...terrainLightingTuningStore.getState().values,
           sunShadowOpacity: 0.9,
+          terrainShadeExposure: -0.5,
+          terrainShadeShadowStrength: 3,
+          terrainShadeHighlightRolloff: 1.5,
         },
       });
     });
 
     await user.click(screen.getByRole('button', { name: 'Copy configuration' }));
     const copied: unknown = JSON.parse(String(writeText.mock.lastCall?.[0]));
-    expect(copied).toMatchObject({ sunAlpenglow: '#123456', sunShadowOpacity: 0.9 });
+    expect(copied).toMatchObject({
+      sunAlpenglow: '#123456',
+      sunShadowOpacity: 0.9,
+      terrainShadeExposure: -0.5,
+      terrainShadeShadowStrength: 3,
+      terrainShadeHighlightRolloff: 1.5,
+    });
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
 
     await user.click(

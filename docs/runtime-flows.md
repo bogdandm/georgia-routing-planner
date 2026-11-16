@@ -361,19 +361,26 @@ x), so it stays below 2 and lit slopes keep their order. The worker reads the re
 back as one brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of
 sunlight codes, interpolates the codes bilinearly, and colors each pixel through a 256 ×
 256 table built once per palette and sky-light share (the last four are kept). The
-neutral level, where the overlay is transparent, is brightness 1.55
-(`shadeNeutralBrightness`), above flat ground in full sun: below it the shadow color
-fades in with alpha 1 − brightness / 1.55, so flat sunlit ground keeps a light shade and
-slopes turned to the Sun can still brighten; above it the highlight color fades in up to
-the compressed maximum of 2. The highlight is tinted by the Rayleigh-extinction sunlight
-color (`domain/terrain/atmosphericSunlight.ts`) at 56% strength. The shadow color
-follows the sunlight code: from the day color toward the golden-hour lilac as the blue
-deficit of the sunlight grows, then over the twilight codes to the deep twilight blue at
-half depth and back to the day color by night. As the Sun sinks, shadows lose part of
-their opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows
-with the direct share of the brightness up to 2. Over the first part of the twilight
-codes, a rose alpenglow is composited over shade with an opacity that peaks about 15% of
-the way to the night elevation, is gone by 55%, and scales with the square of brightness
+neutral reference is physical brightness 1 (`shadeNeutralBrightness`), so normally
+illuminated ground keeps the original basemap colors. Before tone mapping, the LUT
+inverts the mask's compression above 1 and applies a fixed EV exposure; it never
+normalizes a tile or animation frame independently. For exposed brightness divided by
+the neutral reference, `b`, shadow alpha is `1 − exp(−strength × (1 − b)² / b)` below 1
+(full shade at black, or no shade at zero strength). Above 1, highlight alpha is
+`sunHighlightOpacity / (1 + (rolloff / (b − 1))²)`. The curves meet with zero value and
+zero slope at 1; highlights approach their opacity limit without clipping. Exposure
+defaults to 0 EV, shadow strength to 2, and highlight rolloff to 2 physical brightness
+units above neutral. These controls are independent of shadow layer opacity and of each
+other. Atmospheric glow and alpenglow still use the original mask brightness. The
+highlight is tinted by the Rayleigh-extinction sunlight color
+(`domain/terrain/atmosphericSunlight.ts`) at 56% strength. The shadow color follows the
+sunlight code: from the day color toward the golden-hour lilac as the blue deficit of
+the sunlight grows, then over the twilight codes to the deep twilight blue at half depth
+and back to the day color by night. As the Sun sinks, shadows lose part of their
+opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows with
+the direct share of the brightness up to 2. Over the first part of the twilight codes, a
+rose alpenglow is composited over shade with an opacity that peaks about 15% of the way
+to the night elevation, is gone by 55%, and scales with the square of brightness
 relative to the sky share, so open slopes glow and gorges do not. GPU jobs run one at a
 time and wait on a fence before the next starts, so at most one tile of shadow work
 competes with map frames.
@@ -383,8 +390,9 @@ textures (keyed by the DEM mosaic) and 48 cast-shadow visibility textures (keyed
 mosaic and minute, or `night`) on the GPU, about 13 MiB, so a new shade-pass lighting
 for the tiles in view only reassembles mosaics from cached DEM tiles and reruns the
 shade pass. Shade masks are keyed by DEM, tile, minute, and the shade-pass lighting, so
-masks of several lightings coexist; colors, opacities, the neutral, and the sunlight
-tint only select another lookup table over the same masks.
+masks of several lightings coexist; colors, opacities, the neutral, fixed exposure,
+shadow strength, highlight rolloff, and sunlight tint only select another lookup table
+over the same masks.
 
 The temporary **Lighting tuning** panel (`presentation/map/terrainLightingTuning.ts` and
 `TerrainLightingTuningPanel.tsx`) owns a Zustand store of tuned values, mirrored to

@@ -636,8 +636,14 @@ export interface ShadePalette {
   /** Rose light the twilight sky casts on open slopes just after sunset. */
   readonly alpenglowColor: Rgb;
   readonly alpenglowOpacity: number;
-  /** Brightness left untouched, below 2; see `shadeNeutralBrightness`. */
+  /** Physical brightness left untouched after exposure; normally illuminated terrain is 1. */
   readonly neutralBrightness: number;
+  /** Fixed exposure in EV; shared by every tile and animation frame. */
+  readonly exposure: number;
+  /** Strength of the shadow-only transfer curve; 0 disables tonal shade. */
+  readonly shadowStrength: number;
+  /** Excess physical brightness at half the highlight opacity; always above 0. */
+  readonly highlightRolloff: number;
   /** Share of the sunlight hue in the highlight, 0–1; see `sunlightTintStrength`. */
   readonly sunlightTintStrength: number;
 }
@@ -684,13 +690,11 @@ function sunlightTone(code: number): SunlightTone {
  */
 export const sunlightTintStrength = 0.56;
 
-/**
- * Default brightness the overlay leaves untouched. It sits above flat ground in full sun
- * (1), so flat ground keeps a light shade and slopes turned to the Sun can still brighten
- * in two steps: first the shade fades, then the highlight grows up to the compressed
- * maximum of 2. With the neutral at 1, every lit slope already had no shade left to lose.
- */
-export const shadeNeutralBrightness = 1.55;
+/** Normally illuminated terrain keeps the basemap's original colors. */
+export const shadeNeutralBrightness = 1;
+export const terrainShadeExposure = 0;
+export const terrainShadeShadowStrength = 2;
+export const terrainShadeHighlightRolloff = 2;
 const shadeMaximumBrightness = 2;
 
 /**
@@ -711,23 +715,16 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
  * (ImageData semantics).
  *
- * Shade fades in as brightness drops below `neutralBrightness`, in the color of the
- * sky that lights it: `shadowColor` under a high Sun, turning to the lilac
- * `goldenShadowColor` as the Sun reaches the pixel's horizon, then over civil twilight to
- * the deep blue `lowSunShadowColor` and back to `shadowColor` by night. Light
- * is the highlight color tinted by the sunlight color (the tint fades out over the second
- * half of the twilight codes, where only the night top light can still reach it), up to
- * `highlightOpacity` from the
- * neutral to the compressed maximum of 2, plus a glow of up to `lowSunGlowOpacity` ×
- * `lowSun` that grows with the direct share of the brightness up to the compressed
- * maximum of 2, so slopes facing a low Sun keep their relief instead of one saturated
- * tone. As the Sun sinks, shade loses up to `lowSunShadowLift` of its opacity, as the sky
- * lights shadows more than the dimming Sun lights the slopes. Light is composited over
- * shade. A high Sun keeps the plain shadow and highlight. In early civil twilight open
- * slopes (those still lit by most of the sky, `brightness` near `skyLightShare`, the
- * shade pass's `ShadeLighting.skyLightShare`) get a rose `alpenglowColor` glow of up to
- * `alpenglowOpacity`; it rises just past the sea-level horizon and fades before the
- * middle of twilight, while gorges stay plain shade.
+ * The mask's compression above 1 is inverted before applying fixed exposure in EV.
+ * Independent shadow and highlight curves meet with zero slope at the physical neutral
+ * (1 by default). Shadows approach full shade at black; highlights approach
+ * `highlightOpacity` smoothly, with half that opacity at `highlightRolloff` above
+ * neutral. No tile/frame normalization or hard highlight clipping is applied.
+ *
+ * Atmospheric colors, direct-sun glow and alpenglow still use the original mask and
+ * sunlight code, not the exposed brightness. Shade follows the day/golden/twilight sky;
+ * highlight tint fades out in late twilight. Sun glow lights direct-sun slopes and rose
+ * alpenglow lights sky-open slopes in early twilight, leaving gorges in plain shade.
  */
 export function createShadeLookupTable(
   palette: ShadePalette,
@@ -743,6 +740,29 @@ export function createShadeLookupTable(
     alpenglowColor,
     sunlightTintStrength: tintStrength,
   } = palette;
+  const shadows = new Float64Array(256);
+  const highlights = new Float64Array(256);
+  const exposure = 2 ** palette.exposure / palette.neutralBrightness;
+  for (let value = 0; value < 256; value += 1) {
+    const compressed = value / shadeBrightnessScale;
+    // 254 is the quantized limit at 2; 255 is unused by the GPU. Both represent
+    // unbounded physical brightness and therefore the curve's highlight asymptote.
+    const physical =
+      compressed <= 1 ? compressed : compressed < 2 ? 1 / (2 - compressed) : Infinity;
+    const brightness = physical * exposure;
+    if (brightness < 1) {
+      const deficit = 1 - brightness;
+      shadows[value] =
+        palette.shadowStrength === 0
+          ? 0
+          : brightness === 0
+            ? 1
+            : -Math.expm1((-palette.shadowStrength * deficit * deficit) / brightness);
+    } else {
+      const shoulder = palette.highlightRolloff / (brightness - 1);
+      highlights[value] = palette.highlightOpacity / (1 + shoulder * shoulder);
+    }
+  }
   for (let code = 0; code < 256; code += 1) {
     const { color: sunlight, lowSun } = sunlightTone(code);
     const twilightDepth =
@@ -774,7 +794,7 @@ export function createShadeLookupTable(
           alpenglowEndTwilightDepth,
           twilightDepth,
         ));
-    const neutral = palette.neutralBrightness;
+    const glow = lowSun * palette.lowSunGlowOpacity;
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(
@@ -784,33 +804,34 @@ export function createShadeLookupTable(
         ),
         1,
       );
-      const sunAlpha = Math.min(
-        1,
-        directShare * lowSun * palette.lowSunGlowOpacity +
-          Math.min(
-            Math.max((brightness - neutral) / (shadeMaximumBrightness - neutral), 0),
-            1,
-          ) *
-            palette.highlightOpacity,
-      );
+      const sunAlpha = 1 - (1 - (highlights[value] ?? 0)) * (1 - directShare * glow);
       const openSky = Math.min(brightness / skyLightShare, 1);
       const roseAlpha = alpenglow * openSky * openSky;
-      const lightAlpha = Math.min(1, sunAlpha + roseAlpha);
-      const shadeWeight =
-        Math.max(1 - brightness / neutral, 0) * shadeOpacity * (1 - lightAlpha);
+      const sunWeight = sunAlpha * (1 - roseAlpha);
+      const lightAlpha = sunWeight + roseAlpha;
+      const shadeWeight = (shadows[value] ?? 0) * shadeOpacity * (1 - lightAlpha);
       const alpha = lightAlpha + shadeWeight;
       if (alpha === 0) continue;
-      const blend = (channel: 0 | 1 | 2) =>
-        Math.round(
-          (lightColor[channel] * sunAlpha +
-            alpenglowColor[channel] * roseAlpha +
-            shadeColor[channel] * shadeWeight) /
-            (sunAlpha + roseAlpha + shadeWeight),
-        );
-      bytes.set(
-        [blend(0), blend(1), blend(2), Math.round(alpha * 255)],
-        (code * 256 + value) * 4,
+      const offset = (code * 256 + value) * 4;
+      bytes[offset] = Math.round(
+        (lightColor[0] * sunWeight +
+          alpenglowColor[0] * roseAlpha +
+          shadeColor[0] * shadeWeight) /
+          alpha,
       );
+      bytes[offset + 1] = Math.round(
+        (lightColor[1] * sunWeight +
+          alpenglowColor[1] * roseAlpha +
+          shadeColor[1] * shadeWeight) /
+          alpha,
+      );
+      bytes[offset + 2] = Math.round(
+        (lightColor[2] * sunWeight +
+          alpenglowColor[2] * roseAlpha +
+          shadeColor[2] * shadeWeight) /
+          alpha,
+      );
+      bytes[offset + 3] = Math.round(alpha * 255);
     }
   }
   return table;

@@ -31,6 +31,9 @@ const palette: ShadePalette = {
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.4,
   neutralBrightness: shadeNeutralBrightness,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
   sunlightTintStrength: 0.75,
 };
 /** Sunlight code of the zenith Sun at sea level (relative air mass 1). */
@@ -55,20 +58,100 @@ describe('createShadeLookupTable', () => {
   const table = createShadeLookupTable(palette, terrainShadeSkyLightShare);
   const neutralByte = Math.round(shadeNeutralBrightness * shadeBrightnessScale);
 
-  it('keeps the plain shadow and highlight for a high Sun around a neutral above full sun', () => {
-    // The neutral falls between two bytes, so its nearest byte is clear to one unit.
-    expect(entryBytes(table, zenithCode, neutralByte)[3]).toBeLessThanOrEqual(1);
-    // Flat ground in full sun keeps a light shade, so lit slopes can still brighten.
-    const [, , , flatAlpha = 0] = entryBytes(table, zenithCode, shadeBrightnessScale);
-    expect(flatAlpha).toBeGreaterThan(0);
-    expect(flatAlpha).toBeLessThanOrEqual(
-      Math.ceil(255 * (1 - 1 / shadeNeutralBrightness)),
-    );
+  it('leaves normally illuminated terrain unchanged while preserving deep shade and bright slopes', () => {
+    expect(entryBytes(table, zenithCode, shadeBrightnessScale)[3]).toBe(0);
     expect(entryBytes(table, zenithCode, 0)).toEqual([...palette.shadowColor, 255]);
-    expect(entryBytes(table, zenithCode, 254)).toEqual([
-      ...palette.highlightColor,
-      Math.round(0.6 * 255),
-    ]);
+    expect(entryBytes(table, zenithCode, 32)[3]).toBeGreaterThan(200);
+    expect(entryBytes(table, zenithCode, 190)[3]).toBeGreaterThan(0);
+  });
+  it('adjusts shadows independently from highlight strength and rolloff', () => {
+    const strongerShadows = createShadeLookupTable(
+      { ...palette, shadowStrength: 4 },
+      terrainShadeSkyLightShare,
+    );
+    const brighterHighlights = createShadeLookupTable(
+      { ...palette, highlightOpacity: 1 },
+      terrainShadeSkyLightShare,
+    );
+    const softerHighlights = createShadeLookupTable(
+      { ...palette, highlightRolloff: 3 },
+      terrainShadeSkyLightShare,
+    );
+    expect(entryBytes(strongerShadows, zenithCode, 80)[3]).toBeGreaterThan(
+      entryBytes(table, zenithCode, 80)[3] ?? 0,
+    );
+    expect(entryBytes(brighterHighlights, zenithCode, 210)[3]).toBeGreaterThan(
+      entryBytes(table, zenithCode, 210)[3] ?? 0,
+    );
+    expect(entryBytes(softerHighlights, zenithCode, 210)[3]).toBeLessThan(
+      entryBytes(table, zenithCode, 210)[3] ?? 0,
+    );
+    for (let value = 0; value < 256; value += 1) {
+      if (value <= shadeBrightnessScale) {
+        expect(entryBytes(brighterHighlights, zenithCode, value)).toEqual(
+          entryBytes(table, zenithCode, value),
+        );
+        expect(entryBytes(softerHighlights, zenithCode, value)).toEqual(
+          entryBytes(table, zenithCode, value),
+        );
+      } else {
+        expect(entryBytes(strongerShadows, zenithCode, value)).toEqual(
+          entryBytes(table, zenithCode, value),
+        );
+      }
+    }
+  });
+
+  it('applies exposure to decoded physical brightness instead of compressing it again', () => {
+    const exposed = createShadeLookupTable(
+      { ...palette, exposure: 1 },
+      terrainShadeSkyLightShare,
+    );
+    // Physical 2 encodes as 1.5 × 127. One EV maps physical 1 to the same light.
+    expect(
+      largestByteDifference(
+        entryBytes(exposed, zenithCode, 127),
+        entryBytes(table, zenithCode, Math.round(1.5 * 127)),
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(entryBytes(exposed, zenithCode, 64)[3]).toBe(0);
+    expect(entryBytes(exposed, zenithCode, 80)[3]).toBeGreaterThan(0);
+  });
+
+  it('keeps a smooth neutral and ordered highlights through the mask brightness limit', () => {
+    const base = [170, 190, 130];
+    const composite = (value: number) => {
+      const rgba = entryBytes(table, zenithCode, value);
+      const alpha = (rgba[3] ?? 0) / 255;
+      return base.map(
+        (channel, index) => channel * (1 - alpha) + (rgba[index] ?? 0) * alpha,
+      );
+    };
+    for (let value = 1; value < 256; value += 1) {
+      expect(
+        largestByteDifference(composite(value - 1), composite(value)),
+      ).toBeLessThan(5);
+    }
+    for (const value of [126, 127, 128]) {
+      expect(entryBytes(table, zenithCode, value)[3]).toBe(0);
+    }
+    const alphas = [170, 200, 230, 250, 254].map(
+      (value) => entryBytes(table, zenithCode, value)[3] ?? 0,
+    );
+    for (let index = 1; index < alphas.length; index += 1) {
+      expect(alphas[index]).toBeGreaterThan(alphas[index - 1] ?? 0);
+    }
+    const disabled = createShadeLookupTable(
+      {
+        ...palette,
+        shadowStrength: 0,
+        highlightOpacity: 0,
+        lowSunGlowOpacity: 0,
+        alpenglowOpacity: 0,
+      },
+      terrainShadeSkyLightShare,
+    );
+    expect(new Uint8Array(disabled.buffer).every((value) => value === 0)).toBe(true);
   });
 
   it('lifts shadows and turns them lilac when the Sun is on the horizon', () => {
@@ -163,9 +246,11 @@ describe('createShadeLookupTable', () => {
   });
 
   it('moves the untouched neutral and the sky-only shade with the tuned values', () => {
-    const tuned = createShadeLookupTable({ ...palette, neutralBrightness: 1 }, 0.5);
-    // A neutral at full sun leaves flat ground in full sun untouched.
-    expect(entryBytes(tuned, zenithCode, shadeBrightnessScale)[3]).toBe(0);
+    const tuned = createShadeLookupTable({ ...palette, neutralBrightness: 1.25 }, 0.5);
+    // Physical 1.25 encodes as 1.2; its nearest byte stays transparent to one unit.
+    expect(
+      entryBytes(tuned, zenithCode, Math.round(1.2 * shadeBrightnessScale))[3],
+    ).toBeLessThanOrEqual(1);
     // Half of full sun is now lit by the sky alone, so the low Sun adds no warm glow.
     const halfSun = Math.floor(0.5 * shadeBrightnessScale);
     const [red = 0, green = 0, blue = 0] = entryBytes(tuned, horizonCode, halfSun);

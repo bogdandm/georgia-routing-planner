@@ -26,6 +26,9 @@ const request: TerrainShadowTileRequest = {
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.4,
   neutralBrightness: 1.45,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
   sunlightTintStrength: 0.75,
   lighting: {
     skyLightShare: 0.35,
@@ -79,8 +82,11 @@ describe('terrainShadowTileRequestSchema', () => {
     ['a 256 px tile', { ...request, tileSize: 256 }],
     ['a color channel above 255', { ...request, shadowColor: [27, 36, 256] }],
     ['a highlight opacity above 1', { ...request, highlightOpacity: 1.5 }],
-    // The lookup table divides by 2 minus the neutral and by the sky-light share.
-    ['a neutral at the maximum brightness', { ...request, neutralBrightness: 2 }],
+    ['no neutral reference', { ...request, neutralBrightness: 0 }],
+    ['a non-finite exposure', { ...request, exposure: Infinity }],
+    ['an exposure outside the supported range', { ...request, exposure: -2.1 }],
+    ['a negative shadow strength', { ...request, shadowStrength: -0.1 }],
+    ['no highlight shoulder', { ...request, highlightRolloff: 0 }],
     [
       'no sky-light share',
       { ...request, lighting: { ...request.lighting, skyLightShare: 0 } },

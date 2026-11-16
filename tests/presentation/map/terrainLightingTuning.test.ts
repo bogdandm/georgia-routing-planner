@@ -32,6 +32,9 @@ describe('terrain lighting tuning', () => {
   it('compares with the defaults without losing the tuned values', () => {
     setTerrainLightingValue('sunHighlightOpacity', 0.2);
     setTerrainLightingValue('sunSky.night.fog', '#ABCDEF');
+    setTerrainLightingValue('terrainShadeExposure', -0.5);
+    setTerrainLightingValue('terrainShadeShadowStrength', 3);
+    setTerrainLightingValue('terrainShadeHighlightRolloff', 1.5);
     const tuned = terrainLightingTuningStore.getState().values;
 
     terrainLightingTuningStore.setState({ showDefaults: true });
@@ -72,9 +75,15 @@ describe('terrain lighting tuning', () => {
 
   it('keeps tuned values in localStorage and reads back only valid ones', () => {
     setTerrainLightingValue('sunLowShadowLift', 0.75);
+    setTerrainLightingValue('terrainShadeExposure', -0.5);
+    setTerrainLightingValue('terrainShadeShadowStrength', 0);
+    setTerrainLightingValue('terrainShadeHighlightRolloff', 0.05);
     const stored = localStorage.getItem(terrainLightingStorageKey);
     expect(parseStoredTerrainLightingTuning(stored)).toMatchObject({
       sunLowShadowLift: 0.75,
+      terrainShadeExposure: -0.5,
+      terrainShadeShadowStrength: 0,
+      terrainShadeHighlightRolloff: 0.05,
     });
 
     expect(
@@ -83,6 +92,9 @@ describe('terrain lighting tuning', () => {
           sunShadowOpacity: 0.3,
           // Outside its slider range, not a color, and unknown: all ignored.
           shadeNeutralBrightness: 5,
+          terrainShadeExposure: -3,
+          terrainShadeShadowStrength: -0.1,
+          terrainShadeHighlightRolloff: 0,
           sunShadow: 'red',
           rimLightGain: 2,
         }),

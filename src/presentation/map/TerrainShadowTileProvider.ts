@@ -22,6 +22,9 @@ import {
   type ShadePalette,
   shadeNeutralBrightness,
   sunlightTintStrength,
+  terrainShadeExposure,
+  terrainShadeShadowStrength,
+  terrainShadeHighlightRolloff,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 
@@ -161,6 +164,9 @@ export const defaultTerrainShadowShading: TerrainShadowShading = {
     alpenglowColor: parseShadowColor(mapVisualPalette.terrain.sunAlpenglow),
     alpenglowOpacity: mapVisualPalette.terrain.sunAlpenglowOpacity,
     neutralBrightness: shadeNeutralBrightness,
+    exposure: terrainShadeExposure,
+    shadowStrength: terrainShadeShadowStrength,
+    highlightRolloff: terrainShadeHighlightRolloff,
     sunlightTintStrength,
   },
   lighting: defaultShadeLighting,

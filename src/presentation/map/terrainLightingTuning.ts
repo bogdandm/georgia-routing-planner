@@ -4,6 +4,9 @@ import {
   defaultShadeLighting,
   shadeNeutralBrightness,
   sunlightTintStrength,
+  terrainShadeExposure,
+  terrainShadeShadowStrength,
+  terrainShadeHighlightRolloff,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 import {
@@ -85,6 +88,33 @@ export const terrainLightingParameters = {
     max: 1.8,
     step: 0.01,
     defaultValue: shadeNeutralBrightness,
+  },
+  terrainShadeExposure: {
+    kind: 'number',
+    section: 'light',
+    apply: 'lut',
+    min: -2,
+    max: 2,
+    step: 0.05,
+    defaultValue: terrainShadeExposure,
+  },
+  terrainShadeShadowStrength: {
+    kind: 'number',
+    section: 'light',
+    apply: 'lut',
+    min: 0,
+    max: 4,
+    step: 0.05,
+    defaultValue: terrainShadeShadowStrength,
+  },
+  terrainShadeHighlightRolloff: {
+    kind: 'number',
+    section: 'light',
+    apply: 'lut',
+    min: 0.05,
+    max: 4,
+    step: 0.05,
+    defaultValue: terrainShadeHighlightRolloff,
   },
   terrainShadeSkyLightShare: {
     kind: 'number',
@@ -316,6 +346,9 @@ export function terrainShadowShadingFromTuning(
       alpenglowColor: parseShadowColor(tuning.sunAlpenglow),
       alpenglowOpacity: tuning.sunAlpenglowOpacity,
       neutralBrightness: tuning.shadeNeutralBrightness,
+      exposure: tuning.terrainShadeExposure,
+      shadowStrength: tuning.terrainShadeShadowStrength,
+      highlightRolloff: tuning.terrainShadeHighlightRolloff,
       sunlightTintStrength: tuning.sunlightTintStrength,
     },
     lighting: {

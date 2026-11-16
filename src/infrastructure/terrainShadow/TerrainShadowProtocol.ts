@@ -40,8 +40,10 @@ export const terrainShadowTileRequestSchema = z
     lowSunGlowOpacity: z.number().min(0).max(1),
     alpenglowColor: colorSchema,
     alpenglowOpacity: z.number().min(0).max(1),
-    // Below 2, the compressed maximum brightness the lookup table divides by.
     neutralBrightness: z.number().gt(0).lt(2),
+    exposure: z.number().min(-2).max(2),
+    shadowStrength: z.number().min(0).max(4),
+    highlightRolloff: z.number().min(0.05).max(4),
     sunlightTintStrength: z.number().min(0).max(1),
     /** `ShadeLighting`: shade-pass uniforms; part of the cached mask's key. */
     lighting: z

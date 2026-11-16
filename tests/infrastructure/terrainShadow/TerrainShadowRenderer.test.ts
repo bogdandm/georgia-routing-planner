@@ -22,6 +22,9 @@ const request: TerrainShadowTileRequest = {
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.6,
   neutralBrightness: 1.45,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
   sunlightTintStrength: 0.75,
   lighting: {
     skyLightShare: 0.35,
@@ -43,6 +46,9 @@ describe('terrainShadowMaskKey', () => {
       lowSunShadowLift: 0.9,
       alpenglowOpacity: 0,
       neutralBrightness: 1.1,
+      exposure: 1,
+      shadowStrength: 3,
+      highlightRolloff: 0.5,
       sunlightTintStrength: 0,
     };
     expect(terrainShadowMaskKey(recolored, false)).toBe(

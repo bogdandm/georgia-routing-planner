@@ -107,10 +107,13 @@ describe('SunShadowControl', () => {
   it('opens the lighting tuning panel below the rail, open beside the sun panel', async () => {
     const user = userEvent.setup();
     terrainLightingTuningStore.setState({ panelOpen: false });
-    renderSunShadowControls({ enabled: true });
+    const { onChange } = renderSunShadowControls({ enabled: true });
     await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
 
-    await user.click(screen.getByRole('button', { name: 'Lighting tuning' }));
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Lighting tuning' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(onChange).not.toHaveBeenCalled();
 
     expect(screen.getByRole('region', { name: 'Lighting tuning' })).toBeVisible();
     expect(screen.getByRole('dialog', { name: 'Sun shadows' })).toBeVisible();

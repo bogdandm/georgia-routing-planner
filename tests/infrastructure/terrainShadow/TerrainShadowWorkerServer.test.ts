@@ -31,6 +31,9 @@ const request: TerrainShadowTileRequest = {
   alpenglowColor: [240, 163, 184],
   alpenglowOpacity: 0.4,
   neutralBrightness: 1.45,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
   sunlightTintStrength: 0.75,
   lighting: {
     skyLightShare: 0.35,

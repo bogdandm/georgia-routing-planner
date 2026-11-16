@@ -744,6 +744,9 @@ function shadeTableKey(request: TerrainShadowTileRequest): string {
     palette.alpenglowColor,
     palette.alpenglowOpacity,
     palette.neutralBrightness,
+    palette.exposure,
+    palette.shadowStrength,
+    palette.highlightRolloff,
     palette.sunlightTintStrength,
     request.lighting.skyLightShare,
   ]);

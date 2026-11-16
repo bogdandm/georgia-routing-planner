@@ -303,31 +303,38 @@ function SunShadowPanel({
 
   return (
     <Stack spacing={1}>
-      <FormControlLabel
-        control={
-          <Switch
-            // Focus enters the panel so Escape and Tab work from the keyboard.
-            autoFocus={!peek && !unavailable}
-            checked={enabled && !unavailable}
-            disabled={unavailable}
-            onChange={(_event, checked) => {
-              onChange({ enabled: checked, instantMs });
-            }}
-          />
-        }
-        label={<Typography variant="body2">{t`Sun shadows`}</Typography>}
-        sx={{ mx: 0 }}
-      />
-      <Button
-        onClick={() => {
-          terrainLightingTuningStore.setState({ panelOpen: true });
-        }}
-        size="small"
-        startIcon={<TuneRoundedIcon fontSize="small" />}
-        sx={{ alignSelf: 'flex-start' }}
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between' }}
       >
-        {t`Lighting tuning`}
-      </Button>
+        <FormControlLabel
+          control={
+            <Switch
+              // Focus enters the panel so Escape and Tab work from the keyboard.
+              autoFocus={!peek && !unavailable}
+              checked={enabled && !unavailable}
+              disabled={unavailable}
+              onChange={(_event, checked) => {
+                onChange({ enabled: checked, instantMs });
+              }}
+            />
+          }
+          label={<Typography variant="body2">{t`Sun shadows`}</Typography>}
+          sx={{ mx: 0 }}
+        />
+        <Tooltip disableInteractive title={t`Lighting tuning`}>
+          <IconButton
+            aria-label={t`Lighting tuning`}
+            color="primary"
+            onClick={() => {
+              terrainLightingTuningStore.setState({ panelOpen: true });
+            }}
+            size="small"
+          >
+            <TuneRoundedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
       {unavailable ? (
         <Typography color="text.secondary" variant="caption">
           {t`This browser cannot compute shadows: WebGL2 float rendering is unavailable.`}

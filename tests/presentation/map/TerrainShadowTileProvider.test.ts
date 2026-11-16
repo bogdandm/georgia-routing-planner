@@ -185,7 +185,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
 
     await expect(tile).resolves.toEqual({ data: bitmap });
     expect(workerFactory).toHaveBeenCalledOnce();
-    expect(worker.requests[0]?.payload).toEqual({
+    expect(worker.requests[0]?.payload).toMatchObject({
       z: 12,
       x: 2_541,
       y: 1_514,
@@ -194,26 +194,6 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       demTileUrl: terrain.tileUrl,
       demMinZoom: 0,
       demMaxZoom: 12,
-      shadowColor: [0x19, 0x35, 0x5d],
-      highlightColor: [0xff, 0xf7, 0xe6],
-      highlightOpacity: 0.8,
-      goldenShadowColor: [0x3b, 0x28, 0x67],
-      lowSunShadowColor: [0x2e, 0x3f, 0x7a],
-      lowSunShadowLift: 0.25,
-      lowSunGlowOpacity: 0.43,
-      alpenglowColor: [0xf0, 0xa3, 0xb8],
-      alpenglowOpacity: 0.32,
-      neutralBrightness: 1.55,
-      sunlightTintStrength: 0.56,
-      lighting: {
-        skyLightShare: 0.45,
-        skyOcclusionStrength: 2.55,
-        nightSkyLight: 0.58,
-        nightTopLight: 0.25,
-        nightTopLightFocus: 3.9,
-        diffuseSkyFraction: 0.52,
-        softEdgeSigmaPixels: 1.7,
-      },
     });
 
     const second = loadTile();

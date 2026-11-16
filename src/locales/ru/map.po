@@ -58,6 +58,11 @@ msgstr "3D-рельеф недоступен, пока активна мозаи
 msgid "3D terrain with bearing {bearing}° and pitch {pitch}°."
 msgstr "3D-рельеф с азимутом {bearing}° и наклоном {pitch}°."
 
+#. js-lingui-id: dSsPCs
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Alpenglow"
+msgstr "Альпийское свечение"
+
 #. js-lingui-id: X4GABr
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -325,6 +330,11 @@ msgstr "Не удалось проверить данные карты побл�
 msgid "Nearby map feature"
 msgstr "Ближайший объект"
 
+#. js-lingui-id: bj8Kgj
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Night sky"
+msgstr "Ночное небо"
+
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "No named map feature found."
@@ -430,6 +440,11 @@ msgstr "Показать плоскую 2D-карту"
 msgid "Show weather forecast"
 msgstr "Показать прогноз погоды"
 
+#. js-lingui-id: wdq0VE
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sky-tinted shadows"
+msgstr "Цвет теней от неба"
+
 #. js-lingui-id: qy1-46
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -440,6 +455,11 @@ msgstr "Топокарта СССР"
 #: src/presentation/map/SunShadowControl.tsx
 msgid "Stop"
 msgstr "Остановить"
+
+#. js-lingui-id: sgINc_
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sun disk"
+msgstr "Диск Солнца"
 
 #. js-lingui-id: 6TGtTn
 #: src/presentation/map/SunShadowControl.tsx

@@ -457,6 +457,8 @@ export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShad
 uniform sampler2D uVisibility;
 // Open-sky share of a level surface on the 4 × 4 pixel sky-view grid, linearly filtered.
 uniform sampler2D uSkyView;
+// Temporary experiment switches, 0 or 1.
+uniform float uNightSky;
 const float skyOcclusionStrength = ${glslFloat(skyOcclusionStrength)};
 
 const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
@@ -555,7 +557,7 @@ void main() {
     -diffuseSkyTransitionDegrees, diffuseSkyTransitionDegrees, sun.apparentElevationDegrees
   ));
   float sky = skyTwilight * mix(sunSideSky, diffuseSky, diffuseShare)
-    + (1.0 - skyTwilight) * nightSkyLight * diffuseSky;
+    + (1.0 - skyTwilight) * uNightSky * nightSkyLight * diffuseSky;
   float brightness = (1.0 - skyLightShare) * direct + skyLightShare * sky;
   // Above full sun, x ↦ 1 + x / (1 + x) keeps sun-facing slopes ordered below 2 instead
   // of clipping them all to one tone.
@@ -811,6 +813,8 @@ export function expandShadeMask(
 export function createFlatShadeMask(
   tile: TerrainShadowTileAddress,
   instantMs: number,
+  /** Temporary night-sky experiment switch. */
+  nightSky = true,
 ): Uint8Array {
   const mask = new Uint8Array(shadeMaskBytes);
   const gridBrightness = new Float32Array(sunlightGridSize * sunlightGridSize);
@@ -849,7 +853,8 @@ export function createFlatShadeMask(
       const twilight = Math.min(Math.max((elevation - night) / -night, 0), 1);
       const twilightSky = twilight * twilight * (3 - 2 * twilight);
       // Flat ground sees the whole sky, so the night sky adds its full share.
-      const sky = twilightSky + (1 - twilightSky) * terrainShadeNightSkyLight;
+      const sky =
+        twilightSky + (1 - twilightSky) * (nightSky ? terrainShadeNightSkyLight : 0);
       const index = row * sunlightGridSize + column;
       gridBrightness[index] =
         (1 - terrainShadeSkyLightShare) * direct + terrainShadeSkyLightShare * sky;

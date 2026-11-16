@@ -333,31 +333,37 @@ night elevation, the end of civil twilight (−6°), and hands over to a night s
 of the sky share that lights slopes only by their occluded diffuse sky. Night output no
 longer depends on the Sun, so a tile whose every pixel is past the night elevation is
 cached under one `night` key instead of its minute, and night playback frames reuse that
-single mask. The same pass writes a sunlight code: the logarithm of the relative optical
-air mass of the direct-sun path (Kasten–Young, scaled by the pressure at the pixel's
-height, or through the tangent height when the Sun is below the pixel's level), or, once
-the Sun is below the sea-level horizon, how far twilight has faded toward the night
-elevation. Brightness above 1 (slopes facing a low Sun reach several times flat ground)
-is compressed as 1 + x / (1 + x), so it stays below 2 and lit slopes keep their order.
-The worker reads the result back as one brightness byte per pixel (brightness × 127)
-plus a 128 × 128 grid of sunlight codes, interpolates the codes bilinearly, and colors
-each pixel through a 256 × 256 table built once per palette. The neutral level, where
-the overlay is transparent, is brightness 1.45 (`shadeNeutralBrightness`), above flat
-ground in full sun: below it the shadow color fades in with alpha 1 − brightness / 1.45,
-so flat sunlit ground keeps a light shade and slopes turned to the Sun can still
-brighten; above it the highlight color fades in up to the compressed maximum of 2. The
-highlight is tinted by the Rayleigh-extinction sunlight color
-(`domain/terrain/atmosphericSunlight.ts`) at 75% strength. The shadow color follows the
-sunlight code: from the day color toward the golden-hour lilac as the blue deficit of
-the sunlight grows, then over the twilight codes to the deep twilight blue at half depth
-and back to the day color by night. As the Sun sinks, shadows lose part of their
-opacity, and ground lit by the direct Sun gains a sunlight-colored glow that grows with
-the direct share of the brightness up to 2. Over the first part of the twilight codes, a
-rose alpenglow is composited over shade with an opacity that peaks about 15% of the way
-to the night elevation, is gone by 55%, and scales with the square of brightness
-relative to the sky share, so open slopes glow and gorges do not. GPU jobs run one at a
-time and wait on a fence before the next starts, so at most one tile of shadow work
-competes with map frames.
+single mask. Temporary panel checkboxes switch the newest visuals for comparison: the
+provider keeps every switch set under a version, tile URLs end in
+`?experiments=<version>` after a change so MapLibre requests every tile again,
+sky-tinted shadows off sends the earlier day shade and no golden-hour lilac, alpenglow
+off sends a zero alpenglow opacity, and the request carries a `nightSky` flag that
+scales the night-sky term and joins the mask cache key (night tiles without the night
+sky are full shade without GPU work). The Sun disk switch only hides the overlay. The
+same pass writes a sunlight code: the logarithm of the relative optical air mass of the
+direct-sun path (Kasten–Young, scaled by the pressure at the pixel's height, or through
+the tangent height when the Sun is below the pixel's level), or, once the Sun is below
+the sea-level horizon, how far twilight has faded toward the night elevation. Brightness
+above 1 (slopes facing a low Sun reach several times flat ground) is compressed as 1 + x
+/ (1 + x), so it stays below 2 and lit slopes keep their order. The worker reads the
+result back as one brightness byte per pixel (brightness × 127) plus a 128 × 128 grid of
+sunlight codes, interpolates the codes bilinearly, and colors each pixel through a 256 ×
+256 table built once per palette. The neutral level, where the overlay is transparent,
+is brightness 1.45 (`shadeNeutralBrightness`), above flat ground in full sun: below it
+the shadow color fades in with alpha 1 − brightness / 1.45, so flat sunlit ground keeps
+a light shade and slopes turned to the Sun can still brighten; above it the highlight
+color fades in up to the compressed maximum of 2. The highlight is tinted by the
+Rayleigh-extinction sunlight color (`domain/terrain/atmosphericSunlight.ts`) at 75%
+strength. The shadow color follows the sunlight code: from the day color toward the
+golden-hour lilac as the blue deficit of the sunlight grows, then over the twilight
+codes to the deep twilight blue at half depth and back to the day color by night. As the
+Sun sinks, shadows lose part of their opacity, and ground lit by the direct Sun gains a
+sunlight-colored glow that grows with the direct share of the brightness up to 2. Over
+the first part of the twilight codes, a rose alpenglow is composited over shade with an
+opacity that peaks about 15% of the way to the night elevation, is gone by 55%, and
+scales with the square of brightness relative to the sky share, so open slopes glow and
+gorges do not. GPU jobs run one at a time and wait on a fence before the next starts, so
+at most one tile of shadow work competes with map frames.
 
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,

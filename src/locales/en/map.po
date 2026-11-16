@@ -58,6 +58,11 @@ msgstr "3D terrain is unavailable while Sentinel Mosaic is active."
 msgid "3D terrain with bearing {bearing}° and pitch {pitch}°."
 msgstr "3D terrain with bearing {bearing}° and pitch {pitch}°."
 
+#. js-lingui-id: dSsPCs
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Alpenglow"
+msgstr "Alpenglow"
+
 #. js-lingui-id: X4GABr
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -325,6 +330,11 @@ msgstr "Nearby map data could not be inspected."
 msgid "Nearby map feature"
 msgstr "Nearby map feature"
 
+#. js-lingui-id: bj8Kgj
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Night sky"
+msgstr "Night sky"
+
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "No named map feature found."
@@ -430,6 +440,11 @@ msgstr "Show flat 2D map"
 msgid "Show weather forecast"
 msgstr "Show weather forecast"
 
+#. js-lingui-id: wdq0VE
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sky-tinted shadows"
+msgstr "Sky-tinted shadows"
+
 #. js-lingui-id: qy1-46
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -440,6 +455,11 @@ msgstr "Soviet Topographic"
 #: src/presentation/map/SunShadowControl.tsx
 msgid "Stop"
 msgstr "Stop"
+
+#. js-lingui-id: sgINc_
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Sun disk"
+msgstr "Sun disk"
 
 #. js-lingui-id: 6TGtTn
 #: src/presentation/map/SunShadowControl.tsx

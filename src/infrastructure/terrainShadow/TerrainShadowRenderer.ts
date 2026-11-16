@@ -19,6 +19,7 @@ import {
   shadeMaskBytes,
   sunlightGridSize,
   sunlightGridStride,
+  sunlightNightCode,
   terrainShadowShadeFragmentShaderSource,
   terrainShadowVisibilityFragmentShaderSource,
   terrainShadowVisibilitySize,
@@ -44,6 +45,8 @@ const shadowPassBands = 8;
 const bytesPerTexel = 4;
 const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
 const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
+/** Temporary: full night shade for tiles drawn with the night-sky experiment off. */
+const nightMask = new Uint8Array(shadeMaskBytes).fill(sunlightNightCode, tilePixels);
 
 /** Uniforms every tile pass reads; the rest are only active in some passes. */
 const tileUniformNames = [
@@ -72,6 +75,7 @@ const shadeUniformNames = [
   ...sunUniformNames,
   'uVisibility',
   'uSkyView',
+  'uNightSky',
 ] as const;
 const reductionUniformNames = ['uSource', 'uSourceSize', 'uTargetOrigin'] as const;
 /** Texture units of the shade pass's own inputs, after the four mosaic units. */
@@ -627,6 +631,7 @@ function drawShadePasses(
   setSunUniforms(gl, shadeProgram.uniforms, request);
   gl.uniform1i(shadeProgram.uniforms.uVisibility, visibilityTextureUnit);
   gl.uniform1i(shadeProgram.uniforms.uSkyView, skyViewTextureUnit);
+  gl.uniform1f(shadeProgram.uniforms.uNightSky, request.nightSky ? 1 : 0);
   drawFullscreen(gpu);
 }
 
@@ -749,7 +754,7 @@ export class TerrainShadowRenderer {
     // Coarse tiles shade flat ground on the CPU: no GPU context, DEM, or cache memory.
     if (request.z < terrainShadowReliefMinZoom) {
       const startedAt = performance.now();
-      const mask = createFlatShadeMask(request, request.instantMs);
+      const mask = createFlatShadeMask(request, request.instantMs, request.nightSky);
       return {
         mask,
         metrics: this.metrics({
@@ -762,12 +767,24 @@ export class TerrainShadowRenderer {
     }
     const gpu = this.ensureGpu();
     const generation = this.#generation;
+    const night = isTerrainShadowNightTile(request, request.instantMs);
+    if (night && !request.nightSky) {
+      return {
+        mask: nightMask,
+        metrics: this.metrics({
+          computeMs: 0,
+          demFetchMs: 0,
+          cacheHit: true,
+          demTilesFetched: 0,
+        }),
+      };
+    }
     // Night shade lit only by the faint night sky does not depend on the instant, so every
     // night frame of a tile shares one cached mask.
-    const maskInstant = isTerrainShadowNightTile(request, request.instantMs)
+    const maskInstant = night
       ? 'night'
       : String(Math.floor(request.instantMs / 60_000));
-    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${maskInstant}`;
+    const maskKey = `${request.demTileUrl}|${String(request.z)}/${String(request.x)}/${String(request.y)}@${maskInstant}|${String(request.nightSky)}`;
     const cached = this.#masks.get(maskKey);
     if (cached !== undefined) {
       this.storeMask(maskKey, cached);

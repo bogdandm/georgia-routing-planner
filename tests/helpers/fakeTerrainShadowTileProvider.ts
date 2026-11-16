@@ -1,9 +1,11 @@
-import type {
-  TerrainShadowAvailability,
-  TerrainShadowMetricsSnapshot,
-  TerrainShadowPrefetchProgress,
-  TerrainShadowTileAddress,
-  TerrainShadowTileProvider,
+import {
+  defaultTerrainShadowExperiments,
+  type TerrainShadowAvailability,
+  type TerrainShadowExperiments,
+  type TerrainShadowMetricsSnapshot,
+  type TerrainShadowPrefetchProgress,
+  type TerrainShadowTileAddress,
+  type TerrainShadowTileProvider,
 } from '@/presentation/map/TerrainShadowTileProvider';
 
 /** One recorded prefetch; the test settles it, and aborting its signal rejects it. */
@@ -34,6 +36,7 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
   public disposed = false;
   public readonly prefetchCalls: FakePrefetchCall[] = [];
   public metrics: TerrainShadowMetricsSnapshot = emptyMetrics;
+  public experiments: TerrainShadowExperiments = defaultTerrainShadowExperiments;
   #availability: TerrainShadowAvailability;
   readonly #listeners = new Set<(value: TerrainShadowAvailability) => void>();
 
@@ -47,6 +50,10 @@ export class FakeTerrainShadowTileProvider implements TerrainShadowTileProvider 
 
   public setInteractionActive(active: boolean): void {
     this.interactionActive = active;
+  }
+
+  public setExperiments(experiments: TerrainShadowExperiments): void {
+    this.experiments = experiments;
   }
 
   public prefetch(

@@ -20,7 +20,11 @@ import type {
 } from '@/infrastructure/elevation/TerrainComputeBackend';
 import { defaultTerrainContourQueueCapacity } from '@/infrastructure/elevation/TerrainComputeBackend';
 import type { MapFailureReason } from '@/presentation/map/mapTypes';
-import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
+import {
+  defaultTerrainShadowExperiments,
+  type TerrainShadowAvailability,
+  type TerrainShadowExperiments,
+} from '@/presentation/map/TerrainShadowTileProvider';
 
 /**
  * Why Sentinel imagery could not be applied. Satellite UI maps each code to localized
@@ -178,6 +182,8 @@ export interface SunShadowSnapshot {
   /** `unavailable` means this browser cannot render shadows (no WebGL2 float rendering). */
   readonly availability: TerrainShadowAvailability;
   readonly playback: SunShadowPlayback;
+  /** Temporary switches for the latest visual features; session only. */
+  readonly experiments: TerrainShadowExperiments;
 }
 
 export interface MapLayerState {
@@ -263,6 +269,7 @@ const initialMapLayerState: MapLayerState = {
     instantMs: 0,
     availability: 'unknown',
     playback: { status: 'idle' },
+    experiments: defaultTerrainShadowExperiments,
   },
 };
 

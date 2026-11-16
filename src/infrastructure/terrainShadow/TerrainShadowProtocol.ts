@@ -40,6 +40,8 @@ export const terrainShadowTileRequestSchema = z
     lowSunGlowOpacity: z.number().min(0).max(1),
     alpenglowColor: colorSchema,
     alpenglowOpacity: z.number().min(0).max(1),
+    /** Temporary experiment switch; see `TerrainShadowExperiments`. */
+    nightSky: z.boolean(),
   })
   .strict()
   .refine(

@@ -148,6 +148,8 @@ import {
 } from '@/presentation/map/sunShadowDaylight';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
+  defaultTerrainShadowExperiments,
+  type TerrainShadowExperiments,
   type TerrainShadowMetricsSnapshot,
   type TerrainShadowTileAddress,
   type TerrainShadowTileProvider,
@@ -1198,6 +1200,7 @@ export class MapLibreLayerController {
         instantMs: this.#sunShadowInstantMs,
         availability: sunShadowTiles.getAvailability(),
         playback: { status: 'idle' },
+        experiments: defaultTerrainShadowExperiments,
       },
     });
     this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
@@ -1283,6 +1286,18 @@ export class MapLibreLayerController {
     // The settled center may have another sunrise, sunset, or time zone, so the instant
     // is clamped again for it, as the panel does for its displayed time.
     if (!active && this.#map !== null) this.reconcileSunShadow(this.#map);
+  }
+
+  /**
+   * Temporary feature switches from the sun panel. The shadow tile URL changes with them,
+   * so visible tiles are requested again; they do not persist.
+   */
+  public setSunShadowExperiments(experiments: TerrainShadowExperiments): void {
+    this.sunShadowTiles.setExperiments(experiments);
+    mapLayerStore.setState({
+      sunShadow: { ...mapLayerStore.getState().sunShadow, experiments },
+    });
+    if (this.#map !== null) this.reconcileSunShadow(this.#map);
   }
 
   /**
@@ -4003,13 +4018,20 @@ export class MapLibreLayerController {
       );
       const centerElevationMeters =
         terrain === null ? 0 : map.getCenterElevation() / (terrain.exaggeration ?? 1);
-      this.#sunDisk?.setSun({
-        azimuthDegrees: sun.azimuthDegrees,
-        apparentElevationDegrees: sun.apparentElevationDegrees,
-        color: directSunlightColor(
-          relativeOpticalAirMass(sun.apparentElevationDegrees, centerElevationMeters),
-        ),
-      });
+      this.#sunDisk?.setSun(
+        mapLayerStore.getState().sunShadow.experiments.sunDisk
+          ? {
+              azimuthDegrees: sun.azimuthDegrees,
+              apparentElevationDegrees: sun.apparentElevationDegrees,
+              color: directSunlightColor(
+                relativeOpticalAirMass(
+                  sun.apparentElevationDegrees,
+                  centerElevationMeters,
+                ),
+              ),
+            }
+          : null,
+      );
       sky = createSunShadowSky(
         sun.apparentElevationDegrees,
         centerElevationMeters,

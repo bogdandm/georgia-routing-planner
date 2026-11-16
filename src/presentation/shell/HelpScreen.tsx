@@ -283,21 +283,32 @@ function tokenKey(token: InputToken): string {
 }
 
 function KeyCombinations({ row }: { readonly row: KeyGuideRow }) {
+  // Alternatives of three or more keys stack one per line around a compact "or", so the
+  // row stays narrow enough to keep its label beside it.
+  const stacked =
+    row.join === 'or' && row.combinations.some((tokens) => tokens.length >= 3);
   return (
     <Box
       component="span"
       sx={{
         display: 'inline-flex',
-        alignItems: 'center',
+        flexDirection: stacked ? 'column' : 'row',
+        alignItems: stacked ? 'flex-end' : 'center',
         justifyContent: 'flex-end',
         columnGap: 0.75,
+        rowGap: 0.25,
         whiteSpace: 'nowrap',
       }}
     >
       {row.combinations.map((tokens, index) => (
         <Fragment key={tokens.map(tokenKey).join(' ')}>
           {index === 0 || row.join === 'list' ? null : (
-            <Typography component="span" variant="caption" color="text.secondary">
+            <Typography
+              component="span"
+              variant="caption"
+              color="text.secondary"
+              sx={stacked ? { lineHeight: 1 } : undefined}
+            >
               {row.join === 'range' ? '–' : <Trans>or</Trans>}
             </Typography>
           )}

@@ -935,7 +935,9 @@ extinction along the path through the atmosphere, so summits stay whiter than va
 As the Sun sinks, shadows also turn lighter and ground in direct sun gains a
 sunlight-colored glow. Near the horizon that warm glow carries color through the neutral
 brightness transition without changing the shadow geometry or exposing a pale band
-between shade and light; daytime highlighting stays unchanged. Both effects fade out in
+between shade and light. Strongly reddened low sunlight also broadens the highlight
+response, retaining more basemap detail on bright slopes without lowering the maximum
+highlight opacity; daytime highlighting stays unchanged. Both effects fade out in
 twilight. Shortly after sunset, open slopes and summits that still see most of the sky
 glow rose (alpenglow) while gorges stay in plain shade; the glow is gone before the
 middle of civil twilight. While sun shadows draw, the fixed-light relief shading is

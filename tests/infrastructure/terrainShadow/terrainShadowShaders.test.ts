@@ -194,6 +194,32 @@ describe('createShadeLookupTable', () => {
     expect(highlightAlpha).toBeGreaterThan(litAlpha);
   });
 
+  it('softens reddened sunset highlights while retaining the chosen daytime shoulder and opacity limit', () => {
+    const tuned = {
+      ...palette,
+      highlightOpacity: 0.8,
+      highlightRolloff: 0.5,
+      lowSunGlowOpacity: 0,
+      alpenglowOpacity: 0,
+    };
+    const lookup = createShadeLookupTable(tuned, 0.45);
+    // Physical 1 + rolloff is the half-opacity point; invert the mask compression.
+    const halfHighlight = Math.round(
+      (1 + tuned.highlightRolloff / (1 + tuned.highlightRolloff)) *
+        shadeBrightnessScale,
+    );
+    for (const dayCode of [zenithCode, 100]) {
+      const dayAlpha = entryBytes(lookup, dayCode, halfHighlight)[3] ?? 0;
+      expect(Math.abs(dayAlpha / 255 - tuned.highlightOpacity / 2)).toBeLessThan(0.015);
+      expect(entryBytes(lookup, 207, halfHighlight)[3]).toBeLessThan(dayAlpha / 3);
+      expect(entryBytes(lookup, 207, 254)[3]).toBe(entryBytes(lookup, dayCode, 254)[3]);
+      expect(entryBytes(lookup, dayCode, shadeBrightnessScale)[3]).toBe(0);
+    }
+    expect(entryBytes(lookup, 207, 254)[3]).toBe(
+      Math.round(tuned.highlightOpacity * 255),
+    );
+  });
+
   it('keeps a warm sunset transition through neutral brightness instead of exposing a pale fringe', () => {
     const sunset = {
       ...palette,

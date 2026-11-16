@@ -367,12 +367,15 @@ inverts the mask's compression above 1 and applies a fixed EV exposure; it never
 normalizes a tile or animation frame independently. For exposed brightness divided by
 the neutral reference, `b`, shadow alpha is `1 − exp(−strength × (1 − b)² / b)` below 1
 (full shade at black, or no shade at zero strength). Above 1, highlight alpha is
-`sunHighlightOpacity / (1 + (rolloff / (b − 1))²)`. The curves meet with zero value and
-zero slope at 1; highlights approach their opacity limit without clipping. Exposure
-defaults to 0 EV, shadow strength to 2, and highlight rolloff to 2 physical brightness
-units above neutral. These controls are independent of shadow layer opacity and of each
-other. Atmospheric glow and alpenglow still use the original mask brightness. The
-highlight is tinted by the Rayleigh-extinction sunlight color
+`sunHighlightOpacity / (1 + (rolloff × scale / (b − 1))²)`. The scale is 1 by day; once
+sunlight has lost more than half its blue, it smoothly grows to 4 at the horizon. This
+softens orange coverage on bright low-Sun slopes without lowering the opacity limit,
+changing the shadow curve, or altering the chosen daytime response. The curves meet with
+zero value and zero slope at 1; highlights approach their opacity limit without
+clipping. Exposure defaults to 0 EV, shadow strength to 2, and highlight rolloff to 2
+physical brightness units above neutral. These controls are independent of shadow layer
+opacity and of each other. Atmospheric glow and alpenglow still use the original mask
+brightness. The highlight is tinted by the Rayleigh-extinction sunlight color
 (`domain/terrain/atmosphericSunlight.ts`) at 56% strength. The shadow color follows the
 sunlight code: from the day color toward the golden-hour lilac as the blue deficit of
 the sunlight grows, then over the twilight codes to the deep twilight blue at half depth

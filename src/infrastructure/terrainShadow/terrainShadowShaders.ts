@@ -719,7 +719,8 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
  * Independent shadow and highlight curves meet with zero slope at the physical neutral
  * (1 by default). Shadows approach full shade at black; highlights approach
  * `highlightOpacity` smoothly, with half that opacity at `highlightRolloff` above
- * neutral. No tile/frame normalization or hard highlight clipping is applied.
+ * neutral by day. Strongly reddened low sunlight broadens that shoulder up to fourfold
+ * without changing its opacity limit. No tile/frame normalization or hard clipping.
  *
  * Atmospheric colors, direct-sun glow and alpenglow still use the original mask and
  * sunlight code, not the exposed brightness. Shade follows the day/golden/twilight sky;
@@ -741,7 +742,7 @@ export function createShadeLookupTable(
     sunlightTintStrength: tintStrength,
   } = palette;
   const shadows = new Float64Array(256);
-  const highlights = new Float64Array(256);
+  const highlightShouldersSquared = new Float64Array(256).fill(Infinity);
   const exposure = 2 ** palette.exposure / palette.neutralBrightness;
   for (let value = 0; value < 256; value += 1) {
     const compressed = value / shadeBrightnessScale;
@@ -760,7 +761,7 @@ export function createShadeLookupTable(
             : -Math.expm1((-palette.shadowStrength * deficit * deficit) / brightness);
     } else {
       const shoulder = palette.highlightRolloff / (brightness - 1);
-      highlights[value] = palette.highlightOpacity / (1 + shoulder * shoulder);
+      highlightShouldersSquared[value] = shoulder * shoulder;
     }
   }
   for (let code = 0; code < 256; code += 1) {
@@ -798,7 +799,11 @@ export function createShadeLookupTable(
     // Once sunlight has lost more than half its blue, carry its glow through neutral.
     // The tone curves intentionally vanish there; otherwise blurred shadow edges expose
     // a pale basemap strip. High-Sun lighting and sky-only shade keep their old response.
-    const neutralGlowBlend = smoothstep(0.5, 1, lowSun);
+    const lowSunToneBlend = smoothstep(0.5, 1, lowSun);
+    // Low-Sun slopes greatly exceed the flat-ground reference: retain basemap detail
+    // instead of quickly covering them with the daylight highlight's orange tint.
+    const highlightRolloffScale = 1 + 3 * lowSunToneBlend;
+    const highlightRolloffScaleSquared = highlightRolloffScale * highlightRolloffScale;
     for (let value = 0; value < 256; value += 1) {
       const brightness = value / shadeBrightnessScale;
       const directShare = Math.min(
@@ -809,11 +814,16 @@ export function createShadeLookupTable(
         1,
       );
       const glowShare =
-        neutralGlowBlend === 0
+        lowSunToneBlend === 0
           ? directShare
           : directShare +
-            neutralGlowBlend * (smoothstep(skyLightShare, 1, brightness) - directShare);
-      const sunAlpha = 1 - (1 - (highlights[value] ?? 0)) * (1 - glowShare * glow);
+            lowSunToneBlend * (smoothstep(skyLightShare, 1, brightness) - directShare);
+      const highlightAlpha =
+        palette.highlightOpacity /
+        (1 +
+          (highlightShouldersSquared[value] ?? Infinity) *
+            highlightRolloffScaleSquared);
+      const sunAlpha = 1 - (1 - highlightAlpha) * (1 - glowShare * glow);
       const openSky = Math.min(brightness / skyLightShare, 1);
       const roseAlpha = alpenglow * openSky * openSky;
       const sunWeight = sunAlpha * (1 - roseAlpha);

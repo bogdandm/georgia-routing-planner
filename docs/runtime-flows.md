@@ -453,6 +453,20 @@ aborts the prefetch, clears the timer, and returns the state to `idle`; a prefet
 failure is logged as `map.sun-shadow.playback-failed` and published as `failed`, as is
 availability turning `unavailable` during playback.
 
+The camera panel (`MapCaptureControl.tsx`) reads the map canvas through
+`presentation/map/mapCapture.ts`. MapLibre's canvas has no `preserveDrawingBuffer`, so
+its pixels exist only inside the frame that drew them: a screenshot reads the canvas in
+the next `render` event (`MapLibreFacade.captureMapImage`, PNG via `toBlob`), and the
+PNG promise goes straight into a `ClipboardItem` so the clipboard write keeps the
+click's user activation. A day GIF (`MapLibreLayerController.recordSunShadowDay`) takes
+the same frames as playback, unrotated, applies each minute through the sun-shadow
+reconciliation, and captures it in the `idle` event, which MapLibre fires right after
+the frame that leaves every tile loaded and no fade running. Each frame is scaled down
+to a 1080 px shorter side when larger, quantized to its own 256-color palette, and
+appended by `gifenc` at the 150 ms playback delay; `MapWorkspace` downloads the bytes.
+The recording registers as playback, so every playback stop also aborts it with an
+`AbortError`; a completed recording reapplies the minute shown before it.
+
 ## Sentinel search
 
 ```mermaid

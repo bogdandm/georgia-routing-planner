@@ -811,7 +811,16 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   a screenshot** copies a PNG of the map as currently drawn to the clipboard: the
   rendered map with its labels, tracks, and shading, without controls, panels, markers,
   popups, or the Sun disk overlay, at the canvas's device-pixel size. The panel reports
-  whether the copy succeeded.
+  whether the copy succeeded. **Record a GIF of the day**, available while sun shadows
+  are on, steps through the frames of **Play the day** for the shown day from its first
+  to its last minute, captures each once all its tiles are drawn, and downloads a
+  looping `sun-shadows-<date>.gif` at about 6–7 frames per second. Frames have the same
+  content as the screenshot and are scaled so their shorter side is at most 1080 px
+  (smaller maps keep their size), each with its own 256-color palette. The panel shows
+  progress and **Cancel**; a camera move, a time chosen in the sun panel, **Play the
+  day**, or turning shadows off stops the recording and says so. A finished recording
+  returns the map to the minute shown before it. Closing the panel keeps the recording
+  running.
 - **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

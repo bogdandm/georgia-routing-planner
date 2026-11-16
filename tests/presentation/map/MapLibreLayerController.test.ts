@@ -58,6 +58,30 @@ import { createTestServices } from '@test/helpers/createTestServices';
 import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTileProvider';
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 
+// jsdom has no 2D canvas or rendering loop: a frame is "drawn" on the next microtask and
+// records the shadow minute shown at that moment.
+const gifCapture = vi.hoisted(() => ({ capturedInstants: [] as number[] }));
+vi.mock('@/presentation/map/mapCapture', () => ({
+  MapGifRecorder: class {
+    public addFrame(): void {
+      gifCapture.capturedInstants.push(mapLayerStore.getState().sunShadow.instantMs);
+    }
+
+    public finish(): Uint8Array {
+      return Uint8Array.of(0x47, 0x49, 0x46);
+    }
+  },
+  readWhenMapIdle: async (
+    map: { getCanvas: () => HTMLCanvasElement },
+    signal: AbortSignal,
+    read: (canvas: HTMLCanvasElement) => unknown,
+  ) => {
+    await Promise.resolve();
+    if (signal.aborted) throw new DOMException('Aborted.', 'AbortError');
+    return read(map.getCanvas());
+  },
+}));
+
 type Listener = (event: never) => void;
 
 class FakeLayerMap {
@@ -3137,6 +3161,56 @@ describe('MapLibreLayerController', () => {
         playback: { status: 'failed' },
       });
       controller.dispose();
+    });
+
+    describe('GIF recording', () => {
+      function startRecording() {
+        gifCapture.capturedInstants.length = 0;
+        const { controller } = createSunShadowController();
+        const map = new FakeLayerMap();
+        controller.attach(map as unknown as MapLibreMap);
+        controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+        const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
+        if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
+        const progress: number[] = [];
+        const recording = controller.recordSunShadowDay(
+          new AbortController().signal,
+          (fraction) => {
+            progress.push(fraction);
+          },
+        );
+        return { controller, map, recording, progress, window };
+      }
+
+      it('captures every day frame from the first, then returns to the shown minute', async () => {
+        const { controller, recording, progress, window } = startRecording();
+
+        await expect(recording).resolves.toEqual(Uint8Array.of(0x47, 0x49, 0x46));
+        const frames = daylightFrameInstants(window, 10);
+        expect(gifCapture.capturedInstants).toEqual(frames);
+        expect(progress.at(-1)).toBe(1);
+        expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+          Math.floor(shadowInstantMs / 60_000) * 60_000,
+        );
+        controller.dispose();
+      });
+
+      it('stops on a camera move or a chosen time and keeps the newer state', async () => {
+        const first = startRecording();
+        first.map.fire('movestart', {});
+        await expect(first.recording).rejects.toMatchObject({ name: 'AbortError' });
+        expect(gifCapture.capturedInstants.length).toBeLessThanOrEqual(1);
+        first.controller.dispose();
+
+        const second = startRecording();
+        const chosenMs = shadowInstantMs + 60 * 60_000;
+        second.controller.setSunShadow({ enabled: true, instantMs: chosenMs });
+        await expect(second.recording).rejects.toMatchObject({ name: 'AbortError' });
+        expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+          Math.floor(chosenMs / 60_000) * 60_000,
+        );
+        second.controller.dispose();
+      });
     });
   });
 

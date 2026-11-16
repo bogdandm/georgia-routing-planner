@@ -63,6 +63,7 @@ import {
 } from '@/presentation/map/MapViewControls';
 import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
 import type { MapCaptureControlProps } from '@/presentation/map/MapCaptureControl';
+import { downloadFile } from '@/presentation/downloadFile';
 import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
@@ -1865,6 +1866,16 @@ export function MapWorkspace({
       navigator.clipboard.write([
         new ClipboardItem({ 'image/png': facade.captureMapImage() }),
       ]),
+    onRecordDayGif:
+      mapLayers === null || !sunShadow.enabled
+        ? null
+        : async (signal, onProgress) => {
+            const dayMs = sunShadow.instantMs;
+            const gif = await mapLayers.recordSunShadowDay(signal, onProgress);
+            const day = new Date(dayMs).toISOString().slice(0, 10);
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
+            downloadFile(`sun-shadows-${day}.gif`, 'image/gif', gif);
+          },
   };
 
   // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.

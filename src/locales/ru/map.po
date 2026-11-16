@@ -80,6 +80,7 @@ msgid "Bing Aerial"
 msgstr "Аэроснимки Bing"
 
 #. js-lingui-id: dEgA5A
+#: src/presentation/map/MapCaptureControl.tsx
 #: src/presentation/map/MapWorkspace.tsx
 #: src/presentation/map/SunShadowControl.tsx
 msgid "Cancel"
@@ -457,6 +458,21 @@ msgstr "Показать весь день"
 msgid "Recomputes shadow masks on the GPU once released"
 msgstr "Пересчитывает маски теней на GPU после отпускания"
 
+#. js-lingui-id: UEjEIZ
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Record a GIF of the day"
+msgstr "Записать GIF дня"
+
+#. js-lingui-id: 43gcG7
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Recording the day"
+msgstr "Запись дня"
+
+#. js-lingui-id: ryhEvd
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Recording the day: {percent}%"
+msgstr "Запись дня: {percent}%"
+
 #. js-lingui-id: 5FOB1h
 #: src/presentation/map/TerrainLightingTuningPanel.tsx
 msgid "Reset all"
@@ -563,6 +579,16 @@ msgstr "Высота рельефа"
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "Не удалось сохранить текущий вид карты. Работа с картой по-прежнему доступна."
 
+#. js-lingui-id: c-d0U-
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The GIF could not be recorded."
+msgstr "Не удалось записать GIF."
+
+#. js-lingui-id: bNy05A
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The GIF was downloaded."
+msgstr "GIF скачан."
+
 #. js-lingui-id: CHpm1i
 #: src/presentation/map/MapShareDialog.tsx
 msgid "The link could not be copied. Select it and copy it manually."
@@ -588,6 +614,11 @@ msgstr "Не удалось сменить слой карты. Повторит
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "Конфигурация поставщика карты недействительна. Базовая карта не запущена. Проверьте конфигурацию развёртывания или откройте диагностику разработчика."
+
+#. js-lingui-id: O7OY3m
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The recording stopped because the map or the time changed."
+msgstr "Запись остановлена: изменилась карта или время."
 
 #. js-lingui-id: FlHLo_
 #: src/presentation/map/MapWorkspace.tsx
@@ -644,6 +675,11 @@ msgstr "Уклон трека (%)"
 #: src/presentation/map/ElevationGradeLegend.tsx
 msgid "Track grade color thresholds"
 msgstr "Пороги цветов уклона трека"
+
+#. js-lingui-id: wUjgh4
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Turn on sun shadows to record the day."
+msgstr "Включите тени от солнца, чтобы записать день."
 
 #. js-lingui-id: aBvon1
 #: src/presentation/map/MapPointInspectorContent.tsx

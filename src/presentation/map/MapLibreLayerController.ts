@@ -138,6 +138,7 @@ import {
   type ImportedTrackTimeLabel,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
+import { MapGifRecorder, readWhenMapIdle } from '@/presentation/map/mapCapture';
 import {
   clampToDaylight,
   type DaylightWindow,
@@ -1564,6 +1565,58 @@ export class MapLibreLayerController {
     if (running || mapLayerStore.getState().sunShadow.playback.status !== 'idle') {
       this.publishSunShadowPlayback({ status: 'idle' });
     }
+  }
+
+  /**
+   * Records the shown day as the bytes of a looping GIF of the day playback frames, from
+   * the first to the last, each captured once MapLibre has drawn every tile of its
+   * minute. It counts as playback, so a camera move, `setSunShadow`, Play, Stop, or detach
+   * aborts it and the promise rejects with an `AbortError`. A finished recording returns
+   * to the instant it started from. Requires sun shadows to be on.
+   */
+  public async recordSunShadowDay(
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+  ): Promise<Uint8Array> {
+    this.stopSunShadowPlayback();
+    const map = this.#map;
+    if (
+      map === null ||
+      map.isMoving() ||
+      !this.#sunShadowEnabled ||
+      this.sunShadowTiles.getAvailability() === 'unavailable'
+    ) {
+      throw new Error('Sun shadows are not drawn.');
+    }
+    const window = this.sunShadowDaylight(map, this.#sunShadowInstantMs);
+    if (window === null) throw new Error('The shown day has no sunrise and sunset.');
+    const frames = daylightFrameInstants(window, sunShadowPlaybackAverageStepMinutes);
+    const startInstantMs = this.#sunShadowInstantMs;
+    const controller = new AbortController();
+    this.#sunShadowPlaybackAbort = controller;
+    const abort = () => {
+      controller.abort();
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    const canvas = map.getCanvas();
+    const recorder = new MapGifRecorder(canvas.width, canvas.height);
+    try {
+      for (const [index, instantMs] of frames.entries()) {
+        this.setSunShadowInstant(instantMs);
+        this.reconcileSunShadow(map);
+        await readWhenMapIdle(map, controller.signal, (drawn) => {
+          recorder.addFrame(drawn, sunShadowPlaybackFrameMs);
+        });
+        onProgress((index + 1) / frames.length);
+      }
+    } finally {
+      signal.removeEventListener('abort', abort);
+      if (this.#sunShadowPlaybackAbort === controller)
+        this.#sunShadowPlaybackAbort = null;
+    }
+    this.setSunShadowInstant(startInstantMs);
+    this.reconcileSunShadow(map);
+    return recorder.finish();
   }
 
   /**

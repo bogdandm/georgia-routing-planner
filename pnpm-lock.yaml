@@ -85,6 +85,9 @@ importers:
       geotiff:
         specifier: 3.0.5
         version: 3.0.5
+      gifenc:
+        specifier: 1.0.3
+        version: 1.0.3
       ky:
         specifier: 2.0.2
         version: 2.0.2
@@ -3322,6 +3325,12 @@ packages:
         integrity: sha512-Ln0UQDlxH1BapMu3GPtf7CuYNwRZf2gwCuPqbyG6pB8WfmFpzqcy4xtAaAMUhnNqjMKTiCPZG2oMT3YSx8U2NA==,
       }
     engines: { node: '>=0.10.0' }
+
+  gifenc@1.0.3:
+    resolution:
+      {
+        integrity: sha512-xdr6AdrfGBcfzncONUOlXMBuc5wJDtOueE3c5rdG0oNgtINLD+f2iFZltrBRZYzACRbKr+mSVU/x98zv2u3jmw==,
+      }
 
   gl-matrix@3.4.4:
     resolution:
@@ -7125,6 +7134,8 @@ snapshots:
   get-east-asian-width@1.6.0: {}
 
   get-value@2.0.6: {}
+
+  gifenc@1.0.3: {}
 
   gl-matrix@3.4.4: {}
 

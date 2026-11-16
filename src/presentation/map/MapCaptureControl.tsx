@@ -1,10 +1,12 @@
 import { useLingui } from '@lingui/react/macro';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import GifBoxOutlinedIcon from '@mui/icons-material/GifBoxOutlined';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import {
   Box,
   Button,
   ClickAwayListener,
+  LinearProgress,
   Paper,
   Popper,
   Stack,
@@ -12,11 +14,18 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface MapCaptureControlProps {
   /** Copies a PNG of the map, without controls, to the clipboard. */
   readonly onCopyScreenshot: () => Promise<void>;
+  /**
+   * Records the day cycle of sun shadows as a GIF and downloads it; null while shadows
+   * are off. Rejects with an `AbortError` when `signal` or a map change stops it.
+   */
+  readonly onRecordDayGif:
+    | ((signal: AbortSignal, onProgress: (fraction: number) => void) => Promise<void>)
+    | null;
 }
 
 interface MapCaptureButtonProps {
@@ -62,6 +71,9 @@ interface MapCapturePopoverProps extends MapCaptureControlProps {
 }
 
 type ScreenshotStatus = 'idle' | 'copying' | 'copied' | 'failed';
+type GifStatus =
+  | { readonly kind: 'idle' | 'saved' | 'stopped' | 'failed' }
+  | { readonly kind: 'recording'; readonly progress: number };
 
 /** Non-modal like the sun panel: map gestures keep working while it is open. */
 export function MapCapturePopover({
@@ -69,10 +81,19 @@ export function MapCapturePopover({
   panelId,
   onClose,
   onCopyScreenshot,
+  onRecordDayGif,
 }: MapCapturePopoverProps) {
   const { t } = useLingui();
+  const gifAbort = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      gifAbort.current?.abort();
+    },
+    [],
+  );
   /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
   const [screenshot, setScreenshot] = useState<ScreenshotStatus>('idle');
+  const [gif, setGif] = useState<GifStatus>({ kind: 'idle' });
   const copyScreenshot = () => {
     setScreenshot('copying');
     onCopyScreenshot().then(
@@ -84,6 +105,26 @@ export function MapCapturePopover({
       },
     );
   };
+  const recordGif = (record: NonNullable<typeof onRecordDayGif>) => {
+    const controller = new AbortController();
+    gifAbort.current = controller;
+    setGif({ kind: 'recording', progress: 0 });
+    record(controller.signal, (progress) => {
+      setGif({ kind: 'recording', progress });
+    }).then(
+      () => {
+        setGif({ kind: 'saved' });
+      },
+      (error: unknown) => {
+        const aborted = error instanceof DOMException && error.name === 'AbortError';
+        // Cancel is the user's own choice; any other stop is reported.
+        if (controller.signal.aborted) setGif({ kind: 'idle' });
+        else setGif({ kind: aborted ? 'stopped' : 'failed' });
+      },
+    );
+  };
+  const recording = gif.kind === 'recording';
+  const percent = recording ? Math.floor(gif.progress * 100) : 0;
   /* eslint-enable lingui/no-unlocalized-strings */
   return (
     <Popper
@@ -95,6 +136,8 @@ export function MapCapturePopover({
       ]}
       open={anchorEl !== null}
       placement="left-start"
+      // Closing the panel keeps a recording and its result.
+      keepMounted
     >
       <ClickAwayListener
         // eslint-disable-next-line lingui/no-unlocalized-strings -- React event prop name.
@@ -138,6 +181,62 @@ export function MapCapturePopover({
             {screenshot === 'failed' ? (
               <Typography color="error" role="alert" variant="caption">
                 {t`The map image could not be copied.`}
+              </Typography>
+            ) : null}
+            <Button
+              disabled={onRecordDayGif === null || recording}
+              onClick={() => {
+                if (onRecordDayGif !== null) recordGif(onRecordDayGif);
+              }}
+              size="small"
+              startIcon={<GifBoxOutlinedIcon fontSize="small" />}
+              variant="outlined"
+            >
+              {t`Record a GIF of the day`}
+            </Button>
+            {onRecordDayGif === null && !recording ? (
+              <Typography color="text.secondary" variant="caption">
+                {t`Turn on sun shadows to record the day.`}
+              </Typography>
+            ) : null}
+            {recording ? (
+              <Stack spacing={0.5}>
+                <LinearProgress
+                  aria-label={t`Recording the day`}
+                  value={gif.progress * 100}
+                  variant="determinate"
+                />
+                <Stack
+                  direction="row"
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Typography color="text.secondary" role="status" variant="caption">
+                    {t`Recording the day: ${percent}%`}
+                  </Typography>
+                  <Button
+                    onClick={() => {
+                      gifAbort.current?.abort();
+                    }}
+                    size="small"
+                  >
+                    {t`Cancel`}
+                  </Button>
+                </Stack>
+              </Stack>
+            ) : null}
+            {gif.kind === 'saved' ? (
+              <Typography color="text.secondary" role="status" variant="caption">
+                {t`The GIF was downloaded.`}
+              </Typography>
+            ) : null}
+            {gif.kind === 'stopped' ? (
+              <Typography color="text.secondary" role="status" variant="caption">
+                {t`The recording stopped because the map or the time changed.`}
+              </Typography>
+            ) : null}
+            {gif.kind === 'failed' ? (
+              <Typography color="error" role="alert" variant="caption">
+                {t`The GIF could not be recorded.`}
               </Typography>
             ) : null}
           </Stack>

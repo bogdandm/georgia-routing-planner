@@ -26,14 +26,12 @@ export interface TerrainShadowTuning {
   readonly neutralBrightness: number;
   readonly lowSunGlowOpacity: number;
   readonly skyOcclusionStrength: number;
-  readonly penumbraDegreesPerKm: number;
 }
 
 export const defaultTerrainShadowTuning: TerrainShadowTuning = {
   neutralBrightness: shadeNeutralBrightness,
   lowSunGlowOpacity: mapVisualPalette.terrain.sunLowGlowOpacity,
-  skyOcclusionStrength: 1,
-  penumbraDegreesPerKm: 0,
+  skyOcclusionStrength: 1.75,
 };
 
 export type TerrainShadowAvailability = 'unknown' | 'available' | 'unavailable';
@@ -450,7 +448,6 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       lowSunGlowOpacity: tuning.lowSunGlowOpacity,
       neutralBrightness: tuning.neutralBrightness,
       skyOcclusionStrength: tuning.skyOcclusionStrength,
-      penumbraDegreesPerKm: tuning.penumbraDegreesPerKm,
     };
   }
 

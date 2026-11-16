@@ -215,8 +215,8 @@ float curvatureDropMeters(float distanceMeters) {
   return distanceMeters * distanceMeters * curvatureFactor;
 }
 
-float visibleSolarDiskFraction(float apparentElevationDegrees, float horizonDegrees, float diskRadiusDegrees) {
-  float u = clamp((apparentElevationDegrees - horizonDegrees) / diskRadiusDegrees, -1.0, 1.0);
+float visibleSolarDiskFraction(float apparentElevationDegrees, float horizonDegrees) {
+  float u = clamp((apparentElevationDegrees - horizonDegrees) / solarDiskRadiusDegrees, -1.0, 1.0);
   return 0.5 + (u * sqrt(1.0 - u * u) + asin(u)) / pi;
 }
 
@@ -247,15 +247,12 @@ bool mosaicContainsWithMargin(vec2 texels) {
   return all(greaterThanEqual(texels, vec2(mosaicLow))) && all(lessThanEqual(texels, vec2(mosaicHigh)));
 }
 
-// Returns the horizon angle and the distance of the sample that set it. Early exits treat
-// the solar disk as \`diskRadiusDegrees\` wide, the largest radius the caller may use.
-vec2 horizonAngleTowardSun(
+float horizonAngleTowardSun(
   vec2 outputPixel,
   float latitude,
   float azimuthRadians,
   float apparentSunElevationDegrees,
-  float observerElevation,
-  float diskRadiusDegrees
+  float observerElevation
 ) {
   vec2 observerTexels[3];
   for (int level = 0; level < 3; ++level) {
@@ -275,11 +272,10 @@ vec2 horizonAngleTowardSun(
   float travelledMeters = 0.0;
   float cosLatitude = cos(latitude);
   float baseStep = uBaseResolutionEquatorMeters * cosLatitude;
-  float fullyHiddenDegrees = apparentSunElevationDegrees + diskRadiusDegrees;
-  float firstHidingDegrees = apparentSunElevationDegrees - diskRadiusDegrees;
+  float fullyHiddenDegrees = apparentSunElevationDegrees + solarDiskRadiusDegrees;
+  float firstHidingDegrees = apparentSunElevationDegrees - solarDiskRadiusDegrees;
 
   float horizonDegrees = -90.0;
-  float horizonMeters = 0.0;
   int level = 0;
   float distanceMeters = baseStep;
   for (int stepIndex = 0; stepIndex < maximumSteps && distanceMeters <= maximumShadowDistanceMeters; ++stepIndex) {
@@ -313,15 +309,11 @@ vec2 horizonAngleTowardSun(
     if (level >= 3) break;
 
     float relativeHeight = mosaicElevation(level, texels) - observerElevation - curvatureDropMeters(distanceMeters);
-    float angleDegrees = degrees(atan(relativeHeight, distanceMeters));
-    if (angleDegrees > horizonDegrees) {
-      horizonDegrees = angleDegrees;
-      horizonMeters = distanceMeters;
-    }
+    horizonDegrees = max(horizonDegrees, degrees(atan(relativeHeight, distanceMeters)));
     if (horizonDegrees >= fullyHiddenDegrees) break;
     distanceMeters += max(baseStep, distanceMeters * angularStepRadians);
   }
-  return vec2(horizonDegrees, horizonMeters);
+  return horizonDegrees;
 }
 
 // (latitude, longitude) in radians of an output pixel measured from the tile's north-west corner.
@@ -336,13 +328,9 @@ vec2 pixelLatitudeLongitude(vec2 outputPixel) {
  * Visible solar-disk fraction per pixel of the tile plus a blur margin. Texture row 0 is
  * the northern edge minus the margin; the shade pass reads it with matching offsets. The
  * horizon never sinks below the sea-level horizon, so summits keep the last light while
- * the Sun is already below the observer's level. The disk's radius grows by
- * `uPenumbraDegreesPerKm` per kilometre to the sample that sets the horizon (the
- * 100 km cap for the sea-level horizon), so shadows of distant ridges soften (temporary
- * tuning; 0 keeps the geometric disk).
+ * the Sun is already below the observer's level.
  */
 export const terrainShadowVisibilityFragmentShaderSource = `${terrainShadowCommonShaderSource}
-uniform float uPenumbraDegreesPerKm;
 const float visibilityMargin = ${glslFloat(terrainShadowVisibilityMarginPixels)};
 
 void main() {
@@ -351,18 +339,16 @@ void main() {
   SolarPosition sun = solarPositionAt(latitudeLongitude.x, latitudeLongitude.y);
   float observerElevation = mosaicElevation(0, uLevelOrigin[0] + outputPixel * uLevelTexelsPerOutputPixel[0]);
   float seaLevelHorizon = seaLevelHorizonDegrees(observerElevation);
-  float maximumRadius = solarDiskRadiusDegrees + uPenumbraDegreesPerKm * maximumShadowDistanceMeters / 1000.0;
   float sunlitFraction = 0.0;
-  if (sun.apparentElevationDegrees + maximumRadius > seaLevelHorizon) {
-    vec2 terrainHorizon = horizonAngleTowardSun(
-      outputPixel, latitudeLongitude.x, sun.azimuthRadians, sun.apparentElevationDegrees,
-      observerElevation, maximumRadius
+  if (sun.apparentElevationDegrees + solarDiskRadiusDegrees > seaLevelHorizon) {
+    float horizonDegrees = max(
+      horizonAngleTowardSun(
+        outputPixel, latitudeLongitude.x, sun.azimuthRadians, sun.apparentElevationDegrees,
+        observerElevation
+      ),
+      seaLevelHorizon
     );
-    bool terrainSetsHorizon = terrainHorizon.x >= seaLevelHorizon;
-    float horizonDegrees = terrainSetsHorizon ? terrainHorizon.x : seaLevelHorizon;
-    float horizonMeters = terrainSetsHorizon ? terrainHorizon.y : maximumShadowDistanceMeters;
-    float radius = solarDiskRadiusDegrees + uPenumbraDegreesPerKm * horizonMeters / 1000.0;
-    sunlitFraction = visibleSolarDiskFraction(sun.apparentElevationDegrees, horizonDegrees, radius);
+    sunlitFraction = visibleSolarDiskFraction(sun.apparentElevationDegrees, horizonDegrees);
   }
   outValue = vec4(sunlitFraction, 0.0, 0.0, 1.0);
 }
@@ -613,7 +599,7 @@ function sunlightTone(code: number): SunlightTone {
  * How much of the physical sunlight hue reaches the overlay. Eyes and cameras adapt to the
  * warm light, and a fully saturated tint reads as orange paint over imagery.
  */
-const sunlightTintStrength = 0.6;
+const sunlightTintStrength = 0.75;
 
 /**
  * Default brightness the overlay leaves untouched. It sits above flat ground in full sun
@@ -621,7 +607,7 @@ const sunlightTintStrength = 0.6;
  * in two steps: first the shade fades, then the highlight grows up to the compressed
  * maximum of 2. With the neutral at 1, every lit slope already had no shade left to lose.
  */
-export const shadeNeutralBrightness = 1.35;
+export const shadeNeutralBrightness = 1.45;
 const shadeMaximumBrightness = 2;
 
 /**

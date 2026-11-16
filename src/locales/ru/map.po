@@ -390,11 +390,6 @@ msgstr "Открыть windy.com"
 msgid "OSM overlay"
 msgstr "OSM поверх снимков"
 
-#. js-lingui-id: GWmbLZ
-#: src/presentation/map/SunShadowControl.tsx
-msgid "Penumbra °/km"
-msgstr "Полутень, °/км"
-
 #. js-lingui-id: m-QLEF
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "Pick image date"

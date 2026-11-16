@@ -347,34 +347,35 @@ function SunShadowPanel({
         sx={{ mx: 0 }}
       />
       <Stack direction="row" sx={{ columnGap: 1, flexWrap: 'wrap', rowGap: 1.5 }}>
-        {/* eslint-disable lingui/no-unlocalized-strings -- Tuning keys, not UI text. */
-        (
-          [
-            ['neutralBrightness', t`Neutral`, 1, 1.95, 0.05],
-            ['lowSunGlowOpacity', t`Glow`, 0, 1, 0.05],
-            ['skyOcclusionStrength', t`GI strength`, 0, 4, 0.25],
-            ['penumbraDegreesPerKm', t`Penumbra °/km`, 0, 0.2, 0.005],
-          ] as const
-        )
-          /* eslint-enable lingui/no-unlocalized-strings */
-          .map(([key, label, min, max, step]) => (
-            <TextField
-              defaultValue={tuning[key]}
-              disabled={!enabled || unavailable}
-              key={key}
-              label={label}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                if (event.target.value === '' || !(value >= min && value <= max))
-                  return;
-                onTuningChange({ ...tuning, [key]: value });
-              }}
-              size="small"
-              slotProps={{ htmlInput: { max, min, step } }}
-              sx={{ width: 120 }}
-              type="number"
-            />
-          ))}
+        {
+          /* eslint-disable lingui/no-unlocalized-strings -- Tuning keys, not UI text. */
+          (
+            [
+              ['neutralBrightness', t`Neutral`, 1, 1.95, 0.05],
+              ['lowSunGlowOpacity', t`Glow`, 0, 1, 0.05],
+              ['skyOcclusionStrength', t`GI strength`, 0, 4, 0.25],
+            ] as const
+          )
+            /* eslint-enable lingui/no-unlocalized-strings */
+            .map(([key, label, min, max, step]) => (
+              <TextField
+                defaultValue={tuning[key]}
+                disabled={!enabled || unavailable}
+                key={key}
+                label={label}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (event.target.value === '' || !(value >= min && value <= max))
+                    return;
+                  onTuningChange({ ...tuning, [key]: value });
+                }}
+                size="small"
+                slotProps={{ htmlInput: { max, min, step } }}
+                sx={{ width: 120 }}
+                type="number"
+              />
+            ))
+        }
       </Stack>
       {unavailable ? (
         <Typography color="text.secondary" variant="caption">

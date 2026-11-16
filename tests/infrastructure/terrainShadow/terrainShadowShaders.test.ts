@@ -54,7 +54,9 @@ describe('createShadeLookupTable', () => {
     // Flat ground in full sun keeps a light shade, so lit slopes can still brighten.
     const [, , , flatAlpha = 0] = entryBytes(table, zenithCode, shadeBrightnessScale);
     expect(flatAlpha).toBeGreaterThan(0);
-    expect(flatAlpha).toBeLessThan(255 * 0.3);
+    expect(flatAlpha).toBeLessThanOrEqual(
+      Math.ceil(255 * (1 - 1 / shadeNeutralBrightness)),
+    );
     expect(entryBytes(table, zenithCode, 0)).toEqual([...palette.shadowColor, 255]);
     expect(entryBytes(table, zenithCode, 254)).toEqual([
       ...palette.highlightColor,

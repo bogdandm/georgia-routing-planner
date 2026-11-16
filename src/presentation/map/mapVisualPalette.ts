@@ -75,7 +75,7 @@ export const mapVisualPalette = {
     sunHighlightOpacity: 0.6,
     sunLowShadow: '#2E3F7A',
     sunLowShadowLift: 0.25,
-    sunLowGlowOpacity: 0.4,
+    sunLowGlowOpacity: 0.5,
     /**
      * 3D sky while sun shadows draw: the `sky` color overhead, the `horizon` band, and the
      * distant `fog` over terrain, for full day, the twilight blue around sunset, and night.

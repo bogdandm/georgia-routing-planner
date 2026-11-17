@@ -396,21 +396,28 @@ export class SunDiskOverlay {
     map.on('resize', this.handleResize);
   }
 
-  /** Shows the Sun for `sun`, or hides it with null. Unchanged values do nothing. */
+  /**
+   * Shows the Sun for `sun`, or hides it with null. Unchanged values do nothing. A new
+   * color alone, which the sky sends on every rotation frame as the center's terrain
+   * height shifts, only repaints: the skyline depends on the Sun's direction, not its color.
+   */
   public setSun(sun: SunDiskSun | null): void {
     const current = this.#sun;
+    const sameDirection =
+      sun !== null &&
+      current !== null &&
+      sun.azimuthDegrees === current.azimuthDegrees &&
+      sun.apparentElevationDegrees === current.apparentElevationDegrees;
     if (
       sun === current ||
-      (sun !== null &&
-        current !== null &&
-        sun.azimuthDegrees === current.azimuthDegrees &&
-        sun.apparentElevationDegrees === current.apparentElevationDegrees &&
+      (sameDirection &&
         sun.color.every((channel, index) => channel === current.color[index]))
     ) {
       return;
     }
     this.#sun = sun;
-    this.handleChange();
+    if (sameDirection) this.render();
+    else this.handleChange();
   }
 
   public dispose(): void {
@@ -492,7 +499,8 @@ export class SunDiskOverlay {
       sunColumn?.skylineDegrees ?? -90,
     );
     if (fraction <= 0) {
-      this.hide();
+      // Behind terrain the throttled march above keeps checking the skyline.
+      this.hide(true);
       return;
     }
 
@@ -661,9 +669,12 @@ export class SunDiskOverlay {
       `${rgb(color, 0.1)} ${percent(edge * 3.5)}, ${rgb(color, 0)} 100%)`;
   }
 
-  private hide(): void {
-    // Hidden or off screen, the skyline is stale by the time the Sun shows again.
-    this.#horizonMarchedAtMs = Number.NEGATIVE_INFINITY;
+  /**
+   * Without a Sun, terrain, or a projectable direction no march runs, so the skyline is
+   * stale by the time the Sun shows again unless `skylineCurrent`.
+   */
+  private hide(skylineCurrent = false): void {
+    if (!skylineCurrent) this.#horizonMarchedAtMs = Number.NEGATIVE_INFINITY;
     if (!this.#visible) return;
     this.#visible = false;
     this.#element.style.display = 'none';

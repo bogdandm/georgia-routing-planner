@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   projectSunDirection,
@@ -7,6 +7,7 @@ import {
   screenRayDirection,
   skylineElevationDegrees,
   SunDiskOverlay,
+  sunDiskModel,
   type RenderedTerrainIndex,
   type SkylineColumn,
   type SkylineScene,
@@ -346,6 +347,46 @@ describe('SunDiskOverlay', () => {
     fake.terrain = ridge;
     fake.listeners.get('idle')?.();
     expect(element.style.display).toBe('none');
+    overlay.dispose();
+  });
+
+  it('recolors without marching the skyline again until the Sun moves', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    const { fake, container, map } = createMap(-1);
+    const index = fake.terrain.getCoverageIndex();
+    const getCoverageIndex = vi.fn(() => index);
+    fake.terrain = { getCoverageIndex };
+    const overlay = new SunDiskOverlay(map);
+    const { halo } = parts(container);
+    overlay.setSun(lowSun);
+    const background = halo.style.background;
+    expect(getCoverageIndex).toHaveBeenCalledOnce();
+
+    overlay.setSun({ ...lowSun, color: [1, 0.5, 0.2] });
+    expect(halo.style.background).not.toBe(background);
+    expect(getCoverageIndex).toHaveBeenCalledOnce();
+
+    overlay.setSun({ ...lowSun, azimuthDegrees: 1, color: [1, 0.5, 0.2] });
+    expect(getCoverageIndex).toHaveBeenCalledTimes(2);
+    overlay.dispose();
+  });
+
+  it('marches no more often than its interval while terrain hides the moving Sun', () => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    const { fake, container, map } = createMap(10);
+    const index = fake.terrain.getCoverageIndex();
+    const getCoverageIndex = vi.fn(() => index);
+    fake.terrain = { getCoverageIndex };
+    const overlay = new SunDiskOverlay(map);
+    const { element } = parts(container);
+    overlay.setSun(lowSun);
+    expect(element.style.display).toBe('none');
+
+    fake.listeners.get('move')?.();
+    expect(getCoverageIndex).toHaveBeenCalledOnce();
+    now.mockReturnValue(1_000 + sunDiskModel.horizonMarchIntervalMs);
+    fake.listeners.get('move')?.();
+    expect(getCoverageIndex).toHaveBeenCalledTimes(2);
     overlay.dispose();
   });
 });

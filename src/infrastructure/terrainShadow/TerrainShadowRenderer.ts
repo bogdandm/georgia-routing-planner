@@ -136,7 +136,7 @@ interface TimerQueryExtension {
 
 type GpuStage = Extract<
   TerrainShadowTileStage,
-  'assembly' | 'skyView' | 'visibility' | 'shade'
+  'assembly' | 'skyView' | 'visibility' | 'shade' | 'readbackCopy'
 >;
 type StageTimings = Partial<Record<TerrainShadowTileStage, number>>;
 /** Event-loop turns `GpuStageTimer.read` waits for results before dropping them. */
@@ -1276,11 +1276,13 @@ export class TerrainShadowRenderer {
       );
       const demFetchMs = performance.now() - fetchStartedAt;
 
-      const gateStartedAt = performance.now();
-      if (gated) await this.waitForInteractionEnd(signal);
       const queuedAt = performance.now();
       const job = await this.runSerially(async () => {
         throwIfAborted(signal);
+        // Checked at the head of the queue, so jobs queued before a camera move began
+        // wait too; the queue stays blocked meanwhile.
+        const gateStartedAt = performance.now();
+        if (gated) await this.waitForInteractionEnd(signal);
         if (generation !== this.#generation || this.#gpu !== gpu)
           throw contextLostError();
         const startedAt = performance.now();
@@ -1348,7 +1350,9 @@ export class TerrainShadowRenderer {
         timer.measure('shade', () => {
           drawShade(gpu, visibility.texture, skyView.texture, request, levels);
         });
-        queueShadeReadback(gpu);
+        timer.measure('readbackCopy', () => {
+          queueShadeReadback(gpu);
+        });
         // Holding the queue until the GPU finishes keeps at most one tile of shadow work
         // competing with map frames, and makes `computeMs` the real GPU time.
         const gpuWaitStartedAt = performance.now();
@@ -1362,13 +1366,16 @@ export class TerrainShadowRenderer {
           startedAt,
           gpuStages: timer.read(),
           stages: {
-            ...(gated ? { interactionGate: queuedAt - gateStartedAt } : {}),
-            queueWait: startedAt - queuedAt,
+            ...(gated ? { interactionGate: startedAt - gateStartedAt } : {}),
+            queueWait: gateStartedAt - queuedAt,
             gpuWait: readbackStartedAt - gpuWaitStartedAt,
             readback: finishedAt - readbackStartedAt,
           },
         };
       });
+      // Canceled during the caller's yield: a later computation of the key may need
+      // another precision, and the first stored mask of a key wins.
+      throwIfAborted(signal);
       const storeStartedAt = performance.now();
       this.storeMask(maskKey, job.mask, precision());
       const finishedAt = performance.now();
@@ -1419,6 +1426,8 @@ export class TerrainShadowRenderer {
     this.#inflightDem.clear();
     this.#demTiles.clear();
     this.#masks.clear();
+    // Computations of the lost context fail on their own; later requests start afresh.
+    this.#maskComputations.clear();
     this.#uncompressedMasks.clear();
     this.#cachedMaskBytes = 0;
     this.#shadeColorizers.clear();

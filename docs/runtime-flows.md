@@ -237,7 +237,7 @@ sequenceDiagram
     Worker-->>Provider: ImageBitmap colored from the mask
   else
     Worker->>DEM: 3×3 mosaics at z, z−2, z−4 (cached tiles skipped)
-    Worker->>Worker: wait until the camera settles, then the single GPU queue
+    Worker->>Worker: single GPU queue; its head waits until the camera settles
     Worker->>Worker: WebGL2 visibility and shade passes, readback copy, fence wait
     Worker-->>Provider: ImageBitmap colored from the mask (transferred)
   end
@@ -304,7 +304,7 @@ the module worker on the first tile request. A newly encountered camera tile fir
 for `renderDraft`: a cached mask is final; otherwise flat sea-level shade is returned
 without DEM fetches or GPU setup, even during a drag. After its first map render, the
 controller calls `refreshTiles` for that canonical tile. MapLibre retains the draft
-while the full request downloads its DEM and the worker holds it before the GPU queue
+while the full request downloads its DEM and its GPU job waits at the head of the queue
 until the camera settles: the provider forwards `setInteractionActive` to the worker
 (`terrain-shadow.set-interaction`, ordered with tile requests and sent to a worker
 created mid-move), so DEM downloads and cached masks never wait for a move to end. A

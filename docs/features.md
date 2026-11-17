@@ -1038,10 +1038,11 @@ camera, tracks, markers, or URLs, and are never uploaded.
 The sun-shadow variant runs the same phases with shadows on, then times shadow updates
 over two fixed Caucasus scenes (first view, ten minutes later, and back) and an orbit.
 Each update reports the shadow tiles computed and taken from the cache, and per stage
-the tile count, total, and maximum time: the wait for a camera move to end, the worker's
-GPU queue wait, DEM mosaic assembly, sky view, visibility, and shade passes (GPU time
-from WebGL timer queries, absent without them), the GPU fence wait, readback, mask
-compression or expansion, flat-ground drafts, coloring, and `createImageBitmap`.
+the tile count, total, and maximum time: the worker's GPU queue wait, the wait there for
+a camera move to end, DEM mosaic assembly, sky view, visibility, and shade passes and
+the readback copy (GPU time from WebGL timer queries, absent without them), the GPU
+fence wait, the CPU readback, mask compression or expansion, flat-ground drafts,
+coloring, and `createImageBitmap`.
 
 ## Configuration
 

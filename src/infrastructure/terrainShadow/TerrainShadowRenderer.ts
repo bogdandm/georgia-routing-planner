@@ -162,6 +162,8 @@ interface GpuResources {
   readonly shadeTexture: WebGLTexture;
   /** Reused FLOAT RGBA readback of `shadeTexture`. */
   readonly readback: Float32Array;
+  /** GPU-side copy of `shadeTexture` that `readback` is filled from after the fence. */
+  readonly readbackBuffer: WebGLBuffer;
   readonly staticBytes: number;
   /** Null where the browser does not expose GPU timer queries. */
   readonly timerQuery: TimerQueryExtension | null;
@@ -454,11 +456,15 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     terrainShadowTileSize,
   );
   const readback = new Float32Array(tilePixels * rgbaChannels);
+  const readbackBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, readbackBuffer);
+  gl.bufferData(gl.PIXEL_PACK_BUFFER, readback.byteLength, gl.STREAM_READ);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
   const staticBytes =
-    // Encoded staging texture, float shade target, and its CPU readback.
+    // Encoded staging texture, float shade target, its GPU copy, and its CPU readback.
     tileBytes +
     shadeTargetBytes +
-    readback.byteLength +
+    2 * readback.byteLength +
     mosaics.length * mosaicSize * mosaicSize * bytesPerFloat +
     reductionStages.reduce(
       (sum, stage) => sum + stage.size * stage.size * bytesPerFloat,
@@ -482,6 +488,7 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     levelMaximum,
     shadeTexture,
     readback,
+    readbackBuffer,
     staticBytes,
     timerQuery: readTimerQueryExtension(gl),
   };
@@ -775,9 +782,12 @@ function drawShade(
   drawFullscreen(gpu);
 }
 
-/** Reads separate source energies and sunlight codes; row 0 is the northern edge. */
-function readShadeMask(gpu: GpuResources): ShadeMask {
-  const { gl, readback } = gpu;
+/**
+ * Copies the shade target into `readbackBuffer` on the GPU, so the fence that follows
+ * also covers the copy and `readShadeMask` never stalls on it.
+ */
+function queueShadeReadback(gpu: GpuResources): void {
+  const { gl } = gpu;
   gl.bindFramebuffer(gl.READ_FRAMEBUFFER, gpu.readFramebuffer);
   gl.framebufferTexture2D(
     gl.READ_FRAMEBUFFER,
@@ -786,6 +796,7 @@ function readShadeMask(gpu: GpuResources): ShadeMask {
     gpu.shadeTexture,
     0,
   );
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, gpu.readbackBuffer);
   gl.readPixels(
     0,
     0,
@@ -793,8 +804,20 @@ function readShadeMask(gpu: GpuResources): ShadeMask {
     terrainShadowTileSize,
     gl.RGBA,
     gl.FLOAT,
-    readback,
+    0,
   );
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+}
+
+/**
+ * Reads separate source energies and sunlight codes once the GPU has finished
+ * `queueShadeReadback`; row 0 is the northern edge.
+ */
+function readShadeMask(gpu: GpuResources): ShadeMask {
+  const { gl, readback } = gpu;
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, gpu.readbackBuffer);
+  gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, readback);
+  gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
   const direct = new Float32Array(tilePixels);
   const sky = new Float32Array(tilePixels);
   const sunlight = new Uint8Array(sunlightGridSize * sunlightGridSize);
@@ -1148,6 +1171,7 @@ export class TerrainShadowRenderer {
         timer.measure('shade', () => {
           drawShade(gpu, visibility.texture, skyView.texture, request, levels);
         });
+        queueShadeReadback(gpu);
         // Holding the queue until the GPU finishes keeps at most one tile of shadow work
         // competing with map frames, and makes `computeMs` the real GPU time.
         const gpuWaitStartedAt = performance.now();
@@ -1356,13 +1380,19 @@ export class TerrainShadowRenderer {
     }
   }
 
-  private runSerially<T>(job: () => Promise<T>): Promise<T> {
-    const run = this.#gpuQueue.then(yieldToEventLoop).then(job);
-    this.#gpuQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
+  /**
+   * Runs GPU jobs one at a time. Between jobs the queue yields to the event loop, so
+   * queued RPC cancel messages arrive first. A job's caller resumes one event-loop turn
+   * later still, after the next job has issued its GPU passes: compressing and coloring
+   * one tile on the CPU then overlaps the GPU work of the next.
+   */
+  private async runSerially<T>(job: () => Promise<T>): Promise<T> {
+    const run = this.#gpuQueue.then(job);
+    // Registered before the caller's `await` below, so the next job's yield comes first.
+    this.#gpuQueue = run.then(yieldToEventLoop, yieldToEventLoop);
+    const result = await run;
+    await yieldToEventLoop();
+    return result;
   }
 
   private metrics(

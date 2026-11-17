@@ -264,6 +264,17 @@ type CachedMask =
   | { readonly mask: ShadeMask; readonly precision: ShadeMaskPrecision }
   | { readonly compressed: Uint8Array };
 
+/** One mask being computed, shared by every request that wants it meanwhile. */
+interface MaskComputation {
+  readonly promise: Promise<ShadeMaskResult>;
+  readonly controller: AbortController;
+  waiters: number;
+  /** `full` once any waiter asks for it; read when the mask is stored. */
+  precision: ShadeMaskPrecision;
+  /** Whether a waiter already reported the computation's metrics. */
+  reported: boolean;
+}
+
 /** Decoded DEM tile; `texture === null` is a 404 tile treated as sea level 0 m. */
 interface DemTileEntry {
   readonly texture: WebGLTexture | null;
@@ -915,6 +926,8 @@ export class TerrainShadowRenderer {
   readonly #demTiles = new Map<string, DemTileEntry>();
   readonly #demPins = new Map<string, number>();
   readonly #inflightDem = new Map<string, InflightDemFetch>();
+  /** Masks being computed, by mask key. */
+  readonly #maskComputations = new Map<string, MaskComputation>();
   readonly #masks = new Map<string, CachedMask>();
   #cachedMaskBytes = 0;
   /** Keys of uncompressed `#masks` entries, oldest first. */
@@ -1152,7 +1165,13 @@ export class TerrainShadowRenderer {
     };
   }
 
-  /** `gated` requests wait for the end of a camera move before their GPU job. */
+  /**
+   * The mask of `request`: ready, or computed once however many requests want it at the
+   * same time. A shared computation keeps running while any request still waits; its
+   * first request decides whether it waits for the end of a camera move (`gated`), and
+   * any `full` request stores it at full precision. Only the first request to receive it
+   * reports the computation; the others count as cache hits.
+   */
   private async ensureMask(
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
@@ -1163,10 +1182,77 @@ export class TerrainShadowRenderer {
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
     const ready = this.readyMask(request);
     if (ready !== null) return ready;
-    const gpu = this.ensureGpu();
-    const generation = this.#generation;
     const night = isTerrainShadowNightTile(request, request.instantMs);
     const maskKey = terrainShadowMaskKey(request, night);
+    let computation = this.#maskComputations.get(maskKey);
+    if (computation === undefined) {
+      const controller = new AbortController();
+      const promise = this.computeMask(
+        request,
+        night,
+        maskKey,
+        controller.signal,
+        () => created.precision,
+        gated,
+      ).finally(() => {
+        if (this.#maskComputations.get(maskKey) === created) {
+          this.#maskComputations.delete(maskKey);
+        }
+      });
+      // A computation canceled after its last waiter left must not surface as unhandled.
+      promise.catch(() => undefined);
+      const created: MaskComputation = {
+        promise,
+        controller,
+        waiters: 0,
+        precision,
+        reported: false,
+      };
+      this.#maskComputations.set(maskKey, created);
+      computation = created;
+    }
+    if (precision === 'full') computation.precision = 'full';
+    computation.waiters += 1;
+    try {
+      const result = await untilAborted(computation.promise, signal);
+      if (!computation.reported) {
+        computation.reported = true;
+        return result;
+      }
+      return {
+        mask: result.mask,
+        metrics: this.metrics({
+          computeMs: 0,
+          demFetchMs: 0,
+          cacheHit: true,
+          demTilesFetched: 0,
+          stages: {},
+        }),
+        gpuStages: null,
+      };
+    } finally {
+      computation.waiters -= 1;
+      if (computation.waiters === 0 && signal.aborted) {
+        // Nobody waits any more: cancel it, and let later requests start afresh.
+        if (this.#maskComputations.get(maskKey) === computation) {
+          this.#maskComputations.delete(maskKey);
+        }
+        computation.controller.abort();
+      }
+    }
+  }
+
+  /** DEM downloads, the optional camera-move wait, and the GPU job of one mask. */
+  private async computeMask(
+    request: TerrainShadowTileRequest,
+    night: boolean,
+    maskKey: string,
+    signal: AbortSignal,
+    precision: () => ShadeMaskPrecision,
+    gated: boolean,
+  ): Promise<ShadeMaskResult> {
+    const gpu = this.ensureGpu();
+    const generation = this.#generation;
     const levels = terrainShadowLevelZooms(
       request.z,
       request.demMinZoom,
@@ -1284,7 +1370,7 @@ export class TerrainShadowRenderer {
         };
       });
       const storeStartedAt = performance.now();
-      this.storeMask(maskKey, job.mask, precision);
+      this.storeMask(maskKey, job.mask, precision());
       const finishedAt = performance.now();
       return {
         mask: job.mask,

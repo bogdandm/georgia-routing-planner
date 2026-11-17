@@ -46,7 +46,12 @@ import {
   terrainShadowTileSize,
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
-const maximumCachedDemTiles = 64;
+/**
+ * Decoded R32F DEM tiles kept on the GPU (1 MiB each). One 1600 × 1000 px view of
+ * mountains at pitch 60° reads about 100–110 DEM tiles across its three mosaic levels,
+ * so the whole view stays cached and a new instant reuses it instead of refetching.
+ */
+const maximumCachedDemTiles = 128;
 /** Preserve the previous approximate mask-memory ceiling independently of frame count. */
 const maximumCachedMaskBytes = 816 * 1024 * 1024;
 /**

@@ -27,6 +27,7 @@ import {
   shadeMaskBytes,
   sunlightGridSize,
   sunlightGridStride,
+  sunlightNeutralCode,
   sunlightNightCode,
   terrainShadowShadeFragmentShaderSource,
   terrainShadowVisibilityFragmentShaderSource,
@@ -1109,10 +1110,16 @@ export class TerrainShadowRenderer {
     return { texture, fresh: true };
   }
 
-  /** Flat sea-level ground on the CPU: no GPU context, DEM, or cache memory. */
+  /**
+   * Flat sea-level ground on the CPU: no GPU context, DEM, or cache memory. A tile below
+   * the relief zoom spans a large part of the planet, where the twilight and alpenglow
+   * colors would draw broad rings around the terminator, so it keeps the brightness of
+   * day, twilight, and night but takes the neutral sunlight code everywhere.
+   */
   private flatMask(request: TerrainShadowTileRequest): ShadeMaskResult {
     const startedAt = performance.now();
     const mask = createFlatShadeMask(request, request.instantMs, request.lighting);
+    if (request.z < terrainShadowReliefMinZoom) mask.sunlight.fill(sunlightNeutralCode);
     const computeMs = performance.now() - startedAt;
     return {
       mask,

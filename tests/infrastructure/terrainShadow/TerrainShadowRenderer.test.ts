@@ -171,6 +171,44 @@ describe('TerrainShadowRenderer', () => {
       'The terrain shadow renderer was disposed.',
     );
   });
+
+  it('shades coarse flat tiles without twilight tints, unlike relief drafts', async () => {
+    vi.stubGlobal(
+      'ImageData',
+      class {
+        public constructor(
+          public readonly data: Uint8ClampedArray,
+          public readonly width: number,
+          public readonly height: number,
+        ) {}
+      },
+    );
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ close: vi.fn() }));
+    const expansions = vi.spyOn(shadeShaders, 'expandShadeMask');
+    // Low winter Sun over the Caucasus, shortly before sunset.
+    const instantMs = Date.UTC(2026, 11, 21, 13, 30);
+    const renderer = new TerrainShadowRenderer();
+    const signal = new AbortController().signal;
+    try {
+      await renderer.render({ ...request, z: 4, x: 9, y: 5, instantMs }, signal);
+      const draft = await renderer.renderDraft(
+        { ...request, z: 7, x: 79, y: 47, instantMs },
+        signal,
+      );
+      const [coarse, relief] = expansions.mock.calls.map(([mask]) => mask);
+
+      expect(draft.draft).toBe(true);
+      expect(coarse?.direct.some((energy) => energy > 0)).toBe(true);
+      expect(
+        coarse?.sunlight.every((code) => code === shadeShaders.sunlightNeutralCode),
+      ).toBe(true);
+      expect(
+        relief?.sunlight.some((code) => code !== shadeShaders.sunlightNeutralCode),
+      ).toBe(true);
+    } finally {
+      renderer.dispose();
+    }
+  });
 });
 
 describe('compact terrain source-energy masks', () => {

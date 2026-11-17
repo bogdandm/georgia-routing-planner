@@ -167,6 +167,8 @@ export const defaultShadeLighting: ShadeLighting = {
  */
 export const sunlightAirMassMaximumCode = 223;
 export const sunlightNightCode = 255;
+/** The unreddened zenith Sun: white direct light and the day sky, without any tint. */
+export const sunlightNeutralCode = 0;
 /** Below every reachable air mass: the zenith Sun over a summit near 5500 m. */
 export const sunlightMinimumAirMass = 0.5;
 /** Sunlight codes are kept for every 4th pixel in both directions and interpolated. */

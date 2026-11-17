@@ -912,8 +912,11 @@ describe('MapLibreFacade', () => {
 
     nativeMap.setTerrain(null);
     expect(nativeMap.renderWorldCopies).toBe(true);
+    // A 2D pan across the antimeridian leaves the center in a world copy.
+    nativeMap.jumpTo({ center: [200, 42] });
     nativeMap.setTerrain({ source: 'terrain-dem', exaggeration: 1 });
     expect(nativeMap.renderWorldCopies).toBe(false);
+    expect(nativeMap.getCenter()).toEqual({ lng: -160, lat: 42 });
     facade.destroy();
   });
 

@@ -1173,15 +1173,20 @@ export class MapLibreFacade implements MapFacade {
    * MapLibre drapes every world copy of a raster tile into one 3D terrain tile, because it
    * matches them by canonical tile only, so semi-transparent overlays such as sun shadows
    * compound two or three times into tile-shaped seams on a zoomed-out 3D map. World
-   * copies are therefore drawn in 2D only.
+   * copies are therefore drawn in 2D only. A 2D pan across the antimeridian can leave the
+   * center outside ±180°, where a single world draws nothing, so it is wrapped first.
    */
   private readonly handleTerrainChange = (): void => {
     const map = this.#map;
     if (map === null) return;
     const renderWorldCopies = map.getTerrain() === null;
-    if (map.getRenderWorldCopies() !== renderWorldCopies) {
-      map.setRenderWorldCopies(renderWorldCopies);
+    if (map.getRenderWorldCopies() === renderWorldCopies) return;
+    const { lng: longitude, lat: latitude } = map.getCenter();
+    if (!renderWorldCopies && Math.abs(longitude) > 180) {
+      const wrappedLongitude = ((((longitude + 180) % 360) + 360) % 360) - 180;
+      map.jumpTo({ center: [wrappedLongitude, latitude] });
     }
+    map.setRenderWorldCopies(renderWorldCopies);
   };
 
   private readonly handleMoveStart = (): void => {

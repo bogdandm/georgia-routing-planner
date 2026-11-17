@@ -2674,6 +2674,45 @@ describe('MapWorkspace', () => {
       { timeout: 2_000 },
     );
   });
+  it('names a recorded day GIF by the local date at the map center', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const mapLayers = services.mapLayers;
+    if (mapLayers === null) throw new Error('Expected map layer services.');
+    vi.spyOn(mapLayers, 'recordSunShadowDay').mockResolvedValue(new Uint8Array([1]));
+    const downloads: string[] = [];
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        downloads.push(this.download);
+      });
+    const facade = new FakeMapFacade();
+    facade.setSnapshot({ lifecycle: 'ready' });
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MapWorkspace facade={facade} mapCanvas={<div>GIF map</div>} />
+      </RuntimeServicesProvider>,
+    );
+    await screen.findByText('GIF map');
+    // 03:30 in Tbilisi (UTC+4) on June 21 is still June 20 in UTC.
+    act(() => {
+      mapLayerStore.setState((state) => ({
+        sunShadow: {
+          ...state.sunShadow,
+          enabled: true,
+          instantMs: Date.parse('2026-06-20T23:30:00Z'),
+        },
+      }));
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Capture the map' }));
+    await user.click(screen.getByRole('button', { name: 'Record a GIF of the day' }));
+
+    await waitFor(() => {
+      expect(downloads).toEqual(['sun-shadows-2026-06-21.gif']);
+    });
+    click.mockRestore();
+  });
   it('turns north, toggles 3D, and runs the ruler from the keyboard', async () => {
     const user = userEvent.setup();
     const facade = new FakeMapFacade();

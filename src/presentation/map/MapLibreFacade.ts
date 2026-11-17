@@ -42,6 +42,7 @@ import {
   type SunShadowBenchmarkHooks,
 } from '@/presentation/map/renderBenchmark';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import { captureMapPng } from '@/presentation/map/mapCapture';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import type {
   MapLibreLayerController,
@@ -427,6 +428,8 @@ export class MapLibreFacade implements MapFacade {
     map.on('click', this.handleMapClick);
     map.on('sourcedata', this.handleSourceData);
     map.on('error', this.handleError);
+    map.on('terrain', this.handleTerrainChange);
+    this.handleTerrainChange();
     map.getCanvas().addEventListener('webglcontextlost', this.handleContextLost);
     map
       .getCanvas()
@@ -716,6 +719,13 @@ export class MapLibreFacade implements MapFacade {
       name: 'map.navigation.requested',
       data: { status: 'accepted' },
     });
+  }
+
+  /** PNG of the map as drawn in the next frame, without controls; see `captureMapPng`. */
+  public captureMapImage(): Promise<Blob> {
+    const map = this.#map;
+    if (map === null) return Promise.reject(new Error('The map is not ready.'));
+    return captureMapPng(map);
   }
 
   public resetNorth(): void {
@@ -1157,6 +1167,26 @@ export class MapLibreFacade implements MapFacade {
         });
       }
     }
+  };
+
+  /**
+   * MapLibre drapes every world copy of a raster tile into one 3D terrain tile, because it
+   * matches them by canonical tile only, so semi-transparent overlays such as sun shadows
+   * compound two or three times into tile-shaped seams on a zoomed-out 3D map. World
+   * copies are therefore drawn in 2D only. A 2D pan across the antimeridian can leave the
+   * center outside ±180°, where a single world draws nothing, so it is wrapped first.
+   */
+  private readonly handleTerrainChange = (): void => {
+    const map = this.#map;
+    if (map === null) return;
+    const renderWorldCopies = map.getTerrain() === null;
+    if (map.getRenderWorldCopies() === renderWorldCopies) return;
+    const { lng: longitude, lat: latitude } = map.getCenter();
+    if (!renderWorldCopies && Math.abs(longitude) > 180) {
+      const wrappedLongitude = ((((longitude + 180) % 360) + 360) % 360) - 180;
+      map.jumpTo({ center: [wrappedLongitude, latitude] });
+    }
+    map.setRenderWorldCopies(renderWorldCopies);
   };
 
   private readonly handleMoveStart = (): void => {
@@ -2323,6 +2353,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('click', this.handleMapClick);
     map.off('sourcedata', this.handleSourceData);
     map.off('error', this.handleError);
+    map.off('terrain', this.handleTerrainChange);
     map.getCanvas().removeEventListener('webglcontextlost', this.handleContextLost);
     map
       .getCanvas()

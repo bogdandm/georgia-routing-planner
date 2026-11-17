@@ -62,14 +62,34 @@ export const mapVisualPalette = {
     pass: '#29343A',
     scree: '#A39B91',
     /**
-     * Real-sun relief: the worker expands each shade pixel into `sunShadow` (darker than
-     * flat ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter).
-     * Both are opaque `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
+     * Real-sun relief combines direct sunlight and sky irradiance in linear HDR before
+     * tone mapping. `sunHighlight` colors the direct source, with `sunHighlightOpacity`
+     * controlling its color contribution. Sky light shifts from blue-grey `sunShadow`
+     * by day and at night to lilac `sunGoldenShadow` near the horizon and deep blue
+     * `sunLowShadow` in civil twilight. `sunAlpenglow` shifts the twilight sky chromaticity
+     * by at most `sunAlpenglowOpacity`, without adding independent light. Colors are
+     * opaque `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
      */
-    sunShadow: '#1B2433',
-    sunShadowOpacity: 0.5,
+    sunShadow: '#19355D',
+    sunShadowOpacity: 0.53,
     sunHighlight: '#FFF7E6',
-    sunHighlightOpacity: 0.6,
+    sunHighlightOpacity: 0.88,
+    sunGoldenShadow: '#3B2867',
+    sunLowShadow: '#2E3F7A',
+    sunAlpenglow: '#F0A3B8',
+    sunAlpenglowOpacity: 0.32,
+    /**
+     * 3D sky while sun shadows draw: the `sky` color overhead, the `horizon` band, and the
+     * distant `fog` over terrain, for full day, the twilight blue around sunset, and night.
+     * Near sunset the horizon and fog toward the Sun take on the direct sunlight color, and
+     * the horizon facing away turns toward the rose `antisolarHorizon` (Belt of Venus).
+     */
+    sunSky: {
+      day: { sky: '#5D9BDB', horizon: '#D5E4F0', fog: '#CFDCE7' },
+      twilight: { sky: '#2D4278', horizon: '#7D7FAE', fog: '#5A6390' },
+      night: { sky: '#0A0F1E', horizon: '#161E36', fog: '#121A2C' },
+      antisolarHorizon: '#AE98EC',
+    },
   },
   restricted: {
     line: '#C95050',

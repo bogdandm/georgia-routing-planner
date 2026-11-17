@@ -1,4 +1,5 @@
 import { solarDiskRadiusDegrees, solarPosition } from '@/domain/terrain/solarPosition';
+import { seaLevelHorizonDegrees } from '@/domain/terrain/terrainShadow';
 
 /** Edge length of every DEM tile and of every rendered shade tile, in pixels. */
 export const terrainShadowTileSize = 512;
@@ -103,14 +104,23 @@ export function terrainShadowTileGeometry(
 }
 
 /**
+ * Apparent solar elevation at which the shade shader has faded twilight out: the end of
+ * civil twilight (−6°). It must also lie below the sea-level horizon of Everest's summit
+ * (about −3.1°), so no terrain anywhere is still lit directly.
+ */
+export const terrainShadowNightElevationDegrees = Math.min(
+  -6,
+  seaLevelHorizonDegrees(8_849) - solarDiskRadiusDegrees,
+);
+/**
  * Over one z7–12 tile the solar elevation departs from its corner values by far less
- * than this margin, so corners this far below the solar disk prove the tile is dark.
+ * than this margin, so corners this far below the night elevation prove the tile is dark.
  */
 const nightCornerMarginDegrees = 1;
 
 /**
- * True when the Sun is below the horizon at every pixel of the tile at `instantMs`, so
- * its shade mask is all zero (full shade) without any DEM or GPU work.
+ * True when the Sun is below `terrainShadowNightElevationDegrees` at every pixel of the
+ * tile at `instantMs`: only the night sky lights it, so one mask serves every such instant.
  */
 export function isTerrainShadowNightTile(
   output: TerrainShadowTileAddress,
@@ -131,7 +141,9 @@ export function isTerrainShadowNightTile(
         (latitude * 180) / Math.PI,
         (longitude * 180) / Math.PI,
       ).apparentElevationDegrees;
-      if (elevation > -solarDiskRadiusDegrees - nightCornerMarginDegrees) return false;
+      if (elevation > terrainShadowNightElevationDegrees - nightCornerMarginDegrees) {
+        return false;
+      }
     }
   }
   return true;

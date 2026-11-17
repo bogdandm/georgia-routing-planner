@@ -39,6 +39,7 @@ import Map, {
   type MapRef,
 } from 'react-map-gl/maplibre';
 import { useStore } from 'zustand';
+import lookupTimeZone from '@photostructure/tz-lookup';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
@@ -62,6 +63,8 @@ import {
   type TerrainControlState,
 } from '@/presentation/map/MapViewControls';
 import type { SunShadowControlProps } from '@/presentation/map/SunShadowControl';
+import type { MapCaptureControlProps } from '@/presentation/map/MapCaptureControl';
+import { downloadFile } from '@/presentation/downloadFile';
 import { useSatelliteMode } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { createHikingMapStyle } from '@/presentation/map/mapStyleFactory';
 import {
@@ -77,6 +80,7 @@ import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
+import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
@@ -1857,6 +1861,37 @@ export function MapWorkspace({
           },
           peek: sunShadowPeek,
         };
+  const mapCapture: MapCaptureControlProps = {
+    // The PNG promise goes straight into the clipboard item, so the write keeps the
+    // click's user activation while the next frame is read and encoded.
+    onCopyScreenshot: () =>
+      navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': facade.captureMapImage() }),
+      ]),
+    onRecordDayGif:
+      mapLayers === null || !sunShadow.enabled
+        ? null
+        : async (signal, onProgress) => {
+            // The recording spans the local day at the map center, so its date names the file.
+            const center = mapViewport.getViewportSnapshot()?.center;
+            const timeZone =
+              center === undefined
+                ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                : lookupTimeZone(
+                    Math.round(center.latitude * 100) / 100,
+                    Math.round(center.longitude * 100) / 100,
+                  );
+            const {
+              year,
+              month,
+              day: date,
+            } = instantToZonedWallTime(new Date(sunShadow.instantMs), timeZone);
+            const day = `${String(year)}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
+            const gif = await mapLayers.recordSunShadowDay(signal, onProgress);
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
+            downloadFile(`sun-shadows-${day}.gif`, 'image/gif', gif);
+          },
+  };
 
   // Phone workspaces and the desktop comparison grid hide the main map, as in WorkspaceShell.
   const mainMapHidden =
@@ -2079,6 +2114,7 @@ export function MapWorkspace({
               measurementActive={measurementActive}
               onMeasurementActiveChange={handleMeasurementActiveChange}
               sunShadow={sunShadowControl}
+              mapCapture={mapCapture}
             />
             {selectionCoordinate === null ||
             selectionCoordinate === undefined ||
@@ -2220,6 +2256,7 @@ export function MapWorkspace({
           measurementActive={measurementActive}
           onMeasurementActiveChange={handleMeasurementActiveChange}
           sunShadow={sunShadowControl}
+          mapCapture={mapCapture}
         />
       ) : null}
       <ElevationGradeLegend

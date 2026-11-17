@@ -227,6 +227,10 @@ export class FakeMapFacade implements MapFacade {
     this.navigationPaddingRequests.push(visibleAreaPadding);
   }
 
+  public captureMapImage(): Promise<Blob> {
+    return Promise.resolve(new Blob([], { type: 'image/png' }));
+  }
+
   public resetNorth(): void {
     this.northResets += 1;
   }

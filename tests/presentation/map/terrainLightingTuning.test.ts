@@ -1,0 +1,124 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import {
+  defaultTerrainLightingTuning,
+  effectiveTerrainLightingTuning,
+  parseStoredTerrainLightingTuning,
+  resetTerrainLighting,
+  setTerrainLightingValue,
+  terrainLightingStorageKey,
+  terrainLightingTuningStore,
+  terrainShadowShadingFromTuning,
+} from '@/presentation/map/terrainLightingTuning';
+
+beforeEach(() => {
+  terrainLightingTuningStore.setState({
+    values: defaultTerrainLightingTuning,
+    showDefaults: false,
+    panelOpen: false,
+  });
+});
+
+describe('terrain lighting tuning', () => {
+  it('sets the share weighting the cached direct and sky irradiance channels', () => {
+    const shading = terrainShadowShadingFromTuning({
+      ...defaultTerrainLightingTuning,
+      terrainShadeSkyLightShare: 0.5,
+    });
+    expect(shading.lighting.skyLightShare).toBe(0.5);
+    expect(shading.palette).not.toHaveProperty('skyLightShare');
+  });
+
+  it('passes tuned source colors and strengths to cached-mask recoloring', () => {
+    const { palette } = terrainShadowShadingFromTuning({
+      ...defaultTerrainLightingTuning,
+      sunHighlight: '#ABCDEF',
+      sunHighlightOpacity: 0.3,
+      sunLowShadow: '#123456',
+      sunAlpenglow: '#FEDCBA',
+      sunAlpenglowOpacity: 0.7,
+    });
+    expect(palette).toMatchObject({
+      highlightColor: [171, 205, 239],
+      highlightOpacity: 0.3,
+      lowSunShadowColor: [18, 52, 86],
+      alpenglowColor: [254, 220, 186],
+      alpenglowOpacity: 0.7,
+    });
+  });
+
+  it('compares with the defaults without losing the tuned values', () => {
+    setTerrainLightingValue('sunHighlightOpacity', 0.2);
+    setTerrainLightingValue('sunSky.night.fog', '#ABCDEF');
+    setTerrainLightingValue('terrainShadeExposure', -0.5);
+    setTerrainLightingValue('terrainShadeShadowStrength', 3);
+    setTerrainLightingValue('terrainShadeHighlightRolloff', 1.5);
+    const tuned = terrainLightingTuningStore.getState().values;
+
+    terrainLightingTuningStore.setState({ showDefaults: true });
+    expect(effectiveTerrainLightingTuning(terrainLightingTuningStore.getState())).toBe(
+      defaultTerrainLightingTuning,
+    );
+    terrainLightingTuningStore.setState({ showDefaults: false });
+    expect(effectiveTerrainLightingTuning(terrainLightingTuningStore.getState())).toBe(
+      tuned,
+    );
+
+    // Editing while Before is shown returns to After with the edit applied.
+    terrainLightingTuningStore.setState({ showDefaults: true });
+    setTerrainLightingValue('sunShadowOpacity', 0.7);
+    expect(terrainLightingTuningStore.getState()).toMatchObject({
+      showDefaults: false,
+      values: { sunHighlightOpacity: 0.2, sunShadowOpacity: 0.7 },
+    });
+  });
+
+  it('resets one section or every value', () => {
+    setTerrainLightingValue('sunShadowOpacity', 0.9);
+    setTerrainLightingValue('skyOcclusionStrength', 2.5);
+    setTerrainLightingValue('sunAlpenglow', '#000000');
+
+    resetTerrainLighting('light');
+    expect(terrainLightingTuningStore.getState().values).toMatchObject({
+      sunShadowOpacity: defaultTerrainLightingTuning.sunShadowOpacity,
+      skyOcclusionStrength: 2.5,
+      sunAlpenglow: '#000000',
+    });
+
+    resetTerrainLighting();
+    expect(terrainLightingTuningStore.getState().values).toEqual(
+      defaultTerrainLightingTuning,
+    );
+  });
+
+  it('keeps tuned values in localStorage and reads back only valid ones', () => {
+    setTerrainLightingValue('sunAlpenglowOpacity', 0.75);
+    setTerrainLightingValue('terrainShadeExposure', -0.5);
+    setTerrainLightingValue('terrainShadeShadowStrength', 0);
+    setTerrainLightingValue('terrainShadeHighlightRolloff', 0.05);
+    const stored = localStorage.getItem(terrainLightingStorageKey);
+    expect(parseStoredTerrainLightingTuning(stored)).toMatchObject({
+      sunAlpenglowOpacity: 0.75,
+      terrainShadeExposure: -0.5,
+      terrainShadeShadowStrength: 0,
+      terrainShadeHighlightRolloff: 0.05,
+    });
+
+    expect(
+      parseStoredTerrainLightingTuning(
+        JSON.stringify({
+          sunShadowOpacity: 0.3,
+          // Outside its slider range, not a color, and unknown: all ignored.
+          shadeNeutralBrightness: 5,
+          terrainShadeExposure: -3,
+          terrainShadeShadowStrength: -0.1,
+          terrainShadeHighlightRolloff: 0,
+          sunShadow: 'red',
+          rimLightGain: 2,
+        }),
+      ),
+    ).toEqual({ ...defaultTerrainLightingTuning, sunShadowOpacity: 0.3 });
+    expect(parseStoredTerrainLightingTuning('{')).toBe(defaultTerrainLightingTuning);
+    expect(parseStoredTerrainLightingTuning(null)).toBe(defaultTerrainLightingTuning);
+  });
+});

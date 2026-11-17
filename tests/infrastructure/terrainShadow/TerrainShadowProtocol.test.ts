@@ -19,6 +19,23 @@ const request: TerrainShadowTileRequest = {
   shadowColor: [27, 36, 51],
   highlightColor: [255, 247, 230],
   highlightOpacity: 0.6,
+  goldenShadowColor: [70, 53, 110],
+  lowSunShadowColor: [46, 63, 122],
+  alpenglowColor: [240, 163, 184],
+  alpenglowOpacity: 0.4,
+  neutralBrightness: 1.45,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
+  lighting: {
+    skyLightShare: 0.35,
+    skyOcclusionStrength: 1.75,
+    nightSkyLight: 0.6,
+    nightTopLight: 0,
+    nightTopLightFocus: 2,
+    diffuseSkyFraction: 0.5,
+    softEdgeSigmaPixels: 1,
+  },
 };
 
 const metrics: TerrainShadowTileMetrics = {
@@ -29,6 +46,7 @@ const metrics: TerrainShadowTileMetrics = {
   memoryBytes: 1_048_576,
   cachedMasks: 1,
   cachedDemTiles: 27,
+  stages: { queueWait: 3, shade: 1.5 },
 };
 
 afterEach(() => {
@@ -38,6 +56,14 @@ afterEach(() => {
 describe('terrainShadowTileRequestSchema', () => {
   it('accepts a complete tile request', () => {
     expect(terrainShadowTileRequestSchema.parse(request)).toEqual(request);
+  });
+
+  it.each([0, 1])('accepts sky-light share endpoint %s', (skyLightShare) => {
+    const endpoint = {
+      ...request,
+      lighting: { ...request.lighting, skyLightShare },
+    };
+    expect(terrainShadowTileRequestSchema.parse(endpoint)).toEqual(endpoint);
   });
 
   it('accepts flat-ground tiles below the DEM minimum zoom, which read no DEM', () => {
@@ -62,6 +88,15 @@ describe('terrainShadowTileRequestSchema', () => {
     ['a 256 px tile', { ...request, tileSize: 256 }],
     ['a color channel above 255', { ...request, shadowColor: [27, 36, 256] }],
     ['a highlight opacity above 1', { ...request, highlightOpacity: 1.5 }],
+    ['no neutral reference', { ...request, neutralBrightness: 0 }],
+    ['a non-finite exposure', { ...request, exposure: Infinity }],
+    ['an exposure outside the supported range', { ...request, exposure: -2.1 }],
+    ['a negative shadow strength', { ...request, shadowStrength: -0.1 }],
+    ['no highlight shoulder', { ...request, highlightRolloff: 0 }],
+    [
+      'a negative sky-light share',
+      { ...request, lighting: { ...request.lighting, skyLightShare: -0.1 } },
+    ],
     [
       'a relief tile below the DEM minimum zoom',
       { ...request, z: 8, x: 0, y: 0, demMinZoom: 9 },
@@ -84,6 +119,18 @@ describe('isTerrainShadowTileResult', () => {
     expect(isTerrainShadowTileResult({ bitmap: {}, metrics })).toBe(false);
     expect(
       isTerrainShadowTileResult({ bitmap, metrics: { ...metrics, memoryBytes: -1 } }),
+    ).toBe(false);
+    expect(
+      isTerrainShadowTileResult({
+        bitmap,
+        metrics: { ...metrics, stages: { shade: -1 } },
+      }),
+    ).toBe(false);
+    expect(
+      isTerrainShadowTileResult({
+        bitmap,
+        metrics: { ...metrics, stages: { other: 1 } },
+      }),
     ).toBe(false);
     expect(isTerrainShadowTileResult({ bitmap })).toBe(false);
   });

@@ -8,9 +8,11 @@ import {
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
+  defaultTerrainShadowShading,
   MapLibreTerrainShadowTileProvider,
   type TerrainShadowAvailability,
   type TerrainShadowPrefetchProgress,
+  type TerrainShadowShading,
   terrainShadowProtocolId,
 } from '@/presentation/map/TerrainShadowTileProvider';
 
@@ -41,6 +43,7 @@ const renderedMetrics: TerrainShadowTileMetrics = {
   memoryBytes: 100,
   cachedMasks: 1,
   cachedDemTiles: 9,
+  stages: { queueWait: 5, shade: 3 },
 };
 
 class FakeImageBitmap {
@@ -85,7 +88,16 @@ class FakeShadowWorker implements WorkerRpcEndpoint {
   }
 
   public respond(index: number, value: unknown): void {
-    this.dispatchMessage({ type: 'result', requestId: this.requestId(index), value });
+    // Ordinary responses model a completed mask; draft-specific tests override the flag.
+    const response =
+      typeof value === 'object' && value !== null && 'bitmap' in value
+        ? { draft: false, ...value }
+        : value;
+    this.dispatchMessage({
+      type: 'result',
+      requestId: this.requestId(index),
+      value: response,
+    });
   }
 
   public fail(
@@ -174,7 +186,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
 
     await expect(tile).resolves.toEqual({ data: bitmap });
     expect(workerFactory).toHaveBeenCalledOnce();
-    expect(worker.requests[0]?.payload).toEqual({
+    expect(worker.requests[0]?.payload).toMatchObject({
       z: 12,
       x: 2_541,
       y: 1_514,
@@ -183,9 +195,6 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       demTileUrl: terrain.tileUrl,
       demMinZoom: 0,
       demMaxZoom: 12,
-      shadowColor: [0x1b, 0x24, 0x33],
-      highlightColor: [0xff, 0xf7, 0xe6],
-      highlightOpacity: 0.6,
     });
 
     const second = loadTile();
@@ -195,6 +204,42 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     worker.respond(1, { bitmap, metrics: { ...renderedMetrics, cacheHit: true } });
     await second;
     expect(workerFactory).toHaveBeenCalledOnce();
+    provider.dispose();
+  });
+
+  it('gives each shading its own tile URL and keeps older URLs on their shading', async () => {
+    const { provider, worker } = createProvider();
+    const defaultUrl = provider.createTileUrl(instantMs);
+    const tuned: TerrainShadowShading = {
+      palette: { ...defaultTerrainShadowShading.palette, highlightOpacity: 0.2 },
+      lighting: { ...defaultTerrainShadowShading.lighting, skyOcclusionStrength: 2.5 },
+    };
+
+    provider.setShading(tuned);
+    const tunedUrl = provider.createTileUrl(instantMs);
+    expect(tunedUrl).not.toBe(defaultUrl);
+    // Back to the defaults (an equal object): the first URL again, then the tuned one.
+    provider.setShading({ ...defaultTerrainShadowShading });
+    expect(provider.createTileUrl(instantMs)).toBe(defaultUrl);
+    provider.setShading({ ...tuned });
+    expect(provider.createTileUrl(instantMs)).toBe(tunedUrl);
+
+    provider.setShading(defaultTerrainShadowShading);
+    const tile = loadTile(tunedUrl.replace('{z}/{x}/{y}', '12/2541/1514'));
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+    expect(worker.requests[0]?.payload).toMatchObject({
+      highlightOpacity: 0.2,
+      lighting: { skyOcclusionStrength: 2.5 },
+    });
+    worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await tile;
+    await expect(
+      loadTile(
+        tunedUrl.replace('{z}/{x}/{y}', '12/2541/1514').replace(/=\d+$/u, '=99'),
+      ),
+    ).rejects.toThrow('Invalid terrain shadow tile address.');
     provider.dispose();
   });
 
@@ -208,39 +253,160 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.dispose();
   });
 
-  it('holds tile requests during map interaction and releases them afterwards', async () => {
+  it('shows a draft during a drag, then sends its full refresh without drafting later minutes', async () => {
     const { provider, worker } = createProvider();
+    const tile = { z: 12, x: 2541, y: 1514 };
     provider.setInteractionActive(true);
-
-    const tile = loadTile();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(worker.requests).toHaveLength(0);
-    expect(provider.getMetrics().pendingTiles).toBe(1);
-
-    provider.setInteractionActive(false);
+    const initial = loadTile();
     await vi.waitFor(() => {
-      expect(worker.requests).toHaveLength(1);
+      expect(worker.requests).toHaveLength(2);
     });
-    worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
-    await tile;
-    expect(provider.getMetrics().pendingTiles).toBe(0);
+    expect(worker.requests[1]?.method).toBe('terrain-shadow.render-draft');
+    worker.respond(1, {
+      bitmap: new FakeImageBitmap(),
+      metrics: renderedMetrics,
+      draft: true,
+    });
+    await initial;
+    expect(provider.getMetrics().tilesRendered).toBe(0);
+    expect(provider.getAvailability()).toBe('unknown');
+    expect(
+      provider.takeDraftTile(provider.createTileUrl(instantMs + 60_000), tile),
+    ).toBe(false);
+    expect(provider.takeDraftTile(provider.createTileUrl(instantMs), tile)).toBe(true);
+    expect(provider.takeDraftTile(provider.createTileUrl(instantMs), tile)).toBe(false);
+
+    // The worker, not the provider, holds the full tile until the drag ends.
+    const refresh = loadTile();
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(3);
+    });
+    expect(worker.requests[2]?.method).toBe('terrain-shadow.render-tile');
+    worker.respond(2, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await refresh;
+    expect(provider.getAvailability()).toBe('available');
+    const next = loadTile(
+      tileUrl.replace(String(epochMinute), String(epochMinute + 1)),
+    );
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(4);
+    });
+    expect(worker.requests[3]?.method).toBe('terrain-shadow.render-tile');
+    worker.respond(3, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await next;
     provider.dispose();
   });
 
-  it('drops a gated tile aborted by MapLibre without counting a failure', async () => {
-    const { provider, worker, workerFactory } = createProvider();
+  it('forwards camera moves to the worker in order, also to a worker created during one', async () => {
+    const { provider, worker } = createProvider();
+    provider.setInteractionActive(true);
+    const tile = loadTile(`${tileUrl}?quality=full`);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(2);
+    });
+    provider.setInteractionActive(true);
+    provider.setInteractionActive(false);
+
+    expect(
+      worker.requests.map(({ method, payload }) =>
+        method === 'terrain-shadow.set-interaction' ? payload : method,
+      ),
+    ).toEqual([{ active: true }, 'terrain-shadow.render-tile', { active: false }]);
+    worker.respond(1, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await tile;
+    provider.dispose();
+  });
+
+  it('still drafts a tile whose first request MapLibre aborted during a drag', async () => {
+    const { provider, worker } = createProvider();
     provider.setInteractionActive(true);
     const controller = new AbortController();
+    const aborted = loadTile(tileUrl, controller);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(2);
+    });
+    controller.abort();
+    await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
 
-    const tile = loadTile(tileUrl, controller);
+    const retry = loadTile();
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(3);
+    });
+    expect(worker.requests[2]?.method).toBe('terrain-shadow.render-draft');
+    worker.respond(2, {
+      bitmap: new FakeImageBitmap(),
+      metrics: renderedMetrics,
+      draft: true,
+    });
+    await retry;
+    provider.dispose();
+  });
+
+  it('never drafts a full-quality playback tile, even outside the camera history', async () => {
+    const { provider, worker } = createProvider();
+    const url = provider
+      .createTileUrl(instantMs, true)
+      .replace('{z}', '12')
+      .replace('{x}', '2541')
+      .replace('{y}', '1514');
+    const tile = loadTile(url);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+    expect(worker.requests[0]?.method).toBe('terrain-shadow.render-tile');
+    worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+    await tile;
+    expect(
+      provider.takeDraftTile(provider.createTileUrl(instantMs, true), {
+        z: 12,
+        x: 2541,
+        y: 1514,
+      }),
+    ).toBe(false);
+    provider.dispose();
+  });
+
+  it.each([
+    ['in', '11/1270/757', 12, 2541, 1514],
+    ['out', '12/2541/1514', 11, 1270, 757],
+  ] as const)(
+    'keeps existing relief when zooming %s instead of replacing it with flat shade',
+    async (_direction, initialAddress, z, x, y) => {
+      const { provider, worker } = createProvider();
+      const initial = loadTile(
+        `terrain-shadow://${String(epochMinute)}/${initialAddress}`,
+      );
+      await vi.waitFor(() => {
+        expect(worker.requests).toHaveLength(1);
+      });
+      worker.respond(0, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+      await initial;
+      provider.setInteractionActive(true);
+      const zoomed = loadTile(
+        `terrain-shadow://${String(epochMinute)}/${String(z)}/${String(x)}/${String(y)}`,
+      );
+      await vi.waitFor(() => {
+        expect(worker.requests).toHaveLength(3);
+      });
+      expect(worker.requests[2]?.method).toBe('terrain-shadow.render-tile');
+      worker.respond(2, { bitmap: new FakeImageBitmap(), metrics: renderedMetrics });
+      await zoomed;
+      provider.dispose();
+    },
+  );
+
+  it('cancels the worker job of a tile MapLibre aborts without counting a failure', async () => {
+    const { provider, worker } = createProvider();
+    const controller = new AbortController();
+
+    const tile = loadTile(`${tileUrl}?quality=full`, controller);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
     controller.abort();
 
     await expect(tile).rejects.toMatchObject({ name: 'AbortError' });
-    provider.setInteractionActive(false);
-    await Promise.resolve();
-    expect(workerFactory).not.toHaveBeenCalled();
-    expect(worker.requests).toHaveLength(0);
+    expect(worker.canceledRequestIds).toEqual([worker.requests[0]?.requestId]);
     expect(provider.getMetrics()).toMatchObject({ pendingTiles: 0, tilesFailed: 0 });
     provider.dispose();
   });
@@ -307,7 +473,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.dispose();
   });
 
-  it('aggregates worker metrics and keeps the GPU estimate across resets', async () => {
+  it('aggregates worker metrics and stage times and keeps the GPU estimate across resets', async () => {
     const { provider, worker } = createProvider();
     const tiles = [loadTile(), loadTile(), loadTile()];
     await vi.waitFor(() => {
@@ -324,6 +490,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
         cacheHit: true,
         demTilesFetched: 0,
         memoryBytes: 120,
+        stages: { maskCodec: 2, queueWait: 1 },
       },
     });
     worker.fail(2, {
@@ -347,6 +514,11 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       totalDemFetchMs: 10,
       demTilesFetched: 9,
       memoryBytes: 120,
+      stages: {
+        queueWait: { count: 2, totalMs: 6, maxMs: 5 },
+        shade: { count: 1, totalMs: 3, maxMs: 3 },
+        maskCodec: { count: 1, totalMs: 2, maxMs: 2 },
+      },
     });
     expect(provider.getAvailability()).toBe('available');
 
@@ -361,6 +533,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       totalDemFetchMs: 0,
       demTilesFetched: 0,
       memoryBytes: 120,
+      stages: {},
     });
     provider.dispose();
   });

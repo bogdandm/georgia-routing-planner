@@ -59,6 +59,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onLayerPresetChange={() => 'map'}
         onTerrainModeChange={onTerrainModeChange}
@@ -92,6 +93,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onLayerPresetChange={() => 'map'}
         onTerrainModeChange={vi.fn()}
@@ -124,6 +126,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onTerrainModeChange={vi.fn()}
         terrainState="flat"
@@ -195,6 +198,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onLayerPresetChange={onLayerPresetChange}
         onTerrainModeChange={vi.fn()}
@@ -228,6 +232,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onLayerPresetChange={() => 'navigated'}
         onTerrainModeChange={vi.fn()}
@@ -263,6 +268,7 @@ describe('MapViewControls', () => {
           onOpenComparison={null}
           measurementActive={false}
           onMeasurementActiveChange={vi.fn()}
+          mapCapture={null}
           sunShadow={null}
           onLayerPresetChange={() => 'map'}
           onTerrainModeChange={vi.fn()}
@@ -300,6 +306,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onLayerPresetChange={() => 'map'}
         onTerrainModeChange={vi.fn()}
@@ -337,6 +344,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={null}
         onLayerPresetChange={() => 'map'}
         onTerrainModeChange={vi.fn()}
@@ -376,6 +384,7 @@ describe('MapViewControls', () => {
         onOpenComparison={null}
         measurementActive={false}
         onMeasurementActiveChange={vi.fn()}
+        mapCapture={null}
         sunShadow={{
           enabled: false,
           instantMs: 0,

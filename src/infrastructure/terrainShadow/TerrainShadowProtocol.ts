@@ -5,10 +5,17 @@ const colorSchema = z
   .tuple([colorChannelSchema, colorChannelSchema, colorChannelSchema])
   .readonly();
 
-/** Cached one-byte shade masks per worker: 3072 × 256 KiB = 768 MiB. */
-export const terrainShadowMaskCacheLimit = 3072;
-/** Most tiles × frames one day playback may precompute; stays below the mask cache. */
-export const terrainShadowPlaybackTileLimit = 2560;
+/**
+ * Cached shade masks per worker, also bounded by a 1.25 GiB byte budget
+ * (`TerrainShadowRenderer.ts`). Measured worst real masks (~554 KiB) fit about 2360,
+ * typical (~374 KiB) about 3500, so this count stays above the playback budget.
+ */
+export const terrainShadowMaskCacheLimit = 2400;
+/**
+ * Most tiles × lit frames one day playback may precompute: worst measured masks fill
+ * about 1.14 GiB, leaving room for the uncompressed masks and the tiles in view.
+ */
+export const terrainShadowPlaybackTileLimit = 2100;
 /**
  * Lowest tile zoom with terrain-cast shadows. Lower tiles cover too much ground for the
  * DEM march and shade flat ground for the Sun's elevation only.
@@ -34,6 +41,28 @@ export const terrainShadowTileRequestSchema = z
     shadowColor: colorSchema,
     highlightColor: colorSchema,
     highlightOpacity: z.number().min(0).max(1),
+    goldenShadowColor: colorSchema,
+    lowSunShadowColor: colorSchema,
+    alpenglowColor: colorSchema,
+    alpenglowOpacity: z.number().min(0).max(1),
+    neutralBrightness: z.number().gt(0).lt(2),
+    exposure: z.number().min(-2).max(2),
+    shadowStrength: z.number().min(0).max(4),
+    highlightRolloff: z.number().min(0.05).max(4),
+    /** `ShadeLighting`: shade-pass uniforms; part of the cached mask's key. */
+    lighting: z
+      .object({
+        // Weights the independently stored direct and sky irradiance channels.
+        skyLightShare: z.number().min(0).max(1),
+        skyOcclusionStrength: z.number().min(0).max(10),
+        nightSkyLight: z.number().min(0).max(1),
+        nightTopLight: z.number().min(0).max(10),
+        // Exponent of a sky occlusion that may be 0, so it must stay above 0.
+        nightTopLightFocus: z.number().gt(0).max(20),
+        diffuseSkyFraction: z.number().min(0).max(1),
+        softEdgeSigmaPixels: z.number().min(0).max(10),
+      })
+      .strict(),
   })
   .strict()
   .refine(
@@ -51,6 +80,43 @@ export const terrainShadowTileRequestSchema = z
 export type TerrainShadowTileRequest = z.infer<typeof terrainShadowTileRequestSchema>;
 
 /**
+ * Worker stages a tile may pass, each timed in milliseconds:
+ * - `queueWait`: waiting for the worker's single GPU queue;
+ * - `interactionGate`: a map tile's wait at the head of that queue for the end of a
+ *   camera move;
+ * - `assembly` (DEM mosaics and their maximum reductions), `skyView`, `visibility`,
+ *   `shade`, and `readbackCopy` (the shade target into a pixel-pack buffer): GPU time
+ *   from `EXT_disjoint_timer_query_webgl2`, absent without the extension or after a
+ *   disjoint GPU event;
+ * - `gpuWait`: the fence wait for those passes;
+ * - `readback`: reading that buffer into the CPU mask;
+ * - `maskCodec`: compressing masks the cache can no longer keep uncompressed, or
+ *   expanding a compressed one;
+ * - `flatMask`: the CPU flat-ground draft or coarse tile;
+ * - `expand`: coloring the mask into RGBA pixels; `bitmap`: `createImageBitmap`.
+ */
+export const terrainShadowTileStages = [
+  'queueWait',
+  'interactionGate',
+  'assembly',
+  'skyView',
+  'visibility',
+  'shade',
+  'readbackCopy',
+  'gpuWait',
+  'readback',
+  'maskCodec',
+  'flatMask',
+  'expand',
+  'bitmap',
+] as const;
+export type TerrainShadowTileStage = (typeof terrainShadowTileStages)[number];
+/** Stages a tile skipped (cache hits, no timer queries) are absent. */
+export type TerrainShadowTileStageTimings = Readonly<
+  Partial<Record<TerrainShadowTileStage, number>>
+>;
+
+/**
  * Per-tile worker measurements; `memoryBytes` estimates worker memory after the tile:
  * GPU textures plus cached shade masks.
  */
@@ -62,9 +128,10 @@ export interface TerrainShadowTileMetrics {
   readonly memoryBytes: number;
   readonly cachedMasks: number;
   readonly cachedDemTiles: number;
+  readonly stages: TerrainShadowTileStageTimings;
 }
 
-/** 512 px shade bitmap expanded from a cached one-byte mask; transferred, never copied. */
+/** 512 px shade bitmap expanded from a cached shade mask; transferred, never copied. */
 export interface TerrainShadowTileResult {
   readonly bitmap: ImageBitmap;
   readonly metrics: TerrainShadowTileMetrics;
@@ -80,6 +147,15 @@ function isFiniteNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+function isStageTimings(value: unknown): value is TerrainShadowTileStageTimings {
+  if (typeof value !== 'object' || value === null) return false;
+  return Object.entries(value).every(
+    ([stage, ms]) =>
+      (terrainShadowTileStages as readonly string[]).includes(stage) &&
+      isFiniteNonNegative(ms),
+  );
+}
+
 export function isTerrainShadowTileMetrics(
   value: unknown,
 ): value is TerrainShadowTileMetrics {
@@ -92,7 +168,8 @@ export function isTerrainShadowTileMetrics(
     isFiniteNonNegative(metrics.demTilesFetched) &&
     isFiniteNonNegative(metrics.memoryBytes) &&
     isFiniteNonNegative(metrics.cachedMasks) &&
-    isFiniteNonNegative(metrics.cachedDemTiles)
+    isFiniteNonNegative(metrics.cachedDemTiles) &&
+    isStageTimings(metrics.stages)
   );
 }
 

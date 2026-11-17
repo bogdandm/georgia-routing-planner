@@ -69,6 +69,7 @@
     "dexie": "4.4.4",
     "fflate": "0.8.3",
     "geotiff": "3.0.5",
+    "gifenc": "1.0.3",
     "ky": "2.0.2",
     "maplibre-contour": "0.0.5",
     "maplibre-gl": "6.11.2",

@@ -143,6 +143,7 @@ export default tseslint.config(
       'src/presentation/map/MapWorkspace.tsx',
       'src/presentation/map/MapViewControls.tsx',
       'src/presentation/map/SunShadowControl.tsx',
+      'src/presentation/map/MapCaptureControl.tsx',
       'src/presentation/map/MapShareDialog.tsx',
       'src/presentation/map/ElevationGradeLegend.tsx',
       'src/presentation/map/MapLibrePointInspector.ts',

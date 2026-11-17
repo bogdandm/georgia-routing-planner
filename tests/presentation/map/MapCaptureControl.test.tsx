@@ -1,0 +1,120 @@
+import { act, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { activateAppLocale } from '@/presentation/localization/appI18n';
+import {
+  MapCapturePopover,
+  type MapCaptureControlProps,
+} from '@/presentation/map/MapCaptureControl';
+import { renderWithI18n } from '@test/helpers/renderWithI18n';
+
+function renderPopover(props: MapCaptureControlProps) {
+  const anchor = document.body.appendChild(document.createElement('button'));
+  return renderWithI18n(
+    <MapCapturePopover
+      {...props}
+      anchorEl={anchor}
+      onClose={vi.fn()}
+      panelId="capture"
+    />,
+  );
+}
+
+describe('MapCapturePopover', () => {
+  beforeEach(() => {
+    activateAppLocale('en');
+  });
+
+  it('reports whether the screenshot reached the clipboard', async () => {
+    const user = userEvent.setup();
+    const onCopyScreenshot = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('denied'));
+    renderPopover({ onCopyScreenshot, onRecordDayGif: null });
+
+    const take = screen.getByRole('button', { name: 'Take a screenshot' });
+    await user.click(take);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Map image copied to the clipboard',
+    );
+
+    await user.click(take);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The map image could not be copied.',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(onCopyScreenshot).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks for sun shadows before a day GIF can be recorded', () => {
+    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayGif: null });
+
+    expect(
+      screen.getByRole('button', { name: 'Record a GIF of the day' }),
+    ).toBeDisabled();
+    expect(screen.getByText('Turn on sun shadows to record the day.')).toBeVisible();
+  });
+
+  it('shows recording progress and tells a cancel from a stop and a failure', async () => {
+    const user = userEvent.setup();
+    const runs: {
+      readonly signal: AbortSignal;
+      readonly onProgress: (fraction: number) => void;
+      readonly resolve: () => void;
+      readonly reject: (error: unknown) => void;
+    }[] = [];
+    const onRecordDayGif = vi.fn(
+      (signal: AbortSignal, onProgress: (fraction: number) => void) =>
+        new Promise<void>((resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            reject(new DOMException('Aborted.', 'AbortError'));
+          });
+          runs.push({ signal, onProgress, resolve, reject });
+        }),
+    );
+    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayGif });
+    const record = screen.getByRole('button', { name: 'Record a GIF of the day' });
+
+    await user.click(record);
+    expect(record).toBeDisabled();
+    act(() => {
+      runs[0]?.onProgress(0.425);
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Recording the day: 42%');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(runs[0]?.signal.aborted).toBe(true);
+    await waitFor(() => {
+      expect(record).toBeEnabled();
+    });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    await user.click(record);
+    act(() => {
+      runs[1]?.resolve();
+    });
+    expect(await screen.findByText('The GIF was downloaded.')).toHaveAttribute(
+      'role',
+      'status',
+    );
+
+    await user.click(record);
+    act(() => {
+      runs[2]?.reject(new DOMException('Aborted.', 'AbortError'));
+    });
+    expect(
+      await screen.findByText(
+        'The recording stopped because the map or the time changed.',
+      ),
+    ).toHaveAttribute('role', 'status');
+
+    await user.click(record);
+    act(() => {
+      runs[3]?.reject(new Error('No 2D canvas.'));
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The GIF could not be recorded.',
+    );
+  });
+});

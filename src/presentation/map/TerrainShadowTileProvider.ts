@@ -12,12 +12,31 @@ import {
   isTerrainShadowTileResult,
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
+  type TerrainShadowTileStage,
+  terrainShadowReliefMinZoom,
+  terrainShadowTileStages,
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { terrainShadowWorkerMethods } from '@/infrastructure/terrainShadow/TerrainShadowWorkerServer';
+import {
+  defaultShadeLighting,
+  type ShadeLighting,
+  type ShadePalette,
+  shadeNeutralBrightness,
+  terrainShadeExposure,
+  terrainShadeShadowStrength,
+  terrainShadeHighlightRolloff,
+} from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 
 export type TerrainShadowAvailability = 'unknown' | 'available' | 'unavailable';
+
+export interface TerrainShadowStageSummary {
+  /** Tiles that passed the stage. */
+  readonly count: number;
+  readonly totalMs: number;
+  readonly maxMs: number;
+}
 
 export interface TerrainShadowMetricsSnapshot {
   /** Tiles computed on the GPU (worker cache misses). */
@@ -32,6 +51,10 @@ export interface TerrainShadowMetricsSnapshot {
   readonly demTilesFetched: number;
   /** Latest worker memory estimate (GPU textures plus cached shade masks); kept across `resetMetrics`. */
   readonly memoryBytes: number;
+  /** Answered tiles' stage times; see `terrainShadowTileStages`. */
+  readonly stages: Readonly<
+    Partial<Record<TerrainShadowTileStage, TerrainShadowStageSummary>>
+  >;
 }
 
 export interface TerrainShadowTileAddress {
@@ -48,11 +71,30 @@ export interface TerrainShadowPrefetchProgress {
   readonly readyFrames: number;
 }
 
+/**
+ * Colors and shade-pass lighting of the shadow tiles. Palette changes recolor cached
+ * shade masks; lighting changes recompute masks from cached tile geometry.
+ */
+export interface TerrainShadowShading {
+  readonly palette: ShadePalette;
+  readonly lighting: ShadeLighting;
+}
+
 export interface TerrainShadowTileProvider {
   /** Raster tile template for one sun instant, quantized to whole minutes. */
-  createTileUrl(instantMs: number): string;
-  /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
+  createTileUrl(instantMs: number, fullQuality?: boolean): string;
+  /** Consumes a loaded draft once; its refresh must request the full tile. */
+  takeDraftTile(tileUrl: string, tile: TerrainShadowTileAddress): boolean;
+  /**
+   * While true (map drag/zoom/rotate in progress), full tiles download their DEM but wait
+   * in the worker before any GPU work; cached and draft tiles still answer at once.
+   */
   setInteractionActive(active: boolean): void;
+  /**
+   * Colors and lighting of later tile URLs and prefetches. A change gives tiles a new URL,
+   * so MapLibre requests every tile again.
+   */
+  setShading(shading: TerrainShadowShading): void;
   /**
    * Renders and caches every tile for every instant without handing tiles to MapLibre; at
    * most `terrainShadowPrefetchConcurrency` requests in flight. Instants are taken in the
@@ -88,27 +130,34 @@ type TerrainShadowWorkerFactory = () => WorkerRpcEndpoint;
 
 interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly epochMinute: number;
-}
-
-interface GateWaiter {
-  readonly release: () => void;
-  readonly reject: (error: Error) => void;
+  /** Index into the provider's shadings; 0 is `defaultTerrainShadowShading`. */
+  readonly shading: number;
+  readonly fullQuality: boolean;
 }
 
 /** Accumulated counters; `pendingTiles` is live state added by `getMetrics`. */
 type MutableMetrics = {
   -readonly [
-    Key in Exclude<keyof TerrainShadowMetricsSnapshot, 'pendingTiles'>
+    Key in Exclude<keyof TerrainShadowMetricsSnapshot, 'pendingTiles' | 'stages'>
   ]: TerrainShadowMetricsSnapshot[Key];
+} & {
+  stages: Partial<
+    Record<
+      TerrainShadowTileStage,
+      { -readonly [Key in keyof TerrainShadowStageSummary]: number }
+    >
+  >;
 };
 
 const millisecondsPerMinute = 60_000;
+/** Tiles of a shading other than the default end in `?shading=<index>`. */
 const tileAddressPattern = new RegExp(
-  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)$`,
+  `^${terrainShadowProtocolId}://(-?\\d+)/(\\d+)/(\\d+)/(\\d+)(?:\\?shading=(\\d+))?((?:\\?|&)quality=full)?$`,
   'u',
 );
 
-function parseShadowColor(hex: string): readonly [number, number, number] {
+/** Channels 0–255 of an opaque `#RRGGBB` sun-shadow or sun-sky palette color. */
+export function parseShadowColor(hex: string): readonly [number, number, number] {
   const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/iu.exec(hex);
   if (match?.[1] === undefined || match[2] === undefined || match[3] === undefined) {
     throw new Error('The sun shadow palette color must be #RRGGBB.');
@@ -120,8 +169,22 @@ function parseShadowColor(hex: string): readonly [number, number, number] {
   ];
 }
 
-const shadowColor = parseShadowColor(mapVisualPalette.terrain.sunShadow);
-const highlightColor = parseShadowColor(mapVisualPalette.terrain.sunHighlight);
+export const defaultTerrainShadowShading: TerrainShadowShading = {
+  palette: {
+    shadowColor: parseShadowColor(mapVisualPalette.terrain.sunShadow),
+    highlightColor: parseShadowColor(mapVisualPalette.terrain.sunHighlight),
+    highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
+    goldenShadowColor: parseShadowColor(mapVisualPalette.terrain.sunGoldenShadow),
+    lowSunShadowColor: parseShadowColor(mapVisualPalette.terrain.sunLowShadow),
+    alpenglowColor: parseShadowColor(mapVisualPalette.terrain.sunAlpenglow),
+    alpenglowOpacity: mapVisualPalette.terrain.sunAlpenglowOpacity,
+    neutralBrightness: shadeNeutralBrightness,
+    exposure: terrainShadeExposure,
+    shadowStrength: terrainShadeShadowStrength,
+    highlightRolloff: terrainShadeHighlightRolloff,
+  },
+  lighting: defaultShadeLighting,
+};
 
 function defaultWorkerFactory(): WorkerRpcEndpoint {
   return new Worker(
@@ -136,7 +199,7 @@ function defaultWorkerFactory(): WorkerRpcEndpoint {
 function parseTileAddress(url: string): ParsedTileAddress | null {
   const match = tileAddressPattern.exec(url);
   if (match === null) return null;
-  const [epochMinute, z, x, y] = match.slice(1).map(Number);
+  const [epochMinute, z, x, y] = match.slice(1, 5).map(Number);
   if (
     epochMinute === undefined ||
     z === undefined ||
@@ -146,7 +209,14 @@ function parseTileAddress(url: string): ParsedTileAddress | null {
   ) {
     return null;
   }
-  return { epochMinute, z, x, y };
+  return {
+    epochMinute,
+    z,
+    x,
+    y,
+    shading: Number(match[5] ?? 0),
+    fullQuality: match[6] !== undefined,
+  };
 }
 
 function emptyMetrics(memoryBytes: number): MutableMetrics {
@@ -159,6 +229,7 @@ function emptyMetrics(memoryBytes: number): MutableMetrics {
     totalDemFetchMs: 0,
     demTilesFetched: 0,
     memoryBytes,
+    stages: {},
   };
 }
 
@@ -167,9 +238,10 @@ function abortError(): DOMException {
 }
 
 /**
- * Owns the `terrain-shadow://` MapLibre protocol and its lazily created GPU worker. Tiles
- * wait while the map is being dragged, zoomed, or rotated, and availability becomes
- * `unavailable` once the worker reports missing WebGL2 float support or its transport fails.
+ * Owns the `terrain-shadow://` MapLibre protocol and its lazily created GPU worker. The
+ * worker holds GPU work while the map is being dragged, zoomed, or rotated, and
+ * availability becomes `unavailable` once the worker reports missing WebGL2 float
+ * support or its transport fails.
  */
 export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvider {
   readonly #terrain: MapProviderConfiguration['terrain'];
@@ -177,12 +249,25 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   readonly #availabilityListeners = new Set<
     (value: TerrainShadowAvailability) => void
   >();
-  readonly #gateWaiters = new Set<GateWaiter>();
+  /** Bounded camera history: minute replacements and refreshes never start with a draft. */
+  readonly #servedTiles = new Map<
+    string,
+    { url: string; tile: TerrainShadowTileAddress; draft: boolean; relief: boolean }
+  >();
   #rpc: WorkerRpcClient | null = null;
   #availability: TerrainShadowAvailability;
   #metrics = emptyMetrics(0);
   #pendingTiles = 0;
   #interactionActive = false;
+  /**
+   * Every shading so far, so tiles of older URLs still in flight keep theirs; an equal
+   * shading reuses its index, so switching back and forth stays bounded.
+   */
+  readonly #shadings: TerrainShadowShading[] = [defaultTerrainShadowShading];
+  readonly #shadingIndexByKey = new Map<string, number>([
+    [JSON.stringify(defaultTerrainShadowShading), 0],
+  ]);
+  #shading = 0;
   #disposed = false;
 
   public constructor(
@@ -199,20 +284,42 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     addProtocol(terrainShadowProtocolId, this.loadTile);
   }
 
-  public createTileUrl(instantMs: number): string {
+  public createTileUrl(instantMs: number, fullQuality = false): string {
     if (!Number.isFinite(instantMs))
       throw new RangeError('The sun instant must be finite.');
     const epochMinute = Math.floor(instantMs / millisecondsPerMinute);
-    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}`;
+    const shading = this.#shading === 0 ? '' : `?shading=${String(this.#shading)}`;
+    const quality = fullQuality ? `${shading === '' ? '?' : '&'}quality=full` : '';
+    return `${terrainShadowProtocolId}://${String(epochMinute)}/{z}/{x}/{y}${shading}${quality}`;
+  }
+
+  public takeDraftTile(tileUrl: string, tile: TerrainShadowTileAddress): boolean {
+    const key = `${String(tile.z)}/${String(tile.x)}/${String(tile.y)}`;
+    const served = this.#servedTiles.get(key);
+    const url = tileUrl
+      .replace('{z}', String(tile.z))
+      .replace('{x}', String(tile.x))
+      .replace('{y}', String(tile.y));
+    if (served?.url !== url || !served.draft) return false;
+    served.draft = false;
+    return true;
+  }
+
+  public setShading(shading: TerrainShadowShading): void {
+    const key = JSON.stringify(shading);
+    let index = this.#shadingIndexByKey.get(key);
+    if (index === undefined) {
+      index = this.#shadings.push(shading) - 1;
+      this.#shadingIndexByKey.set(key, index);
+    }
+    this.#shading = index;
   }
 
   public setInteractionActive(active: boolean): void {
     if (this.#interactionActive === active) return;
     this.#interactionActive = active;
-    if (active) return;
-    const waiters = [...this.#gateWaiters];
-    this.#gateWaiters.clear();
-    for (const waiter of waiters) waiter.release();
+    // A worker created later receives the current state from `ensureRpc`.
+    if (this.#rpc !== null) this.sendInteraction(this.#rpc);
   }
 
   public getAvailability(): TerrainShadowAvailability {
@@ -229,7 +336,11 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   }
 
   public getMetrics(): TerrainShadowMetricsSnapshot {
-    return { ...this.#metrics, pendingTiles: this.#pendingTiles };
+    return {
+      ...this.#metrics,
+      stages: structuredClone(this.#metrics.stages),
+      pendingTiles: this.#pendingTiles,
+    };
   }
 
   public resetMetrics(): void {
@@ -240,12 +351,10 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (this.#disposed) return;
     this.#disposed = true;
     removeProtocol(terrainShadowProtocolId);
-    const waiters = [...this.#gateWaiters];
-    this.#gateWaiters.clear();
-    for (const waiter of waiters) waiter.reject(abortError());
     this.#rpc?.dispose();
     this.#rpc = null;
     this.#availabilityListeners.clear();
+    this.#servedTiles.clear();
   }
 
   private readonly loadTile: AddProtocolAction = async (
@@ -254,32 +363,85 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   ) => {
     const signal = abortController.signal;
     const address = parseTileAddress(parameters.url);
-    if (address === null) throw new Error('Invalid terrain shadow tile address.');
+    const shading = address === null ? undefined : this.#shadings[address.shading];
+    if (address === null || shading === undefined) {
+      throw new Error('Invalid terrain shadow tile address.');
+    }
     if (this.#disposed) throw new Error('The terrain shadow provider was disposed.');
     if (this.#availability === 'unavailable') {
       throw new Error('Terrain shadows are unavailable in this browser.');
     }
+    const key = `${String(address.z)}/${String(address.x)}/${String(address.y)}`;
+    const previous = this.#servedTiles.get(key);
+    const draft =
+      !address.fullQuality &&
+      previous === undefined &&
+      !this.hasReliefCoverage(address);
+    const served = {
+      url: parameters.url,
+      tile: address,
+      draft: false,
+      relief: previous?.relief ?? false,
+    };
+    this.#servedTiles.delete(key);
+    this.#servedTiles.set(key, served);
+    if (this.#servedTiles.size > 1024) {
+      const oldest = this.#servedTiles.keys().next().value;
+      if (oldest !== undefined) this.#servedTiles.delete(oldest);
+    }
     this.#pendingTiles += 1;
     try {
-      await this.waitForInteractionEnd(signal);
+      if (signal.aborted) throw abortError();
       const result = await this.ensureRpc().request<unknown>(
-        terrainShadowWorkerMethods.renderTile,
-        this.createRequest(address, address.epochMinute),
+        draft
+          ? terrainShadowWorkerMethods.renderDraft
+          : terrainShadowWorkerMethods.renderTile,
+        this.createRequest(address, address.epochMinute, shading),
         signal,
       );
       if (!isTerrainShadowTileResult(result)) {
         throw new Error('The terrain shadow worker returned an invalid tile.');
       }
-      this.recordTile(result.metrics);
-      this.setAvailability('available');
+      if (draft && (!('draft' in result) || typeof result.draft !== 'boolean')) {
+        result.bitmap.close();
+        throw new Error('The terrain shadow worker returned an invalid draft.');
+      }
+      served.draft = draft && 'draft' in result && result.draft === true;
+      if (!served.draft) {
+        served.relief = address.z >= terrainShadowReliefMinZoom;
+        this.recordTile(result.metrics);
+        this.setAvailability('available');
+      }
       return { data: result.bitmap };
     } catch (error) {
+      // Only answered requests count as served, so a retry still gets its quick draft.
+      if (this.#servedTiles.get(key) === served) {
+        this.#servedTiles.delete(key);
+        if (previous !== undefined) this.#servedTiles.set(key, previous);
+      }
       this.recordTileFailure(error, signal);
       throw error;
     } finally {
       this.#pendingTiles -= 1;
     }
   };
+
+  /** Keep MapLibre's parent/child relief until a new zoom has its full-resolution tile. */
+  private hasReliefCoverage(tile: TerrainShadowTileAddress): boolean {
+    for (const entry of this.#servedTiles.values()) {
+      if (!entry.relief) continue;
+      const zoom = Math.min(tile.z, entry.tile.z);
+      const tileScale = 2 ** (tile.z - zoom);
+      const entryScale = 2 ** (entry.tile.z - zoom);
+      if (
+        Math.floor(tile.x / tileScale) === Math.floor(entry.tile.x / entryScale) &&
+        Math.floor(tile.y / tileScale) === Math.floor(entry.tile.y / entryScale)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   public async prefetch(
     tiles: readonly TerrainShadowTileAddress[],
@@ -296,6 +458,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     // Every other block walks the tiles backwards, so the tiles just computed, whose DEM
     // tiles the worker still caches, start the next block.
     const reversedTiles = [...tiles].reverse();
+    const shading = this.#shadings[this.#shading] ?? defaultTerrainShadowShading;
     const requests: {
       readonly frame: number;
       readonly request: TerrainShadowTileRequest;
@@ -320,6 +483,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
             request: this.createRequest(
               tile,
               Math.floor(instantMs / millisecondsPerMinute),
+              shading,
             ),
           });
         });
@@ -387,6 +551,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   private createRequest(
     address: TerrainShadowTileAddress,
     epochMinute: number,
+    { palette, lighting }: TerrainShadowShading,
   ): TerrainShadowTileRequest {
     return {
       z: address.z,
@@ -397,9 +562,8 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       demTileUrl: this.#terrain.tileUrl,
       demMinZoom: this.#terrain.minZoom,
       demMaxZoom: this.#terrain.maxZoom,
-      shadowColor,
-      highlightColor,
-      highlightOpacity: mapVisualPalette.terrain.sunHighlightOpacity,
+      ...palette,
+      lighting,
     };
   }
 
@@ -423,30 +587,21 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       this.setAvailability('unavailable');
     });
     this.#rpc = rpc;
+    if (this.#interactionActive) this.sendInteraction(rpc);
     return rpc;
   }
 
-  private waitForInteractionEnd(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) return Promise.reject(abortError());
-    if (!this.#interactionActive) return Promise.resolve();
-    return new Promise<void>((resolve, reject) => {
-      const handleAbort = () => {
-        this.#gateWaiters.delete(waiter);
-        reject(abortError());
-      };
-      const waiter: GateWaiter = {
-        release: () => {
-          signal.removeEventListener('abort', handleAbort);
-          resolve();
-        },
-        reject: (error) => {
-          signal.removeEventListener('abort', handleAbort);
-          reject(error);
-        },
-      };
-      this.#gateWaiters.add(waiter);
-      signal.addEventListener('abort', handleAbort, { once: true });
-    });
+  /**
+   * The worker holds full tiles before its GPU queue while the camera moves; messages
+   * arrive in order, so tile requests sent after this see the new state. A transport
+   * failure already turns shadows unavailable.
+   */
+  private sendInteraction(rpc: WorkerRpcClient): void {
+    rpc
+      .request(terrainShadowWorkerMethods.setInteraction, {
+        active: this.#interactionActive,
+      })
+      .catch(() => undefined);
   }
 
   private recordTile(tile: TerrainShadowTileMetrics): void {
@@ -458,6 +613,14 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     metrics.totalDemFetchMs += tile.demFetchMs;
     metrics.demTilesFetched += tile.demTilesFetched;
     metrics.memoryBytes = tile.memoryBytes;
+    for (const stage of terrainShadowTileStages) {
+      const ms = tile.stages[stage];
+      if (ms === undefined) continue;
+      const summary = (metrics.stages[stage] ??= { count: 0, totalMs: 0, maxMs: 0 });
+      summary.count += 1;
+      summary.totalMs += ms;
+      summary.maxMs = Math.max(summary.maxMs, ms);
+    }
   }
 
   private setAvailability(value: TerrainShadowAvailability): void {

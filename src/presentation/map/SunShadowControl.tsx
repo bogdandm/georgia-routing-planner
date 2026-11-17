@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StopRoundedIcon from '@mui/icons-material/StopRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined';
 import {
   Box,
@@ -36,6 +37,7 @@ import {
   localDayBounds,
   sunlitNow,
 } from '@/presentation/map/sunShadowDaylight';
+import { terrainLightingTuningStore } from '@/presentation/map/terrainLightingTuning';
 import type { TerrainShadowAvailability } from '@/presentation/map/TerrainShadowTileProvider';
 
 export interface SunShadowChange {
@@ -301,21 +303,38 @@ function SunShadowPanel({
 
   return (
     <Stack spacing={1}>
-      <FormControlLabel
-        control={
-          <Switch
-            // Focus enters the panel so Escape and Tab work from the keyboard.
-            autoFocus={!peek && !unavailable}
-            checked={enabled && !unavailable}
-            disabled={unavailable}
-            onChange={(_event, checked) => {
-              onChange({ enabled: checked, instantMs });
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+      >
+        <FormControlLabel
+          control={
+            <Switch
+              // Focus enters the panel so Escape and Tab work from the keyboard.
+              autoFocus={!peek && !unavailable}
+              checked={enabled && !unavailable}
+              disabled={unavailable}
+              onChange={(_event, checked) => {
+                onChange({ enabled: checked, instantMs });
+              }}
+            />
+          }
+          label={<Typography variant="body2">{t`Sun shadows`}</Typography>}
+          sx={{ mx: 0 }}
+        />
+        <Tooltip disableInteractive title={t`Lighting tuning`}>
+          <IconButton
+            aria-label={t`Lighting tuning`}
+            color="primary"
+            onClick={() => {
+              terrainLightingTuningStore.setState({ panelOpen: true });
             }}
-          />
-        }
-        label={<Typography variant="body2">{t`Sun shadows`}</Typography>}
-        sx={{ mx: 0 }}
-      />
+            size="small"
+          >
+            <TuneRoundedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
       {unavailable ? (
         <Typography color="text.secondary" variant="caption">
           {t`This browser cannot compute shadows: WebGL2 float rendering is unavailable.`}

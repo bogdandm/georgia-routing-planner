@@ -126,7 +126,8 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 | Settled viewport for search controls                              | `MapViewportSnapshotStore`                                      |
 | Direct visual-COG scene registry and raster worker                | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
 | Contour DEM fetch, parse, contour caches, worker fallback         | `TerrainComputeEngine` / `TerrainComputeBackend`                |
-| Sun-shadow protocol, worker lifecycle, interaction gate, support  | `MapLibreTerrainShadowTileProvider`                             |
+| Sun-shadow protocol, worker lifecycle, camera-move forwarding     | `MapLibreTerrainShadowTileProvider`                             |
+| Temporary sun-shadow lighting tuning values and Before/After      | Zustand `terrainLightingTuningStore` mirrored to `localStorage` |
 | Tracks, folders, markers, camera, layer and UI preferences        | `AppDatabase` behind the application ports                      |
 | Loaded folders, previews, route plan, selection, multi-view       | `TracksWorkspaceProvider` React state                           |
 | Marker collection, editor draft, per-marker forecasts             | `MarkersWorkspaceProvider` React state                          |
@@ -209,17 +210,20 @@ visibility commands. It validates and persists layer preferences and projects it
 into `mapLayerStore`. `ContourTileGenerator` registers the contour protocol and adapts
 the terrain backend to `maplibre-contour`; `SatelliteCogTileProvider` registers the
 `georgia-satellite-cog` protocol; `MapLibreTerrainShadowTileProvider` registers the
-`terrain-shadow` protocol. `SunShadowControl.tsx` renders the rail button and its panel.
-Runtime behavior is described in [runtime-flows.md](runtime-flows.md).
+`terrain-shadow` protocol. `SunShadowControl.tsx` renders the rail button and its panel;
+`TerrainLightingTuningPanel.tsx` renders the temporary lighting tuning panel below the
+rail. Runtime behavior is described in [runtime-flows.md](runtime-flows.md).
 
 The solar and shadow model is independent of MapLibre and reusable for other terrain
 analysis, such as classifying track points as sunlit or shaded:
 `domain/terrain/solarPosition.ts` computes subsolar points, solar position with
 atmospheric refraction, and sunrise and sunset; `domain/terrain/terrainShadow.ts` holds
 the shared model constants, a `TerrainElevationSampler` contract, and the CPU reference
-that the GLSL shader mirrors (`horizonAngleTowardSun`, `visibleSolarDiskFraction`,
-`evaluateTerrainSunlight`); `domain/time/zonedWallTime.ts` converts between instants and
-wall time in an IANA zone.
+that the GLSL shader mirrors (`horizonAngleTowardSun`, `seaLevelHorizonDegrees`,
+`visibleSolarDiskFraction`, `evaluateTerrainSunlight`);
+`domain/terrain/atmosphericSunlight.ts` holds the relative optical air mass, which the
+shader mirrors, and the Rayleigh-extinction color of direct sunlight;
+`domain/time/zonedWallTime.ts` converts between instants and wall time in an IANA zone.
 
 `SatelliteCompareMaps` renders the comparison grid as separate lightweight maps, keyed
 by grid position, that never attach to the facade or the controller's map. Each pane's

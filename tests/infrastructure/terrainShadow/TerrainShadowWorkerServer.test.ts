@@ -24,6 +24,23 @@ const request: TerrainShadowTileRequest = {
   shadowColor: [27, 36, 51],
   highlightColor: [255, 247, 230],
   highlightOpacity: 0.6,
+  goldenShadowColor: [70, 53, 110],
+  lowSunShadowColor: [46, 63, 122],
+  alpenglowColor: [240, 163, 184],
+  alpenglowOpacity: 0.4,
+  neutralBrightness: 1.45,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
+  lighting: {
+    skyLightShare: 0.35,
+    skyOcclusionStrength: 1.75,
+    nightSkyLight: 0.6,
+    nightTopLight: 0,
+    nightTopLightFocus: 2,
+    diffuseSkyFraction: 0.5,
+    softEdgeSigmaPixels: 1,
+  },
 };
 
 describe('TerrainShadowWorkerServer', () => {
@@ -32,7 +49,9 @@ describe('TerrainShadowWorkerServer', () => {
     const render = vi.fn();
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render,
+      renderDraft: vi.fn(),
       prefetch: vi.fn(),
+      setInteractionActive: vi.fn(),
       dispose: vi.fn(),
     });
     const client = new WorkerRpcClient(clientEndpoint);
@@ -66,7 +85,9 @@ describe('TerrainShadowWorkerServer', () => {
     );
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render,
+      renderDraft: vi.fn(),
       prefetch: vi.fn(),
+      setInteractionActive: vi.fn(),
       dispose: vi.fn(),
     });
     const client = new WorkerRpcClient(clientEndpoint);
@@ -104,11 +125,14 @@ describe('TerrainShadowWorkerServer', () => {
       memoryBytes: 1_048_576,
       cachedMasks: 1,
       cachedDemTiles: 27,
+      stages: {},
     };
     const prefetch = vi.fn(() => Promise.resolve(metrics));
     const server = new TerrainShadowWorkerServer(serverEndpoint, {
       render: vi.fn(),
+      renderDraft: vi.fn(),
       prefetch,
+      setInteractionActive: vi.fn(),
       dispose: vi.fn(),
     });
     const client = new WorkerRpcClient(clientEndpoint);
@@ -121,6 +145,29 @@ describe('TerrainShadowWorkerServer', () => {
       client.request(terrainShadowWorkerMethods.prefetchTile, request),
     ).resolves.toEqual(metrics);
     expect(prefetch).toHaveBeenCalledExactlyOnceWith(request, expect.any(AbortSignal));
+
+    client.dispose();
+    server.dispose();
+  });
+
+  it('validates camera-move messages and forwards them to the renderer', async () => {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    const setInteractionActive = vi.fn();
+    const server = new TerrainShadowWorkerServer(serverEndpoint, {
+      render: vi.fn(),
+      renderDraft: vi.fn(),
+      prefetch: vi.fn(),
+      setInteractionActive,
+      dispose: vi.fn(),
+    });
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await expect(
+      client.request(terrainShadowWorkerMethods.setInteraction, { active: 'yes' }),
+    ).rejects.toThrow();
+    await client.request(terrainShadowWorkerMethods.setInteraction, { active: true });
+    await client.request(terrainShadowWorkerMethods.setInteraction, { active: false });
+    expect(setInteractionActive.mock.calls).toEqual([[true], [false]]);
 
     client.dispose();
     server.dispose();

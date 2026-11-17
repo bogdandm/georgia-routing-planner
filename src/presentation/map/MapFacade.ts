@@ -130,6 +130,9 @@ export interface MapFacade {
     visibleAreaPadding?: MapFitPadding,
   ): void;
 
+  /** PNG of the GL map as drawn in the next frame, without controls or HTML overlays. */
+  captureMapImage(): Promise<Blob>;
+
   /** Turns the camera north; 3D keeps the directed-fit pitch. */
   resetNorth(): void;
 

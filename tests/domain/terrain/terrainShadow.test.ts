@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { solarPosition } from '@/domain/terrain/solarPosition';
 import {
   curvatureDropMeters,
   destinationPoint,
   evaluateTerrainSunlight,
   horizonAngleTowardSun,
+  seaLevelHorizonDegrees,
   terrainShadowModel,
   type TerrainElevationSampler,
   type TerrainObserver,
@@ -232,6 +234,24 @@ describe('horizonAngleTowardSun', () => {
   });
 });
 
+describe('seaLevelHorizonDegrees', () => {
+  it('matches the lowest terrain angle the march finds over a sea-level sphere', () => {
+    // The tangent point from 500 m lies about 86 km away, inside the march cap. A Sun on
+    // the horizon and an unbounded terrain maximum let the march run to the cap.
+    const hill: TerrainObserver = { ...observer, elevationMeters: 500 };
+    const horizon = horizonAngleTowardSun({ elevationAt: () => 0 }, hill, south, {
+      baseResolutionMeters: 30,
+      maximumElevationMeters: 1e9,
+      apparentSunElevationDegrees: 0,
+    });
+
+    expect(seaLevelHorizonDegrees(500)).toBeCloseTo(horizon.horizonDegrees, 3);
+    expect(seaLevelHorizonDegrees(0)).toBeCloseTo(0, 12);
+    expect(seaLevelHorizonDegrees(-28)).toBeCloseTo(0, 12);
+    expect(seaLevelHorizonDegrees(5000)).toBeCloseTo(-2.1, 1);
+  });
+});
+
 describe('evaluateTerrainSunlight', () => {
   const tbilisi: TerrainObserver = {
     latitudeDegrees: 41.7151,
@@ -271,5 +291,29 @@ describe('evaluateTerrainSunlight', () => {
 
     expect(result.sunlitFraction).toBe(0);
     expect(samples).toBe(0);
+  });
+
+  it('keeps a summit lit after sunset at sea level until its own horizon', () => {
+    const sunsetDay = Date.UTC(2026, 5, 21, 15, 0);
+    let instant = new Date(sunsetDay);
+    while (
+      solarPosition(instant, tbilisi.latitudeDegrees, tbilisi.longitudeDegrees)
+        .apparentElevationDegrees > -1.5
+    ) {
+      instant = new Date(instant.getTime() + 60_000);
+    }
+    const seaLevelPlain: TerrainElevationSampler = { elevationAt: () => 0 };
+    const summit: TerrainObserver = { ...tbilisi, elevationMeters: 5000 };
+    const muchLater = new Date(instant.getTime() + 20 * 60_000);
+
+    expect(
+      evaluateTerrainSunlight(seaLevelPlain, summit, instant, options).sunlitFraction,
+    ).toBe(1);
+    expect(
+      evaluateTerrainSunlight(seaLevelPlain, tbilisi, instant, options).sunlitFraction,
+    ).toBe(0);
+    expect(
+      evaluateTerrainSunlight(seaLevelPlain, summit, muchLater, options).sunlitFraction,
+    ).toBe(0);
   });
 });

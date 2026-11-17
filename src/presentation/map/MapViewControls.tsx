@@ -37,10 +37,16 @@ import {
   type TerrainMode,
 } from '@/presentation/map/mapTypes';
 import {
+  MapCaptureButton,
+  MapCapturePopover,
+  type MapCaptureControlProps,
+} from '@/presentation/map/MapCaptureControl';
+import {
   SunShadowButton,
   SunShadowPopover,
   type SunShadowControlProps,
 } from '@/presentation/map/SunShadowControl';
+import { TerrainLightingTuningPanel } from '@/presentation/map/TerrainLightingTuningPanel';
 
 export type TerrainControlState =
   'flat' | 'enabling' | 'terrain' | 'disabling' | 'failed';
@@ -66,6 +72,8 @@ interface MapViewControlsProps {
   readonly onMeasurementActiveChange: (active: boolean) => void;
   /** Null hides the sun-shadow button where no layer controller exists. */
   readonly sunShadow: SunShadowControlProps | null;
+  /** Null hides the capture button where no map can be captured. */
+  readonly mapCapture: MapCaptureControlProps | null;
 }
 
 const basemapLabels: Readonly<Record<BasemapPreset, MessageDescriptor>> = {
@@ -119,6 +127,7 @@ export function MapViewControls({
   onOpenComparison,
   onMeasurementActiveChange,
   sunShadow,
+  mapCapture,
 }: MapViewControlsProps) {
   const { t } = useLingui();
   const [menuButton, setMenuButton] = useState<HTMLElement | null>(null);
@@ -131,6 +140,10 @@ export function MapViewControls({
   const sunShadowAnchor =
     sunShadowButton ?? (sunShadow?.peek === true ? sunShadowRailButton : null);
   const sunShadowPanelId = useId();
+  const [captureButton, setCaptureButton] = useState<HTMLElement | null>(null);
+  const capturePanelId = useId();
+  // The lighting tuning panel opens below the rail.
+  const [rail, setRail] = useState<HTMLElement | null>(null);
   const pending = terrainState === 'enabling' || terrainState === 'disabling';
   const selectedMode: TerrainMode =
     terrainState === 'terrain' || terrainState === 'enabling' ? 'terrain' : 'flat';
@@ -157,6 +170,7 @@ export function MapViewControls({
     <>
       <Paper
         elevation={0}
+        ref={setRail}
         sx={{
           borderRadius: '0 0 10px 10px',
           overflow: 'hidden',
@@ -284,6 +298,15 @@ export function MapViewControls({
             }}
             open={sunShadowAnchor !== null}
             panelId={sunShadowPanelId}
+          />
+        )}
+        {mapCapture === null ? null : (
+          <MapCaptureButton
+            onToggle={(button) => {
+              setCaptureButton(captureButton === null ? button : null);
+            }}
+            open={captureButton !== null}
+            panelId={capturePanelId}
           />
         )}
         {onOpenComparison === null ? null : (
@@ -546,6 +569,17 @@ export function MapViewControls({
           panelId={sunShadowPanelId}
         />
       )}
+      {mapCapture === null ? null : (
+        <MapCapturePopover
+          {...mapCapture}
+          anchorEl={captureButton}
+          onClose={() => {
+            setCaptureButton(null);
+          }}
+          panelId={capturePanelId}
+        />
+      )}
+      {sunShadow === null ? null : <TerrainLightingTuningPanel anchorEl={rail} />}
     </>
   );
 }

@@ -58,6 +58,21 @@ msgstr "3D-рельеф недоступен, пока активна мозаи
 msgid "3D terrain with bearing {bearing}° and pitch {pitch}°."
 msgstr "3D-рельеф с азимутом {bearing}° и наклоном {pitch}°."
 
+#. js-lingui-id: NawEr2
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "After"
+msgstr "После"
+
+#. js-lingui-id: GTAQdJ
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Ambient & twilight"
+msgstr "Рассеянный свет и сумерки"
+
+#. js-lingui-id: EmSrGB
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Before"
+msgstr "До"
+
 #. js-lingui-id: X4GABr
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -65,10 +80,16 @@ msgid "Bing Aerial"
 msgstr "Аэроснимки Bing"
 
 #. js-lingui-id: dEgA5A
+#: src/presentation/map/MapCaptureControl.tsx
 #: src/presentation/map/MapWorkspace.tsx
 #: src/presentation/map/SunShadowControl.tsx
 msgid "Cancel"
 msgstr "Отмена"
+
+#. js-lingui-id: fBBDRJ
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Capture the map"
+msgstr "Снимок карты"
 
 #. js-lingui-id: ROXMZ9
 #: src/presentation/map/SatelliteCompareMaps.tsx
@@ -101,6 +122,11 @@ msgstr "Не удалось получить доступ к буферу обм
 msgid "Close"
 msgstr "Закрыть"
 
+#. js-lingui-id: W0no_b
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Close lighting tuning"
+msgstr "Закрыть настройку освещения"
+
 #. js-lingui-id: ucYcTY
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Close map point details"
@@ -111,10 +137,20 @@ msgstr "Закрыть сведения о точке"
 msgid "Clouds, precipitation, and wind"
 msgstr "Облака, осадки и ветер"
 
+#. js-lingui-id: 1HfW_F
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Colors"
+msgstr "Цвета"
+
 #. js-lingui-id: lMoJUA
 #: src/presentation/map/MapViewControls.tsx
 msgid "Compare images from different dates side by side"
 msgstr "Сравнить снимки за разные даты рядом"
+
+#. js-lingui-id: P_2vKs
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Compare with the defaults"
+msgstr "Сравнить со значениями по умолчанию"
 
 #. js-lingui-id: E4xaOs
 #: src/presentation/map/SunShadowControl.tsx
@@ -133,13 +169,24 @@ msgstr "Координаты скопированы"
 
 #. js-lingui-id: 6V3Ea3
 #: src/presentation/map/CopyLinkButton.tsx
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
 msgid "Copied"
 msgstr "Скопировано"
+
+#. js-lingui-id: 0Rj7YG
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Copy configuration"
+msgstr "Скопировать конфигурацию"
 
 #. js-lingui-id: hAvoLY
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Copy coordinates"
 msgstr "Копировать координаты"
+
+#. js-lingui-id: 9sj0G8
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Copy failed"
+msgstr "Не удалось скопировать"
 
 #. js-lingui-id: y1eoq1
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -228,6 +275,11 @@ msgstr "Плоская карта"
 msgid "Google Satellite"
 msgstr "Снимки Google"
 
+#. js-lingui-id: cTcQ3M
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once. Double-click an item to reset it."
+msgstr "Значения GPU пересчитывают маски теней после отпускания ползунка; остальные перекрашивают кэшированные маски или применяются сразу. Двойной щелчок сбрасывает параметр к значению по умолчанию."
+
 #. js-lingui-id: ddStAP
 #: src/presentation/map/ElevationGradeLegend.tsx
 msgid "Hide track grade legend"
@@ -242,6 +294,17 @@ msgstr "Добавить в ссылку"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Layers tab"
 msgstr "Все слои"
+
+#. js-lingui-id: 6Wa6-I
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Light & contrast"
+msgstr "Свет и контраст"
+
+#. js-lingui-id: 0_gaE7
+#: src/presentation/map/SunShadowControl.tsx
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Lighting tuning"
+msgstr "Настройка освещения"
 
 #. js-lingui-id: yzF66j
 #: src/presentation/map/MapShareDialog.tsx
@@ -273,6 +336,11 @@ msgstr "Карта"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Map dimension"
 msgstr "Режим карты"
+
+#. js-lingui-id: wYB6zw
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Map image copied to the clipboard"
+msgstr "Изображение карты скопировано в буфер обмена"
 
 #. js-lingui-id: 2TeMfD
 #: src/presentation/map/MapPointInspectorContent.tsx
@@ -308,6 +376,11 @@ msgstr "Измерить расстояние"
 #: src/presentation/map/MapViewControls.tsx
 msgid "Measure distance and elevation"
 msgstr "Измерить расстояние и перепад высоты"
+
+#. js-lingui-id: mko1Mf
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Mountain effects"
+msgstr "Горные эффекты"
 
 #. js-lingui-id: WlrBzh
 #: src/presentation/map/mapShareUrl.ts
@@ -380,6 +453,36 @@ msgstr "Выбрать дату снимка"
 msgid "Play the day"
 msgstr "Показать весь день"
 
+#. js-lingui-id: JnOBHb
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Recomputes shadow masks on the GPU once released"
+msgstr "Пересчитывает маски теней на GPU после отпускания"
+
+#. js-lingui-id: UEjEIZ
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Record a GIF of the day"
+msgstr "Записать GIF дня"
+
+#. js-lingui-id: 43gcG7
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Recording the day"
+msgstr "Запись дня"
+
+#. js-lingui-id: ryhEvd
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Recording the day: {percent}%"
+msgstr "Запись дня: {percent}%"
+
+#. js-lingui-id: 5FOB1h
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Reset all"
+msgstr "Сбросить всё"
+
+#. js-lingui-id: zdJkhc
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Reset section"
+msgstr "Сбросить раздел"
+
 #. js-lingui-id: ZoGI0k
 #: src/presentation/map/MapShareDialog.tsx
 msgid "Satellite layer"
@@ -430,6 +533,11 @@ msgstr "Показать плоскую 2D-карту"
 msgid "Show weather forecast"
 msgstr "Показать прогноз погоды"
 
+#. js-lingui-id: 7-RyoQ
+#: src/presentation/map/TerrainLightingTuningPanel.tsx
+msgid "Sky & atmosphere"
+msgstr "Небо и атмосфера"
+
 #. js-lingui-id: qy1-46
 #: src/presentation/map/mapShareUrl.ts
 #: src/presentation/map/MapViewControls.tsx
@@ -456,6 +564,11 @@ msgstr "Восход {sunrise}"
 msgid "Sunset {sunset}"
 msgstr "Закат {sunset}"
 
+#. js-lingui-id: TZglEu
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Take a screenshot"
+msgstr "Сделать скриншот"
+
 #. js-lingui-id: M4RWWV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Terrain elevation"
@@ -466,10 +579,25 @@ msgstr "Высота рельефа"
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "Не удалось сохранить текущий вид карты. Работа с картой по-прежнему доступна."
 
+#. js-lingui-id: c-d0U-
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The GIF could not be recorded."
+msgstr "Не удалось записать GIF."
+
+#. js-lingui-id: bNy05A
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The GIF was downloaded."
+msgstr "GIF скачан."
+
 #. js-lingui-id: CHpm1i
 #: src/presentation/map/MapShareDialog.tsx
 msgid "The link could not be copied. Select it and copy it manually."
 msgstr "Не удалось скопировать ссылку. Выделите её и скопируйте вручную."
+
+#. js-lingui-id: 9YnIgb
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The map image could not be copied."
+msgstr "Не удалось скопировать изображение карты."
 
 #. js-lingui-id: wvC5Wi
 #: src/presentation/map/MapShareDialog.tsx
@@ -486,6 +614,11 @@ msgstr "Не удалось сменить слой карты. Повторит
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "The map provider configuration is invalid. The basemap was not started. Check the deployment configuration or open developer diagnostics."
 msgstr "Конфигурация поставщика карты недействительна. Базовая карта не запущена. Проверьте конфигурацию развёртывания или откройте диагностику разработчика."
+
+#. js-lingui-id: O7OY3m
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The recording stopped because the map or the time changed."
+msgstr "Запись остановлена: изменилась карта или время."
 
 #. js-lingui-id: FlHLo_
 #: src/presentation/map/MapWorkspace.tsx
@@ -542,6 +675,11 @@ msgstr "Уклон трека (%)"
 #: src/presentation/map/ElevationGradeLegend.tsx
 msgid "Track grade color thresholds"
 msgstr "Пороги цветов уклона трека"
+
+#. js-lingui-id: wUjgh4
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Turn on sun shadows to record the day."
+msgstr "Включите тени от солнца, чтобы записать день."
 
 #. js-lingui-id: aBvon1
 #: src/presentation/map/MapPointInspectorContent.tsx

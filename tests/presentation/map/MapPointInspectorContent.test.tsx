@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { activateAppLocale } from '@/presentation/localization/appI18n';
-import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
+import {
+  externalMapViewUrl,
+  wikilocMapUrl,
+} from '@/presentation/map/externalMapViewUrl';
 import {
   MapPointActionList,
   MapPointInspectorContent,
@@ -25,6 +28,53 @@ describe('external map view zoom', () => {
     expect(googleUrl.searchParams.get('zoom')).toBe(String(google));
     expect(yandexUrl.searchParams.get('z')).toBe(String(yandex));
     expect(yandexUrl.searchParams.has('pt')).toBe(false);
+  });
+});
+
+function wikilocBox(href: string) {
+  const url = new URL(href);
+  const [south, west] = (url.searchParams.get('sw') ?? '').split(',').map(Number);
+  const [north, east] = (url.searchParams.get('ne') ?? '').split(',').map(Number);
+  if (
+    south === undefined ||
+    west === undefined ||
+    north === undefined ||
+    east === undefined
+  ) {
+    throw new Error('Wikiloc URL has no bounding box.');
+  }
+  return { url, south, west, north, east };
+}
+
+const mercatorY = (latitude: number) =>
+  Math.log(Math.tan(Math.PI / 4 + (latitude * Math.PI) / 360));
+
+describe('Wikiloc map URL', () => {
+  it.each([
+    [8, 41.712345],
+    [13.4, 41.712345],
+    [13.4, -70],
+  ])('centers the zoom %s box on latitude %s in Web Mercator', (zoom, latitude) => {
+    const box = wikilocBox(
+      wikilocMapUrl(zoom, { longitude: 44.801234, latitude }, 'ru'),
+    );
+    expect(box.url.origin + box.url.pathname).toBe(
+      'https://ru.wikiloc.com/wikiloc/map.do',
+    );
+    expect(box.url.searchParams.get('page')).toBe('1');
+    expect((box.west + box.east) / 2).toBeCloseTo(44.801234, 9);
+    expect((mercatorY(box.south) + mercatorY(box.north)) / 2).toBeCloseTo(
+      mercatorY(latitude),
+      9,
+    );
+    // 640 px of a 512 * 2^zoom px world.
+    expect(box.east - box.west).toBeCloseTo((640 / (512 * 2 ** zoom)) * 360, 9);
+    expect(box.south).toBeLessThan(latitude);
+    expect(box.north).toBeGreaterThan(latitude);
+  });
+
+  it('uses the international host outside the Russian interface', () => {
+    expect(new URL(wikilocMapUrl(10, coordinate, 'en')).host).toBe('www.wikiloc.com');
   });
 });
 
@@ -66,6 +116,27 @@ describe('MapPointActionList', () => {
       );
     },
   );
+
+  it('builds the Wikiloc box from the live zoom when activated', () => {
+    let camera = { ...coordinate, zoom: 8, bearing: 0, pitch: 0 };
+    renderWithI18n(
+      <MapPointActionList
+        coordinate={coordinate}
+        getCamera={() => camera}
+        touch={false}
+        onSelect={() => undefined}
+      />,
+    );
+    const link = screen.getByRole('menuitem', { name: 'Open in Wikiloc' });
+    const initial = wikilocBox(link.getAttribute('href') ?? '');
+    camera = { longitude: 45.25, latitude: 43.75, zoom: 10, bearing: 28, pitch: 45 };
+    fireEvent.click(link);
+
+    const box = wikilocBox(link.getAttribute('href') ?? '');
+    expect(box.url.host).toBe('www.wikiloc.com');
+    expect(box.east - box.west).toBeCloseTo((initial.east - initial.west) / 4, 9);
+    expect((box.west + box.east) / 2).toBeCloseTo(coordinate.longitude, 9);
+  });
 });
 
 describe('MapPointInspectorContent', () => {

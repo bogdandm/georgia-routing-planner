@@ -433,6 +433,11 @@ msgstr "Now"
 msgid "Open image comparison"
 msgstr "Open image comparison"
 
+#. js-lingui-id: TZf1Q9
+#: src/presentation/map/MapPointInspectorContent.tsx
+msgid "Open in Wikiloc"
+msgstr "Open in Wikiloc"
+
 #. js-lingui-id: 6plAyV
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Open meteoblue.com"

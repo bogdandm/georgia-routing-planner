@@ -25,7 +25,10 @@ import { useEffect, useRef, type MouseEvent, type ReactNode } from 'react';
 
 import { KeyboardShortcutKeys } from '@/presentation/KeyboardShortcutKeys';
 import type { KeyboardShortcut } from '@/presentation/keyboardShortcuts';
-import { externalMapViewUrl } from '@/presentation/map/externalMapViewUrl';
+import {
+  externalMapViewUrl,
+  wikilocMapUrl,
+} from '@/presentation/map/externalMapViewUrl';
 import type {
   MapCamera,
   MapCoordinate,
@@ -50,7 +53,8 @@ export type MapPointAction =
   | 'open-meteoblue'
   | 'open-windy'
   | 'open-google-maps'
-  | 'open-yandex-maps';
+  | 'open-yandex-maps'
+  | 'open-wikiloc';
 
 // Decimal-degree coordinates keep the same machine-readable form as copied values.
 // eslint-disable-next-line lingui/no-unlocalized-strings -- BCP 47 locale token.
@@ -124,7 +128,8 @@ interface MapPointActionEntry {
   readonly action: MapPointAction;
   readonly icon: ReactNode;
   readonly label: string;
-  readonly href?: string;
+  /** Built again from the live camera at activation; the map can move under the menu. */
+  readonly href?: (camera: MapCamera) => string;
   /**
    * A global shortcut for the same kind of action, shown as a hint only: it acts at the map
    * center or by the next click, not at this point.
@@ -148,7 +153,7 @@ export function MapPointActionList({
   readonly touch: boolean;
   readonly onSelect: (action: MapPointAction) => void;
 }) {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const camera = getCamera();
   const pointActions: readonly MapPointActionEntry[] = [
     {
@@ -184,17 +189,23 @@ export function MapPointActionList({
       action: 'open-google-maps',
       icon: <OpenInNewOutlinedIcon />,
       label: 'Google Maps',
-      href: externalMapViewUrl('open-google-maps', camera, coordinate),
+      href: (camera) => externalMapViewUrl('open-google-maps', camera, coordinate),
       shortcut: { action: 'open-google-maps' },
     },
     {
       action: 'open-yandex-maps',
       icon: <OpenInNewOutlinedIcon />,
       label: 'Yandex Maps',
-      href: externalMapViewUrl('open-yandex-maps', camera, coordinate),
+      href: (camera) => externalMapViewUrl('open-yandex-maps', camera, coordinate),
       shortcut: { action: 'open-yandex-maps' },
     },
     /* eslint-enable lingui/no-unlocalized-strings */
+    {
+      action: 'open-wikiloc',
+      icon: <OpenInNewOutlinedIcon />,
+      label: t`Open in Wikiloc`,
+      href: (camera) => wikilocMapUrl(camera.zoom, coordinate, i18n.locale),
+    },
   ];
   const weatherActions: readonly MapPointActionEntry[] = [
     {
@@ -212,13 +223,13 @@ export function MapPointActionList({
       action: 'open-meteoblue',
       icon: <OpenInNewOutlinedIcon />,
       label: t`Open meteoblue.com`,
-      href: meteoblueForecastUrl(coordinate),
+      href: () => meteoblueForecastUrl(coordinate),
     },
     {
       action: 'open-windy',
       icon: <OpenInNewOutlinedIcon />,
       label: t`Open windy.com`,
-      href: windyForecastUrl(coordinate),
+      href: () => windyForecastUrl(coordinate),
     },
   ];
   // Dense rows keep the tap popup short; 40 px still leaves a comfortable touch target.
@@ -227,11 +238,9 @@ export function MapPointActionList({
     const select = () => {
       onSelect(action);
     };
-    const refreshMapView = (event: MouseEvent<HTMLAnchorElement>) => {
-      if (action === 'open-google-maps' || action === 'open-yandex-maps') {
-        // Movement need not publish a React snapshot before native link navigation.
-        event.currentTarget.href = externalMapViewUrl(action, getCamera(), coordinate);
-      }
+    const refreshHref = (event: MouseEvent<HTMLAnchorElement>) => {
+      // Movement need not publish a React snapshot before native link navigation.
+      if (href !== undefined) event.currentTarget.href = href(getCamera());
     };
     const content = (
       <>
@@ -254,15 +263,15 @@ export function MapPointActionList({
       <MenuItem
         key={action}
         component="a"
-        href={href}
+        href={href(camera)}
         target="_blank"
         rel="noopener noreferrer"
         sx={itemSx}
         onClick={(event) => {
-          refreshMapView(event);
+          refreshHref(event);
           select();
         }}
-        onAuxClick={refreshMapView}
+        onAuxClick={refreshHref}
       >
         {content}
       </MenuItem>

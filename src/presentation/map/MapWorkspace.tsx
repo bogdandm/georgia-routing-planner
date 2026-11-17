@@ -1720,6 +1720,7 @@ export function MapWorkspace({
       case 'open-windy':
       case 'open-google-maps':
       case 'open-yandex-maps':
+      case 'open-wikiloc':
         return;
     }
   };

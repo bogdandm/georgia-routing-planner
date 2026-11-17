@@ -927,8 +927,14 @@ export class TerrainShadowRenderer {
   /** Visibility per mosaic key and minute (or `night`): the DEM and the Sun only. */
   readonly #visibilities = new Map<string, WebGLTexture>();
   readonly #shadeColorizers = new Map<string, ShadeColorizer>();
-  /** DEM URLs the mosaics currently hold, so consecutive instants of a tile reuse them. */
-  #assembledMosaicKey: string | null = null;
+  /**
+   * Per mosaic level, the DEM URLs it holds and whether `levelMaximum` has its maximum,
+   * so consecutive instants of a tile, and neighbors sharing coarse ancestors, reuse them.
+   */
+  readonly #assembledLevels: ({
+    readonly key: string;
+    readonly reduced: boolean;
+  } | null)[] = [null, null, null];
   #gpuQueue: Promise<void> = Promise.resolve();
   #disposed = false;
 
@@ -1148,7 +1154,9 @@ export class TerrainShadowRenderer {
         tile === null ? null : demTileUrl(request.demTileUrl, tile),
       ),
     );
-    const mosaicKey = levelUrls.flat().join('|');
+    const levelKeys = levelUrls.map((tileUrls) => tileUrls.join('|'));
+    const mosaicKey = levelKeys.join('|');
+    const visibilityKey = `${mosaicKey}@${night ? 'night' : String(Math.floor(request.instantMs / 60_000))}`;
     const urls = [...new Set(levelUrls.flat().filter((url) => url !== null))];
 
     for (const url of urls) this.#demPins.set(url, (this.#demPins.get(url) ?? 0) + 1);
@@ -1166,21 +1174,40 @@ export class TerrainShadowRenderer {
           throw contextLostError();
         const startedAt = performance.now();
         const timer = new GpuStageTimer(gpu);
-        if (this.#assembledMosaicKey !== mosaicKey) {
-          this.#assembledMosaicKey = null;
-          timer.measure('assembly', () => {
-            levelUrls.forEach((tileUrls, level) => {
-              const mosaic = gpu.mosaics[level];
-              if (mosaic === undefined) return;
-              assembleMosaic(
-                gpu,
-                mosaic,
-                tileUrls.map((url) => this.demTexture(url)),
-              );
-              reduceMaximum(gpu, mosaic, level);
-            });
+        // With both geometry textures cached, the shade pass reads only the finest mosaic
+        // and no level maximum, so coarser levels and every reduction are skipped.
+        const marching =
+          !this.#skyViews.has(mosaicKey) || !this.#visibilities.has(visibilityKey);
+        const stale = levelKeys
+          .slice(0, marching ? levels.length : 1)
+          .flatMap((key, level) => {
+            const assembled = this.#assembledLevels[level];
+            return assembled?.key === key && (assembled.reduced || !marching)
+              ? []
+              : [level];
           });
-          this.#assembledMosaicKey = mosaicKey;
+        if (stale.length > 0) {
+          timer.measure('assembly', () => {
+            for (const level of stale) {
+              const mosaic = gpu.mosaics[level];
+              const tileUrls = levelUrls[level];
+              const key = levelKeys[level];
+              if (mosaic === undefined || tileUrls === undefined || key === undefined)
+                continue;
+              const previous = this.#assembledLevels[level];
+              // Cleared first, so a failed assembly never leaves a stale key behind.
+              this.#assembledLevels[level] = null;
+              if (previous?.key !== key) {
+                assembleMosaic(
+                  gpu,
+                  mosaic,
+                  tileUrls.map((url) => this.demTexture(url)),
+                );
+              }
+              if (marching) reduceMaximum(gpu, mosaic, level);
+              this.#assembledLevels[level] = { key, reduced: marching };
+            }
+          });
         }
         // Level 0 is the 3×3 block around this tile at its own zoom, so the mosaic key
         // also identifies the tile: its sky view holds for every instant and lighting,
@@ -1199,7 +1226,7 @@ export class TerrainShadowRenderer {
         const visibility = this.claimGeometryTexture(
           gpu.gl,
           this.#visibilities,
-          `${mosaicKey}@${night ? 'night' : String(Math.floor(request.instantMs / 60_000))}`,
+          visibilityKey,
           createVisibilityTexture,
         );
         if (visibility.fresh) {
@@ -1286,7 +1313,7 @@ export class TerrainShadowRenderer {
     // The textures died with the context.
     this.#skyViews.clear();
     this.#visibilities.clear();
-    this.#assembledMosaicKey = null;
+    this.#assembledLevels.fill(null);
   }
 
   /** Resolves `true` when this request started the network fetch for `url`. */

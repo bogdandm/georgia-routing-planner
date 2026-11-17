@@ -392,6 +392,7 @@ export class SunDiskOverlay {
     map.on('move', this.handleMove);
     map.on('moveend', this.handleChange);
     map.on('terrain', this.handleChange);
+    map.on('idle', this.handleChange);
     map.on('resize', this.handleResize);
   }
 
@@ -416,6 +417,7 @@ export class SunDiskOverlay {
     this.#map.off('move', this.handleMove);
     this.#map.off('moveend', this.handleChange);
     this.#map.off('terrain', this.handleChange);
+    this.#map.off('idle', this.handleChange);
     this.#map.off('resize', this.handleResize);
     this.#element.remove();
   }
@@ -424,7 +426,10 @@ export class SunDiskOverlay {
     this.render();
   };
 
-  /** Settled camera, new Sun, or terrain toggled: the skyline is marched again. */
+  /**
+   * Settled camera, new Sun, terrain toggled, or DEM tiles loaded since (`idle`): the
+   * skyline is marched again.
+   */
   private readonly handleChange = (): void => {
     this.#horizonMarchedAtMs = Number.NEGATIVE_INFINITY;
     this.render();

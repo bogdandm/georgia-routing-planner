@@ -397,6 +397,11 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       }
       return { data: result.bitmap };
     } catch (error) {
+      // Only answered requests count as served, so a retry still gets its quick draft.
+      if (this.#servedTiles.get(key) === served) {
+        this.#servedTiles.delete(key);
+        if (previous !== undefined) this.#servedTiles.set(key, previous);
+      }
       this.recordTileFailure(error, signal);
       throw error;
     } finally {

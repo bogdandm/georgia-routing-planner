@@ -298,6 +298,31 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.dispose();
   });
 
+  it('still drafts a tile whose first request MapLibre aborted during a drag', async () => {
+    const { provider, worker } = createProvider();
+    provider.setInteractionActive(true);
+    const controller = new AbortController();
+    const aborted = loadTile(tileUrl, controller);
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(1);
+    });
+    controller.abort();
+    await expect(aborted).rejects.toMatchObject({ name: 'AbortError' });
+
+    const retry = loadTile();
+    await vi.waitFor(() => {
+      expect(worker.requests).toHaveLength(2);
+    });
+    expect(worker.requests[1]?.method).toBe('terrain-shadow.render-draft');
+    worker.respond(1, {
+      bitmap: new FakeImageBitmap(),
+      metrics: renderedMetrics,
+      draft: true,
+    });
+    await retry;
+    provider.dispose();
+  });
+
   it('never drafts a full-quality playback tile, even outside the camera history', async () => {
     const { provider, worker } = createProvider();
     const url = provider

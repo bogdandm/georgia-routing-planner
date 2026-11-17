@@ -39,6 +39,7 @@ import Map, {
   type MapRef,
 } from 'react-map-gl/maplibre';
 import { useStore } from 'zustand';
+import lookupTimeZone from '@photostructure/tz-lookup';
 
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
@@ -79,6 +80,7 @@ import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
+import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
@@ -1870,9 +1872,22 @@ export function MapWorkspace({
       mapLayers === null || !sunShadow.enabled
         ? null
         : async (signal, onProgress) => {
-            const dayMs = sunShadow.instantMs;
+            // The recording spans the local day at the map center, so its date names the file.
+            const center = mapViewport.getViewportSnapshot()?.center;
+            const timeZone =
+              center === undefined
+                ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                : lookupTimeZone(
+                    Math.round(center.latitude * 100) / 100,
+                    Math.round(center.longitude * 100) / 100,
+                  );
+            const {
+              year,
+              month,
+              day: date,
+            } = instantToZonedWallTime(new Date(sunShadow.instantMs), timeZone);
+            const day = `${String(year)}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
             const gif = await mapLayers.recordSunShadowDay(signal, onProgress);
-            const day = new Date(dayMs).toISOString().slice(0, 10);
             // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
             downloadFile(`sun-shadows-${day}.gif`, 'image/gif', gif);
           },

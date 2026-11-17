@@ -2936,6 +2936,36 @@ describe('MapLibreLayerController', () => {
     });
   });
 
+  it('tints the sky again for the center elevation once 3D terrain tiles load', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    // 3D terrain with no DEM tile drawn yet, so the center still reads sea level.
+    map.terrain = {
+      source: 'terrain-dem',
+      exaggeration: 1,
+      getCoverageIndex: () => null,
+    };
+    controller.attach(map as unknown as MapLibreMap);
+    const window = daylightWindow(
+      shadowInstantMs,
+      { latitude: 42.71, longitude: 43.14 },
+      'Asia/Tbilisi',
+    );
+    if (window === null) throw new Error('The Caucasus has a sunset.');
+    const sunsetGlowMs = window.sunsetMs - 5 * 60_000;
+    map.bearing = solarPosition(new Date(sunsetGlowMs), 42.71, 43.14).azimuthDegrees;
+    controller.setSunShadow({ enabled: true, instantMs: sunsetGlowMs });
+    const seaLevelSky = map.sky;
+
+    vi.spyOn(map, 'getCenterElevation').mockReturnValue(3000);
+    map.fire('idle', {});
+    expect(map.sky).not.toEqual(seaLevelSky);
+    const skyCalls = map.skyCalls;
+    map.fire('idle', {});
+    expect(map.skyCalls).toBe(skyCalls);
+    controller.dispose();
+  });
+
   it('applies lighting tuning: opacity and sky at once, tile shading once edits settle', () => {
     vi.useFakeTimers();
     const { controller, shadows } = createSunShadowController();
@@ -3205,6 +3235,21 @@ describe('MapLibreLayerController', () => {
       controller.dispose();
     });
 
+    it('keeps playing through palette edits and stops when shade lighting changes', async () => {
+      const { controller, shadows } = startPlayback();
+      const prefetch = shadows.prefetchCalls[0];
+
+      setTerrainLightingValue('sunHighlightOpacity', 0.3);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(prefetch?.signal.aborted).toBe(false);
+      expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
+
+      setTerrainLightingValue('skyOcclusionStrength', 2.5);
+      expect(prefetch?.signal.aborted).toBe(true);
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
+      controller.dispose();
+    });
+
     describe('GIF recording', () => {
       function startRecording() {
         gifCapture.capturedInstants.length = 0;
@@ -3252,6 +3297,22 @@ describe('MapLibreLayerController', () => {
           Math.floor(chosenMs / 60_000) * 60_000,
         );
         second.controller.dispose();
+      });
+
+      it('rejects an already aborted signal without recording', async () => {
+        gifCapture.capturedInstants.length = 0;
+        const { controller } = createSunShadowController();
+        const map = new FakeLayerMap();
+        controller.attach(map as unknown as MapLibreMap);
+        controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+        const aborted = new AbortController();
+        aborted.abort();
+
+        await expect(
+          controller.recordSunShadowDay(aborted.signal, () => undefined),
+        ).rejects.toMatchObject({ name: 'AbortError' });
+        expect(gifCapture.capturedInstants).toEqual([]);
+        controller.dispose();
       });
     });
   });

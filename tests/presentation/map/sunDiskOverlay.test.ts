@@ -244,7 +244,7 @@ describe('SunDiskOverlay', () => {
     const fake = {
       terrainSpecification: { source: 'dem', exaggeration: 1 } as unknown,
       listeners,
-      terrain: { getCoverageIndex: () => index },
+      terrain: { getCoverageIndex: (): RenderedTerrainIndex | null => index },
       on: (type: string, listener: () => void) => listeners.set(type, listener),
       off: (type: string) => listeners.delete(type),
       getCanvas: () => canvas,
@@ -330,6 +330,21 @@ describe('SunDiskOverlay', () => {
     expect(element.style.display).toBe('none');
 
     overlay.setSun(null);
+    expect(element.style.display).toBe('none');
+    overlay.dispose();
+  });
+
+  it('hides the Sun behind a ridge whose DEM tiles load after the camera settles', () => {
+    const { fake, container, map } = createMap(10);
+    const ridge = fake.terrain;
+    fake.terrain = { getCoverageIndex: () => null };
+    const overlay = new SunDiskOverlay(map);
+    const { element } = parts(container);
+    overlay.setSun(lowSun);
+    expect(element.style.display).toBe('block');
+
+    fake.terrain = ridge;
+    fake.listeners.get('idle')?.();
     expect(element.style.display).toBe('none');
     overlay.dispose();
   });

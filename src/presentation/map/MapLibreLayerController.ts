@@ -1242,14 +1242,24 @@ export class MapLibreLayerController {
   /**
    * Applies the lighting tuning panel: shadow opacity and sky at once, tile shading after
    * `lightingTuningTileDelayMs` without further edits, and the Before/After toggle at once.
-   * Unchanged shading keeps the tile URL, so sky and opacity edits request no tiles.
+   * Unchanged shading keeps the tile URL, so sky and opacity edits request no tiles. New
+   * shade-pass lighting stops day playback and recording, whose frames were computed with
+   * the previous lighting; palette edits only recolor cached masks and keep them running.
    */
   private readonly handleLightingTuning = (
     state: TerrainLightingTuningState,
     previous: TerrainLightingTuningState,
   ): void => {
     const tuning = effectiveTerrainLightingTuning(state);
-    if (tuning === effectiveTerrainLightingTuning(previous)) return;
+    const previousTuning = effectiveTerrainLightingTuning(previous);
+    if (tuning === previousTuning) return;
+    if (
+      this.#sunShadowPlaybackAbort !== null &&
+      JSON.stringify(terrainShadowShadingFromTuning(tuning).lighting) !==
+        JSON.stringify(terrainShadowShadingFromTuning(previousTuning).lighting)
+    ) {
+      this.stopSunShadowPlayback();
+    }
     const map = this.#map;
     if (map?.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
       try {
@@ -1322,7 +1332,7 @@ export class MapLibreLayerController {
     map.setMissingStyleImageResolver(this.resolveBasemapImage);
     map.on('styledata', this.handleStyleData);
     map.on('movestart', this.handleSunShadowPlaybackMove);
-    map.on('rotate', this.handleSunShadowSkyRotate);
+    map.on('rotate', this.handleSunShadowSkyChange);
     this.#sunDisk?.dispose();
     this.#sunDisk = new SunDiskOverlay(map);
     map.on('error', this.handleTerrainOverlayError);
@@ -1572,12 +1582,14 @@ export class MapLibreLayerController {
    * the first to the last, each captured once MapLibre has drawn every tile of its
    * minute. It counts as playback, so a camera move, `setSunShadow`, Play, Stop, or detach
    * aborts it and the promise rejects with an `AbortError`. A finished recording returns
-   * to the instant it started from. Requires sun shadows to be on.
+   * to the instant it started from. Requires sun shadows to be on. An already aborted
+   * `signal` rejects with its `AbortError` before anything changes.
    */
   public async recordSunShadowDay(
     signal: AbortSignal,
     onProgress: (fraction: number) => void,
   ): Promise<Uint8Array> {
+    signal.throwIfAborted();
     this.stopSunShadowPlayback();
     const map = this.#map;
     if (
@@ -1710,7 +1722,7 @@ export class MapLibreLayerController {
     this.#appliedSunShadowTileUrl = null;
     map.off('styledata', this.handleStyleData);
     map.off('movestart', this.handleSunShadowPlaybackMove);
-    map.off('rotate', this.handleSunShadowSkyRotate);
+    map.off('rotate', this.handleSunShadowSkyChange);
     this.#sunDisk?.dispose();
     this.#sunDisk = null;
     map.off('error', this.handleTerrainOverlayError);
@@ -3738,9 +3750,14 @@ export class MapLibreLayerController {
     if (event.sourceId === mapSourceIds.terrainDem) this.updateTerrainDemLoading();
   };
 
+  /**
+   * Also on `idle`, after late DEM tiles change the center elevation the sky and Sun color
+   * were set for at the last settle.
+   */
   private readonly handleTerrainDemStateChange = (): void => {
     this.syncTerrainMode();
     this.updateTerrainDemLoading();
+    if (this.#sunShadowEnabled) this.handleSunShadowSkyChange();
   };
 
   private removeTerrainDemLoadingListeners(map: MapLibreMap): void {
@@ -4179,8 +4196,11 @@ export class MapLibreLayerController {
     map.setSky(sky);
   }
 
-  /** The sky follows the camera bearing while it rotates, not only once it settles. */
-  private readonly handleSunShadowSkyRotate = (): void => {
+  /**
+   * The sky follows the camera bearing while it rotates, not only once it settles, and the
+   * center elevation once its DEM tiles load.
+   */
+  private readonly handleSunShadowSkyChange = (): void => {
     const map = this.#map;
     if (map === null) return;
     try {

@@ -78,17 +78,20 @@ export type TerrainShadowTileRequest = z.infer<typeof terrainShadowTileRequestSc
 
 /**
  * Worker stages a tile may pass, each timed in milliseconds:
+ * - `interactionGate`: a map tile's wait for the end of a camera move, after its DEM;
  * - `queueWait`: waiting for the worker's single GPU queue;
  * - `assembly` (DEM mosaics and their maximum reductions), `skyView`, `visibility`, and
  *   `shade`: GPU time from `EXT_disjoint_timer_query_webgl2`, absent without the
  *   extension or after a disjoint GPU event;
  * - `gpuWait`: the fence wait for those passes;
  * - `readback`: reading the shade target into the CPU mask;
- * - `maskCodec`: compressing a new mask into the cache or expanding a cached one;
+ * - `maskCodec`: compressing masks the cache can no longer keep uncompressed, or
+ *   expanding a compressed one;
  * - `flatMask`: the CPU flat-ground draft or coarse tile;
  * - `expand`: coloring the mask into RGBA pixels; `bitmap`: `createImageBitmap`.
  */
 export const terrainShadowTileStages = [
+  'interactionGate',
   'queueWait',
   'assembly',
   'skyView',

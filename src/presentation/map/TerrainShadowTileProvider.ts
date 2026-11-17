@@ -31,12 +31,6 @@ import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 
 export type TerrainShadowAvailability = 'unknown' | 'available' | 'unavailable';
 
-/**
- * Worker stages plus `interactionGate`, the main-thread wait of a full tile request for
- * the end of a camera move.
- */
-export type TerrainShadowMetricsStage = TerrainShadowTileStage | 'interactionGate';
-
 export interface TerrainShadowStageSummary {
   /** Tiles that passed the stage. */
   readonly count: number;
@@ -59,7 +53,7 @@ export interface TerrainShadowMetricsSnapshot {
   readonly memoryBytes: number;
   /** Answered tiles' stage times; see `terrainShadowTileStages`. */
   readonly stages: Readonly<
-    Partial<Record<TerrainShadowMetricsStage, TerrainShadowStageSummary>>
+    Partial<Record<TerrainShadowTileStage, TerrainShadowStageSummary>>
   >;
 }
 
@@ -91,7 +85,10 @@ export interface TerrainShadowTileProvider {
   createTileUrl(instantMs: number, fullQuality?: boolean): string;
   /** Consumes a loaded draft once; its refresh must request the full tile. */
   takeDraftTile(tileUrl: string, tile: TerrainShadowTileAddress): boolean;
-  /** While true, queued tile requests wait (map drag/zoom/rotate in progress). */
+  /**
+   * While true (map drag/zoom/rotate in progress), full tiles download their DEM but wait
+   * in the worker before any GPU work; cached and draft tiles still answer at once.
+   */
   setInteractionActive(active: boolean): void;
   /**
    * Colors and lighting of later tile URLs and prefetches. A change gives tiles a new URL,
@@ -138,11 +135,6 @@ interface ParsedTileAddress extends TerrainShadowTileAddress {
   readonly fullQuality: boolean;
 }
 
-interface GateWaiter {
-  readonly release: () => void;
-  readonly reject: (error: Error) => void;
-}
-
 /** Accumulated counters; `pendingTiles` is live state added by `getMetrics`. */
 type MutableMetrics = {
   -readonly [
@@ -151,7 +143,7 @@ type MutableMetrics = {
 } & {
   stages: Partial<
     Record<
-      TerrainShadowMetricsStage,
+      TerrainShadowTileStage,
       { -readonly [Key in keyof TerrainShadowStageSummary]: number }
     >
   >;
@@ -246,9 +238,10 @@ function abortError(): DOMException {
 }
 
 /**
- * Owns the `terrain-shadow://` MapLibre protocol and its lazily created GPU worker. Tiles
- * wait while the map is being dragged, zoomed, or rotated, and availability becomes
- * `unavailable` once the worker reports missing WebGL2 float support or its transport fails.
+ * Owns the `terrain-shadow://` MapLibre protocol and its lazily created GPU worker. The
+ * worker holds GPU work while the map is being dragged, zoomed, or rotated, and
+ * availability becomes `unavailable` once the worker reports missing WebGL2 float
+ * support or its transport fails.
  */
 export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvider {
   readonly #terrain: MapProviderConfiguration['terrain'];
@@ -256,7 +249,6 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   readonly #availabilityListeners = new Set<
     (value: TerrainShadowAvailability) => void
   >();
-  readonly #gateWaiters = new Set<GateWaiter>();
   /** Bounded camera history: minute replacements and refreshes never start with a draft. */
   readonly #servedTiles = new Map<
     string,
@@ -326,10 +318,8 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   public setInteractionActive(active: boolean): void {
     if (this.#interactionActive === active) return;
     this.#interactionActive = active;
-    if (active) return;
-    const waiters = [...this.#gateWaiters];
-    this.#gateWaiters.clear();
-    for (const waiter of waiters) waiter.release();
+    // A worker created later receives the current state from `ensureRpc`.
+    if (this.#rpc !== null) this.sendInteraction(this.#rpc);
   }
 
   public getAvailability(): TerrainShadowAvailability {
@@ -361,9 +351,6 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     if (this.#disposed) return;
     this.#disposed = true;
     removeProtocol(terrainShadowProtocolId);
-    const waiters = [...this.#gateWaiters];
-    this.#gateWaiters.clear();
-    for (const waiter of waiters) waiter.reject(abortError());
     this.#rpc?.dispose();
     this.#rpc = null;
     this.#availabilityListeners.clear();
@@ -405,9 +392,6 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     this.#pendingTiles += 1;
     try {
       if (signal.aborted) throw abortError();
-      const gateStartedAt = performance.now();
-      if (!draft) await this.waitForInteractionEnd(signal);
-      const gateWaitMs = performance.now() - gateStartedAt;
       const result = await this.ensureRpc().request<unknown>(
         draft
           ? terrainShadowWorkerMethods.renderDraft
@@ -425,7 +409,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       served.draft = draft && 'draft' in result && result.draft === true;
       if (!served.draft) {
         served.relief = address.z >= terrainShadowReliefMinZoom;
-        this.recordTile(result.metrics, draft ? null : gateWaitMs);
+        this.recordTile(result.metrics);
         this.setAvailability('available');
       }
       return { data: result.bitmap };
@@ -530,7 +514,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
           if (!isTerrainShadowTileMetrics(metrics)) {
             throw new Error('The terrain shadow worker returned invalid metrics.');
           }
-          this.recordTile(metrics, null);
+          this.recordTile(metrics);
           this.setAvailability('available');
         } catch (error) {
           this.recordTileFailure(error, controller.signal);
@@ -603,34 +587,24 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       this.setAvailability('unavailable');
     });
     this.#rpc = rpc;
+    if (this.#interactionActive) this.sendInteraction(rpc);
     return rpc;
   }
 
-  private waitForInteractionEnd(signal: AbortSignal): Promise<void> {
-    if (signal.aborted) return Promise.reject(abortError());
-    if (!this.#interactionActive) return Promise.resolve();
-    return new Promise<void>((resolve, reject) => {
-      const handleAbort = () => {
-        this.#gateWaiters.delete(waiter);
-        reject(abortError());
-      };
-      const waiter: GateWaiter = {
-        release: () => {
-          signal.removeEventListener('abort', handleAbort);
-          resolve();
-        },
-        reject: (error) => {
-          signal.removeEventListener('abort', handleAbort);
-          reject(error);
-        },
-      };
-      this.#gateWaiters.add(waiter);
-      signal.addEventListener('abort', handleAbort, { once: true });
-    });
+  /**
+   * The worker holds full tiles before its GPU queue while the camera moves; messages
+   * arrive in order, so tile requests sent after this see the new state. A transport
+   * failure already turns shadows unavailable.
+   */
+  private sendInteraction(rpc: WorkerRpcClient): void {
+    rpc
+      .request(terrainShadowWorkerMethods.setInteraction, {
+        active: this.#interactionActive,
+      })
+      .catch(() => undefined);
   }
 
-  /** `gateWaitMs` is null for requests that never pass the interaction gate. */
-  private recordTile(tile: TerrainShadowTileMetrics, gateWaitMs: number | null): void {
+  private recordTile(tile: TerrainShadowTileMetrics): void {
     const metrics = this.#metrics;
     if (tile.cacheHit) metrics.tilesFromCache += 1;
     else metrics.tilesRendered += 1;
@@ -639,14 +613,8 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     metrics.totalDemFetchMs += tile.demFetchMs;
     metrics.demTilesFetched += tile.demTilesFetched;
     metrics.memoryBytes = tile.memoryBytes;
-    const stages = terrainShadowTileStages.map(
-      (stage): [TerrainShadowMetricsStage, number | undefined] => [
-        stage,
-        tile.stages[stage],
-      ],
-    );
-    stages.push(['interactionGate', gateWaitMs ?? undefined]);
-    for (const [stage, ms] of stages) {
+    for (const stage of terrainShadowTileStages) {
+      const ms = tile.stages[stage];
       if (ms === undefined) continue;
       const summary = (metrics.stages[stage] ??= { count: 0, totalMs: 0, maxMs: 0 });
       summary.count += 1;

@@ -936,6 +936,9 @@ export class TerrainShadowRenderer {
     readonly reduced: boolean;
   } | null)[] = [null, null, null];
   #gpuQueue: Promise<void> = Promise.resolve();
+  /** True during a camera move; see `setInteractionActive`. */
+  #interactionActive = false;
+  readonly #interactionWaiters = new Set<() => void>();
   #disposed = false;
 
   /** Colors the cached shade mask of `request` into a transferable bitmap. */
@@ -947,11 +950,24 @@ export class TerrainShadowRenderer {
     try {
       return await this.colorize(
         request,
-        await this.ensureMask(request, signal, 'full'),
+        await this.ensureMask(request, signal, 'full', true),
       );
     } finally {
       this.endActiveTile();
     }
+  }
+
+  /**
+   * While a camera move is active, `render` waits right before the GPU queue, so shadow
+   * passes never compete with the map's frames. DEM downloads, cached masks, drafts, and
+   * playback prefetches go on, so only GPU work remains once the move ends.
+   */
+  public setInteractionActive(active: boolean): void {
+    this.#interactionActive = active;
+    if (active) return;
+    const waiters = [...this.#interactionWaiters];
+    this.#interactionWaiters.clear();
+    for (const release of waiters) release();
   }
 
   /**
@@ -998,7 +1014,12 @@ export class TerrainShadowRenderer {
     }
     this.#activeTiles += 1;
     try {
-      const { metrics, gpuStages } = await this.ensureMask(request, signal, 'playback');
+      const { metrics, gpuStages } = await this.ensureMask(
+        request,
+        signal,
+        'playback',
+        false,
+      );
       return { ...metrics, stages: { ...metrics.stages, ...(await gpuStages) } };
     } finally {
       this.endActiveTile();
@@ -1131,10 +1152,12 @@ export class TerrainShadowRenderer {
     };
   }
 
+  /** `gated` requests wait for the end of a camera move before their GPU job. */
   private async ensureMask(
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
     precision: ShadeMaskPrecision,
+    gated: boolean,
   ): Promise<ShadeMaskResult> {
     throwIfAborted(signal);
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
@@ -1167,6 +1190,8 @@ export class TerrainShadowRenderer {
       );
       const demFetchMs = performance.now() - fetchStartedAt;
 
+      const gateStartedAt = performance.now();
+      if (gated) await this.waitForInteractionEnd(signal);
       const queuedAt = performance.now();
       const job = await this.runSerially(async () => {
         throwIfAborted(signal);
@@ -1251,6 +1276,7 @@ export class TerrainShadowRenderer {
           startedAt,
           gpuStages: timer.read(),
           stages: {
+            ...(gated ? { interactionGate: queuedAt - gateStartedAt } : {}),
             queueWait: startedAt - queuedAt,
             gpuWait: readbackStartedAt - gpuWaitStartedAt,
             readback: finishedAt - readbackStartedAt,
@@ -1464,6 +1490,23 @@ export class TerrainShadowRenderer {
     const compressed = compressShadeMask(cached.mask, cached.precision);
     this.#masks.set(key, { compressed });
     this.#cachedMaskBytes += compressed.byteLength - shadeMaskBytes;
+  }
+
+  private waitForInteractionEnd(signal: AbortSignal): Promise<void> {
+    if (!this.#interactionActive) return Promise.resolve();
+    throwIfAborted(signal);
+    return new Promise<void>((resolve, reject) => {
+      const release = () => {
+        signal.removeEventListener('abort', handleAbort);
+        resolve();
+      };
+      const handleAbort = () => {
+        this.#interactionWaiters.delete(release);
+        reject(abortError());
+      };
+      this.#interactionWaiters.add(release);
+      signal.addEventListener('abort', handleAbort, { once: true });
+    });
   }
 
   private endActiveTile(): void {

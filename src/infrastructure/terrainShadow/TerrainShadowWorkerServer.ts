@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import {
   type WorkerRpcEndpoint,
   WorkerRpcServer,
@@ -11,7 +13,11 @@ export const terrainShadowWorkerMethods = {
   renderDraft: 'terrain-shadow.render-draft',
   /** Caches one tile's shade mask and answers with its metrics only. */
   prefetchTile: 'terrain-shadow.prefetch-tile',
+  /** `{ active }`: whether a camera move is in progress; see `setInteractionActive`. */
+  setInteraction: 'terrain-shadow.set-interaction',
 } as const;
+
+const interactionSchema = z.object({ active: z.boolean() }).strict();
 
 /** Validates worker messages and transfers rendered shade masks without copying them. */
 export class TerrainShadowWorkerServer {
@@ -21,7 +27,7 @@ export class TerrainShadowWorkerServer {
     endpoint: WorkerRpcEndpoint,
     renderer: Pick<
       TerrainShadowRenderer,
-      'render' | 'renderDraft' | 'prefetch' | 'dispose'
+      'render' | 'renderDraft' | 'prefetch' | 'setInteractionActive' | 'dispose'
     > = new TerrainShadowRenderer(),
   ) {
     const renderTile = async (
@@ -48,6 +54,10 @@ export class TerrainShadowWorkerServer {
           renderTile(payload, signal, true),
         [terrainShadowWorkerMethods.prefetchTile]: async (payload, { signal }) =>
           renderer.prefetch(terrainShadowTileRequestSchema.parse(payload), signal),
+        [terrainShadowWorkerMethods.setInteraction]: (payload) => {
+          renderer.setInteractionActive(interactionSchema.parse(payload).active);
+          return Promise.resolve(null);
+        },
       },
       () => {
         renderer.dispose();

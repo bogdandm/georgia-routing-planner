@@ -64,6 +64,36 @@ export const defaultTerrainOverlayPreferences: TerrainOverlayPreferences = {
   demTileSize: 512,
 };
 
+/**
+ * How relief shading draws: terrain-cast sun shadows for the chosen instant, or the
+ * classic fixed-light hillshade. The `terrain-relief` visibility shows or hides either.
+ */
+export type ReliefShadingStyle = 'sun-shadows' | 'hillshade';
+
+/** The instant each session opens sun shadows on, relative to that day's sunrise or sunset. */
+export interface SunShadowStartTime {
+  readonly anchor: 'sunrise' | 'sunset';
+  /** Whole minutes after the anchor, negative before it, within its offset range. */
+  readonly offsetMinutes: number;
+}
+
+export const defaultSunShadowStartTime: SunShadowStartTime = {
+  anchor: 'sunrise',
+  offsetMinutes: 180,
+};
+
+/**
+ * Offsets reach two hours from the anchor into twilight, where the sun panel's time range
+ * ends, and six hours toward midday; the two ranges mirror each other.
+ */
+export const sunShadowStartOffsetRanges = {
+  sunrise: { min: -120, max: 360 },
+  sunset: { min: -360, max: 120 },
+} as const satisfies Record<
+  SunShadowStartTime['anchor'],
+  { readonly min: number; readonly max: number }
+>;
+
 export interface PersistedMapLayerPreferences {
   /** `natural-feature-patterns` here is the 2D choice; 3D keeps its own below. */
   readonly visibility: MapLayerVisibilityPreferences;
@@ -77,8 +107,11 @@ export interface PersistedMapLayerPreferences {
   readonly satelliteRenderingMode: SatelliteRenderingMode;
   readonly renderingTuning: SatelliteRenderingTuning;
   readonly terrainOverlays: TerrainOverlayPreferences;
-  /** Terrain-cast sun shadows; the shadow instant is session state and never persists. */
-  readonly sunShadowEnabled: boolean;
+  /** The shadow instant is session state and never persists. */
+  readonly reliefShadingStyle: ReliefShadingStyle;
+  /** The one-time notice that sun shadows replaced the hillshade is still to be shown. */
+  readonly sunShadowNoticePending: boolean;
+  readonly sunShadowStartTime: SunShadowStartTime;
 }
 
 /** Persists map presentation choices locally without synchronizing them off-device. */

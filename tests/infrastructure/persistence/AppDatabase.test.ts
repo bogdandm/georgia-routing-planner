@@ -559,7 +559,9 @@ describe('AppDatabase', () => {
         shadeAboveSatellite: true,
         demTileSize: 256,
       },
-      sunShadowEnabled: true,
+      reliefShadingStyle: 'hillshade',
+      sunShadowNoticePending: false,
+      sunShadowStartTime: { anchor: 'sunset', offsetMinutes: -90 },
     } as const;
 
     await database.saveMapLayerPreferences(preferences);
@@ -591,17 +593,30 @@ describe('AppDatabase', () => {
     });
   });
 
-  it('loads sun shadows off for layer preferences saved before the shadow switch', async () => {
-    const { sunShadowEnabled: _sunShadowEnabled, ...preferences } =
-      await database.loadMapLayerPreferences();
+  it('switches layer preferences saved with the old sun-shadow switch to sun shadows once', async () => {
+    const {
+      reliefShadingStyle: _reliefShadingStyle,
+      sunShadowNoticePending: _sunShadowNoticePending,
+      ...preferences
+    } = await database.loadMapLayerPreferences();
     await database.settings.put({
       key: 'map.layers',
-      value: preferences,
+      value: { ...preferences, sunShadowEnabled: false },
       updatedAt: '2026-11-01T00:00:00.000Z',
     });
 
     await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
-      sunShadowEnabled: false,
+      reliefShadingStyle: 'sun-shadows',
+      sunShadowNoticePending: true,
+    });
+    const rewritten = await database.settings.get('map.layers');
+    expect(rewritten?.value).not.toHaveProperty('sunShadowEnabled');
+  });
+
+  it('starts a browser without saved layer preferences on sun shadows without the notice', async () => {
+    await expect(database.loadMapLayerPreferences()).resolves.toMatchObject({
+      reliefShadingStyle: 'sun-shadows',
+      sunShadowNoticePending: false,
     });
   });
 

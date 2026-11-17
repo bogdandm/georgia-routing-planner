@@ -82,9 +82,10 @@ marker list.
 ## Maps and satellite imagery
 
 The map combines hiking-focused OpenStreetMap data with relief shading, elevation
-contours, and optional 3D terrain. The sun button beside the map shows terrain-cast
-shadows for a chosen date and time. Search moves the map to a place or coordinate, and
-Layers controls map detail, terrain overlays, imagery, weather, and track visibility.
+contours, and optional 3D terrain. Relief is shaded with terrain-cast sun shadows by
+default; the sun button beside the map picks their date and time or returns to the
+classic hillshade. Search moves the map to a place or coordinate, and Layers controls
+map detail, terrain overlays, imagery, weather, and track visibility.
 
 You can use one raster basemap at a time: Google, Bing, Esri, the Georgian NAPR
 orthophoto, or the NAPR/NSDI Soviet topographic mosaic (nationwide 1:25,000 with

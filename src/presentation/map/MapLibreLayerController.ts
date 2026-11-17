@@ -32,11 +32,13 @@ import type {
   SatelliteRenderingMode,
   SatelliteRenderingTuning,
   TerrainDemTileSize,
+  SunShadowStartTime,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import {
   defaultSatelliteRenderingMode,
   defaultSatelliteRenderingTuning,
+  defaultSunShadowStartTime,
   defaultTerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { supportedContourIntervals } from '@/application/ports/MapLayerPreferencesRepository';
@@ -1077,7 +1079,10 @@ export class MapLibreLayerController {
     defaultTerrainOverlayPreferences;
   #contourFailureReported = false;
   #appliedContourTileUrl: string | null = null;
-  #sunShadowEnabled = false;
+  /** Relief shading style: sun shadows rather than the hillshade. */
+  #sunShadowEnabled = true;
+  #sunShadowNoticePending = false;
+  #sunShadowStartTime: SunShadowStartTime = defaultSunShadowStartTime;
   /** Shadow instant in epoch milliseconds, quantized to whole minutes. */
   #sunShadowInstantMs = quantizeSunShadowInstant(Date.now());
   #appliedSunShadowTileUrl: string | null = null;
@@ -1093,8 +1098,10 @@ export class MapLibreLayerController {
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
   #sunShadowPlaybackFrames: readonly number[] = [];
   #sunShadowPlaybackIndex = 0;
-  /** True until the session's start instant was moved to the map center's morning. */
+  /** True until the session's start instant was moved to the map center's start time. */
   #sunShadowInstantIsSessionStart = true;
+  /** A `setSunShadow` instant replaced the session start for the rest of the session. */
+  #sunShadowInstantChosen = false;
   /** Sun disk over the 3D map while shadows draw; present while a map is attached. */
   #sunDisk: SunDiskOverlay | null = null;
   readonly #releaseSunShadowAvailability: () => void;
@@ -1218,6 +1225,8 @@ export class MapLibreLayerController {
         instantMs: this.#sunShadowInstantMs,
         availability: sunShadowTiles.getAvailability(),
         playback: { status: 'idle' },
+        noticePending: this.#sunShadowNoticePending,
+        startTime: this.#sunShadowStartTime,
       },
     });
     this.#releaseSunShadowAvailability = sunShadowTiles.subscribeAvailability(
@@ -1370,37 +1379,79 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Shows or hides terrain-cast sun shadows for one instant, quantized to whole minutes.
-   * Only `enabled` persists; an unchanged switch and minute leaves the map untouched.
-   * Every call stops day playback first, so user changes always win over the animation.
-   * While the previous minute still loads, a new one waits and only the latest is drawn,
-   * unless `drawEveryStep` asks MapLibre to render every minute in turn.
+   * Chooses sun shadows or the hillshade for relief shading and the shadow instant,
+   * quantized to whole minutes. Choosing shadows also shows hidden relief shading, unless
+   * the weather map hides terrain, and changing the style answers the sun-shadow notice
+   * unless `keepNotice` marks a temporary benchmark change. Only the style persists; an
+   * unchanged choice and minute
+   * leaves the map untouched. Every call stops day playback first, so user changes always
+   * win over the animation. While the previous minute still loads, a new one waits and
+   * only the latest is drawn, unless `drawEveryStep` asks MapLibre to render every minute
+   * in turn.
    */
   public setSunShadow(value: {
     readonly enabled: boolean;
     readonly instantMs: number;
     readonly drawEveryStep?: boolean;
+    readonly keepNotice?: boolean;
   }): void {
     this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
+    if (value.enabled && !mapLayerStore.getState().visibility['terrain-relief']) {
+      this.setLayerVisibility('terrain-relief', true);
+    }
     const instantMs = quantizeSunShadowInstant(value.instantMs);
     const enabledChanged = this.#sunShadowEnabled !== value.enabled;
     if (!enabledChanged && this.#sunShadowInstantMs === instantMs) return;
     this.#sunShadowDrawEveryStep = value.drawEveryStep === true;
     this.#sunShadowEnabled = value.enabled;
+    if (enabledChanged && value.keepNotice !== true)
+      this.#sunShadowNoticePending = false;
     // A chosen instant replaces the session start time; toggling the switch keeps it.
-    if (instantMs !== this.#sunShadowInstantMs)
+    if (instantMs !== this.#sunShadowInstantMs) {
       this.#sunShadowInstantIsSessionStart = false;
+      this.#sunShadowInstantChosen = true;
+    }
     this.#sunShadowInstantMs = instantMs;
     mapLayerStore.setState({
       sunShadow: {
         ...mapLayerStore.getState().sunShadow,
         enabled: value.enabled,
         instantMs,
+        noticePending: this.#sunShadowNoticePending,
       },
     });
     if (this.#map !== null) this.reconcileTerrainOverlays();
     if (enabledChanged) this.persistStableState();
+  }
+
+  /** Marks the notice that sun shadows replaced the hillshade as seen, for good. */
+  public dismissSunShadowNotice(): void {
+    if (!this.#sunShadowNoticePending) return;
+    this.#sunShadowNoticePending = false;
+    mapLayerStore.setState({
+      sunShadow: { ...mapLayerStore.getState().sunShadow, noticePending: false },
+    });
+    this.persistStableState();
+  }
+
+  /**
+   * Chooses when each session's shadow instant starts and moves the shown instant there,
+   * on its local day at the map center, as the next reload would.
+   */
+  public setSunShadowStartTime(value: SunShadowStartTime): void {
+    this.#sunShadowStartTime = value;
+    mapLayerStore.setState({
+      sunShadow: { ...mapLayerStore.getState().sunShadow, startTime: value },
+    });
+    this.persistStableState();
+    const map = this.#map;
+    if (map === null) return;
+    const { place, timeZone } = this.sunShadowPlace(map);
+    this.setSunShadow({
+      enabled: this.#sunShadowEnabled,
+      instantMs: sessionStartInstant(this.#sunShadowInstantMs, place, timeZone, value),
+    });
   }
 
   /**
@@ -1447,12 +1498,7 @@ export class MapLibreLayerController {
     this.stopSunShadowPlayback();
     const map = this.#map;
     // A move already in progress fired its `movestart` before Play was pressed.
-    if (
-      map === null ||
-      map.isMoving() ||
-      !this.#sunShadowEnabled ||
-      this.sunShadowTiles.getAvailability() === 'unavailable'
-    ) {
+    if (map === null || map.isMoving() || !this.sunShadowsDrawn()) {
       return;
     }
     const window = this.sunShadowDaylight(map, this.#sunShadowInstantMs);
@@ -1608,12 +1654,7 @@ export class MapLibreLayerController {
     signal.throwIfAborted();
     this.stopSunShadowPlayback();
     const map = this.#map;
-    if (
-      map === null ||
-      map.isMoving() ||
-      !this.#sunShadowEnabled ||
-      this.sunShadowTiles.getAvailability() === 'unavailable'
-    ) {
+    if (map === null || map.isMoving() || !this.sunShadowsDrawn()) {
       throw new Error('Sun shadows are not drawn.');
     }
     const window = this.sunShadowDaylight(map, this.#sunShadowInstantMs);
@@ -2031,6 +2072,9 @@ export class MapLibreLayerController {
     if (staticBasemapSelected || layerId === 'satellite-imagery') {
       this.applyBaseLayerVisibility();
       this.applyMapVisualMode();
+      terrainResult = this.reconcileTerrainOverlays();
+    } else if (layerId === 'terrain-relief') {
+      // Sun shadows draw inside relief shading, so they follow its visibility.
       terrainResult = this.reconcileTerrainOverlays();
     }
     this.persistStableState();
@@ -2777,7 +2821,11 @@ export class MapLibreLayerController {
       this.#renderingTuning = { ...persisted.renderingTuning };
       this.#satelliteRenderingMode = persisted.satelliteRenderingMode;
       this.#terrainOverlayPreferences = { ...persisted.terrainOverlays };
-      this.#sunShadowEnabled = persisted.sunShadowEnabled;
+      this.#sunShadowEnabled = persisted.reliefShadingStyle === 'sun-shadows';
+      this.#sunShadowNoticePending = persisted.sunShadowNoticePending;
+      this.#sunShadowStartTime = persisted.sunShadowStartTime;
+      // The session may have opened on the default start time before this load finished.
+      if (!this.#sunShadowInstantChosen) this.#sunShadowInstantIsSessionStart = true;
       mapLayerStore.setState({
         visibility,
         openStreetMapOpacity: persisted.openStreetMapOpacity,
@@ -2792,7 +2840,9 @@ export class MapLibreLayerController {
         layerProblem: null,
         sunShadow: {
           ...mapLayerStore.getState().sunShadow,
-          enabled: persisted.sunShadowEnabled,
+          enabled: this.#sunShadowEnabled,
+          noticePending: this.#sunShadowNoticePending,
+          startTime: this.#sunShadowStartTime,
         },
       });
       this.applyBaseLayerVisibility();
@@ -3738,7 +3788,9 @@ export class MapLibreLayerController {
         satelliteRenderingMode: this.#satelliteRenderingMode,
         renderingTuning,
         terrainOverlays: { ...this.#terrainOverlayPreferences },
-        sunShadowEnabled: this.#sunShadowEnabled,
+        reliefShadingStyle: this.#sunShadowEnabled ? 'sun-shadows' : 'hillshade',
+        sunShadowNoticePending: this.#sunShadowNoticePending,
+        sunShadowStartTime: this.#sunShadowStartTime,
       })
       .catch(() => {
         this.logger.log({
@@ -4036,17 +4088,25 @@ export class MapLibreLayerController {
     }
   }
 
+  /** Sun shadows replace the hillshade only while relief shading itself is visible. */
+  private sunShadowsDrawn(): boolean {
+    return (
+      this.#sunShadowEnabled &&
+      mapLayerStore.getState().visibility['terrain-relief'] &&
+      this.sunShadowTiles.getAvailability() !== 'unavailable'
+    );
+  }
+
   /**
    * Keeps the sun-shadow raster directly above the water polygons, so lakes and contours
-   * are shaded too, while shadows are on and the browser can render them, and removes it
-   * otherwise. Once it draws, the fixed-light relief hillshade is excluded through its
-   * zoom range because the shadow layer already shades relief for the real sun, and the
-   * 3D sky follows the same instant. A failure only logs: the relief and contours keep
-   * working without shadows.
+   * are shaded too, while relief shading is visible with the sun-shadow style and the
+   * browser can render them, and removes it otherwise. Once it draws, the fixed-light
+   * relief hillshade is excluded through its zoom range because the shadow layer already
+   * shades relief for the real sun, and the 3D sky follows the same instant. A failure
+   * only logs: the relief and contours keep working without shadows.
    */
   private reconcileSunShadow(map: MapLibreMap): void {
-    const wanted =
-      this.#sunShadowEnabled && this.sunShadowTiles.getAvailability() !== 'unavailable';
+    const wanted = this.sunShadowsDrawn();
     const setReliefHidden = (hidden: boolean) => {
       const relief = map.getLayer(terrainOverlayLayerIds.reliefShade);
       if (
@@ -4062,17 +4122,25 @@ export class MapLibreLayerController {
       );
     };
     try {
-      // The session opens three hours after sunrise of today at the map center.
+      // The session opens at the chosen start time of today at the map center.
       if (this.#sunShadowInstantIsSessionStart) {
         this.#sunShadowInstantIsSessionStart = false;
         const { place, timeZone } = this.sunShadowPlace(map);
         this.setSunShadowInstant(
           quantizeSunShadowInstant(
-            sessionStartInstant(this.#sunShadowInstantMs, place, timeZone),
+            sessionStartInstant(
+              this.#sunShadowInstantMs,
+              place,
+              timeZone,
+              this.#sunShadowStartTime,
+            ),
           ),
         );
       }
       if (!wanted) {
+        // Hidden relief or weather ends playback and recording, which need drawn shadows;
+        // a finished playback keeps its note.
+        if (this.#sunShadowPlaybackAbort !== null) this.stopSunShadowPlayback();
         setReliefHidden(false);
         if (map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
           map.removeLayer(terrainOverlayLayerIds.sunShadow);
@@ -4220,11 +4288,7 @@ export class MapLibreLayerController {
     const map = this.#map;
     if (map === null) return;
     try {
-      this.reconcileSunShadowSky(
-        map,
-        this.#sunShadowEnabled &&
-          this.sunShadowTiles.getAvailability() !== 'unavailable',
-      );
+      this.reconcileSunShadowSky(map, this.sunShadowsDrawn());
     } catch {
       this.logger.log({ level: 'error', name: 'map.sun-shadow.render-failed' });
     }
@@ -5863,6 +5927,7 @@ export class MapLibreLayerController {
       }
     }
     mapLayerStore.setState({ visibility });
+    this.reconcileTerrainOverlays();
     this.logger.log({
       level: 'info',
       name: 'weather.map.terrain-overlays-hidden',
@@ -5892,6 +5957,7 @@ export class MapLibreLayerController {
       }
     }
     mapLayerStore.setState({ visibility });
+    if (map !== null) this.reconcileTerrainOverlays();
     this.persistStableState();
     this.logger.log({
       level: 'info',

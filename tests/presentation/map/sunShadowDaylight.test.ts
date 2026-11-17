@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { defaultSunShadowStartTime } from '@/application/ports/MapLayerPreferencesRepository';
 import {
   clampToDaylight,
   type DaylightWindow,
@@ -157,11 +158,27 @@ describe('sessionStartInstant', () => {
     for (const nowMs of [tbilisiTime(0, 5), tbilisiTime(13, 40), tbilisiTime(23, 55)]) {
       expect(
         Math.abs(
-          sessionStartInstant(nowMs, tchkhutkharo, 'Asia/Tbilisi') -
-            tbilisiTime(10, 58),
+          sessionStartInstant(
+            nowMs,
+            tchkhutkharo,
+            'Asia/Tbilisi',
+            defaultSunShadowStartTime,
+          ) - tbilisiTime(10, 58),
         ),
       ).toBeLessThanOrEqual(minute);
     }
+  });
+
+  it('opens relative to sunset when the start time follows sunset', () => {
+    const nowMs = tbilisiTime(9, 0);
+    const window = daylightWindow(nowMs, tchkhutkharo, 'Asia/Tbilisi');
+    expect(window).not.toBeNull();
+    expect(
+      sessionStartInstant(nowMs, tchkhutkharo, 'Asia/Tbilisi', {
+        anchor: 'sunset',
+        offsetMinutes: -90,
+      }),
+    ).toBe((window?.sunsetMs ?? 0) - 90 * minute);
   });
 
   it('opens at 11:00 on a day without sunrise and sunset', () => {
@@ -170,6 +187,7 @@ describe('sessionStartInstant', () => {
         Date.UTC(2026, 11, 21, 3),
         { latitude: 78.2, longitude: 15.6 },
         'UTC',
+        defaultSunShadowStartTime,
       ),
     ).toBe(Date.UTC(2026, 11, 21, 11));
   });

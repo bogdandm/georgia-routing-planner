@@ -6,12 +6,14 @@ import type {
   LogicalMapLayerId,
   SatelliteRenderingMode,
   SatelliteRenderingTuning,
+  SunShadowStartTime,
   TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import {
   defaultSatelliteRenderingMode,
   defaultSatelliteRenderingTuning,
   defaultTerrainOverlayPreferences,
+  defaultSunShadowStartTime,
   defaultWeatherMapOpacity,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import type {
@@ -172,12 +174,20 @@ export type SunShadowPlayback =
 
 /** Terrain-cast sun shadows as the layer controller applies them. */
 export interface SunShadowSnapshot {
+  /**
+   * Relief shading style is sun shadows rather than the hillshade; they draw only while
+   * `terrain-relief` is visible and the browser can render them.
+   */
   readonly enabled: boolean;
   /** Shadow instant in epoch milliseconds, whole minutes; session state, starts at now. */
   readonly instantMs: number;
   /** `unavailable` means this browser cannot render shadows (no WebGL2 float rendering). */
   readonly availability: TerrainShadowAvailability;
   readonly playback: SunShadowPlayback;
+  /** The one-time notice that sun shadows replaced the hillshade waits to be shown. */
+  readonly noticePending: boolean;
+  /** When each session's shadow instant starts, relative to sunrise or sunset. */
+  readonly startTime: SunShadowStartTime;
 }
 
 export interface MapLayerState {
@@ -259,10 +269,12 @@ const initialMapLayerState: MapLayerState = {
   },
   // The layer controller replaces this with the session's start instant when constructed.
   sunShadow: {
-    enabled: false,
+    enabled: true,
     instantMs: 0,
     availability: 'unknown',
     playback: { status: 'idle' },
+    noticePending: false,
+    startTime: defaultSunShadowStartTime,
   },
 };
 

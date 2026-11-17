@@ -21,7 +21,7 @@ import {
   Typography,
 } from '@mui/material';
 import lookupTimeZone from '@photostructure/tz-lookup';
-import { type Ref, useState, useSyncExternalStore } from 'react';
+import { type Ref, useId, useState, useSyncExternalStore } from 'react';
 
 import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
 import {
@@ -46,6 +46,7 @@ export interface SunShadowChange {
 }
 
 export interface SunShadowControlProps {
+  /** Shadows draw: they are the relief shading style and relief shading is visible. */
   readonly enabled: boolean;
   /** Shadow instant in epoch milliseconds. */
   readonly instantMs: number;
@@ -63,6 +64,9 @@ export interface SunShadowControlProps {
    * the held key keeps reaching the global shortcuts.
    */
   readonly peek: boolean;
+  /** Shows the one-time notice that sun shadows replaced the classic hillshade. */
+  readonly noticeOpen: boolean;
+  readonly onNoticeDismiss: () => void;
 }
 
 const minutesPerDay = 24 * 60;
@@ -240,6 +244,78 @@ export function SunShadowPopover({
           <SunShadowPanel {...props} />
         </Paper>
       </ClickAwayListener>
+    </Popper>
+  );
+}
+
+interface SunShadowNoticeProps {
+  /** The rail button while the notice shows, otherwise null. */
+  readonly anchorEl: HTMLElement | null;
+  readonly onUseHillshade: () => void;
+  readonly onDismiss: () => void;
+}
+
+/**
+ * One-time notice beside the rail button after sun shadows replaced the classic
+ * hillshade, with an arrow pointing at the button. It never takes focus and stays until
+ * one of its buttons answers it.
+ */
+export function SunShadowNotice({
+  anchorEl,
+  onUseHillshade,
+  onDismiss,
+}: SunShadowNoticeProps) {
+  const { t } = useLingui();
+  const titleId = useId();
+  // Popper's arrow modifier centers this element on the button along the notice's edge.
+  const [arrow, setArrow] = useState<HTMLElement | null>(null);
+  return (
+    <Popper
+      anchorEl={anchorEl}
+      disablePortal
+      modifiers={[
+        { name: 'offset', options: { offset: [0, 10] } },
+        { name: 'preventOverflow', options: { padding: 8 } },
+        { name: 'arrow', enabled: true, options: { element: arrow, padding: 4 } },
+      ]}
+      open={anchorEl !== null}
+      placement="left-start"
+    >
+      <Paper
+        aria-labelledby={titleId}
+        elevation={8}
+        role="dialog"
+        sx={{ px: 2, py: 1.5, width: 300 }}
+      >
+        <Typography id={titleId} variant="subtitle2">
+          {t`New relief shading`}
+        </Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body2">
+          {t`Relief is now shaded with sun shadows for the chosen time of day instead of the classic hillshade. Rendering can be heavy on weak CPUs. Switch back here or under Relief shading in Layers.`}
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: 1.5 }}>
+          <Button onClick={onUseHillshade} size="small">
+            {t`Use classic shading`}
+          </Button>
+          <Button onClick={onDismiss} size="small" variant="contained">
+            {t`Got it`}
+          </Button>
+        </Stack>
+      </Paper>
+      <Box
+        ref={setArrow}
+        sx={{
+          position: 'absolute',
+          right: -10,
+          width: 0,
+          height: 0,
+          borderTop: '10px solid transparent',
+          borderBottom: '10px solid transparent',
+          borderLeft: '10px solid',
+          borderLeftColor: 'background.paper',
+          filter: 'drop-shadow(2px 0 1px rgb(0 0 0 / 12%))',
+        }}
+      />
     </Popper>
   );
 }

@@ -244,13 +244,16 @@ sequenceDiagram
   Provider-->>Map: raster tile data
 ```
 
-While the switch is on and shadows are not known to be unavailable, the controller keeps
-the `terrain-sun-shadow` raster source (every zoom up to z12, overzoomed above) and its
-layer directly above the water polygons, so lakes and contours are shaded too. Once that
-layer exists it sets the relief hillshade's minimum zoom to 24 so the fixed-light
-shading does not double the real-sun relief; a failed shadow setup leaves the relief
-drawn. Turning the switch off removes the source and layer and restores the relief zoom
-range. The relief visibility preference is never written. The tile URL carries the
+While the sun-shadow style is chosen, `terrain-relief` is visible (so neither the user
+nor the weather map hides it), and shadows are not known to be unavailable, the
+controller keeps the `terrain-sun-shadow` raster source (every zoom up to z12,
+overzoomed above) and its layer directly above the water polygons, so lakes and contours
+are shaded too. Once that layer exists it sets the relief hillshade's minimum zoom to 24
+so the fixed-light shading does not double the real-sun relief; a failed shadow setup
+leaves the relief drawn. Choosing the classic style or hiding relief removes the source
+and layer and restores the relief zoom range; every relief visibility change reconciles
+them. Choosing the sun-shadow style while relief is hidden makes relief visible through
+`setLayerVisibility`, which persists it like a Layers checkbox. The tile URL carries the
 instant as a whole epoch minute, so an unchanged minute changes nothing, and a new
 minute replaces the source tiles with `setTiles`: MapLibre requests only the visible
 tiles again, but renders every replaced minute in full. So while the shadow source is
@@ -292,11 +295,13 @@ center's terrain height shifts, only repaints, and a Sun hidden by terrain keeps
 ms march interval, so turning the camera marches at most ten times a second. It hides
 without 3D terrain and below −1° apparent elevation.
 
-On the first reconciliation with a map, the session instant moves to three hours after
-sunrise of today at the map center (`sessionStartInstant`; 11:00 on a day without
-sunrise and sunset), so every page load opens on the same morning light regardless of
-the user's clock. The panel's **Now** keeps the current time while the Sun is up and
-uses 11:00 of that day after dark. An instant chosen in the panel is never replaced,
+On the first reconciliation with a map, the session instant moves to the persisted
+default time of today at the map center (`sessionStartInstant`: an offset from sunrise
+or sunset, three hours after sunrise by default; 11:00 on a day without sunrise and
+sunset), so every page load opens on the same light regardless of the user's clock.
+Stored preferences that finish loading after that move it again unless the session
+already chose an instant. The panel's **Now** keeps the current time while the Sun is up
+and uses 11:00 of that day after dark. An instant chosen in the panel is never replaced,
 only clamped to the range.
 
 `MapLibreTerrainShadowTileProvider` registers the `terrain-shadow` protocol and creates

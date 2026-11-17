@@ -24,6 +24,16 @@ msgstr "Слои: {0}"
 msgid "{contourIntervalMeters, plural, one {# metre} other {# metres}}"
 msgstr "{contourIntervalMeters, plural, one {# метр} few {# метра} many {# метров} other {# метра}}"
 
+#. js-lingui-id: KUDopg
+#: src/presentation/layers/LayersPanel.tsx
+msgid "{offsetLabel} from sunrise"
+msgstr "{offsetLabel} от восхода"
+
+#. js-lingui-id: 4exCgw
+#: src/presentation/layers/LayersPanel.tsx
+msgid "{offsetLabel} from sunset"
+msgstr "{offsetLabel} от заката"
+
 #. js-lingui-id: UHDMPz
 #: src/presentation/layers/LayersPanel.tsx
 msgid "{size} px"
@@ -37,7 +47,7 @@ msgstr "Все погодные слои показаны на одно врем
 #. js-lingui-id: IVtOJv
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Applies to relief and 3D. 256 px keeps 3D textures at 1024 px; 512 px loads fewer tiles with 2048 px textures."
-msgstr "Для отмывки и 3D. 256 px оставляет 3D-текстуры размером 1024 px; 512 px загружает меньше тайлов, но с текстурами 2048 px."
+msgstr "Для затенения рельефа и 3D. 256 px оставляет 3D-текстуры размером 1024 px; 512 px загружает меньше тайлов, но с текстурами 2048 px."
 
 #. js-lingui-id: SrvjBt
 #: src/presentation/layers/LayersPanel.tsx
@@ -94,6 +104,11 @@ msgstr "Выберите доступное время прогноза пого
 msgid "Choose an opacity between 0 and 100 percent."
 msgstr "Выберите непрозрачность от 0 до 100 процентов."
 
+#. js-lingui-id: 1gUYFw
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Classic"
+msgstr "Классическое"
+
 #. js-lingui-id: 4RvaOl
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Climb and descent grade colors across the active track."
@@ -103,6 +118,16 @@ msgstr "Раскраска активного трека по крутизне �
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Copernicus Sentinel-2 via {satelliteCatalogLabel}"
 msgstr "Copernicus Sentinel-2 через {satelliteCatalogLabel}"
+
+#. js-lingui-id: gNhG7m
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Default time"
+msgstr "Время по умолчанию"
+
+#. js-lingui-id: tzn3MH
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Default time offset"
+msgstr "Сдвиг времени по умолчанию"
 
 #. js-lingui-id: DIIomD
 #: src/presentation/layers/LayersPanel.tsx
@@ -127,7 +152,7 @@ msgstr "Горизонтали"
 #. js-lingui-id: e3hfCa
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Elevation isolines could not be generated. Relief and the base map remain available."
-msgstr "Не удалось построить горизонтали. Отмывка рельефа и базовая карта по-прежнему доступны."
+msgstr "Не удалось построить горизонтали. Затенение рельефа и базовая карта по-прежнему доступны."
 
 #. js-lingui-id: yEd2QC
 #: src/presentation/layers/LayersPanel.tsx
@@ -137,7 +162,7 @@ msgstr "Тайлы высот"
 #. js-lingui-id: ME-el8
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Elevation tiles for relief, contours, and 3D terrain."
-msgstr "Данные высот для отмывки, горизонталей и 3D-рельефа."
+msgstr "Данные высот для затенения рельефа, горизонталей и 3D-рельефа."
 
 #. js-lingui-id: r3Wm_7
 #: src/presentation/layers/LayersPanel.tsx
@@ -188,11 +213,6 @@ msgstr "Зелёные контуры, редкие знаки NR и одна п
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Hiking paths"
 msgstr "Пешеходные тропы"
-
-#. js-lingui-id: Ck5Mnm
-#: src/presentation/layers/LayersPanel.tsx
-msgid "Hillshade derived from the configured elevation tiles."
-msgstr "Теневая отмывка по данным высот."
 
 #. js-lingui-id: DxCeHZ
 #: src/presentation/layers/LayersPanel.tsx
@@ -294,7 +314,7 @@ msgstr "Военные территории по данным поставщик
 #. js-lingui-id: 5rAKFG
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Relief shading"
-msgstr "Отмывка рельефа"
+msgstr "Затенение рельефа"
 
 #. js-lingui-id: qFDnlT
 #: src/presentation/layers/LayersPanel.tsx
@@ -341,10 +361,40 @@ msgstr "Контур сцены"
 msgid "Settlements, peaks, and hiking places."
 msgstr "Населённые пункты, вершины и туристические места."
 
+#. js-lingui-id: Sw4-Ep
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Shading"
+msgstr "Затенение"
+
 #. js-lingui-id: aE74-n
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Soviet topographic maps"
 msgstr "Советские топографические карты"
+
+#. js-lingui-id: 6TGtTn
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sun shadows"
+msgstr "Тени от солнца"
+
+#. js-lingui-id: XNKifV
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sun shadows for the chosen time of day or the classic hillshade."
+msgstr "Тени от солнца для выбранного времени суток или классическое затенение."
+
+#. js-lingui-id: -rRIve
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sun shadows open at this time of the day on every visit."
+msgstr "Тени от солнца открываются в это время дня при каждом запуске."
+
+#. js-lingui-id: tUlpfc
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sunrise"
+msgstr "Восход"
+
+#. js-lingui-id: oNxgAm
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sunset"
+msgstr "Закат"
 
 #. js-lingui-id: M4RWWV
 #: src/presentation/layers/LayersPanel.tsx
@@ -359,7 +409,7 @@ msgstr "Обработка рельефа работает в режиме со�
 #. js-lingui-id: LpVRfA
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Terrain relief could not be rendered. The base map remains available."
-msgstr "Не удалось отрисовать отмывку рельефа. Базовая карта по-прежнему доступна."
+msgstr "Не удалось отрисовать затенение рельефа. Базовая карта по-прежнему доступна."
 
 #. js-lingui-id: XlRlgt
 #: src/presentation/layers/LayersPanel.tsx
@@ -415,6 +465,11 @@ msgstr "Не удалось показать выбранный кадр пог�
 #: src/presentation/layers/LayersPanel.tsx
 msgid "The weather map provider is unavailable."
 msgstr "Поставщик карты погоды недоступен."
+
+#. js-lingui-id: Sjubzm
+#: src/presentation/layers/LayersPanel.tsx
+msgid "This browser cannot compute sun shadows."
+msgstr "Этот браузер не может рассчитать тени от солнца."
 
 #. js-lingui-id: -vD4Tz
 #: src/presentation/layers/LayersPanel.tsx

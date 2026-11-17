@@ -614,6 +614,12 @@ test('keeps DEM failure feedback in the shared status without a map banner', asy
   );
   await page.goto('?developer=1');
   const workspace = page.getByTestId('map-workspace');
+  // Default sun shadows shade the overview zoom without DEM tiles; the classic hillshade
+  // requests them. `D` is ignored where shadows are unavailable and the hillshade shows.
+  await expect(workspace).toHaveAttribute('data-map-state', /^(?:ready|degraded)$/u, {
+    timeout: 15_000,
+  });
+  await page.keyboard.press('d');
   await expect(workspace).toHaveAttribute('data-map-state', 'degraded', {
     timeout: 15_000,
   });

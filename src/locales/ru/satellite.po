@@ -501,7 +501,7 @@ msgstr "Потолок отражательной способности"
 #. js-lingui-id: DwHtA9
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Relief shading could not be updated. Try again."
-msgstr "Не удалось обновить отмывку рельефа. Повторите попытку."
+msgstr "Не удалось обновить затенение рельефа. Повторите попытку."
 
 #. js-lingui-id: Cj8ku6
 #: src/presentation/satellite-browser/SatelliteComparison.tsx
@@ -647,7 +647,7 @@ msgstr "Показать мозаику"
 #. js-lingui-id: cmfdzj
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx
 msgid "Show relief shading above satellite imagery"
-msgstr "Показывать отмывку рельефа поверх спутниковых снимков"
+msgstr "Показывать затенение рельефа поверх спутниковых снимков"
 
 #. js-lingui-id: dqKoCE
 #: src/presentation/satellite-browser/SatelliteRenderingControls.tsx

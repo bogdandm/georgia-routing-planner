@@ -1,3 +1,4 @@
+import type { SunShadowStartTime } from '@/application/ports/MapLayerPreferencesRepository';
 import { solarDayEvents } from '@/domain/terrain/solarPosition';
 import {
   instantToZonedWallTime,
@@ -114,23 +115,21 @@ function elevenOClock(dayMs: number, timeZone: string): number {
   return zonedWallTimeToInstant({ ...date, hour: 11, minute: 0 }, timeZone).getTime();
 }
 
-/** How long after sunrise a session opens sun shadows. */
-const sessionStartAfterSunriseMilliseconds = 3 * 60 * millisecondsPerMinute;
-
 /**
- * The instant a session opens sun shadows on: three hours after sunrise on the local day
- * of `dayMs` at `place`, so every reload shows the same morning light whatever the user's
- * clock says. 11:00 of that day when it has no sunrise and sunset.
+ * The instant a session opens sun shadows on: `startTime` relative to sunrise or sunset on
+ * the local day of `dayMs` at `place`, so every reload shows the same light whatever the
+ * user's clock says. 11:00 of that day when it has no sunrise and sunset.
  */
 export function sessionStartInstant(
   dayMs: number,
   place: { readonly latitude: number; readonly longitude: number },
   timeZone: string,
+  startTime: SunShadowStartTime,
 ): number {
   const window = daylightWindow(dayMs, place, timeZone);
-  return window === null
-    ? elevenOClock(dayMs, timeZone)
-    : window.sunriseMs + sessionStartAfterSunriseMilliseconds;
+  if (window === null) return elevenOClock(dayMs, timeZone);
+  const anchorMs = startTime.anchor === 'sunrise' ? window.sunriseMs : window.sunsetMs;
+  return anchorMs + startTime.offsetMinutes * millisecondsPerMinute;
 }
 
 /** The longest step between frames, as a multiple of the average step. */

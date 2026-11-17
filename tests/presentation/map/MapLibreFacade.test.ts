@@ -2,6 +2,7 @@ import type { GeoJSONFeature, Map as MapLibreMap } from 'maplibre-gl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
+import { defaultSunShadowStartTime } from '@/application/ports/MapLayerPreferencesRepository';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
 import type { MapLibreLayerController } from '@/presentation/map/MapLibreLayerController';
@@ -2978,6 +2979,8 @@ describe('MapLibreFacade', () => {
           instantMs: previousInstantMs,
           availability: 'available',
           playback: { status: 'idle' },
+          noticePending: false,
+          startTime: defaultSunShadowStartTime,
         },
       });
       vi.mocked(runRenderBenchmark).mockImplementation(
@@ -3001,8 +3004,8 @@ describe('MapLibreFacade', () => {
 
       await expect(run).rejects.toThrow('The benchmark stopped.');
       expect(setSunShadow.mock.calls).toEqual([
-        [{ enabled: true, instantMs: benchmarkInstantMs }],
-        [{ enabled: false, instantMs: previousInstantMs }],
+        [{ enabled: true, instantMs: benchmarkInstantMs, keepNotice: true }],
+        [{ enabled: false, instantMs: previousInstantMs, keepNotice: true }],
       ]);
       facade.destroy();
     });
@@ -3015,6 +3018,8 @@ describe('MapLibreFacade', () => {
           instantMs: previousInstantMs,
           availability: 'unavailable',
           playback: { status: 'idle' },
+          noticePending: false,
+          startTime: defaultSunShadowStartTime,
         },
       });
 
@@ -3030,8 +3035,18 @@ describe('MapLibreFacade', () => {
       facade.destroy();
     });
 
-    it('leaves sun shadows alone in a plain run', async () => {
+    it('measures a plain run without the default sun shadows and restores them', async () => {
       const { facade, setSunShadow } = createBenchmarkFacade();
+      mapLayerStore.setState({
+        sunShadow: {
+          enabled: true,
+          instantMs: previousInstantMs,
+          availability: 'available',
+          playback: { status: 'idle' },
+          noticePending: false,
+          startTime: defaultSunShadowStartTime,
+        },
+      });
       vi.mocked(runRenderBenchmark).mockRejectedValue(new Error('No WebGL.'));
 
       await expect(
@@ -3040,7 +3055,10 @@ describe('MapLibreFacade', () => {
         }),
       ).rejects.toThrow('No WebGL.');
       expect(vi.mocked(runRenderBenchmark).mock.calls[0]?.[3]).toBeNull();
-      expect(setSunShadow).not.toHaveBeenCalled();
+      expect(setSunShadow.mock.calls).toEqual([
+        [{ enabled: false, instantMs: previousInstantMs, keepNotice: true }],
+        [{ enabled: true, instantMs: previousInstantMs, keepNotice: true }],
+      ]);
       facade.destroy();
     });
   });

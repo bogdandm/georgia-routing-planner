@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { currentBounds } from '@openmeteo/weather-map-layer';
 import lookupTimeZone from '@photostructure/tz-lookup';
 
+import { defaultSunShadowStartTime } from '@/application/ports/MapLayerPreferencesRepository';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
   type SavedMarker,
@@ -2749,6 +2750,8 @@ describe('MapLibreLayerController', () => {
       instantMs: minute * 60_000,
       availability: 'available',
       playback: { status: 'idle' },
+      noticePending: false,
+      startTime: defaultSunShadowStartTime,
     });
     const setTiles = vi.spyOn(source, 'setTiles');
     const movesBefore = map.moves.length;
@@ -2764,7 +2767,7 @@ describe('MapLibreLayerController', () => {
     ]);
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        sunShadowEnabled: true,
+        reliefShadingStyle: 'sun-shadows',
       });
     });
 
@@ -2777,7 +2780,7 @@ describe('MapLibreLayerController', () => {
     );
     await waitFor(async () => {
       await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
-        sunShadowEnabled: false,
+        reliefShadingStyle: 'hillshade',
       });
     });
   });
@@ -2804,6 +2807,43 @@ describe('MapLibreLayerController', () => {
     controller.setSunShadow({ enabled: true, instantMs: userEveningMs });
     expect(mapLayerStore.getState().sunShadow.instantMs).toBe(userEveningMs);
     controller.dispose();
+  });
+
+  it('moves the shown instant to a new start time and opens later sessions there', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2026, 6, 1, 10, 20));
+    const place = { latitude: 42.71, longitude: 43.14 };
+    const window = daylightWindow(Date.UTC(2026, 6, 1, 10, 20), place, 'Asia/Tbilisi');
+    const sunsetStart =
+      Math.floor(((window?.sunsetMs ?? 0) - 60 * 60_000) / 60_000) * 60_000;
+    const first = createSunShadowController();
+    first.controller.attach(new FakeLayerMap() as unknown as MapLibreMap);
+
+    first.controller.setSunShadowStartTime({ anchor: 'sunset', offsetMinutes: -60 });
+
+    expect(mapLayerStore.getState().sunShadow).toMatchObject({
+      instantMs: sunsetStart,
+      startTime: { anchor: 'sunset', offsetMinutes: -60 },
+    });
+    await vi.waitFor(async () => {
+      await expect(
+        first.services.database.loadMapLayerPreferences(),
+      ).resolves.toMatchObject({
+        sunShadowStartTime: { anchor: 'sunset', offsetMinutes: -60 },
+      });
+    });
+    first.controller.dispose();
+
+    // A reload whose map opened before the stored preferences finished loading.
+    resetMapLayerStore();
+    const reload = createSunShadowController();
+    await reload.services.database.saveMapLayerPreferences(
+      await first.services.database.loadMapLayerPreferences(),
+    );
+    reload.controller.attach(new FakeLayerMap() as unknown as MapLibreMap);
+    await reload.controller.restorePersistedState();
+    expect(mapLayerStore.getState().sunShadow.instantMs).toBe(sunsetStart);
+    reload.controller.dispose();
   });
 
   it('moves a night instant to two hours after sunset at the map center', () => {
@@ -2885,11 +2925,68 @@ describe('MapLibreLayerController', () => {
     );
   });
 
-  it('tints the sky for the shadow instant, skips unchanged skies, and clears it when off', () => {
+  it('draws sun shadows only while relief shading shows and shows hidden relief for them', () => {
     const { controller } = createSunShadowController();
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(true);
+
+    expect(controller.setLayerVisibility('terrain-relief', false)).toEqual({
+      status: 'success',
+    });
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(false);
+    expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
+    expect(mapLayerStore.getState().sunShadow.enabled).toBe(true);
+
+    controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+    expect(mapLayerStore.getState().visibility['terrain-relief']).toBe(true);
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(true);
+    expect(map.layers.get(terrainOverlayLayerIds.reliefShade)).toMatchObject({
+      minzoom: 24,
+    });
+  });
+
+  it.each([
+    [
+      'dismissal',
+      (controller: MapLibreLayerController) => {
+        controller.dismissSunShadowNotice();
+      },
+    ],
+    [
+      'the classic style',
+      (controller: MapLibreLayerController) => {
+        controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+      },
+    ],
+  ])('answers the sun-shadow notice for good by %s', async (_name, answer) => {
+    const { controller, services } = createSunShadowController();
+    const stored = await services.database.loadMapLayerPreferences();
+    await services.database.saveMapLayerPreferences({
+      ...stored,
+      sunShadowNoticePending: true,
+    });
+    controller.attach(new FakeLayerMap() as unknown as MapLibreMap);
+    await controller.restorePersistedState();
+    expect(mapLayerStore.getState().sunShadow.noticePending).toBe(true);
+
+    answer(controller);
+
+    expect(mapLayerStore.getState().sunShadow.noticePending).toBe(false);
+    await waitFor(async () => {
+      await expect(services.database.loadMapLayerPreferences()).resolves.toMatchObject({
+        sunShadowNoticePending: false,
+      });
+    });
+  });
+
+  it('tints the sky for the shadow instant, skips unchanged skies, and clears it when off', () => {
+    const { controller } = createSunShadowController();
+    const map = new FakeLayerMap();
+    // Sun shadows are the default style, so the map starts on the hillshade here.
     controller.setSunShadow({ enabled: false, instantMs: shadowInstantMs });
+    controller.attach(map as unknown as MapLibreMap);
     // A map that never drew shadows keeps a style without sky.
     expect(map.skyCalls).toBe(0);
 
@@ -4528,7 +4625,9 @@ describe('MapLibreLayerController', () => {
         shadeAboveSatellite: true,
         demTileSize: 256,
       },
-      sunShadowEnabled: true,
+      reliefShadingStyle: 'sun-shadows',
+      sunShadowNoticePending: true,
+      sunShadowStartTime: { anchor: 'sunset', offsetMinutes: -60 },
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -4540,8 +4639,13 @@ describe('MapLibreLayerController', () => {
     expect(map.visibility.get(mapLayerIds.restrictedAreas)).toBe('none');
     expect(map.visibility.get(mapLayerIds.protectedAreaOutlines)).toBe('none');
     expect(map.visibility.get(terrainOverlayLayerIds.reliefShade)).toBe('none');
-    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(true);
-    expect(mapLayerStore.getState().sunShadow.enabled).toBe(true);
+    // Sun shadows are a relief shading style, so hidden relief draws neither.
+    expect(map.layers.has(terrainOverlayLayerIds.sunShadow)).toBe(false);
+    expect(mapLayerStore.getState().sunShadow).toMatchObject({
+      enabled: true,
+      noticePending: true,
+      startTime: { anchor: 'sunset', offsetMinutes: -60 },
+    });
     expect(map.visibility.get(terrainOverlayLayerIds.contourMinor)).toBe('none');
     expect(mapLayerStore.getState()).toMatchObject({
       visibility: {
@@ -4586,7 +4690,9 @@ describe('MapLibreLayerController', () => {
       satelliteRenderingMode: controller.getRenderingMode(),
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
-      sunShadowEnabled: false,
+      reliefShadingStyle: 'hillshade',
+      sunShadowNoticePending: false,
+      sunShadowStartTime: defaultSunShadowStartTime,
     });
     const map = new FakeLayerMap();
     controller.attach(map as unknown as MapLibreMap);
@@ -4622,7 +4728,9 @@ describe('MapLibreLayerController', () => {
       satelliteRenderingMode: controller.getRenderingMode(),
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
-      sunShadowEnabled: false,
+      reliefShadingStyle: 'hillshade',
+      sunShadowNoticePending: false,
+      sunShadowStartTime: defaultSunShadowStartTime,
     });
     // Keep the stored Google choice so a repeated load would visibly revert Esri.
     vi.spyOn(services.database, 'saveMapLayerPreferences').mockResolvedValue(undefined);
@@ -4653,7 +4761,9 @@ describe('MapLibreLayerController', () => {
       satelliteRenderingMode: 'auto',
       renderingTuning: controller.getRenderingTuning(),
       terrainOverlays: controller.getTerrainOverlayPreferences(),
-      sunShadowEnabled: false,
+      reliefShadingStyle: 'hillshade',
+      sunShadowNoticePending: false,
+      sunShadowStartTime: defaultSunShadowStartTime,
     });
     const map = new FakeLayerMap();
     map.styleLoaded = false;

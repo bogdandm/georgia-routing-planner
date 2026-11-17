@@ -24,6 +24,16 @@ msgstr "{0} layers"
 msgid "{contourIntervalMeters, plural, one {# metre} other {# metres}}"
 msgstr "{contourIntervalMeters, plural, one {# metre} other {# metres}}"
 
+#. js-lingui-id: KUDopg
+#: src/presentation/layers/LayersPanel.tsx
+msgid "{offsetLabel} from sunrise"
+msgstr "{offsetLabel} from sunrise"
+
+#. js-lingui-id: 4exCgw
+#: src/presentation/layers/LayersPanel.tsx
+msgid "{offsetLabel} from sunset"
+msgstr "{offsetLabel} from sunset"
+
 #. js-lingui-id: UHDMPz
 #: src/presentation/layers/LayersPanel.tsx
 msgid "{size} px"
@@ -94,6 +104,11 @@ msgstr "Choose an available weather forecast time."
 msgid "Choose an opacity between 0 and 100 percent."
 msgstr "Choose an opacity between 0 and 100 percent."
 
+#. js-lingui-id: 1gUYFw
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Classic"
+msgstr "Classic"
+
 #. js-lingui-id: 4RvaOl
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Climb and descent grade colors across the active track."
@@ -103,6 +118,16 @@ msgstr "Climb and descent grade colors across the active track."
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Copernicus Sentinel-2 via {satelliteCatalogLabel}"
 msgstr "Copernicus Sentinel-2 via {satelliteCatalogLabel}"
+
+#. js-lingui-id: gNhG7m
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Default time"
+msgstr "Default time"
+
+#. js-lingui-id: tzn3MH
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Default time offset"
+msgstr "Default time offset"
 
 #. js-lingui-id: DIIomD
 #: src/presentation/layers/LayersPanel.tsx
@@ -188,11 +213,6 @@ msgstr "Green outlines, sparse NR signs, and one name label for national parks a
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Hiking paths"
 msgstr "Hiking paths"
-
-#. js-lingui-id: Ck5Mnm
-#: src/presentation/layers/LayersPanel.tsx
-msgid "Hillshade derived from the configured elevation tiles."
-msgstr "Hillshade derived from the configured elevation tiles."
 
 #. js-lingui-id: DxCeHZ
 #: src/presentation/layers/LayersPanel.tsx
@@ -341,10 +361,40 @@ msgstr "Scene footprint"
 msgid "Settlements, peaks, and hiking places."
 msgstr "Settlements, peaks, and hiking places."
 
+#. js-lingui-id: Sw4-Ep
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Shading"
+msgstr "Shading"
+
 #. js-lingui-id: aE74-n
 #: src/presentation/layers/LayersPanel.tsx
 msgid "Soviet topographic maps"
 msgstr "Soviet topographic maps"
+
+#. js-lingui-id: 6TGtTn
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sun shadows"
+msgstr "Sun shadows"
+
+#. js-lingui-id: XNKifV
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sun shadows for the chosen time of day or the classic hillshade."
+msgstr "Sun shadows for the chosen time of day or the classic hillshade."
+
+#. js-lingui-id: -rRIve
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sun shadows open at this time of the day on every visit."
+msgstr "Sun shadows open at this time of the day on every visit."
+
+#. js-lingui-id: tUlpfc
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sunrise"
+msgstr "Sunrise"
+
+#. js-lingui-id: oNxgAm
+#: src/presentation/layers/LayersPanel.tsx
+msgid "Sunset"
+msgstr "Sunset"
 
 #. js-lingui-id: M4RWWV
 #: src/presentation/layers/LayersPanel.tsx
@@ -415,6 +465,11 @@ msgstr "The selected weather frame could not be shown."
 #: src/presentation/layers/LayersPanel.tsx
 msgid "The weather map provider is unavailable."
 msgstr "The weather map provider is unavailable."
+
+#. js-lingui-id: Sjubzm
+#: src/presentation/layers/LayersPanel.tsx
+msgid "This browser cannot compute sun shadows."
+msgstr "This browser cannot compute sun shadows."
 
 #. js-lingui-id: -vD4Tz
 #: src/presentation/layers/LayersPanel.tsx

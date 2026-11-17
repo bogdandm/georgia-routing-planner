@@ -275,6 +275,11 @@ msgstr "Flat map"
 msgid "Google Satellite"
 msgstr "Google Satellite"
 
+#. js-lingui-id: 76gPWk
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Got it"
+msgstr "Got it"
+
 #. js-lingui-id: cTcQ3M
 #: src/presentation/map/TerrainLightingTuningPanel.tsx
 msgid "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once. Double-click an item to reset it."
@@ -398,6 +403,11 @@ msgstr "Nearby map data could not be inspected."
 msgid "Nearby map feature"
 msgstr "Nearby map feature"
 
+#. js-lingui-id: qdL_sA
+#: src/presentation/map/SunShadowControl.tsx
+msgid "New relief shading"
+msgstr "New relief shading"
+
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "No named map feature found."
@@ -472,6 +482,11 @@ msgstr "Recording the day"
 #: src/presentation/map/MapCaptureControl.tsx
 msgid "Recording the day: {percent}%"
 msgstr "Recording the day: {percent}%"
+
+#. js-lingui-id: ZiaU3x
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Relief is now shaded with sun shadows for the chosen time of day instead of the classic hillshade. Rendering can be heavy on weak CPUs. Switch back here or under Relief shading in Layers."
+msgstr "Relief is now shaded with sun shadows for the chosen time of day instead of the classic hillshade. Rendering can be heavy on weak CPUs. Switch back here or under Relief shading in Layers."
 
 #. js-lingui-id: 5FOB1h
 #: src/presentation/map/TerrainLightingTuningPanel.tsx
@@ -685,6 +700,11 @@ msgstr "Turn on sun shadows to record the day."
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Unnamed map feature"
 msgstr "Unnamed map feature"
+
+#. js-lingui-id: sOZBVw
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Use classic shading"
+msgstr "Use classic shading"
 
 #. js-lingui-id: feai_T
 #: src/presentation/map/MapViewControls.tsx

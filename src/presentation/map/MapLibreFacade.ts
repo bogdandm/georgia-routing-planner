@@ -171,6 +171,7 @@ type MapLayerControllerLifecycle = Pick<
       | 'getTerrainOverlayPreferences'
       | 'isExpectedRasterCancellation'
       | 'resetSunShadowMetrics'
+      | 'setLayerVisibility'
       | 'setSunShadow'
     >
   >;
@@ -918,21 +919,21 @@ export class MapLibreFacade implements MapFacade {
       throw new Error('The map is not ready for a render benchmark.');
     }
     const layers = this.layerController;
-    const sunShadowControl =
-      options.sunShadows && hasSunShadowControl(layers) ? layers : null;
-    if (options.sunShadows) {
-      if (
-        sunShadowControl === null ||
-        mapLayerStore.getState().sunShadow.availability === 'unavailable'
-      ) {
-        throw new Error(
-          'This browser cannot render sun shadows, so the sun-shadow benchmark cannot run.',
-        );
-      }
+    const sunShadowControl = hasSunShadowControl(layers) ? layers : null;
+    if (
+      options.sunShadows &&
+      (sunShadowControl === null ||
+        mapLayerStore.getState().sunShadow.availability === 'unavailable')
+    ) {
+      throw new Error(
+        'This browser cannot render sun shadows, so the sun-shadow benchmark cannot run.',
+      );
     }
     const previousSunShadow = mapLayerStore.getState().sunShadow;
+    // Choosing sun shadows also shows hidden relief shading, which the run then hides again.
+    const previousReliefVisible = mapLayerStore.getState().visibility['terrain-relief'];
     const sunShadowHooks: SunShadowBenchmarkHooks | null =
-      sunShadowControl === null
+      sunShadowControl === null || !options.sunShadows
         ? null
         : {
             setInstant: (instantMs) => {
@@ -948,6 +949,13 @@ export class MapLibreFacade implements MapFacade {
     const controller = new AbortController();
     this.#renderBenchmark = controller;
     try {
+      // Sun shadows are the default relief shading; the plain run measures the map without.
+      if (!options.sunShadows) {
+        sunShadowControl?.setSunShadow({
+          enabled: false,
+          instantMs: previousSunShadow.instantMs,
+        });
+      }
       if (previousMode !== 'terrain') {
         const result = await this.setTerrainMode('terrain');
         if (result.status === 'failed') throw new Error(result.reason);
@@ -963,6 +971,12 @@ export class MapLibreFacade implements MapFacade {
         enabled: previousSunShadow.enabled,
         instantMs: previousSunShadow.instantMs,
       });
+      if (
+        !previousReliefVisible &&
+        mapLayerStore.getState().visibility['terrain-relief']
+      ) {
+        layers?.setLayerVisibility?.('terrain-relief', false);
+      }
       const attached = this.#map === map;
       if (attached && previousMode !== 'terrain')
         await this.setTerrainMode(previousMode);

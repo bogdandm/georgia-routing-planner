@@ -275,6 +275,11 @@ msgstr "Плоская карта"
 msgid "Google Satellite"
 msgstr "Снимки Google"
 
+#. js-lingui-id: 76gPWk
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Got it"
+msgstr "Понятно"
+
 #. js-lingui-id: cTcQ3M
 #: src/presentation/map/TerrainLightingTuningPanel.tsx
 msgid "GPU values recompute shadow masks once released; the others recolor cached masks or apply at once. Double-click an item to reset it."
@@ -398,6 +403,11 @@ msgstr "Не удалось проверить данные карты побл�
 msgid "Nearby map feature"
 msgstr "Ближайший объект"
 
+#. js-lingui-id: qdL_sA
+#: src/presentation/map/SunShadowControl.tsx
+msgid "New relief shading"
+msgstr "Новое затенение рельефа"
+
 #. js-lingui-id: T-1HHj
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "No named map feature found."
@@ -472,6 +482,11 @@ msgstr "Запись дня"
 #: src/presentation/map/MapCaptureControl.tsx
 msgid "Recording the day: {percent}%"
 msgstr "Запись дня: {percent}%"
+
+#. js-lingui-id: ZiaU3x
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Relief is now shaded with sun shadows for the chosen time of day instead of the classic hillshade. Rendering can be heavy on weak CPUs. Switch back here or under Relief shading in Layers."
+msgstr "Рельеф теперь затеняется тенями от солнца для выбранного времени суток вместо классического затенения. Отрисовка может сильно нагружать слабые процессоры. Вернуть классическое затенение можно здесь или в пункте «Затенение рельефа» на вкладке «Слои»."
 
 #. js-lingui-id: 5FOB1h
 #: src/presentation/map/TerrainLightingTuningPanel.tsx
@@ -685,6 +700,11 @@ msgstr "Включите тени от солнца, чтобы записать
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Unnamed map feature"
 msgstr "Безымянный объект карты"
+
+#. js-lingui-id: sOZBVw
+#: src/presentation/map/SunShadowControl.tsx
+msgid "Use classic shading"
+msgstr "Вернуть классическое"
 
 #. js-lingui-id: feai_T
 #: src/presentation/map/MapViewControls.tsx

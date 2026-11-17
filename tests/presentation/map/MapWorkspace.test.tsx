@@ -2643,11 +2643,14 @@ describe('MapWorkspace', () => {
     await screen.findByText('Sun keys map');
     const startMs = mapLayerStore.getState().sunShadow.instantMs;
 
+    // Sun shadows are the default relief shading, so D first switches to the hillshade.
     await user.keyboard('d');
     expect(mapLayerStore.getState().sunShadow).toMatchObject({
-      enabled: true,
+      enabled: false,
       instantMs: startMs,
     });
+    await user.keyboard('d');
+    expect(mapLayerStore.getState().sunShadow.enabled).toBe(true);
     await user.keyboard('d');
     expect(mapLayerStore.getState().sunShadow.enabled).toBe(false);
 

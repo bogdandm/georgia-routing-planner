@@ -476,6 +476,11 @@ export function MapWorkspace({
   const appliedMosaic = useStore(mapLayerStore, (state) => state.appliedMosaic);
   const weatherMap = useStore(mapLayerStore, (state) => state.weatherMap);
   const sunShadow = useStore(mapLayerStore, (state) => state.sunShadow);
+  // Sun shadows are a relief shading style, so they only draw while relief shading shows.
+  const sunShadowShown = useStore(
+    mapLayerStore,
+    (state) => state.sunShadow.enabled && state.visibility['terrain-relief'],
+  );
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
@@ -1845,7 +1850,7 @@ export function MapWorkspace({
     mapLayers === null
       ? null
       : {
-          enabled: sunShadow.enabled,
+          enabled: sunShadowShown,
           instantMs: sunShadow.instantMs,
           availability: sunShadow.availability,
           playback: sunShadow.playback,
@@ -1860,6 +1865,13 @@ export function MapWorkspace({
             mapLayers.stopSunShadowPlayback();
           },
           peek: sunShadowPeek,
+          noticeOpen:
+            sunShadow.noticePending &&
+            sunShadowShown &&
+            sunShadow.availability !== 'unavailable',
+          onNoticeDismiss: () => {
+            mapLayers.dismissSunShadowNotice();
+          },
         };
   const mapCapture: MapCaptureControlProps = {
     // The PNG promise goes straight into the clipboard item, so the write keeps the
@@ -1869,7 +1881,7 @@ export function MapWorkspace({
         new ClipboardItem({ 'image/png': facade.captureMapImage() }),
       ]),
     onRecordDayGif:
-      mapLayers === null || !sunShadow.enabled
+      mapLayers === null || !sunShadowShown
         ? null
         : async (signal, onProgress) => {
             // The recording spans the local day at the map center, so its date names the file.
@@ -1978,7 +1990,7 @@ export function MapWorkspace({
       case 'toggle-sun-shadows':
         if (mapLayers === null || sunShadow.availability === 'unavailable') return;
         mapLayers.setSunShadow({
-          enabled: !sunShadow.enabled,
+          enabled: !sunShadowShown,
           instantMs: sunShadow.instantMs,
         });
         break;

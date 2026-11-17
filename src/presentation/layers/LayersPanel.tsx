@@ -22,6 +22,7 @@ import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import {
   supportedContourIntervals,
   supportedTerrainDemTileSizes,
+  sunShadowStartOffsetRanges,
   type LogicalMapLayerId,
   type TerrainOverlayPreferences,
 } from '@/application/ports/MapLayerPreferencesRepository';
@@ -158,7 +159,7 @@ const terrainControls = [
   {
     id: 'terrain-relief',
     label: msg`Relief shading`,
-    description: msg`Hillshade derived from the configured elevation tiles.`,
+    description: msg`Sun shadows for the chosen time of day or the classic hillshade.`,
     requiresScene: false,
   },
   {
@@ -247,6 +248,141 @@ function mapLayerProblemMessage(problem: MapLayerProblem): MessageDescriptor {
     case 'terrain-overlay-failed':
       return terrainOverlayProblemMessage(problem.problem);
   }
+}
+
+/**
+ * Relief shading style and the start time of sun shadows. The offset applies once the
+ * slider is released, because every applied minute renders new shadow tiles.
+ */
+function SunShadowReliefSettings({ disabled }: { readonly disabled: boolean }) {
+  const { t } = useLingui();
+  const { mapLayers } = useRuntimeServices();
+  const { enabled, unavailable, startTime } = useStore(
+    mapLayerStore,
+    useShallow((layerState) => ({
+      enabled: layerState.sunShadow.enabled,
+      unavailable: layerState.sunShadow.availability === 'unavailable',
+      startTime: layerState.sunShadow.startTime,
+    })),
+  );
+  const [draftOffset, setDraftOffset] = useState<number | null>(null);
+  const offsetRange = sunShadowStartOffsetRanges[startTime.anchor];
+  const offset = draftOffset ?? startTime.offsetMinutes;
+  const offsetMagnitude = Math.abs(offset);
+  // `+3:00` or `−1:30`: hours and minutes from the anchor, the same in every locale.
+  const offsetSign = offset < 0 ? '−' : '+';
+  const offsetLabel = `${offsetSign}${String(Math.floor(offsetMagnitude / 60))}:${String(offsetMagnitude % 60).padStart(2, '0')}`;
+  const startTimeDisabled = disabled || unavailable || !enabled;
+  const commitOffset = (value: number | number[]) => {
+    setDraftOffset(null);
+    if (typeof value !== 'number' || value === startTime.offsetMinutes) return;
+    mapLayers?.setSunShadowStartTime({ ...startTime, offsetMinutes: value });
+  };
+
+  return (
+    <>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1 }}>
+        <Typography
+          id="relief-shading-style-label"
+          variant="body2"
+          sx={{ minWidth: 104 }}
+        >
+          <Trans>Shading</Trans>
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          aria-labelledby="relief-shading-style-label"
+          value={enabled && !unavailable ? 'sun-shadows' : 'hillshade'}
+          disabled={disabled || unavailable}
+          onChange={(_event, value: unknown) => {
+            if (value !== 'sun-shadows' && value !== 'hillshade') return;
+            mapLayers?.setSunShadow({
+              enabled: value === 'sun-shadows',
+              // The instant is the sun panel's; only the style changes.
+              instantMs: mapLayerStore.getState().sunShadow.instantMs,
+            });
+          }}
+        >
+          <ToggleButton value="sun-shadows">{t`Sun shadows`}</ToggleButton>
+          <ToggleButton value="hillshade">{t`Classic`}</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+      {unavailable ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mb: 1 }}
+        >
+          <Trans>This browser cannot compute sun shadows.</Trans>
+        </Typography>
+      ) : null}
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+        <Typography
+          id="sun-shadow-start-time-label"
+          variant="body2"
+          sx={{ minWidth: 104 }}
+        >
+          <Trans>Default time</Trans>
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          aria-labelledby="sun-shadow-start-time-label"
+          value={startTime.anchor}
+          disabled={startTimeDisabled}
+          onChange={(_event, value: unknown) => {
+            if (value !== 'sunrise' && value !== 'sunset') return;
+            // The offset ranges mirror each other: 3 h after sunrise becomes 3 h before sunset.
+            mapLayers?.setSunShadowStartTime({
+              anchor: value,
+              offsetMinutes:
+                startTime.offsetMinutes === 0 ? 0 : -startTime.offsetMinutes,
+            });
+          }}
+        >
+          <ToggleButton value="sunrise">{t`Sunrise`}</ToggleButton>
+          <ToggleButton value="sunset">{t`Sunset`}</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mt: 0.5 }}>
+        <Slider
+          aria-label={t`Default time offset`}
+          aria-valuetext={
+            startTime.anchor === 'sunrise'
+              ? t`${offsetLabel} from sunrise`
+              : t`${offsetLabel} from sunset`
+          }
+          disabled={startTimeDisabled}
+          min={offsetRange.min}
+          max={offsetRange.max}
+          step={15}
+          value={offset}
+          onChange={(_event, value) => {
+            if (typeof value === 'number') setDraftOffset(value);
+          }}
+          onChangeCommitted={(_event, value) => {
+            commitOffset(value);
+          }}
+          sx={{ flex: 1, mx: 0.5 }}
+        />
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ minWidth: 40, textAlign: 'right' }}
+        >
+          {offsetLabel}
+        </Typography>
+      </Stack>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: 'block', mb: 1 }}
+      >
+        <Trans>Sun shadows open at this time of the day on every visit.</Trans>
+      </Typography>
+    </>
+  );
 }
 
 export function LayersPanel() {
@@ -659,6 +795,9 @@ export function LayersPanel() {
                       </Typography>
                       {control.id === 'terrain-relief' ? (
                         <Box sx={{ mt: 1, pl: 3.5 }}>
+                          <SunShadowReliefSettings
+                            disabled={disabled || !state.visibility['terrain-relief']}
+                          />
                           <Stack
                             direction="row"
                             spacing={1.5}

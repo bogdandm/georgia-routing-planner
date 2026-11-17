@@ -1283,6 +1283,28 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(services.mapLayers?.getTerrainOverlayPreferences().demTileSize).toBe(256);
     });
+    const shading = screen.getByRole('group', { name: 'Shading' });
+    expect(
+      within(shading).getByRole('button', { name: 'Sun shadows' }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    const defaultTime = screen.getByRole('group', { name: 'Default time' });
+    expect(screen.getByRole('slider', { name: 'Default time offset' })).toHaveAttribute(
+      'aria-valuetext',
+      '+3:00 from sunrise',
+    );
+    // Switching the anchor mirrors the offset: 3 hours after sunrise, 3 hours before sunset.
+    await user.click(within(defaultTime).getByRole('button', { name: 'Sunset' }));
+    expect(screen.getByRole('slider', { name: 'Default time offset' })).toHaveAttribute(
+      'aria-valuetext',
+      '−3:00 from sunset',
+    );
+    await user.click(within(shading).getByRole('button', { name: 'Classic' }));
+    expect(within(shading).getByRole('button', { name: 'Classic' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // The default time only applies to sun shadows.
+    expect(within(defaultTime).getByRole('button', { name: 'Sunrise' })).toBeDisabled();
     await user.click(screen.getByRole('tab', { name: 'Satellite' }));
     await user.click(
       screen.getByRole('checkbox', {
@@ -1308,6 +1330,8 @@ describe('WorkspaceShell', () => {
           shadeAboveSatellite: true,
           demTileSize: 256,
         },
+        reliefShadingStyle: 'hillshade',
+        sunShadowStartTime: { anchor: 'sunset', offsetMinutes: -180 },
       });
     });
   });

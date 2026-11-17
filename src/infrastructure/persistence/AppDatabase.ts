@@ -49,7 +49,9 @@ import type {
 import {
   defaultSatelliteRenderingMode,
   defaultSatelliteRenderingTuning,
+  defaultSunShadowStartTime,
   defaultWeatherMapOpacity,
+  sunShadowStartOffsetRanges,
 } from '@/application/ports/MapLayerPreferencesRepository';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
 import type {
@@ -691,21 +693,40 @@ const mapLayerPreferencesSchema = z
           .default(defaultTerrainOverlayPreferences.demTileSize),
       })
       .default(defaultTerrainOverlayPreferences),
-    // Only the switch persists; the shadow instant is session state that starts at now.
-    sunShadowEnabled: z.boolean().default(false),
+    // Only the style persists; the shadow instant is session state that starts at now.
+    // Records saved before sun shadows replaced the hillshade load with sun shadows and a
+    // pending notice, whatever their removed `sunShadowEnabled` switch said.
+    reliefShadingStyle: z.enum(['sun-shadows', 'hillshade']).default('sun-shadows'),
+    sunShadowNoticePending: z.boolean().default(true),
+    sunShadowStartTime: z
+      .object({
+        anchor: z.enum(['sunrise', 'sunset']),
+        offsetMinutes: z.number().int(),
+      })
+      .strict()
+      .refine(
+        ({ anchor, offsetMinutes }) =>
+          offsetMinutes >= sunShadowStartOffsetRanges[anchor].min &&
+          offsetMinutes <= sunShadowStartOffsetRanges[anchor].max,
+        'The sun-shadow start offset is outside its range.',
+      )
+      .default(defaultSunShadowStartTime),
   })
   .strict();
 
-function withoutLegacyAppliedScene(value: unknown): unknown {
+const legacyMapLayerKeys = ['appliedScene', 'sunShadowEnabled'] as const;
+
+function withoutLegacyMapLayerKeys(value: unknown): unknown {
   if (
     typeof value !== 'object' ||
     value === null ||
-    !Object.hasOwn(value, 'appliedScene')
+    !legacyMapLayerKeys.some((key) => Object.hasOwn(value, key))
   ) {
     return value;
   }
   const sanitized = { ...(value as Record<string, unknown>) };
   delete sanitized.appliedScene;
+  delete sanitized.sunShadowEnabled;
   return sanitized;
 }
 
@@ -739,7 +760,10 @@ const defaultMapLayerPreferences: PersistedMapLayerPreferences = {
   satelliteRenderingMode: defaultSatelliteRenderingMode,
   renderingTuning: defaultSatelliteRenderingTuning,
   terrainOverlays: defaultTerrainOverlayPreferences,
-  sunShadowEnabled: false,
+  reliefShadingStyle: 'sun-shadows',
+  // A browser without saved layer choices never saw the hillshade being replaced.
+  sunShadowNoticePending: false,
+  sunShadowStartTime: defaultSunShadowStartTime,
 };
 
 // Preferences that travel in a data archive, with the check each archived value must
@@ -750,7 +774,7 @@ const archivedSettingValidators = new Map<string, (value: unknown) => boolean>([
   [
     'map.layers',
     (value) =>
-      mapLayerPreferencesSchema.safeParse(withoutLegacyAppliedScene(value)).success,
+      mapLayerPreferencesSchema.safeParse(withoutLegacyMapLayerKeys(value)).success,
   ],
   [
     'satellite.maximum-cloud-cover',
@@ -4243,8 +4267,9 @@ export class AppDatabase
         ? (record.value as Record<string, unknown>)
         : null;
     const storedVisibility = storedValue?.visibility;
-    const hadLegacyScene =
-      storedValue !== null && Object.hasOwn(storedValue, 'appliedScene');
+    const hadLegacyKey =
+      storedValue !== null &&
+      legacyMapLayerKeys.some((key) => Object.hasOwn(storedValue, key));
     const missingStaticBasemapPreference =
       typeof storedVisibility !== 'object' ||
       storedVisibility === null ||
@@ -4256,14 +4281,10 @@ export class AppDatabase
     const missingWeatherMapOpacity =
       storedValue === null || !Object.hasOwn(storedValue, 'weatherMapOpacity');
     const parsed = mapLayerPreferencesSchema.safeParse(
-      withoutLegacyAppliedScene(record.value),
+      withoutLegacyMapLayerKeys(record.value),
     );
     if (parsed.success) {
-      if (
-        hadLegacyScene ||
-        missingStaticBasemapPreference ||
-        missingWeatherMapOpacity
-      ) {
+      if (hadLegacyKey || missingStaticBasemapPreference || missingWeatherMapOpacity) {
         await this.saveMapLayerPreferences(parsed.data);
       }
       return parsed.data;

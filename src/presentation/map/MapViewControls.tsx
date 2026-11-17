@@ -43,6 +43,7 @@ import {
 } from '@/presentation/map/MapCaptureControl';
 import {
   SunShadowButton,
+  SunShadowNotice,
   SunShadowPopover,
   type SunShadowControlProps,
 } from '@/presentation/map/SunShadowControl';
@@ -294,6 +295,8 @@ export function MapViewControls({
             buttonRef={setSunShadowRailButton}
             enabled={sunShadow.enabled}
             onToggle={(button) => {
+              // Opening the panel answers the notice that points at this button.
+              if (sunShadow.noticeOpen) sunShadow.onNoticeDismiss();
               setSunShadowButton(sunShadowButton === null ? button : null);
             }}
             open={sunShadowAnchor !== null}
@@ -567,6 +570,20 @@ export function MapViewControls({
             setSunShadowButton(null);
           }}
           panelId={sunShadowPanelId}
+        />
+      )}
+      {sunShadow === null ? null : (
+        <SunShadowNotice
+          anchorEl={
+            sunShadow.noticeOpen && sunShadowAnchor === null
+              ? sunShadowRailButton
+              : null
+          }
+          onDismiss={sunShadow.onNoticeDismiss}
+          // Changing the style answers the notice too.
+          onUseHillshade={() => {
+            sunShadow.onChange({ enabled: false, instantMs: sunShadow.instantMs });
+          }}
         />
       )}
       {mapCapture === null ? null : (

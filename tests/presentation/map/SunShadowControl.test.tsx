@@ -42,6 +42,7 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
   const onChange = vi.fn();
   const onPlay = vi.fn();
   const onStop = vi.fn();
+  const onNoticeDismiss = vi.fn();
   renderWithI18n(
     <MapViewControls
       activeLayerPreset={null}
@@ -71,11 +72,13 @@ function renderSunShadowControls(sunShadow: Partial<SunShadowControlProps>) {
         onPlay,
         onStop,
         peek: false,
+        noticeOpen: false,
+        onNoticeDismiss,
         ...sunShadow,
       }}
     />,
   );
-  return { onChange, onPlay, onStop };
+  return { onChange, onPlay, onStop, onNoticeDismiss };
 }
 
 describe('SunShadowControl', () => {
@@ -102,6 +105,40 @@ describe('SunShadowControl', () => {
       enabled: true,
       instantMs: tbilisiNoonMs,
     });
+  });
+
+  it('offers the classic hillshade from the one-time notice beside the sun button', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderSunShadowControls({
+      enabled: true,
+      noticeOpen: true,
+    });
+    const notice = screen.getByRole('dialog', { name: 'New relief shading' });
+    expect(notice).toHaveTextContent(/heavy on weak CPUs/);
+
+    await user.click(screen.getByRole('button', { name: 'Use classic shading' }));
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({
+      enabled: false,
+      instantMs: tbilisiNoonMs,
+    });
+  });
+
+  it('answers the notice when the sun panel opens and keeps the shadows', async () => {
+    const user = userEvent.setup();
+    const { onChange, onNoticeDismiss } = renderSunShadowControls({
+      enabled: true,
+      noticeOpen: true,
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Sun shadows' }));
+
+    expect(onNoticeDismiss).toHaveBeenCalledOnce();
+    expect(screen.getByRole('dialog', { name: 'Sun shadows' })).toBeVisible();
+    expect(
+      screen.queryByRole('dialog', { name: 'New relief shading' }),
+    ).not.toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('opens the lighting tuning panel below the rail, open beside the sun panel', async () => {

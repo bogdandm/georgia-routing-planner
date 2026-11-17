@@ -466,9 +466,20 @@ and the next request creates a fresh context.
 Tiles below z7 (`terrainShadowReliefMinZoom`) skip the DEM, the GPU, and every cache:
 `createFlatShadeMask` evaluates the shade pass's terms for flat sea-level ground (the
 visible solar disk over a 0° horizon with the same flat-ground normalization, plus the
-twilight-faded sky light) and the sea-level sunlight code at the 128 × 128 grid samples
-on the CPU, and interpolates each energy bilinearly to pixels. They fill low zooms and
-the distance of pitched 3D views, where z7 relief tiles would be too many to compute.
+twilight-faded sky light) at the 128 × 128 grid samples on the CPU, and interpolates
+each energy bilinearly to pixels. They fill low zooms and the distance of pitched 3D
+views, where z7 relief tiles would be too many to compute. Such a tile spans a large
+part of the planet, so it takes the neutral sunlight code (`sunlightNeutralCode`, the
+unreddened zenith Sun and the day sky) everywhere: day, twilight, and night keep their
+brightness, but the golden, twilight, and alpenglow tints, which would draw broad
+colored rings around the terminator, are left to relief tiles. Flat drafts of relief
+tiles keep the sea-level sunlight code, so they match their final colors.
+
+With 3D terrain MapLibre drapes every world copy of a raster tile into one terrain tile,
+because it matches them by canonical tile only; a semi-transparent overlay such as the
+sun shadow then compounds two or three times into tile-shaped seams once world copies
+are in view. The facade therefore draws world copies in 2D only: it sets
+`renderWorldCopies` from `map.getTerrain()` on attach and on every `terrain` event.
 
 A failed tile fails only that tile; MapLibre leaves it blank. When the worker reports
 missing WebGL2 float support or its transport fails, availability becomes `unavailable`
@@ -481,17 +492,22 @@ reference for the shader model.
 of the shown day at the map center, which spans two hours before sunrise to two hours
 after sunset (clamped to the local day), makes whole-minute frames from its start to its
 last minute (`daylightFrameInstants`): as many as one every 10 minutes would give, but a
-frame d minutes from the nearer sunrise or sunset steps min(30, 1 + k·d²) minutes,
-rounded and at least one, with the smallest k whose schedule fits that count
+frame d minutes from the nearer sunrise or sunset steps min(3 × average, 1 + k·d²)
+minutes, rounded and at least one, with the smallest k whose schedule fits that count
 (bisection), so about ±10 minutes around each event are every minute and midday moves in
-30-minute steps. The frames are rotated to start at the current time, and the controller
-asks `map.coveringTiles` for the 512 px z7–12 tiles of the current view, deduplicated
-across world copies. That public coverage ignores terrain-aware culling; tiles it
-misses, and the flat-ground tiles below z7, render on demand during playback. Only
-frames from 45 minutes before sunrise to 45 minutes after sunset (lit frames) hold
-cached masks, so when tiles × those frames exceed `terrainShadowPlaybackTileLimit`,
-playback is refused as `too-many-tiles` and logged as `map.sun-shadow.playback-refused`
-with both counts. Otherwise the provider's `prefetch` sends
+30-minute steps. The controller asks `map.coveringTiles` for the 512 px z7–12 tiles of
+the current view, deduplicated across world copies. That public coverage ignores
+terrain-aware culling; tiles it misses, and the flat-ground tiles below z7, render on
+demand during playback. Only frames from 45 minutes before sunrise to 45 minutes after
+sunset (lit frames) hold cached masks, so tiles × lit frames must fit
+`terrainShadowPlaybackTileLimit` (2100, the worker's 1.25 GiB mask budget at the worst
+measured mask size). A view whose tiles do not fit the 10-minute schedule lengthens the
+average step a minute at a time until they do, so the minutes around sunrise and sunset
+thin out together with midday; a 2560 px mountain view at 70° pitch (about 34 tiles)
+gets about 60 lit frames instead of 78. When even 24 lit frames do not fit (more than 87
+tiles), playback is refused as `too-many-tiles` and logged as
+`map.sun-shadow.playback-refused` with the tile count and lit-frame budget. The frames
+are rotated to start at the current time. Otherwise the provider's `prefetch` sends
 `terrain-shadow.prefetch-tile` requests in playback order in blocks of six frames,
 tile-major inside a block and with the tile order reversed every other block, at most
 four at a time and never held during a camera move. The worker renders each mask into

@@ -800,8 +800,9 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   order at about 6–7 frames per second, each frame shown only once its tiles are drawn,
   and starts before the computation ends once the remaining frames are estimated to be
   ready before the animation reaches them; **Stop** ends it. Any map move, a change in
-  the panel or by key, or turning shadows off stops playback. A view needing more than
-  1400 tile frames between 45 minutes before sunrise and 45 minutes after sunset shows a
+  the panel or by key, or turning shadows off stops playback. Larger views get sparser
+  frames, so tiles times frames between 45 minutes before sunrise and 45 minutes after
+  sunset stay within 2100; only a view where even 24 such frames would exceed it shows a
   note to zoom in instead, until the map moves, and a failed computation shows an error
   note. Browsers that cannot render floating-point targets in a worker (WebGL2 with
   `EXT_color_buffer_float` and `OffscreenCanvas`) see a disabled switch with an
@@ -954,8 +955,9 @@ below buildings, labels, and tracks; it drapes over 3D terrain, stays on while t
 weather map is shown, and is not drawn in comparison panes. Relief and cast shadows are
 computed from z7 up to z12, then overzoomed. Below z7, which in 3D also covers the
 distance toward the horizon, the layer shades flat sea-level ground for the same
-instant, without relief, so distant terrain and low zooms still follow daylight, sunset,
-and night.
+instant, without relief and in neutral tones only, so low zooms and distant terrain
+follow daylight and night without colored twilight rings across the planet. In 3D the
+map draws no world copies, which MapLibre would drape over each other.
 
 While sun shadows draw, the 3D sky above the horizon and the haze over distant terrain
 follow the Sun at the map center for the same instant: blue by day, twilight blue after

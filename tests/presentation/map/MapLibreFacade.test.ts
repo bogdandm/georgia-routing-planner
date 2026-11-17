@@ -70,6 +70,7 @@ class FakeNativeMap {
   public terrainElevation: number | null = null;
   public initialTerrain: unknown = null;
   public moving = false;
+  public renderWorldCopies = true;
   public projectedPoint = { x: 0, y: 0 };
   public renderedLayers: string[] = [
     routePlanLayerIds.direct,
@@ -222,6 +223,15 @@ class FakeNativeMap {
 
   public setTerrain(value: unknown): void {
     this.terrainValues.push(value);
+    this.fire('terrain');
+  }
+
+  public getRenderWorldCopies(): boolean {
+    return this.renderWorldCopies;
+  }
+
+  public setRenderWorldCopies(value: boolean): void {
+    this.renderWorldCopies = value;
   }
 
   public getTerrain(): unknown {
@@ -358,7 +368,7 @@ describe('MapLibreFacade', () => {
 
     facade.attach(nativeMap as unknown as MapLibreMap);
     facade.attach(nativeMap as unknown as MapLibreMap);
-    expect(nativeMap.listenerCount()).toBe(11);
+    expect(nativeMap.listenerCount()).toBe(12);
 
     nativeMap.fire('style.load');
     expect(facade.getDiagnosticsSnapshot().lifecycle).toBe('ready');
@@ -871,7 +881,7 @@ describe('MapLibreFacade', () => {
     nativeMap.fire('load');
 
     const transition = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(13);
+    expect(nativeMap.listenerCount()).toBe(14);
     nativeMap.fire('error', {
       error: { message: 'fixture DEM unavailable' },
       sourceId: 'terrain-dem',
@@ -883,13 +893,28 @@ describe('MapLibreFacade', () => {
     });
 
     const retry = facade.setTerrainMode('terrain');
-    expect(nativeMap.listenerCount()).toBe(13);
+    expect(nativeMap.listenerCount()).toBe(14);
     expect(nativeMap.terrainTileUpdates).toEqual([
       ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp?terrainEnableRetry=1'],
     ]);
     facade.destroy();
     await expect(retry).resolves.toMatchObject({ status: 'failed' });
     expect(nativeMap.listenerCount()).toBe(0);
+  });
+
+  it('draws world copies only without 3D terrain, which would drape them all at once', () => {
+    const services = createTestServices();
+    const nativeMap = new FakeNativeMap();
+    nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1 };
+    const facade = new MapLibreFacade(services.logger);
+    facade.attach(nativeMap as unknown as MapLibreMap);
+    expect(nativeMap.renderWorldCopies).toBe(false);
+
+    nativeMap.setTerrain(null);
+    expect(nativeMap.renderWorldCopies).toBe(true);
+    nativeMap.setTerrain({ source: 'terrain-dem', exaggeration: 1 });
+    expect(nativeMap.renderWorldCopies).toBe(false);
+    facade.destroy();
   });
 
   it('categorizes and aggregates recoverable source failures without retaining raw errors', () => {

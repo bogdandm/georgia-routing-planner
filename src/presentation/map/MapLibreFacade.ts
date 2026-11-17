@@ -428,6 +428,8 @@ export class MapLibreFacade implements MapFacade {
     map.on('click', this.handleMapClick);
     map.on('sourcedata', this.handleSourceData);
     map.on('error', this.handleError);
+    map.on('terrain', this.handleTerrainChange);
+    this.handleTerrainChange();
     map.getCanvas().addEventListener('webglcontextlost', this.handleContextLost);
     map
       .getCanvas()
@@ -1164,6 +1166,21 @@ export class MapLibreFacade implements MapFacade {
           data: { cameraZoom: Math.round(camera.zoom * 10) / 10 },
         });
       }
+    }
+  };
+
+  /**
+   * MapLibre drapes every world copy of a raster tile into one 3D terrain tile, because it
+   * matches them by canonical tile only, so semi-transparent overlays such as sun shadows
+   * compound two or three times into tile-shaped seams on a zoomed-out 3D map. World
+   * copies are therefore drawn in 2D only.
+   */
+  private readonly handleTerrainChange = (): void => {
+    const map = this.#map;
+    if (map === null) return;
+    const renderWorldCopies = map.getTerrain() === null;
+    if (map.getRenderWorldCopies() !== renderWorldCopies) {
+      map.setRenderWorldCopies(renderWorldCopies);
     }
   };
 
@@ -2331,6 +2348,7 @@ export class MapLibreFacade implements MapFacade {
     map.off('click', this.handleMapClick);
     map.off('sourcedata', this.handleSourceData);
     map.off('error', this.handleError);
+    map.off('terrain', this.handleTerrainChange);
     map.getCanvas().removeEventListener('webglcontextlost', this.handleContextLost);
     map
       .getCanvas()

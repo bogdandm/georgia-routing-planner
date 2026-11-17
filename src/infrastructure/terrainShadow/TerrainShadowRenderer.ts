@@ -1,6 +1,11 @@
 import { subsolarPoint } from '@/domain/terrain/solarPosition';
 import { terrainShadowModel } from '@/domain/terrain/terrainShadow';
 import {
+  compressShadeMask,
+  expandCompressedShadeMask,
+  type ShadeMaskPrecision,
+} from '@/infrastructure/terrainShadow/terrainShadowMaskCodec';
+import {
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
   type TerrainShadowTileResult,
@@ -10,13 +15,14 @@ import {
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
   createFlatShadeMask,
-  createShadeLookupTable,
+  createShadeColorizer,
   expandShadeMask,
   fullscreenVertexShaderSource,
   maximumReductionFactor,
   maximumReductionFragmentShaderSource,
+  type ShadeColorizer,
+  type ShadeMask,
   type ShadePalette,
-  shadeMaskBytes,
   sunlightGridSize,
   sunlightGridStride,
   sunlightNightCode,
@@ -40,23 +46,31 @@ import {
 } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
 const maximumCachedDemTiles = 64;
+/** Preserve the previous approximate mask-memory ceiling independently of frame count. */
+const maximumCachedMaskBytes = 816 * 1024 * 1024;
 /**
  * Cast-shadow visibility (per tile and minute) and sky view (per tile) textures kept on
  * the GPU, so new shade-pass lighting redraws only the shade pass of the tiles in view:
  * 48 × (266 KiB + 16 KiB) ≈ 13 MiB.
  */
 const maximumCachedGeometryTextures = 48;
-/** Shade lookup tables kept, so switching between a few palettes reuses them. */
-const maximumCachedShadeTables = 4;
+/** Source-color coefficients kept, so switching between a few palettes reuses them. */
+const maximumCachedShadeColorizers = 4;
 /** Horizontal bands per visibility pass, flushed separately to keep GPU submissions short. */
 const shadowPassBands = 8;
-const bytesPerTexel = 4;
-const tileBytes = terrainShadowTileSize * terrainShadowTileSize * bytesPerTexel;
+const rgbaChannels = 4;
+const bytesPerFloat = Float32Array.BYTES_PER_ELEMENT;
 const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
+const tileBytes = tilePixels * bytesPerFloat;
+const shadeTargetBytes = tilePixels * rgbaChannels * bytesPerFloat;
 const visibilityBytes = terrainShadowVisibilitySize * terrainShadowVisibilitySize;
 const skyViewBytes = terrainSkyViewSize * terrainSkyViewSize;
 /** Plain night shade, for night tiles without night-sky light. */
-const nightMask = new Uint8Array(shadeMaskBytes).fill(sunlightNightCode, tilePixels);
+const nightMask: ShadeMask = {
+  direct: new Float32Array(tilePixels),
+  sky: new Float32Array(tilePixels),
+  sunlight: new Uint8Array(sunlightGridSize * sunlightGridSize).fill(sunlightNightCode),
+};
 
 /** Uniforms every tile pass reads; the rest are only active in some passes. */
 const tileUniformNames = [
@@ -129,15 +143,15 @@ interface GpuResources {
   readonly reductionStages: readonly ReductionStage[];
   /** 3×1 R32F: texel i holds the maximum elevation of LOD level i. */
   readonly levelMaximum: WebGLTexture;
-  /** RGBA8 shade pass target: red carries the brightness byte, green the sunlight code. */
+  /** RGBA32F shade target: weighted direct/sky energies and the sunlight code. */
   readonly shadeTexture: WebGLTexture;
-  /** Reused RGBA readback of `shadeTexture`. */
-  readonly readback: Uint8Array;
+  /** Reused FLOAT RGBA readback of `shadeTexture`. */
+  readonly readback: Float32Array;
   readonly staticBytes: number;
 }
 
 interface ShadeMaskResult {
-  readonly mask: Uint8Array;
+  readonly mask: ShadeMask;
   readonly metrics: TerrainShadowTileMetrics;
 }
 
@@ -347,20 +361,22 @@ function createGpuResources(onContextLost: () => void): GpuResources {
   );
   const shadeTexture = createTexture(
     gl,
-    gl.RGBA8,
+    gl.RGBA32F,
     terrainShadowTileSize,
     terrainShadowTileSize,
   );
-  const readback = new Uint8Array(tileBytes);
+  const readback = new Float32Array(tilePixels * rgbaChannels);
   const staticBytes =
-    // Encoded staging texture, shade target, and its CPU readback.
-    3 * tileBytes +
-    mosaics.length * mosaicSize * mosaicSize * bytesPerTexel +
+    // Encoded staging texture, float shade target, and its CPU readback.
+    tileBytes +
+    shadeTargetBytes +
+    readback.byteLength +
+    mosaics.length * mosaicSize * mosaicSize * bytesPerFloat +
     reductionStages.reduce(
-      (sum, stage) => sum + stage.size * stage.size * bytesPerTexel,
+      (sum, stage) => sum + stage.size * stage.size * bytesPerFloat,
       0,
     ) +
-    mosaics.length * bytesPerTexel;
+    mosaics.length * bytesPerFloat;
 
   return {
     gl,
@@ -670,8 +686,8 @@ function drawShade(
   drawFullscreen(gpu);
 }
 
-/** Reads `shadeTexture` into the `shadeMaskBytes` layout; row 0 is the northern edge. */
-function readShadeMask(gpu: GpuResources): Uint8Array {
+/** Reads separate source energies and sunlight codes; row 0 is the northern edge. */
+function readShadeMask(gpu: GpuResources): ShadeMask {
   const { gl, readback } = gpu;
   gl.bindFramebuffer(gl.READ_FRAMEBUFFER, gpu.readFramebuffer);
   gl.framebufferTexture2D(
@@ -687,29 +703,32 @@ function readShadeMask(gpu: GpuResources): Uint8Array {
     terrainShadowTileSize,
     terrainShadowTileSize,
     gl.RGBA,
-    gl.UNSIGNED_BYTE,
+    gl.FLOAT,
     readback,
   );
-  const mask = new Uint8Array(shadeMaskBytes);
+  const direct = new Float32Array(tilePixels);
+  const sky = new Float32Array(tilePixels);
+  const sunlight = new Uint8Array(sunlightGridSize * sunlightGridSize);
   for (let index = 0; index < tilePixels; index += 1) {
-    mask[index] = readback[index * bytesPerTexel] ?? 0;
+    direct[index] = readback[index * rgbaChannels] ?? 0;
+    sky[index] = readback[index * rgbaChannels + 1] ?? 0;
   }
   const sampleOffset = sunlightGridStride / 2;
   for (let gridRow = 0; gridRow < sunlightGridSize; gridRow += 1) {
     const row = gridRow * sunlightGridStride + sampleOffset;
     for (let gridColumn = 0; gridColumn < sunlightGridSize; gridColumn += 1) {
       const column = gridColumn * sunlightGridStride + sampleOffset;
-      mask[tilePixels + gridRow * sunlightGridSize + gridColumn] =
-        readback[(row * terrainShadowTileSize + column) * bytesPerTexel + 1] ?? 0;
+      sunlight[gridRow * sunlightGridSize + gridColumn] =
+        readback[(row * terrainShadowTileSize + column) * rgbaChannels + 2] ?? 0;
     }
   }
-  return mask;
+  return { direct, sky, sunlight };
 }
 
 /**
  * Cache key of a tile's shade mask: DEM, tile, minute (or `night`, whose shade does not
  * depend on the instant), and shade-pass lighting. Palette fields are not part of it, so
- * new colors recolor the cached masks through another lookup table.
+ * new colors recolor the cached masks with different source-color coefficients.
  */
 export function terrainShadowMaskKey(
   request: TerrainShadowTileRequest,
@@ -730,8 +749,8 @@ export function terrainShadowMaskKey(
   ].join('|');
 }
 
-/** Cache key of a shade lookup table: every palette field and the sky-light share. */
-function shadeTableKey(request: TerrainShadowTileRequest): string {
+/** Cache key of source-color coefficients and tone mapping: palette and daylight balance. */
+function shadeColorizerKey(request: TerrainShadowTileRequest): string {
   const palette: ShadePalette = request;
   return JSON.stringify([
     palette.shadowColor,
@@ -739,15 +758,12 @@ function shadeTableKey(request: TerrainShadowTileRequest): string {
     palette.highlightOpacity,
     palette.goldenShadowColor,
     palette.lowSunShadowColor,
-    palette.lowSunShadowLift,
-    palette.lowSunGlowOpacity,
     palette.alpenglowColor,
     palette.alpenglowOpacity,
     palette.neutralBrightness,
     palette.exposure,
     palette.shadowStrength,
     palette.highlightRolloff,
-    palette.sunlightTintStrength,
     request.lighting.skyLightShare,
   ]);
 }
@@ -755,7 +771,7 @@ function shadeTableKey(request: TerrainShadowTileRequest): string {
 /**
  * Worker-owned WebGL2 terrain-shadow renderer. One OffscreenCanvas context is created on
  * the first request and recreated after a context loss; decoded DEM tiles, per-tile sky
- * view and cast-shadow visibility textures, shade masks, and lookup tables live in
+ * view and cast-shadow visibility textures, shade masks, and colorizers live in
  * bounded LRU caches. Geometry (DEM, sky view, visibility) never depends on lighting or
  * colors, so new shade-pass lighting reruns only the shade pass, and a new palette only
  * recolors cached masks. GPU work runs one tile at a time; DEM fetches run concurrently
@@ -769,11 +785,12 @@ export class TerrainShadowRenderer {
   readonly #demPins = new Map<string, number>();
   readonly #inflightDem = new Map<string, InflightDemFetch>();
   readonly #masks = new Map<string, Uint8Array>();
+  #cachedMaskBytes = 0;
   /** Sky view per mosaic key: it depends on the DEM around the tile only. */
   readonly #skyViews = new Map<string, WebGLTexture>();
   /** Visibility per mosaic key and minute (or `night`): the DEM and the Sun only. */
   readonly #visibilities = new Map<string, WebGLTexture>();
-  readonly #shadeTables = new Map<string, Uint32Array>();
+  readonly #shadeColorizers = new Map<string, ShadeColorizer>();
   /** DEM URLs the mosaics currently hold, so consecutive instants of a tile reuse them. */
   #assembledMosaicKey: string | null = null;
   #gpuQueue: Promise<void> = Promise.resolve();
@@ -784,7 +801,7 @@ export class TerrainShadowRenderer {
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
   ): Promise<TerrainShadowTileResult> {
-    return this.colorize(request, await this.ensureMask(request, signal));
+    return this.colorize(request, await this.ensureMask(request, signal, 'full'));
   }
 
   /**
@@ -807,12 +824,28 @@ export class TerrainShadowRenderer {
     };
   }
 
-  /** Computes and caches the shade mask of `request` without producing a bitmap. */
+  /**
+   * Computes and caches the shade mask of `request` without producing a bitmap. Day
+   * playback frames are stored at `playback` precision; a cached mask of either
+   * precision is reused as is, so playback frames are later shown without recomputing.
+   */
   public async prefetch(
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
   ): Promise<TerrainShadowTileMetrics> {
-    return (await this.ensureMask(request, signal)).metrics;
+    throwIfAborted(signal);
+    if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
+    const night = isTerrainShadowNightTile(request, request.instantMs);
+    if (this.cachedMask(terrainShadowMaskKey(request, night)) !== undefined) {
+      // Prefetch only needs presence/metrics, not two expanded tile-sized float arrays.
+      return this.metrics({
+        computeMs: 0,
+        demFetchMs: 0,
+        cacheHit: true,
+        demTilesFetched: 0,
+      });
+    }
+    return (await this.ensureMask(request, signal, 'playback')).metrics;
   }
 
   private async colorize(
@@ -820,35 +853,35 @@ export class TerrainShadowRenderer {
     { mask, metrics }: ShadeMaskResult,
   ): Promise<TerrainShadowTileResult> {
     const startedAt = performance.now();
-    const table = this.shadeTable(request);
+    const colorizer = this.shadeColorizer(request);
     const bitmap = await createImageBitmap(
       new ImageData(
-        expandShadeMask(mask, table),
+        expandShadeMask(mask, colorizer),
         terrainShadowTileSize,
         terrainShadowTileSize,
       ),
     );
     return {
       bitmap,
-      metrics: {
+      metrics: this.metrics({
         ...metrics,
         computeMs: metrics.computeMs + performance.now() - startedAt,
-      },
+      }),
     };
   }
 
-  private shadeTable(request: TerrainShadowTileRequest): Uint32Array {
-    const key = shadeTableKey(request);
-    const table =
-      this.#shadeTables.get(key) ??
-      createShadeLookupTable(request, request.lighting.skyLightShare);
-    this.#shadeTables.delete(key);
-    this.#shadeTables.set(key, table);
-    for (const oldestKey of this.#shadeTables.keys()) {
-      if (this.#shadeTables.size <= maximumCachedShadeTables) break;
-      this.#shadeTables.delete(oldestKey);
+  private shadeColorizer(request: TerrainShadowTileRequest): ShadeColorizer {
+    const key = shadeColorizerKey(request);
+    const colorizer =
+      this.#shadeColorizers.get(key) ??
+      createShadeColorizer(request, request.lighting.skyLightShare);
+    this.#shadeColorizers.delete(key);
+    this.#shadeColorizers.set(key, colorizer);
+    for (const oldestKey of this.#shadeColorizers.keys()) {
+      if (this.#shadeColorizers.size <= maximumCachedShadeColorizers) break;
+      this.#shadeColorizers.delete(oldestKey);
     }
-    return table;
+    return colorizer;
   }
 
   /**
@@ -913,15 +946,23 @@ export class TerrainShadowRenderer {
     // Night shade lit only by the faint night sky does not depend on the instant, so every
     // night frame of a tile shares one cached mask.
     const maskKey = terrainShadowMaskKey(request, night);
-    const cached = this.#masks.get(maskKey);
+    const cached = this.cachedMask(maskKey);
     if (cached === undefined) return null;
-    this.storeMask(maskKey, cached);
-    return { mask: cached, metrics: hitMetrics() };
+    const startedAt = performance.now();
+    const mask = expandCompressedShadeMask(cached);
+    return {
+      mask,
+      metrics: {
+        ...hitMetrics(),
+        computeMs: performance.now() - startedAt,
+      },
+    };
   }
 
   private async ensureMask(
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
+    precision: ShadeMaskPrecision,
   ): Promise<ShadeMaskResult> {
     throwIfAborted(signal);
     if (this.#disposed) throw new Error('The terrain shadow renderer was disposed.');
@@ -997,7 +1038,7 @@ export class TerrainShadowRenderer {
         if (gpu.gl.isContextLost()) throw contextLostError();
         return { mask: readShadeMask(gpu), startedAt: jobStartedAt };
       });
-      this.storeMask(maskKey, mask);
+      this.storeMask(maskKey, mask, precision);
       return {
         mask,
         metrics: this.metrics({
@@ -1043,6 +1084,8 @@ export class TerrainShadowRenderer {
     this.#inflightDem.clear();
     this.#demTiles.clear();
     this.#masks.clear();
+    this.#cachedMaskBytes = 0;
+    this.#shadeColorizers.clear();
     // The textures died with the context.
     this.#skyViews.clear();
     this.#visibilities.clear();
@@ -1149,13 +1192,34 @@ export class TerrainShadowRenderer {
     return entry.texture;
   }
 
-  /** Inserts or refreshes `key` as most recently used and evicts beyond the cap. */
-  private storeMask(key: string, mask: Uint8Array): void {
-    this.#masks.delete(key);
-    this.#masks.set(key, mask);
-    for (const oldestKey of this.#masks.keys()) {
-      if (this.#masks.size <= terrainShadowMaskCacheLimit) break;
+  /** Refreshes an existing compact mask without decoding or recompressing it. */
+  private cachedMask(key: string): Uint8Array | undefined {
+    const cached = this.#masks.get(key);
+    if (cached !== undefined) {
+      this.#masks.delete(key);
+      this.#masks.set(key, cached);
+    }
+    return cached;
+  }
+
+  /**
+   * Stores binary16 source energies and evicts LRU entries by count and actual bytes.
+   * The first stored mask of a key wins: a render and a playback prefetch can miss the
+   * same key concurrently, and a later `playback` mask must not downgrade a `full` one.
+   */
+  private storeMask(key: string, mask: ShadeMask, precision: ShadeMaskPrecision): void {
+    if (this.cachedMask(key) !== undefined) return;
+    const compressed = compressShadeMask(mask, precision);
+    this.#masks.set(key, compressed);
+    this.#cachedMaskBytes += compressed.byteLength;
+    for (const [oldestKey, oldest] of this.#masks) {
+      if (
+        this.#masks.size <= terrainShadowMaskCacheLimit &&
+        this.#cachedMaskBytes <= maximumCachedMaskBytes
+      )
+        break;
       this.#masks.delete(oldestKey);
+      this.#cachedMaskBytes -= oldest.byteLength;
     }
   }
 
@@ -1178,6 +1242,10 @@ export class TerrainShadowRenderer {
     for (const entry of this.#demTiles.values()) {
       if (entry.texture !== null) decodedTiles += 1;
     }
+    let colorizerBytes = 0;
+    for (const colorizer of this.#shadeColorizers.values()) {
+      colorizerBytes += colorizer.sources.byteLength;
+    }
     return {
       ...tile,
       memoryBytes:
@@ -1185,7 +1253,8 @@ export class TerrainShadowRenderer {
         decodedTiles * tileBytes +
         this.#visibilities.size * visibilityBytes +
         this.#skyViews.size * skyViewBytes +
-        this.#masks.size * shadeMaskBytes,
+        this.#cachedMaskBytes +
+        colorizerBytes,
       cachedMasks: this.#masks.size,
       cachedDemTiles: this.#demTiles.size,
     };

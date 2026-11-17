@@ -20,13 +20,31 @@ beforeEach(() => {
 });
 
 describe('terrain lighting tuning', () => {
-  it('drives the shade pass and the lookup table from one sky-light share', () => {
+  it('sets the share weighting the cached direct and sky irradiance channels', () => {
     const shading = terrainShadowShadingFromTuning({
       ...defaultTerrainLightingTuning,
       terrainShadeSkyLightShare: 0.5,
     });
     expect(shading.lighting.skyLightShare).toBe(0.5);
     expect(shading.palette).not.toHaveProperty('skyLightShare');
+  });
+
+  it('passes tuned source colors and strengths to cached-mask recoloring', () => {
+    const { palette } = terrainShadowShadingFromTuning({
+      ...defaultTerrainLightingTuning,
+      sunHighlight: '#ABCDEF',
+      sunHighlightOpacity: 0.3,
+      sunLowShadow: '#123456',
+      sunAlpenglow: '#FEDCBA',
+      sunAlpenglowOpacity: 0.7,
+    });
+    expect(palette).toMatchObject({
+      highlightColor: [171, 205, 239],
+      highlightOpacity: 0.3,
+      lowSunShadowColor: [18, 52, 86],
+      alpenglowColor: [254, 220, 186],
+      alpenglowOpacity: 0.7,
+    });
   });
 
   it('compares with the defaults without losing the tuned values', () => {
@@ -74,13 +92,13 @@ describe('terrain lighting tuning', () => {
   });
 
   it('keeps tuned values in localStorage and reads back only valid ones', () => {
-    setTerrainLightingValue('sunLowShadowLift', 0.75);
+    setTerrainLightingValue('sunAlpenglowOpacity', 0.75);
     setTerrainLightingValue('terrainShadeExposure', -0.5);
     setTerrainLightingValue('terrainShadeShadowStrength', 0);
     setTerrainLightingValue('terrainShadeHighlightRolloff', 0.05);
     const stored = localStorage.getItem(terrainLightingStorageKey);
     expect(parseStoredTerrainLightingTuning(stored)).toMatchObject({
-      sunLowShadowLift: 0.75,
+      sunAlpenglowOpacity: 0.75,
       terrainShadeExposure: -0.5,
       terrainShadeShadowStrength: 0,
       terrainShadeHighlightRolloff: 0.05,

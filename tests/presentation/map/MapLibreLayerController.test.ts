@@ -13,6 +13,7 @@ import type { TrackMarker } from '@/domain/tracks/localTrack';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import { maximumSatelliteMosaicSceneCount } from '@/domain/satellite/selectSatelliteMosaicScenes';
 import type { TerrainComputeQueueState } from '@/infrastructure/elevation/TerrainComputeBackend';
+import { terrainShadowPlaybackTileLimit } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import {
   isSentinelDirectFallbackError,
   MapLibreLayerController,
@@ -3161,8 +3162,8 @@ describe('MapLibreLayerController', () => {
           frame >= window.sunriseMs - 45 * 60_000 &&
           frame <= window.sunsetMs + 45 * 60_000,
       ).length;
-      const tileCount = Math.floor(2560 / litFrames);
-      expect(tileCount * frames.length).toBeGreaterThan(2560);
+      const tileCount = Math.floor(terrainShadowPlaybackTileLimit / litFrames);
+      expect(tileCount * frames.length).toBeGreaterThan(terrainShadowPlaybackTileLimit);
 
       const { controller, shadows, playbackFrames } = startPlayback(
         Array.from({ length: tileCount }, (_, x) => ({ z: 12, x, y: 1514 })),

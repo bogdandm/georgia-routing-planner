@@ -3,453 +3,195 @@ import { describe, expect, it } from 'vitest';
 import { horizonAirMass } from '@/domain/terrain/atmosphericSunlight';
 import {
   createFlatShadeMask,
-  createShadeLookupTable,
+  createShadeColorizer,
   defaultShadeLighting,
   expandShadeMask,
-  shadeNeutralBrightness,
-  shadeBrightnessScale,
+  type ShadeMask,
   type ShadePalette,
-  shadeMaskBytes,
   sunlightAirMassMaximumCode,
   sunlightGridSize,
   sunlightMinimumAirMass,
   sunlightNightCode,
-  terrainShadeNightSkyLight,
-  terrainShadeNightTopLight,
-  terrainShadeSkyLightShare,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
 import { terrainShadowTileSize } from '@/infrastructure/terrainShadow/terrainShadowTiles';
 
-const palette: ShadePalette = {
-  shadowColor: [27, 36, 51],
-  highlightColor: [255, 247, 230],
-  highlightOpacity: 0.6,
-  goldenShadowColor: [70, 53, 110],
-  lowSunShadowColor: [46, 63, 122],
-  lowSunShadowLift: 0.4,
-  lowSunGlowOpacity: 0.35,
-  alpenglowColor: [240, 163, 184],
-  alpenglowOpacity: 0.4,
-  neutralBrightness: shadeNeutralBrightness,
-  exposure: 0,
-  shadowStrength: 2,
-  highlightRolloff: 2,
-  sunlightTintStrength: 0.75,
-};
-/** Sunlight code of the zenith Sun at sea level (relative air mass 1). */
+const tilePixels = terrainShadowTileSize ** 2;
 const zenithCode = Math.round(
   (sunlightAirMassMaximumCode * Math.log(1 / sunlightMinimumAirMass)) /
     Math.log(horizonAirMass / sunlightMinimumAirMass),
 );
-const horizonCode = sunlightAirMassMaximumCode;
+const palette: ShadePalette = {
+  shadowColor: [255, 255, 255],
+  highlightColor: [255, 255, 255],
+  highlightOpacity: 0.8,
+  goldenShadowColor: [255, 255, 255],
+  lowSunShadowColor: [255, 255, 255],
+  alpenglowColor: [240, 163, 184],
+  alpenglowOpacity: 0,
+  neutralBrightness: 1,
+  exposure: 0,
+  shadowStrength: 2,
+  highlightRolloff: 2,
+};
 
-function entryBytes(table: Uint32Array, code: number, shade: number): number[] {
-  return [...new Uint8Array(table.buffer, (code * 256 + shade) * 4, 4)];
+function uniformMask(direct: number, sky: number, code = zenithCode): ShadeMask {
+  return {
+    direct: new Float32Array(tilePixels).fill(direct),
+    sky: new Float32Array(tilePixels).fill(sky),
+    sunlight: new Uint8Array(sunlightGridSize ** 2).fill(code),
+  };
 }
 
-function largestByteDifference(
-  left: readonly number[],
-  right: readonly number[],
-): number {
-  return Math.max(...left.map((value, index) => Math.abs(value - (right[index] ?? 0))));
+/** Actual straight-alpha composition over the model's reference grey surface. */
+function composite(mask: ShadeMask, colors: ShadePalette = palette): number[] {
+  const [red = 0, green = 0, blue = 0, alphaByte = 0] = expandShadeMask(
+    mask,
+    createShadeColorizer(colors, defaultShadeLighting.skyLightShare),
+  );
+  const alpha = alphaByte / 255;
+  return [red, green, blue].map((value) => value * alpha + 127.5 * (1 - alpha));
 }
 
-describe('createShadeLookupTable', () => {
-  const table = createShadeLookupTable(palette, terrainShadeSkyLightShare);
-  const neutralByte = Math.round(shadeNeutralBrightness * shadeBrightnessScale);
-
-  it('leaves normally illuminated terrain unchanged while preserving deep shade and bright slopes', () => {
-    expect(entryBytes(table, zenithCode, shadeBrightnessScale)[3]).toBe(0);
-    expect(entryBytes(table, zenithCode, 0)).toEqual([...palette.shadowColor, 255]);
-    expect(entryBytes(table, zenithCode, 32)[3]).toBeGreaterThan(200);
-    expect(entryBytes(table, zenithCode, 190)[3]).toBeGreaterThan(0);
-  });
-  it('adjusts shadows independently from highlight strength and rolloff', () => {
-    const strongerShadows = createShadeLookupTable(
-      { ...palette, shadowStrength: 4 },
-      terrainShadeSkyLightShare,
-    );
-    const brighterHighlights = createShadeLookupTable(
-      { ...palette, highlightOpacity: 1 },
-      terrainShadeSkyLightShare,
-    );
-    const softerHighlights = createShadeLookupTable(
-      { ...palette, highlightRolloff: 3 },
-      terrainShadeSkyLightShare,
-    );
-    expect(entryBytes(strongerShadows, zenithCode, 80)[3]).toBeGreaterThan(
-      entryBytes(table, zenithCode, 80)[3] ?? 0,
-    );
-    expect(entryBytes(brighterHighlights, zenithCode, 210)[3]).toBeGreaterThan(
-      entryBytes(table, zenithCode, 210)[3] ?? 0,
-    );
-    expect(entryBytes(softerHighlights, zenithCode, 210)[3]).toBeLessThan(
-      entryBytes(table, zenithCode, 210)[3] ?? 0,
-    );
-    for (let value = 0; value < 256; value += 1) {
-      if (value <= shadeBrightnessScale) {
-        expect(entryBytes(brighterHighlights, zenithCode, value)).toEqual(
-          entryBytes(table, zenithCode, value),
-        );
-        expect(entryBytes(softerHighlights, zenithCode, value)).toEqual(
-          entryBytes(table, zenithCode, value),
-        );
-      } else {
-        expect(entryBytes(strongerShadows, zenithCode, value)).toEqual(
-          entryBytes(table, zenithCode, value),
-        );
-      }
+describe('separated linear lighting composition', () => {
+  it('renders no illumination black and unit neutral illumination as reference grey', () => {
+    expect(composite(uniformMask(0, 0))).toEqual([0, 0, 0]);
+    for (const channel of composite(uniformMask(0, 1))) {
+      expect(channel).toBeCloseTo(127.5, 0);
     }
   });
 
-  it('applies exposure to decoded physical brightness instead of compressing it again', () => {
-    const exposed = createShadeLookupTable(
-      { ...palette, exposure: 1 },
-      terrainShadeSkyLightShare,
-    );
-    // Physical 2 encodes as 1.5 × 127. One EV maps physical 1 to the same light.
-    expect(
-      largestByteDifference(
-        entryBytes(exposed, zenithCode, 127),
-        entryBytes(table, zenithCode, Math.round(1.5 * 127)),
-      ),
-    ).toBeLessThanOrEqual(2);
-    expect(entryBytes(exposed, zenithCode, 64)[3]).toBe(0);
-    expect(entryBytes(exposed, zenithCode, 80)[3]).toBeGreaterThan(0);
-  });
-
-  it('keeps a smooth neutral and ordered highlights through the mask brightness limit', () => {
-    const base = [170, 190, 130];
-    const composite = (value: number) => {
-      const rgba = entryBytes(table, zenithCode, value);
-      const alpha = (rgba[3] ?? 0) / 255;
-      return base.map(
-        (channel, index) => channel * (1 - alpha) + (rgba[index] ?? 0) * alpha,
-      );
-    };
-    for (let value = 1; value < 256; value += 1) {
-      expect(
-        largestByteDifference(composite(value - 1), composite(value)),
-      ).toBeLessThan(5);
-    }
-    for (const value of [126, 127, 128]) {
-      expect(entryBytes(table, zenithCode, value)[3]).toBe(0);
-    }
-    const alphas = [170, 200, 230, 250, 254].map(
-      (value) => entryBytes(table, zenithCode, value)[3] ?? 0,
-    );
-    for (let index = 1; index < alphas.length; index += 1) {
-      expect(alphas[index]).toBeGreaterThan(alphas[index - 1] ?? 0);
-    }
-    const disabled = createShadeLookupTable(
-      {
-        ...palette,
-        shadowStrength: 0,
-        highlightOpacity: 0,
-        lowSunGlowOpacity: 0,
-        alpenglowOpacity: 0,
-      },
-      terrainShadeSkyLightShare,
-    );
-    expect(new Uint8Array(disabled.buffer).every((value) => value === 0)).toBe(true);
-  });
-
-  it('lifts shadows and turns them lilac when the Sun is on the horizon', () => {
-    const [red = 0, green = 0, blue = 0, alpha = 0] = entryBytes(table, horizonCode, 0);
-
-    expect(alpha).toBeLessThan(255 * 0.65);
-    expect(alpha).toBeGreaterThan(255 * 0.55);
-    expect(
-      largestByteDifference([red, green, blue], palette.goldenShadowColor),
-    ).toBeLessThanOrEqual(1);
-  });
-
-  it('turns shadows deep blue in the middle of civil twilight', () => {
-    // The twilight codes span an even count, so the nearest code is half a step away.
-    const middleTwilightCode = Math.round((horizonCode + 1 + sunlightNightCode) / 2);
-    const [red = 0, green = 0, blue = 0] = entryBytes(table, middleTwilightCode, 0);
-
-    expect(
-      largestByteDifference([red, green, blue], palette.lowSunShadowColor),
-    ).toBeLessThanOrEqual(2);
-  });
-
-  it('warms slopes lit by a low Sun and their highlights', () => {
-    const [litRed = 0, , litBlue = 0, litAlpha = 0] = entryBytes(
-      table,
-      horizonCode,
-      neutralByte,
-    );
-    const [highlightRed = 0, , highlightBlue = 0, highlightAlpha = 0] = entryBytes(
-      table,
-      horizonCode,
-      254,
-    );
-
-    expect(litAlpha).toBeGreaterThan(0);
-    expect(litRed).toBeGreaterThan(200);
-    expect(litRed - litBlue).toBeGreaterThan(120);
-    expect(highlightRed).toBeGreaterThan(200);
-    expect(highlightRed - highlightBlue).toBeGreaterThan(120);
-    expect(highlightAlpha).toBeGreaterThan(litAlpha);
-  });
-
-  it('softens reddened sunset highlights while retaining the chosen daytime shoulder and opacity limit', () => {
-    const tuned = {
+  it('keeps open flat daylight neutral with a colored sky instead of dimming plains', () => {
+    const colors = {
       ...palette,
-      highlightOpacity: 0.8,
-      highlightRolloff: 0.5,
-      lowSunGlowOpacity: 0,
-      alpenglowOpacity: 0,
+      shadowColor: [25, 53, 93] as const,
+      highlightColor: [255, 247, 230] as const,
     };
-    const lookup = createShadeLookupTable(tuned, 0.45);
-    // Physical 1 + rolloff is the half-opacity point; invert the mask compression.
-    const halfHighlight = Math.round(
-      (1 + tuned.highlightRolloff / (1 + tuned.highlightRolloff)) *
-        shadeBrightnessScale,
-    );
-    for (const dayCode of [zenithCode, 100]) {
-      const dayAlpha = entryBytes(lookup, dayCode, halfHighlight)[3] ?? 0;
-      expect(Math.abs(dayAlpha / 255 - tuned.highlightOpacity / 2)).toBeLessThan(0.015);
-      expect(entryBytes(lookup, 207, halfHighlight)[3]).toBeLessThan(dayAlpha / 3);
-      expect(entryBytes(lookup, 207, 254)[3]).toBe(entryBytes(lookup, dayCode, 254)[3]);
-      expect(entryBytes(lookup, dayCode, shadeBrightnessScale)[3]).toBe(0);
+    const open = uniformMask(0.55, 0.45);
+    const shaded = uniformMask(0, 0.45);
+    for (const channel of composite(open, colors)) {
+      expect(Math.abs(channel - 127.5)).toBeLessThan(1);
     }
-    expect(entryBytes(lookup, 207, 254)[3]).toBe(
-      Math.round(tuned.highlightOpacity * 255),
+    expect(composite(shaded, colors)[0]).toBeLessThan(100);
+  });
+
+  it('keeps solar color only in the actual direct contribution, even for equal total energy', () => {
+    const skyOnly = composite(uniformMask(0, 1, sunlightAirMassMaximumCode));
+    const sunOnly = composite(uniformMask(1, 0, sunlightAirMassMaximumCode));
+    const mixed = composite(uniformMask(0.5, 0.5, sunlightAirMassMaximumCode));
+    expect(skyOnly[0]).toBeCloseTo(skyOnly[2] ?? 0, 0);
+    expect(sunOnly[0]).toBeGreaterThan((sunOnly[2] ?? 0) + 80);
+    expect(mixed[2]).toBeGreaterThan(sunOnly[2] ?? 0);
+    expect(mixed[2]).toBeLessThan(skyOnly[2] ?? 0);
+  });
+
+  it('adds source energies before applying the nonlinear display transfer', () => {
+    const direct = uniformMask(0.5, 0, sunlightAirMassMaximumCode);
+    const sky = uniformMask(0, 0.5, sunlightAirMassMaximumCode);
+    const together = composite(uniformMask(0.5, 0.5, sunlightAirMassMaximumCode));
+    const separateSun = composite(direct);
+    const separateSky = composite(sky);
+    expect(
+      Math.abs((together[0] ?? 0) - (separateSun[0] ?? 0) - (separateSky[0] ?? 0)),
+    ).toBeGreaterThan(10);
+  });
+
+  it('applies a common fixed EV exposure to both sources, without clipping HDR energies', () => {
+    const mask = uniformMask(0.7, 0.3, sunlightAirMassMaximumCode);
+    expect(composite(mask, { ...palette, exposure: 1 })).toEqual(
+      composite(uniformMask(1.4, 0.6, sunlightAirMassMaximumCode)),
+    );
+    const highlights = [1, 2, 8, 64].map(
+      (energy) => composite(uniformMask(0, energy))[0] ?? 0,
+    );
+    for (let index = 1; index < highlights.length; index += 1) {
+      expect(highlights[index]).toBeGreaterThan(highlights[index - 1] ?? 0);
+    }
+    expect(highlights[3]).toBeLessThan(255);
+  });
+
+  it('keeps twilight alpenglow in the occluded sky source instead of creating a fill', () => {
+    const code = sunlightAirMassMaximumCode + 6;
+    const rose = { ...palette, alpenglowOpacity: 1 };
+    expect(composite(uniformMask(0, 0, code), rose)).toEqual([0, 0, 0]);
+    const neutral = composite(uniformMask(0, 0.5, code));
+    const open = composite(uniformMask(0, 0.5, code), rose);
+    expect(open[1]).toBeLessThan(neutral[1] ?? 0);
+    expect(open[0]).toBeCloseTo(neutral[0] ?? 0, 0);
+    expect(composite(uniformMask(0.5, 0, code), rose)).toEqual(
+      composite(uniformMask(0.5, 0, code)),
+    );
+    expect(composite(uniformMask(0, 0.5, sunlightNightCode), rose)).toEqual(
+      composite(uniformMask(0, 0.5, sunlightNightCode)),
     );
   });
 
-  it('keeps a warm sunset transition through neutral brightness instead of exposing a pale fringe', () => {
-    const sunset = {
-      ...palette,
-      highlightOpacity: 0.8,
-      highlightRolloff: 0.5,
-      shadowStrength: 1.4,
-      lowSunGlowOpacity: 0.43,
-    };
-    const skyShare = 0.45;
-    // A sunset boundary crosses these shade bytes even when visibility is blurred.
-    const code = 207;
-    for (const highlightOpacity of [sunset.highlightOpacity, 0]) {
-      const lookup = createShadeLookupTable({ ...sunset, highlightOpacity }, skyShare);
-      for (const shade of [110, 120, 127, 131, 134, 145]) {
-        const [red = 0, , blue = 0, alpha = 0] = entryBytes(lookup, code, shade);
-        expect(alpha).toBeGreaterThan(0.75 * sunset.lowSunGlowOpacity * 255);
-        expect(red - blue).toBeGreaterThan(100);
-      }
-      // The bridge must not warm terrain lit only by the sky.
-      expect(
-        entryBytes(lookup, code, Math.floor(skyShare * shadeBrightnessScale)),
-      ).toEqual(
-        entryBytes(
-          createShadeLookupTable(
-            { ...sunset, highlightOpacity, lowSunGlowOpacity: 0 },
-            skyShare,
-          ),
-          code,
-          Math.floor(skyShare * shadeBrightnessScale),
-        ),
-      );
-      const base = [230, 230, 220];
-      let previous: number[] | undefined;
-      for (let shade = 0; shade < 256; shade += 1) {
-        const rgba = entryBytes(lookup, code, shade);
-        const alpha = (rgba[3] ?? 0) / 255;
-        const composite = base.map(
-          (channel, index) => channel * (1 - alpha) + (rgba[index] ?? 0) * alpha,
+  it('crosses neutral continuously rather than cutting out the sunset chromaticity', () => {
+    let previous = composite(uniformMask(0.8, 0.2, sunlightAirMassMaximumCode));
+    for (let direct = 0.81; direct < 1.2; direct += 0.01) {
+      const next = composite(uniformMask(direct, 0.2, sunlightAirMassMaximumCode));
+      expect(next[0]).toBeGreaterThan((next[2] ?? 0) + 30);
+      for (let channel = 0; channel < 3; channel += 1) {
+        expect(Math.abs((next[channel] ?? 0) - (previous[channel] ?? 0))).toBeLessThan(
+          4,
         );
-        if (previous !== undefined)
-          expect(largestByteDifference(previous, composite)).toBeLessThan(5);
-        previous = composite;
       }
+      previous = next;
     }
-  });
-
-  it('keeps shadow lit only by the sky free of the warm sunlight glow', () => {
-    const skyOnly = Math.floor(terrainShadeSkyLightShare * shadeBrightnessScale);
-    const [red = 0, green = 0, blue = 0] = entryBytes(table, horizonCode, skyOnly);
-
-    expect(
-      largestByteDifference([red, green, blue], palette.goldenShadowColor),
-    ).toBeLessThanOrEqual(1);
-  });
-
-  it('glows rose on open slopes in early twilight but not in gorges or at night', () => {
-    const earlyTwilightCode =
-      horizonCode + 1 + Math.round(0.15 * (sunlightNightCode - horizonCode - 1));
-    const openSlope = Math.floor(terrainShadeSkyLightShare * shadeBrightnessScale);
-    const redOverBlue = (code: number, shade: number) => {
-      const [red = 0, , blue = 0] = entryBytes(table, code, shade);
-      return red - blue;
-    };
-
-    // Rose is composited over the twilight shade, so it shifts the hue rather than replacing it.
-    expect(redOverBlue(earlyTwilightCode, openSlope)).toBeGreaterThan(
-      redOverBlue(earlyTwilightCode, 4) + 25,
-    );
-    expect(redOverBlue(earlyTwilightCode, openSlope)).toBeGreaterThan(
-      redOverBlue(sunlightNightCode, openSlope) + 25,
-    );
-  });
-
-  it('continues across the sea-level horizon and returns to the plain night shade', () => {
-    expect(
-      largestByteDifference(
-        entryBytes(table, horizonCode + 1, 60),
-        entryBytes(table, horizonCode, 60),
-      ),
-    ).toBeLessThanOrEqual(3);
-    expect(entryBytes(table, sunlightNightCode, 0)).toEqual([
-      ...palette.shadowColor,
-      255,
-    ]);
-    expect(entryBytes(table, sunlightNightCode, neutralByte)[3]).toBeLessThanOrEqual(1);
-  });
-
-  it('lights night relief above the neutral in the plain highlight color, without sunset hue', () => {
-    const [red = 0, green = 0, blue = 0, alpha = 0] = entryBytes(
-      table,
-      sunlightNightCode,
-      254,
-    );
-    expect(alpha).toBeGreaterThan(0);
-    expect(largestByteDifference([red, green, blue], palette.highlightColor)).toBe(0);
-  });
-
-  it('moves the untouched neutral and the sky-only shade with the tuned values', () => {
-    const tuned = createShadeLookupTable({ ...palette, neutralBrightness: 1.25 }, 0.5);
-    // Physical 1.25 encodes as 1.2; its nearest byte stays transparent to one unit.
-    expect(
-      entryBytes(tuned, zenithCode, Math.round(1.2 * shadeBrightnessScale))[3],
-    ).toBeLessThanOrEqual(1);
-    // Half of full sun is now lit by the sky alone, so the low Sun adds no warm glow.
-    const halfSun = Math.floor(0.5 * shadeBrightnessScale);
-    const [red = 0, green = 0, blue = 0] = entryBytes(tuned, horizonCode, halfSun);
-    expect(
-      largestByteDifference([red, green, blue], palette.goldenShadowColor),
-    ).toBeLessThanOrEqual(1);
-    const [defaultRed = 0, , defaultBlue = 0] = entryBytes(table, horizonCode, halfSun);
-    expect(defaultRed - defaultBlue).toBeGreaterThan(red - blue);
   });
 });
 
-describe('expandShadeMask', () => {
-  it('pairs each pixel brightness with its bilinearly interpolated sunlight code', () => {
-    // An identity table makes every output pixel read back as code × 256 + brightness.
-    const identity = Uint32Array.from({ length: 256 * 256 }, (_, index) => index);
-    const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
-    const mask = new Uint8Array(shadeMaskBytes).fill(7, 0, tilePixels);
-    for (let row = 0; row < sunlightGridSize; row += 1) {
-      for (let column = 0; column < sunlightGridSize; column += 1) {
-        mask[tilePixels + row * sunlightGridSize + column] = 2 * column;
-      }
-    }
-    mask[2] = 200;
-
-    const pixels = new Uint32Array(expandShadeMask(mask, identity).buffer);
-    const rowStart = 100 * terrainShadowTileSize;
-
-    expect(pixels).toHaveLength(tilePixels);
-    expect(pixels[2]).toBe(200);
-    expect(
-      [0, 2, 4, 6, 509, 510, 511].map(
-        (column) => (pixels[rowStart + column] ?? 0) >> 8,
-      ),
-    ).toEqual([0, 0, 1, 2, 254, 254, 254]);
-    expect((pixels[rowStart + 4] ?? 0) & 0xff).toBe(7);
-  });
-});
-
-describe('createFlatShadeMask', () => {
-  // The z6 tile around Tbilisi: 39.4°–45° E, 41°–45.1° N.
+describe('flat-ground linear masks', () => {
   const tile = { z: 6, x: 39, y: 23 };
-  const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
-  const codes = (mask: Uint8Array) => [...mask.subarray(tilePixels)];
-  const brightness = (mask: Uint8Array) => [...mask.subarray(0, tilePixels)];
+  const noonMs = Date.UTC(2026, 6, 1, 8, 30);
+  const nightMs = Date.UTC(2026, 6, 1, 22);
 
-  it('shades flat ground in full sun as the neutral level and night by the night lights', () => {
-    const noon = createFlatShadeMask(
-      tile,
-      Date.UTC(2026, 6, 1, 8, 30),
-      defaultShadeLighting,
+  it('preserves separate full-day sources and zero direct sunlight at night', () => {
+    const noon = createFlatShadeMask(tile, noonMs, defaultShadeLighting);
+    expect(noon.direct[0]).toBeCloseTo(1 - defaultShadeLighting.skyLightShare, 6);
+    expect(noon.sky[0]).toBeCloseTo(defaultShadeLighting.skyLightShare, 6);
+    const night = createFlatShadeMask(tile, nightMs, defaultShadeLighting);
+    expect(night.direct.every((value) => value === 0)).toBe(true);
+    expect(night.sky[0]).toBeCloseTo(
+      defaultShadeLighting.skyLightShare * defaultShadeLighting.nightSkyLight +
+        defaultShadeLighting.nightTopLight,
+      6,
     );
-    expect(new Set(brightness(noon))).toEqual(new Set([shadeBrightnessScale]));
-    expect(Math.max(...codes(noon))).toBeLessThan(sunlightAirMassMaximumCode / 2);
-
-    const night = createFlatShadeMask(
-      tile,
-      Date.UTC(2026, 6, 1, 22),
-      defaultShadeLighting,
-    );
-    expect(new Set(brightness(night))).toEqual(
-      new Set([
-        Math.round(
-          (terrainShadeSkyLightShare * terrainShadeNightSkyLight +
-            terrainShadeNightTopLight) *
-            shadeBrightnessScale,
-        ),
-      ]),
-    );
-    expect(new Set(codes(night))).toEqual(new Set([sunlightNightCode]));
+    expect(night.sunlight.every((code) => code === sunlightNightCode)).toBe(true);
   });
 
-  it('darkens and reddens toward the east while the Sun sets across the tile', () => {
+  it('sets the direct source across the local sunset while keeping sky illumination', () => {
     const mask = createFlatShadeMask(
       tile,
       Date.UTC(2026, 6, 1, 17),
       defaultShadeLighting,
     );
-    const middleRow = (terrainShadowTileSize / 2) * terrainShadowTileSize;
-    const middleGridRow = tilePixels + (sunlightGridSize / 2) * sunlightGridSize;
+    const row = (terrainShadowTileSize / 2) * terrainShadowTileSize;
+    expect(mask.direct[row]).toBeGreaterThan(0);
+    expect(mask.direct[row + terrainShadowTileSize - 1]).toBe(0);
+    expect(mask.sky[row + terrainShadowTileSize - 1]).toBeGreaterThan(0);
+  });
 
-    // The western edge still has a low Sun; the eastern one is past the sea-level sunset.
-    expect(mask[middleRow] ?? 0).toBeGreaterThan(terrainShadeSkyLightShare * 127);
-    expect(mask[middleRow + terrainShadowTileSize - 1] ?? 255).toBeLessThan(
-      terrainShadeSkyLightShare * 127,
-    );
-    expect(mask[middleGridRow] ?? 255).toBeLessThanOrEqual(sunlightAirMassMaximumCode);
-    expect(mask[middleGridRow + sunlightGridSize - 1] ?? 0).toBeGreaterThan(
-      sunlightAirMassMaximumCode,
+  it('retains overhead energy above one without changing daylight illumination', () => {
+    const lighting = { skyLightShare: 0.5, nightSkyLight: 0, nightTopLight: 8 };
+    const night = createFlatShadeMask(tile, nightMs, lighting);
+    expect(night.sky.every((value) => value === 8)).toBe(true);
+    expect(createFlatShadeMask(tile, noonMs, lighting)).toEqual(
+      createFlatShadeMask(tile, noonMs, { ...lighting, nightTopLight: 0 }),
     );
   });
 
-  it('takes the night sky and the sky-light share from the given lighting', () => {
-    const nightMs = Date.UTC(2026, 6, 1, 22);
-    const dark = createFlatShadeMask(tile, nightMs, {
-      skyLightShare: terrainShadeSkyLightShare,
-      nightSkyLight: 0,
-      nightTopLight: 0,
+  it('supports isolated sources at both sky-share endpoints', () => {
+    const direct = createFlatShadeMask(tile, noonMs, {
+      ...defaultShadeLighting,
+      skyLightShare: 0,
     });
-    expect(new Set(brightness(dark))).toEqual(new Set([0]));
-    const brighter = createFlatShadeMask(tile, nightMs, {
-      skyLightShare: 0.5,
-      nightSkyLight: 1,
-      nightTopLight: 0,
+    const sky = createFlatShadeMask(tile, noonMs, {
+      ...defaultShadeLighting,
+      skyLightShare: 1,
     });
-    expect(new Set(brightness(brighter))).toEqual(
-      new Set([Math.round(0.5 * shadeBrightnessScale)]),
-    );
-  });
-
-  it('adds the night top light after the blue hour only, outside the sky-light share', () => {
-    const topLit = { skyLightShare: 0.5, nightSkyLight: 0, nightTopLight: 0.8 };
-    const night = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 22), topLit);
-    expect(new Set(brightness(night))).toEqual(
-      new Set([Math.round(0.8 * shadeBrightnessScale)]),
-    );
-    // Above full sun it is compressed like the shade pass: 1.6 → 1 + 0.6 / 1.6.
-    const bright = createFlatShadeMask(tile, Date.UTC(2026, 6, 1, 22), {
-      ...topLit,
-      nightTopLight: 1.6,
-    });
-    expect(new Set(brightness(bright))).toEqual(
-      new Set([Math.round((1 + 0.6 / 1.6) * shadeBrightnessScale)]),
-    );
-    // Daylight shading is unchanged.
-    const noonMs = Date.UTC(2026, 6, 1, 8, 30);
-    expect(createFlatShadeMask(tile, noonMs, topLit)).toEqual(
-      createFlatShadeMask(tile, noonMs, { ...topLit, nightTopLight: 0 }),
-    );
+    expect(direct.sky.every((value) => value === 0)).toBe(true);
+    expect(direct.direct.every((value) => value === 1)).toBe(true);
+    expect(sky.direct.every((value) => value === 0)).toBe(true);
+    expect(sky.sky.every((value) => value === 1)).toBe(true);
   });
 });

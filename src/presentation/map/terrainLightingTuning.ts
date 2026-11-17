@@ -3,7 +3,6 @@ import { createStore } from 'zustand/vanilla';
 import {
   defaultShadeLighting,
   shadeNeutralBrightness,
-  sunlightTintStrength,
   terrainShadeExposure,
   terrainShadeShadowStrength,
   terrainShadeHighlightRolloff,
@@ -30,10 +29,10 @@ export type TerrainLightingSection =
 
 /**
  * How a parameter reaches the map: `layer` is a MapLibre paint property and `sky` the
- * style sky, both immediate; `lut` recolors cached shade masks in the worker; `gpu`
- * recomputes shade masks on the GPU from cached DEM, sky-view, and visibility textures.
+ * style sky, both immediate; `color` recolors cached direct/sky masks using source-color
+ * coefficients in the worker; `gpu` recomputes masks from cached terrain geometry.
  */
-export type TerrainLightingApply = 'layer' | 'sky' | 'lut' | 'gpu';
+export type TerrainLightingApply = 'layer' | 'sky' | 'color' | 'gpu';
 
 interface NumberParameter {
   readonly kind: 'number';
@@ -79,11 +78,11 @@ function color(
  */
 export const terrainLightingParameters = {
   sunShadowOpacity: unit('light', 'layer', palette.sunShadowOpacity),
-  sunHighlightOpacity: unit('light', 'lut', palette.sunHighlightOpacity),
+  sunHighlightOpacity: unit('light', 'color', palette.sunHighlightOpacity),
   shadeNeutralBrightness: {
     kind: 'number',
     section: 'light',
-    apply: 'lut',
+    apply: 'color',
     min: 0.8,
     max: 1.8,
     step: 0.01,
@@ -92,7 +91,7 @@ export const terrainLightingParameters = {
   terrainShadeExposure: {
     kind: 'number',
     section: 'light',
-    apply: 'lut',
+    apply: 'color',
     min: -2,
     max: 2,
     step: 0.05,
@@ -101,7 +100,7 @@ export const terrainLightingParameters = {
   terrainShadeShadowStrength: {
     kind: 'number',
     section: 'light',
-    apply: 'lut',
+    apply: 'color',
     min: 0,
     max: 4,
     step: 0.05,
@@ -110,7 +109,7 @@ export const terrainLightingParameters = {
   terrainShadeHighlightRolloff: {
     kind: 'number',
     section: 'light',
-    apply: 'lut',
+    apply: 'color',
     min: 0.05,
     max: 4,
     step: 0.05,
@@ -120,12 +119,11 @@ export const terrainLightingParameters = {
     kind: 'number',
     section: 'light',
     apply: 'gpu',
-    min: 0.1,
-    max: 0.7,
+    min: 0,
+    max: 1,
     step: 0.01,
     defaultValue: defaultShadeLighting.skyLightShare,
   },
-  sunlightTintStrength: unit('light', 'lut', sunlightTintStrength),
   skyOcclusionStrength: {
     kind: 'number',
     section: 'ambient',
@@ -159,9 +157,7 @@ export const terrainLightingParameters = {
     'gpu',
     defaultShadeLighting.diffuseSkyFraction,
   ),
-  sunLowShadowLift: unit('ambient', 'lut', palette.sunLowShadowLift),
-  sunLowGlowOpacity: unit('ambient', 'lut', palette.sunLowGlowOpacity),
-  sunAlpenglowOpacity: unit('mountain', 'lut', palette.sunAlpenglowOpacity),
+  sunAlpenglowOpacity: unit('mountain', 'color', palette.sunAlpenglowOpacity),
   terrainShadowSoftEdgeSigmaPixels: {
     kind: 'number',
     section: 'mountain',
@@ -171,11 +167,11 @@ export const terrainLightingParameters = {
     step: 0.05,
     defaultValue: defaultShadeLighting.softEdgeSigmaPixels,
   },
-  sunShadow: color('colors', 'lut', palette.sunShadow),
-  sunHighlight: color('colors', 'lut', palette.sunHighlight),
-  sunGoldenShadow: color('colors', 'lut', palette.sunGoldenShadow),
-  sunLowShadow: color('colors', 'lut', palette.sunLowShadow),
-  sunAlpenglow: color('colors', 'lut', palette.sunAlpenglow),
+  sunShadow: color('colors', 'color', palette.sunShadow),
+  sunHighlight: color('colors', 'color', palette.sunHighlight),
+  sunGoldenShadow: color('colors', 'color', palette.sunGoldenShadow),
+  sunLowShadow: color('colors', 'color', palette.sunLowShadow),
+  sunAlpenglow: color('colors', 'color', palette.sunAlpenglow),
   'sunSky.day.sky': color('sky', 'sky', sky.day.sky),
   'sunSky.day.horizon': color('sky', 'sky', sky.day.horizon),
   'sunSky.day.fog': color('sky', 'sky', sky.day.fog),
@@ -328,8 +324,8 @@ export function formatTerrainLightingTuning(values: TerrainLightingTuning): stri
 /**
  * Shadow-tile shading of `tuning`, built in the field order of
  * `defaultTerrainShadowShading`, so the defaults map back to the provider's first variant.
- * `terrainShadeSkyLightShare` is the one sky-light share of both the shade pass and the
- * lookup table.
+ * `terrainShadeSkyLightShare` weights the direct and sky irradiance stored by the
+ * shade pass, independently of their source-color coefficients.
  */
 export function terrainShadowShadingFromTuning(
   tuning: TerrainLightingTuning,
@@ -341,15 +337,12 @@ export function terrainShadowShadingFromTuning(
       highlightOpacity: tuning.sunHighlightOpacity,
       goldenShadowColor: parseShadowColor(tuning.sunGoldenShadow),
       lowSunShadowColor: parseShadowColor(tuning.sunLowShadow),
-      lowSunShadowLift: tuning.sunLowShadowLift,
-      lowSunGlowOpacity: tuning.sunLowGlowOpacity,
       alpenglowColor: parseShadowColor(tuning.sunAlpenglow),
       alpenglowOpacity: tuning.sunAlpenglowOpacity,
       neutralBrightness: tuning.shadeNeutralBrightness,
       exposure: tuning.terrainShadeExposure,
       shadowStrength: tuning.terrainShadeShadowStrength,
       highlightRolloff: tuning.terrainShadeHighlightRolloff,
-      sunlightTintStrength: tuning.sunlightTintStrength,
     },
     lighting: {
       skyLightShare: tuning.terrainShadeSkyLightShare,

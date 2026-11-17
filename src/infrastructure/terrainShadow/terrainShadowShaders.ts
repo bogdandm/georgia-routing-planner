@@ -3,7 +3,6 @@ import {
   directSunlightColor,
   horizonAirMass,
   kastenYoungAirMass,
-  type SunlightColor,
 } from '@/domain/terrain/atmosphericSunlight';
 import { solarPositionAt, subsolarPoint } from '@/domain/terrain/solarPosition';
 import {
@@ -76,13 +75,10 @@ export const terrainShadowVisibilityMarginPixels = 2;
 /** Side of the visibility texture: the 512 px tile plus the blur margin on both sides. */
 export const terrainShadowVisibilitySize =
   terrainShadowTileSize + 2 * terrainShadowVisibilityMarginPixels;
-/** Stored shade byte = round(brightness × 127): flat ground in full sun is exactly 127. */
-export const shadeBrightnessScale = 127;
 /**
  * Sun elevation whose flat-ground brightness counts as full sun. Lower suns divide by
  * this floor instead of their own sine, so dawn and dusk darken flat ground gradually.
- * Slopes facing a low Sun then exceed 1 several times; the shade pass compresses
- * brightness above 1 into [1, 2) so they keep their order instead of clipping.
+ * Sun-facing slopes may exceed 1; source energies stay linear and unclamped.
  */
 export const terrainShadeFlatReferenceElevationDegrees = 10;
 /** Gaussian σ of the cast-shadow soft edge, in output pixels. */
@@ -136,11 +132,7 @@ export const terrainShadeNightSkyLight = 0.58;
 export const terrainShadeNightTopLight = 0.25;
 export const terrainShadeNightTopLightFocus = 3.9;
 
-/**
- * Shade-pass lighting the GPU reads as uniforms, so new values recompute shade masks
- * without recompiling shaders or redrawing the tile's sky view and cast-shadow visibility.
- * `skyLightShare` also shapes the lookup table; the request carries it once for both.
- */
+/** Shade-pass uniforms; changing colors or exposure reuses the separated source energies. */
 export interface ShadeLighting {
   readonly skyLightShare: number;
   readonly skyOcclusionStrength: number;
@@ -181,11 +173,16 @@ export const sunlightMinimumAirMass = 0.5;
 export const sunlightGridStride = 4;
 export const sunlightGridSize = terrainShadowTileSize / sunlightGridStride;
 const tilePixels = terrainShadowTileSize * terrainShadowTileSize;
-/**
- * Cached shade mask: one brightness byte per pixel, rows from the northern edge, followed
- * by the `sunlightGridSize`² sunlight codes sampled at pixel (4i + 2, 4j + 2).
- */
-export const shadeMaskBytes = tilePixels + sunlightGridSize * sunlightGridSize;
+/** Linear relative irradiance, before source colors, exposure, or tone mapping. */
+export interface ShadeMask {
+  readonly direct: Float32Array;
+  /** Diffuse sky plus the existing night overhead light. */
+  readonly sky: Float32Array;
+  readonly sunlight: Uint8Array;
+}
+
+/** Two float32 energies per pixel and the 128² optical-air-mass/twilight grid. */
+export const shadeMaskBytes = tilePixels * 8 + sunlightGridSize * sunlightGridSize;
 
 /**
  * GPU mirror of `horizonAngleTowardSun`, `seaLevelHorizonDegrees`, and
@@ -483,15 +480,9 @@ void main() {
 `;
 
 /**
- * Real-sun relief brightness, normalized so flat ground in full sun is 1. The direct part
- * is blurred cast-shadow visibility times Lambert slope lighting; its slope term reaches 0
- * exactly where the horizon march starts reporting self-shadow, so terminators stay
- * continuous. The sky part is a wrapped Lambert light from the Sun's azimuth, so relief
- * stays visible inside shadows, dimmed by the terrain that hides sky beyond the slope's
- * own plane (`terrainSkyViewFragmentShaderSource`), so gorges darken and ridges stay
- * lit. Output is brightness × `shadeBrightnessScale` / 255 in the
- * red channel and the sunlight code / 255 in the green channel. `kastenYoungAirMass` and
- * `relativeOpticalAirMass` mirror `@/domain/terrain/atmosphericSunlight`.
+ * Separate direct and sky irradiance, retaining the visibility, Lambert, and sky-view
+ * model. RGBA32F output is weighted direct, weighted sky (including night overhead),
+ * sunlight code, and 1. No color, exposure, compression, or clipping occurs here.
  */
 export const terrainShadowShadeFragmentShaderSource = `${terrainShadowCommonShaderSource}
 uniform sampler2D uVisibility;
@@ -508,7 +499,6 @@ uniform float uSoftEdgeSigma;
 
 const int visibilityMargin = ${String(terrainShadowVisibilityMarginPixels)};
 const float flatReferenceElevationDegrees = ${glslFloat(terrainShadeFlatReferenceElevationDegrees)};
-const float brightnessScale = ${glslFloat(shadeBrightnessScale)};
 const float rayleighScaleHeightMeters = ${glslFloat(atmosphericSunlightModel.rayleighScaleHeightMeters)};
 const float horizonAirMass = ${glslFloat(horizonAirMass)};
 const float minimumAirMass = ${glslFloat(sunlightMinimumAirMass)};
@@ -605,47 +595,33 @@ void main() {
   float nightTop = 1.0 - smoothstep(
     nightElevationDegrees, 0.5 * nightElevationDegrees, sun.apparentElevationDegrees
   );
-  float brightness = (1.0 - uSkyLightShare) * direct + uSkyLightShare * sky
+  float directEnergy = (1.0 - uSkyLightShare) * direct;
+  float skyEnergy = uSkyLightShare * sky
     + uNightTopLight * nightTop * pow(occlusion, uNightTopLightFocus) * skyNormal.z;
-  // Above full sun, x ↦ 1 + x / (1 + x) keeps sun-facing slopes ordered below 2 instead
-  // of clipping them all to one tone.
-  float overExposure = max(brightness - 1.0, 0.0);
-  brightness = min(brightness, 1.0) + overExposure / (1.0 + overExposure);
   float code = sunlightCode(sun.apparentElevationDegrees, mosaicElevation(0, texels));
-  outValue = vec4(clamp(brightness * brightnessScale / 255.0, 0.0, 1.0), code / 255.0, 0.0, 1.0);
+  outValue = vec4(directEnergy, skyEnergy, code, 1.0);
 }
 `;
 
 type Rgb = readonly [number, number, number];
 
 /**
- * Colors and tone the worker applies to shade masks; `#RRGGBB` channels and 0–1
- * opacities. Changing them rebuilds the lookup table and reuses every cached mask.
+ * Source chromaticities are sRGB picker colors; energies never use 0–255 color values.
+ * Colors and display transfer controls recolor cached linear masks.
  */
 export interface ShadePalette {
-  /** Shade under a high Sun and at night: the blue-grey of a clear daytime sky. */
   readonly shadowColor: Rgb;
   readonly highlightColor: Rgb;
   readonly highlightOpacity: number;
-  /** Shade with the Sun on the horizon: the lilac of the golden-hour sky. */
   readonly goldenShadowColor: Rgb;
-  /** Shade in the middle of civil twilight: the deep blue of the twilight sky. */
   readonly lowSunShadowColor: Rgb;
-  readonly lowSunShadowLift: number;
-  readonly lowSunGlowOpacity: number;
-  /** Rose light the twilight sky casts on open slopes just after sunset. */
   readonly alpenglowColor: Rgb;
   readonly alpenglowOpacity: number;
-  /** Physical brightness left untouched after exposure; normally illuminated terrain is 1. */
   readonly neutralBrightness: number;
-  /** Fixed exposure in EV; shared by every tile and animation frame. */
+  /** Fixed EV exposure, identical across tiles and animation frames. */
   readonly exposure: number;
-  /** Strength of the shadow-only transfer curve; 0 disables tonal shade. */
   readonly shadowStrength: number;
-  /** Excess physical brightness at half the highlight opacity; always above 0. */
   readonly highlightRolloff: number;
-  /** Share of the sunlight hue in the highlight, 0–1; see `sunlightTintStrength`. */
-  readonly sunlightTintStrength: number;
 }
 
 function mixRgb(from: Rgb, to: Rgb, weight: number): Rgb {
@@ -656,204 +632,124 @@ function mixRgb(from: Rgb, to: Rgb, weight: number): Rgb {
   ];
 }
 
-interface SunlightTone {
-  readonly color: SunlightColor;
-  /** 0 for a high Sun, 1 at the horizon, back to 0 at `sunlightNightCode`. */
-  readonly lowSun: number;
-}
-
-/**
- * Decodes a sunlight code. Above the sea-level horizon `lowSun` is the blue deficit of the
- * sunlight color, so it follows the same atmosphere; below it eases out (smoothstep) over
- * the twilight codes, so night returns to the plain shadow without a visible step.
- */
-function sunlightTone(code: number): SunlightTone {
-  if (code > sunlightAirMassMaximumCode) {
-    const depth =
-      (code - sunlightAirMassMaximumCode - 1) /
-      (sunlightNightCode - sunlightAirMassMaximumCode - 1);
-    return {
-      color: directSunlightColor(horizonAirMass),
-      lowSun: 1 - depth * depth * (3 - 2 * depth),
-    };
-  }
-  const airMass =
-    sunlightMinimumAirMass *
-    (horizonAirMass / sunlightMinimumAirMass) ** (code / sunlightAirMassMaximumCode);
-  const color = directSunlightColor(airMass);
-  return { color, lowSun: Math.max(0, 1 - color[2] / color[0]) };
-}
-
-/**
- * How much of the physical sunlight hue reaches the overlay. Eyes and cameras adapt to the
- * warm light, and a fully saturated tint reads as orange paint over imagery.
- */
-export const sunlightTintStrength = 0.56;
-
-/** Normally illuminated terrain keeps the basemap's original colors. */
-export const shadeNeutralBrightness = 1;
-export const terrainShadeExposure = 0;
-export const terrainShadeShadowStrength = 2;
-export const terrainShadeHighlightRolloff = 2;
-const shadeMaximumBrightness = 2;
-
-/**
- * Alpenglow, as a fraction of the way from the sea-level horizon to the night elevation:
- * it peaks at `alpenglowPeakTwilightDepth` (about 2° below the horizon) and is gone by
- * `alpenglowEndTwilightDepth`.
- */
-const alpenglowPeakTwilightDepth = 0.15;
-const alpenglowEndTwilightDepth = 0.55;
-
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
   return t * t * (3 - 2 * t);
 }
 
+function srgbToLinear(value: number): number {
+  const channel = value / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function linearToSrgb(value: number): number {
+  return value <= 0.0031308 ? 12.92 * value : 1.055 * value ** (1 / 2.4) - 0.055;
+}
+
+/** Normalize picker brightness away: the shade pass, not the picker, owns energy. */
+function linearChromaticity(color: Rgb): Rgb {
+  const red = srgbToLinear(color[0]);
+  const green = srgbToLinear(color[1]);
+  const blue = srgbToLinear(color[2]);
+  const maximum = Math.max(red, green, blue);
+  return maximum === 0 ? [0, 0, 0] : [red / maximum, green / maximum, blue / maximum];
+}
+
+export const shadeNeutralBrightness = 1;
+export const terrainShadeExposure = -0.1;
+export const terrainShadeShadowStrength = 2.25;
+export const terrainShadeHighlightRolloff = 1.05;
+
+export interface ShadeColorizer {
+  /** Six linear coefficients per code: direct RGB, sky RGB. Not a brightness LUT. */
+  readonly sources: Float32Array;
+  readonly palette: ShadePalette;
+  readonly exposure: number;
+}
+
 /**
- * RGBA8 colors indexed by `sunlightCode × 256 + shadeByte`, written byte-wise so the table
- * is endian-safe when read through a `Uint32Array`. Colors are not premultiplied
- * (ImageData semantics).
- *
- * The mask's compression above 1 is inverted before applying fixed exposure in EV.
- * Independent shadow and highlight curves meet with zero slope at the physical neutral
- * (1 by default). Shadows approach full shade at black; highlights approach
- * `highlightOpacity` smoothly, with half that opacity at `highlightRolloff` above
- * neutral by day. Strongly reddened low sunlight broadens that shoulder up to fourfold
- * without changing its opacity limit. No tile/frame normalization or hard clipping.
- *
- * Atmospheric colors, direct-sun glow and alpenglow still use the original mask and
- * sunlight code, not the exposed brightness. Shade follows the day/golden/twilight sky;
- * highlight tint fades out in late twilight. Sun glow lights direct-sun slopes and rose
- * alpenglow lights sky-open slopes in early twilight, leaving gorges in plain shade.
+ * Precompute only source colors. The normalized Rayleigh sunlight hue is a relative
+ * illuminant, not absolute solar radiometry; diffuse sky remains the existing artistic
+ * day/twilight model. Alpenglow changes that sky, never adds an independent fill.
  */
-export function createShadeLookupTable(
+export function createShadeColorizer(
   palette: ShadePalette,
   skyLightShare: number,
-): Uint32Array {
-  const table = new Uint32Array(256 * 256);
-  const bytes = new Uint8Array(table.buffer);
-  const {
-    shadowColor,
-    highlightColor,
-    goldenShadowColor,
-    lowSunShadowColor,
-    alpenglowColor,
-    sunlightTintStrength: tintStrength,
-  } = palette;
-  const shadows = new Float64Array(256);
-  const highlightShouldersSquared = new Float64Array(256).fill(Infinity);
-  const exposure = 2 ** palette.exposure / palette.neutralBrightness;
-  for (let value = 0; value < 256; value += 1) {
-    const compressed = value / shadeBrightnessScale;
-    // 254 is the quantized limit at 2; 255 is unused by the GPU. Both represent
-    // unbounded physical brightness and therefore the curve's highlight asymptote.
-    const physical =
-      compressed <= 1 ? compressed : compressed < 2 ? 1 / (2 - compressed) : Infinity;
-    const brightness = physical * exposure;
-    if (brightness < 1) {
-      const deficit = 1 - brightness;
-      shadows[value] =
-        palette.shadowStrength === 0
-          ? 0
-          : brightness === 0
-            ? 1
-            : -Math.expm1((-palette.shadowStrength * deficit * deficit) / brightness);
-    } else {
-      const shoulder = palette.highlightRolloff / (brightness - 1);
-      highlightShouldersSquared[value] = shoulder * shoulder;
-    }
-  }
+): ShadeColorizer {
+  const sources = new Float32Array(256 * 6);
+  const whiteBalance = linearChromaticity(palette.highlightColor);
+  const daySky = linearChromaticity(palette.shadowColor);
+  const goldenSky = linearChromaticity(palette.goldenShadowColor);
+  const twilightSky = linearChromaticity(palette.lowSunShadowColor);
+  const alpenglow = linearChromaticity(palette.alpenglowColor);
+  // Fixed daylight white balance, not per-tile/frame normalization: a flat surface
+  // under the reference zenith Sun and open day sky must retain its basemap colors.
+  const daylightWhite: Rgb = [
+    (1 - skyLightShare) * whiteBalance[0] + skyLightShare * daySky[0],
+    (1 - skyLightShare) * whiteBalance[1] + skyLightShare * daySky[1],
+    (1 - skyLightShare) * whiteBalance[2] + skyLightShare * daySky[2],
+  ];
   for (let code = 0; code < 256; code += 1) {
-    const { color: sunlight, lowSun } = sunlightTone(code);
     const twilightDepth =
       code > sunlightAirMassMaximumCode
         ? (code - sunlightAirMassMaximumCode - 1) /
           (sunlightNightCode - sunlightAirMassMaximumCode - 1)
         : 0;
-    const tint = tintStrength * (1 - smoothstep(0.5, 1, twilightDepth));
-    const lightColor: Rgb = [
-      highlightColor[0] * (1 - tint + tint * sunlight[0]),
-      highlightColor[1] * (1 - tint + tint * sunlight[1]),
-      highlightColor[2] * (1 - tint + tint * sunlight[2]),
-    ];
-    let shadeColor: Rgb;
+    const airMass =
+      sunlightMinimumAirMass *
+      (horizonAirMass / sunlightMinimumAirMass) **
+        (Math.min(code, sunlightAirMassMaximumCode) / sunlightAirMassMaximumCode);
+    // This function already returns linear relative transmission, not sRGB.
+    const sunlight = directSunlightColor(airMass);
+    const lowSun = Math.max(0, 1 - sunlight[2] / sunlight[0]);
+    let skyColor: Rgb;
     if (code <= sunlightAirMassMaximumCode) {
-      shadeColor = mixRgb(shadowColor, goldenShadowColor, lowSun);
+      skyColor = mixRgb(daySky, goldenSky, lowSun);
     } else if (twilightDepth < 0.5) {
-      shadeColor = mixRgb(goldenShadowColor, lowSunShadowColor, twilightDepth / 0.5);
+      skyColor = mixRgb(goldenSky, twilightSky, twilightDepth / 0.5);
     } else {
-      shadeColor = mixRgb(lowSunShadowColor, shadowColor, (twilightDepth - 0.5) / 0.5);
+      skyColor = mixRgb(twilightSky, daySky, (twilightDepth - 0.5) / 0.5);
     }
-    const shadeOpacity = 1 - lowSun * palette.lowSunShadowLift;
-    const alpenglow =
+    const rose =
       palette.alpenglowOpacity *
-      smoothstep(0, alpenglowPeakTwilightDepth, twilightDepth) *
-      (1 -
-        smoothstep(
-          alpenglowPeakTwilightDepth,
-          alpenglowEndTwilightDepth,
-          twilightDepth,
-        ));
-    const glow = lowSun * palette.lowSunGlowOpacity;
-    // Once sunlight has lost more than half its blue, carry its glow through neutral.
-    // The tone curves intentionally vanish there; otherwise blurred shadow edges expose
-    // a pale basemap strip. High-Sun lighting and sky-only shade keep their old response.
-    const lowSunToneBlend = smoothstep(0.5, 1, lowSun);
-    // Low-Sun slopes greatly exceed the flat-ground reference: retain basemap detail
-    // instead of quickly covering them with the daylight highlight's orange tint.
-    const highlightRolloffScale = 1 + 3 * lowSunToneBlend;
-    const highlightRolloffScaleSquared = highlightRolloffScale * highlightRolloffScale;
-    for (let value = 0; value < 256; value += 1) {
-      const brightness = value / shadeBrightnessScale;
-      const directShare = Math.min(
-        Math.max(
-          (brightness - skyLightShare) / (shadeMaximumBrightness - skyLightShare),
-          0,
-        ),
-        1,
-      );
-      const glowShare =
-        lowSunToneBlend === 0
-          ? directShare
-          : directShare +
-            lowSunToneBlend * (smoothstep(skyLightShare, 1, brightness) - directShare);
-      const highlightAlpha =
-        palette.highlightOpacity /
-        (1 +
-          (highlightShouldersSquared[value] ?? Infinity) *
-            highlightRolloffScaleSquared);
-      const sunAlpha = 1 - (1 - highlightAlpha) * (1 - glowShare * glow);
-      const openSky = Math.min(brightness / skyLightShare, 1);
-      const roseAlpha = alpenglow * openSky * openSky;
-      const sunWeight = sunAlpha * (1 - roseAlpha);
-      const lightAlpha = sunWeight + roseAlpha;
-      const shadeWeight = (shadows[value] ?? 0) * shadeOpacity * (1 - lightAlpha);
-      const alpha = lightAlpha + shadeWeight;
-      if (alpha === 0) continue;
-      const offset = (code * 256 + value) * 4;
-      bytes[offset] = Math.round(
-        (lightColor[0] * sunWeight +
-          alpenglowColor[0] * roseAlpha +
-          shadeColor[0] * shadeWeight) /
-          alpha,
-      );
-      bytes[offset + 1] = Math.round(
-        (lightColor[1] * sunWeight +
-          alpenglowColor[1] * roseAlpha +
-          shadeColor[1] * shadeWeight) /
-          alpha,
-      );
-      bytes[offset + 2] = Math.round(
-        (lightColor[2] * sunWeight +
-          alpenglowColor[2] * roseAlpha +
-          shadeColor[2] * shadeWeight) /
-          alpha,
-      );
-      bytes[offset + 3] = Math.round(alpha * 255);
+      smoothstep(0, 0.15, twilightDepth) *
+      (1 - smoothstep(0.15, 0.55, twilightDepth));
+    for (let channel = 0; channel < 3; channel += 1) {
+      const reference = daylightWhite[channel] ?? 0;
+      sources[code * 6 + channel] =
+        reference === 0
+          ? 0
+          : ((sunlight[channel] ?? 0) * (whiteBalance[channel] ?? 0)) / reference;
+      sources[code * 6 + 3 + channel] =
+        reference === 0
+          ? 0
+          : ((skyColor[channel] ?? 0) * (1 - rose) + (alpenglow[channel] ?? 0) * rose) /
+            reference;
     }
   }
-  return table;
+  return {
+    sources,
+    palette,
+    exposure: 2 ** palette.exposure / palette.neutralBrightness,
+  };
+}
+
+// A raster overlay cannot read the basemap's albedo. Its RGBA approximation is exact
+// for this middle-grey sRGB surface only; arbitrary basemap colors are not physical.
+const referenceSurface = 0.5;
+const referenceSurfaceLinear = srgbToLinear(referenceSurface * 255);
+
+/** One fixed display transfer, applied only after direct and sky have been added. */
+function displayChannel(energy: number, colorizer: ShadeColorizer): number {
+  const value = energy * colorizer.exposure;
+  const { shadowStrength, highlightOpacity, highlightRolloff } = colorizer.palette;
+  const mapped =
+    value <= 1
+      ? (referenceSurfaceLinear * value) / (1 + shadowStrength * (1 - value) ** 2)
+      : referenceSurfaceLinear +
+        ((1 - referenceSurfaceLinear) * highlightOpacity * (value - 1)) /
+          (highlightRolloff + value - 1);
+  return linearToSrgb(mapped);
 }
 
 /** For each output row or column: the grid sample at or before it and the next one's weight in quarters. */
@@ -868,19 +764,19 @@ for (let pixel = 0; pixel < terrainShadowTileSize; pixel += 1) {
 }
 
 /**
- * Expands a shade mask (`shadeMaskBytes` layout) into 512 px ImageData RGBA bytes,
- * interpolating the sunlight code bilinearly between its grid samples.
+ * Add linear source RGB, expose and tone map once, then encode sRGB and derive a
+ * straight-alpha overlay against reference grey. Source identity is never inferred
+ * from brightness. Only the final display result is quantized to RGBA8.
  */
 export function expandShadeMask(
-  mask: Uint8Array,
-  table: Uint32Array,
+  mask: ShadeMask,
+  colorizer: ShadeColorizer,
 ): Uint8ClampedArray<ArrayBuffer> {
   const pixels = new Uint8ClampedArray(tilePixels * 4);
-  const pixels32 = new Uint32Array(pixels.buffer);
   const weightSum = sunlightGridStride * sunlightGridStride;
   for (let row = 0; row < terrainShadowTileSize; row += 1) {
     const southWeight = sunlightGridWeight[row] ?? 0;
-    const northStart = tilePixels + (sunlightGridLower[row] ?? 0) * sunlightGridSize;
+    const northStart = (sunlightGridLower[row] ?? 0) * sunlightGridSize;
     const southStart = northStart + (southWeight === 0 ? 0 : sunlightGridSize);
     const northWeight = sunlightGridStride - southWeight;
     for (let column = 0; column < terrainShadowTileSize; column += 1) {
@@ -889,36 +785,64 @@ export function expandShadeMask(
       const east = west + (eastWeight === 0 ? 0 : 1);
       const westWeight = sunlightGridStride - eastWeight;
       const code = Math.round(
-        ((mask[northStart + west] ?? 0) * westWeight * northWeight +
-          (mask[northStart + east] ?? 0) * eastWeight * northWeight +
-          (mask[southStart + west] ?? 0) * westWeight * southWeight +
-          (mask[southStart + east] ?? 0) * eastWeight * southWeight) /
+        ((mask.sunlight[northStart + west] ?? 0) * westWeight * northWeight +
+          (mask.sunlight[northStart + east] ?? 0) * eastWeight * northWeight +
+          (mask.sunlight[southStart + west] ?? 0) * westWeight * southWeight +
+          (mask.sunlight[southStart + east] ?? 0) * eastWeight * southWeight) /
           weightSum,
       );
       const index = row * terrainShadowTileSize + column;
-      pixels32[index] = table[code * 256 + (mask[index] ?? 0)] ?? 0;
+      const direct = mask.direct[index] ?? 0;
+      const sky = mask.sky[index] ?? 0;
+      const offset = code * 6;
+      const red = displayChannel(
+        direct * (colorizer.sources[offset] ?? 0) +
+          sky * (colorizer.sources[offset + 3] ?? 0),
+        colorizer,
+      );
+      const green = displayChannel(
+        direct * (colorizer.sources[offset + 1] ?? 0) +
+          sky * (colorizer.sources[offset + 4] ?? 0),
+        colorizer,
+      );
+      const blue = displayChannel(
+        direct * (colorizer.sources[offset + 2] ?? 0) +
+          sky * (colorizer.sources[offset + 5] ?? 0),
+        colorizer,
+      );
+      const alpha = Math.max(
+        1 - Math.min(red, green, blue) / referenceSurface,
+        (Math.max(red, green, blue) - referenceSurface) / (1 - referenceSurface),
+        0,
+      );
+      if (alpha < 1 / 510) continue;
+      const retainedBase = referenceSurface * (1 - alpha);
+      pixels[index * 4] = ((red - retainedBase) / alpha) * 255;
+      pixels[index * 4 + 1] = ((green - retainedBase) / alpha) * 255;
+      pixels[index * 4 + 2] = ((blue - retainedBase) / alpha) * 255;
+      pixels[index * 4 + 3] = alpha * 255;
     }
   }
   return pixels;
 }
 
 /**
- * Shade mask of flat sea-level ground for a tile below `terrainShadowReliefMinZoom`,
- * without DEM, slopes, or cast shadows: the shade pass's terms for a flat pixel whose
- * horizon is the sea-level horizon (0°), so the direct Sun is the visible disk fraction
- * normalized like the GPU and the sky term is its twilight fade, plus the full night top
- * light, compressed above 1 like the GPU. Brightness and sunlight
- * codes are evaluated at the sunlight grid samples, as the GPU codes are, and brightness
- * is interpolated bilinearly to pixels, so a tile costs 128² solar positions on the CPU.
+ * Flat sea-level draft/coarse mask, without DEM or a GPU. Evaluate the same direct
+ * and sky terms at 128² solar positions, then interpolate each energy separately.
  */
 export function createFlatShadeMask(
   tile: TerrainShadowTileAddress,
   instantMs: number,
   lighting: Pick<ShadeLighting, 'skyLightShare' | 'nightSkyLight' | 'nightTopLight'>,
-): Uint8Array {
+): ShadeMask {
   const { skyLightShare, nightSkyLight, nightTopLight } = lighting;
-  const mask = new Uint8Array(shadeMaskBytes);
-  const gridBrightness = new Float32Array(sunlightGridSize * sunlightGridSize);
+  const mask: ShadeMask = {
+    direct: new Float32Array(tilePixels),
+    sky: new Float32Array(tilePixels),
+    sunlight: new Uint8Array(sunlightGridSize * sunlightGridSize),
+  };
+  const gridDirect = new Float32Array(sunlightGridSize * sunlightGridSize);
+  const gridSky = new Float32Array(sunlightGridSize * sunlightGridSize);
   const sun = subsolarPoint(new Date(instantMs));
   const geometry = terrainShadowTileGeometry(tile);
   const degreesPerRadian = 180 / Math.PI;
@@ -956,15 +880,12 @@ export function createFlatShadeMask(
       // Flat ground sees the whole sky, so the night sky and the top light add in full.
       const sky = twilightSky + (1 - twilightSky) * nightSkyLight;
       const index = row * sunlightGridSize + column;
-      const brightness =
-        (1 - skyLightShare) * direct +
+      gridDirect[index] = (1 - skyLightShare) * direct;
+      gridSky[index] =
         skyLightShare * sky +
         nightTopLight * (1 - smoothstep(night, night / 2, elevation));
-      const overExposure = Math.max(brightness - 1, 0);
-      gridBrightness[index] =
-        Math.min(brightness, 1) + overExposure / (1 + overExposure);
       // `sunlightCode` of the shade shader at sea level, where the horizon is 0°.
-      mask[tilePixels + index] =
+      mask.sunlight[index] =
         elevation < 0
           ? sunlightAirMassMaximumCode +
             1 +
@@ -997,15 +918,19 @@ export function createFlatShadeMask(
       const west = sunlightGridLower[column] ?? 0;
       const east = west + (eastWeight === 0 ? 0 : 1);
       const westWeight = sunlightGridStride - eastWeight;
-      const brightness =
-        ((gridBrightness[northStart + west] ?? 0) * westWeight * northWeight +
-          (gridBrightness[northStart + east] ?? 0) * eastWeight * northWeight +
-          (gridBrightness[southStart + west] ?? 0) * westWeight * southWeight +
-          (gridBrightness[southStart + east] ?? 0) * eastWeight * southWeight) /
+      const index = row * terrainShadowTileSize + column;
+      mask.direct[index] =
+        ((gridDirect[northStart + west] ?? 0) * westWeight * northWeight +
+          (gridDirect[northStart + east] ?? 0) * eastWeight * northWeight +
+          (gridDirect[southStart + west] ?? 0) * westWeight * southWeight +
+          (gridDirect[southStart + east] ?? 0) * eastWeight * southWeight) /
         weightSum;
-      mask[row * terrainShadowTileSize + column] = Math.round(
-        brightness * shadeBrightnessScale,
-      );
+      mask.sky[index] =
+        ((gridSky[northStart + west] ?? 0) * westWeight * northWeight +
+          (gridSky[northStart + east] ?? 0) * eastWeight * northWeight +
+          (gridSky[southStart + west] ?? 0) * westWeight * southWeight +
+          (gridSky[southStart + east] ?? 0) * eastWeight * southWeight) /
+        weightSum;
     }
   }
   return mask;

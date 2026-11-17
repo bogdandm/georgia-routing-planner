@@ -5,10 +5,14 @@ const colorSchema = z
   .tuple([colorChannelSchema, colorChannelSchema, colorChannelSchema])
   .readonly();
 
-/** Cached shade masks per worker: 3072 × 272 KiB (brightness plus sunlight grid) = 816 MiB. */
-export const terrainShadowMaskCacheLimit = 3072;
-/** Most tiles × frames one day playback may precompute; stays below the mask cache. */
-export const terrainShadowPlaybackTileLimit = 2560;
+/**
+ * Cached shade masks per worker, also bounded by an 816 MiB budget of compressed bytes
+ * (`terrainShadowMaskCodec.ts`). Measured worst real masks (~565 KiB) fit about 1480,
+ * typical (~400 KiB) about 2090, so this count stays above the playback budget.
+ */
+export const terrainShadowMaskCacheLimit = 1536;
+/** Most tiles × frames one day playback may precompute; fits worst measured masks. */
+export const terrainShadowPlaybackTileLimit = 1400;
 /**
  * Lowest tile zoom with terrain-cast shadows. Lower tiles cover too much ground for the
  * DEM march and shade flat ground for the Sun's elevation only.
@@ -36,20 +40,17 @@ export const terrainShadowTileRequestSchema = z
     highlightOpacity: z.number().min(0).max(1),
     goldenShadowColor: colorSchema,
     lowSunShadowColor: colorSchema,
-    lowSunShadowLift: z.number().min(0).max(1),
-    lowSunGlowOpacity: z.number().min(0).max(1),
     alpenglowColor: colorSchema,
     alpenglowOpacity: z.number().min(0).max(1),
     neutralBrightness: z.number().gt(0).lt(2),
     exposure: z.number().min(-2).max(2),
     shadowStrength: z.number().min(0).max(4),
     highlightRolloff: z.number().min(0.05).max(4),
-    sunlightTintStrength: z.number().min(0).max(1),
     /** `ShadeLighting`: shade-pass uniforms; part of the cached mask's key. */
     lighting: z
       .object({
-        // The lookup table divides by the share and by 2 minus it.
-        skyLightShare: z.number().gt(0).lt(1),
+        // Weights the independently stored direct and sky irradiance channels.
+        skyLightShare: z.number().min(0).max(1),
         skyOcclusionStrength: z.number().min(0).max(10),
         nightSkyLight: z.number().min(0).max(1),
         nightTopLight: z.number().min(0).max(10),

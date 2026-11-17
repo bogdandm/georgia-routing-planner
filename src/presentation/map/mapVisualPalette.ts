@@ -62,24 +62,20 @@ export const mapVisualPalette = {
     pass: '#29343A',
     scree: '#A39B91',
     /**
-     * Real-sun relief: the worker expands each shade pixel into shade (darker than flat
-     * ground in full sun) or `sunHighlight` at most `sunHighlightOpacity` (brighter),
-     * tinted by the sunlight color. Shade takes the color of the sky that lights it:
-     * blue-grey `sunShadow` by day and at night, lilac `sunGoldenShadow` with the Sun on
-     * the horizon, deep blue `sunLowShadow` mid civil twilight. As the Sun sinks, shade
-     * loses up to `sunLowShadowLift` of its opacity, and ground in direct sun gains a
-     * sunlight-colored glow of up to `sunLowGlowOpacity`. In early twilight open slopes
-     * glow rose (`sunAlpenglow`, at most `sunAlpenglowOpacity`). Colors are opaque
-     * `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
+     * Real-sun relief combines direct sunlight and sky irradiance in linear HDR before
+     * tone mapping. `sunHighlight` colors the direct source, with `sunHighlightOpacity`
+     * controlling its color contribution. Sky light shifts from blue-grey `sunShadow`
+     * by day and at night to lilac `sunGoldenShadow` near the horizon and deep blue
+     * `sunLowShadow` in civil twilight. `sunAlpenglow` shifts the twilight sky chromaticity
+     * by at most `sunAlpenglowOpacity`, without adding independent light. Colors are
+     * opaque `#RRGGBB`; `sunShadowOpacity` is the layer `raster-opacity`.
      */
     sunShadow: '#19355D',
-    sunShadowOpacity: 0.62,
+    sunShadowOpacity: 0.53,
     sunHighlight: '#FFF7E6',
-    sunHighlightOpacity: 0.8,
+    sunHighlightOpacity: 0.88,
     sunGoldenShadow: '#3B2867',
     sunLowShadow: '#2E3F7A',
-    sunLowShadowLift: 0.25,
-    sunLowGlowOpacity: 0.43,
     sunAlpenglow: '#F0A3B8',
     sunAlpenglowOpacity: 0.32,
     /**

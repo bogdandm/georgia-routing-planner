@@ -25,10 +25,15 @@ describe('TerrainLightingTuningPanel', () => {
     renderWithI18n(<TerrainLightingTuningPanel anchorEl={document.body} />);
 
     const opacity = screen.getByRole('slider', { name: 'sunShadowOpacity' });
+    // Step up: one step down (0.52) equals another default shown in the panel.
+    const steppedOpacity =
+      Math.round((defaultTerrainLightingTuning.sunShadowOpacity + 0.01) * 100) / 100;
     opacity.focus();
     await user.keyboard('{ArrowRight}');
-    expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(0.63);
-    expect(screen.getByText('0.63')).toBeInTheDocument();
+    expect(terrainLightingTuningStore.getState().values.sunShadowOpacity).toBe(
+      steppedOpacity,
+    );
+    expect(screen.getByText(steppedOpacity.toFixed(2))).toBeInTheDocument();
 
     for (const name of [
       'terrainShadeExposure',
@@ -38,10 +43,15 @@ describe('TerrainLightingTuningPanel', () => {
       screen.getByRole('slider', { name }).focus();
       await user.keyboard('{ArrowRight}');
     }
+    const stepped = (value: number) => Math.round((value + 0.05) * 100) / 100;
     expect(terrainLightingTuningStore.getState().values).toMatchObject({
-      terrainShadeExposure: 0.05,
-      terrainShadeShadowStrength: 2.05,
-      terrainShadeHighlightRolloff: 2.05,
+      terrainShadeExposure: stepped(defaultTerrainLightingTuning.terrainShadeExposure),
+      terrainShadeShadowStrength: stepped(
+        defaultTerrainLightingTuning.terrainShadeShadowStrength,
+      ),
+      terrainShadeHighlightRolloff: stepped(
+        defaultTerrainLightingTuning.terrainShadeHighlightRolloff,
+      ),
     });
 
     // GPU values carry a marker and land in the store once the keyboard step commits.
@@ -56,7 +66,7 @@ describe('TerrainLightingTuningPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Before' }));
     expect(terrainLightingTuningStore.getState()).toMatchObject({
       showDefaults: true,
-      values: { sunShadowOpacity: 0.63 },
+      values: { sunShadowOpacity: steppedOpacity },
     });
     await user.click(screen.getByRole('button', { name: 'After' }));
     expect(terrainLightingTuningStore.getState().showDefaults).toBe(false);

@@ -151,6 +151,8 @@ interface MarkersWorkspaceValue {
     date: string,
     triggerElement: HTMLElement,
   ) => void;
+  /** Marker whose floating forecast is open; its map card anchors the panel. */
+  readonly weatherPreviewMarkerId: string | null;
   /** Reloads every marker forecast. */
   readonly refreshWeather: () => void;
 }
@@ -794,6 +796,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
     weatherPreview === null
       ? undefined
       : weatherByMarkerId.get(weatherPreview.markerId);
+  const weatherPreviewMarkerId = weatherPreview?.markerId ?? null;
   const value = useMemo<MarkersWorkspaceValue>(
     () => ({
       markers,
@@ -814,6 +817,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
         setWeatherSettingsOpen(true);
       },
       openWeatherPreview,
+      weatherPreviewMarkerId,
       refreshWeather,
     }),
     [
@@ -829,6 +833,7 @@ export function MarkersWorkspaceProvider({ children }: PropsWithChildren) {
       weatherByMarkerId,
       weatherPreferences,
       weatherPreferencesReady,
+      weatherPreviewMarkerId,
       weatherWeekdays,
     ],
   );

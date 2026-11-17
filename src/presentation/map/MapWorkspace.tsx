@@ -75,7 +75,7 @@ import {
   type MapFitPadding,
   type MapLayerPreset,
   type MapPointInspection,
-  type MapViewportBounds,
+  type MapViewportSnapshot,
 } from '@/presentation/map/mapTypes';
 import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -205,13 +205,18 @@ type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
 function isNearSettledViewport(
   longitude: number,
   latitude: number,
-  bounds: MapViewportBounds,
+  viewport: MapViewportSnapshot,
 ): boolean {
+  const { bounds, center } = viewport;
+  // MapLibre reports bounds in the camera's unwrapped world, which can lie beyond ±180°,
+  // so the marker is compared as its world copy nearest the view center.
+  const nearestLongitude =
+    longitude + 360 * Math.round((center.longitude - longitude) / 360);
   const longitudeMargin = (bounds.east - bounds.west) / 2;
   const latitudeMargin = (bounds.north - bounds.south) / 2;
   return (
-    longitude >= bounds.west - longitudeMargin &&
-    longitude <= bounds.east + longitudeMargin &&
+    nearestLongitude >= bounds.west - longitudeMargin &&
+    nearestLongitude <= bounds.east + longitudeMargin &&
     latitude >= bounds.south - latitudeMargin &&
     latitude <= bounds.north + latitudeMargin
   );
@@ -515,17 +520,14 @@ export function MapWorkspace({
     (listener: () => void) => mapViewport.subscribe(listener),
     [mapViewport],
   );
-  const getMarkerWeatherCardBounds = useCallback(
-    () =>
-      markerWeatherCardsShown
-        ? (mapViewport.getViewportSnapshot()?.bounds ?? null)
-        : null,
+  const getMarkerWeatherCardViewport = useCallback(
+    () => (markerWeatherCardsShown ? mapViewport.getViewportSnapshot() : null),
     [mapViewport, markerWeatherCardsShown],
   );
-  const markerWeatherCardBounds = useSyncExternalStore(
+  const markerWeatherCardViewport = useSyncExternalStore(
     subscribeToSettledViewport,
-    getMarkerWeatherCardBounds,
-    getMarkerWeatherCardBounds,
+    getMarkerWeatherCardViewport,
+    getMarkerWeatherCardViewport,
   );
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
@@ -2204,13 +2206,19 @@ export function MapWorkspace({
             {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
             ) : null}
-            {markerWeatherCardBounds !== null && markersWorkspace !== null
+            {markerWeatherCardViewport !== null && markersWorkspace !== null
               ? markersWorkspace.markers.map((marker) => {
                   const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
                   if (weather?.status !== 'ready') return null;
                   const [longitude, latitude] = marker.coordinate;
+                  // An open forecast panel is anchored to its card, so that card stays.
                   if (
-                    !isNearSettledViewport(longitude, latitude, markerWeatherCardBounds)
+                    marker.id !== markersWorkspace.weatherPreviewMarkerId &&
+                    !isNearSettledViewport(
+                      longitude,
+                      latitude,
+                      markerWeatherCardViewport,
+                    )
                   ) {
                     return null;
                   }

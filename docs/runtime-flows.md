@@ -232,13 +232,13 @@ sequenceDiagram
   participant Worker as terrain-shadow worker
   participant DEM as Mapterhorn DEM
   Map->>Provider: terrain-shadow://<epochMinute>/{z}/{x}/{y}
-  Provider->>Provider: wait until the camera settles
   Provider->>Worker: renderTile (tile, instant, DEM URL, shade colors)
   alt mask cached for tile and minute
     Worker-->>Provider: ImageBitmap colored from the mask
   else
     Worker->>DEM: 3×3 mosaics at z, z−2, z−4 (cached tiles skipped)
-    Worker->>Worker: WebGL2 visibility and shade passes, fence wait, mask readback
+    Worker->>Worker: wait until the camera settles, then the single GPU queue
+    Worker->>Worker: WebGL2 visibility and shade passes, readback copy, fence wait
     Worker-->>Provider: ImageBitmap colored from the mask (transferred)
   end
   Provider-->>Map: raster tile data
@@ -283,11 +283,14 @@ The Sun disk (`presentation/map/sunDiskOverlay.ts`) is one `pointer-events: none
 element right above the map canvas, created by the layer controller for each attached
 map and fed the same Sun as the sky. On every `move` it projects the Sun's direction
 with MapLibre's camera rotation, field of view, and padded center. At most every 100 ms,
-and on `moveend`, `terrain`, and a new Sun, it marches the skyline in seven screen
-columns across the halo over the DEM tiles MapLibre currently draws (its terrain
+and on `moveend`, `terrain`, and a new Sun direction, it marches the skyline in seven
+screen columns across the halo over the DEM tiles MapLibre currently draws (its terrain
 coverage index, flat mercator terrain without curvature, clipped at the far plane) and
 clips the element with a polygon along that skyline; the halo fades by the visible disk
-fraction. It hides without 3D terrain and below −1° apparent elevation.
+fraction. A new Sun color alone, which the sky sends on every rotation frame as the
+center's terrain height shifts, only repaints, and a Sun hidden by terrain keeps the 100
+ms march interval, so turning the camera marches at most ten times a second. It hides
+without 3D terrain and below −1° apparent elevation.
 
 On the first reconciliation with a map, the session instant moves to three hours after
 sunrise of today at the map center (`sessionStartInstant`; 11:00 on a day without
@@ -301,66 +304,74 @@ the module worker on the first tile request. A newly encountered camera tile fir
 for `renderDraft`: a cached mask is final; otherwise flat sea-level shade is returned
 without DEM fetches or GPU setup, even during a drag. After its first map render, the
 controller calls `refreshTiles` for that canonical tile. MapLibre retains the draft
-while the full request waits for the interaction gate and the DEM/GPU calculation. A
+while the full request downloads its DEM and the worker holds it before the GPU queue
+until the camera settles: the provider forwards `setInteractionActive` to the worker
+(`terrain-shadow.set-interaction`, ordered with tile requests and sent to a worker
+created mid-move), so DEM downloads and cached masks never wait for a move to end. A
 bounded 1024-coordinate history prevents another draft on refresh or a minute
 replacement. It also suppresses drafts wherever an already computed parent or child
 relief tile overlaps: zoom changes retain MapLibre's existing detail transition, never
 replacing relief with a flat preview. Play and GIF URLs carry `quality=full`, so even
-cache misses never show draft frames. Aborted requests leave the gate or cancel their
-worker job. The worker answers with an `ImageBitmap`, which MapLibre accepts directly,
-so no image is encoded.
+cache misses never show draft frames. Aborted requests cancel their worker job. The
+worker answers with an `ImageBitmap`, which MapLibre accepts directly, so no image is
+encoded.
 
 For an output tile at zoom z, the worker builds 3×3 DEM mosaics at z, z−2, and z−4
 (clamped to the DEM zoom range) around the tile, so occluders up to the 100 km cap are
-covered at z12; consecutive instants of the same tile reuse the assembled mosaics. Each
-horizon sample reads the finest mosaic that contains it, and a GPU reduction of each
-level's maximum elevation ends the march early once nothing ahead can rise above the
-Sun. The visibility pass computes, per pixel of the tile plus a 2 px margin, the Sun's
-azimuth and refracted elevation, marches along the great circle toward the Sun with
-Earth curvature and terrestrial refraction, and stores the visible fraction of the solar
-disk. The horizon is never taken below the pixel's sea-level horizon (the tangent to a
-sea-level sphere under the same curvature model, about 2.1° below a 5000 m summit), so
-summits keep the last light while the Sun is already below their level and the sea
-beyond the 100 km march cap still hides it. The shade pass blurs that fraction with a
-5×5 Gaussian (configured soft-edge σ, truncated at the 2 px margin) and multiplies it by
-Lambert lighting from finest-mosaic central differences, normalized so flat ground in
-full sun (or at 10° elevation for lower suns) is 1. The slope term reaches zero exactly
-where the march begins to report self-shadow, so terminators stay continuous. The
-configured sky-light share separates that direct light from sky illumination, which
-keeps relief inside shadows: a softly wrapped Lambert light from the Sun's azimuth at
-30° elevation while the Sun is up, turning into a configurable diffuse fraction
-proportional to the visible sky (as from thin cloud that keeps scattering light after
-sunset) as the Sun crosses ±2° around the horizon, both on 1.5× exaggerated slopes. Both
-are scaled by the terrain's occlusion of that sky: a sky-view pass, run once per tile
-and reused for every instant and lighting, marches 16 azimuths up to 20 km (steps
-growing by 8% of the distance) from every fourth output pixel into a 128 × 128 R8
-texture holding the mean cos²(max(h, 0)) of the highest 1.5×-exaggerated terrain angle
-h; the shade pass samples it bilinearly and divides it by the visible sky of the slope's
-own plane, ½(1 + n_z), capped at 1, so a slope's own tilt is not counted twice and only
-terrain beyond it darkens gorges; the missing share is amplified by
-`skyOcclusionStrength`, so gorges read clearly. The twilight sky term eases out
-(smoothstep) between the horizon and the night elevation, the end of civil twilight
-(−6°), and hands over to an occluded diffuse night sky. A separately configured night
-top light adds directly to the brightness, outside the sky share, so it never changes
-daylight shading: the zenith Lambert term of the exaggerated slope times the sky
-occlusion raised to a focus exponent, so open crests keep it and valleys lose it; it
-fades in from −3° to the night elevation and stays constant below. The night overhead
-light belongs to the sky source, so it cannot acquire direct-sun color from brightness
-alone. Night output no longer depends on the Sun, so a tile whose every pixel is past
-the night elevation is cached under one `night` key instead of its minute, and night
-playback frames reuse that single mask. The shade-pass lighting (sky-light share,
-occlusion strength, night sky and top light, diffuse sky light, soft-edge σ) is a set of
-uniforms carried by each request (`ShadeLighting`), not compiled into the shader. The
-same pass writes a sunlight code: the logarithm of the relative optical air mass of the
-direct-sun path (Kasten–Young, scaled by the pressure at the pixel's height, or through
-the tangent height when the Sun is below the pixel's level), or, once the Sun is below
-the sea-level horizon, how far twilight has faded toward the night elevation.
+covered at z12. Each level remembers the DEM tiles it holds, so consecutive instants of
+a tile, and neighbors sharing a coarse ancestor, reuse it; when both of a tile's
+geometry textures are cached, only the finest level is assembled, without any maximum
+reduction, because the shade pass reads nothing else. Each horizon sample reads the
+finest mosaic that contains it, and a GPU reduction of each level's maximum elevation
+ends the march early once nothing ahead can rise above the Sun. The visibility pass
+computes, per pixel of the tile plus a 2 px margin, the Sun's azimuth and refracted
+elevation, marches along the great circle toward the Sun with Earth curvature and
+terrestrial refraction, and stores the visible fraction of the solar disk. The horizon
+is never taken below the pixel's sea-level horizon (the tangent to a sea-level sphere
+under the same curvature model, about 2.1° below a 5000 m summit), so summits keep the
+last light while the Sun is already below their level and the sea beyond the 100 km
+march cap still hides it. The shade pass blurs that fraction with a 5×5 Gaussian
+(configured soft-edge σ, truncated at the 2 px margin) and multiplies it by Lambert
+lighting from finest-mosaic central differences, normalized so flat ground in full sun
+(or at 10° elevation for lower suns) is 1. The slope term reaches zero exactly where the
+march begins to report self-shadow, so terminators stay continuous. The configured
+sky-light share separates that direct light from sky illumination, which keeps relief
+inside shadows: a softly wrapped Lambert light from the Sun's azimuth at 30° elevation
+while the Sun is up, turning into a configurable diffuse fraction proportional to the
+visible sky (as from thin cloud that keeps scattering light after sunset) as the Sun
+crosses ±2° around the horizon, both on 1.5× exaggerated slopes. Both are scaled by the
+terrain's occlusion of that sky: a sky-view pass, run once per tile and reused for every
+instant and lighting, marches 16 azimuths up to 20 km (steps growing by 8% of the
+distance) from every fourth output pixel into a 128 × 128 R8 texture holding the mean
+cos²(max(h, 0)) of the highest 1.5×-exaggerated terrain angle h; the shade pass samples
+it bilinearly and divides it by the visible sky of the slope's own plane, ½(1 + n_z),
+capped at 1, so a slope's own tilt is not counted twice and only terrain beyond it
+darkens gorges; the missing share is amplified by `skyOcclusionStrength`, so gorges read
+clearly. The twilight sky term eases out (smoothstep) between the horizon and the night
+elevation, the end of civil twilight (−6°), and hands over to an occluded diffuse night
+sky. A separately configured night top light adds directly to the brightness, outside
+the sky share, so it never changes daylight shading: the zenith Lambert term of the
+exaggerated slope times the sky occlusion raised to a focus exponent, so open crests
+keep it and valleys lose it; it fades in from −3° to the night elevation and stays
+constant below. The night overhead light belongs to the sky source, so it cannot acquire
+direct-sun color from brightness alone. Night output no longer depends on the Sun, so a
+tile whose every pixel is past the night elevation is cached under one `night` key
+instead of its minute, and night playback frames reuse that single mask. The shade-pass
+lighting (sky-light share, occlusion strength, night sky and top light, diffuse sky
+light, soft-edge σ) is a set of uniforms carried by each request (`ShadeLighting`), not
+compiled into the shader. The same pass writes a sunlight code: the logarithm of the
+relative optical air mass of the direct-sun path (Kasten–Young, scaled by the pressure
+at the pixel's height, or through the tangent height when the Sun is below the pixel's
+level), or, once the Sun is below the sea-level horizon, how far twilight has faded
+toward the night elevation.
 
 The shade target is RGBA32F: weighted direct energy, weighted sky energy (including
-night overhead), sunlight code, and 1. The worker reads FLOAT pixels into two float32
-energy planes plus a 128 × 128 byte grid of sunlight codes. Neither source is clipped,
-compressed, tone mapped, nor converted to 0–255 colors. The CPU flat-ground path
-produces the same separated representation, interpolating each energy independently.
+night overhead), sunlight code, and 1. Right after the shade pass the worker copies it
+into a pixel-pack buffer on the GPU, so the fence also covers that copy; after the fence
+it reads FLOAT pixels into two float32 energy planes plus a 128 × 128 byte grid of
+sunlight codes. Neither source is clipped, compressed, tone mapped, nor converted to
+0–255 colors. The CPU flat-ground path produces the same separated representation,
+interpolating each energy independently.
 
 `createShadeColorizer` precomputes six linear source-color coefficients for each of 256
 sunlight codes, not a table indexed by total brightness. Direct sunlight uses
@@ -402,16 +413,19 @@ would require a different MapLibre render-target composition path.
 The source defaults belong to `terrainShadowShaders.ts`, `mapVisualPalette.ts`, and
 `terrainOverlayStyle.ts`; `terrainLightingTuning.ts` exposes those owners' values. GPU
 jobs run one at a time and wait on a fence before the next starts, so at most one tile
-of shadow work competes with map frames.
+of shadow work competes with map frames. A finished job's caller resumes only after the
+next queued job has issued its GPU passes, so coloring one tile on the CPU overlaps the
+GPU work of the next. Concurrent requests for the same mask share one computation, which
+keeps running while any of them waits; the others count as cache hits.
 
 Geometry and lighting are cached apart. Per tile the worker keeps up to 48 sky-view
 textures (keyed by the DEM mosaic) and 48 cast-shadow visibility textures (keyed by the
 mosaic and minute, or `night`) on the GPU, about 13 MiB, so a new shade-pass lighting
-for the tiles in view only reassembles mosaics from cached DEM tiles and reruns the
-shade pass. Shade masks are keyed by DEM, tile, minute, and the shade-pass lighting, so
-masks of several lightings coexist; source colors, alpenglow, the neutral, fixed
-exposure, shadow strength, and highlight rolloff only select another colorizer over the
-same masks. The last four colorizers are retained.
+for the tiles in view only reassembles the finest mosaic from cached DEM tiles and
+reruns the shade pass. Shade masks are keyed by DEM, tile, minute, and the shade-pass
+lighting, so masks of several lightings coexist; source colors, alpenglow, the neutral,
+fixed exposure, shadow strength, and highlight rolloff only select another colorizer
+over the same masks. The last four colorizers are retained.
 
 The temporary **Lighting tuning** panel (`presentation/map/terrainLightingTuning.ts` and
 `TerrainLightingTuningPanel.tsx`) owns a Zustand store of tuned values, mirrored to
@@ -429,21 +443,25 @@ defaults.
 DEM tiles are fetched with the same URLs and request mode as the `terrain-dem` source,
 so they reuse the HTTP cache. A 404 tile counts as sea level; any other HTTP, network,
 or decode failure fails the shadow tile instead of drawing a truncated horizon. The
-worker keeps about 64 decoded DEM tiles (R32F textures, pinned while a tile uses them)
-and up to `terrainShadowMaskCacheLimit` shade masks keyed as above in an LRU cache that
-is also capped by a compressed-byte budget in `TerrainShadowRenderer.ts`
-(`terrainShadowMaskCodec.ts`). Each mask stores its two source energies as binary16 byte
-planes plus the sunlight grid, compressed with DEFLATE. Tiles shown interactively keep
-every binary16 bit. Day playback prefetches round away three more mantissa bits, staying
-below one 8-bit display step over most of the range, because per-pixel DEM normal noise
-keeps full binary16 poorly compressible; `terrainShadowPlaybackTileLimit` is sized so
-worst measured playback masks fit the byte budget. A cached mask of either precision is
-reused as is, so playback frames are shown without recomputation. A night tile (its four
-corners see the Sun more than 1° below the night elevation, −6°, also below the
-sea-level horizon of Everest's summit, about −3.1°) whose request carries neither
-night-sky nor night top light is answered with a shared full-shade night mask without
-DEM fetches, GPU work, or a cache entry. A lost WebGL context drops every cache, and the
-next request creates a fresh context.
+worker keeps 128 decoded DEM tiles (R32F textures, 1 MiB each, pinned while a tile uses
+them; one 1600 × 1000 px mountain view at 60° pitch reads about 100–110) and up to
+`terrainShadowMaskCacheLimit` shade masks keyed as above in an LRU cache that is also
+capped by a byte budget in `TerrainShadowRenderer.ts` (`terrainShadowMaskCodec.ts`). A
+new mask stays uncompressed while tiles are being computed or colored and is compressed
+one per event-loop turn once the renderer is idle, so DEFLATE never delays a tile;
+beyond 32 uncompressed masks (sustained work such as a day playback prefetch) the oldest
+is compressed at once. Each compressed mask stores its two source energies as binary16
+byte planes plus the sunlight grid, compressed with DEFLATE. Tiles shown interactively
+keep every binary16 bit. Day playback prefetches round away three more mantissa bits,
+staying below one 8-bit display step over most of the range, because per-pixel DEM
+normal noise keeps full binary16 poorly compressible; `terrainShadowPlaybackTileLimit`
+is sized so worst measured playback masks fit the byte budget. A cached mask of either
+precision is reused as is, so playback frames are shown without recomputation. A night
+tile (its four corners see the Sun more than 1° below the night elevation, −6°, also
+below the sea-level horizon of Everest's summit, about −3.1°) whose request carries
+neither night-sky nor night top light is answered with a shared full-shade night mask
+without DEM fetches, GPU work, or a cache entry. A lost WebGL context drops every cache,
+and the next request creates a fresh context.
 
 Tiles below z7 (`terrainShadowReliefMinZoom`) skip the DEM, the GPU, and every cache:
 `createFlatShadeMask` evaluates the shade pass's terms for flat sea-level ground (the
@@ -476,10 +494,10 @@ playback is refused as `too-many-tiles` and logged as `map.sun-shadow.playback-r
 with both counts. Otherwise the provider's `prefetch` sends
 `terrain-shadow.prefetch-tile` requests in playback order in blocks of six frames,
 tile-major inside a block and with the tile order reversed every other block, at most
-four at a time and past the interaction gate. The worker renders each mask into its
-cache and answers with metrics only; a block's consecutive instants of a tile reuse the
-assembled mosaics, and the reversal starts each block with the tiles whose DEM tiles are
-still cached. Progress, including the count of leading frames whose tiles are all
+four at a time and never held during a camera move. The worker renders each mask into
+its cache and answers with metrics only; a block's consecutive instants of a tile reuse
+the assembled mosaics, and the reversal starts each block with the tiles whose DEM tiles
+are still cached. Progress, including the count of leading frames whose tiles are all
 cached, is published to `mapLayerStore.sunShadow.playback` in whole percents. The rate
 per lit frame is measured from the end of the first block on, because that block also
 waited for DEM downloads and its frames become ready only with its last tile. Whenever

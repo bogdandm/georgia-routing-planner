@@ -126,7 +126,7 @@ artifacts; merged validation output stays under `node_modules/.tmp/locales`, and
 | Settled viewport for search controls                              | `MapViewportSnapshotStore`                                      |
 | Direct visual-COG scene registry and raster worker                | `SatelliteCogTileProvider` / `SatelliteCogRasterizer`           |
 | Contour DEM fetch, parse, contour caches, worker fallback         | `TerrainComputeEngine` / `TerrainComputeBackend`                |
-| Sun-shadow protocol, worker lifecycle, interaction gate, support  | `MapLibreTerrainShadowTileProvider`                             |
+| Sun-shadow protocol, worker lifecycle, camera-move forwarding     | `MapLibreTerrainShadowTileProvider`                             |
 | Temporary sun-shadow lighting tuning values and Before/After      | Zustand `terrainLightingTuningStore` mirrored to `localStorage` |
 | Tracks, folders, markers, camera, layer and UI preferences        | `AppDatabase` behind the application ports                      |
 | Loaded folders, previews, route plan, selection, multi-view       | `TracksWorkspaceProvider` React state                           |

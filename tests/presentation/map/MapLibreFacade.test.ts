@@ -3004,8 +3004,8 @@ describe('MapLibreFacade', () => {
 
       await expect(run).rejects.toThrow('The benchmark stopped.');
       expect(setSunShadow.mock.calls).toEqual([
-        [{ enabled: true, instantMs: benchmarkInstantMs }],
-        [{ enabled: false, instantMs: previousInstantMs }],
+        [{ enabled: true, instantMs: benchmarkInstantMs, keepNotice: true }],
+        [{ enabled: false, instantMs: previousInstantMs, keepNotice: true }],
       ]);
       facade.destroy();
     });
@@ -3056,8 +3056,8 @@ describe('MapLibreFacade', () => {
       ).rejects.toThrow('No WebGL.');
       expect(vi.mocked(runRenderBenchmark).mock.calls[0]?.[3]).toBeNull();
       expect(setSunShadow.mock.calls).toEqual([
-        [{ enabled: false, instantMs: previousInstantMs }],
-        [{ enabled: true, instantMs: previousInstantMs }],
+        [{ enabled: false, instantMs: previousInstantMs, keepNotice: true }],
+        [{ enabled: true, instantMs: previousInstantMs, keepNotice: true }],
       ]);
       facade.destroy();
     });

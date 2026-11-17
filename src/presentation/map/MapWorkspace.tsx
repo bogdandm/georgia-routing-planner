@@ -1865,9 +1865,10 @@ export function MapWorkspace({
             mapLayers.stopSunShadowPlayback();
           },
           peek: sunShadowPeek,
+          // Even with relief hidden, so every upgraded browser sees it on its first open.
           noticeOpen:
             sunShadow.noticePending &&
-            sunShadowShown &&
+            sunShadow.enabled &&
             sunShadow.availability !== 'unavailable',
           onNoticeDismiss: () => {
             mapLayers.dismissSunShadowNotice();

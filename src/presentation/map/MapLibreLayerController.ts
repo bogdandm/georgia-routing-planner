@@ -1381,8 +1381,9 @@ export class MapLibreLayerController {
   /**
    * Chooses sun shadows or the hillshade for relief shading and the shadow instant,
    * quantized to whole minutes. Choosing shadows also shows hidden relief shading, unless
-   * the weather map hides terrain, and changing the style answers the sun-shadow notice.
-   * Only the style persists; an unchanged choice and minute
+   * the weather map hides terrain, and changing the style answers the sun-shadow notice
+   * unless `keepNotice` marks a temporary benchmark change. Only the style persists; an
+   * unchanged choice and minute
    * leaves the map untouched. Every call stops day playback first, so user changes always
    * win over the animation. While the previous minute still loads, a new one waits and
    * only the latest is drawn, unless `drawEveryStep` asks MapLibre to render every minute
@@ -1392,6 +1393,7 @@ export class MapLibreLayerController {
     readonly enabled: boolean;
     readonly instantMs: number;
     readonly drawEveryStep?: boolean;
+    readonly keepNotice?: boolean;
   }): void {
     this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
@@ -1403,7 +1405,8 @@ export class MapLibreLayerController {
     if (!enabledChanged && this.#sunShadowInstantMs === instantMs) return;
     this.#sunShadowDrawEveryStep = value.drawEveryStep === true;
     this.#sunShadowEnabled = value.enabled;
-    if (enabledChanged) this.#sunShadowNoticePending = false;
+    if (enabledChanged && value.keepNotice !== true)
+      this.#sunShadowNoticePending = false;
     // A chosen instant replaces the session start time; toggling the switch keeps it.
     if (instantMs !== this.#sunShadowInstantMs) {
       this.#sunShadowInstantIsSessionStart = false;
@@ -4135,6 +4138,9 @@ export class MapLibreLayerController {
         );
       }
       if (!wanted) {
+        // Hidden relief or weather ends playback and recording, which need drawn shadows;
+        // a finished playback keeps its note.
+        if (this.#sunShadowPlaybackAbort !== null) this.stopSunShadowPlayback();
         setReliefHidden(false);
         if (map.getLayer(terrainOverlayLayerIds.sunShadow) !== undefined) {
           map.removeLayer(terrainOverlayLayerIds.sunShadow);

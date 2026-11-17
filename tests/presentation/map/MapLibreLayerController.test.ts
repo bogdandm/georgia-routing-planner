@@ -3121,7 +3121,7 @@ describe('MapLibreLayerController', () => {
 
     function startPlayback(tileIds = [{ z: 12, x: 2541, y: 1514 }]) {
       vi.useFakeTimers();
-      const { controller, shadows } = createSunShadowController();
+      const { controller, shadows, services } = createSunShadowController();
       const map = new FakeLayerMap();
       map.coveringTileIds = tileIds;
       controller.attach(map as unknown as MapLibreMap);
@@ -3143,7 +3143,7 @@ describe('MapLibreLayerController', () => {
           frame <= window.sunsetMs + 45 * 60_000,
       );
       controller.playSunShadowDay();
-      return { controller, shadows, map, frames, playbackFrames, litFrames };
+      return { controller, shadows, services, map, frames, playbackFrames, litFrames };
     }
 
     it('precomputes deduplicated tiles for every daylight frame, then plays them', async () => {
@@ -3359,6 +3359,22 @@ describe('MapLibreLayerController', () => {
         instantMs: shown,
         playback: { status: 'failed' },
       });
+      controller.dispose();
+    });
+
+    it('stops playing when relief shading is hidden', async () => {
+      const { controller, shadows, services } = startPlayback();
+      const prefetch = shadows.prefetchCalls[0];
+      // fake-indexeddb cannot finish a write under fake timers.
+      vi.spyOn(services.database, 'saveMapLayerPreferences').mockResolvedValue(
+        undefined,
+      );
+
+      controller.setLayerVisibility('terrain-relief', false);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(prefetch?.signal.aborted).toBe(true);
+      expect(mapLayerStore.getState().sunShadow.playback).toEqual({ status: 'idle' });
       controller.dispose();
     });
 

@@ -937,7 +937,11 @@ export class MapLibreFacade implements MapFacade {
         ? null
         : {
             setInstant: (instantMs) => {
-              sunShadowControl.setSunShadow({ enabled: true, instantMs });
+              sunShadowControl.setSunShadow({
+                enabled: true,
+                instantMs,
+                keepNotice: true,
+              });
             },
             metrics: () => sunShadowControl.getSunShadowMetrics(),
             resetMetrics: () => {
@@ -954,6 +958,7 @@ export class MapLibreFacade implements MapFacade {
         sunShadowControl?.setSunShadow({
           enabled: false,
           instantMs: previousSunShadow.instantMs,
+          keepNotice: true,
         });
       }
       if (previousMode !== 'terrain') {
@@ -970,6 +975,7 @@ export class MapLibreFacade implements MapFacade {
       sunShadowControl?.setSunShadow({
         enabled: previousSunShadow.enabled,
         instantMs: previousSunShadow.instantMs,
+        keepNotice: true,
       });
       if (
         !previousReliefVisible &&

@@ -24,6 +24,7 @@ import {
   type ShadeColorizer,
   type ShadeMask,
   type ShadePalette,
+  shadeMaskBytes,
   sunlightGridSize,
   sunlightGridStride,
   sunlightNightCode,
@@ -54,6 +55,11 @@ import {
 const maximumCachedDemTiles = 128;
 /** Preserve the previous approximate mask-memory ceiling independently of frame count. */
 const maximumCachedMaskBytes = 816 * 1024 * 1024;
+/**
+ * New masks kept uncompressed (2 MiB each) until the renderer is idle: more than one
+ * view's tiles, so DEFLATE never delays a view, while sustained work stays bounded.
+ */
+const maximumUncompressedMasks = 32;
 /**
  * Cast-shadow visibility (per tile and minute) and sky view (per tile) textures kept on
  * the GPU, so new shade-pass lighting redraws only the shade pass of the tiles in view:
@@ -249,6 +255,14 @@ interface ShadeMaskResult {
   /** GPU pass times of a freshly computed mask; they become readable a little later. */
   readonly gpuStages: Promise<StageTimings> | null;
 }
+
+/**
+ * A cached shade mask: as computed until the renderer compresses it while idle, then as
+ * `compressShadeMask` bytes.
+ */
+type CachedMask =
+  | { readonly mask: ShadeMask; readonly precision: ShadeMaskPrecision }
+  | { readonly compressed: Uint8Array };
 
 /** Decoded DEM tile; `texture === null` is a 404 tile treated as sea level 0 m. */
 interface DemTileEntry {
@@ -901,8 +915,13 @@ export class TerrainShadowRenderer {
   readonly #demTiles = new Map<string, DemTileEntry>();
   readonly #demPins = new Map<string, number>();
   readonly #inflightDem = new Map<string, InflightDemFetch>();
-  readonly #masks = new Map<string, Uint8Array>();
+  readonly #masks = new Map<string, CachedMask>();
   #cachedMaskBytes = 0;
+  /** Keys of uncompressed `#masks` entries, oldest first. */
+  readonly #uncompressedMasks = new Set<string>();
+  #compressionScheduled = false;
+  /** `render` and `prefetch` calls still computing or coloring a mask. */
+  #activeTiles = 0;
   /** Sky view per mosaic key: it depends on the DEM around the tile only. */
   readonly #skyViews = new Map<string, WebGLTexture>();
   /** Visibility per mosaic key and minute (or `night`): the DEM and the Sun only. */
@@ -918,7 +937,15 @@ export class TerrainShadowRenderer {
     request: TerrainShadowTileRequest,
     signal: AbortSignal,
   ): Promise<TerrainShadowTileResult> {
-    return this.colorize(request, await this.ensureMask(request, signal, 'full'));
+    this.#activeTiles += 1;
+    try {
+      return await this.colorize(
+        request,
+        await this.ensureMask(request, signal, 'full'),
+      );
+    } finally {
+      this.endActiveTile();
+    }
   }
 
   /**
@@ -963,8 +990,13 @@ export class TerrainShadowRenderer {
         stages: {},
       });
     }
-    const { metrics, gpuStages } = await this.ensureMask(request, signal, 'playback');
-    return { ...metrics, stages: { ...metrics.stages, ...(await gpuStages) } };
+    this.#activeTiles += 1;
+    try {
+      const { metrics, gpuStages } = await this.ensureMask(request, signal, 'playback');
+      return { ...metrics, stages: { ...metrics.stages, ...(await gpuStages) } };
+    } finally {
+      this.endActiveTile();
+    }
   }
 
   private async colorize(
@@ -1082,8 +1114,10 @@ export class TerrainShadowRenderer {
     const maskKey = terrainShadowMaskKey(request, night);
     const cached = this.cachedMask(maskKey);
     if (cached === undefined) return null;
+    if ('mask' in cached)
+      return { mask: cached.mask, metrics: hitMetrics(0), gpuStages: null };
     const startedAt = performance.now();
-    const mask = expandCompressedShadeMask(cached);
+    const mask = expandCompressedShadeMask(cached.compressed);
     return {
       mask,
       metrics: hitMetrics(performance.now() - startedAt),
@@ -1246,6 +1280,7 @@ export class TerrainShadowRenderer {
     this.#inflightDem.clear();
     this.#demTiles.clear();
     this.#masks.clear();
+    this.#uncompressedMasks.clear();
     this.#cachedMaskBytes = 0;
     this.#shadeColorizers.clear();
     // The textures died with the context.
@@ -1354,8 +1389,8 @@ export class TerrainShadowRenderer {
     return entry.texture;
   }
 
-  /** Refreshes an existing compact mask without decoding or recompressing it. */
-  private cachedMask(key: string): Uint8Array | undefined {
+  /** Refreshes an existing mask without decoding or recompressing it. */
+  private cachedMask(key: string): CachedMask | undefined {
     const cached = this.#masks.get(key);
     if (cached !== undefined) {
       this.#masks.delete(key);
@@ -1365,15 +1400,22 @@ export class TerrainShadowRenderer {
   }
 
   /**
-   * Stores binary16 source energies and evicts LRU entries by count and actual bytes.
-   * The first stored mask of a key wins: a render and a playback prefetch can miss the
-   * same key concurrently, and a later `playback` mask must not downgrade a `full` one.
+   * Caches a new mask uncompressed, for `compressMask` to turn into binary16 source
+   * energies later, and evicts LRU entries by count and actual bytes. The first stored
+   * mask of a key wins: a render and a playback prefetch can miss the same key
+   * concurrently, and a later `playback` mask must not downgrade a `full` one.
    */
   private storeMask(key: string, mask: ShadeMask, precision: ShadeMaskPrecision): void {
     if (this.cachedMask(key) !== undefined) return;
-    const compressed = compressShadeMask(mask, precision);
-    this.#masks.set(key, compressed);
-    this.#cachedMaskBytes += compressed.byteLength;
+    this.#masks.set(key, { mask, precision });
+    this.#uncompressedMasks.add(key);
+    this.#cachedMaskBytes += shadeMaskBytes;
+    // Under sustained load, such as a day playback prefetch, the idle moment never
+    // comes, so the oldest uncompressed masks are compressed right away instead.
+    for (const oldestKey of this.#uncompressedMasks) {
+      if (this.#uncompressedMasks.size <= maximumUncompressedMasks) break;
+      this.compressMask(oldestKey);
+    }
     for (const [oldestKey, oldest] of this.#masks) {
       if (
         this.#masks.size <= terrainShadowMaskCacheLimit &&
@@ -1381,8 +1423,42 @@ export class TerrainShadowRenderer {
       )
         break;
       this.#masks.delete(oldestKey);
-      this.#cachedMaskBytes -= oldest.byteLength;
+      this.#uncompressedMasks.delete(oldestKey);
+      this.#cachedMaskBytes -=
+        'compressed' in oldest ? oldest.compressed.byteLength : shadeMaskBytes;
     }
+  }
+
+  /** Replaces an uncompressed mask by its DEFLATE form in place, keeping its LRU slot. */
+  private compressMask(key: string): void {
+    this.#uncompressedMasks.delete(key);
+    const cached = this.#masks.get(key);
+    if (cached === undefined || !('mask' in cached)) return;
+    const compressed = compressShadeMask(cached.mask, cached.precision);
+    this.#masks.set(key, { compressed });
+    this.#cachedMaskBytes += compressed.byteLength - shadeMaskBytes;
+  }
+
+  private endActiveTile(): void {
+    this.#activeTiles -= 1;
+    if (this.#activeTiles === 0) this.scheduleMaskCompression();
+  }
+
+  /**
+   * Compresses the uncompressed masks one per event-loop turn while no tile is being
+   * computed or colored, so DEFLATE never delays a tile the map waits for.
+   */
+  private scheduleMaskCompression(): void {
+    if (this.#compressionScheduled || this.#uncompressedMasks.size === 0) return;
+    this.#compressionScheduled = true;
+    setTimeout(() => {
+      this.#compressionScheduled = false;
+      // A tile started meanwhile: `endActiveTile` schedules the rest once it ends.
+      if (this.#activeTiles > 0) return;
+      const [oldestKey] = this.#uncompressedMasks;
+      if (oldestKey !== undefined) this.compressMask(oldestKey);
+      this.scheduleMaskCompression();
+    }, 0);
   }
 
   /**

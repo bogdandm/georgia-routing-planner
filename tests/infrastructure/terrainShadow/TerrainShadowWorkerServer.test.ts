@@ -123,6 +123,7 @@ describe('TerrainShadowWorkerServer', () => {
       memoryBytes: 1_048_576,
       cachedMasks: 1,
       cachedDemTiles: 27,
+      stages: {},
     };
     const prefetch = vi.fn(() => Promise.resolve(metrics));
     const server = new TerrainShadowWorkerServer(serverEndpoint, {

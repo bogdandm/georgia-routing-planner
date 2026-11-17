@@ -12,7 +12,9 @@ import {
   isTerrainShadowTileResult,
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
+  type TerrainShadowTileStage,
   terrainShadowReliefMinZoom,
+  terrainShadowTileStages,
   terrainShadowUnavailableErrorCode,
 } from '@/infrastructure/terrainShadow/TerrainShadowProtocol';
 import { terrainShadowWorkerMethods } from '@/infrastructure/terrainShadow/TerrainShadowWorkerServer';
@@ -29,6 +31,19 @@ import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 
 export type TerrainShadowAvailability = 'unknown' | 'available' | 'unavailable';
 
+/**
+ * Worker stages plus `interactionGate`, the main-thread wait of a full tile request for
+ * the end of a camera move.
+ */
+export type TerrainShadowMetricsStage = TerrainShadowTileStage | 'interactionGate';
+
+export interface TerrainShadowStageSummary {
+  /** Tiles that passed the stage. */
+  readonly count: number;
+  readonly totalMs: number;
+  readonly maxMs: number;
+}
+
 export interface TerrainShadowMetricsSnapshot {
   /** Tiles computed on the GPU (worker cache misses). */
   readonly tilesRendered: number;
@@ -42,6 +57,10 @@ export interface TerrainShadowMetricsSnapshot {
   readonly demTilesFetched: number;
   /** Latest worker memory estimate (GPU textures plus cached shade masks); kept across `resetMetrics`. */
   readonly memoryBytes: number;
+  /** Answered tiles' stage times; see `terrainShadowTileStages`. */
+  readonly stages: Readonly<
+    Partial<Record<TerrainShadowMetricsStage, TerrainShadowStageSummary>>
+  >;
 }
 
 export interface TerrainShadowTileAddress {
@@ -127,8 +146,15 @@ interface GateWaiter {
 /** Accumulated counters; `pendingTiles` is live state added by `getMetrics`. */
 type MutableMetrics = {
   -readonly [
-    Key in Exclude<keyof TerrainShadowMetricsSnapshot, 'pendingTiles'>
+    Key in Exclude<keyof TerrainShadowMetricsSnapshot, 'pendingTiles' | 'stages'>
   ]: TerrainShadowMetricsSnapshot[Key];
+} & {
+  stages: Partial<
+    Record<
+      TerrainShadowMetricsStage,
+      { -readonly [Key in keyof TerrainShadowStageSummary]: number }
+    >
+  >;
 };
 
 const millisecondsPerMinute = 60_000;
@@ -211,6 +237,7 @@ function emptyMetrics(memoryBytes: number): MutableMetrics {
     totalDemFetchMs: 0,
     demTilesFetched: 0,
     memoryBytes,
+    stages: {},
   };
 }
 
@@ -319,7 +346,11 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
   }
 
   public getMetrics(): TerrainShadowMetricsSnapshot {
-    return { ...this.#metrics, pendingTiles: this.#pendingTiles };
+    return {
+      ...this.#metrics,
+      stages: structuredClone(this.#metrics.stages),
+      pendingTiles: this.#pendingTiles,
+    };
   }
 
   public resetMetrics(): void {
@@ -374,7 +405,9 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     this.#pendingTiles += 1;
     try {
       if (signal.aborted) throw abortError();
+      const gateStartedAt = performance.now();
       if (!draft) await this.waitForInteractionEnd(signal);
+      const gateWaitMs = performance.now() - gateStartedAt;
       const result = await this.ensureRpc().request<unknown>(
         draft
           ? terrainShadowWorkerMethods.renderDraft
@@ -392,7 +425,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
       served.draft = draft && 'draft' in result && result.draft === true;
       if (!served.draft) {
         served.relief = address.z >= terrainShadowReliefMinZoom;
-        this.recordTile(result.metrics);
+        this.recordTile(result.metrics, draft ? null : gateWaitMs);
         this.setAvailability('available');
       }
       return { data: result.bitmap };
@@ -497,7 +530,7 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
           if (!isTerrainShadowTileMetrics(metrics)) {
             throw new Error('The terrain shadow worker returned invalid metrics.');
           }
-          this.recordTile(metrics);
+          this.recordTile(metrics, null);
           this.setAvailability('available');
         } catch (error) {
           this.recordTileFailure(error, controller.signal);
@@ -596,7 +629,8 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     });
   }
 
-  private recordTile(tile: TerrainShadowTileMetrics): void {
+  /** `gateWaitMs` is null for requests that never pass the interaction gate. */
+  private recordTile(tile: TerrainShadowTileMetrics, gateWaitMs: number | null): void {
     const metrics = this.#metrics;
     if (tile.cacheHit) metrics.tilesFromCache += 1;
     else metrics.tilesRendered += 1;
@@ -605,6 +639,20 @@ export class MapLibreTerrainShadowTileProvider implements TerrainShadowTileProvi
     metrics.totalDemFetchMs += tile.demFetchMs;
     metrics.demTilesFetched += tile.demTilesFetched;
     metrics.memoryBytes = tile.memoryBytes;
+    const stages = terrainShadowTileStages.map(
+      (stage): [TerrainShadowMetricsStage, number | undefined] => [
+        stage,
+        tile.stages[stage],
+      ],
+    );
+    stages.push(['interactionGate', gateWaitMs ?? undefined]);
+    for (const [stage, ms] of stages) {
+      if (ms === undefined) continue;
+      const summary = (metrics.stages[stage] ??= { count: 0, totalMs: 0, maxMs: 0 });
+      summary.count += 1;
+      summary.totalMs += ms;
+      summary.maxMs = Math.max(summary.maxMs, ms);
+    }
   }
 
   private setAvailability(value: TerrainShadowAvailability): void {

@@ -97,6 +97,7 @@ const emptyShadowMetrics: TerrainShadowMetricsSnapshot = {
   totalDemFetchMs: 0,
   demTilesFetched: 0,
   memoryBytes: 0,
+  stages: {},
 };
 
 function shadowStep(

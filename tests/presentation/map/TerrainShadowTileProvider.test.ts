@@ -43,6 +43,7 @@ const renderedMetrics: TerrainShadowTileMetrics = {
   memoryBytes: 100,
   cachedMasks: 1,
   cachedDemTiles: 9,
+  stages: { queueWait: 5, shade: 3 },
 };
 
 class FakeImageBitmap {
@@ -478,7 +479,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
     provider.dispose();
   });
 
-  it('aggregates worker metrics and keeps the GPU estimate across resets', async () => {
+  it('aggregates worker metrics and stage times and keeps the GPU estimate across resets', async () => {
     const { provider, worker } = createProvider();
     const tiles = [loadTile(), loadTile(), loadTile()];
     await vi.waitFor(() => {
@@ -495,6 +496,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
         cacheHit: true,
         demTilesFetched: 0,
         memoryBytes: 120,
+        stages: { maskCodec: 2, queueWait: 1 },
       },
     });
     worker.fail(2, {
@@ -518,6 +520,17 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       totalDemFetchMs: 10,
       demTilesFetched: 9,
       memoryBytes: 120,
+      stages: {
+        queueWait: { count: 2, totalMs: 6, maxMs: 5 },
+        shade: { count: 1, totalMs: 3, maxMs: 3 },
+        maskCodec: { count: 1, totalMs: 2, maxMs: 2 },
+        // The first request was a draft request, which never waits for the gate.
+        interactionGate: {
+          count: 1,
+          totalMs: expect.any(Number) as number,
+          maxMs: expect.any(Number) as number,
+        },
+      },
     });
     expect(provider.getAvailability()).toBe('available');
 
@@ -532,6 +545,7 @@ describe('MapLibreTerrainShadowTileProvider', () => {
       totalDemFetchMs: 0,
       demTilesFetched: 0,
       memoryBytes: 120,
+      stages: {},
     });
     provider.dispose();
   });

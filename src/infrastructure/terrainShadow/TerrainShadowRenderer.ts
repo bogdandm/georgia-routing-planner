@@ -9,6 +9,7 @@ import {
   type TerrainShadowTileMetrics,
   type TerrainShadowTileRequest,
   type TerrainShadowTileResult,
+  type TerrainShadowTileStage,
   terrainShadowMaskCacheLimit,
   terrainShadowReliefMinZoom,
   terrainShadowUnavailableErrorCode,
@@ -116,6 +117,20 @@ type UniformLocations<TName extends string> = Readonly<
   Record<TName, WebGLUniformLocation>
 >;
 
+/** The `EXT_disjoint_timer_query_webgl2` constants the stage timer reads. */
+interface TimerQueryExtension {
+  readonly TIME_ELAPSED_EXT: GLenum;
+  readonly GPU_DISJOINT_EXT: GLenum;
+}
+
+type GpuStage = Extract<
+  TerrainShadowTileStage,
+  'assembly' | 'skyView' | 'visibility' | 'shade'
+>;
+type StageTimings = Partial<Record<TerrainShadowTileStage, number>>;
+/** Event-loop turns `GpuStageTimer.read` waits for results before dropping them. */
+const maximumTimerQueryPolls = 20;
+
 interface ShaderProgram<TName extends string> {
   readonly program: WebGLProgram;
   readonly uniforms: UniformLocations<TName>;
@@ -148,11 +163,84 @@ interface GpuResources {
   /** Reused FLOAT RGBA readback of `shadeTexture`. */
   readonly readback: Float32Array;
   readonly staticBytes: number;
+  /** Null where the browser does not expose GPU timer queries. */
+  readonly timerQuery: TimerQueryExtension | null;
+}
+
+function readTimerQueryExtension(
+  gl: WebGL2RenderingContext,
+): TimerQueryExtension | null {
+  const extension: unknown = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  if (typeof extension !== 'object' || extension === null) return null;
+  const { TIME_ELAPSED_EXT, GPU_DISJOINT_EXT } = extension as Record<string, unknown>;
+  return typeof TIME_ELAPSED_EXT === 'number' && typeof GPU_DISJOINT_EXT === 'number'
+    ? { TIME_ELAPSED_EXT, GPU_DISJOINT_EXT }
+    : null;
+}
+
+/** Timer queries around the passes of one GPU job, read after the GPU has run them. */
+class GpuStageTimer {
+  readonly #gl: WebGL2RenderingContext;
+  readonly #extension: TimerQueryExtension | null;
+  readonly #queries: { readonly stage: GpuStage; readonly query: WebGLQuery }[] = [];
+
+  public constructor(gpu: GpuResources) {
+    this.#gl = gpu.gl;
+    this.#extension = gpu.timerQuery;
+  }
+
+  public measure(stage: GpuStage, draw: () => void): void {
+    const extension = this.#extension;
+    if (extension === null) {
+      draw();
+      return;
+    }
+    const gl = this.#gl;
+    const query = gl.createQuery();
+    gl.beginQuery(extension.TIME_ELAPSED_EXT, query);
+    try {
+      draw();
+    } finally {
+      gl.endQuery(extension.TIME_ELAPSED_EXT);
+    }
+    this.#queries.push({ stage, query });
+  }
+
+  /**
+   * GPU milliseconds per measured stage. WebGL only makes query results available after
+   * the issuing task returned to the event loop, so this yields; a disjoint GPU event
+   * (clock change, context switch) or results still missing after the polls drop all.
+   */
+  public async read(): Promise<StageTimings> {
+    const gl = this.#gl;
+    const extension = this.#extension;
+    const last = this.#queries.at(-1);
+    if (extension === null || last === undefined) return {};
+    const available = () =>
+      gl.getQueryParameter(last.query, gl.QUERY_RESULT_AVAILABLE) === true;
+    for (let poll = 0; poll < maximumTimerQueryPolls && !available(); poll += 1) {
+      await yieldToEventLoop();
+    }
+    const valid = available() && gl.getParameter(extension.GPU_DISJOINT_EXT) !== true;
+    const timings: StageTimings = {};
+    for (const { stage, query } of this.#queries) {
+      if (valid) {
+        const nanoseconds: unknown = gl.getQueryParameter(query, gl.QUERY_RESULT);
+        if (typeof nanoseconds === 'number') {
+          timings[stage] = (timings[stage] ?? 0) + nanoseconds / 1e6;
+        }
+      }
+      gl.deleteQuery(query);
+    }
+    return timings;
+  }
 }
 
 interface ShadeMaskResult {
   readonly mask: ShadeMask;
   readonly metrics: TerrainShadowTileMetrics;
+  /** GPU pass times of a freshly computed mask; they become readable a little later. */
+  readonly gpuStages: Promise<StageTimings> | null;
 }
 
 /** Decoded DEM tile; `texture === null` is a 404 tile treated as sea level 0 m. */
@@ -395,6 +483,7 @@ function createGpuResources(onContextLost: () => void): GpuResources {
     shadeTexture,
     readback,
     staticBytes,
+    timerQuery: readTimerQueryExtension(gl),
   };
 }
 
@@ -843,29 +932,37 @@ export class TerrainShadowRenderer {
         demFetchMs: 0,
         cacheHit: true,
         demTilesFetched: 0,
+        stages: {},
       });
     }
-    return (await this.ensureMask(request, signal, 'playback')).metrics;
+    const { metrics, gpuStages } = await this.ensureMask(request, signal, 'playback');
+    return { ...metrics, stages: { ...metrics.stages, ...(await gpuStages) } };
   }
 
   private async colorize(
     request: TerrainShadowTileRequest,
-    { mask, metrics }: ShadeMaskResult,
+    { mask, metrics, gpuStages }: ShadeMaskResult,
   ): Promise<TerrainShadowTileResult> {
     const startedAt = performance.now();
     const colorizer = this.shadeColorizer(request);
+    const pixels = expandShadeMask(mask, colorizer);
+    const bitmapStartedAt = performance.now();
     const bitmap = await createImageBitmap(
-      new ImageData(
-        expandShadeMask(mask, colorizer),
-        terrainShadowTileSize,
-        terrainShadowTileSize,
-      ),
+      new ImageData(pixels, terrainShadowTileSize, terrainShadowTileSize),
     );
+    const finishedAt = performance.now();
     return {
       bitmap,
       metrics: this.metrics({
         ...metrics,
-        computeMs: metrics.computeMs + performance.now() - startedAt,
+        computeMs: metrics.computeMs + finishedAt - startedAt,
+        stages: {
+          ...metrics.stages,
+          // Read only now, so the tile never waits for the GPU timer results alone.
+          ...(await gpuStages),
+          expand: bitmapStartedAt - startedAt,
+          bitmap: finishedAt - bitmapStartedAt,
+        },
       }),
     };
   }
@@ -916,14 +1013,17 @@ export class TerrainShadowRenderer {
   private flatMask(request: TerrainShadowTileRequest): ShadeMaskResult {
     const startedAt = performance.now();
     const mask = createFlatShadeMask(request, request.instantMs, request.lighting);
+    const computeMs = performance.now() - startedAt;
     return {
       mask,
       metrics: this.metrics({
-        computeMs: performance.now() - startedAt,
+        computeMs,
         demFetchMs: 0,
         cacheHit: false,
         demTilesFetched: 0,
+        stages: { flatMask: computeMs },
       }),
+      gpuStages: null,
     };
   }
 
@@ -934,14 +1034,20 @@ export class TerrainShadowRenderer {
   private readyMask(request: TerrainShadowTileRequest): ShadeMaskResult | null {
     if (request.z < terrainShadowReliefMinZoom) return this.flatMask(request);
     const night = isTerrainShadowNightTile(request, request.instantMs);
-    const hitMetrics = () =>
-      this.metrics({ computeMs: 0, demFetchMs: 0, cacheHit: true, demTilesFetched: 0 });
+    const hitMetrics = (computeMs: number) =>
+      this.metrics({
+        computeMs,
+        demFetchMs: 0,
+        cacheHit: true,
+        demTilesFetched: 0,
+        stages: computeMs === 0 ? {} : { maskCodec: computeMs },
+      });
     if (
       night &&
       request.lighting.nightSkyLight === 0 &&
       request.lighting.nightTopLight === 0
     ) {
-      return { mask: nightMask, metrics: hitMetrics() };
+      return { mask: nightMask, metrics: hitMetrics(0), gpuStages: null };
     }
     // Night shade lit only by the faint night sky does not depend on the instant, so every
     // night frame of a tile shares one cached mask.
@@ -952,10 +1058,8 @@ export class TerrainShadowRenderer {
     const mask = expandCompressedShadeMask(cached);
     return {
       mask,
-      metrics: {
-        ...hitMetrics(),
-        computeMs: performance.now() - startedAt,
-      },
+      metrics: hitMetrics(performance.now() - startedAt),
+      gpuStages: null,
     };
   }
 
@@ -993,22 +1097,26 @@ export class TerrainShadowRenderer {
       );
       const demFetchMs = performance.now() - fetchStartedAt;
 
-      const { mask, startedAt } = await this.runSerially(async () => {
+      const queuedAt = performance.now();
+      const job = await this.runSerially(async () => {
         throwIfAborted(signal);
         if (generation !== this.#generation || this.#gpu !== gpu)
           throw contextLostError();
-        const jobStartedAt = performance.now();
+        const startedAt = performance.now();
+        const timer = new GpuStageTimer(gpu);
         if (this.#assembledMosaicKey !== mosaicKey) {
           this.#assembledMosaicKey = null;
-          levelUrls.forEach((tileUrls, level) => {
-            const mosaic = gpu.mosaics[level];
-            if (mosaic === undefined) return;
-            assembleMosaic(
-              gpu,
-              mosaic,
-              tileUrls.map((url) => this.demTexture(url)),
-            );
-            reduceMaximum(gpu, mosaic, level);
+          timer.measure('assembly', () => {
+            levelUrls.forEach((tileUrls, level) => {
+              const mosaic = gpu.mosaics[level];
+              if (mosaic === undefined) return;
+              assembleMosaic(
+                gpu,
+                mosaic,
+                tileUrls.map((url) => this.demTexture(url)),
+              );
+              reduceMaximum(gpu, mosaic, level);
+            });
           });
           this.#assembledMosaicKey = mosaicKey;
         }
@@ -1021,7 +1129,11 @@ export class TerrainShadowRenderer {
           mosaicKey,
           createSkyViewTexture,
         );
-        if (skyView.fresh) drawSkyView(gpu, skyView.texture, request, levels);
+        if (skyView.fresh) {
+          timer.measure('skyView', () => {
+            drawSkyView(gpu, skyView.texture, request, levels);
+          });
+        }
         const visibility = this.claimGeometryTexture(
           gpu.gl,
           this.#visibilities,
@@ -1029,24 +1141,45 @@ export class TerrainShadowRenderer {
           createVisibilityTexture,
         );
         if (visibility.fresh) {
-          drawVisibility(gpu, visibility.texture, request, levels);
+          timer.measure('visibility', () => {
+            drawVisibility(gpu, visibility.texture, request, levels);
+          });
         }
-        drawShade(gpu, visibility.texture, skyView.texture, request, levels);
+        timer.measure('shade', () => {
+          drawShade(gpu, visibility.texture, skyView.texture, request, levels);
+        });
         // Holding the queue until the GPU finishes keeps at most one tile of shadow work
         // competing with map frames, and makes `computeMs` the real GPU time.
+        const gpuWaitStartedAt = performance.now();
         await waitForGpu(gpu.gl);
         if (gpu.gl.isContextLost()) throw contextLostError();
-        return { mask: readShadeMask(gpu), startedAt: jobStartedAt };
+        const readbackStartedAt = performance.now();
+        const mask = readShadeMask(gpu);
+        const finishedAt = performance.now();
+        return {
+          mask,
+          startedAt,
+          gpuStages: timer.read(),
+          stages: {
+            queueWait: startedAt - queuedAt,
+            gpuWait: readbackStartedAt - gpuWaitStartedAt,
+            readback: finishedAt - readbackStartedAt,
+          },
+        };
       });
-      this.storeMask(maskKey, mask, precision);
+      const storeStartedAt = performance.now();
+      this.storeMask(maskKey, job.mask, precision);
+      const finishedAt = performance.now();
       return {
-        mask,
+        mask: job.mask,
         metrics: this.metrics({
-          computeMs: performance.now() - startedAt,
+          computeMs: finishedAt - job.startedAt,
           demFetchMs,
           cacheHit: false,
           demTilesFetched: fetched.filter(Boolean).length,
+          stages: { ...job.stages, maskCodec: finishedAt - storeStartedAt },
         }),
+        gpuStages: job.gpuStages,
       };
     } finally {
       for (const url of urls) {
@@ -1235,7 +1368,7 @@ export class TerrainShadowRenderer {
   private metrics(
     tile: Pick<
       TerrainShadowTileMetrics,
-      'computeMs' | 'demFetchMs' | 'cacheHit' | 'demTilesFetched'
+      'computeMs' | 'demFetchMs' | 'cacheHit' | 'demTilesFetched' | 'stages'
     >,
   ): TerrainShadowTileMetrics {
     let decodedTiles = 0;

@@ -77,6 +77,37 @@ export const terrainShadowTileRequestSchema = z
 export type TerrainShadowTileRequest = z.infer<typeof terrainShadowTileRequestSchema>;
 
 /**
+ * Worker stages a tile may pass, each timed in milliseconds:
+ * - `queueWait`: waiting for the worker's single GPU queue;
+ * - `assembly` (DEM mosaics and their maximum reductions), `skyView`, `visibility`, and
+ *   `shade`: GPU time from `EXT_disjoint_timer_query_webgl2`, absent without the
+ *   extension or after a disjoint GPU event;
+ * - `gpuWait`: the fence wait for those passes;
+ * - `readback`: reading the shade target into the CPU mask;
+ * - `maskCodec`: compressing a new mask into the cache or expanding a cached one;
+ * - `flatMask`: the CPU flat-ground draft or coarse tile;
+ * - `expand`: coloring the mask into RGBA pixels; `bitmap`: `createImageBitmap`.
+ */
+export const terrainShadowTileStages = [
+  'queueWait',
+  'assembly',
+  'skyView',
+  'visibility',
+  'shade',
+  'gpuWait',
+  'readback',
+  'maskCodec',
+  'flatMask',
+  'expand',
+  'bitmap',
+] as const;
+export type TerrainShadowTileStage = (typeof terrainShadowTileStages)[number];
+/** Stages a tile skipped (cache hits, no timer queries) are absent. */
+export type TerrainShadowTileStageTimings = Readonly<
+  Partial<Record<TerrainShadowTileStage, number>>
+>;
+
+/**
  * Per-tile worker measurements; `memoryBytes` estimates worker memory after the tile:
  * GPU textures plus cached shade masks.
  */
@@ -88,6 +119,7 @@ export interface TerrainShadowTileMetrics {
   readonly memoryBytes: number;
   readonly cachedMasks: number;
   readonly cachedDemTiles: number;
+  readonly stages: TerrainShadowTileStageTimings;
 }
 
 /** 512 px shade bitmap expanded from a cached shade mask; transferred, never copied. */
@@ -106,6 +138,15 @@ function isFiniteNonNegative(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+function isStageTimings(value: unknown): value is TerrainShadowTileStageTimings {
+  if (typeof value !== 'object' || value === null) return false;
+  return Object.entries(value).every(
+    ([stage, ms]) =>
+      (terrainShadowTileStages as readonly string[]).includes(stage) &&
+      isFiniteNonNegative(ms),
+  );
+}
+
 export function isTerrainShadowTileMetrics(
   value: unknown,
 ): value is TerrainShadowTileMetrics {
@@ -118,7 +159,8 @@ export function isTerrainShadowTileMetrics(
     isFiniteNonNegative(metrics.demTilesFetched) &&
     isFiniteNonNegative(metrics.memoryBytes) &&
     isFiniteNonNegative(metrics.cachedMasks) &&
-    isFiniteNonNegative(metrics.cachedDemTiles)
+    isFiniteNonNegative(metrics.cachedDemTiles) &&
+    isStageTimings(metrics.stages)
   );
 }
 

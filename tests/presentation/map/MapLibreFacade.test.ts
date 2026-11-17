@@ -2906,6 +2906,7 @@ describe('MapLibreFacade', () => {
       totalDemFetchMs: 0,
       demTilesFetched: 0,
       memoryBytes: 0,
+      stages: {},
     };
     const previousInstantMs = Date.parse('2026-07-01T09:00:00Z');
     const benchmarkInstantMs = Date.parse('2026-12-21T05:30:00Z');

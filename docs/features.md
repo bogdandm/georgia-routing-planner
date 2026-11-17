@@ -1035,6 +1035,14 @@ camera are restored; neither the temporary 3D mode nor benchmark camera moves ar
 persisted. Reports contain browser, screen, GPU, and visible layer IDs but no user
 camera, tracks, markers, or URLs, and are never uploaded.
 
+The sun-shadow variant runs the same phases with shadows on, then times shadow updates
+over two fixed Caucasus scenes (first view, ten minutes later, and back) and an orbit.
+Each update reports the shadow tiles computed and taken from the cache, and per stage
+the tile count, total, and maximum time: the main-thread wait for a camera move to end,
+the worker's GPU queue wait, DEM mosaic assembly, sky view, visibility, and shade passes
+(GPU time from WebGL timer queries, absent without them), the GPU fence wait, readback,
+mask compression or expansion, flat-ground drafts, coloring, and `createImageBitmap`.
+
 ## Configuration
 
 `VITE_MAP_PROVIDER_CONFIGURATION` is optional public JSON validated by Zod. Endpoints

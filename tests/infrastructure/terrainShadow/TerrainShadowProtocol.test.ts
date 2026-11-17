@@ -46,6 +46,7 @@ const metrics: TerrainShadowTileMetrics = {
   memoryBytes: 1_048_576,
   cachedMasks: 1,
   cachedDemTiles: 27,
+  stages: { queueWait: 3, shade: 1.5 },
 };
 
 afterEach(() => {
@@ -118,6 +119,18 @@ describe('isTerrainShadowTileResult', () => {
     expect(isTerrainShadowTileResult({ bitmap: {}, metrics })).toBe(false);
     expect(
       isTerrainShadowTileResult({ bitmap, metrics: { ...metrics, memoryBytes: -1 } }),
+    ).toBe(false);
+    expect(
+      isTerrainShadowTileResult({
+        bitmap,
+        metrics: { ...metrics, stages: { shade: -1 } },
+      }),
+    ).toBe(false);
+    expect(
+      isTerrainShadowTileResult({
+        bitmap,
+        metrics: { ...metrics, stages: { other: 1 } },
+      }),
     ).toBe(false);
     expect(isTerrainShadowTileResult({ bitmap })).toBe(false);
   });

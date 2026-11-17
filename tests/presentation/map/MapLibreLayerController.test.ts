@@ -3167,9 +3167,10 @@ describe('MapLibreLayerController', () => {
       controller.dispose();
     });
 
-    it('refuses views needing more than the playback tile limit until the camera moves', () => {
+    it('refuses views too large for even a sparse day until the camera moves', () => {
+      // 100 tiles leave room for 21 lit frames, below the 24 an animation needs.
       const { controller, shadows, map } = startPlayback(
-        Array.from({ length: 40 }, (_, x) => ({ z: 12, x, y: 1514 })),
+        Array.from({ length: 100 }, (_, x) => ({ z: 12, x, y: 1514 })),
       );
 
       expect(mapLayerStore.getState().sunShadow.playback).toEqual({
@@ -3200,6 +3201,35 @@ describe('MapLibreLayerController', () => {
       );
 
       expect(shadows.prefetchCalls[0]?.instantsMs).toEqual(playbackFrames);
+      expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
+      controller.dispose();
+    });
+
+    it('spaces frames further apart for views whose tiles do not fit the full day', () => {
+      const tileCount = 40;
+      const { controller, shadows, frames, litFrames } = startPlayback(
+        Array.from({ length: tileCount }, (_, x) => ({ z: 12, x, y: 1514 })),
+      );
+      const window = daylightWindow(shadowInstantMs, center, 'Asia/Tbilisi');
+      if (window === null) throw new Error('The Caucasus has a sunrise and sunset.');
+      const instants = shadows.prefetchCalls[0]?.instantsMs ?? [];
+      const lit = instants.filter(
+        (frame) =>
+          frame >= window.sunriseMs - 45 * 60_000 &&
+          frame <= window.sunsetMs + 45 * 60_000,
+      ).length;
+
+      expect(litFrames.filter(Boolean).length * tileCount).toBeGreaterThan(
+        terrainShadowPlaybackTileLimit,
+      );
+      expect(lit * tileCount).toBeLessThanOrEqual(terrainShadowPlaybackTileLimit);
+      expect(lit).toBeGreaterThanOrEqual(24);
+      expect(instants.length).toBeLessThan(frames.length);
+      // Still minute frames right at sunrise, where the light changes fastest.
+      const sunriseMinute = Math.round(window.sunriseMs / 60_000) * 60_000;
+      expect(instants.some((frame) => Math.abs(frame - sunriseMinute) <= 60_000)).toBe(
+        true,
+      );
       expect(mapLayerStore.getState().sunShadow.playback.status).toBe('loading');
       controller.dispose();
     });

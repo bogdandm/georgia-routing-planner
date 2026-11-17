@@ -456,10 +456,13 @@ function quantizeSunShadowInstant(instantMs: number): number {
 const sunHiddenReliefMinZoom = 24;
 /**
  * Day playback frames: as many as sun instants 10 minutes apart would give, but whole
- * minutes around sunrise and sunset and up to 30 minutes apart at midday
- * (`daylightFrameInstants`); each shows for 150 ms (~6.7 fps).
+ * minutes around sunrise and sunset and up to three average steps apart at midday
+ * (`daylightFrameInstants`); each shows for 150 ms (~6.7 fps). Views with more tiles than
+ * that density fits into `terrainShadowPlaybackTileLimit` take a longer average step.
  */
 const sunShadowPlaybackAverageStepMinutes = 10;
+/** Fewer lit frames than this would no longer read as an animated day. */
+const sunShadowPlaybackMinimumLitFrames = 24;
 const sunShadowPlaybackFrameMs = 150;
 /**
  * Frames this close to sunrise or sunset at the center still cache masks somewhere in
@@ -1432,10 +1435,13 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Precomputes shadows for every 10-minute frame of the shown day's range over the
-   * tiles covering the view, in playback order from the current time, then loops through
-   * them until stopped. The animation starts early once the remaining frames are estimated
-   * to be ready before it reaches them. Any camera move, `setSunShadow`, or detach stops it.
+   * Precomputes shadows for the shown day's frames over the tiles covering the view, in
+   * playback order from the current time, then loops through them until stopped. Frames
+   * come every 10 minutes on average, sparser when the view's tiles would not fit the
+   * worker's mask budget, and the view is refused when even
+   * `sunShadowPlaybackMinimumLitFrames` do not fit. The animation starts early once the
+   * remaining frames are estimated to be ready before it reaches them. Any camera move,
+   * `setSunShadow`, or detach stops it.
    */
   public playSunShadowDay(): void {
     this.stopSunShadowPlayback();
@@ -1454,16 +1460,6 @@ export class MapLibreLayerController {
       this.publishSunShadowPlayback({ status: 'failed' });
       return;
     }
-    const frames = daylightFrameInstants(window, sunShadowPlaybackAverageStepMinutes);
-    // Playback runs from the current time to the end and wraps; the prefetch follows it.
-    const startIndex = Math.max(
-      frames.findIndex((frame) => frame >= this.#sunShadowInstantMs),
-      0,
-    );
-    const playbackFrames = [
-      ...frames.slice(startIndex),
-      ...frames.slice(0, startIndex),
-    ];
     // Public coverage ignores terrain-aware culling; tiles it misses load on demand.
     // Coarser tiles shade flat ground without a cached mask, so only relief tiles prefetch.
     const tiles = new Map<string, TerrainShadowTileAddress>();
@@ -1479,21 +1475,41 @@ export class MapLibreLayerController {
     }
     // Only frames with the Sun near or above the horizon cache a mask; the worker answers
     // darker twilight frames with a shared full-shade mask that costs no memory.
-    const litFrames = playbackFrames.map(
-      (frame) =>
-        frame >= window.sunriseMs - sunShadowLitFrameSlackMs &&
-        frame <= window.sunsetMs + sunShadowLitFrameSlackMs,
-    );
-    const litFrameCount = litFrames.filter(Boolean).length;
-    if (tiles.size * litFrameCount > terrainShadowPlaybackTileLimit) {
+    const isLit = (frame: number) =>
+      frame >= window.sunriseMs - sunShadowLitFrameSlackMs &&
+      frame <= window.sunsetMs + sunShadowLitFrameSlackMs;
+    const litFrameBudget = Math.floor(terrainShadowPlaybackTileLimit / tiles.size);
+    if (litFrameBudget < sunShadowPlaybackMinimumLitFrames) {
       this.logger.log({
         level: 'info',
         name: 'map.sun-shadow.playback-refused',
-        data: { tiles: tiles.size, litFrames: litFrameCount },
+        data: { tiles: tiles.size, litFrameBudget },
       });
       this.publishSunShadowPlayback({ status: 'too-many-tiles' });
       return;
     }
+    // Lengthen the average step one minute at a time until the lit frames fit; the step
+    // never exceeds the whole range, where only its two ends remain.
+    const rangeMinutes = (window.lastMinuteMs - window.firstMinuteMs) / 60_000;
+    let averageStepMinutes = sunShadowPlaybackAverageStepMinutes;
+    let frames = daylightFrameInstants(window, averageStepMinutes);
+    while (
+      frames.filter(isLit).length > litFrameBudget &&
+      averageStepMinutes < rangeMinutes
+    ) {
+      averageStepMinutes += 1;
+      frames = daylightFrameInstants(window, averageStepMinutes);
+    }
+    // Playback runs from the current time to the end and wraps; the prefetch follows it.
+    const startIndex = Math.max(
+      frames.findIndex((frame) => frame >= this.#sunShadowInstantMs),
+      0,
+    );
+    const playbackFrames = [
+      ...frames.slice(startIndex),
+      ...frames.slice(0, startIndex),
+    ];
+    const litFrames = playbackFrames.map(isLit);
 
     const controller = new AbortController();
     this.#sunShadowPlaybackAbort = controller;

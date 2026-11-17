@@ -6,13 +6,16 @@ const colorSchema = z
   .readonly();
 
 /**
- * Cached shade masks per worker, also bounded by an 816 MiB budget of compressed bytes
- * (`terrainShadowMaskCodec.ts`). Measured worst real masks (~565 KiB) fit about 1480,
- * typical (~400 KiB) about 2090, so this count stays above the playback budget.
+ * Cached shade masks per worker, also bounded by a 1.25 GiB byte budget
+ * (`TerrainShadowRenderer.ts`). Measured worst real masks (~554 KiB) fit about 2360,
+ * typical (~374 KiB) about 3500, so this count stays above the playback budget.
  */
-export const terrainShadowMaskCacheLimit = 1536;
-/** Most tiles × frames one day playback may precompute; fits worst measured masks. */
-export const terrainShadowPlaybackTileLimit = 1400;
+export const terrainShadowMaskCacheLimit = 2400;
+/**
+ * Most tiles × lit frames one day playback may precompute: worst measured masks fill
+ * about 1.14 GiB, leaving room for the uncompressed masks and the tiles in view.
+ */
+export const terrainShadowPlaybackTileLimit = 2100;
 /**
  * Lowest tile zoom with terrain-cast shadows. Lower tiles cover too much ground for the
  * DEM march and shade flat ground for the Sun's elevation only.

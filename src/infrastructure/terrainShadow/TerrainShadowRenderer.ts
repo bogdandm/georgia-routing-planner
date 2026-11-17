@@ -53,8 +53,8 @@ import {
  * so the whole view stays cached and a new instant reuses it instead of refetching.
  */
 const maximumCachedDemTiles = 128;
-/** Preserve the previous approximate mask-memory ceiling independently of frame count. */
-const maximumCachedMaskBytes = 816 * 1024 * 1024;
+/** Sized with `terrainShadowPlaybackTileLimit` and `terrainShadowMaskCacheLimit`. */
+const maximumCachedMaskBytes = 1280 * 1024 * 1024;
 /**
  * New masks kept uncompressed (2 MiB each) until the renderer is idle: more than one
  * view's tiles, so DEFLATE never delays a view, while sustained work stays bounded.

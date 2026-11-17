@@ -75,6 +75,7 @@ import {
   type MapFitPadding,
   type MapLayerPreset,
   type MapPointInspection,
+  type MapViewportBounds,
 } from '@/presentation/map/mapTypes';
 import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -193,6 +194,28 @@ type MapWorkspaceNotice =
 /** `map-link` is the keyboard copy of the current view; its notice shows the copied link. */
 type CopyConfirmation = 'coordinates' | 'link' | 'map-link' | 'weather-link';
 type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
+
+/**
+ * Whether a marker lies within half a viewport of the settled view on every side. Each
+ * marker weather card is a DOM marker whose position MapLibre restyles on every camera
+ * frame, even off screen, and Chrome's per-frame style cost for them grows until the next
+ * garbage collection, so cards are mounted only near the view; the margin covers short
+ * pans.
+ */
+function isNearSettledViewport(
+  longitude: number,
+  latitude: number,
+  bounds: MapViewportBounds,
+): boolean {
+  const longitudeMargin = (bounds.east - bounds.west) / 2;
+  const latitudeMargin = (bounds.north - bounds.south) / 2;
+  return (
+    longitude >= bounds.west - longitudeMargin &&
+    longitude <= bounds.east + longitudeMargin &&
+    latitude >= bounds.south - latitudeMargin &&
+    latitude <= bounds.north + latitudeMargin
+  );
+}
 
 function WeatherForecastMapMarker({
   marker,
@@ -484,6 +507,26 @@ export function MapWorkspace({
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
+  const markerWeatherCardsShown =
+    activeTab === 'markers' && markersWorkspace?.weatherPreferences.showOnMap === true;
+  // The viewport store publishes only settled views; reading it only while the cards are
+  // shown keeps camera moves on other tabs from re-rendering the map workspace.
+  const subscribeToSettledViewport = useCallback(
+    (listener: () => void) => mapViewport.subscribe(listener),
+    [mapViewport],
+  );
+  const getMarkerWeatherCardBounds = useCallback(
+    () =>
+      markerWeatherCardsShown
+        ? (mapViewport.getViewportSnapshot()?.bounds ?? null)
+        : null,
+    [mapViewport, markerWeatherCardsShown],
+  );
+  const markerWeatherCardBounds = useSyncExternalStore(
+    subscribeToSettledViewport,
+    getMarkerWeatherCardBounds,
+    getMarkerWeatherCardBounds,
+  );
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const editablePath =
@@ -2161,10 +2204,16 @@ export function MapWorkspace({
             {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
             ) : null}
-            {activeTab === 'markers' && markersWorkspace?.weatherPreferences.showOnMap
+            {markerWeatherCardBounds !== null && markersWorkspace !== null
               ? markersWorkspace.markers.map((marker) => {
                   const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
                   if (weather?.status !== 'ready') return null;
+                  const [longitude, latitude] = marker.coordinate;
+                  if (
+                    !isNearSettledViewport(longitude, latitude, markerWeatherCardBounds)
+                  ) {
+                    return null;
+                  }
                   return (
                     <Marker
                       key={`weather:${marker.id}`}

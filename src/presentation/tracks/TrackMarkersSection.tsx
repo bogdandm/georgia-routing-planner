@@ -169,6 +169,7 @@ export function TrackMarkersSection({
           <span>
             <IconButton
               size="small"
+              color="inherit"
               aria-label={t`Add track marker`}
               disabled={markers.length >= MAXIMUM_TRACK_MARKERS}
               onClick={onAdd}

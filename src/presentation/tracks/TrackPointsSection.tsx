@@ -977,6 +977,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
             <span>
               <IconButton
                 size="small"
+                color="inherit"
                 aria-label={t`Edit points`}
                 disabled={disabled}
                 onClick={onStartEditing}

@@ -969,6 +969,7 @@ export function ElevationProfileChart({
                   onTrackGradeLegendDismissedChange(false);
                 }}
                 size="small"
+                color="inherit"
               >
                 <HelpOutlineOutlinedIcon fontSize="small" />
               </IconButton>

@@ -102,6 +102,7 @@ export function ClimbsDescentsSection({
           <span>
             <IconButton
               size="small"
+              color="inherit"
               aria-label={t`Recalculate elevation`}
               disabled={recalculating}
               onClick={onRecalculate}

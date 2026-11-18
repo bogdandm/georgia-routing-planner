@@ -2379,8 +2379,9 @@ describe('WorkspaceShell', () => {
     if (mapLayers === null) return;
     const labels = vi.spyOn(mapLayers, 'setImportedTrackTimeLabels');
     const base = savedTrackSummary('local:partial', 'Partial elevation');
-    // Browser-local hours, so the recorded 05:00 start reads 05:00 in any timezone.
-    const at = (hour: number) => new Date(2026, 6, 22, hour).toISOString();
+    // Georgia route-local hours, independent of the browser/CI timezone.
+    const at = (hour: number) =>
+      new Date(`2026-07-22T${String(hour).padStart(2, '0')}:00:00+04:00`).toISOString();
     const source = {
       ...base,
       metrics: {

@@ -517,7 +517,7 @@ export function TrackLightingSummary({
                 sx={{
                   display: 'contents',
                   color:
-                    met || seconds === undefined ? 'text.primary' : 'text.disabled',
+                    met || seconds === undefined ? 'text.primary' : 'text.secondary',
                 }}
               >
                 <Box

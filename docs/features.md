@@ -395,10 +395,11 @@ highlighted, and the day length, the pace the timeline uses, and the hike's star
 finish. The Sun's dot and readout stand at the map's sun-shadow time of day; hovering
 reads any other time, and a click moves the map's sun shadows there. Below it and the
 light strip, all four light kinds are listed in aligned columns with their hours and
-minutes, dimming those the hike does not meet; the light the hike finishes in notes how
-long before or after that day's sunset it ends. Rows keep their place while the light is
-calculated. The date, route start, and pace controls follow, then the map time and light
-options. Without terrain light, a sentence states the finish's sunset margin instead.
+minutes, using accessible secondary text for those the hike does not meet; the light the
+hike finishes in notes how long before or after that day's sunset it ends. Rows keep
+their place while the light is calculated. The date, route start, and pace controls
+follow, then the map time and light options. Without terrain light, a sentence states
+the finish's sunset margin instead.
 
 Every track detail section (Track details, Elevation profile, Climbs & Descents, Route
 timing, Markers, Points, and Source details) is a disclosure whose state is remembered

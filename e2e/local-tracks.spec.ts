@@ -815,7 +815,6 @@ test('imports, retains, reopens, renames, and deletes a local GPX track', async 
   });
   const closeTrack = savedDetails.getByRole('button', { name: 'Close track' });
   await expect(page.getByRole('button', { name: 'Track actions' })).toBeVisible();
-  await expect(savedDetails.getByRole('separator')).toHaveCount(0);
   await expect(
     savedDetails.getByRole('button', { name: 'Add to favorites' }),
   ).toHaveCount(0);

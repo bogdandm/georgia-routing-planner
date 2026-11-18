@@ -2383,11 +2383,16 @@ describe('MapWorkspace', () => {
     });
     useUiStore.setState({ activeTab: 'markers' });
     const user = userEvent.setup();
+    const facade = new FakeMapFacade();
+    facade.viewportSnapshot = {
+      bounds: { west: 44.6, south: 41.6, east: 45, north: 41.8 },
+      center: { longitude: 44.8, latitude: 41.7 },
+    };
 
     renderWithI18n(
       <RuntimeServicesProvider services={services}>
         <MarkersWorkspaceProvider>
-          <MapWorkspace facade={new FakeMapFacade()} />
+          <MapWorkspace facade={facade} />
         </MarkersWorkspaceProvider>
       </RuntimeServicesProvider>,
     );
@@ -2417,6 +2422,91 @@ describe('MapWorkspace', () => {
         name: 'Open Sat weather for Weather summit: 20 °C, 0 mm precipitation',
       }),
     ).toBeNull();
+
+    services.database.close();
+    await services.database.delete();
+  });
+
+  it('mounts marker weather cards only within half a viewport of the settled view', async () => {
+    const user = userEvent.setup();
+    const services = createTestServices();
+    const markers = [
+      { id: 'tbilisi', name: 'Tbilisi summit', coordinate: [44.8271, 41.7151] },
+      { id: 'margin', name: 'Margin summit', coordinate: [45.15, 41.7] },
+      { id: 'batumi', name: 'Batumi summit', coordinate: [41.64, 41.65] },
+    ] as const;
+    for (const marker of markers) {
+      await services.database.saveSavedMarker({
+        schemaVersion: SAVED_MARKER_SCHEMA_VERSION,
+        id: marker.id,
+        name: marker.name,
+        normalizedName: marker.name.toLowerCase(),
+        coordinate: [...marker.coordinate],
+        elevationMeters: 1_750,
+        iconKey: 'place',
+        colorKey: 'blue',
+        createdAt: '2026-07-18T00:00:00.000Z',
+        updatedAt: '2026-07-18T00:00:00.000Z',
+      });
+    }
+    useUiStore.setState({ activeTab: 'markers' });
+    const facade = new FakeMapFacade();
+    facade.viewportSnapshot = {
+      bounds: { west: 41, south: 41, east: 46, north: 43 },
+      center: { longitude: 43.5, latitude: 42 },
+    };
+    const cardNames = () =>
+      screen
+        .queryAllByTestId('weather-map-marker')
+        .map((card) => card.querySelector('[title]')?.getAttribute('title'))
+        .toSorted();
+
+    renderWithI18n(
+      <RuntimeServicesProvider services={services}>
+        <MarkersWorkspaceProvider>
+          <MapWorkspace facade={facade} />
+        </MarkersWorkspaceProvider>
+      </RuntimeServicesProvider>,
+    );
+    await waitFor(() => {
+      expect(cardNames()).toEqual(['Batumi summit', 'Margin summit', 'Tbilisi summit']);
+    });
+
+    const tbilisiView = {
+      bounds: { west: 44.6, south: 41.6, east: 45, north: 41.8 },
+      center: { longitude: 44.8, latitude: 41.7 },
+    };
+    // A view over Batumi in the next world copy east, as MapLibre reports it.
+    const wrappedBatumiView = {
+      bounds: { west: 401.5, south: 41.55, east: 401.8, north: 41.75 },
+      center: { longitude: 401.65, latitude: 41.65 },
+    };
+
+    // Margin summit is east of the view but within half its width.
+    act(() => {
+      facade.emitViewportSettled(tbilisiView);
+    });
+    expect(cardNames()).toEqual(['Margin summit', 'Tbilisi summit']);
+
+    act(() => {
+      facade.emitViewportSettled(wrappedBatumiView);
+    });
+    expect(cardNames()).toEqual(['Batumi summit']);
+
+    // The card anchoring an open forecast panel stays mounted away from the view.
+    act(() => {
+      facade.emitViewportSettled(tbilisiView);
+    });
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Open Sat weather for Tbilisi summit: 20 °C, 0 mm precipitation',
+      }),
+    );
+    expect(await screen.findByRole('dialog')).toBeVisible();
+    act(() => {
+      facade.emitViewportSettled(wrappedBatumiView);
+    });
+    expect(cardNames()).toEqual(['Batumi summit', 'Tbilisi summit']);
 
     services.database.close();
     await services.database.delete();

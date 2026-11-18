@@ -75,6 +75,7 @@ import {
   type MapFitPadding,
   type MapLayerPreset,
   type MapPointInspection,
+  type MapViewportSnapshot,
 } from '@/presentation/map/mapTypes';
 import { matchKeyboardShortcut } from '@/presentation/keyboardShortcuts';
 import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
@@ -193,6 +194,33 @@ type MapWorkspaceNotice =
 /** `map-link` is the keyboard copy of the current view; its notice shows the copied link. */
 type CopyConfirmation = 'coordinates' | 'link' | 'map-link' | 'weather-link';
 type OpenMapPointInspection = Exclude<MapPointInspection, { status: 'closed' }>;
+
+/**
+ * Whether a marker lies within half a viewport of the settled view on every side. Each
+ * marker weather card is a DOM marker whose position MapLibre restyles on every camera
+ * frame, even off screen, and Chrome's per-frame style cost for them grows until the next
+ * garbage collection, so cards are mounted only near the view; the margin covers short
+ * pans.
+ */
+function isNearSettledViewport(
+  longitude: number,
+  latitude: number,
+  viewport: MapViewportSnapshot,
+): boolean {
+  const { bounds, center } = viewport;
+  // MapLibre reports bounds in the camera's unwrapped world, which can lie beyond ±180°,
+  // so the marker is compared as its world copy nearest the view center.
+  const nearestLongitude =
+    longitude + 360 * Math.round((center.longitude - longitude) / 360);
+  const longitudeMargin = (bounds.east - bounds.west) / 2;
+  const latitudeMargin = (bounds.north - bounds.south) / 2;
+  return (
+    nearestLongitude >= bounds.west - longitudeMargin &&
+    nearestLongitude <= bounds.east + longitudeMargin &&
+    latitude >= bounds.south - latitudeMargin &&
+    latitude <= bounds.north + latitudeMargin
+  );
+}
 
 function WeatherForecastMapMarker({
   marker,
@@ -484,6 +512,23 @@ export function MapWorkspace({
   const tracksWorkspace = useOptionalTracksWorkspace();
   const markersWorkspace = useOptionalMarkersWorkspace();
   const activeTab = useUiStore((state) => state.activeTab);
+  const markerWeatherCardsShown =
+    activeTab === 'markers' && markersWorkspace?.weatherPreferences.showOnMap === true;
+  // The viewport store publishes only settled views; reading it only while the cards are
+  // shown keeps camera moves on other tabs from re-rendering the map workspace.
+  const subscribeToSettledViewport = useCallback(
+    (listener: () => void) => mapViewport.subscribe(listener),
+    [mapViewport],
+  );
+  const getMarkerWeatherCardViewport = useCallback(
+    () => (markerWeatherCardsShown ? mapViewport.getViewportSnapshot() : null),
+    [mapViewport, markerWeatherCardsShown],
+  );
+  const markerWeatherCardViewport = useSyncExternalStore(
+    subscribeToSettledViewport,
+    getMarkerWeatherCardViewport,
+    getMarkerWeatherCardViewport,
+  );
   const mobileWorkspaceOpen = useUiStore((state) => state.mobileWorkspaceOpen);
   const activeProfile = tracksWorkspace?.activeProfile ?? null;
   const editablePath =
@@ -2161,10 +2206,22 @@ export function MapWorkspace({
             {activeTab === 'weather' && weatherMapForecastMarker !== null ? (
               <WeatherForecastMapMarker marker={weatherMapForecastMarker} />
             ) : null}
-            {activeTab === 'markers' && markersWorkspace?.weatherPreferences.showOnMap
+            {markerWeatherCardViewport !== null && markersWorkspace !== null
               ? markersWorkspace.markers.map((marker) => {
                   const weather = markersWorkspace.weatherByMarkerId.get(marker.id);
                   if (weather?.status !== 'ready') return null;
+                  const [longitude, latitude] = marker.coordinate;
+                  // An open forecast panel is anchored to its card, so that card stays.
+                  if (
+                    marker.id !== markersWorkspace.weatherPreviewMarkerId &&
+                    !isNearSettledViewport(
+                      longitude,
+                      latitude,
+                      markerWeatherCardViewport,
+                    )
+                  ) {
+                    return null;
+                  }
                   return (
                     <Marker
                       key={`weather:${marker.id}`}

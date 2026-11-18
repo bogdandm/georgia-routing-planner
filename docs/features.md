@@ -495,9 +495,13 @@ While Markers is open, each marker gets one forecast at its coordinate; its terr
 elevation is resolved once and stored on the marker. The list labels each forecast date
 column once, in date order, and each row shows one clickable cell per date with icon,
 temperature range, and precipitation. With map display enabled, a compact overlay with
-the name and the same cells replaces the marker symbol until Markers closes. A cell
-opens the floating 24-hour table used by Weather, starting at the interval boundary; its
-**Open in Weather** loads the full forecast at the marker.
+the name and the same cells replaces the marker symbol until Markers closes. Overlays
+exist only for markers within half a view of the settled camera on every side, plus the
+overlay whose 24-hour table is open, because each mounted overlay costs browser style
+work on every rendered camera frame. A pan that reaches markers beyond that margin shows
+their overlays once the camera settles; until then they show neither overlay nor symbol.
+A cell opens the floating 24-hour table used by Weather, starting at the interval
+boundary; its **Open in Weather** loads the full forecast at the marker.
 
 The weather-settings action names the selected weekdays in the same date order as the
 list columns. **Refresh marker weather** beside it reloads every marker forecast. Failed

@@ -90,8 +90,6 @@ describe('WorkspaceShell', () => {
       ['Route timing', 'timing'],
       ['Points', 'points'],
       ['Source details', 'metadata'],
-      ['By elevation', 'weather-elevation'],
-      ['Along the route', 'weather-route'],
     ] as const;
     for (const [name, key] of sections) {
       const button = within(details).getByRole('button', { name });
@@ -2381,8 +2379,9 @@ describe('WorkspaceShell', () => {
     if (mapLayers === null) return;
     const labels = vi.spyOn(mapLayers, 'setImportedTrackTimeLabels');
     const base = savedTrackSummary('local:partial', 'Partial elevation');
-    // Browser-local hours, so the recorded 05:00 start reads 05:00 in any timezone.
-    const at = (hour: number) => new Date(2026, 6, 22, hour).toISOString();
+    // Georgia route-local hours, independent of the browser/CI timezone.
+    const at = (hour: number) =>
+      new Date(`2026-07-22T${String(hour).padStart(2, '0')}:00:00+04:00`).toISOString();
     const source = {
       ...base,
       metrics: {
@@ -2433,7 +2432,8 @@ describe('WorkspaceShell', () => {
     const markerList = within(details).getByRole('list', { name: 'Track markers' });
     expect(await within(markerList).findByText('05:00')).toBeVisible();
     expect(within(markerList).getByText('06:00')).toBeVisible();
-    expect(within(details).getByText(/3h 0m in total/)).toBeVisible();
+    // The sun graph's hike span covers the full three-hour recording.
+    expect(await within(details).findByText('05:00–08:00')).toBeVisible();
     await waitFor(() => {
       expect(labels).toHaveBeenLastCalledWith([
         { placement: 'left', coordinate: [44, 42], time: '05:00' },

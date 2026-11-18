@@ -230,6 +230,7 @@ describe('AppDatabase', () => {
           paceFactor: 1.25,
           ignoreRecordedTime: true,
           relativeTimeMarkers: true,
+          hikeDate: '2026-07-15',
         },
         'local:gudauri': {
           ...defaultTrackWeatherTimelineSettings,
@@ -293,6 +294,13 @@ describe('AppDatabase', () => {
         expanded: true,
         weekday: 3,
         timelines: { 'local:kazbegi': { startHour: 9, paceFactor: 1.23 } },
+      },
+      {
+        expanded: true,
+        weekday: 3,
+        timelines: {
+          'local:kazbegi': { startHour: 9, paceFactor: 1, hikeDate: '2026-02-30' },
+        },
       },
     ]) {
       await database.settings.put({

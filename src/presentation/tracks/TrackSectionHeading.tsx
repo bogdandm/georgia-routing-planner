@@ -1,7 +1,7 @@
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { ButtonBase, Typography } from '@mui/material';
 
-/** Shared keyboard-accessible heading for track details and their nested forecasts. */
+/** Shared keyboard-accessible heading for the collapsible track sections. */
 export function TrackSectionHeading({
   title,
   label = title,
@@ -9,7 +9,6 @@ export function TrackSectionHeading({
   expanded,
   onToggle,
   compact = false,
-  nested = false,
 }: {
   readonly title: string;
   readonly label?: string;
@@ -17,7 +16,6 @@ export function TrackSectionHeading({
   readonly expanded: boolean;
   readonly onToggle: () => void;
   readonly compact?: boolean;
-  readonly nested?: boolean;
 }) {
   return (
     <ButtonBase
@@ -30,11 +28,11 @@ export function TrackSectionHeading({
         minWidth: 0,
         minHeight: compact ? 32 : 44,
         justifyContent: 'space-between',
-        px: nested ? 0 : 1,
+        px: 1,
         textAlign: 'left',
       }}
     >
-      <Typography component={nested ? 'h4' : 'h3'} variant="subtitle2">
+      <Typography component="h3" variant="subtitle2">
         {title}
       </Typography>
       <ExpandMoreIcon

@@ -1,6 +1,9 @@
 import type { Clock } from '@/application/ports/Clock';
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
-import type { ElevationProvider } from '@/application/ports/ElevationProvider';
+import type {
+  ElevationProvider,
+  TerrainSamplerSource,
+} from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapCameraRepository } from '@/application/ports/MapCameraRepository';
 import type { SavedMarkerRepository } from '@/application/ports/SavedMarkerRepository';
@@ -68,6 +71,8 @@ export interface RuntimeServices {
   readonly idGenerator: IdGenerator;
   readonly logger: DiagnosticLogger;
   readonly elevationProvider: ElevationProvider | null;
+  /** The same DEM as `elevationProvider`, loaded for CPU sunlight marches. */
+  readonly terrainSampler: TerrainSamplerSource | null;
   readonly pointWeatherForecast: GetPointWeatherForecast;
   readonly geocodingProviderConfiguration: GeocodingProviderConfigurationResult;
   readonly mapProviderConfiguration: MapProviderConfigurationResult;
@@ -334,6 +339,7 @@ export function createRuntimeServices(): RuntimeServices {
     idGenerator,
     logger,
     elevationProvider,
+    terrainSampler: elevationProvider,
     pointWeatherForecast,
     geocodingProviderConfiguration: geocodingConfiguration,
     mapCameraRepository: database,

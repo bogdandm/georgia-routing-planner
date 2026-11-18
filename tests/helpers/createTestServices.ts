@@ -249,6 +249,7 @@ export function createTestServices(
     idGenerator,
     logger,
     elevationProvider: testElevationProvider,
+    terrainSampler: null,
     pointWeatherForecast,
     geocodingProviderConfiguration: {
       status: 'valid',

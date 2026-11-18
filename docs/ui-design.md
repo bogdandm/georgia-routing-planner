@@ -72,6 +72,11 @@ steps of the theme's 8 px unit when 4 px precision is necessary.
 
 - Separate major sections by 16 px and a divider when the source or responsibility
   changes.
+- Separate a stack of collapsible sections, such as the open track's details, with a
+  full-width divider and 8 px on either side, like the satellite scene list, so a
+  collapsed stack still reads as distinct blocks.
+- Draw a collapsible section's heading actions, such as add or recalculate, in the
+  heading's text color like its chevron, not in MUI's muted default icon color.
 - Keep a section heading close to its description, then leave 8 px before its controls.
 - Use 12 px between repeated control-and-description rows.
 - Use 8 px between a parent control and a compact dependent row.

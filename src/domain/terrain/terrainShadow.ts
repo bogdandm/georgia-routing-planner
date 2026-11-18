@@ -197,6 +197,70 @@ export function horizonAngleTowardSun(
   return { horizonDegrees, reachedMeters, coverageLimited };
 }
 
+/** Sky-view pass constants shared by `skyViewFactor` and the GPU sky-view shader. */
+export const terrainSkyViewModel = {
+  /** Horizon directions per sky-view sample. */
+  directions: 16,
+  /** Terrain farther than this does not hide sky; deep valleys are a few kilometres wide. */
+  maximumDistanceMeters: 20_000,
+  /** Each march step grows by this fraction of the distance travelled. */
+  stepFraction: 0.08,
+  /** Terrain heights are exaggerated like the sky light's slopes. */
+  reliefExaggeration: 1.5,
+} as const;
+
+/**
+ * Share of a level surface's cosine-weighted sky that the surrounding terrain leaves open:
+ * 1 on open ground and ridges, lower in valleys and gorges. CPU mirror of the sky-view
+ * shader: each direction keeps its highest exaggerated terrain angle h, and the result
+ * averages cos²(max(h, 0)). Missing DEM coverage ends a direction's march.
+ */
+export function skyViewFactor(
+  sampler: TerrainElevationSampler,
+  observer: TerrainObserver,
+  options: TerrainMarchOptions,
+): number {
+  const { directions, maximumDistanceMeters, stepFraction, reliefExaggeration } =
+    terrainSkyViewModel;
+  const baseStep = options.baseResolutionMeters;
+  const headroom = options.maximumElevationMeters - observer.elevationMeters;
+  let openSky = 0;
+  for (let direction = 0; direction < directions; direction += 1) {
+    const azimuth = (360 * (direction + 0.5)) / directions;
+    let slope = 0;
+    for (
+      let distance = baseStep;
+      distance <= maximumDistanceMeters;
+      distance += Math.max(baseStep, distance * stepFraction)
+    ) {
+      // Nothing farther can rise above the horizon found so far.
+      if (
+        (distance * slope) / reliefExaggeration + curvatureDropMeters(distance) >
+        headroom
+      ) {
+        break;
+      }
+      const point = destinationPoint(
+        observer.latitudeDegrees,
+        observer.longitudeDegrees,
+        azimuth,
+        distance,
+      );
+      const elevation = sampler.elevationAt(
+        point.latitudeDegrees,
+        point.longitudeDegrees,
+        distance,
+      );
+      if (elevation === null) break;
+      const relativeHeight =
+        elevation - observer.elevationMeters - curvatureDropMeters(distance);
+      slope = Math.max(slope, (reliefExaggeration * relativeHeight) / distance);
+    }
+    openSky += 1 / (1 + slope * slope);
+  }
+  return openSky / directions;
+}
+
 /** Visible fraction of a uniform solar disk whose center is `apparentElevationDegrees` above a straight horizon edge. */
 export function visibleSolarDiskFraction(
   apparentElevationDegrees: number,

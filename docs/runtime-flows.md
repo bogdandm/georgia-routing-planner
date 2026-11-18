@@ -764,12 +764,12 @@ expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and 
 every disclosure or weekday change and every released start or pace slider and timing
 option of a saved track; changes made before the record loads are merged over it,
 keeping its per-track entries, and then saved. The record's `timelines` map holds tracks
-with non-default start, pace, recorded-time override, or relative display, or any
-explicit time-marker visibility choice (a null choice follows Layers), keyed by saved
-track ID. The provider owns the active track's settings: a preview or shared track keeps
-them in memory and they move to the new saved ID on save. Deleting a track from the
-Tracks workspace removes its entry; tracks removed by synchronization leave an unused
-entry that reattaches if the same ID returns.
+with non-default start, pace, recorded-time override, relative display, or hike date, or
+any explicit time-marker visibility choice (a null choice follows Layers), keyed by
+saved track ID. The provider owns the active track's settings: a preview or shared track
+keeps them in memory and they move to the new saved ID on save. Deleting a track from
+the Tracks workspace removes its entry; tracks removed by synchronization leave an
+unused entry that reattaches if the same ID returns.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
@@ -930,32 +930,64 @@ distance only; source-segment boundaries never contribute vertical travel. For a
 forecast checkpoint without elevation, the existing point forecast request resolves
 elevation and the card displays the returned value.
 
+`useTrackLighting` (`presentation/tracks/useTrackLighting.ts`), called once by the
+provider for the active single track, resolves the IANA zone at the route start, the
+hike date (the stored `hikeDate`, else the forecast's selected date from the shared
+`weekday` preference), and the start instant from **Route start**; a recorded track's
+default start is read on that zone's clock. It plans stations from `routeElapsedSeconds`
+with `planTrackLightingStations`, spaced evenly over combined distance and time
+progress, and finds the sunrises and sunsets the hike passes with `solarDayEvents`. A
+saved track first reads `localTrackLighting`; a row whose hash, start instant, and
+station timing all match is used as is. Otherwise `computeTrackLighting`
+(`application/tracks/computeTrackLighting.ts`) asks the `TerrainSamplerSource` port,
+implemented by `RasterDemElevationProvider`, to load every DEM tile within the
+terrain-shadow reach: the provider zoom within 5 km, two zooms coarser within 20 km, and
+four coarser out to the 100 km march cap, mirroring the shader's mosaic levels. A route
+needing more than 160 tiles, or any failed tile, rejects the load. `stationSunlight`
+then marches `horizonAngleTowardSun`, the CPU reference of the shadow shader, toward the
+Sun from seven ground points within 50 m of each station on the main thread, yielding to
+the event loop every 16 stations, and the result replaces the stored row. A newer input
+aborts the run. `TrackWeatherSection` turns a **Hike date** inside the forecast week
+into that forecast weekday and clears `hikeDate`; only a date outside the week is
+stored. Two effects keep that date and the map's sun-shadow date one: whenever the hike
+date or route zone changes, `showHikeDateOnMap` calls
+`MapLibreLayerController.setSunShadow` with the same local time on the hike date (a map
+already there is left alone), which then clamps it to that day's daylight window at the
+map center like any chosen instant; whenever the map's `sunShadow.instantMs` moves to
+another local date, that date becomes the hike date. The sun graph in **Route timing**
+reads the same instant for its Sun dot, and a click on it calls `setSunShadow` with the
+clicked minute.
+
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the
-lower-right grade legend appears with it. Chart hover changes panel emphasis only; the
-chart point drives a separate transient trace-point source. Hovering or focusing a
-Climbs & Descents row sends that segment's grade subsegments to `setImportedTrackFocus`.
-The focus overlay has two slots, each a source with its own casing, line, and grade
-layers above the highlight. Rows only claim the hover and the list releases it, so
-crossing the gaps between rows keeps the focus. The profile publishes the current focus
-without an effect cleanup, so moving between rows never sends an intermediate `null`. A
-new segment loads into the less visible slot. Each slot's visibility moves toward its
-target over 300 ms, and the controller writes the resulting opacities every animation
-frame, because the style disables paint transitions (see terrain overlay
-reconciliation). The base casing, line, and highlight dim with the slots' combined eased
-visibility, down to 15% of the track opacity, so a cross-fade keeps the track dimmed
-while one segment replaces the other, and release fades everything back together.
-Selecting a row issues a fit command with the segment's antimeridian-aware bounds and a
-travel path: its points with elevation, facing start to finish. Import and track
-selection issue one fit command padded for the Tracks panes whose path faces
-`trackOutboundDirection`: start to finish, or start to the farthest point for an
-`isLoop` track. Tracks without source elevation add their DEM samples to the drawn
-points and fit again once those samples arrive; drawing another track clears any focus
-at once. Flat mode fits the bounds in the current orientation. In terrain mode the
-facade instead flies to the result of `directedCameraFit`: MapLibre fits as if unpitched
-and ignores relief, so at 45° the far half compresses and points above the terrain under
-the center rise toward the horizon. The solver projects the path through MapLibre's
-pinhole camera at the target pitch. It uses rendered terrain heights from
+lower-right grade legend appears with it. When the single active track's `lightOnMap`
+timeline setting is on and its terrain light is ready, the provider instead sends
+`trackLightMapSegments` (`presentation/tracks/trackLightColor.ts`): the profile points
+split where the strip color of each step's midpoint changes, through the same
+`setImportedTrackHighlight`. Chart hover changes panel emphasis only; the chart point
+and the light strip's hovered point drive a separate transient trace-point source.
+Hovering or focusing a Climbs & Descents row sends that segment's grade subsegments to
+`setImportedTrackFocus`. The focus overlay has two slots, each a source with its own
+casing, line, and grade layers above the highlight. Rows only claim the hover and the
+list releases it, so crossing the gaps between rows keeps the focus. The profile
+publishes the current focus without an effect cleanup, so moving between rows never
+sends an intermediate `null`. A new segment loads into the less visible slot. Each
+slot's visibility moves toward its target over 300 ms, and the controller writes the
+resulting opacities every animation frame, because the style disables paint transitions
+(see terrain overlay reconciliation). The base casing, line, and highlight dim with the
+slots' combined eased visibility, down to 15% of the track opacity, so a cross-fade
+keeps the track dimmed while one segment replaces the other, and release fades
+everything back together. Selecting a row issues a fit command with the segment's
+antimeridian-aware bounds and a travel path: its points with elevation, facing start to
+finish. Import and track selection issue one fit command padded for the Tracks panes
+whose path faces `trackOutboundDirection`: start to finish, or start to the farthest
+point for an `isLoop` track. Tracks without source elevation add their DEM samples to
+the drawn points and fit again once those samples arrive; drawing another track clears
+any focus at once. Flat mode fits the bounds in the current orientation. In terrain mode
+the facade instead flies to the result of `directedCameraFit`: MapLibre fits as if
+unpitched and ignores relief, so at 45° the far half compresses and points above the
+terrain under the center rise toward the horizon. The solver projects the path through
+MapLibre's pinhole camera at the target pitch. It uses rendered terrain heights from
 `queryTerrainElevation` inside the current view and track elevations elsewhere, and
 keeps about 500 points: the per-window extremes across, along, and in elevation. It
 re-solves until the camera sits on the terrain under its own center, at that latitude's

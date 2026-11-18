@@ -196,19 +196,30 @@ import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSecti
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
+  routeTimeZone,
+  useTrackLighting,
+  type TrackLightingView,
+} from '@/presentation/tracks/useTrackLighting';
+import {
   createTrackTimingRoute,
+  defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  localCalendarDate,
+  trackWeatherDates,
   planTrackClockTimes,
   planTrackMarkerTimes,
   trackWeatherTimeline,
   withTrackWeatherTimeline,
   type TrackClockTimes,
+  type RecordedRouteStart,
   type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import type { ImportedTrackHighlightSegment } from '@/presentation/map/MapLibreLayerController';
 import type { ImportedTrackTimeLabel } from '@/presentation/map/mapStyleFactory';
+import { trackLightMapSegments } from '@/presentation/tracks/trackLightColor';
 import {
   formatTrackDistance,
   formatTrackDuration,
@@ -488,6 +499,8 @@ interface TracksWorkspaceValue {
   readonly activeTrackWeatherTimeline: TrackWeatherTimelineSettings;
   readonly activeTrackMarkerTimes: ReadonlyMap<string, string>;
   readonly activeTimingRoute: TrackTimingRoute | null;
+  /** Sun and terrain light of the active track's hike; null without a timed route. */
+  readonly activeTrackLighting: TrackLightingView | null;
   readonly updateActiveTrackWeatherTimeline: (
     settings: TrackWeatherTimelineSettings,
   ) => void;
@@ -698,6 +711,15 @@ function trackNameFailureMessage(
   return error.problem === 'required'
     ? msg`Track name is required.`
     : msg`Track name must be 200 characters or fewer.`;
+}
+
+/** The recorded start on the clock of the route start, which timing defaults use. */
+function recordedRouteStart(
+  metrics: Pick<TrackMetrics, 'recordedStartAt' | 'startCoordinate'>,
+): RecordedRouteStart | undefined {
+  return metrics.recordedStartAt === undefined
+    ? undefined
+    : { at: metrics.recordedStartAt, timeZone: routeTimeZone(metrics.startCoordinate) };
 }
 
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
@@ -1107,28 +1129,33 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setUnsavedTrackTimeline(null);
   }
   const savedTimingTrackId = active?.kind === 'saved' ? active.summary.id : null;
-  const recordedStartAt =
+  const timingMetrics =
     active?.kind === 'saved'
-      ? active.summary.metrics.recordedStartAt
+      ? active.summary.metrics
       : (active?.kind === 'preview' || active?.kind === 'shared') &&
           active.preparationStatus === 'ready'
-        ? active.sourceMetrics.recordedStartAt
+        ? active.sourceMetrics
         : undefined;
+  const recordedStartAt = timingMetrics?.recordedStartAt;
+  const activeRecordedStart = useMemo(
+    () => (timingMetrics === undefined ? undefined : recordedRouteStart(timingMetrics)),
+    [timingMetrics],
+  );
   const activeTrackWeatherTimeline = useMemo(
     () =>
       savedTimingTrackId !== null
         ? trackWeatherTimeline(
             trackWeatherPreferences,
             savedTimingTrackId,
-            recordedStartAt,
+            activeRecordedStart,
           )
         : unsavedTrackTimeline !== null &&
             unsavedTrackTimeline.trackId === activeUnsavedTrackId
           ? unsavedTrackTimeline.settings
-          : trackWeatherTimeline(null, null, recordedStartAt),
+          : trackWeatherTimeline(null, null, activeRecordedStart),
     [
       savedTimingTrackId,
-      recordedStartAt,
+      activeRecordedStart,
       trackWeatherPreferences,
       unsavedTrackTimeline,
       activeUnsavedTrackId,
@@ -1142,7 +1169,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
             active.summary.id,
             settings,
-            active.summary.metrics.recordedStartAt,
+            recordedRouteStart(active.summary.metrics),
           ),
         );
       } else if (active?.kind === 'preview' || active?.kind === 'shared') {
@@ -2284,7 +2311,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
             summary.id,
             unsavedTrackTimeline.settings,
-            summary.metrics.recordedStartAt,
+            recordedRouteStart(summary.metrics),
           ),
         );
       }
@@ -3483,40 +3510,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     },
     [mapLayers],
   );
-  useEffect(() => {
-    const highlightSegments = multiTrackMode
-      ? readyMultiTrackSelections.flatMap((selection) => {
-          const profile = selection.profile;
-          if (profile === null) return [];
-          return profile.gradeSubsegments.map((gradeSubsegment) => ({
-            coordinates: profile.points
-              .slice(
-                gradeSubsegment.startSampleIndex,
-                gradeSubsegment.endSampleIndex + 1,
-              )
-              .map((point) => point.coordinate),
-            color: appColors.elevationGrade[gradeSubsegment.band],
-          }));
-        })
-      : activePathOwner !== null || activeProfile === null
-        ? null
-        : activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
-            coordinates: activeProfile.points
-              .slice(
-                gradeSubsegment.startSampleIndex,
-                gradeSubsegment.endSampleIndex + 1,
-              )
-              .map((point) => point.coordinate),
-            color: appColors.elevationGrade[gradeSubsegment.band],
-          }));
-    mapLayers?.setImportedTrackHighlight(highlightSegments);
-  }, [
-    activePathOwner,
-    activeProfile,
-    mapLayers,
-    multiTrackMode,
-    readyMultiTrackSelections,
-  ]);
   // A track's own choice wins over the Layers default; times follow its route start
   // and pace, so multi-track mode shows each track at its own stored settings.
   const defaultTimeMarkers = useStore(mapLayerStore, (state) => state.trackTimeMarkers);
@@ -3561,6 +3554,64 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
     return routes;
   }, [readyMultiTrackSelections]);
+  const activeTrackLighting = useTrackLighting({
+    savedTrack:
+      active?.kind === 'saved'
+        ? { id: active.summary.id, contentHash: active.summary.contentHash ?? null }
+        : null,
+    route: multiTrackMode ? null : activeTimingRoute,
+    metrics: activeStatsMetrics,
+    settings: activeTrackWeatherTimeline,
+    recordedStartAt,
+    // The track forecast's selected date, as `TrackWeatherSection` derives it.
+    forecastDate: defaultTrackWeatherDate(
+      trackWeatherDates(localCalendarDate(clock.now())),
+      (trackWeatherPreferences ?? defaultTrackWeatherPreferences).weekday,
+    ),
+  });
+  // A single track can take its light colors once its terrain light is ready; until then,
+  // and in multi-track mode, the map shows grade colors.
+  const activeLightSamples =
+    activeTrackWeatherTimeline.lightOnMap &&
+    activeTrackLighting?.terrain.status === 'ready'
+      ? activeTrackLighting.terrain.samples
+      : null;
+  useEffect(() => {
+    let highlightSegments: readonly ImportedTrackHighlightSegment[] | null = null;
+    if (multiTrackMode) {
+      highlightSegments = readyMultiTrackSelections.flatMap((selection) => {
+        const profile = selection.profile;
+        if (profile === null) return [];
+        return profile.gradeSubsegments.map((gradeSubsegment) => ({
+          coordinates: profile.points
+            .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
+            .map((point) => point.coordinate),
+          color: appColors.elevationGrade[gradeSubsegment.band],
+        }));
+      });
+    } else if (activePathOwner === null && activeProfile !== null) {
+      highlightSegments =
+        activeLightSamples === null
+          ? activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
+              coordinates: activeProfile.points
+                .slice(
+                  gradeSubsegment.startSampleIndex,
+                  gradeSubsegment.endSampleIndex + 1,
+                )
+                .map((point) => point.coordinate),
+              color: appColors.elevationGrade[gradeSubsegment.band],
+            }))
+          : trackLightMapSegments(activeProfile.points, activeLightSamples);
+    }
+    mapLayers?.setImportedTrackHighlight(highlightSegments);
+  }, [
+    activeLightSamples,
+    activePathOwner,
+    activeProfile,
+    mapLayers,
+    multiTrackMode,
+    readyMultiTrackSelections,
+  ]);
   const activeTrackMarkerTimes = useMemo((): ReadonlyMap<string, string> => {
     if (
       multiTrackMode ||
@@ -3616,7 +3667,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         const settings = trackWeatherTimeline(
           trackWeatherPreferences,
           selection.summary.id,
-          selection.summary.metrics.recordedStartAt,
+          recordedRouteStart(selection.summary.metrics),
         );
         const timingRoute = multiTrackTimingRoutes.get(selection.summary.id);
         if (
@@ -3696,6 +3747,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeTrackWeatherTimeline,
       activeTrackMarkerTimes,
       activeTimingRoute,
+      activeTrackLighting,
       updateActiveTrackWeatherTimeline,
       createFolder,
       updateFolder,
@@ -3777,6 +3829,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeTrackWeatherTimeline,
       activeTrackMarkerTimes,
       activeTimingRoute,
+      activeTrackLighting,
       updateActiveTrackWeatherTimeline,
       importErrorMessage,
       importFiles,
@@ -5449,6 +5502,7 @@ function InteractiveElevationProfile({
   const {
     active,
     activePath,
+    activeTrackLighting,
     elevationProgress,
     pointSelection,
     pointsList,
@@ -5581,7 +5635,9 @@ function InteractiveElevationProfile({
     );
   };
   return (
-    <Stack spacing={1.5}>
+    // Fragment: in the track panel the profile and Climbs & Descents are separate
+    // sections of the divided section list.
+    <>
       {showsPreparation ? (
         <ElevationPreparationChart
           progress={elevationProgress}
@@ -5610,6 +5666,7 @@ function InteractiveElevationProfile({
               'profile',
             );
           }}
+          lighting={showHeading ? activeTrackLighting : null}
           {...(pointsList === null
             ? {}
             : { onDistanceRangeSelect: selectPathPointsInDistanceRange })}
@@ -5651,7 +5708,7 @@ function InteractiveElevationProfile({
           }}
         />
       ) : null}
-    </Stack>
+    </>
   );
 }
 
@@ -5675,7 +5732,7 @@ function TrackElevationAnalysis() {
     (active.kind === 'preview' && active.preparationStatus === 'preparing');
   const emptyOrPreparing =
     preparing || profile === null ? (
-      <Stack spacing={1.5}>
+      <>
         {preparing ? (
           <ElevationPreparationChart
             progress={elevationProgress}
@@ -5733,7 +5790,7 @@ function TrackElevationAnalysis() {
             onSegmentSelectionChange={() => undefined}
           />
         )}
-      </Stack>
+      </>
     ) : null;
   if (emptyOrPreparing !== null) return emptyOrPreparing;
   if (profile === null) return null;
@@ -5788,7 +5845,7 @@ function TrackMetadata({
         }}
       />
       {expanded ? (
-        <Stack id={detailsId} spacing={0.5} sx={{ px: 1 }}>
+        <Stack id={detailsId} spacing={0.5} sx={{ px: 1, pt: 1 }}>
           <Typography variant="body2">
             {sourceFilename} · {formatLabel}
           </Typography>
@@ -5914,6 +5971,7 @@ export function TrackDetailsPane({
     activeTrackWeatherTimeline,
     activeTrackMarkerTimes,
     activeTimingRoute,
+    activeTrackLighting,
     applyGeneratedName,
     closeActive,
     clearRoutePlan,
@@ -6668,128 +6726,151 @@ export function TrackDetailsPane({
               </Stack>
             </>
           ) : null}
-          <Box component="section">
-            <TrackSectionHeading
-              title={t`Track details`}
-              detailsId={summaryDetailsId}
-              expanded={summaryExpanded}
-              onToggle={() => {
-                setSectionExpanded('summary', !summaryExpanded);
-              }}
+          {/* Every collapsible section is a direct DOM child here, fragments included,
+              so each one after the first gets a divider with 8 px on either side. The
+              divider spans the whole panel: the section bleeds through the panel's
+              16 px padding and pads its content back. Flex gap keeps those margins,
+              which Stack's margin spacing would reset. */}
+          <Stack
+            spacing={1}
+            useFlexGap
+            sx={{
+              flex: '1 0 auto',
+              '& > * + *': {
+                mx: -2,
+                px: 2,
+                pt: 1,
+                borderTop: 1,
+                borderColor: 'divider',
+              },
+            }}
+          >
+            <Box component="section">
+              <TrackSectionHeading
+                title={t`Track details`}
+                detailsId={summaryDetailsId}
+                expanded={summaryExpanded}
+                onToggle={() => {
+                  setSectionExpanded('summary', !summaryExpanded);
+                }}
+              />
+              {summaryExpanded ? (
+                <Box
+                  id={summaryDetailsId}
+                  sx={{ minHeight: 56, pt: 1, display: 'flex', alignItems: 'center' }}
+                >
+                  {metrics === null ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {active.kind === 'route-plan' ? (
+                        <Trans>
+                          Add at least two route points to see track details.
+                        </Trans>
+                      ) : (
+                        <Trans>Track details are being prepared…</Trans>
+                      )}
+                    </Typography>
+                  ) : (
+                    <Box sx={{ width: '100%' }}>
+                      <TrackStats metrics={metrics} />
+                    </Box>
+                  )}
+                </Box>
+              ) : null}
+            </Box>
+            <TrackElevationAnalysis
+              key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
             />
-            {summaryExpanded ? (
-              <Box
-                id={summaryDetailsId}
-                sx={{ minHeight: 56, display: 'flex', alignItems: 'center' }}
-              >
-                {metrics === null ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {active.kind === 'route-plan' ? (
-                      <Trans>Add at least two route points to see track details.</Trans>
-                    ) : (
-                      <Trans>Track details are being prepared…</Trans>
-                    )}
-                  </Typography>
-                ) : (
-                  <Box sx={{ width: '100%' }}>
-                    <TrackStats metrics={metrics} />
-                  </Box>
-                )}
-              </Box>
-            ) : null}
-          </Box>
-          <TrackElevationAnalysis
-            key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
-          />
-          {trackMarkers === null || activePath !== null ? null : (
-            <TrackMarkersSection
-              key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
-              elevationProvider={elevationProvider}
-              markers={trackMarkers}
-              markerTimes={activeTrackMarkerTimes}
-              onAdd={startTrackMarkerPlacement}
-              onRename={renameTrackMarker}
-              onDelete={deleteTrackMarker}
-            />
-          )}
-          {activePath !== null ||
-          activeProfile === null ||
-          metrics === null ||
-          activeTimingRoute === null ? null : (
-            <TrackWeatherSection
-              key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
-              profile={activeProfile}
-              metrics={metrics}
-              timingRoute={activeTimingRoute}
-              preferences={trackWeatherPreferences}
-              onPreferencesChange={updateTrackWeatherPreferences}
-              timelineSettings={activeTrackWeatherTimeline}
-              onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
-            />
-          )}
-          {/* Editing a saved track's points is desktop-only; phones list plan points. */}
-          {pointsList === null ||
-          (mode === 'mobile' && active.kind !== 'route-plan') ? null : (
-            <TrackPointsSection
-              key={`points:${active.kind === 'saved' ? active.summary.id : active.id}`}
-              variant={active.kind === 'route-plan' ? 'plan' : 'track'}
-              editing={activePath !== null}
-              anchors={pointsList.anchors}
-              legs={pointsList.legs}
-              insertion={
-                pathInsertion === null
-                  ? null
-                  : {
-                      afterIndex:
-                        pathInsertion.afterAnchorId === null
-                          ? -1
-                          : pointsList.path.anchors.findIndex(
-                              (anchor) => anchor.id === pathInsertion.afterAnchorId,
-                            ),
-                      mode: pathInsertion.mode,
-                    }
-              }
-              movingIndex={movingIndex < 0 ? null : movingIndex}
-              selection={pointSelection}
-              revealRequest={pointRevealRequest}
-              disabled={activePath?.status === 'saving'}
-              {...(active.kind === 'saved' && activePath === null
-                ? { onStartEditing: startTrackEdit }
-                : {})}
-              onSelectionChange={setPointSelection}
-              onDeleteSelection={deletePathSelection}
-              onMoveStart={(index) => {
-                editActivePath((draft) => startTrackPathMove(draft, index));
-                setMobileWorkspaceOpen(false);
-              }}
-              onMoveCancel={() => {
-                editActivePath(cancelTrackPathMove);
-              }}
-              onInsertionStart={(afterIndex) => {
-                editActivePath((draft) => startTrackPathInsertion(draft, afterIndex));
-                setMobileWorkspaceOpen(false);
-              }}
-              onInsertionModeChange={(mode) => {
-                editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
-              }}
-              onInsertionEnd={() => {
-                editActivePath(endTrackPathInsertion);
-              }}
-              onLegModeChange={(legIndex, mode) => {
-                editActivePath((draft) => setTrackPathLegMode(draft, legIndex, mode));
-              }}
-            />
-          )}
-          {active.kind === 'route-plan' || activePath !== null ? null : (
-            <TrackMetadata
-              calculatedMetrics={calculatedMetrics}
-              pointCount={pointCount}
-              savedAt={savedAt}
-              segmentCount={segmentCount}
-              sourceFilename={sourceFilename}
-              sourceFormat={sourceFormat}
-            />
-          )}
+            {activePath !== null ||
+            activeProfile === null ||
+            metrics === null ||
+            activeTimingRoute === null ? null : (
+              <TrackWeatherSection
+                key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                profile={activeProfile}
+                metrics={metrics}
+                timingRoute={activeTimingRoute}
+                preferences={trackWeatherPreferences}
+                onPreferencesChange={updateTrackWeatherPreferences}
+                timelineSettings={activeTrackWeatherTimeline}
+                onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
+                lighting={activeTrackLighting}
+              />
+            )}
+            {trackMarkers === null || activePath !== null ? null : (
+              <TrackMarkersSection
+                key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                elevationProvider={elevationProvider}
+                markers={trackMarkers}
+                markerTimes={activeTrackMarkerTimes}
+                onAdd={startTrackMarkerPlacement}
+                onRename={renameTrackMarker}
+                onDelete={deleteTrackMarker}
+              />
+            )}
+            {/* Editing a saved track's points is desktop-only; phones list plan points. */}
+            {pointsList === null ||
+            (mode === 'mobile' && active.kind !== 'route-plan') ? null : (
+              <TrackPointsSection
+                key={`points:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                variant={active.kind === 'route-plan' ? 'plan' : 'track'}
+                editing={activePath !== null}
+                anchors={pointsList.anchors}
+                legs={pointsList.legs}
+                insertion={
+                  pathInsertion === null
+                    ? null
+                    : {
+                        afterIndex:
+                          pathInsertion.afterAnchorId === null
+                            ? -1
+                            : pointsList.path.anchors.findIndex(
+                                (anchor) => anchor.id === pathInsertion.afterAnchorId,
+                              ),
+                        mode: pathInsertion.mode,
+                      }
+                }
+                movingIndex={movingIndex < 0 ? null : movingIndex}
+                selection={pointSelection}
+                revealRequest={pointRevealRequest}
+                disabled={activePath?.status === 'saving'}
+                {...(active.kind === 'saved' && activePath === null
+                  ? { onStartEditing: startTrackEdit }
+                  : {})}
+                onSelectionChange={setPointSelection}
+                onDeleteSelection={deletePathSelection}
+                onMoveStart={(index) => {
+                  editActivePath((draft) => startTrackPathMove(draft, index));
+                  setMobileWorkspaceOpen(false);
+                }}
+                onMoveCancel={() => {
+                  editActivePath(cancelTrackPathMove);
+                }}
+                onInsertionStart={(afterIndex) => {
+                  editActivePath((draft) => startTrackPathInsertion(draft, afterIndex));
+                  setMobileWorkspaceOpen(false);
+                }}
+                onInsertionModeChange={(mode) => {
+                  editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
+                }}
+                onInsertionEnd={() => {
+                  editActivePath(endTrackPathInsertion);
+                }}
+                onLegModeChange={(legIndex, mode) => {
+                  editActivePath((draft) => setTrackPathLegMode(draft, legIndex, mode));
+                }}
+              />
+            )}
+            {active.kind === 'route-plan' || activePath !== null ? null : (
+              <TrackMetadata
+                calculatedMetrics={calculatedMetrics}
+                pointCount={pointCount}
+                savedAt={savedAt}
+                segmentCount={segmentCount}
+                sourceFilename={sourceFilename}
+                sourceFormat={sourceFormat}
+              />
+            )}
+          </Stack>
           {segmentCount > 1 && activePath === null ? (
             <Alert severity="info">
               <Trans>Independent segments are not joined; totals exclude gaps.</Trans>

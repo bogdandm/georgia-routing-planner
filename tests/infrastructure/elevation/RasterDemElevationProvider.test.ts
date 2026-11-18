@@ -275,3 +275,105 @@ describe('RasterDemElevationProvider sampling progress', () => {
     expect(progress).toEqual([0]);
   });
 });
+
+describe('RasterDemElevationProvider terrain sampler', () => {
+  // Zoom 4 with 2 px tiles keeps every level of the sampler (z4, z2, z0) to one tile
+  // around the station: each tile spans hundreds of kilometres.
+  const samplerTerrain = { ...terrain(), maxZoom: 4 };
+  const station: ElevationCoordinate = { longitude: 44, latitude: 42 };
+
+  /** Serves one uniform tile per zoom, resolved immediately; `null` zooms fail. */
+  function zoomServer(metersByZoom: Readonly<Record<number, number | null | 'fail'>>) {
+    const decodedByBlob = new Map<Blob, DecodedDemTile>();
+    const get = vi.fn((url: string) => {
+      const zoomLevel = Number(/dem\.test\/(\d+)\//u.exec(url)?.[1]);
+      const meters = metersByZoom[zoomLevel];
+      if (meters === undefined || meters === 'fail') {
+        return { blob: () => Promise.reject(new Error(`DEM tile ${url} failed.`)) };
+      }
+      const blob = new Blob([url]);
+      decodedByBlob.set(blob, tile([meters, meters, meters, meters]));
+      return { blob: () => Promise.resolve(blob) };
+    });
+    const decoder: DemImageDecoder = {
+      decode: (blob) => {
+        const decoded = decodedByBlob.get(blob);
+        if (decoded === undefined) throw new Error('Unknown DEM blob.');
+        return Promise.resolve(decoded);
+      },
+    };
+    return {
+      get,
+      provider: new RasterDemElevationProvider(
+        { get } as unknown as KyInstance,
+        samplerTerrain,
+        idGenerator,
+        decoder,
+      ),
+    };
+  }
+
+  it('reads the finest level within reach and coarser levels farther away', async () => {
+    const { get, provider } = zoomServer({ 4: 1_000, 2: 2_000, 0: 3_000 });
+    const sampler = await provider.loadTerrainSampler(
+      [station],
+      new AbortController().signal,
+    );
+
+    expect(get.mock.calls.map(([url]) => url).sort()).toEqual([
+      'https://dem.test/0/0/0.webp',
+      'https://dem.test/2/2/1.webp',
+      'https://dem.test/4/9/5.webp',
+    ]);
+    expect(sampler.elevationAt(42, 44, 0)).toBeCloseTo(1_000, 9);
+    expect(sampler.elevationAt(42, 44, 10_000)).toBeCloseTo(2_000, 9);
+    expect(sampler.elevationAt(42, 44, 60_000)).toBeCloseTo(3_000, 9);
+    expect(sampler.elevationAt(42, 44, 150_000)).toBeNull();
+    expect(sampler.maximumElevationMeters).toBe(3_000);
+    // One z4 pixel of a 2 px tile at 42° N.
+    expect(sampler.baseResolutionMeters).toBeCloseTo(
+      (2 * Math.PI * 6_371_008.8 * Math.cos((42 * Math.PI) / 180)) / (16 * 2),
+      6,
+    );
+  });
+
+  it('fills transparent fine pixels from the next coarser level', async () => {
+    const { provider } = zoomServer({ 4: null, 2: 2_000, 0: 3_000 });
+    const sampler = await provider.loadTerrainSampler(
+      [station],
+      new AbortController().signal,
+    );
+
+    expect(sampler.elevationAt(42, 44, 0)).toBeCloseTo(2_000, 9);
+    expect(sampler.maximumElevationMeters).toBe(3_000);
+  });
+
+  it('rejects when any tile fails, since missing far terrain would read as sunlight', async () => {
+    const { provider } = zoomServer({ 4: 1_000, 2: 2_000, 0: 'fail' });
+
+    await expect(
+      provider.loadTerrainSampler([station], new AbortController().signal),
+    ).rejects.toThrow('failed');
+  });
+
+  it('rejects a scattered route before loading any tile', async () => {
+    const get = vi.fn();
+    // At zoom 6 points 10° apart each need their own finest tiles.
+    const provider = new RasterDemElevationProvider(
+      { get } as unknown as KyInstance,
+      { ...terrain(), maxZoom: 6 },
+      idGenerator,
+    );
+    const scattered: ElevationCoordinate[] = [];
+    for (let latitude = -60; latitude <= 60; latitude += 10) {
+      for (let longitude = -170; longitude <= 170; longitude += 10) {
+        scattered.push({ longitude, latitude });
+      }
+    }
+
+    await expect(
+      provider.loadTerrainSampler(scattered, new AbortController().signal),
+    ).rejects.toThrow('too many DEM tiles');
+    expect(get).not.toHaveBeenCalled();
+  });
+});

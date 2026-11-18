@@ -7,6 +7,7 @@ import {
 import { solarPositionAt, subsolarPoint } from '@/domain/terrain/solarPosition';
 import {
   terrainShadowModel,
+  terrainSkyViewModel,
   visibleSolarDiskFraction,
 } from '@/domain/terrain/terrainShadow';
 import {
@@ -97,7 +98,7 @@ export const terrainShadeSkyLightShare = 0.45;
  */
 export const terrainShadeSkyLightElevationDegrees = 30;
 const skyLightWrap = 0.2;
-const skyLightReliefExaggeration = 1.5;
+const skyLightReliefExaggeration = terrainSkyViewModel.reliefExaggeration;
 /**
  * How strongly the terrain's occlusion of the sky dims the sky light: the shade pass uses
  * max(1 − strength · (1 − occlusion), 0), so above 1 gorges darken faster than the open
@@ -408,12 +409,11 @@ void main() {
 
 /** Sky-view grid: one sample per 4 × 4 output pixels, read back with linear filtering. */
 export const terrainSkyViewSize = terrainShadowTileSize / 4;
-/** Horizon directions per sky-view sample. */
-const skyViewDirections = 16;
-/** Terrain farther than this does not hide sky; deep valleys are a few kilometres wide. */
-const skyViewMaximumDistanceMeters = 20_000;
-/** Each sky-view march step grows by this fraction of the distance travelled. */
-const skyViewStepFraction = 0.08;
+const {
+  directions: skyViewDirections,
+  maximumDistanceMeters: skyViewMaximumDistanceMeters,
+  stepFraction: skyViewStepFraction,
+} = terrainSkyViewModel;
 
 /**
  * Share of a level surface's cosine-weighted sky that the surrounding terrain leaves

@@ -63,6 +63,8 @@ When elevation is available, the track view adds:
 - An interactive elevation profile linked to the map.
 - A breakdown of climbs and descents.
 - Grade colors along the steeper parts of the route.
+- Light along the route for any hike date: time in sun, terrain shade, the blue hour,
+  and darkness, with sunrise, sunset, and how long before sunset the hike ends.
 
 ## Markers
 

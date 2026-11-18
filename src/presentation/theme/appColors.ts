@@ -17,6 +17,13 @@ export const appColors = {
     'steep-climb': '#C93C45',
     'extreme-climb': '#C93C45',
   },
+  /** Legend colors of the route light kinds; `trackLightColor` shades between them. */
+  trackLight: {
+    sun: '#FFC233',
+    shade: '#8FA7B5',
+    twilight: '#8EA2DD',
+    dark: '#1C2443',
+  },
   surface: {
     canvas: '#EAF5F7',
     map: '#D8D8D3',

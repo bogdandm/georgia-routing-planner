@@ -44,6 +44,7 @@ import {
 
 import {
   elevationSegmentIndexForSample,
+  nearestPointIndex,
   sampleElevationProfilePoints,
   type ElevationProfile,
   type ElevationProfilePoint,
@@ -66,6 +67,8 @@ import {
 } from '@/presentation/tracks/trackFormatters';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
+import { SunEventChartMark } from '@/presentation/tracks/TrackLighting';
+import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 
 /** A press that travels this far along the chart is a range drag, never a click. */
 const RANGE_DRAG_THRESHOLD_PX = 4;
@@ -215,43 +218,11 @@ interface ElevationProfileChartProps {
     readonly startMeters: number;
     readonly endMeters: number;
   }) => void;
-}
-
-/** Index of the profile point nearest `distanceMeters`; points ascend by distance. */
-function nearestPointIndex(
-  points: readonly ElevationProfilePoint[],
-  distanceMeters: number,
-  coordinate?: TrackCoordinate,
-): number {
-  let low = 0;
-  let high = points.length - 1;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((points[middle]?.distanceMeters ?? 0) < distanceMeters) low = middle + 1;
-    else high = middle;
-  }
-  if (coordinate !== undefined) {
-    for (
-      let index = low;
-      points[index]?.distanceMeters === distanceMeters;
-      index += 1
-    ) {
-      const candidate = points[index]?.coordinate;
-      if (candidate?.[0] === coordinate[0] && candidate[1] === coordinate[1]) {
-        return index;
-      }
-    }
-  }
-  const previous = points[low - 1];
-  const next = points[low];
-  if (
-    previous !== undefined &&
-    (next === undefined ||
-      distanceMeters - previous.distanceMeters < next.distanceMeters - distanceMeters)
-  ) {
-    return low - 1;
-  }
-  return low;
+  /**
+   * The hike's light: sunrise and sunset marks on the profile. Without it the chart
+   * shows none.
+   */
+  readonly lighting?: TrackLightingView | null;
 }
 
 function activeChartRow(
@@ -608,7 +579,8 @@ export function ElevationPreparationChart({
       }}
     />
   );
-  if (!expanded) return heading;
+  // A wrapper takes the track panel's section divider, which a button would reset.
+  if (!expanded) return <Box>{heading}</Box>;
 
   return (
     <Stack spacing={1.5}>
@@ -689,6 +661,7 @@ export function ElevationProfileChart({
   onTrackGradeLegendDismissedChange,
   onPointClick,
   onDistanceRangeSelect,
+  lighting = null,
 }: ElevationProfileChartProps): ReactElement {
   /**
    * A press on the chart: where it started, whether the pointer has travelled far
@@ -728,6 +701,47 @@ export function ElevationProfileChart({
         ? profile.points[sampleIndex]?.distanceMeters
         : elapsedSeconds[sampleIndex]) ?? 0,
     [elapsedSeconds, profile],
+  );
+  /**
+   * Chart position of the hiker at a route distance and elapsed hike time. On the Time
+   * axis a recording-timed hike scales its elapsed time onto the recorded one, so stops
+   * keep their span; an estimated hike is placed by distance between profile samples.
+   */
+  const lightingTotalSeconds =
+    lighting === null ? 0 : (lighting.finishMs - lighting.startMs) / 1_000;
+  const recordedTotalSeconds = elapsedSeconds?.at(-1) ?? 0;
+  const lightingTimeScale =
+    lighting?.recordedTiming === true && lightingTotalSeconds > 0
+      ? recordedTotalSeconds / lightingTotalSeconds
+      : null;
+  const xOfLighting = useCallback(
+    (distanceMeters: number, hikeSeconds: number): number => {
+      if (elapsedSeconds === null) return distanceMeters;
+      if (lightingTimeScale !== null) return hikeSeconds * lightingTimeScale;
+      const { points } = profile;
+      let low = 0;
+      let high = points.length - 1;
+      while (low < high) {
+        const middle = (low + high) >> 1;
+        if ((points[middle]?.distanceMeters ?? Infinity) < distanceMeters)
+          low = middle + 1;
+        else high = middle;
+      }
+      const after = points[low];
+      const before = points[low - 1];
+      if (after === undefined) return 0;
+      if (before === undefined || after.distanceMeters <= before.distanceMeters) {
+        return elapsedSeconds[low] ?? 0;
+      }
+      const beforeX = elapsedSeconds[low - 1] ?? 0;
+      const afterX = elapsedSeconds[low] ?? beforeX;
+      return (
+        beforeX +
+        ((afterX - beforeX) * (distanceMeters - before.distanceMeters)) /
+          (after.distanceMeters - before.distanceMeters)
+      );
+    },
+    [elapsedSeconds, lightingTimeScale, profile],
   );
   let highlight: { readonly startX: number; readonly endX: number } | null = null;
   if (highlightedDistanceRange !== null) {
@@ -844,7 +858,8 @@ export function ElevationProfileChart({
       }}
     />
   );
-  if (showHeading && !expanded) return heading;
+  // A wrapper takes the track panel's section divider, which a button would reset.
+  if (showHeading && !expanded) return <Box>{heading}</Box>;
 
   return (
     <Stack spacing={1.5} useFlexGap data-tour="track-profile">
@@ -859,6 +874,7 @@ export function ElevationProfileChart({
                   onTrackGradeLegendDismissedChange(false);
                 }}
                 size="small"
+                color="inherit"
               >
                 <HelpOutlineOutlinedIcon fontSize="small" />
               </IconButton>
@@ -968,6 +984,40 @@ export function ElevationProfileChart({
               strokeWidth={1}
             />
           ))}
+          {lighting?.sunEvents.map((event) => {
+            const time = new Intl.DateTimeFormat(i18n.locale, {
+              /* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+              hour: '2-digit',
+              minute: '2-digit',
+              hourCycle: 'h23',
+              /* eslint-enable lingui/no-unlocalized-strings */
+              timeZone: lighting.timeZone,
+            }).format(new Date(event.instantMs));
+            const label =
+              event.kind === 'sunrise' ? t`Sunrise ${time}` : t`Sunset ${time}`;
+            return (
+              <ReferenceLine
+                key={event.instantMs}
+                className="elevation-profile-sun-event"
+                x={xOfLighting(
+                  event.distanceMeters,
+                  (event.instantMs - lighting.startMs) / 1_000,
+                )}
+                ifOverflow="hidden"
+                stroke={appColors.brand.tigerOrange}
+                strokeDasharray="4 3"
+                label={(props: { readonly viewBox?: { x?: number; y?: number } }) => (
+                  <SunEventChartMark
+                    x={props.viewBox?.x ?? 0}
+                    y={props.viewBox?.y ?? 0}
+                    kind={event.kind}
+                    time={time}
+                    label={label}
+                  />
+                )}
+              />
+            );
+          })}
           {highlight !== null && highlight.startX !== highlight.endX ? (
             <ReferenceArea
               className="elevation-profile-highlight"

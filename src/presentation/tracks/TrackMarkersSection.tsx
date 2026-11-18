@@ -169,6 +169,7 @@ export function TrackMarkersSection({
           <span>
             <IconButton
               size="small"
+              color="inherit"
               aria-label={t`Add track marker`}
               disabled={markers.length >= MAXIMUM_TRACK_MARKERS}
               onClick={onAdd}
@@ -179,7 +180,7 @@ export function TrackMarkersSection({
         </Tooltip>
       </Box>
       {expanded ? (
-        <Box id={detailsId} sx={{ px: 1 }}>
+        <Box id={detailsId} sx={{ px: 1, pt: 1 }}>
           {deleteFailed ? (
             <Typography variant="caption" color="error">
               <Trans>The track marker could not be deleted.</Trans>

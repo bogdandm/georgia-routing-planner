@@ -56,6 +56,11 @@ msgstr "{heading}, {grade}, {distance}, {primary}, {opposite} ascent"
 msgid "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 msgstr "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 
+#. js-lingui-id: _oqig9
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{hours}h"
+msgstr "{hours}h"
+
 #. js-lingui-id: i3Frvq
 #: src/presentation/tracks/trackFormatters.ts
 msgid "{hours}h {minutes}m"
@@ -65,6 +70,16 @@ msgstr "{hours}h {minutes}m"
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "{label}: {value}"
 msgstr "{label}: {value}"
+
+#. js-lingui-id: JptW2N
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{margin} after sunset"
+msgstr "{margin} after sunset"
+
+#. js-lingui-id: MISIin
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{margin} before sunset"
+msgstr "{margin} before sunset"
 
 #. js-lingui-id: zpwS9F
 #: src/presentation/tracks/ElevationProfileChart.tsx
@@ -90,6 +105,11 @@ msgstr "{message} (segment {segmentNumber}, point {pointNumber})"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "{message} (segment {segmentNumber})"
 msgstr "{message} (segment {segmentNumber})"
+
+#. js-lingui-id: ZOtn9F
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{minutes}m"
+msgstr "{minutes}m"
 
 #. js-lingui-id: rXvqYW
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -213,6 +233,16 @@ msgstr "Additional valid waypoints were omitted."
 msgid "Adjust pace"
 msgstr "Adjust pace"
 
+#. js-lingui-id: JOzOwW
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Adjusted pace"
+msgstr "Adjusted pace"
+
+#. js-lingui-id: krcdgc
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "After dark"
+msgstr "After dark"
+
 #. js-lingui-id: Gbx5p_
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Along the route"
@@ -248,6 +278,11 @@ msgstr "Average speed"
 msgid "Back to tracks"
 msgstr "Back to tracks"
 
+#. js-lingui-id: _rXxL4
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Blue hour"
+msgstr "Blue hour"
+
 #. js-lingui-id: QIgTCB
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Browse track file"
@@ -262,6 +297,11 @@ msgstr "Building route graph… {graphProgress}"
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "By elevation"
 msgstr "By elevation"
+
+#. js-lingui-id: AkLEX7
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Calculating the light along the route"
+msgstr "Calculating the light along the route"
 
 #. js-lingui-id: dEgA5A
 #: src/presentation/tracks/RoutePlanControls.tsx
@@ -353,6 +393,11 @@ msgstr "Collapse {0}"
 msgid "Collapse track details"
 msgstr "Collapse track details"
 
+#. js-lingui-id: D6KBwc
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Color the map track by light"
+msgstr "Color the map track by light"
+
 #. js-lingui-id: 25r4HG
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Combined track details"
@@ -411,6 +456,11 @@ msgstr "Create reversed track"
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Day"
 msgstr "Day"
+
+#. js-lingui-id: qxkSyg
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Daylight"
+msgstr "Daylight"
 
 #. js-lingui-id: cnGeoo
 #: src/presentation/tracks/TrackPointsSection.tsx
@@ -645,6 +695,11 @@ msgstr "Enter a folder name."
 msgid "Enter a marker name."
 msgstr "Enter a marker name."
 
+#. js-lingui-id: R9wpsN
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Estimated pace"
+msgstr "Estimated pace"
+
 #. js-lingui-id: -nuEh_
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "Estimated time"
@@ -670,6 +725,16 @@ msgstr "Files with DTD or entity declarations are not supported."
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Finish"
 msgstr "Finish"
+
+#. js-lingui-id: gvC3XE
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Finishing {margin} after sunset."
+msgstr "Finishing {margin} after sunset."
+
+#. js-lingui-id: RUSxxV
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Finishing {margin} before sunset."
+msgstr "Finishing {margin} before sunset."
 
 #. js-lingui-id: F7cy8b
 #: src/presentation/tracks/ElevationProfileChart.tsx
@@ -706,6 +771,16 @@ msgstr "Forecast date"
 msgid "Highest"
 msgstr "Highest"
 
+#. js-lingui-id: kmRppW
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Hike"
+msgstr "Hike"
+
+#. js-lingui-id: SvMZQo
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Hike date"
+msgstr "Hike date"
+
 #. js-lingui-id: nyzDhI
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Ignore recorded time"
@@ -721,6 +796,16 @@ msgstr "Import a GPX, FIT, or KML file to preview it, then save it in this brows
 msgid "Import track file"
 msgstr "Import track file"
 
+#. js-lingui-id: HF047e
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "In the shade"
+msgstr "In the shade"
+
+#. js-lingui-id: uVhkeb
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "In the sun"
+msgstr "In the sun"
+
 #. js-lingui-id: ZwUT0o
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Independent segments are not joined; totals exclude gaps."
@@ -730,6 +815,11 @@ msgstr "Independent segments are not joined; totals exclude gaps."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Item dropped."
 msgstr "Item dropped."
+
+#. js-lingui-id: w2YeAc
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Light along the route: {description}"
+msgstr "Light along the route: {description}"
 
 #. js-lingui-id: rjuFFw
 #: src/presentation/tracks/RoutePlanControls.tsx
@@ -1035,11 +1125,21 @@ msgstr "Profile value"
 msgid "Recalculate elevation"
 msgstr "Recalculate elevation"
 
+#. js-lingui-id: S-JfFg
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Recorded pace"
+msgstr "Recorded pace"
+
 #. js-lingui-id: SVCift
 #: src/presentation/tracks/TrackSummary.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Recorded time"
 msgstr "Recorded time"
+
+#. js-lingui-id: zxRhcR
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Recording date"
+msgstr "Recording date"
 
 #. js-lingui-id: 5PjJFI
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1337,6 +1437,28 @@ msgstr "Starting at {startTime} at the estimated pace, about {duration} in total
 msgid "Starting at {startTime} at the recorded pace, {duration} in total."
 msgstr "Starting at {startTime} at the recorded pace, {duration} in total."
 
+#. js-lingui-id: oDdPGG
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Sun elevation over the hike day; the Sun reaches {peakDegrees}°."
+msgstr "Sun elevation over the hike day; the Sun reaches {peakDegrees}°."
+
+#. js-lingui-id: 1-0nwY
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Sun elevation over the hike day: sunrise {sunrise}, sunset {sunset}, {dayLength} of daylight; the Sun reaches {peakDegrees}°."
+msgstr "Sun elevation over the hike day: sunrise {sunrise}, sunset {sunset}, {dayLength} of daylight; the Sun reaches {peakDegrees}°."
+
+#. js-lingui-id: qrw1ZF
+#: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Sunrise {time}"
+msgstr "Sunrise {time}"
+
+#. js-lingui-id: uomtms
+#: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Sunset {time}"
+msgstr "Sunset {time}"
+
 #. js-lingui-id: fKf3Bw
 #: src/presentation/tracks/TrackShareTable.tsx
 msgid "Sync this track before sharing."
@@ -1396,6 +1518,11 @@ msgstr "The forecast could not be loaded."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The import was cancelled."
 msgstr "The import was cancelled."
+
+#. js-lingui-id: hDiIKB
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "The light along the route could not be calculated."
+msgstr "The light along the route could not be calculated."
 
 #. js-lingui-id: s18Ck2
 #: src/presentation/tracks/TrackShareTable.tsx
@@ -1501,6 +1628,11 @@ msgstr "This track link is invalid."
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Time"
 msgstr "Time"
+
+#. js-lingui-id: ecUA8p
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Today"
+msgstr "Today"
 
 #. js-lingui-id: SLFyVr
 #: src/presentation/tracks/TracksWorkspace.tsx

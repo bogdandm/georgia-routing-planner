@@ -15,6 +15,7 @@ import {
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const profile: ElevationProfile = {
@@ -152,6 +153,7 @@ interface ElevationProfileChartCallbacks {
     readonly startMeters: number;
     readonly endMeters: number;
   }) => void;
+  readonly lighting?: TrackLightingView | null;
 }
 
 function renderElevationProfileChart({
@@ -167,6 +169,7 @@ function renderElevationProfileChart({
   onPointClick,
   hoveredPoint,
   onDistanceRangeSelect,
+  lighting,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
     profile: ElevationProfile;
@@ -184,6 +187,7 @@ function renderElevationProfileChart({
       readonly startMeters: number;
       readonly endMeters: number;
     }) => void;
+    lighting?: TrackLightingView | null;
   } = {
     profile: chartProfile,
     activeSegmentIndex: activeSegmentIndex ?? null,
@@ -207,6 +211,9 @@ function renderElevationProfileChart({
   }
   if (onDistanceRangeSelect !== undefined) {
     chartProps.onDistanceRangeSelect = onDistanceRangeSelect;
+  }
+  if (lighting !== undefined) {
+    chartProps.lighting = lighting;
   }
   return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
@@ -889,6 +896,79 @@ describe('ElevationProfileChart', () => {
       expect(screen.getByText('0.0 km/h')).toBeVisible();
       await waitFor(() => {
         expect(onActivePointChange).toHaveBeenLastCalledWith(pausedProfile.points[1]);
+      });
+    });
+
+    describe('with route lighting', () => {
+      // A synthetic sunset at 08:20 UTC, 12:20 in Tbilisi, halfway up the climb.
+      const sunsetLighting: TrackLightingView = {
+        timeZone: 'Asia/Tbilisi',
+        date: '2026-05-01',
+        recordedDate: '2026-05-01',
+        startMs: Date.parse('2026-05-01T08:00:00Z'),
+        finishMs: Date.parse('2026-05-01T08:40:00Z'),
+        // Estimated timing places the sunset by distance between profile samples.
+        recordedTiming: false,
+        startCoordinate: [44, 42],
+        finishCoordinate: [44.02, 42.02],
+        sunEvents: [
+          {
+            kind: 'sunset',
+            instantMs: Date.parse('2026-05-01T08:20:00Z'),
+            distanceMeters: 933,
+          },
+        ],
+        terrain: { status: 'off' },
+      };
+
+      it('marks a sunset with its time on the Distance and the Time axis', async () => {
+        const user = userEvent.setup();
+        const { container } = renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: sunsetLighting,
+        });
+        const sunEventX = () =>
+          [...container.querySelectorAll('.elevation-profile-sun-event line')].map(
+            (line) => Number(line.getAttribute('x1')),
+          );
+
+        // 933 of 2,800 m across the 68–404 px plot.
+        expect(sunEventX()).toHaveLength(1);
+        expect(sunEventX()[0]).toBeCloseTo(68 + (933 / 2_800) * 336, 0);
+        // Recharts draws reference-line labels in a separate label layer.
+        expect(screen.getByText('Sunset 12:20')).toBeInTheDocument();
+        expect(screen.getByText('12:20')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Time' }));
+
+        // 933 m is reached after 20 of 40 minutes, mid-way across the plot.
+        expect(sunEventX()[0]).toBeCloseTo(236, 0);
+      });
+
+      it('scales a recording-timed hike onto the recorded Time axis, whatever its pace', async () => {
+        const user = userEvent.setup();
+        // At half the recorded pace the 40-minute recording takes 80 minutes; its sunset
+        // after 40 hike minutes falls 20 recorded minutes in, wherever it is placed.
+        const { container } = renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: {
+            ...sunsetLighting,
+            finishMs: Date.parse('2026-05-01T09:20:00Z'),
+            recordedTiming: true,
+            sunEvents: [
+              {
+                kind: 'sunset',
+                instantMs: Date.parse('2026-05-01T08:40:00Z'),
+                distanceMeters: 0,
+              },
+            ],
+          },
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Time' }));
+
+        const sunEvent = container.querySelector('.elevation-profile-sun-event line');
+        expect(Number(sunEvent?.getAttribute('x1'))).toBeCloseTo(236, 0);
       });
     });
   });

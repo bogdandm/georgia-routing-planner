@@ -1175,6 +1175,58 @@ describe('local track persistence', () => {
     ).resolves.toBeNull();
   });
 
+  it('stores lighting only for the current geometry and deletes it with the track', async () => {
+    const id = 'local:lighting';
+    await database.saveLocalTrack(summary(id, 'Lighting'), content(id));
+    const lighting = {
+      trackId: id,
+      contentHash: 'a'.repeat(64),
+      algorithmVersion: 2,
+      startMs: Date.parse('2026-07-15T05:00:00.000Z'),
+      samples: [
+        {
+          distanceMeters: 0,
+          elapsedSeconds: 0,
+          sunlitFraction: 1,
+          sunElevationDegrees: 40,
+          skyView: 1,
+          groundElevationMeters: 1_500,
+        },
+        {
+          distanceMeters: 1_000,
+          elapsedSeconds: 900,
+          sunlitFraction: 0.25,
+          sunElevationDegrees: 42,
+          skyView: 0.7,
+          groundElevationMeters: 1_620,
+        },
+      ],
+    } as const;
+
+    await database.saveTrackLighting(lighting);
+    await expect(database.loadTrackLighting(id)).resolves.toEqual(lighting);
+
+    // Lighting computed for replaced geometry, or for a deleted track, is never stored.
+    await database.saveTrackLighting({
+      ...lighting,
+      contentHash: 'b'.repeat(64),
+      startMs: 0,
+    });
+    await database.saveTrackLighting({ ...lighting, trackId: 'local:missing' });
+    await expect(database.loadTrackLighting(id)).resolves.toEqual(lighting);
+    await expect(database.loadTrackLighting('local:missing')).resolves.toBeNull();
+
+    await expect(
+      database.saveTrackLighting({
+        ...lighting,
+        samples: [{ ...lighting.samples[0], sunlitFraction: 2 }],
+      }),
+    ).rejects.toBeInstanceOf(LocalTrackStorageError);
+
+    await database.deleteLocalTrack(id);
+    await expect(database.loadTrackLighting(id)).resolves.toBeNull();
+  });
+
   it('sorts favorites first, then newest first with a stable ID tie-breaker', async () => {
     await database.saveLocalTrack(
       { ...summary('local:3', 'Older'), savedAt: '2026-07-20T10:00:00.000Z' },

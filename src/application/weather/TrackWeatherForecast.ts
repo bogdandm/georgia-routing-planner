@@ -14,6 +14,7 @@ import type {
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
+import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
   estimateHikingSeconds,
   geodesicDistanceMeters,
@@ -35,6 +36,13 @@ export interface TrackWeatherTimelineSettings {
   readonly timeMarkers: boolean | null;
   /** Map times count from 00:00 at the start instead of the route start's clock time. */
   readonly relativeTimeMarkers: boolean;
+  /** The map colors the track by its light along the hike instead of its grade. */
+  readonly lightOnMap: boolean;
+  /**
+   * Local `YYYY-MM-DD` of the hike for lighting; null uses the recording date, or today
+   * for a planned route.
+   */
+  readonly hikeDate: string | null;
 }
 
 /** Browser-local track forecast view state. */
@@ -324,16 +332,24 @@ export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings =
   ignoreRecordedTime: false,
   timeMarkers: null,
   relativeTimeMarkers: false,
+  lightOnMap: false,
+  hikeDate: null,
 };
 
+/** A recorded start instant and the IANA zone at the route start, whose clock it shows. */
+export interface RecordedRouteStart {
+  readonly at: string;
+  readonly timeZone: string;
+}
+
 /**
- * Saved overrides win; otherwise use the recorded start's browser-local clock time,
+ * Saved overrides win; otherwise use the recorded start's local clock time at the route,
  * rounded to the nearest half-hour. Only own entries count for untrusted track IDs.
  */
 export function trackWeatherTimeline(
   preferences: TrackWeatherPreferences | null,
   trackId: string | null,
-  recordedStartAt?: string,
+  recordedStart?: RecordedRouteStart,
 ): TrackWeatherTimelineSettings {
   if (
     preferences !== null &&
@@ -343,11 +359,12 @@ export function trackWeatherTimeline(
     const stored = preferences.timelines[trackId];
     if (stored !== undefined) return stored;
   }
-  if (recordedStartAt === undefined) return defaultTrackWeatherTimelineSettings;
-  const start = new Date(recordedStartAt);
+  if (recordedStart === undefined) return defaultTrackWeatherTimelineSettings;
+  const start = new Date(recordedStart.at);
   if (!Number.isFinite(start.getTime())) return defaultTrackWeatherTimelineSettings;
-  const seconds =
-    start.getHours() * 3600 + start.getMinutes() * 60 + start.getSeconds();
+  const wall = instantToZonedWallTime(start, recordedStart.timeZone);
+  // Zone offsets are whole minutes, so the UTC seconds are the local ones.
+  const seconds = wall.hour * 3600 + wall.minute * 60 + start.getUTCSeconds();
   const startHour = (Math.round(seconds / 1800) % 48) / 2;
   return { ...defaultTrackWeatherTimelineSettings, startHour };
 }
@@ -360,17 +377,19 @@ export function withTrackWeatherTimeline(
   preferences: TrackWeatherPreferences,
   trackId: string,
   settings: TrackWeatherTimelineSettings | null,
-  recordedStartAt?: string,
+  recordedStart?: RecordedRouteStart,
 ): TrackWeatherPreferences {
   const others = Object.entries(preferences.timelines).filter(([id]) => id !== trackId);
-  const defaults = trackWeatherTimeline(null, null, recordedStartAt);
+  const defaults = trackWeatherTimeline(null, null, recordedStart);
   const adjusted =
     settings !== null &&
     (settings.startHour !== defaults.startHour ||
       settings.paceFactor !== defaults.paceFactor ||
       settings.ignoreRecordedTime !== defaults.ignoreRecordedTime ||
       settings.timeMarkers !== defaults.timeMarkers ||
-      settings.relativeTimeMarkers !== defaults.relativeTimeMarkers);
+      settings.relativeTimeMarkers !== defaults.relativeTimeMarkers ||
+      settings.lightOnMap !== defaults.lightOnMap ||
+      settings.hikeDate !== defaults.hikeDate);
   // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
   return {
     ...preferences,
@@ -394,7 +413,7 @@ export type TrackTimingMetrics = Pick<
  * distance and the stored ascent and descent anchors it instead of the noisier
  * per-sample sum. `paceFactor` stretches (above 1) or compresses that time.
  */
-function routeElapsedSeconds(
+export function routeElapsedSeconds(
   points: readonly TrackTimingPoint[],
   metrics: TrackTimingMetrics,
   timing: TrackWeatherTiming,
@@ -590,6 +609,13 @@ function parseLocalDate(date: string): number {
 
 function localDateTime(milliseconds: number): string {
   return new Date(milliseconds).toISOString().slice(0, 16);
+}
+
+/** Browser-local calendar date; forecast dates are labels in the track's time zone. */
+export function localCalendarDate(value: Date): string {
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${value.getFullYear().toString()}-${month}-${day}`;
 }
 
 /** Selectable forecast dates starting at the given local date. */

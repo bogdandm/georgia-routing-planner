@@ -977,6 +977,7 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
             <span>
               <IconButton
                 size="small"
+                color="inherit"
                 aria-label={t`Edit points`}
                 disabled={disabled}
                 onClick={onStartEditing}
@@ -1002,7 +1003,13 @@ export function TrackPointsSection(props: TrackPointsSectionProps): ReactElement
       {open ? (
         <Box
           id={detailsId}
-          sx={{ px: 1, flex: '1 0 auto', display: 'flex', flexDirection: 'column' }}
+          sx={{
+            px: 1,
+            pt: 1,
+            flex: '1 0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
           onKeyDown={handleListKeyDown}
         >
           {selection === null ? null : (

@@ -787,10 +787,11 @@ describe('per-track timeline settings', () => {
     ).toEqual({ 'local:ridge': shown });
   });
 
-  it('stores tracks that only ignore recorded time or count relative times', () => {
+  it('stores tracks that only ignore recorded time, count relative times, or pick a date', () => {
     for (const settings of [
       { ...defaultTrackWeatherTimelineSettings, ignoreRecordedTime: true },
       { ...defaultTrackWeatherTimelineSettings, relativeTimeMarkers: true },
+      { ...defaultTrackWeatherTimelineSettings, hikeDate: '2026-07-15' },
     ]) {
       expect(
         withTrackWeatherTimeline(
@@ -817,6 +818,12 @@ describe('per-track timeline settings', () => {
 });
 
 describe('recorded route-start defaults', () => {
+  /** A recorded start at a Tbilisi (UTC+4) clock time. */
+  const tbilisiStart = (hours: number, minutes: number) => ({
+    at: new Date(Date.UTC(2026, 6, 22, hours - 4, minutes)).toISOString(),
+    timeZone: 'Asia/Tbilisi',
+  });
+
   it.each([
     [8, 14, 8],
     [8, 15, 8.5],
@@ -824,33 +831,45 @@ describe('recorded route-start defaults', () => {
     [8, 45, 9],
     [23, 46, 0],
   ])(
-    'rounds a local recorded start at %i:%i to %s hours',
+    'rounds a recorded start at %i:%i on the route clock to %s hours',
     (hours, minutes, expected) => {
-      const recordedStartAt = new Date(2026, 6, 22, hours, minutes).toISOString();
-      expect(trackWeatherTimeline(null, null, recordedStartAt).startHour).toBe(
-        expected,
-      );
+      expect(
+        trackWeatherTimeline(null, null, tbilisiStart(hours, minutes)).startHour,
+      ).toBe(expected);
     },
   );
 
+  it('reads the recorded start on the route clock, not the browser one', () => {
+    const instant = new Date(Date.UTC(2026, 6, 22, 2, 0)).toISOString();
+
+    expect(
+      trackWeatherTimeline(null, null, { at: instant, timeZone: 'Asia/Tbilisi' })
+        .startHour,
+    ).toBe(6);
+    expect(
+      trackWeatherTimeline(null, null, { at: instant, timeZone: 'America/New_York' })
+        .startHour,
+    ).toBe(22);
+  });
+
   it('retains a manual 09:00 override instead of treating it as the recorded default', () => {
-    const recordedStartAt = new Date(2026, 6, 22, 7, 16).toISOString();
+    const recordedStart = tbilisiStart(7, 16);
     const manual = withTrackWeatherTimeline(
       defaultTrackWeatherPreferences,
       'local:early',
       defaultTrackWeatherTimelineSettings,
-      recordedStartAt,
+      recordedStart,
     );
-    expect(trackWeatherTimeline(manual, 'local:early', recordedStartAt).startHour).toBe(
+    expect(trackWeatherTimeline(manual, 'local:early', recordedStart).startHour).toBe(
       9,
     );
     const reset = withTrackWeatherTimeline(
       manual,
       'local:early',
-      trackWeatherTimeline(null, null, recordedStartAt),
-      recordedStartAt,
+      trackWeatherTimeline(null, null, recordedStart),
+      recordedStart,
     );
-    expect(trackWeatherTimeline(reset, 'local:early', recordedStartAt).startHour).toBe(
+    expect(trackWeatherTimeline(reset, 'local:early', recordedStart).startHour).toBe(
       7.5,
     );
     expect(Object.hasOwn(reset.timelines, 'local:early')).toBe(false);

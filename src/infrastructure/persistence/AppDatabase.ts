@@ -95,6 +95,10 @@ import {
 } from '@/domain/tracks/trackCalculations';
 import type { PoiCandidate } from '@/domain/tracks/trackNaming';
 import {
+  TRACK_LIGHTING_ALGORITHM_VERSION,
+  type TrackLightingRecord,
+} from '@/domain/tracks/trackLighting';
+import {
   TRACK_THUMBNAIL_ALGORITHM_VERSION,
   createTrackThumbnail,
   type TrackThumbnail,
@@ -582,6 +586,8 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
             ignoreRecordedTime: z.boolean().default(false),
             timeMarkers: z.boolean().nullable().default(null),
             relativeTimeMarkers: z.boolean().default(false),
+            lightOnMap: z.boolean().default(false),
+            hikeDate: z.iso.date().nullable().default(null),
           })
           .strict(),
       )
@@ -1322,6 +1328,29 @@ const trackThumbnailSchema: z.ZodType<TrackThumbnail> = z.object({
   segments: z.array(z.array(z.tuple([z.number(), z.number().min(-90).max(90)]))),
 });
 
+const trackLightingRecordSchema: z.ZodType<TrackLightingRecord> = z
+  .object({
+    trackId: z.string().min(1).max(200),
+    contentHash: z.string().nullable(),
+    algorithmVersion: z.literal(TRACK_LIGHTING_ALGORITHM_VERSION),
+    startMs: z.number().int(),
+    samples: z
+      .array(
+        z
+          .object({
+            distanceMeters: z.number().nonnegative(),
+            elapsedSeconds: z.number().nonnegative(),
+            sunlitFraction: z.number().min(0).max(1),
+            sunElevationDegrees: z.number().min(-90).max(90),
+            skyView: z.number().min(0).max(1),
+            groundElevationMeters: z.number().min(-12_000).max(9_000),
+          })
+          .strict(),
+      )
+      .max(1_000),
+  })
+  .strict();
+
 function parseLocalTrackSummary(value: unknown): LocalTrackSummary | null {
   const result = localTrackSummarySchema.safeParse(value);
   return result.success ? result.data : null;
@@ -1505,6 +1534,7 @@ export class AppDatabase
   public readonly trackFolders!: EntityTable<TrackFolder, 'id'>;
   public readonly folderSyncStates!: EntityTable<FolderSyncState, 'folderId'>;
   public readonly localTrackThumbnails!: EntityTable<TrackThumbnail, 'trackId'>;
+  public readonly localTrackLighting!: EntityTable<TrackLightingRecord, 'trackId'>;
   public constructor(private readonly logger: DiagnosticLogger) {
     super('GeorgiaRoutingPlanner');
     this.version(1).stores({
@@ -1699,6 +1729,19 @@ export class AppDatabase
           if (summary !== null) await summaryTable.put(withEstimatedDurations(summary));
         }
       });
+    this.version(12).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      trackFolders: 'id,normalizedName,position',
+      folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      localTrackThumbnails: 'trackId',
+      localTrackLighting: 'trackId',
+    });
     this.on('populate', async (transaction) => {
       const folder = createDefaultImportsFolder(new Date().toISOString());
       await transaction.table('trackFolders').put(folder);
@@ -1945,6 +1988,41 @@ export class AppDatabase
         );
         await this.localTrackThumbnails.put(thumbnail);
         return thumbnail;
+      },
+    );
+  }
+
+  /** The track's last computed lighting; the caller checks that it still applies. */
+  public async loadTrackLighting(trackId: string): Promise<TrackLightingRecord | null> {
+    const parsed = trackLightingRecordSchema.safeParse(
+      await this.localTrackLighting.get(trackId),
+    );
+    return parsed.success ? parsed.data : null;
+  }
+
+  /**
+   * Replaces the track's cached lighting unless the track is gone or its geometry
+   * changed while the lighting was computed.
+   */
+  public async saveTrackLighting(record: TrackLightingRecord): Promise<void> {
+    const parsed = trackLightingRecordSchema.safeParse(record);
+    if (!parsed.success) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The track lighting is invalid.',
+      );
+    }
+    await this.transaction(
+      'rw',
+      this.localTracks,
+      this.localTrackLighting,
+      async () => {
+        const summary = parseLocalTrackSummary(
+          await this.localTracks.get(record.trackId),
+        );
+        if (summary === null || (summary.contentHash ?? null) !== record.contentHash)
+          return;
+        await this.localTrackLighting.put(parsed.data);
       },
     );
   }
@@ -2681,15 +2759,19 @@ export class AppDatabase
   public async deleteLocalTrack(trackId: string): Promise<void> {
     await this.transaction(
       'rw',
-      this.settings,
-      this.localTracks,
-      this.localTrackContents,
-      this.trackSyncStates,
-      this.localTrackThumbnails,
+      [
+        this.settings,
+        this.localTracks,
+        this.localTrackContents,
+        this.trackSyncStates,
+        this.localTrackThumbnails,
+        this.localTrackLighting,
+      ],
       async () => {
         const state = parseTrackSyncState(await this.trackSyncStates.get(trackId));
         await this.localTrackContents.delete(trackId);
         await this.localTrackThumbnails.delete(trackId);
+        await this.localTrackLighting.delete(trackId);
         await this.localTracks.delete(trackId);
         if (state !== null) {
           // Predecessor lists stay so the deletion also removes replaced account records.
@@ -2799,6 +2881,7 @@ export class AppDatabase
         this.localTrackContents,
         this.trackSyncStates,
         this.localTrackThumbnails,
+        this.localTrackLighting,
         this.savedMarkers,
         this.markerSyncStates,
         this.trackFolders,
@@ -3046,6 +3129,7 @@ export class AppDatabase
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
           await this.localTrackThumbnails.delete(trackId);
+          await this.localTrackLighting.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
         if (!sameAccount) await this.trackSyncStates.clear();
@@ -3267,11 +3351,14 @@ export class AppDatabase
     }
     await this.transaction(
       'rw',
-      this.settings,
-      this.localTracks,
-      this.localTrackContents,
-      this.trackSyncStates,
-      this.localTrackThumbnails,
+      [
+        this.settings,
+        this.localTracks,
+        this.localTrackContents,
+        this.trackSyncStates,
+        this.localTrackThumbnails,
+        this.localTrackLighting,
+      ],
       async () => {
         if (batch.expectedUserId !== undefined) {
           const owner = await this.settings.get('sync.user-id');
@@ -3338,6 +3425,7 @@ export class AppDatabase
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
           await this.localTrackThumbnails.delete(trackId);
+          await this.localTrackLighting.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
         batch.signal?.throwIfAborted();
@@ -3712,6 +3800,7 @@ export class AppDatabase
         this.localTrackContents,
         this.trackSyncStates,
         this.localTrackThumbnails,
+        this.localTrackLighting,
         this.savedMarkers,
         this.markerSyncStates,
       ],
@@ -3795,6 +3884,7 @@ export class AppDatabase
           await this.localTracks.delete(trackId);
           await this.localTrackContents.delete(trackId);
           await this.localTrackThumbnails.delete(trackId);
+          await this.localTrackLighting.delete(trackId);
           await this.trackSyncStates.delete(trackId);
         }
         for (const markerId of decision.markers.deleteIds) {

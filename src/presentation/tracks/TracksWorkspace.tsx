@@ -217,7 +217,9 @@ import {
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import type { ImportedTrackHighlightSegment } from '@/presentation/map/MapLibreLayerController';
 import type { ImportedTrackTimeLabel } from '@/presentation/map/mapStyleFactory';
+import { trackLightMapSegments } from '@/presentation/tracks/trackLightColor';
 import {
   formatTrackDistance,
   formatTrackDuration,
@@ -3508,40 +3510,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     },
     [mapLayers],
   );
-  useEffect(() => {
-    const highlightSegments = multiTrackMode
-      ? readyMultiTrackSelections.flatMap((selection) => {
-          const profile = selection.profile;
-          if (profile === null) return [];
-          return profile.gradeSubsegments.map((gradeSubsegment) => ({
-            coordinates: profile.points
-              .slice(
-                gradeSubsegment.startSampleIndex,
-                gradeSubsegment.endSampleIndex + 1,
-              )
-              .map((point) => point.coordinate),
-            color: appColors.elevationGrade[gradeSubsegment.band],
-          }));
-        })
-      : activePathOwner !== null || activeProfile === null
-        ? null
-        : activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
-            coordinates: activeProfile.points
-              .slice(
-                gradeSubsegment.startSampleIndex,
-                gradeSubsegment.endSampleIndex + 1,
-              )
-              .map((point) => point.coordinate),
-            color: appColors.elevationGrade[gradeSubsegment.band],
-          }));
-    mapLayers?.setImportedTrackHighlight(highlightSegments);
-  }, [
-    activePathOwner,
-    activeProfile,
-    mapLayers,
-    multiTrackMode,
-    readyMultiTrackSelections,
-  ]);
   // A track's own choice wins over the Layers default; times follow its route start
   // and pace, so multi-track mode shows each track at its own stored settings.
   const defaultTimeMarkers = useStore(mapLayerStore, (state) => state.trackTimeMarkers);
@@ -3601,6 +3569,49 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       (trackWeatherPreferences ?? defaultTrackWeatherPreferences).weekday,
     ),
   });
+  // A single track can take its light colors once its terrain light is ready; until then,
+  // and in multi-track mode, the map shows grade colors.
+  const activeLightSamples =
+    activeTrackWeatherTimeline.lightOnMap &&
+    activeTrackLighting?.terrain.status === 'ready'
+      ? activeTrackLighting.terrain.samples
+      : null;
+  useEffect(() => {
+    let highlightSegments: readonly ImportedTrackHighlightSegment[] | null = null;
+    if (multiTrackMode) {
+      highlightSegments = readyMultiTrackSelections.flatMap((selection) => {
+        const profile = selection.profile;
+        if (profile === null) return [];
+        return profile.gradeSubsegments.map((gradeSubsegment) => ({
+          coordinates: profile.points
+            .slice(gradeSubsegment.startSampleIndex, gradeSubsegment.endSampleIndex + 1)
+            .map((point) => point.coordinate),
+          color: appColors.elevationGrade[gradeSubsegment.band],
+        }));
+      });
+    } else if (activePathOwner === null && activeProfile !== null) {
+      highlightSegments =
+        activeLightSamples === null
+          ? activeProfile.gradeSubsegments.map((gradeSubsegment) => ({
+              coordinates: activeProfile.points
+                .slice(
+                  gradeSubsegment.startSampleIndex,
+                  gradeSubsegment.endSampleIndex + 1,
+                )
+                .map((point) => point.coordinate),
+              color: appColors.elevationGrade[gradeSubsegment.band],
+            }))
+          : trackLightMapSegments(activeProfile.points, activeLightSamples);
+    }
+    mapLayers?.setImportedTrackHighlight(highlightSegments);
+  }, [
+    activeLightSamples,
+    activePathOwner,
+    activeProfile,
+    mapLayers,
+    multiTrackMode,
+    readyMultiTrackSelections,
+  ]);
   const activeTrackMarkerTimes = useMemo((): ReadonlyMap<string, string> => {
     if (
       multiTrackMode ||

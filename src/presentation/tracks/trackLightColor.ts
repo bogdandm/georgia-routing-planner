@@ -7,6 +7,7 @@ import {
   terrainShadeFlatReferenceElevationDegrees,
   terrainShadeSkyLightShare,
 } from '@/infrastructure/terrainShadow/terrainShadowShaders';
+import type { ImportedTrackHighlightSegment } from '@/presentation/map/MapLibreLayerController';
 import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
 import { appColors } from '@/presentation/theme/appColors';
 
@@ -121,4 +122,58 @@ export function trackLightColor(
     return Math.round(encoded * 255);
   });
   return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * The map track in the strip's colors: each step between route points takes the light
+ * at its midpoint distance, and neighbouring steps of one color join into one line.
+ * Points and samples ascend by route distance; a recorded stop, whose samples share one
+ * distance, colors the route there like the strip's distance axis does.
+ */
+export function trackLightMapSegments(
+  points: readonly {
+    readonly distanceMeters: number;
+    readonly coordinate: readonly [number, number];
+  }[],
+  samples: readonly TrackLightingSample[],
+): ImportedTrackHighlightSegment[] {
+  const segments: { coordinates: (readonly [number, number])[]; color: string }[] = [];
+  let afterIndex = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    if (start === undefined || end === undefined) continue;
+    const distance = (start.distanceMeters + end.distanceMeters) / 2;
+    while (
+      afterIndex < samples.length - 1 &&
+      (samples[afterIndex]?.distanceMeters ?? Infinity) < distance
+    ) {
+      afterIndex += 1;
+    }
+    const after = samples[afterIndex];
+    const before = samples[afterIndex - 1] ?? after;
+    if (after === undefined || before === undefined) return [];
+    const span = after.distanceMeters - before.distanceMeters;
+    const weight =
+      span <= 0
+        ? 1
+        : Math.min(1, Math.max(0, (distance - before.distanceMeters) / span));
+    const between = (from: number, to: number) => from + (to - from) * weight;
+    const color = trackLightColor({
+      sunlitFraction: between(before.sunlitFraction, after.sunlitFraction),
+      sunElevationDegrees: between(
+        before.sunElevationDegrees,
+        after.sunElevationDegrees,
+      ),
+      skyView: between(before.skyView, after.skyView),
+      groundElevationMeters: between(
+        before.groundElevationMeters,
+        after.groundElevationMeters,
+      ),
+    });
+    const current = segments.at(-1);
+    if (current?.color === color) current.coordinates.push(end.coordinate);
+    else segments.push({ coordinates: [start.coordinate, end.coordinate], color });
+  }
+  return segments;
 }

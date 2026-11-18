@@ -381,6 +381,14 @@ and a click goes to that point. The profile and the strip share one cursor line,
 drawing the point hovered on the other. A hike timed by its recording keeps its stops in
 place at any pace.
 
+**Color the map track by light**, among the map options of **Route timing**, paints the
+active track on the map in the strip's colors instead of its grade colors: each step
+between route points takes the light at its midpoint. It is remembered in this browser
+for each track like its route start and pace, and is disabled when terrain light is off
+or could not be calculated. Grade colors remain while the light is calculated and in
+multi-track view. The colors replace the **Elevation gradient** overlay, so that layer's
+visibility still applies, and hovering a Climbs & Descents row still shows its grades.
+
 **Route timing** opens with a Garmin-style sun graph of the start day: the Sun's
 elevation on a true scale against the horizon, down to the end of astronomical twilight,
 with twilight bands, sunrise and sunset marks with their times, the hike's span
@@ -390,8 +398,8 @@ reads any other time, and a click moves the map's sun shadows there. Below it, a
 light kinds are listed in aligned columns with their hours and minutes, dimming those
 the hike does not meet; the light the hike finishes in notes how long before or after
 that day's sunset it ends. Rows keep their place while the light is calculated. The
-date, route start, and pace controls follow, then the map time options. Without terrain
-light, a sentence states the finish's sunset margin instead.
+date, route start, and pace controls follow, then the map time and light options.
+Without terrain light, a sentence states the finish's sunset margin instead.
 
 Every track detail section (Track details, Elevation profile, Climbs & Descents,
 Markers, Route timing, Points, and Source details) is a disclosure whose state is

@@ -393,6 +393,11 @@ msgstr "Collapse {0}"
 msgid "Collapse track details"
 msgstr "Collapse track details"
 
+#. js-lingui-id: D6KBwc
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Color the map track by light"
+msgstr "Color the map track by light"
+
 #. js-lingui-id: 25r4HG
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Combined track details"

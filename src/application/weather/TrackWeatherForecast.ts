@@ -36,6 +36,8 @@ export interface TrackWeatherTimelineSettings {
   readonly timeMarkers: boolean | null;
   /** Map times count from 00:00 at the start instead of the route start's clock time. */
   readonly relativeTimeMarkers: boolean;
+  /** The map colors the track by its light along the hike instead of its grade. */
+  readonly lightOnMap: boolean;
   /**
    * Local `YYYY-MM-DD` of the hike for lighting; null uses the recording date, or today
    * for a planned route.
@@ -330,6 +332,7 @@ export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings =
   ignoreRecordedTime: false,
   timeMarkers: null,
   relativeTimeMarkers: false,
+  lightOnMap: false,
   hikeDate: null,
 };
 
@@ -385,6 +388,7 @@ export function withTrackWeatherTimeline(
       settings.ignoreRecordedTime !== defaults.ignoreRecordedTime ||
       settings.timeMarkers !== defaults.timeMarkers ||
       settings.relativeTimeMarkers !== defaults.relativeTimeMarkers ||
+      settings.lightOnMap !== defaults.lightOnMap ||
       settings.hikeDate !== defaults.hikeDate);
   // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
   return {

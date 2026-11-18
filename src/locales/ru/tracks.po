@@ -393,6 +393,11 @@ msgstr "Свернуть папку «{0}»"
 msgid "Collapse track details"
 msgstr "Свернуть сведения о треке"
 
+#. js-lingui-id: D6KBwc
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Color the map track by light"
+msgstr "Раскрашивать трек на карте по освещённости"
+
 #. js-lingui-id: 25r4HG
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Combined track details"

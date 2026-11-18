@@ -669,6 +669,14 @@ export function TrackWeatherSection({
                   !timeMarkers,
                 )}
                 {timelineCheckbox(
+                  t`Color the map track by light`,
+                  timelineSettings.lightOnMap,
+                  (checked) => ({ ...timelineSettings, lightOnMap: checked }),
+                  lighting === null ||
+                    lighting.terrain.status === 'off' ||
+                    lighting.terrain.status === 'failed',
+                )}
+                {timelineCheckbox(
                   t`Ignore recorded time`,
                   timelineSettings.ignoreRecordedTime,
                   (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),

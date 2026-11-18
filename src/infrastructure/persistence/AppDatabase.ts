@@ -586,6 +586,7 @@ const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
             ignoreRecordedTime: z.boolean().default(false),
             timeMarkers: z.boolean().nullable().default(null),
             relativeTimeMarkers: z.boolean().default(false),
+            lightOnMap: z.boolean().default(false),
             hikeDate: z.iso.date().nullable().default(null),
           })
           .strict(),

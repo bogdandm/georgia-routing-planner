@@ -116,7 +116,7 @@ export function ClimbsDescentsSection({
         </Tooltip>
       </Box>
       {expanded ? (
-        <Box id={detailsId}>
+        <Box id={detailsId} sx={{ pt: 1 }}>
           {directionalSegments.length === 0 ? (
             <Typography variant="caption" color="text.secondary">
               <Trans>No significant climbs or descents.</Trans>

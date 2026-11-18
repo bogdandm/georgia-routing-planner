@@ -519,7 +519,7 @@ export function TrackWeatherSection({
           // below its thumb is pulled into those gaps, so each label stays 8 px over its
           // thumb and every group looks about 16 px apart. Flex gap keeps those negative
           // margins, which Stack's margin spacing would reset.
-          <Stack id={timingDetailsId} sx={{ px: 1, pb: 1 }}>
+          <Stack id={timingDetailsId} sx={{ px: 1, py: 1 }}>
             {lighting === null ? (
               <Typography variant="caption" color="text.secondary">
                 {timelineCaption}
@@ -689,7 +689,7 @@ export function TrackWeatherSection({
           }}
         />
         {expanded ? (
-          <Stack id={detailsId} spacing={1.5} sx={{ px: 1, pb: 1 }}>
+          <Stack id={detailsId} spacing={1.5} sx={{ px: 1, py: 1 }}>
             <ToggleButtonGroup
               exclusive
               fullWidth

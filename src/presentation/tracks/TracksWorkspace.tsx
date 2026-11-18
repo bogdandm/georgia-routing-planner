@@ -5834,7 +5834,7 @@ function TrackMetadata({
         }}
       />
       {expanded ? (
-        <Stack id={detailsId} spacing={0.5} sx={{ px: 1 }}>
+        <Stack id={detailsId} spacing={0.5} sx={{ px: 1, pt: 1 }}>
           <Typography variant="body2">
             {sourceFilename} · {formatLabel}
           </Typography>
@@ -6746,7 +6746,7 @@ export function TrackDetailsPane({
               {summaryExpanded ? (
                 <Box
                   id={summaryDetailsId}
-                  sx={{ minHeight: 56, display: 'flex', alignItems: 'center' }}
+                  sx={{ minHeight: 56, pt: 1, display: 'flex', alignItems: 'center' }}
                 >
                   {metrics === null ? (
                     <Typography variant="body2" color="text.secondary">

@@ -196,6 +196,10 @@ import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSecti
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
+  useTrackLighting,
+  type TrackLightingView,
+} from '@/presentation/tracks/useTrackLighting';
+import {
   createTrackTimingRoute,
   defaultTrackWeatherPreferences,
   planTrackClockTimes,
@@ -488,6 +492,8 @@ interface TracksWorkspaceValue {
   readonly activeTrackWeatherTimeline: TrackWeatherTimelineSettings;
   readonly activeTrackMarkerTimes: ReadonlyMap<string, string>;
   readonly activeTimingRoute: TrackTimingRoute | null;
+  /** Sun and terrain light of the active track's hike; null without a timed route. */
+  readonly activeTrackLighting: TrackLightingView | null;
   readonly updateActiveTrackWeatherTimeline: (
     settings: TrackWeatherTimelineSettings,
   ) => void;
@@ -3561,6 +3567,16 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
     return routes;
   }, [readyMultiTrackSelections]);
+  const activeTrackLighting = useTrackLighting({
+    savedTrack:
+      active?.kind === 'saved'
+        ? { id: active.summary.id, contentHash: active.summary.contentHash ?? null }
+        : null,
+    route: multiTrackMode ? null : activeTimingRoute,
+    metrics: activeStatsMetrics,
+    settings: activeTrackWeatherTimeline,
+    recordedStartAt,
+  });
   const activeTrackMarkerTimes = useMemo((): ReadonlyMap<string, string> => {
     if (
       multiTrackMode ||
@@ -3696,6 +3712,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeTrackWeatherTimeline,
       activeTrackMarkerTimes,
       activeTimingRoute,
+      activeTrackLighting,
       updateActiveTrackWeatherTimeline,
       createFolder,
       updateFolder,
@@ -3777,6 +3794,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeTrackWeatherTimeline,
       activeTrackMarkerTimes,
       activeTimingRoute,
+      activeTrackLighting,
       updateActiveTrackWeatherTimeline,
       importErrorMessage,
       importFiles,
@@ -5449,6 +5467,7 @@ function InteractiveElevationProfile({
   const {
     active,
     activePath,
+    activeTrackLighting,
     elevationProgress,
     pointSelection,
     pointsList,
@@ -5610,6 +5629,7 @@ function InteractiveElevationProfile({
               'profile',
             );
           }}
+          lighting={showHeading ? activeTrackLighting : null}
           {...(pointsList === null
             ? {}
             : { onDistanceRangeSelect: selectPathPointsInDistanceRange })}
@@ -5914,6 +5934,7 @@ export function TrackDetailsPane({
     activeTrackWeatherTimeline,
     activeTrackMarkerTimes,
     activeTimingRoute,
+    activeTrackLighting,
     applyGeneratedName,
     closeActive,
     clearRoutePlan,
@@ -6725,6 +6746,7 @@ export function TrackDetailsPane({
               onPreferencesChange={updateTrackWeatherPreferences}
               timelineSettings={activeTrackWeatherTimeline}
               onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
+              lighting={activeTrackLighting}
             />
           )}
           {/* Editing a saved track's points is desktop-only; phones list plan points. */}

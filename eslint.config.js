@@ -159,6 +159,7 @@ export default tseslint.config(
       'src/presentation/tracks/TrackSummary.tsx',
       'src/presentation/tracks/TrackThumbnailImage.tsx',
       'src/presentation/tracks/TrackFolderEditorDialog.tsx',
+      'src/presentation/tracks/TrackLighting.tsx',
       'src/presentation/tracks/trackFormatters.ts',
       'src/presentation/markers/MarkersWorkspace.tsx',
       'src/presentation/markers/MarkerEditorDialog.tsx',

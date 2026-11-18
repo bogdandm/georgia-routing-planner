@@ -340,6 +340,37 @@ route points and timestamps. Estimated timing counts horizontal travel through m
 elevation without inventing vertical changes. Disconnected segments never contribute a
 climb or descent between their endpoints.
 
+#### Route lighting
+
+**Route timing** also places the hike on a calendar day. **Hike date** defaults to the
+recording date of a recorded track, or to today for a planned one; a chosen date is
+remembered with the track's route start and pace, and **Recording date** or **Today**
+returns to the default. Changing the date also moves the map's sun shadows to that date
+at their current local time of day, so a winter visit can check summer light. Clock
+times use the time zone at the route start.
+
+Light along the route comes from the terrain-shadow model behind the map's sun shadows:
+at every route station (at most 25 m apart, 400 per route) and the moment the hiker
+passes it, the visible fraction of the solar disk above the marched terrain horizon,
+averaged over seven ground points within 50 m. Each moment is split into **In the sun**,
+**In the shade** (the Sun is above the horizon but terrain hides it), **Blue hour**
+(after sunset until the Sun is 6° below the horizon), and **After dark**. These kinds
+follow the Sun's elevation, never the map's shading brightness, which keeps night
+deliberately light so relief stays readable. Saved tracks store their lighting in this
+browser; it is recomputed when the geometry, hike date, route start, pace, or
+recorded-time choice changes, which mostly costs DEM tile loads. Failed DEM loads show
+that the light could not be calculated instead of guessing sunlight.
+
+Under the elevation profile, a strip colors the route by its light: yellow sun, grey
+shade, a blue hour that deepens toward its end, and dark blue night. It follows the
+Distance or Time axis above it and is labelled with the local clock hours the hiker
+passes. On the Time axis, dashed lines mark each sunrise and sunset the hike passes.
+**Route timing** lists the time in each light kind the hike meets, states how long
+before or after that day's sunset at the finish the hike ends, and shows a Garmin-style
+sun graph of the start day: the Sun's elevation against the horizon, red sunrise and
+sunset marks with their times, the hike's span highlighted, the day length, and the
+Sun's highest elevation.
+
 Every track detail section (Track details, Elevation profile, Climbs & Descents,
 Markers, Route timing, Points, Source details, and the forecast's **By elevation** and
 **Along the route**) is a disclosure whose state is remembered in this browser for all

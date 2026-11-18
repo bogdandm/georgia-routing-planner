@@ -66,6 +66,8 @@ import {
 } from '@/presentation/tracks/trackFormatters';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
+import { TrackLightingStrip } from '@/presentation/tracks/TrackLighting';
+import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 
 /** A press that travels this far along the chart is a range drag, never a click. */
 const RANGE_DRAG_THRESHOLD_PX = 4;
@@ -215,6 +217,11 @@ interface ElevationProfileChartProps {
     readonly startMeters: number;
     readonly endMeters: number;
   }) => void;
+  /**
+   * The hike's light: sunrise and sunset marks on the Time axis and the light strip
+   * under the chart. Without it the chart shows neither.
+   */
+  readonly lighting?: TrackLightingView | null;
 }
 
 /** Index of the profile point nearest `distanceMeters`; points ascend by distance. */
@@ -689,6 +696,7 @@ export function ElevationProfileChart({
   onTrackGradeLegendDismissedChange,
   onPointClick,
   onDistanceRangeSelect,
+  lighting = null,
 }: ElevationProfileChartProps): ReactElement {
   /**
    * A press on the chart: where it started, whether the pointer has travelled far
@@ -729,6 +737,35 @@ export function ElevationProfileChart({
         : elapsedSeconds[sampleIndex]) ?? 0,
     [elapsedSeconds, profile],
   );
+  /** Chart position of a route distance, interpolated between profile samples. */
+  const xOfDistance = useCallback(
+    (distanceMeters: number): number => {
+      if (elapsedSeconds === null) return distanceMeters;
+      const { points } = profile;
+      let low = 0;
+      let high = points.length - 1;
+      while (low < high) {
+        const middle = (low + high) >> 1;
+        if ((points[middle]?.distanceMeters ?? Infinity) < distanceMeters)
+          low = middle + 1;
+        else high = middle;
+      }
+      const after = points[low];
+      const before = points[low - 1];
+      if (after === undefined) return 0;
+      if (before === undefined || after.distanceMeters <= before.distanceMeters) {
+        return elapsedSeconds[low] ?? 0;
+      }
+      const beforeX = elapsedSeconds[low - 1] ?? 0;
+      const afterX = elapsedSeconds[low] ?? beforeX;
+      return (
+        beforeX +
+        ((afterX - beforeX) * (distanceMeters - before.distanceMeters)) /
+          (after.distanceMeters - before.distanceMeters)
+      );
+    },
+    [elapsedSeconds, profile],
+  );
   let highlight: { readonly startX: number; readonly endX: number } | null = null;
   if (highlightedDistanceRange !== null) {
     // The time axis places each highlighted distance at its nearest profile point.
@@ -742,6 +779,8 @@ export function ElevationProfileChart({
     );
     highlight = { startX, endX };
   }
+  const showsLightStrip =
+    showHeading && lighting !== null && lighting.terrain.status !== 'off';
   const timeTicks = useMemo(
     () => (elapsedSeconds === null ? null : timeAxisTicks(elapsedSeconds.at(-1) ?? 0)),
     [elapsedSeconds],
@@ -968,6 +1007,38 @@ export function ElevationProfileChart({
               strokeWidth={1}
             />
           ))}
+          {axis === 'time'
+            ? lighting?.sunEvents.map((event) => {
+                const time = new Intl.DateTimeFormat(i18n.locale, {
+                  /* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hourCycle: 'h23',
+                  /* eslint-enable lingui/no-unlocalized-strings */
+                  timeZone: lighting.timeZone,
+                }).format(new Date(event.instantMs));
+                return (
+                  <ReferenceLine
+                    key={event.instantMs}
+                    className="elevation-profile-sun-event"
+                    x={xOfDistance(event.distanceMeters)}
+                    ifOverflow="hidden"
+                    stroke={appColors.brand.tigerOrange}
+                    strokeDasharray="4 3"
+                    label={{
+                      value:
+                        event.kind === 'sunrise'
+                          ? t`Sunrise ${time}`
+                          : t`Sunset ${time}`,
+                      position: 'insideTopLeft',
+                      fill: appColors.brand.tigerOrange,
+                      fontSize: theme.typography.caption.fontSize,
+                      fontFamily: theme.typography.fontFamily,
+                    }}
+                  />
+                );
+              })
+            : null}
           {highlight !== null && highlight.startX !== highlight.endX ? (
             <ReferenceArea
               className="elevation-profile-highlight"
@@ -1008,13 +1079,22 @@ export function ElevationProfileChart({
           )}
         </AreaChart>
       </Box>
+      {showsLightStrip ? (
+        <TrackLightingStrip lighting={lighting} xOfDistance={xOfDistance} />
+      ) : null}
       {showHeading && timeline !== null ? (
-        // Pull the toggles up into the empty band under the x-axis labels, and end them
-        // at the plot's right border: the chart box extends 8px past the content edge
-        // (mx: -1) and reserves a 16px right margin.
+        // Without the light strip, pull the toggles up into the empty band under the
+        // x-axis labels, and end them at the plot's right border: the chart box extends
+        // 8px past the content edge (mx: -1) and reserves a 16px right margin.
         <Stack
           direction="row"
-          sx={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1, mt: -2.5, pr: 1 }}
+          sx={{
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            gap: 1,
+            mt: showsLightStrip ? 0 : -2.5,
+            pr: 1,
+          }}
         >
           <ToggleButtonGroup
             exclusive

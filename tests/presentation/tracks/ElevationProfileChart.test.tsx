@@ -15,6 +15,7 @@ import {
   ElevationProfileChart,
 } from '@/presentation/tracks/ElevationProfileChart';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
+import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 const profile: ElevationProfile = {
@@ -152,6 +153,7 @@ interface ElevationProfileChartCallbacks {
     readonly startMeters: number;
     readonly endMeters: number;
   }) => void;
+  readonly lighting?: TrackLightingView | null;
 }
 
 function renderElevationProfileChart({
@@ -167,6 +169,7 @@ function renderElevationProfileChart({
   onPointClick,
   hoveredPoint,
   onDistanceRangeSelect,
+  lighting,
 }: ElevationProfileChartCallbacks = {}) {
   const chartProps: {
     profile: ElevationProfile;
@@ -184,6 +187,7 @@ function renderElevationProfileChart({
       readonly startMeters: number;
       readonly endMeters: number;
     }) => void;
+    lighting?: TrackLightingView | null;
   } = {
     profile: chartProfile,
     activeSegmentIndex: activeSegmentIndex ?? null,
@@ -207,6 +211,9 @@ function renderElevationProfileChart({
   }
   if (onDistanceRangeSelect !== undefined) {
     chartProps.onDistanceRangeSelect = onDistanceRangeSelect;
+  }
+  if (lighting !== undefined) {
+    chartProps.lighting = lighting;
   }
   return renderWithI18n(
     <ThemeProvider theme={createAppTheme()}>
@@ -889,6 +896,99 @@ describe('ElevationProfileChart', () => {
       expect(screen.getByText('0.0 km/h')).toBeVisible();
       await waitFor(() => {
         expect(onActivePointChange).toHaveBeenLastCalledWith(pausedProfile.points[1]);
+      });
+    });
+
+    describe('with route lighting', () => {
+      // A synthetic sunset at 08:20 UTC, 12:20 in Tbilisi, halfway up the climb.
+      const sunsetLighting: TrackLightingView = {
+        timeZone: 'Asia/Tbilisi',
+        date: '2026-05-01',
+        defaultDate: '2026-05-01',
+        defaultDateSource: 'recording',
+        startMs: Date.parse('2026-05-01T08:00:00Z'),
+        finishMs: Date.parse('2026-05-01T08:40:00Z'),
+        startCoordinate: [44, 42],
+        finishCoordinate: [44.02, 42.02],
+        sunEvents: [
+          {
+            kind: 'sunset',
+            instantMs: Date.parse('2026-05-01T08:20:00Z'),
+            distanceMeters: 933,
+          },
+        ],
+        terrain: { status: 'off' },
+      };
+
+      it('marks a sunset on the Time axis only', async () => {
+        const user = userEvent.setup();
+        const { container } = renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: sunsetLighting,
+        });
+
+        expect(container.querySelector('.elevation-profile-sun-event')).toBeNull();
+        expect(screen.queryByText(/^Sunset/u)).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Time' }));
+
+        const sunEvents = container.querySelectorAll(
+          '.elevation-profile-sun-event line',
+        );
+        expect(sunEvents).toHaveLength(1);
+        // 933 m is reached after 20 of 40 minutes, mid-way across the 68–404 px plot.
+        expect(Number(sunEvents[0]?.getAttribute('x1'))).toBeCloseTo(236, 0);
+        // Recharts draws reference-line labels in a separate label layer.
+        expect(screen.getByText('Sunset 12:20')).toBeInTheDocument();
+      });
+
+      it('shows the light along the route under the chart only with terrain light', () => {
+        const { unmount } = renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: {
+            ...sunsetLighting,
+            terrain: {
+              status: 'ready',
+              // Sunlit up the climb, fading into terrain shade on the descent.
+              samples: [
+                {
+                  distanceMeters: 0,
+                  elapsedSeconds: 0,
+                  sunlitFraction: 1,
+                  sunElevationDegrees: 20,
+                },
+                {
+                  distanceMeters: 1_400,
+                  elapsedSeconds: 1_800,
+                  sunlitFraction: 1,
+                  sunElevationDegrees: 20,
+                },
+                {
+                  distanceMeters: 2_800,
+                  elapsedSeconds: 2_400,
+                  sunlitFraction: 0,
+                  sunElevationDegrees: 20,
+                },
+              ],
+            },
+          },
+        });
+
+        expect(
+          screen.getByRole('img', {
+            name: 'Light along the route: In the sun 0h 35m, In the shade 0h 5m',
+          }),
+        ).toBeInTheDocument();
+        unmount();
+
+        renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: sunsetLighting,
+        });
+
+        expect(
+          screen.queryByRole('img', { name: /^Light along the route/u }),
+        ).not.toBeInTheDocument();
       });
     });
   });

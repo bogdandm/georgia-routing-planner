@@ -1,11 +1,13 @@
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   Box,
+  Button,
   Checkbox,
   FormControlLabel,
   Skeleton,
   Slider,
   Stack,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -51,6 +53,12 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
+import { TrackLightingSummary } from '@/presentation/tracks/TrackLighting';
+import {
+  parseIsoDate,
+  showHikeDateOnMap,
+  type TrackLightingView,
+} from '@/presentation/tracks/useTrackLighting';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
 import {
@@ -118,6 +126,8 @@ interface TrackWeatherSectionProps {
   /** This track's route start and pace; the workspace decides where they are kept. */
   readonly timelineSettings: TrackWeatherTimelineSettings;
   readonly onTimelineSettingsChange: (settings: TrackWeatherTimelineSettings) => void;
+  /** The hike's date, sun, and terrain light; null while the route cannot be timed. */
+  readonly lighting: TrackLightingView | null;
 }
 
 /**
@@ -132,9 +142,10 @@ export function TrackWeatherSection({
   onPreferencesChange,
   timelineSettings,
   onTimelineSettingsChange,
+  lighting,
 }: TrackWeatherSectionProps): ReactElement {
   const { i18n, t } = useLingui();
-  const { clock, pointWeatherForecast } = useRuntimeServices();
+  const { clock, mapLayers, pointWeatherForecast } = useRuntimeServices();
   const current = preferences ?? defaultTrackWeatherPreferences;
   const expanded = preferences?.expanded ?? false;
   const timingExpanded = useUiStore(
@@ -446,6 +457,16 @@ export function TrackWeatherSection({
         : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
   const paceFormat = new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 2 });
   const formatPace = (value: number) => `×${paceFormat.format(value)}`;
+  /** Stores the hike date, the default as null, and shows its light on the map. */
+  const changeHikeDate = (date: string) => {
+    if (lighting === null) return;
+    const next = parseIsoDate(date) === null ? lighting.defaultDate : date;
+    onTimelineSettingsChange({
+      ...timelineSettings,
+      hikeDate: next === lighting.defaultDate ? null : next,
+    });
+    showHikeDateOnMap(mapLayers, next, lighting.timeZone);
+  };
 
   return (
     <>
@@ -475,6 +496,32 @@ export function TrackWeatherSection({
               timelineSettings.ignoreRecordedTime,
               (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
               metrics.elapsedSeconds === undefined,
+            )}
+            {lighting === null ? null : (
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pt: 1 }}>
+                <TextField
+                  label={t`Hike date`}
+                  onChange={(event) => {
+                    changeHikeDate(event.target.value);
+                  }}
+                  size="small"
+                  sx={{ flex: 1 }}
+                  type="date"
+                  value={lighting.date}
+                />
+                <Button
+                  disabled={timelineSettings.hikeDate === null}
+                  onClick={() => {
+                    changeHikeDate(lighting.defaultDate);
+                  }}
+                  size="small"
+                  variant="outlined"
+                >
+                  {lighting.defaultDateSource === 'recording'
+                    ? t`Recording date`
+                    : t`Today`}
+                </Button>
+              </Stack>
             )}
             <Box>
               <Typography id={startLabelId} variant="caption" color="text.secondary">
@@ -559,6 +606,7 @@ export function TrackWeatherSection({
             <Typography variant="caption" color="text.secondary">
               {timelineCaption}
             </Typography>
+            {lighting === null ? null : <TrackLightingSummary lighting={lighting} />}
           </Stack>
         ) : null}
       </Box>

@@ -32,6 +32,7 @@ the SQL in `supabase/migrations`, and the Edge Function validators in
 | Imported GPX/FIT/KML before retention   | Browser memory                                      | Discarded unless the user saves it; original file bytes are never kept      |
 | Retained local track summary and points | IndexedDB `localTracks` and `localTrackContents`    | Saved and deleted atomically; summary owns nullable folder placement        |
 | Saved-track list thumbnails             | IndexedDB `localTrackThumbnails`                    | Derived and disposable; deleted with the track, recomputed when stale       |
+| Saved-track route lighting              | IndexedDB `localTrackLighting`                      | Derived and disposable; deleted with the track, recomputed when stale       |
 | Flat personal folders                   | IndexedDB `trackFolders`; Supabase                  | Ordered and revisioned; at most 1,000 remote folders per user               |
 | Saved markers                           | IndexedDB `savedMarkers`; Supabase `marker_records` | Owner-only; at most 10,000 remote markers per user                          |
 | Synchronized track metadata             | Supabase Postgres `track_records`                   | Owner-readable; writes pass through the authenticated `track-sync` function |
@@ -47,7 +48,7 @@ the SQL in `supabase/migrations`, and the Edge Function validators in
 
 ## IndexedDB schema
 
-`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 11. Earlier
+`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 12. Earlier
 versions exist only as upgrade steps.
 
 | Store                  | Key        | Record                                                             |
@@ -57,6 +58,7 @@ versions exist only as upgrade steps.
 | `localTracks`          | `id`       | `LocalTrackSummary`, schema version 6                              |
 | `localTrackContents`   | `trackId`  | `LocalTrackContent`, schema version 6                              |
 | `localTrackThumbnails` | `trackId`  | `TrackThumbnail`, algorithm version 1                              |
+| `localTrackLighting`   | `trackId`  | `TrackLightingRecord`, algorithm version 1                         |
 | `trackFolders`         | `id`       | `TrackFolder`, schema version 1                                    |
 | `savedMarkers`         | `id`       | `SavedMarker`, schema version 2                                    |
 | `trackSyncStates`      | `trackId`  | Browser-local track synchronization queue                          |
@@ -77,7 +79,7 @@ upsert.
 | `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                                                   |
 | `satellite.comparison-layout`   | Comparison grid layout last picked in the sidebar: 2 (2×1) or 4 (2×2); absent until the first pick                                                                             |
 | `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                                                           |
-| `weather.track-preferences`     | Forecast expansion and weekday; per-track route start, pace, recorded-time override, time visibility, and elapsed-time display; never uploaded                                 |
+| `weather.track-preferences`     | Forecast expansion and weekday; per-track route start, pace, recorded-time override, time visibility, elapsed-time display, and hike date; never uploaded                      |
 | `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                                                 |
 | `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                                              |
 | `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                                                       |
@@ -88,7 +90,8 @@ upsert.
 
 ## Local tracks
 
-Code: `src/domain/tracks/localTrack.ts`, `trackFolder.ts`, `trackThumbnail.ts`.
+Code: `src/domain/tracks/localTrack.ts`, `trackFolder.ts`, `trackThumbnail.ts`,
+`trackLighting.ts`.
 
 `LocalTrackSummary` is the listable record: normalized name, `savedAt`/`updatedAt`,
 optional `contentHash`, source filename and format (`gpx | fit | kml`), favorite flag,
@@ -125,6 +128,14 @@ browser-local derivations and never affect the hash.
 `TrackThumbnail` stores the source `contentHash` (null for unhashed rows), algorithm
 version, a loop flag, and simplified per-segment vertices whose longitudes are unwrapped
 across the antimeridian. A hash or version mismatch makes it stale.
+
+`TrackLightingRecord` stores the last route lighting computed for a saved track: the
+source `contentHash`, algorithm version, the route start instant, and per-station
+distance, elapsed seconds, averaged sunlit fraction, and apparent Sun elevation. It is
+reused only while the hash, version, start instant, and every station's distance and
+elapsed time still match the current timing; otherwise it is recomputed and replaced. A
+write is dropped when the track is gone or its hash changed meanwhile. Unsaved tracks
+keep lighting in memory only. It is never uploaded or archived.
 
 ### Folders and placement
 
@@ -173,7 +184,7 @@ rule, drops stale sync states and delete records, writes pending upserts with nu
 revisions, stores the new owner, and resets `sync.usage` in one transaction.
 
 When a same-account remote deletion needs a decision, one transaction removes the
-selected summary, content, thumbnail, and state rows and clears
+selected summary, content, thumbnail, lighting, and state rows and clears
 `local-tracks.latest-opened` when it names a removed track. Unselected pairs receive
 null-revision pending upserts; an already absent pair only loses its stale state.
 Deleting an unsent upsert removes its intent; deleting a synchronized track keeps only a
@@ -345,10 +356,10 @@ failures never block the primary operation.
 
 ## Deletion and consistency rules
 
-- Deleting a local track removes its content, thumbnail, and sync state atomically,
-  keeping only a delete retry record for synchronized tracks. Folders and saved markers
-  are unaffected.
+- Deleting a local track removes its content, thumbnail, lighting, and sync state
+  atomically, keeping only a delete retry record for synchronized tracks. Folders and
+  saved markers are unaffected.
 - Deleting a folder moves its tracks to **Unfiled**; **Imports** cannot be deleted.
 - Deleting a remote track cascades to its public share.
-- Changing a calculation policy version recalculates derived metrics or thumbnails from
-  authoritative geometry.
+- Changing a calculation policy version recalculates derived metrics, thumbnails, or
+  lighting from authoritative geometry.

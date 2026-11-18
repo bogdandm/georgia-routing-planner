@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { act, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,10 +20,13 @@ import {
   mapInteractionStore,
   resetMapInteractionStore,
 } from '@/presentation/map/mapInteractionStore';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
+import { daylightWindow } from '@/presentation/map/sunShadowDaylight';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
+import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 import { weatherResumeRetryDelayMs } from '@/presentation/weather/useWeatherRetryOnResume';
 import { createTestServices } from '@test/helpers/createTestServices';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
@@ -68,6 +71,7 @@ function renderSection(
   initial: TrackWeatherPreferences | null,
   metrics: TrackStatsMetrics = dayHike,
   initialTimeline: TrackWeatherTimelineSettings = defaultTrackWeatherTimelineSettings,
+  lighting: TrackLightingView | null = null,
 ) {
   const onPreferencesChange = vi.fn();
   const onTimelineSettingsChange = vi.fn();
@@ -89,6 +93,12 @@ function renderSection(
           onTimelineSettingsChange(next);
           setTimelineSettings(next);
         }}
+        // The track panel derives the shown date from the stored override.
+        lighting={
+          lighting === null
+            ? null
+            : { ...lighting, date: timelineSettings.hikeDate ?? lighting.defaultDate }
+        }
       />
     );
   }
@@ -114,6 +124,7 @@ function expandedSection(metrics: TrackStatsMetrics) {
           onPreferencesChange={vi.fn()}
           timelineSettings={defaultTrackWeatherTimelineSettings}
           onTimelineSettingsChange={vi.fn()}
+          lighting={null}
         />
       </ThemeProvider>
     </RuntimeServicesProvider>
@@ -455,5 +466,162 @@ describe('TrackWeatherSection', () => {
     expect(
       execute.mock.calls.slice(initialCalls).map(([input]) => input.elevationMeters),
     ).toEqual([2_900]);
+  });
+
+  describe('route lighting', () => {
+    const timeZone = 'Asia/Tbilisi';
+    const today = '2026-11-18';
+    const hikeLighting: TrackLightingView = {
+      timeZone,
+      date: today,
+      defaultDate: today,
+      defaultDateSource: 'today',
+      // 09:00 to 14:30 in Tbilisi (UTC+4 all year).
+      startMs: Date.UTC(2026, 10, 18, 5),
+      finishMs: Date.UTC(2026, 10, 18, 10, 30),
+      startCoordinate: [44.5, 42],
+      finishCoordinate: [44.5, 42],
+      sunEvents: [],
+      terrain: { status: 'off' },
+    };
+
+    /** Lighting on 4 July finishing `offsetMs` from that day's sunset at the route. */
+    function lightingAroundSunset(
+      offsetMs: number,
+      terrain: TrackLightingView['terrain'],
+    ): TrackLightingView {
+      const daylight = daylightWindow(
+        Date.UTC(2026, 6, 4, 8),
+        { latitude: 42, longitude: 44.5 },
+        timeZone,
+      );
+      if (daylight === null) throw new Error('Expected a sunset in July.');
+      const finishMs = daylight.sunsetMs + offsetMs;
+      return {
+        ...hikeLighting,
+        date: '2026-07-04',
+        defaultDate: '2026-07-04',
+        defaultDateSource: 'recording',
+        startMs: finishMs - 3 * 3_600_000,
+        finishMs,
+        terrain,
+      };
+    }
+
+    it('stores a chosen hike date and moves the map shadows to it at the same local time', () => {
+      mapLayerStore.setState((state) => ({
+        sunShadow: {
+          ...state.sunShadow,
+          enabled: true,
+          // 15:30 in Tbilisi.
+          instantMs: Date.UTC(2026, 10, 18, 11, 30),
+        },
+      }));
+      const { mapLayers } = services;
+      if (mapLayers === null) throw new Error('Expected test map layers.');
+      const setSunShadow = vi.spyOn(mapLayers, 'setSunShadow');
+      const { onTimelineSettingsChange } = renderSection(
+        null,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        hikeLighting,
+      );
+      const date = screen.getByLabelText('Hike date');
+      expect(date).toHaveValue(today);
+
+      fireEvent.change(date, { target: { value: '2026-07-04' } });
+
+      expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+        ...defaultTrackWeatherTimelineSettings,
+        hikeDate: '2026-07-04',
+      });
+      expect(setSunShadow).toHaveBeenLastCalledWith({
+        enabled: true,
+        instantMs: Date.UTC(2026, 6, 4, 11, 30),
+      });
+      expect(date).toHaveValue('2026-07-04');
+    });
+
+    it('resets a chosen hike date to today and disables the reset without one', async () => {
+      const user = userEvent.setup();
+      const { onTimelineSettingsChange } = renderSection(
+        null,
+        dayHike,
+        { ...defaultTrackWeatherTimelineSettings, hikeDate: '2026-07-04' },
+        hikeLighting,
+      );
+      const reset = screen.getByRole('button', { name: 'Today' });
+      expect(screen.getByLabelText('Hike date')).toHaveValue('2026-07-04');
+
+      await user.click(reset);
+
+      expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+        ...defaultTrackWeatherTimelineSettings,
+        hikeDate: null,
+      });
+      expect(screen.getByLabelText('Hike date')).toHaveValue(today);
+      expect(reset).toBeDisabled();
+    });
+
+    it('sums the light kinds along the route and omits those the hike never meets', () => {
+      renderSection(
+        null,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        lightingAroundSunset(-2 * 3_600_000, {
+          status: 'ready',
+          samples: [
+            {
+              distanceMeters: 0,
+              elapsedSeconds: 0,
+              sunlitFraction: 1,
+              sunElevationDegrees: 30,
+            },
+            {
+              distanceMeters: 8_000,
+              elapsedSeconds: 7_200,
+              sunlitFraction: 1,
+              sunElevationDegrees: 18,
+            },
+            {
+              distanceMeters: 8_000,
+              elapsedSeconds: 7_200,
+              sunlitFraction: 0,
+              sunElevationDegrees: 18,
+            },
+            {
+              distanceMeters: 12_000,
+              elapsedSeconds: 10_800,
+              sunlitFraction: 0,
+              sunElevationDegrees: 10,
+            },
+          ],
+        }),
+      );
+
+      // No blue hour or darkness: the hike ends two hours before sunset.
+      expect(screen.getAllByRole('listitem').map((kind) => kind.textContent)).toEqual([
+        'In the sun 2h 0m',
+        'In the shade 1h 0m',
+      ]);
+      expect(
+        screen.getByRole('img', { name: /^Sun elevation over the hike day/u }),
+      ).toBeInTheDocument();
+    });
+
+    it.each([
+      [-90 * 60_000, 'Finishing 1h 30m before sunset.'],
+      [75 * 60_000, 'Finishing 1h 15m after sunset.'],
+    ])('relates a finish %i ms from sunset to it', (offsetMs, sentence) => {
+      renderSection(
+        null,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        lightingAroundSunset(offsetMs, { status: 'off' }),
+      );
+
+      expect(screen.getByText(sentence)).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Recording date' })).toBeDisabled();
+    });
   });
 });

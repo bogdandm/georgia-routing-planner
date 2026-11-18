@@ -764,12 +764,12 @@ expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and 
 every disclosure or weekday change and every released start or pace slider and timing
 option of a saved track; changes made before the record loads are merged over it,
 keeping its per-track entries, and then saved. The record's `timelines` map holds tracks
-with non-default start, pace, recorded-time override, or relative display, or any
-explicit time-marker visibility choice (a null choice follows Layers), keyed by saved
-track ID. The provider owns the active track's settings: a preview or shared track keeps
-them in memory and they move to the new saved ID on save. Deleting a track from the
-Tracks workspace removes its entry; tracks removed by synchronization leave an unused
-entry that reattaches if the same ID returns.
+with non-default start, pace, recorded-time override, relative display, or hike date, or
+any explicit time-marker visibility choice (a null choice follows Layers), keyed by
+saved track ID. The provider owns the active track's settings: a preview or shared track
+keeps them in memory and they move to the new saved ID on save. Deleting a track from
+the Tracks workspace removes its entry; tracks removed by synchronization leave an
+unused entry that reattaches if the same ID returns.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
@@ -929,6 +929,25 @@ marker passage times, and weather checkpoints. Unknown elevation contributes hor
 distance only; source-segment boundaries never contribute vertical travel. For a
 forecast checkpoint without elevation, the existing point forecast request resolves
 elevation and the card displays the returned value.
+
+`useTrackLighting` (`presentation/tracks/useTrackLighting.ts`), called once by the
+provider for the active single track, resolves the IANA zone at the route start, the
+hike date (the stored `hikeDate`, else the recording or current date), and the start
+instant from **Route start**. It plans stations from `routeElapsedSeconds` with
+`planTrackLightingStations` and finds the sunrises and sunsets the hike passes with
+`solarDayEvents`. A saved track first reads `localTrackLighting`; a row whose hash,
+start instant, and station timing all match is used as is. Otherwise
+`computeTrackLighting` (`application/tracks/computeTrackLighting.ts`) asks the
+`TerrainSamplerSource` port, implemented by `RasterDemElevationProvider`, to load every
+DEM tile within the terrain-shadow reach: the provider zoom within 5 km, two zooms
+coarser within 20 km, and four coarser out to the 100 km march cap, mirroring the
+shader's mosaic levels. Any failed tile rejects the load. `stationSunlight` then marches
+`horizonAngleTowardSun`, the CPU reference of the shadow shader, toward the Sun from
+seven ground points within 50 m of each station on the main thread, yielding to the
+event loop every 16 stations, and the result replaces the stored row. A newer input
+aborts the run. Changing **Hike date** also calls `MapLibreLayerController.setSunShadow`
+with the same local time on the new date, which then clamps it to that day's daylight
+window at the map center like any chosen instant.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

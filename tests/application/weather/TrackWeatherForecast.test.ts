@@ -787,10 +787,11 @@ describe('per-track timeline settings', () => {
     ).toEqual({ 'local:ridge': shown });
   });
 
-  it('stores tracks that only ignore recorded time or count relative times', () => {
+  it('stores tracks that only ignore recorded time, count relative times, or pick a date', () => {
     for (const settings of [
       { ...defaultTrackWeatherTimelineSettings, ignoreRecordedTime: true },
       { ...defaultTrackWeatherTimelineSettings, relativeTimeMarkers: true },
+      { ...defaultTrackWeatherTimelineSettings, hikeDate: '2026-07-15' },
     ]) {
       expect(
         withTrackWeatherTimeline(

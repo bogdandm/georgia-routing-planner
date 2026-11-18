@@ -4,6 +4,7 @@ import type {
   TrackMarker,
 } from '@/domain/tracks/localTrack';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
+import type { TrackLightingRecord } from '@/domain/tracks/trackLighting';
 import type { TrackThumbnail } from '@/domain/tracks/trackThumbnail';
 
 export interface LocalTrackRepository {
@@ -31,6 +32,10 @@ export interface LocalTrackRepository {
   listLocalTrackThumbnails(): Promise<readonly TrackThumbnail[]>;
   /** Recomputes and stores one track's thumbnail; removes it and returns null when the track or its content is gone. */
   refreshLocalTrackThumbnail(trackId: string): Promise<TrackThumbnail | null>;
+  /** The last stored lighting of a saved track; callers check that it still applies. */
+  loadTrackLighting(trackId: string): Promise<TrackLightingRecord | null>;
+  /** Stores lighting unless the track is gone or no longer has `record.contentHash`. */
+  saveTrackLighting(record: TrackLightingRecord): Promise<void>;
   loadLocalTrackContent(trackId: string): Promise<LocalTrackContent>;
   updateLocalTrackMarkers(
     trackId: string,

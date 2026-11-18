@@ -35,6 +35,11 @@ export interface TrackWeatherTimelineSettings {
   readonly timeMarkers: boolean | null;
   /** Map times count from 00:00 at the start instead of the route start's clock time. */
   readonly relativeTimeMarkers: boolean;
+  /**
+   * Local `YYYY-MM-DD` of the hike for lighting; null uses the recording date, or today
+   * for a planned route.
+   */
+  readonly hikeDate: string | null;
 }
 
 /** Browser-local track forecast view state. */
@@ -324,6 +329,7 @@ export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings =
   ignoreRecordedTime: false,
   timeMarkers: null,
   relativeTimeMarkers: false,
+  hikeDate: null,
 };
 
 /**
@@ -370,7 +376,8 @@ export function withTrackWeatherTimeline(
       settings.paceFactor !== defaults.paceFactor ||
       settings.ignoreRecordedTime !== defaults.ignoreRecordedTime ||
       settings.timeMarkers !== defaults.timeMarkers ||
-      settings.relativeTimeMarkers !== defaults.relativeTimeMarkers);
+      settings.relativeTimeMarkers !== defaults.relativeTimeMarkers ||
+      settings.hikeDate !== defaults.hikeDate);
   // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
   return {
     ...preferences,
@@ -394,7 +401,7 @@ export type TrackTimingMetrics = Pick<
  * distance and the stored ascent and descent anchors it instead of the noisier
  * per-sample sum. `paceFactor` stretches (above 1) or compresses that time.
  */
-function routeElapsedSeconds(
+export function routeElapsedSeconds(
   points: readonly TrackTimingPoint[],
   metrics: TrackTimingMetrics,
   timing: TrackWeatherTiming,

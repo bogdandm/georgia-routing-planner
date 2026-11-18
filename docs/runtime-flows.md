@@ -932,22 +932,26 @@ elevation and the card displays the returned value.
 
 `useTrackLighting` (`presentation/tracks/useTrackLighting.ts`), called once by the
 provider for the active single track, resolves the IANA zone at the route start, the
-hike date (the stored `hikeDate`, else the recording or current date), and the start
-instant from **Route start**. It plans stations from `routeElapsedSeconds` with
-`planTrackLightingStations` and finds the sunrises and sunsets the hike passes with
-`solarDayEvents`. A saved track first reads `localTrackLighting`; a row whose hash,
-start instant, and station timing all match is used as is. Otherwise
-`computeTrackLighting` (`application/tracks/computeTrackLighting.ts`) asks the
-`TerrainSamplerSource` port, implemented by `RasterDemElevationProvider`, to load every
-DEM tile within the terrain-shadow reach: the provider zoom within 5 km, two zooms
-coarser within 20 km, and four coarser out to the 100 km march cap, mirroring the
-shader's mosaic levels. Any failed tile rejects the load. `stationSunlight` then marches
-`horizonAngleTowardSun`, the CPU reference of the shadow shader, toward the Sun from
-seven ground points within 50 m of each station on the main thread, yielding to the
-event loop every 16 stations, and the result replaces the stored row. A newer input
-aborts the run. Changing **Hike date** also calls `MapLibreLayerController.setSunShadow`
-with the same local time on the new date, which then clamps it to that day's daylight
-window at the map center like any chosen instant.
+hike date (the stored `hikeDate`, else the forecast's selected date from the shared
+`weekday` preference), and the start instant from **Route start**; a recorded track's
+default start is read on that zone's clock. It plans stations from `routeElapsedSeconds`
+with `planTrackLightingStations`, spaced evenly over combined distance and time
+progress, and finds the sunrises and sunsets the hike passes with `solarDayEvents`. A
+saved track first reads `localTrackLighting`; a row whose hash, start instant, and
+station timing all match is used as is. Otherwise `computeTrackLighting`
+(`application/tracks/computeTrackLighting.ts`) asks the `TerrainSamplerSource` port,
+implemented by `RasterDemElevationProvider`, to load every DEM tile within the
+terrain-shadow reach: the provider zoom within 5 km, two zooms coarser within 20 km, and
+four coarser out to the 100 km march cap, mirroring the shader's mosaic levels. A route
+needing more than 160 tiles, or any failed tile, rejects the load. `stationSunlight`
+then marches `horizonAngleTowardSun`, the CPU reference of the shadow shader, toward the
+Sun from seven ground points within 50 m of each station on the main thread, yielding to
+the event loop every 16 stations, and the result replaces the stored row. A newer input
+aborts the run. `TrackWeatherSection` turns a **Hike date** inside the forecast week
+into that forecast weekday and clears `hikeDate`; only a date outside the week is
+stored. Any change also calls `MapLibreLayerController.setSunShadow` with the same local
+time on the new date, which then clamps it to that day's daylight window at the map
+center like any chosen instant.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

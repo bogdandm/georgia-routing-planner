@@ -46,13 +46,17 @@ export type TrackTerrainLighting =
 export interface TrackLightingView {
   /** IANA zone at the route start; every clock time is shown in it. */
   readonly timeZone: string;
-  /** Local `YYYY-MM-DD` of the hike: the chosen date or `defaultDate`. */
+  /** Local `YYYY-MM-DD` of the hike: the track's own date or the forecast date. */
   readonly date: string;
-  /** The recording date, or today for a planned route. */
-  readonly defaultDate: string;
-  readonly defaultDateSource: 'recording' | 'today';
+  /** Local date the recording started at the route, if the track is recorded. */
+  readonly recordedDate: string | null;
   readonly startMs: number;
   readonly finishMs: number;
+  /**
+   * The hike follows the recorded timestamps, only scaled by the pace, so its elapsed
+   * time maps proportionally onto the profile's recorded Time axis.
+   */
+  readonly recordedTiming: boolean;
   readonly startCoordinate: TrackCoordinate;
   readonly finishCoordinate: TrackCoordinate;
   readonly sunEvents: readonly TrackSunEvent[];
@@ -69,11 +73,22 @@ interface TrackLightingInput {
   readonly metrics: TrackTimingMetrics | null;
   readonly settings: TrackWeatherTimelineSettings;
   readonly recordedStartAt: string | undefined;
+  /** The date selected in the track weather forecast; the hike date follows it by default. */
+  readonly forecastDate: string;
 }
 
-/** More events than any multi-day recording passes; bounds the scan. */
-const maximumSunEvents = 64;
 const millisecondsPerMinute = 60_000;
+
+/**
+ * IANA zone at a route's start, whose clock every route time uses. Rounded like the map's
+ * sun panel, so nearby points share one zone.
+ */
+export function routeTimeZone([longitude, latitude]: TrackCoordinate): string {
+  return lookupTimeZone(
+    Math.round(latitude * 100) / 100,
+    Math.round(longitude * 100) / 100,
+  );
+}
 
 /** `{ year, month, day }` of a `YYYY-MM-DD` date, or null when it is not one. */
 export function parseIsoDate(
@@ -89,7 +104,10 @@ export function parseIsoDate(
     : null;
 }
 
-/** Sunrises and sunsets at `coordinate` within [startMs, finishMs), in time order. */
+/**
+ * Sunrises and sunsets at `coordinate` within [startMs, finishMs), in time order. Each
+ * step finds at least the next event a minute later, so the scan ends at the finish.
+ */
 function sunEventInstants(
   startMs: number,
   finishMs: number,
@@ -97,7 +115,7 @@ function sunEventInstants(
 ): readonly Omit<TrackSunEvent, 'distanceMeters'>[] {
   const events: Omit<TrackSunEvent, 'distanceMeters'>[] = [];
   let fromMs = startMs;
-  while (fromMs < finishMs && events.length < maximumSunEvents) {
+  while (fromMs < finishMs) {
     const { sunrise, sunset } = solarDayEvents(
       new Date(fromMs),
       new Date(finishMs),
@@ -166,40 +184,34 @@ export function useTrackLighting({
   metrics,
   settings,
   recordedStartAt,
+  forecastDate,
 }: TrackLightingInput): TrackLightingView | null {
-  const { clock, database, logger, terrainSampler } = useRuntimeServices();
+  const { database, logger, terrainSampler } = useRuntimeServices();
   const { paceFactor, ignoreRecordedTime, startHour, hikeDate } = settings;
   const startCoordinate = route?.points[0]?.coordinate;
   const finishCoordinate = route?.points.at(-1)?.coordinate;
-  // Rounded like the map's sun panel, so nearby points share one zone.
   const timeZone = useMemo(
-    () =>
-      startCoordinate === undefined
-        ? null
-        : lookupTimeZone(
-            Math.round(startCoordinate[1] * 100) / 100,
-            Math.round(startCoordinate[0] * 100) / 100,
-          ),
+    () => (startCoordinate === undefined ? null : routeTimeZone(startCoordinate)),
     [startCoordinate],
   );
   const recordedStart =
     recordedStartAt === undefined ? null : new Date(recordedStartAt);
-  const recorded = recordedStart !== null && Number.isFinite(recordedStart.getTime());
-  let defaultDate: string | null = null;
-  if (timeZone !== null) {
-    const wall = instantToZonedWallTime(
-      recorded ? recordedStart : clock.now(),
-      timeZone,
-    );
-    defaultDate = [
+  let recordedDate: string | null = null;
+  if (
+    timeZone !== null &&
+    recordedStart !== null &&
+    Number.isFinite(recordedStart.getTime())
+  ) {
+    const wall = instantToZonedWallTime(recordedStart, timeZone);
+    recordedDate = [
       String(wall.year).padStart(4, '0'),
       String(wall.month).padStart(2, '0'),
       String(wall.day).padStart(2, '0'),
     ].join('-');
   }
-  const date = hikeDate ?? defaultDate;
+  const date = hikeDate ?? forecastDate;
   const startMs = useMemo(() => {
-    const day = date === null ? null : parseIsoDate(date);
+    const day = parseIsoDate(date);
     if (day === null || timeZone === null) return null;
     const minutes = Math.round(startHour * 60);
     return zonedWallTimeToInstant(
@@ -207,14 +219,15 @@ export function useTrackLighting({
       timeZone,
     ).getTime();
   }, [date, startHour, timeZone]);
-  const stations = useMemo(() => {
-    if (route === null || metrics === null) return [];
-    const { elapsed } = routeElapsedSeconds(route.points, metrics, {
+  const timing = useMemo(() => {
+    if (route === null || metrics === null) return { stations: [], recorded: false };
+    const { elapsed, recorded } = routeElapsedSeconds(route.points, metrics, {
       paceFactor,
       ignoreRecordedTime,
     });
-    return planTrackLightingStations(route, elapsed);
+    return { stations: planTrackLightingStations(route, elapsed), recorded };
   }, [ignoreRecordedTime, metrics, paceFactor, route]);
+  const { stations } = timing;
   const finishSeconds = stations.at(-1)?.elapsedSeconds ?? 0;
   const sunEvents = useMemo(() => {
     if (startMs === null || startCoordinate === undefined) return [];
@@ -287,34 +300,49 @@ export function useTrackLighting({
     };
   }, [contentHash, database, logger, startMs, stations, terrainSampler, trackId]);
 
-  if (
-    timeZone === null ||
-    date === null ||
-    defaultDate === null ||
-    startMs === null ||
-    startCoordinate === undefined ||
-    finishCoordinate === undefined
-  ) {
-    return null;
-  }
-  const terrain: TrackTerrainLighting =
-    terrainSampler === null
-      ? { status: 'off' }
-      : computed !== null &&
-          computed.stations === stations &&
-          computed.startMs === startMs
-        ? computed.result
-        : { status: 'loading' };
-  return {
-    timeZone,
+  // One stable view per input, so the chart's hover re-renders can skip the light strip.
+  const recordedTiming = timing.recorded;
+  return useMemo(() => {
+    if (
+      timeZone === null ||
+      startMs === null ||
+      startCoordinate === undefined ||
+      finishCoordinate === undefined
+    ) {
+      return null;
+    }
+    const terrain: TrackTerrainLighting =
+      terrainSampler === null
+        ? { status: 'off' }
+        : computed !== null &&
+            computed.stations === stations &&
+            computed.startMs === startMs
+          ? computed.result
+          : { status: 'loading' };
+    return {
+      timeZone,
+      date,
+      recordedDate,
+      startMs,
+      finishMs: startMs + finishSeconds * 1_000,
+      recordedTiming,
+      startCoordinate,
+      finishCoordinate,
+      sunEvents,
+      terrain,
+    };
+  }, [
+    computed,
     date,
-    defaultDate,
-    defaultDateSource: recorded ? 'recording' : 'today',
-    startMs,
-    finishMs: startMs + finishSeconds * 1_000,
-    startCoordinate,
     finishCoordinate,
+    finishSeconds,
+    recordedDate,
+    recordedTiming,
+    startCoordinate,
+    startMs,
+    stations,
     sunEvents,
-    terrain,
-  };
+    terrainSampler,
+    timeZone,
+  ]);
 }

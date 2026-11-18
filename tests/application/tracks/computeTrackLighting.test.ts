@@ -8,7 +8,7 @@ import {
 } from '@/application/tracks/computeTrackLighting';
 import type { TrackTimingRoute } from '@/application/weather/TrackWeatherForecast';
 
-/** 1 km east along 42° N in two source segments; the second starts after a gap. */
+/** 1 km east along 42° N in two source segments; the second starts an hour later. */
 const route: TrackTimingRoute = {
   points: [
     { coordinate: [44, 42], distanceMeters: 0, sourceSegmentIndex: 0 },
@@ -17,7 +17,7 @@ const route: TrackTimingRoute = {
     { coordinate: [44.0135, 42], distanceMeters: 1_000, sourceSegmentIndex: 1 },
   ],
 };
-const elapsedSeconds = [0, 1_200, 1_800, 3_600];
+const elapsedSeconds = [0, 1_200, 4_800, 6_600];
 
 const loadFlatSampler: TerrainSamplerSource['loadTerrainSampler'] = () =>
   Promise.resolve({
@@ -28,34 +28,60 @@ const loadFlatSampler: TerrainSamplerSource['loadTerrainSampler'] = () =>
 const flatTerrain: TerrainSamplerSource = { loadTerrainSampler: loadFlatSampler };
 
 describe('planTrackLightingStations', () => {
-  it('spaces stations every 25 m from start to finish, timed along the route', () => {
+  it('places stations at most 25 m and 10 minutes apart from start to finish', () => {
     const stations = planTrackLightingStations(route, elapsedSeconds);
 
-    expect(stations).toHaveLength(41);
+    // 40 steps of 25 m plus 11 of 10 minutes.
+    expect(stations).toHaveLength(52);
     expect(stations[0]).toEqual({
       coordinate: [44, 42],
       distanceMeters: 0,
       elapsedSeconds: 0,
     });
-    expect(stations[8]?.distanceMeters).toBe(200);
-    expect(stations[8]?.elapsedSeconds).toBeCloseTo(600, 9);
-    expect(stations[8]?.coordinate[0]).toBeCloseTo(44.002, 9);
     expect(stations.at(-1)).toEqual({
       coordinate: [44.0135, 42],
       distanceMeters: 1_000,
-      elapsedSeconds: 3_600,
+      elapsedSeconds: 6_600,
     });
+    for (const [index, station] of stations.entries()) {
+      const previous = stations[index - 1];
+      if (previous === undefined) continue;
+      expect(station.distanceMeters - previous.distanceMeters).toBeLessThanOrEqual(
+        25.001,
+      );
+      expect(station.elapsedSeconds - previous.elapsedSeconds).toBeLessThanOrEqual(
+        600.001,
+      );
+    }
   });
 
-  it('places a station at a segment gap on the next segment after the wait', () => {
-    const atGap = planTrackLightingStations(route, elapsedSeconds)[16];
-
-    expect(atGap?.distanceMeters).toBe(400);
-    expect(atGap?.coordinate).toEqual([44.004, 42]);
-    expect(atGap?.elapsedSeconds).toBe(1_200);
-    expect(planTrackLightingStations(route, elapsedSeconds)[17]?.elapsedSeconds).toBe(
-      1_800 + 1_800 / 24,
+  it('waits at the end of a segment until the next one starts', () => {
+    const waiting = planTrackLightingStations(route, elapsedSeconds).filter(
+      (station) => station.elapsedSeconds > 1_200 && station.elapsedSeconds < 4_800,
     );
+
+    expect(waiting).toHaveLength(5);
+    for (const station of waiting) {
+      expect(station.coordinate).toEqual([44.004, 42]);
+      expect(station.distanceMeters).toBe(400);
+    }
+  });
+
+  it('samples a recorded overnight stop through the night', () => {
+    const camp: TrackTimingRoute = {
+      points: [
+        { coordinate: [44, 42], distanceMeters: 0, sourceSegmentIndex: 0 },
+        { coordinate: [44.001, 42], distanceMeters: 100, sourceSegmentIndex: 0 },
+        { coordinate: [44.001, 42], distanceMeters: 100, sourceSegmentIndex: 0 },
+        { coordinate: [44.002, 42], distanceMeters: 200, sourceSegmentIndex: 0 },
+      ],
+    };
+    const atCamp = planTrackLightingStations(camp, [0, 60, 36_060, 36_120]).filter(
+      (station) => station.distanceMeters === 100,
+    );
+
+    expect(atCamp.length).toBeGreaterThanOrEqual(60);
+    expect(atCamp.every((station) => station.coordinate[0] === 44.001)).toBe(true);
   });
 
   it('caps long routes at 400 stations', () => {
@@ -95,7 +121,7 @@ describe('computeTrackLighting', () => {
   it('lights each station at the instant the hiker passes it', async () => {
     const loadTerrainSampler = vi.fn(loadFlatSampler);
     const stations = planTrackLightingStations(route, elapsedSeconds);
-    // An hour-long walk starting 30 minutes before a June sunrise in Tbilisi (~01:38 UTC).
+    // A walk from 30 minutes before a June sunrise in Tbilisi (~01:38 UTC) until 03:00 UTC.
     const samples = await computeTrackLighting(
       { loadTerrainSampler },
       stations,
@@ -113,7 +139,7 @@ describe('computeTrackLighting', () => {
     expect(samples[0]?.sunlitFraction).toBe(0);
     expect(samples[0]?.sunElevationDegrees).toBeLessThan(0);
     expect(samples.at(-1)?.sunlitFraction).toBe(1);
-    expect(samples.at(-1)?.elapsedSeconds).toBe(3_600);
+    expect(samples.at(-1)?.elapsedSeconds).toBe(6_600);
   });
 
   it('stops when the signal aborts', async () => {

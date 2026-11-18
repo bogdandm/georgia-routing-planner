@@ -34,6 +34,7 @@ import {
   TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  localCalendarDate,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
@@ -84,13 +85,6 @@ function locationKey(location: TrackWeatherLocation): string {
   const [longitude, latitude] = location.coordinate;
   const elevation = location.elevationMeters;
   return `${longitude.toFixed(5)},${latitude.toFixed(5)},${elevation === undefined ? '' : Math.round(elevation).toString()}`;
-}
-
-/** Browser-local calendar date; forecast dates are labels in the track's timezone. */
-function localDate(value: Date): string {
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${value.getFullYear().toString()}-${month}-${day}`;
 }
 
 function utcDate(date: string): Date {
@@ -169,7 +163,10 @@ export function TrackWeatherSection({
   const elevationDetailsId = `${detailsId}-elevation`;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const routeDetailsId = `${detailsId}-route`;
-  const dates = useMemo(() => trackWeatherDates(localDate(clock.now())), [clock]);
+  const dates = useMemo(
+    () => trackWeatherDates(localCalendarDate(clock.now())),
+    [clock],
+  );
   const selectedDate = defaultTrackWeatherDate(dates, current.weekday);
   const elevationLocations = useMemo(
     () => selectTrackElevationLocations(profile),
@@ -457,16 +454,26 @@ export function TrackWeatherSection({
         : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
   const paceFormat = new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 2 });
   const formatPace = (value: number) => `×${paceFormat.format(value)}`;
-  /** Stores the hike date, the default as null, and shows its light on the map. */
+  /**
+   * A hike date within the forecast week selects that forecast date, so both stay in
+   * step; any other date is stored as the track's own. The map shows its light.
+   */
   const changeHikeDate = (date: string) => {
     if (lighting === null) return;
-    const next = parseIsoDate(date) === null ? lighting.defaultDate : date;
-    onTimelineSettingsChange({
-      ...timelineSettings,
-      hikeDate: next === lighting.defaultDate ? null : next,
-    });
+    const next = parseIsoDate(date) === null ? selectedDate : date;
+    if (dates.includes(next)) {
+      if (next !== selectedDate) {
+        onPreferencesChange({ ...current, weekday: trackWeatherWeekday(next) });
+      }
+      if (timelineSettings.hikeDate !== null) {
+        onTimelineSettingsChange({ ...timelineSettings, hikeDate: null });
+      }
+    } else {
+      onTimelineSettingsChange({ ...timelineSettings, hikeDate: next });
+    }
     showHikeDateOnMap(mapLayers, next, lighting.timeZone);
   };
+  const today = dates[0];
 
   return (
     <>
@@ -510,17 +517,29 @@ export function TrackWeatherSection({
                   value={lighting.date}
                 />
                 <Button
-                  disabled={timelineSettings.hikeDate === null}
+                  disabled={today === undefined || lighting.date === today}
                   onClick={() => {
-                    changeHikeDate(lighting.defaultDate);
+                    if (today !== undefined) changeHikeDate(today);
                   }}
                   size="small"
                   variant="outlined"
                 >
-                  {lighting.defaultDateSource === 'recording'
-                    ? t`Recording date`
-                    : t`Today`}
+                  {t`Today`}
                 </Button>
+                {lighting.recordedDate === null ? null : (
+                  <Button
+                    disabled={lighting.date === lighting.recordedDate}
+                    onClick={() => {
+                      if (lighting.recordedDate !== null) {
+                        changeHikeDate(lighting.recordedDate);
+                      }
+                    }}
+                    size="small"
+                    variant="outlined"
+                  >
+                    {t`Recording date`}
+                  </Button>
+                )}
               </Stack>
             )}
             <Box>

@@ -6,7 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PointWeatherForecastError } from '@/application/ports/WeatherForecastGateway';
 import {
+  defaultTrackWeatherDate,
+  defaultTrackWeatherPreferences,
   defaultTrackWeatherTimelineSettings,
+  localCalendarDate,
+  trackWeatherDates,
+  trackWeatherWeekday,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
@@ -93,11 +98,19 @@ function renderSection(
           onTimelineSettingsChange(next);
           setTimelineSettings(next);
         }}
-        // The track panel derives the shown date from the stored override.
+        // The track panel shows the track's own date, else the forecast's selected date.
         lighting={
           lighting === null
             ? null
-            : { ...lighting, date: timelineSettings.hikeDate ?? lighting.defaultDate }
+            : {
+                ...lighting,
+                date:
+                  timelineSettings.hikeDate ??
+                  defaultTrackWeatherDate(
+                    forecastDates(),
+                    (preferences ?? defaultTrackWeatherPreferences).weekday,
+                  ),
+              }
         }
       />
     );
@@ -110,6 +123,11 @@ function renderSection(
     </RuntimeServicesProvider>,
   );
   return { onPreferencesChange, onTimelineSettingsChange };
+}
+
+/** The forecast week from the test clock's browser-local today. */
+function forecastDates(): readonly string[] {
+  return trackWeatherDates(localCalendarDate(services.clock.now()));
 }
 
 function expandedSection(metrics: TrackStatsMetrics) {
@@ -470,15 +488,15 @@ describe('TrackWeatherSection', () => {
 
   describe('route lighting', () => {
     const timeZone = 'Asia/Tbilisi';
-    const today = '2026-11-18';
     const hikeLighting: TrackLightingView = {
       timeZone,
-      date: today,
-      defaultDate: today,
-      defaultDateSource: 'today',
+      // The harness replaces it with the track or forecast date.
+      date: '2026-07-18',
+      recordedDate: null,
       // 09:00 to 14:30 in Tbilisi (UTC+4 all year).
-      startMs: Date.UTC(2026, 10, 18, 5),
-      finishMs: Date.UTC(2026, 10, 18, 10, 30),
+      startMs: Date.UTC(2026, 6, 18, 5),
+      finishMs: Date.UTC(2026, 6, 18, 10, 30),
+      recordedTiming: false,
       startCoordinate: [44.5, 42],
       finishCoordinate: [44.5, 42],
       sunEvents: [],
@@ -499,35 +517,33 @@ describe('TrackWeatherSection', () => {
       const finishMs = daylight.sunsetMs + offsetMs;
       return {
         ...hikeLighting,
-        date: '2026-07-04',
-        defaultDate: '2026-07-04',
-        defaultDateSource: 'recording',
+        recordedDate: '2026-07-04',
         startMs: finishMs - 3 * 3_600_000,
         finishMs,
         terrain,
       };
     }
 
-    it('stores a chosen hike date and moves the map shadows to it at the same local time', () => {
+    it('keeps a date outside the forecast week as the track date and moves the map shadows to it', () => {
       mapLayerStore.setState((state) => ({
         sunShadow: {
           ...state.sunShadow,
           enabled: true,
           // 15:30 in Tbilisi.
-          instantMs: Date.UTC(2026, 10, 18, 11, 30),
+          instantMs: Date.UTC(2026, 6, 18, 11, 30),
         },
       }));
       const { mapLayers } = services;
       if (mapLayers === null) throw new Error('Expected test map layers.');
       const setSunShadow = vi.spyOn(mapLayers, 'setSunShadow');
-      const { onTimelineSettingsChange } = renderSection(
+      const { onPreferencesChange, onTimelineSettingsChange } = renderSection(
         null,
         dayHike,
         defaultTrackWeatherTimelineSettings,
         hikeLighting,
       );
       const date = screen.getByLabelText('Hike date');
-      expect(date).toHaveValue(today);
+      expect(date).toHaveValue(defaultTrackWeatherDate(forecastDates(), 6));
 
       fireEvent.change(date, { target: { value: '2026-07-04' } });
 
@@ -535,6 +551,7 @@ describe('TrackWeatherSection', () => {
         ...defaultTrackWeatherTimelineSettings,
         hikeDate: '2026-07-04',
       });
+      expect(onPreferencesChange).not.toHaveBeenCalled();
       expect(setSunShadow).toHaveBeenLastCalledWith({
         enabled: true,
         instantMs: Date.UTC(2026, 6, 4, 11, 30),
@@ -542,28 +559,90 @@ describe('TrackWeatherSection', () => {
       expect(date).toHaveValue('2026-07-04');
     });
 
-    it('resets a chosen hike date to today and disables the reset without one', async () => {
+    it('selects a date within the forecast week as the forecast date', () => {
+      const { onPreferencesChange, onTimelineSettingsChange } = renderSection(
+        expandedPreferences,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        hikeLighting,
+      );
+      const inWeek = forecastDates()[2];
+      if (inWeek === undefined) throw new Error('Expected a forecast week.');
+
+      fireEvent.change(screen.getByLabelText('Hike date'), {
+        target: { value: inWeek },
+      });
+
+      expect(onPreferencesChange).toHaveBeenLastCalledWith({
+        ...expandedPreferences,
+        weekday: trackWeatherWeekday(inWeek),
+      });
+      expect(onTimelineSettingsChange).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Hike date')).toHaveValue(inWeek);
+    });
+
+    it('returns from a track date to today, which the forecast then shows', async () => {
       const user = userEvent.setup();
-      const { onTimelineSettingsChange } = renderSection(
-        null,
+      const [today, , , later] = forecastDates();
+      if (today === undefined || later === undefined) {
+        throw new Error('Expected a forecast week.');
+      }
+      // The forecast shows a later day of the week until Today selects today.
+      const preferences = {
+        ...expandedPreferences,
+        weekday: trackWeatherWeekday(later),
+      };
+      const { onPreferencesChange, onTimelineSettingsChange } = renderSection(
+        preferences,
         dayHike,
         { ...defaultTrackWeatherTimelineSettings, hikeDate: '2026-07-04' },
         hikeLighting,
       );
-      const reset = screen.getByRole('button', { name: 'Today' });
+      const todayButton = screen.getByRole('button', { name: 'Today' });
       expect(screen.getByLabelText('Hike date')).toHaveValue('2026-07-04');
 
-      await user.click(reset);
+      await user.click(todayButton);
 
       expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
         ...defaultTrackWeatherTimelineSettings,
         hikeDate: null,
       });
+      expect(onPreferencesChange).toHaveBeenLastCalledWith({
+        ...preferences,
+        weekday: trackWeatherWeekday(today),
+      });
       expect(screen.getByLabelText('Hike date')).toHaveValue(today);
-      expect(reset).toBeDisabled();
+      expect(todayButton).toBeDisabled();
     });
 
-    it('sums the light kinds along the route and omits those the hike never meets', () => {
+    it('picks the recording date of a recorded track', async () => {
+      const user = userEvent.setup();
+      const { onTimelineSettingsChange } = renderSection(
+        null,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        { ...hikeLighting, recordedDate: '2026-07-04' },
+      );
+      const recording = screen.getByRole('button', { name: 'Recording date' });
+
+      await user.click(recording);
+
+      expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+        ...defaultTrackWeatherTimelineSettings,
+        hikeDate: '2026-07-04',
+      });
+      expect(recording).toBeDisabled();
+    });
+
+    it('offers no recording date for a planned route', () => {
+      renderSection(null, dayHike, defaultTrackWeatherTimelineSettings, hikeLighting);
+
+      expect(
+        screen.queryByRole('button', { name: 'Recording date' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('lists the light kinds the hike meets one per row', () => {
       renderSection(
         null,
         dayHike,
@@ -621,7 +700,6 @@ describe('TrackWeatherSection', () => {
       );
 
       expect(screen.getByText(sentence)).toBeVisible();
-      expect(screen.getByRole('button', { name: 'Recording date' })).toBeDisabled();
     });
   });
 });

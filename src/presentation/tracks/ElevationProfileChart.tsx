@@ -737,10 +737,22 @@ export function ElevationProfileChart({
         : elapsedSeconds[sampleIndex]) ?? 0,
     [elapsedSeconds, profile],
   );
-  /** Chart position of a route distance, interpolated between profile samples. */
-  const xOfDistance = useCallback(
-    (distanceMeters: number): number => {
+  /**
+   * Chart position of the hiker at a route distance and elapsed hike time. On the Time
+   * axis a recording-timed hike scales its elapsed time onto the recorded one, so stops
+   * keep their span; an estimated hike is placed by distance between profile samples.
+   */
+  const lightingTotalSeconds =
+    lighting === null ? 0 : (lighting.finishMs - lighting.startMs) / 1_000;
+  const recordedTotalSeconds = elapsedSeconds?.at(-1) ?? 0;
+  const lightingTimeScale =
+    lighting?.recordedTiming === true && lightingTotalSeconds > 0
+      ? recordedTotalSeconds / lightingTotalSeconds
+      : null;
+  const xOfLighting = useCallback(
+    (distanceMeters: number, hikeSeconds: number): number => {
       if (elapsedSeconds === null) return distanceMeters;
+      if (lightingTimeScale !== null) return hikeSeconds * lightingTimeScale;
       const { points } = profile;
       let low = 0;
       let high = points.length - 1;
@@ -764,7 +776,7 @@ export function ElevationProfileChart({
           (after.distanceMeters - before.distanceMeters)
       );
     },
-    [elapsedSeconds, profile],
+    [elapsedSeconds, lightingTimeScale, profile],
   );
   let highlight: { readonly startX: number; readonly endX: number } | null = null;
   if (highlightedDistanceRange !== null) {
@@ -779,8 +791,6 @@ export function ElevationProfileChart({
     );
     highlight = { startX, endX };
   }
-  const showsLightStrip =
-    showHeading && lighting !== null && lighting.terrain.status !== 'off';
   const timeTicks = useMemo(
     () => (elapsedSeconds === null ? null : timeAxisTicks(elapsedSeconds.at(-1) ?? 0)),
     [elapsedSeconds],
@@ -1021,7 +1031,10 @@ export function ElevationProfileChart({
                   <ReferenceLine
                     key={event.instantMs}
                     className="elevation-profile-sun-event"
-                    x={xOfDistance(event.distanceMeters)}
+                    x={xOfLighting(
+                      event.distanceMeters,
+                      (event.instantMs - lighting.startMs) / 1_000,
+                    )}
                     ifOverflow="hidden"
                     stroke={appColors.brand.tigerOrange}
                     strokeDasharray="4 3"
@@ -1079,20 +1092,17 @@ export function ElevationProfileChart({
           )}
         </AreaChart>
       </Box>
-      {showsLightStrip ? (
-        <TrackLightingStrip lighting={lighting} xOfDistance={xOfDistance} />
-      ) : null}
       {showHeading && timeline !== null ? (
-        // Without the light strip, pull the toggles up into the empty band under the
-        // x-axis labels, and end them at the plot's right border: the chart box extends
-        // 8px past the content edge (mx: -1) and reserves a 16px right margin.
+        // Pull the toggles up into the empty band under the x-axis labels, and end them
+        // at the plot's right border: the chart box extends 8px past the content edge
+        // (mx: -1) and reserves a 16px right margin.
         <Stack
           direction="row"
           sx={{
             flexWrap: 'wrap',
             justifyContent: 'flex-end',
             gap: 1,
-            mt: showsLightStrip ? 0 : -2.5,
+            mt: -2.5,
             pr: 1,
           }}
         >
@@ -1129,6 +1139,9 @@ export function ElevationProfileChart({
             </ToggleButton>
           </ToggleButtonGroup>
         </Stack>
+      ) : null}
+      {showHeading && lighting !== null ? (
+        <TrackLightingStrip lighting={lighting} axis={axis} />
       ) : null}
     </Stack>
   );

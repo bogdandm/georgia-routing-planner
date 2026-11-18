@@ -129,6 +129,8 @@ const terrainSamplerLevels = [
 ] as const;
 
 const metersPerLatitudeDegree = (Math.PI * terrainShadowModel.earthRadiusMeters) / 180;
+/** At most this many decoded tiles (1 MiB each at 512 px) back one sampler. */
+const maximumTerrainSamplerTiles = 160;
 
 /** Decoded heights of one level; `NaN` marks transparent or non-finite pixels. */
 interface TerrainSamplerLevel {
@@ -342,40 +344,50 @@ export class RasterDemElevationProvider
     const { maxZoom, tileSize } = this.terrain;
     const minZoom = this.terrain.minZoom ?? 0;
     let maximumElevationMeters = -Infinity;
-    const levels = await Promise.all(
-      terrainSamplerLevels.map(async ({ zoomOffset, reachMeters }) => {
-        const zoom = Math.max(minZoom, maxZoom - zoomOffset);
-        const tileCount = 2 ** zoom;
-        const keys = new Set<number>();
-        for (const coordinate of coordinates) {
-          const latitudeReach = reachMeters / metersPerLatitudeDegree;
-          const longitudeReach = Math.min(
-            180,
-            latitudeReach /
-              Math.max(0.01, Math.cos((coordinate.latitude * Math.PI) / 180)),
-          );
-          const northWest = worldPixelPosition(
-            coordinate.latitude + latitudeReach,
-            coordinate.longitude - longitudeReach,
-            tileCount,
-          );
-          const southEast = worldPixelPosition(
-            coordinate.latitude - latitudeReach,
-            coordinate.longitude + longitudeReach,
-            tileCount,
-          );
-          const firstRow = Math.max(0, Math.floor(northWest.row));
-          const lastRow = Math.min(tileCount - 1, Math.floor(southEast.row));
-          const firstColumn = Math.floor(northWest.column);
-          // Wrapped east edges continue past the antimeridian.
-          let lastColumn = Math.floor(southEast.column);
-          if (lastColumn < firstColumn) lastColumn += tileCount;
-          for (let column = firstColumn; column <= lastColumn; column += 1) {
-            for (let row = firstRow; row <= lastRow; row += 1) {
-              keys.add((column % tileCount) * tileCount + row);
-            }
+    const plans = terrainSamplerLevels.map(({ zoomOffset, reachMeters }) => {
+      const zoom = Math.max(minZoom, maxZoom - zoomOffset);
+      const tileCount = 2 ** zoom;
+      const keys = new Set<number>();
+      for (const coordinate of coordinates) {
+        const latitudeReach = reachMeters / metersPerLatitudeDegree;
+        const longitudeReach = Math.min(
+          180,
+          latitudeReach /
+            Math.max(0.01, Math.cos((coordinate.latitude * Math.PI) / 180)),
+        );
+        const northWest = worldPixelPosition(
+          coordinate.latitude + latitudeReach,
+          coordinate.longitude - longitudeReach,
+          tileCount,
+        );
+        const southEast = worldPixelPosition(
+          coordinate.latitude - latitudeReach,
+          coordinate.longitude + longitudeReach,
+          tileCount,
+        );
+        const firstRow = Math.max(0, Math.floor(northWest.row));
+        const lastRow = Math.min(tileCount - 1, Math.floor(southEast.row));
+        const firstColumn = Math.floor(northWest.column);
+        // Wrapped east edges continue past the antimeridian.
+        let lastColumn = Math.floor(southEast.column);
+        if (lastColumn < firstColumn) lastColumn += tileCount;
+        for (let column = firstColumn; column <= lastColumn; column += 1) {
+          for (let row = firstRow; row <= lastRow; row += 1) {
+            keys.add((column % tileCount) * tileCount + row);
           }
         }
+      }
+      return { zoom, tileCount, reachMeters, keys };
+    });
+    // Decoded tiles stay in memory until the march ends, so a widely scattered route
+    // fails here instead of exhausting the tab.
+    if (
+      plans.reduce((sum, plan) => sum + plan.keys.size, 0) > maximumTerrainSamplerTiles
+    ) {
+      throw new Error('The route needs too many DEM tiles.');
+    }
+    const levels = await Promise.all(
+      plans.map(async ({ zoom, tileCount, reachMeters, keys }) => {
         const tiles = new Map<number, Float32Array>();
         await Promise.all(
           [...keys].map(async (key) => {

@@ -1,6 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 import { Box, Skeleton, Stack, Typography } from '@mui/material';
-import { useId, useMemo, type ReactElement } from 'react';
+import { memo, useId, useMemo, useState, type ReactElement } from 'react';
 
 import { solarPosition } from '@/domain/terrain/solarPosition';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
@@ -14,14 +14,20 @@ import {
 } from '@/domain/tracks/trackLighting';
 import { daylightWindow, localDayBounds } from '@/presentation/map/sunShadowDaylight';
 import { appColors } from '@/presentation/theme/appColors';
-import { formatTrackDuration } from '@/presentation/tracks/trackFormatters';
+import {
+  formatTrackDistance,
+  formatTrackDuration,
+} from '@/presentation/tracks/trackFormatters';
 import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 
 const millisecondsPerHour = 3_600_000;
-/** Clock labels under the strip: at most this many, at least this far apart. */
-const maximumHourLabels = 7;
-const minimumHourLabelGapFraction = 0.09;
-const hourLabelSteps = [1, 2, 3, 4, 6, 12, 24] as const;
+/** Labels under the strip: at most this many, at least this far apart. */
+const maximumTickLabels = 7;
+const minimumTickGapFraction = 0.09;
+const hourTickSteps = [1, 2, 3, 4, 6, 12, 24] as const;
+const distanceTickStepsMeters = [
+  500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000,
+] as const;
 
 function hexChannels(hex: string): readonly [number, number, number] {
   const value = Number.parseInt(hex.slice(1), 16);
@@ -99,39 +105,56 @@ function useLightKindLabels(): Readonly<Record<TrackLightKind, string>> {
   };
 }
 
+/** Lighting between the two samples around `position` on the strip's axis. */
+function sampleAt(
+  samples: readonly TrackLightingSample[],
+  positionOf: (sample: TrackLightingSample) => number,
+  position: number,
+): TrackLightingSample | null {
+  const index = samples.findIndex((sample) => positionOf(sample) >= position);
+  const after = samples[index] ?? samples.at(-1);
+  const before = samples[index - 1] ?? after;
+  if (after === undefined || before === undefined) return null;
+  const span = positionOf(after) - positionOf(before);
+  const fraction = span <= 0 ? 1 : (position - positionOf(before)) / span;
+  const mix = (from: number, to: number) => from + (to - from) * fraction;
+  return {
+    distanceMeters: mix(before.distanceMeters, after.distanceMeters),
+    elapsedSeconds: mix(before.elapsedSeconds, after.elapsedSeconds),
+    sunlitFraction: mix(before.sunlitFraction, after.sunlitFraction),
+    sunElevationDegrees: mix(before.sunElevationDegrees, after.sunElevationDegrees),
+  };
+}
+
 interface TrackLightingStripProps {
   readonly lighting: TrackLightingView;
-  /** Horizontal chart position of a route distance on the profile's current axis. */
-  readonly xOfDistance: (distanceMeters: number) => number;
+  /** The profile's axis: the strip runs over route distance or hike time like it. */
+  readonly axis: 'distance' | 'time';
 }
 
 /**
- * Light along the route under the profile, aligned with its plot area, with the clock
- * hours the hiker passes. Stops sit at each sample's chart position, so the strip
- * follows the Distance or Time axis above it.
+ * Light along the route across the full width, over route distance or hike time like
+ * the profile above, with distance or clock-hour labels and a hover readout.
  */
-export function TrackLightingStrip({
+export const TrackLightingStrip = memo(function TrackLightingStrip({
   lighting,
-  xOfDistance,
+  axis,
 }: TrackLightingStripProps): ReactElement | null {
   const { i18n, t } = useLingui();
   const labels = useLightKindLabels();
   const clock = useClockFormat(lighting.timeZone);
   // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG element ID.
   const gradientId = `track-light-${useId().replaceAll(':', '')}`;
+  const [hoverFraction, setHoverFraction] = useState<number | null>(null);
   const { terrain } = lighting;
   if (terrain.status === 'off') return null;
-  // Matches the chart: an 8 px bleed, a 64 px axis plus 4 px margin, and 16 px at right.
-  const plotInset = { mx: -1, pl: 8.5, pr: 2 };
   if (terrain.status === 'loading') {
     return (
-      <Box sx={plotInset}>
-        <Skeleton
-          variant="rounded"
-          height={10}
-          aria-label={t`Calculating the light along the route`}
-        />
-      </Box>
+      <Skeleton
+        variant="rounded"
+        height={10}
+        aria-label={t`Calculating the light along the route`}
+      />
     );
   }
   if (terrain.status === 'failed') {
@@ -142,97 +165,186 @@ export function TrackLightingStrip({
     );
   }
   const { samples } = terrain;
-  const firstX = xOfDistance(samples[0]?.distanceMeters ?? 0);
-  const width = xOfDistance(samples.at(-1)?.distanceMeters ?? 0) - firstX;
-  const fractionOf = (distanceMeters: number) =>
-    width <= 0 ? 0 : (xOfDistance(distanceMeters) - firstX) / width;
-  const elapsedSpanMs = lighting.finishMs - lighting.startMs;
-  const step =
-    hourLabelSteps.find(
-      (hours) => elapsedSpanMs / (hours * millisecondsPerHour) <= maximumHourLabels,
-    ) ?? 24;
-  const hourLabels: { readonly fraction: number; readonly label: string }[] = [];
-  // Whole local hours on the step grid, placed where the hiker is at that time.
-  const startWall = instantToZonedWallTime(
-    new Date(lighting.startMs),
-    lighting.timeZone,
-  );
-  let hourMs =
-    lighting.startMs - startWall.minute * 60_000 - (lighting.startMs % 60_000);
-  if (hourMs < lighting.startMs) hourMs += millisecondsPerHour;
-  for (; hourMs <= lighting.finishMs; hourMs += millisecondsPerHour) {
-    const hour = instantToZonedWallTime(new Date(hourMs), lighting.timeZone).hour;
-    if (hour % step !== 0) continue;
-    const elapsedSeconds = (hourMs - lighting.startMs) / 1_000;
-    const index = samples.findIndex(
-      (sample) => sample.elapsedSeconds >= elapsedSeconds,
-    );
-    const after = samples[index];
-    const before = samples[index - 1] ?? after;
-    if (after === undefined || before === undefined) continue;
-    const span = after.elapsedSeconds - before.elapsedSeconds;
-    const distanceMeters =
-      span <= 0
-        ? after.distanceMeters
-        : before.distanceMeters +
-          ((after.distanceMeters - before.distanceMeters) *
-            (elapsedSeconds - before.elapsedSeconds)) /
-            span;
-    const fraction = fractionOf(distanceMeters);
+  const positionOf = (sample: TrackLightingSample) =>
+    axis === 'time' ? sample.elapsedSeconds : sample.distanceMeters;
+  const firstPosition = samples[0] === undefined ? 0 : positionOf(samples[0]);
+  const lastSample = samples.at(-1);
+  const span = lastSample === undefined ? 0 : positionOf(lastSample) - firstPosition;
+  const fractionOf = (position: number) =>
+    span <= 0 ? 0 : (position - firstPosition) / span;
+
+  const ticks: {
+    readonly key: number;
+    readonly fraction: number;
+    readonly label: string;
+  }[] = [];
+  const addTick = (key: number, fraction: number, label: string) => {
+    const previous = ticks.at(-1);
     if (
-      hourLabels.length > 0 &&
-      fraction - (hourLabels.at(-1)?.fraction ?? 0) < minimumHourLabelGapFraction
+      fraction > 1 ||
+      (previous !== undefined && fraction - previous.fraction < minimumTickGapFraction)
     ) {
-      continue;
+      return;
     }
-    hourLabels.push({ fraction, label: clock.format(new Date(hourMs)) });
+    ticks.push({ key, fraction, label });
+  };
+  if (axis === 'time') {
+    // Whole local hours on a step grid that keeps the labels few.
+    const spanMs = lighting.finishMs - lighting.startMs;
+    const step =
+      hourTickSteps.find(
+        (hours) => spanMs / (hours * millisecondsPerHour) <= maximumTickLabels,
+      ) ?? 24;
+    const startWall = instantToZonedWallTime(
+      new Date(lighting.startMs),
+      lighting.timeZone,
+    );
+    let hourMs =
+      lighting.startMs - startWall.minute * 60_000 - (lighting.startMs % 60_000);
+    if (hourMs < lighting.startMs) hourMs += millisecondsPerHour;
+    for (; hourMs <= lighting.finishMs; hourMs += millisecondsPerHour) {
+      if (
+        instantToZonedWallTime(new Date(hourMs), lighting.timeZone).hour % step !==
+        0
+      ) {
+        continue;
+      }
+      addTick(
+        hourMs,
+        fractionOf((hourMs - lighting.startMs) / 1_000),
+        clock.format(new Date(hourMs)),
+      );
+    }
+  } else {
+    const step =
+      distanceTickStepsMeters.find(
+        (meters) => span / meters <= maximumTickLabels - 1,
+      ) ?? Math.ceil(span / (maximumTickLabels - 1));
+    for (let meters = 0; meters <= span; meters += step) {
+      addTick(
+        meters,
+        fractionOf(firstPosition + meters),
+        formatTrackDistance(meters, i18n),
+      );
+    }
   }
+
   const durations = trackLightDurations(samples);
   const description = trackLightKinds
     .filter((kind) => durations[kind] >= 60)
     .map((kind) => `${labels[kind]} ${formatTrackDuration(durations[kind], i18n)}`)
     .join(', ');
+  const hovered =
+    hoverFraction === null
+      ? null
+      : sampleAt(samples, positionOf, firstPosition + hoverFraction * span);
+  let hoverLabel: string | null = null;
+  if (hovered !== null) {
+    const shares = trackLightShares(hovered);
+    const kind = trackLightKinds.reduce((best, candidate) =>
+      shares[candidate] > shares[best] ? candidate : best,
+    );
+    hoverLabel = [
+      clock.format(new Date(lighting.startMs + hovered.elapsedSeconds * 1_000)),
+      formatTrackDistance(hovered.distanceMeters, i18n),
+      labels[kind],
+    ].join(' · ');
+  }
+  const anchoredAt = (fraction: number) => ({
+    left: `${String(fraction * 100)}%`,
+    /* eslint-disable lingui/no-unlocalized-strings -- CSS values. */
+    transform:
+      fraction < 0.04
+        ? 'none'
+        : fraction > 0.96
+          ? 'translateX(-100%)'
+          : 'translateX(-50%)',
+    /* eslint-enable lingui/no-unlocalized-strings */
+  });
 
   return (
-    <Box sx={plotInset}>
+    <Box sx={{ position: 'relative' }}>
       <Box
-        role="img"
-        aria-label={t`Light along the route: ${description}`}
-        component="svg"
-        sx={{ display: 'block', width: '100%', height: 10, borderRadius: 1 }}
-        // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG attribute value.
-        preserveAspectRatio="none"
-        viewBox="0 0 100 10"
+        sx={{ position: 'relative', cursor: 'crosshair', touchAction: 'pan-y' }}
+        onPointerMove={(event) => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          if (bounds.width <= 0) return;
+          setHoverFraction(
+            Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
+          );
+        }}
+        onPointerLeave={() => {
+          setHoverFraction(null);
+        }}
       >
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
-            {samples.map((sample) => (
-              <stop
-                key={sample.distanceMeters}
-                offset={`${String(fractionOf(sample.distanceMeters) * 100)}%`}
-                stopColor={sampleColor(sample)}
-              />
-            ))}
-          </linearGradient>
-        </defs>
-        <rect width="100" height="10" rx="1.5" fill={`url(#${gradientId})`} />
+        <Box
+          role="img"
+          aria-label={t`Light along the route: ${description}`}
+          component="svg"
+          sx={{ display: 'block', width: '100%', height: 12, borderRadius: 1 }}
+          // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG attribute value.
+          preserveAspectRatio="none"
+          viewBox="0 0 100 10"
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+              {samples.map((sample) => (
+                <stop
+                  key={`${String(sample.distanceMeters)}:${String(sample.elapsedSeconds)}`}
+                  offset={`${String(fractionOf(positionOf(sample)) * 100)}%`}
+                  stopColor={sampleColor(sample)}
+                />
+              ))}
+            </linearGradient>
+          </defs>
+          <rect width="100" height="10" rx="1.5" fill={`url(#${gradientId})`} />
+        </Box>
+        {hoverFraction === null ? null : (
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              top: -2,
+              bottom: -2,
+              left: `${String(hoverFraction * 100)}%`,
+              width: 2,
+              ml: '-1px',
+              bgcolor: 'text.primary',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        {hoverLabel === null || hoverFraction === null ? null : (
+          <Typography
+            variant="caption"
+            sx={{
+              position: 'absolute',
+              bottom: 'calc(100% + 6px)',
+              ...anchoredAt(hoverFraction),
+              px: 0.75,
+              py: 0.25,
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              boxShadow: 2,
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          >
+            {hoverLabel}
+          </Typography>
+        )}
       </Box>
       <Box sx={{ position: 'relative', height: 16 }}>
-        {hourLabels.map(({ fraction, label }) => (
+        {ticks.map(({ key, fraction, label }) => (
           <Typography
-            key={label}
+            key={key}
             variant="caption"
             color="text.secondary"
             sx={{
               position: 'absolute',
               top: 0,
-              left: `${String(fraction * 100)}%`,
-              transform:
-                fraction < 0.04
-                  ? 'none'
-                  : fraction > 0.96
-                    ? 'translateX(-100%)'
-                    : 'translateX(-50%)',
+              ...anchoredAt(fraction),
               lineHeight: '16px',
               whiteSpace: 'nowrap',
             }}
@@ -243,7 +355,7 @@ export function TrackLightingStrip({
       </Box>
     </Box>
   );
-}
+});
 
 /** Seconds of each light kind and how the finish relates to sunset. */
 export function TrackLightingSummary({
@@ -253,14 +365,16 @@ export function TrackLightingSummary({
 }): ReactElement {
   const { i18n, t } = useLingui();
   const labels = useLightKindLabels();
-  const { terrain } = lighting;
-  const daylight = daylightWindow(
-    lighting.finishMs,
-    {
-      latitude: lighting.finishCoordinate[1],
-      longitude: lighting.finishCoordinate[0],
-    },
-    lighting.timeZone,
+  const { terrain, finishMs, timeZone } = lighting;
+  const [finishLongitude, finishLatitude] = lighting.finishCoordinate;
+  const daylight = useMemo(
+    () =>
+      daylightWindow(
+        finishMs,
+        { latitude: finishLatitude, longitude: finishLongitude },
+        timeZone,
+      ),
+    [finishLatitude, finishLongitude, finishMs, timeZone],
   );
   let finishLine: string | null = null;
   if (daylight !== null) {
@@ -278,11 +392,7 @@ export function TrackLightingSummary({
   return (
     <Stack spacing={0.75}>
       {durations === null ? null : (
-        <Stack
-          component="ul"
-          direction="row"
-          sx={{ flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.25, m: 0, p: 0 }}
-        >
+        <Stack component="ul" spacing={0.25} sx={{ m: 0, p: 0 }}>
           {trackLightKinds
             .filter((kind) => durations[kind] >= 60)
             .map((kind) => (
@@ -313,10 +423,10 @@ export function TrackLightingSummary({
             ))}
         </Stack>
       )}
+      <SunDayChart lighting={lighting} />
       {finishLine === null ? null : (
         <Typography variant="body2">{finishLine}</Typography>
       )}
-      <SunDayChart lighting={lighting} />
     </Stack>
   );
 }
@@ -338,38 +448,43 @@ function SunDayChart({
 }): ReactElement {
   const { i18n, t } = useLingui();
   const clock = useClockFormat(lighting.timeZone);
+  const { startMs, timeZone } = lighting;
+  const [hoverMs, setHoverMs] = useState<number | null>(null);
   const [longitude, latitude] = lighting.startCoordinate;
-  const day = localDayBounds(
-    instantToZonedWallTime(new Date(lighting.startMs), lighting.timeZone),
-    lighting.timeZone,
-  );
-  const daylight = daylightWindow(
-    lighting.startMs,
-    { latitude, longitude },
-    lighting.timeZone,
-  );
+  // A day of sun positions and its sunrise and sunset; slider drags re-render often.
+  const { day, daylight, curve, peak } = useMemo(() => {
+    const bounds = localDayBounds(
+      instantToZonedWallTime(new Date(startMs), timeZone),
+      timeZone,
+    );
+    const points: { readonly instantMs: number; readonly elevation: number }[] = [];
+    for (
+      let instantMs = bounds.startMs;
+      instantMs <= bounds.endMs;
+      instantMs += sampleStepMinutes * 60_000
+    ) {
+      points.push({
+        instantMs,
+        elevation: solarPosition(new Date(instantMs), latitude, longitude)
+          .apparentElevationDegrees,
+      });
+    }
+    return {
+      day: bounds,
+      daylight: daylightWindow(startMs, { latitude, longitude }, timeZone),
+      curve: points,
+      peak: points.reduce(
+        (highest, point) => (point.elevation > highest.elevation ? point : highest),
+        points[0] ?? { instantMs: bounds.startMs, elevation: 0 },
+      ),
+    };
+  }, [latitude, longitude, startMs, timeZone]);
   const spanMs = day.endMs - day.startMs;
   const xOf = (instantMs: number) =>
     Math.min(
       chartWidth,
       Math.max(0, ((instantMs - day.startMs) / spanMs) * chartWidth),
     );
-  const curve: { readonly instantMs: number; readonly elevation: number }[] = [];
-  for (
-    let instantMs = day.startMs;
-    instantMs <= day.endMs;
-    instantMs += sampleStepMinutes * 60_000
-  ) {
-    curve.push({
-      instantMs,
-      elevation: solarPosition(new Date(instantMs), latitude, longitude)
-        .apparentElevationDegrees,
-    });
-  }
-  const peak = curve.reduce(
-    (highest, point) => (point.elevation > highest.elevation ? point : highest),
-    curve[0] ?? { instantMs: day.startMs, elevation: 0 },
-  );
   const scale = daylightHeight / Math.max(peak.elevation, 10);
   const yOf = (elevation: number) =>
     Math.min(chartHeight - 2, horizonY - elevation * scale);
@@ -399,6 +514,18 @@ function SunDayChart({
     sunrise === null || sunset === null || dayLength === null
       ? t`Sun elevation over the hike day; the Sun reaches ${peakDegrees}°.`
       : t`Sun elevation over the hike day: sunrise ${sunrise}, sunset ${sunset}, ${dayLength} of daylight; the Sun reaches ${peakDegrees}°.`;
+  // Hovering reads the Sun's elevation at any time of the day; otherwise its peak shows.
+  const shown =
+    hoverMs === null
+      ? peak
+      : {
+          instantMs: hoverMs,
+          elevation: solarPosition(new Date(hoverMs), latitude, longitude)
+            .apparentElevationDegrees,
+        };
+  const shownDegrees = new Intl.NumberFormat(i18n.locale, {
+    maximumFractionDigits: 0,
+  }).format(hoverMs === null ? Math.max(0, shown.elevation) : shown.elevation);
   const lightColor = appColors.text.inverse;
   const mutedColor = appColors.text.inverseMuted;
 
@@ -418,7 +545,26 @@ function SunDayChart({
         aria-label={description}
         component="svg"
         viewBox={`0 0 ${String(chartWidth)} ${String(chartHeight)}`}
-        sx={{ display: 'block', width: '100%', height: 'auto', overflow: 'visible' }}
+        sx={{
+          display: 'block',
+          width: '100%',
+          height: 'auto',
+          overflow: 'visible',
+          cursor: 'crosshair',
+          touchAction: 'pan-y',
+        }}
+        onPointerMove={(event) => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          if (bounds.width <= 0) return;
+          const fraction = Math.min(
+            1,
+            Math.max(0, (event.clientX - bounds.left) / bounds.width),
+          );
+          setHoverMs(day.startMs + fraction * spanMs);
+        }}
+        onPointerLeave={() => {
+          setHoverMs(null);
+        }}
       >
         {[3, 6, 9, 12, 15, 18, 21].map((hour) => (
           <line
@@ -474,17 +620,39 @@ function SunDayChart({
                 fill={appColors.marker.red}
               />
             ))}
-        {peak.elevation > 0 ? (
+        {hoverMs === null ? null : (
+          <line
+            x1={xOf(hoverMs)}
+            x2={xOf(hoverMs)}
+            y1={8}
+            y2={chartHeight}
+            stroke={lightColor}
+            strokeOpacity={0.6}
+          />
+        )}
+        {shown.elevation > -6 ? (
           <circle
-            cx={xOf(peak.instantMs)}
-            cy={yOf(peak.elevation)}
+            cx={xOf(shown.instantMs)}
+            cy={yOf(shown.elevation)}
             r={6}
             fill={appColors.brand.amber}
           />
         ) : null}
         <text x={0} y={22} fill={lightColor} fontSize={18} fontWeight={700}>
-          {peakDegrees}°
+          {shownDegrees}°
         </text>
+        {hoverMs === null ? null : (
+          <text
+            x={chartWidth}
+            y={22}
+            fill={lightColor}
+            fontSize={15}
+            fontWeight={700}
+            textAnchor="end"
+          >
+            {clock.format(new Date(hoverMs))}
+          </text>
+        )}
         {daylight === null || sunrise === null || sunset === null ? null : (
           <>
             <text

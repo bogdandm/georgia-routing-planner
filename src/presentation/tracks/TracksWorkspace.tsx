@@ -196,17 +196,22 @@ import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSecti
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
+  routeTimeZone,
   useTrackLighting,
   type TrackLightingView,
 } from '@/presentation/tracks/useTrackLighting';
 import {
   createTrackTimingRoute,
+  defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  localCalendarDate,
+  trackWeatherDates,
   planTrackClockTimes,
   planTrackMarkerTimes,
   trackWeatherTimeline,
   withTrackWeatherTimeline,
   type TrackClockTimes,
+  type RecordedRouteStart,
   type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
@@ -706,6 +711,15 @@ function trackNameFailureMessage(
     : msg`Track name must be 200 characters or fewer.`;
 }
 
+/** The recorded start on the clock of the route start, which timing defaults use. */
+function recordedRouteStart(
+  metrics: Pick<TrackMetrics, 'recordedStartAt' | 'startCoordinate'>,
+): RecordedRouteStart | undefined {
+  return metrics.recordedStartAt === undefined
+    ? undefined
+    : { at: metrics.recordedStartAt, timeZone: routeTimeZone(metrics.startCoordinate) };
+}
+
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const { t, i18n } = useLingui();
   const {
@@ -1113,28 +1127,33 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setUnsavedTrackTimeline(null);
   }
   const savedTimingTrackId = active?.kind === 'saved' ? active.summary.id : null;
-  const recordedStartAt =
+  const timingMetrics =
     active?.kind === 'saved'
-      ? active.summary.metrics.recordedStartAt
+      ? active.summary.metrics
       : (active?.kind === 'preview' || active?.kind === 'shared') &&
           active.preparationStatus === 'ready'
-        ? active.sourceMetrics.recordedStartAt
+        ? active.sourceMetrics
         : undefined;
+  const recordedStartAt = timingMetrics?.recordedStartAt;
+  const activeRecordedStart = useMemo(
+    () => (timingMetrics === undefined ? undefined : recordedRouteStart(timingMetrics)),
+    [timingMetrics],
+  );
   const activeTrackWeatherTimeline = useMemo(
     () =>
       savedTimingTrackId !== null
         ? trackWeatherTimeline(
             trackWeatherPreferences,
             savedTimingTrackId,
-            recordedStartAt,
+            activeRecordedStart,
           )
         : unsavedTrackTimeline !== null &&
             unsavedTrackTimeline.trackId === activeUnsavedTrackId
           ? unsavedTrackTimeline.settings
-          : trackWeatherTimeline(null, null, recordedStartAt),
+          : trackWeatherTimeline(null, null, activeRecordedStart),
     [
       savedTimingTrackId,
-      recordedStartAt,
+      activeRecordedStart,
       trackWeatherPreferences,
       unsavedTrackTimeline,
       activeUnsavedTrackId,
@@ -1148,7 +1167,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
             active.summary.id,
             settings,
-            active.summary.metrics.recordedStartAt,
+            recordedRouteStart(active.summary.metrics),
           ),
         );
       } else if (active?.kind === 'preview' || active?.kind === 'shared') {
@@ -2290,7 +2309,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
             summary.id,
             unsavedTrackTimeline.settings,
-            summary.metrics.recordedStartAt,
+            recordedRouteStart(summary.metrics),
           ),
         );
       }
@@ -3576,6 +3595,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     metrics: activeStatsMetrics,
     settings: activeTrackWeatherTimeline,
     recordedStartAt,
+    // The track forecast's selected date, as `TrackWeatherSection` derives it.
+    forecastDate: defaultTrackWeatherDate(
+      trackWeatherDates(localCalendarDate(clock.now())),
+      (trackWeatherPreferences ?? defaultTrackWeatherPreferences).weekday,
+    ),
   });
   const activeTrackMarkerTimes = useMemo((): ReadonlyMap<string, string> => {
     if (
@@ -3632,7 +3656,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         const settings = trackWeatherTimeline(
           trackWeatherPreferences,
           selection.summary.id,
-          selection.summary.metrics.recordedStartAt,
+          recordedRouteStart(selection.summary.metrics),
         );
         const timingRoute = multiTrackTimingRoutes.get(selection.summary.id);
         if (

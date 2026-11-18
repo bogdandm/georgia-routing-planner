@@ -355,4 +355,25 @@ describe('RasterDemElevationProvider terrain sampler', () => {
       provider.loadTerrainSampler([station], new AbortController().signal),
     ).rejects.toThrow('failed');
   });
+
+  it('rejects a scattered route before loading any tile', async () => {
+    const get = vi.fn();
+    // At zoom 6 points 10° apart each need their own finest tiles.
+    const provider = new RasterDemElevationProvider(
+      { get } as unknown as KyInstance,
+      { ...terrain(), maxZoom: 6 },
+      idGenerator,
+    );
+    const scattered: ElevationCoordinate[] = [];
+    for (let latitude = -60; latitude <= 60; latitude += 10) {
+      for (let longitude = -170; longitude <= 170; longitude += 10) {
+        scattered.push({ longitude, latitude });
+      }
+    }
+
+    await expect(
+      provider.loadTerrainSampler(scattered, new AbortController().signal),
+    ).rejects.toThrow('too many DEM tiles');
+    expect(get).not.toHaveBeenCalled();
+  });
 });

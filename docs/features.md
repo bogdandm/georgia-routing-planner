@@ -327,12 +327,13 @@ follows recorded timestamps when the track has recorded time and otherwise the D
 estimate, so climbs advance more slowly than flat walking. **Ignore recorded time**,
 offered on timed tracks, selects the estimate instead, totalling the DIN 33466 time of
 the track's distance and stored ascent and descent. **Route start** sets the start from
-00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time,
-rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace** scales hiking
-time from ×0.5 (faster) to ×2 (slower) on release. These settings are remembered in this
-browser for each saved track and reset to the defaults for a reversed copy; an unsaved
-track keeps them while it is open and carries them over when saved. They are not
-synchronized to the account and do not change the track's recorded or estimated time.
+00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time at the
+route start, rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace**
+scales hiking time from ×0.5 (faster) to ×2 (slower) on release. These settings are
+remembered in this browser for each saved track and reset to the defaults for a reversed
+copy; an unsaved track keeps them while it is open and carries them over when saved.
+They are not synchronized to the account and do not change the track's recorded or
+estimated time.
 
 Timing includes the full route even if elevation is available only in its middle.
 Complete profiles reuse filtered elevation; incomplete profiles retain the original
@@ -342,34 +343,40 @@ climb or descent between their endpoints.
 
 #### Route lighting
 
-**Route timing** also places the hike on a calendar day. **Hike date** defaults to the
-recording date of a recorded track, or to today for a planned one; a chosen date is
-remembered with the track's route start and pace, and **Recording date** or **Today**
-returns to the default. Changing the date also moves the map's sun shadows to that date
-at their current local time of day, so a winter visit can check summer light. Clock
-times use the time zone at the route start.
+**Route timing** also places the hike on a calendar day. **Hike date** follows the date
+selected in **Weather forecast**, and choosing a date within the forecast week selects
+it there too. A date outside that week, such as next summer, is remembered with the
+track's route start and pace instead. **Today** returns to today, and a recorded track
+offers **Recording date** for the day its file was recorded. Changing the date also
+moves the map's sun shadows to that date at their current local time of day, so a winter
+visit can check summer light. Clock times use the time zone at the route start.
 
 Light along the route comes from the terrain-shadow model behind the map's sun shadows:
-at every route station (at most 25 m apart, 400 per route) and the moment the hiker
-passes it, the visible fraction of the solar disk above the marched terrain horizon,
-averaged over seven ground points within 50 m. Each moment is split into **In the sun**,
-**In the shade** (the Sun is above the horizon but terrain hides it), **Blue hour**
-(after sunset until the Sun is 6° below the horizon), and **After dark**. These kinds
-follow the Sun's elevation, never the map's shading brightness, which keeps night
+at every route station and the moment the hiker passes it, the visible fraction of the
+solar disk above the marched terrain horizon, averaged over seven ground points within
+50 m. Stations are at most 25 m or 10 minutes apart, so stops and overnight breaks are
+sampled through time; long routes use up to 400. Each moment is split into **In the
+sun**, **In the shade** (the Sun is above the horizon but terrain hides it), **Blue
+hour** (after sunset until the Sun is 6° below the horizon), and **After dark**. These
+kinds follow the Sun's elevation, never the map's shading brightness, which keeps night
 deliberately light so relief stays readable. Saved tracks store their lighting in this
 browser; it is recomputed when the geometry, hike date, route start, pace, or
-recorded-time choice changes, which mostly costs DEM tile loads. Failed DEM loads show
-that the light could not be calculated instead of guessing sunlight.
+recorded-time choice changes, which mostly costs DEM tile loads. Failed DEM loads, and
+routes scattered so widely that they need more than 160 DEM tiles, show that the light
+could not be calculated instead of guessing sunlight.
 
-Under the elevation profile, a strip colors the route by its light: yellow sun, grey
-shade, a blue hour that deepens toward its end, and dark blue night. It follows the
-Distance or Time axis above it and is labelled with the local clock hours the hiker
-passes. On the Time axis, dashed lines mark each sunrise and sunset the hike passes.
-**Route timing** lists the time in each light kind the hike meets, states how long
-before or after that day's sunset at the finish the hike ends, and shows a Garmin-style
+Below the profile and its toggles, a full-width strip colors the route by its light:
+yellow sun, grey shade, a blue hour that deepens toward its end, and dark blue night. It
+runs over route distance with distance labels, or, on the Time axis, over hike time with
+the local clock hours. Hovering the strip reads out the time, distance, and light at
+that point. On the Time axis, dashed lines mark each sunrise and sunset the hike passes;
+a hike timed by its recording keeps its stops in place at any pace. **Route timing**
+lists the time in each light kind the hike meets, one per row, and shows a Garmin-style
 sun graph of the start day: the Sun's elevation against the horizon, red sunrise and
 sunset marks with their times, the hike's span highlighted, the day length, and the
-Sun's highest elevation.
+Sun's highest elevation. Hovering the graph shows the Sun's elevation at that time of
+day. Below it, a sentence states how long before or after that day's sunset at the
+finish the hike ends.
 
 Every track detail section (Track details, Elevation profile, Climbs & Descents,
 Markers, Route timing, Points, Source details, and the forecast's **By elevation** and

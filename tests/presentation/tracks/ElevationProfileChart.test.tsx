@@ -904,10 +904,11 @@ describe('ElevationProfileChart', () => {
       const sunsetLighting: TrackLightingView = {
         timeZone: 'Asia/Tbilisi',
         date: '2026-05-01',
-        defaultDate: '2026-05-01',
-        defaultDateSource: 'recording',
+        recordedDate: '2026-05-01',
         startMs: Date.parse('2026-05-01T08:00:00Z'),
         finishMs: Date.parse('2026-05-01T08:40:00Z'),
+        // Estimated timing places the sunset by distance between profile samples.
+        recordedTiming: false,
         startCoordinate: [44, 42],
         finishCoordinate: [44.02, 42.02],
         sunEvents: [
@@ -918,6 +919,31 @@ describe('ElevationProfileChart', () => {
           },
         ],
         terrain: { status: 'off' },
+      };
+
+      // Sunlit up the climb, fading into terrain shade on the descent.
+      const litThenShaded: TrackLightingView['terrain'] = {
+        status: 'ready',
+        samples: [
+          {
+            distanceMeters: 0,
+            elapsedSeconds: 0,
+            sunlitFraction: 1,
+            sunElevationDegrees: 20,
+          },
+          {
+            distanceMeters: 1_400,
+            elapsedSeconds: 1_800,
+            sunlitFraction: 1,
+            sunElevationDegrees: 20,
+          },
+          {
+            distanceMeters: 2_800,
+            elapsedSeconds: 2_400,
+            sunlitFraction: 0,
+            sunElevationDegrees: 20,
+          },
+        ],
       };
 
       it('marks a sunset on the Time axis only', async () => {
@@ -942,36 +968,36 @@ describe('ElevationProfileChart', () => {
         expect(screen.getByText('Sunset 12:20')).toBeInTheDocument();
       });
 
-      it('shows the light along the route under the chart only with terrain light', () => {
-        const { unmount } = renderElevationProfileChart({
+      it('scales a recording-timed hike onto the recorded Time axis, whatever its pace', async () => {
+        const user = userEvent.setup();
+        // At half the recorded pace the 40-minute recording takes 80 minutes; its sunset
+        // after 40 hike minutes falls 20 recorded minutes in, wherever it is placed.
+        const { container } = renderElevationProfileChart({
           profile: timedProfile,
           lighting: {
             ...sunsetLighting,
-            terrain: {
-              status: 'ready',
-              // Sunlit up the climb, fading into terrain shade on the descent.
-              samples: [
-                {
-                  distanceMeters: 0,
-                  elapsedSeconds: 0,
-                  sunlitFraction: 1,
-                  sunElevationDegrees: 20,
-                },
-                {
-                  distanceMeters: 1_400,
-                  elapsedSeconds: 1_800,
-                  sunlitFraction: 1,
-                  sunElevationDegrees: 20,
-                },
-                {
-                  distanceMeters: 2_800,
-                  elapsedSeconds: 2_400,
-                  sunlitFraction: 0,
-                  sunElevationDegrees: 20,
-                },
-              ],
-            },
+            finishMs: Date.parse('2026-05-01T09:20:00Z'),
+            recordedTiming: true,
+            sunEvents: [
+              {
+                kind: 'sunset',
+                instantMs: Date.parse('2026-05-01T08:40:00Z'),
+                distanceMeters: 0,
+              },
+            ],
           },
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Time' }));
+
+        const sunEvent = container.querySelector('.elevation-profile-sun-event line');
+        expect(Number(sunEvent?.getAttribute('x1'))).toBeCloseTo(236, 0);
+      });
+
+      it('shows the light along the route below the chart only with terrain light', () => {
+        const { unmount } = renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: { ...sunsetLighting, terrain: litThenShaded },
         });
 
         expect(
@@ -989,6 +1015,46 @@ describe('ElevationProfileChart', () => {
         expect(
           screen.queryByRole('img', { name: /^Light along the route/u }),
         ).not.toBeInTheDocument();
+      });
+
+      it('labels the light strip with distances or clock hours like the profile axis', async () => {
+        const user = userEvent.setup();
+        renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: { ...sunsetLighting, terrain: litThenShaded },
+        });
+
+        expect(screen.getByText('0.5 km')).toBeInTheDocument();
+        expect(screen.queryByText('12:00')).not.toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Time' }));
+
+        // The hike starts at 12:00 in Tbilisi and lasts 40 minutes.
+        expect(screen.getByText('12:00')).toBeInTheDocument();
+        expect(screen.queryByText('0.5 km')).not.toBeInTheDocument();
+      });
+
+      it('reads out the time, distance, and light under the pointer', () => {
+        renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: { ...sunsetLighting, terrain: litThenShaded },
+        });
+        const strip = screen.getByRole('img', {
+          name: /^Light along the route/u,
+        }).parentElement;
+        if (strip === null) throw new Error('Expected the strip hover area.');
+        vi.spyOn(strip, 'getBoundingClientRect').mockReturnValue(
+          new DOMRect(0, 0, 100, 12),
+        );
+
+        // Half of the 2.8 km route on the Distance axis.
+        fireEvent.pointerMove(strip, { clientX: 50 });
+
+        expect(screen.getByText('12:30 · 1.4 km · In the sun')).toBeInTheDocument();
+
+        fireEvent.pointerLeave(strip);
+
+        expect(screen.queryByText(/· In the sun$/u)).not.toBeInTheDocument();
       });
     });
   });

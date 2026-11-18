@@ -17,12 +17,11 @@ export const appColors = {
     'steep-climb': '#C93C45',
     'extreme-climb': '#C93C45',
   },
-  /** Route light kinds; twilight darkens from `twilight` toward `twilightEnd`. */
+  /** Legend colors of the route light kinds; `trackLightColor` shades between them. */
   trackLight: {
     sun: '#FFC233',
     shade: '#8FA7B5',
     twilight: '#8EA2DD',
-    twilightEnd: '#3A4FA0',
     dark: '#1C2443',
   },
   surface: {

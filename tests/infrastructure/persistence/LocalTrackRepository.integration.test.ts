@@ -1181,7 +1181,7 @@ describe('local track persistence', () => {
     const lighting = {
       trackId: id,
       contentHash: 'a'.repeat(64),
-      algorithmVersion: 1,
+      algorithmVersion: 2,
       startMs: Date.parse('2026-07-15T05:00:00.000Z'),
       samples: [
         {
@@ -1189,12 +1189,16 @@ describe('local track persistence', () => {
           elapsedSeconds: 0,
           sunlitFraction: 1,
           sunElevationDegrees: 40,
+          skyView: 1,
+          groundElevationMeters: 1_500,
         },
         {
           distanceMeters: 1_000,
           elapsedSeconds: 900,
           sunlitFraction: 0.25,
           sunElevationDegrees: 42,
+          skyView: 0.7,
+          groundElevationMeters: 1_620,
         },
       ],
     } as const;

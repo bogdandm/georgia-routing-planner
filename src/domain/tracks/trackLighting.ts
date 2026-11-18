@@ -3,13 +3,14 @@ import {
   destinationPoint,
   horizonAngleTowardSun,
   seaLevelHorizonDegrees,
+  skyViewFactor,
   visibleSolarDiskFraction,
   type TerrainElevationSampler,
   type TerrainMarchOptions,
 } from '@/domain/terrain/terrainShadow';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 
-export const TRACK_LIGHTING_ALGORITHM_VERSION = 1;
+export const TRACK_LIGHTING_ALGORITHM_VERSION = 2;
 
 export const trackLightingModel = {
   /** Sunlight is averaged over the ground within this distance of the route. */
@@ -41,6 +42,13 @@ export interface TrackLightingSample {
   readonly sunlitFraction: number;
   /** Apparent elevation of the Sun's centre, refraction included. */
   readonly sunElevationDegrees: number;
+  /**
+   * Open share of the sky at the station, as the map's sky light uses it: 1 on open
+   * ground, lower in valleys, so a gorge's shade is darker than a boulder's.
+   */
+  readonly skyView: number;
+  /** DEM ground height at the station; thinner air above it whitens the sunlight. */
+  readonly groundElevationMeters: number;
 }
 
 /**
@@ -60,16 +68,16 @@ export interface TrackLightingRecord {
 type TerrainSampler = TerrainElevationSampler & TerrainMarchOptions;
 
 /**
- * Sunlight at one route position and instant with the terrain-shadow model shared by
- * the map's sun shadows: the visible solar-disk fraction above the marched terrain
- * horizon, averaged over the station's 50 m disk. Observers outside DEM coverage are
- * skipped; without any, the ground counts as open sea-level terrain.
+ * Light at one route position and instant with the terrain-shadow model shared by the
+ * map's sun shadows: the visible solar-disk fraction above the marched terrain horizon,
+ * averaged over the station's 50 m disk, and the station's open sky. Observers outside
+ * DEM coverage are skipped; without any, the ground counts as open sea-level terrain.
  */
 export function stationSunlight(
   sampler: TerrainSampler,
   coordinate: TrackCoordinate,
   instant: Date,
-): Pick<TrackLightingSample, 'sunlitFraction' | 'sunElevationDegrees'> {
+): Omit<TrackLightingSample, 'distanceMeters' | 'elapsedSeconds'> {
   const [longitude, latitude] = coordinate;
   const sun = solarPosition(instant, latitude, longitude);
   const observers = [{ latitudeDegrees: latitude, longitudeDegrees: longitude }];
@@ -111,12 +119,26 @@ export function stationSunlight(
       Math.max(horizon.horizonDegrees, seaLevelHorizon),
     );
   }
+  const groundElevationMeters = sampler.elevationAt(latitude, longitude, 0);
   return {
     sunlitFraction:
       observed > 0
         ? sunlit / observed
         : visibleSolarDiskFraction(sun.apparentElevationDegrees, 0),
     sunElevationDegrees: sun.apparentElevationDegrees,
+    skyView:
+      groundElevationMeters === null
+        ? 1
+        : skyViewFactor(
+            sampler,
+            {
+              latitudeDegrees: latitude,
+              longitudeDegrees: longitude,
+              elevationMeters: groundElevationMeters,
+            },
+            sampler,
+          ),
+    groundElevationMeters: groundElevationMeters ?? 0,
   };
 }
 

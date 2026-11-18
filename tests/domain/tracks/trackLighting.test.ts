@@ -45,6 +45,8 @@ function sample(
     elapsedSeconds,
     sunlitFraction,
     sunElevationDegrees,
+    skyView: 1,
+    groundElevationMeters: 0,
   };
 }
 
@@ -57,6 +59,45 @@ describe('stationSunlight', () => {
       solarPosition(solsticeNoon, station[1], station[0]).apparentElevationDegrees,
       9,
     );
+  });
+
+  it('reports the open sky and ground height the station stands on', () => {
+    /** A north–south gorge floor at 1,000 m between walls rising 400 m within 200 m. */
+    const gorge: TerrainElevationSampler & TerrainMarchOptions = {
+      baseResolutionMeters: 10,
+      maximumElevationMeters: 1_400,
+      elevationAt(_latitude, longitudeDegrees) {
+        const eastMeters =
+          (longitudeDegrees - station[0]) *
+          metersPerDegree *
+          Math.cos((42 * Math.PI) / 180);
+        return Math.abs(eastMeters) >= 200 ? 1_400 : 1_000;
+      },
+    };
+    /** A 10 m boulder 20 m east of open ground. */
+    const boulder: TerrainElevationSampler & TerrainMarchOptions = {
+      baseResolutionMeters: 10,
+      maximumElevationMeters: 1_010,
+      elevationAt(latitudeDegrees, longitudeDegrees) {
+        const eastMeters =
+          (longitudeDegrees - station[0]) *
+          metersPerDegree *
+          Math.cos((42 * Math.PI) / 180);
+        const northMeters = (latitudeDegrees - station[1]) * metersPerDegree;
+        return Math.abs(eastMeters - 20) < 5 && Math.abs(northMeters) < 5
+          ? 1_010
+          : 1_000;
+      },
+    };
+
+    const open = stationSunlight(southWall(Infinity, 0), station, solsticeNoon);
+    const inGorge = stationSunlight(gorge, station, solsticeNoon);
+    const byBoulder = stationSunlight(boulder, station, solsticeNoon);
+
+    expect(open.skyView).toBe(1);
+    expect(inGorge.groundElevationMeters).toBe(1_000);
+    expect(byBoulder.skyView).toBeLessThan(1);
+    expect(inGorge.skyView).toBeLessThan(byBoulder.skyView - 0.2);
   });
 
   it('averages the 50 m disk, so a shadow edge through it gives partial sunlight', () => {

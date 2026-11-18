@@ -105,6 +105,8 @@ describe('lightingMatchesStations', () => {
       elapsedSeconds: station.elapsedSeconds,
       sunlitFraction: 1,
       sunElevationDegrees: 30,
+      skyView: 1,
+      groundElevationMeters: 0,
     }));
     const slower = planTrackLightingStations(
       route,

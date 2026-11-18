@@ -1341,6 +1341,8 @@ const trackLightingRecordSchema: z.ZodType<TrackLightingRecord> = z
             elapsedSeconds: z.number().nonnegative(),
             sunlitFraction: z.number().min(0).max(1),
             sunElevationDegrees: z.number().min(-90).max(90),
+            skyView: z.number().min(0).max(1),
+            groundElevationMeters: z.number().min(-12_000).max(9_000),
           })
           .strict(),
       )

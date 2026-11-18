@@ -6716,12 +6716,22 @@ export function TrackDetailsPane({
             </>
           ) : null}
           {/* Every collapsible section is a direct DOM child here, fragments included,
-              so each one after the first gets a divider with 8 px on either side. */}
+              so each one after the first gets a divider with 8 px on either side. The
+              divider spans the whole panel: the section bleeds through the panel's
+              16 px padding and pads its content back. Flex gap keeps those margins,
+              which Stack's margin spacing would reset. */}
           <Stack
             spacing={1}
+            useFlexGap
             sx={{
               flex: '1 0 auto',
-              '& > * + *': { borderTop: 1, borderColor: 'divider', pt: 1 },
+              '& > * + *': {
+                mx: -2,
+                px: 2,
+                pt: 1,
+                borderTop: 1,
+                borderColor: 'divider',
+              },
             }}
           >
             <Box component="section">

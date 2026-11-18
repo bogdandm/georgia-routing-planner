@@ -51,9 +51,15 @@ import {
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
-import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
+import {
+  nearestPointIndex,
+  type ElevationProfile,
+} from '@/domain/tracks/elevationProfile';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
-import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
+import {
+  requestMapNavigation,
+  requestWeatherForecast,
+} from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 import {
@@ -525,7 +531,30 @@ export function TrackWeatherSection({
                 {timelineCaption}
               </Typography>
             ) : (
-              <TrackLightingSummary lighting={lighting} pace={pace} />
+              <TrackLightingSummary
+                lighting={lighting}
+                pace={pace}
+                // The strip traces its route point on the map and a click goes there.
+                onHoverSample={(sample) => {
+                  mapLayers?.setImportedTrackTracePoint(
+                    sample === null
+                      ? null
+                      : (profile.points[
+                          nearestPointIndex(profile.points, sample.distanceMeters)
+                        ]?.coordinate ?? null),
+                  );
+                }}
+                onSelectDistance={(distanceMeters) => {
+                  const point =
+                    profile.points[nearestPointIndex(profile.points, distanceMeters)];
+                  if (point === undefined) return;
+                  requestMapNavigation({
+                    longitude: point.coordinate[0],
+                    latitude: point.coordinate[1],
+                    zoom: 13,
+                  });
+                }}
+              />
             )}
             <Divider sx={{ mt: 1.5, mb: 2.5 }} />
             <Stack spacing={1.5} useFlexGap>

@@ -369,18 +369,16 @@ recorded-time choice changes, which mostly costs DEM tile loads. Failed DEM load
 routes scattered so widely that they need more than 160 DEM tiles, show that the light
 could not be calculated instead of guessing sunlight.
 
-Below the profile and its toggles, a full-width strip colors the route by its light with
-the same light model as the map: sunlight takes the Sun's color, reddened by air mass so
-the golden hour shows, shade takes the sky's color dimmed by the station's open sky, so
-a gorge reads darker than a boulder's shadow, and the sky light fades through twilight
-to a dark night floor, far darker than the map's readable night. It runs over route
-distance with distance labels, or, on the Time axis, over hike time with the local clock
-hours. Half-sun icons with their times mark each sunrise and sunset the hike passes, on
-the strip and on the profile on both axes. Hovering or clicking the strip acts like the
-profile: it traces the point on the map, reads out the time, distance, and light there,
-and a click goes to that point. The profile and the strip share one cursor line, each
-drawing the point hovered on the other. A hike timed by its recording keeps its stops in
-place at any pace.
+Between the sun graph and the light list of **Route timing**, a full-width strip colors
+the hike by its light with the same light model as the map: sunlight takes the Sun's
+color, reddened by air mass so the golden hour shows, shade takes the sky's color dimmed
+by the station's open sky, so a gorge reads darker than a boulder's shadow, and the sky
+light fades through twilight to a dark night floor, far darker than the map's readable
+night. It runs over hike time with the local clock hours as labels. Half-sun icons with
+their times mark each sunrise and sunset the hike passes on the strip, and dashed lines
+mark them on the profile on both axes; a hike timed by its recording keeps its stops in
+place there at any pace. Hovering the strip traces that route point on the map and reads
+out the time, distance, and light there, and a click goes to that point.
 
 **Color the map track by light**, among the map options of **Route timing**, paints the
 active track on the map in the strip's colors instead of its grade colors: each step
@@ -395,12 +393,12 @@ elevation on a true scale against the horizon, down to the end of astronomical t
 with twilight bands, sunrise and sunset marks with their times, the hike's span
 highlighted, and the day length, the pace the timeline uses, and the hike's start and
 finish. The Sun's dot and readout stand at the map's sun-shadow time of day; hovering
-reads any other time, and a click moves the map's sun shadows there. Below it, all four
-light kinds are listed in aligned columns with their hours and minutes, dimming those
-the hike does not meet; the light the hike finishes in notes how long before or after
-that day's sunset it ends. Rows keep their place while the light is calculated. The
-date, route start, and pace controls follow, then the map time and light options.
-Without terrain light, a sentence states the finish's sunset margin instead.
+reads any other time, and a click moves the map's sun shadows there. Below it and the
+light strip, all four light kinds are listed in aligned columns with their hours and
+minutes, dimming those the hike does not meet; the light the hike finishes in notes how
+long before or after that day's sunset it ends. Rows keep their place while the light is
+calculated. The date, route start, and pace controls follow, then the map time and light
+options. Without terrain light, a sentence states the finish's sunset margin instead.
 
 Every track detail section (Track details, Elevation profile, Climbs & Descents, Route
 timing, Markers, Points, and Source details) is a disclosure whose state is remembered

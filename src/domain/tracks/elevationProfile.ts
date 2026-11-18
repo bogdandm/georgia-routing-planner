@@ -120,6 +120,43 @@ export function elevationSegmentIndexForSample(
   return segmentIndex < 0 ? null : segmentIndex;
 }
 
+/** Index of the profile point nearest `distanceMeters`; points ascend by distance. */
+export function nearestPointIndex(
+  points: readonly ElevationProfilePoint[],
+  distanceMeters: number,
+  coordinate?: TrackCoordinate,
+): number {
+  let low = 0;
+  let high = points.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((points[middle]?.distanceMeters ?? 0) < distanceMeters) low = middle + 1;
+    else high = middle;
+  }
+  if (coordinate !== undefined) {
+    for (
+      let index = low;
+      points[index]?.distanceMeters === distanceMeters;
+      index += 1
+    ) {
+      const candidate = points[index]?.coordinate;
+      if (candidate?.[0] === coordinate[0] && candidate[1] === coordinate[1]) {
+        return index;
+      }
+    }
+  }
+  const previous = points[low - 1];
+  const next = points[low];
+  if (
+    previous !== undefined &&
+    (next === undefined ||
+      distanceMeters - previous.distanceMeters < next.distanceMeters - distanceMeters)
+  ) {
+    return low - 1;
+  }
+  return low;
+}
+
 /** Caps chart work without dropping macro or grade-band boundaries. */
 export function sampleElevationProfilePoints(
   profile: ElevationProfile,

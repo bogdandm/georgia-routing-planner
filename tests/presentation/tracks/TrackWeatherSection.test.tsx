@@ -857,5 +857,110 @@ describe('TrackWeatherSection', () => {
       // finishMs − startMs of the fixture: 09:00 to 14:30.
       expect(screen.getByText('≈ 5h 30m')).toBeVisible();
     });
+
+    describe('light strip', () => {
+      const station = (
+        distanceMeters: number,
+        elapsedSeconds: number,
+        sunlitFraction: number,
+      ) => ({
+        distanceMeters,
+        elapsedSeconds,
+        sunlitFraction,
+        sunElevationDegrees: 30,
+        skyView: 1,
+        groundElevationMeters: 2_000,
+      });
+      // Sunlit for the first 6 km and 3 hours, fading into shade by the 14:30 finish.
+      const litThenShaded: TrackLightingView = {
+        ...hikeLighting,
+        sunEvents: [
+          {
+            kind: 'sunset',
+            instantMs: Date.UTC(2026, 6, 18, 9),
+            distanceMeters: 9_000,
+          },
+        ],
+        terrain: {
+          status: 'ready',
+          samples: [
+            station(0, 0, 1),
+            station(6_000, 10_800, 1),
+            station(12_000, 19_800, 0),
+          ],
+        },
+      };
+
+      function renderStrip(): HTMLElement {
+        renderSection(
+          null,
+          dayHike,
+          defaultTrackWeatherTimelineSettings,
+          litThenShaded,
+        );
+        const hoverArea = screen.getByRole('img', {
+          name: /^Light along the route/u,
+        }).parentElement;
+        if (hoverArea === null) throw new Error('Expected the strip hover area.');
+        vi.spyOn(hoverArea, 'getBoundingClientRect').mockReturnValue(
+          new DOMRect(0, 0, 100, 12),
+        );
+        return hoverArea;
+      }
+
+      it('labels the strip with the clock hours of the hike and marks its sunset', () => {
+        const hoverArea = renderStrip();
+        const strip = hoverArea.parentElement;
+        if (strip === null) throw new Error('Expected the strip.');
+
+        // Whole Tbilisi hours from the 09:00 start to the 14:30 finish.
+        expect(within(strip).getByText('09:00')).toBeInTheDocument();
+        expect(within(strip).getByText('14:00')).toBeInTheDocument();
+        expect(within(strip).queryByText(/ km$/u)).not.toBeInTheDocument();
+        expect(
+          within(strip).getByRole('img', { name: 'Sunset 13:00' }),
+        ).toBeInTheDocument();
+      });
+
+      it('shows no strip without terrain light', () => {
+        renderSection(null, dayHike, defaultTrackWeatherTimelineSettings, hikeLighting);
+
+        expect(
+          screen.queryByRole('img', { name: /^Light along the route/u }),
+        ).not.toBeInTheDocument();
+      });
+
+      it('reads out the light under the pointer and traces its route point on the map', () => {
+        const { mapLayers } = services;
+        if (mapLayers === null) throw new Error('Expected test map layers.');
+        const setTracePoint = vi.spyOn(mapLayers, 'setImportedTrackTracePoint');
+        const hoverArea = renderStrip();
+
+        // 40 % of the 5.5-hour hike: 2h 12m in, 4.4 km along, nearest the 4 km point.
+        fireEvent.pointerMove(hoverArea, { clientX: 40 });
+
+        expect(screen.getByText('11:12 · 4.4 km · In the sun')).toBeInTheDocument();
+        expect(setTracePoint).toHaveBeenLastCalledWith(ridge.points[4]?.coordinate);
+
+        fireEvent.pointerLeave(hoverArea);
+
+        expect(screen.queryByText(/· In the sun$/u)).not.toBeInTheDocument();
+        expect(setTracePoint).toHaveBeenLastCalledWith(null);
+      });
+
+      it('goes to the route point clicked on the strip', () => {
+        const hoverArea = renderStrip();
+
+        // 90 % of the hike is 10.68 km along, nearest the 11 km point.
+        fireEvent.click(hoverArea, { clientX: 90 });
+
+        const [longitude, latitude] = ridge.points[11]?.coordinate ?? [];
+        expect(mapInteractionStore.getState().navigationCommand?.target).toEqual({
+          longitude,
+          latitude,
+          zoom: 13,
+        });
+      });
+    });
   });
 });

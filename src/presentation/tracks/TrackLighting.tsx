@@ -34,9 +34,6 @@ const minimumTickGapFraction = 0.09;
 /** The strip's 12 px bar plus its 16 px label row, kept by every loading state. */
 const stripHeight = 28;
 const hourTickSteps = [1, 2, 3, 4, 6, 12, 24] as const;
-const distanceTickStepsMeters = [
-  500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000,
-] as const;
 
 /** Legend color of each light kind; the strip shades them by the map's light model. */
 const trackLightColors: Readonly<Record<TrackLightKind, string>> = {
@@ -125,18 +122,17 @@ function useLightKindLabels(): Readonly<Record<TrackLightKind, string>> {
   };
 }
 
-/** Lighting between the two samples around `position` on the strip's axis. */
+/** Lighting between the two samples around `elapsedSeconds` on the hike's timeline. */
 function sampleAt(
   samples: readonly TrackLightingSample[],
-  positionOf: (sample: TrackLightingSample) => number,
-  position: number,
+  elapsedSeconds: number,
 ): TrackLightingSample | null {
-  const index = samples.findIndex((sample) => positionOf(sample) >= position);
+  const index = samples.findIndex((sample) => sample.elapsedSeconds >= elapsedSeconds);
   const after = samples[index] ?? samples.at(-1);
   const before = samples[index - 1] ?? after;
   if (after === undefined || before === undefined) return null;
-  const span = positionOf(after) - positionOf(before);
-  const fraction = span <= 0 ? 1 : (position - positionOf(before)) / span;
+  const span = after.elapsedSeconds - before.elapsedSeconds;
+  const fraction = span <= 0 ? 1 : (elapsedSeconds - before.elapsedSeconds) / span;
   const mix = (from: number, to: number) => from + (to - from) * fraction;
   return {
     distanceMeters: mix(before.distanceMeters, after.distanceMeters),
@@ -163,36 +159,23 @@ function pointerFraction(event: {
 
 interface TrackLightingStripProps {
   readonly lighting: TrackLightingView;
-  /** The profile's axis: the strip runs over route distance or hike time like it. */
-  readonly axis: 'distance' | 'time';
   /** The route point under the pointer, to trace on the map; null when it leaves. */
-  readonly onHoverSample?: (
+  readonly onHoverSample: (
     sample: Pick<TrackLightingSample, 'distanceMeters' | 'elapsedSeconds'> | null,
   ) => void;
-  /** The route distance clicked, to go to on the map like a profile click. */
-  readonly onSelectDistance?: (distanceMeters: number) => void;
-  /**
-   * The profile point under the pointer, drawn as the strip's cursor so both charts
-   * share it. `hikeSeconds` places it on the Time axis when the hike follows its
-   * recording, where stops make a distance ambiguous; otherwise the distance does.
-   */
-  readonly cursor?: {
-    readonly distanceMeters: number;
-    readonly hikeSeconds: number | null;
-  } | null;
+  /** The route distance clicked, to go to on the map. */
+  readonly onSelectDistance: (distanceMeters: number) => void;
 }
 
 /**
- * Light along the route across the full width, over route distance or hike time like
- * the profile above, with distance or clock-hour labels, sunrise and sunset marks, and a
- * hover readout. Hovering and clicking act on route points like the profile does.
+ * Light along the route across the full width, over the hike's clock with hour labels,
+ * sunrise and sunset marks, and a hover readout. Hovering traces the route point on the
+ * map and a click goes to it.
  */
-export function TrackLightingStrip({
+function TrackLightingStrip({
   lighting,
-  axis,
   onHoverSample,
   onSelectDistance,
-  cursor = null,
 }: TrackLightingStripProps): ReactElement | null {
   const { i18n, t } = useLingui();
   const labels = useLightKindLabels();
@@ -230,14 +213,10 @@ export function TrackLightingStrip({
     );
   }
   const { samples } = terrain;
-  const positionOf = (sample: TrackLightingSample) =>
-    axis === 'time' ? sample.elapsedSeconds : sample.distanceMeters;
-  const firstPosition = samples[0] === undefined ? 0 : positionOf(samples[0]);
-  const lastSample = samples.at(-1);
-  const span = lastSample === undefined ? 0 : positionOf(lastSample) - firstPosition;
-  const fractionOf = (position: number) =>
-    span <= 0 ? 0 : (position - firstPosition) / span;
-
+  const firstSeconds = samples[0]?.elapsedSeconds ?? 0;
+  const span = (samples.at(-1)?.elapsedSeconds ?? firstSeconds) - firstSeconds;
+  const fractionOf = (elapsedSeconds: number) =>
+    span <= 0 ? 0 : (elapsedSeconds - firstSeconds) / span;
   const ticks: {
     readonly key: number;
     readonly fraction: number;
@@ -253,45 +232,28 @@ export function TrackLightingStrip({
     }
     ticks.push({ key, fraction, label });
   };
-  if (axis === 'time') {
-    // Whole local hours on a step grid that keeps the labels few.
-    const spanMs = lighting.finishMs - lighting.startMs;
-    const step =
-      hourTickSteps.find(
-        (hours) => spanMs / (hours * millisecondsPerHour) <= maximumTickLabels,
-      ) ?? 24;
-    const startWall = instantToZonedWallTime(
-      new Date(lighting.startMs),
-      lighting.timeZone,
+  // Whole local hours on a step grid that keeps the labels few.
+  const spanMs = lighting.finishMs - lighting.startMs;
+  const step =
+    hourTickSteps.find(
+      (hours) => spanMs / (hours * millisecondsPerHour) <= maximumTickLabels,
+    ) ?? 24;
+  const startWall = instantToZonedWallTime(
+    new Date(lighting.startMs),
+    lighting.timeZone,
+  );
+  let hourMs =
+    lighting.startMs - startWall.minute * 60_000 - (lighting.startMs % 60_000);
+  if (hourMs < lighting.startMs) hourMs += millisecondsPerHour;
+  for (; hourMs <= lighting.finishMs; hourMs += millisecondsPerHour) {
+    if (instantToZonedWallTime(new Date(hourMs), lighting.timeZone).hour % step !== 0) {
+      continue;
+    }
+    addTick(
+      hourMs,
+      fractionOf((hourMs - lighting.startMs) / 1_000),
+      clock.format(new Date(hourMs)),
     );
-    let hourMs =
-      lighting.startMs - startWall.minute * 60_000 - (lighting.startMs % 60_000);
-    if (hourMs < lighting.startMs) hourMs += millisecondsPerHour;
-    for (; hourMs <= lighting.finishMs; hourMs += millisecondsPerHour) {
-      if (
-        instantToZonedWallTime(new Date(hourMs), lighting.timeZone).hour % step !==
-        0
-      ) {
-        continue;
-      }
-      addTick(
-        hourMs,
-        fractionOf((hourMs - lighting.startMs) / 1_000),
-        clock.format(new Date(hourMs)),
-      );
-    }
-  } else {
-    const step =
-      distanceTickStepsMeters.find(
-        (meters) => span / meters <= maximumTickLabels - 1,
-      ) ?? Math.ceil(span / (maximumTickLabels - 1));
-    for (let meters = 0; meters <= span; meters += step) {
-      addTick(
-        meters,
-        fractionOf(firstPosition + meters),
-        formatTrackDistance(meters, i18n),
-      );
-    }
   }
 
   const durations = trackLightDurations(samples);
@@ -302,19 +264,7 @@ export function TrackLightingStrip({
   const hovered =
     hoverFraction === null
       ? null
-      : sampleAt(samples, positionOf, firstPosition + hoverFraction * span);
-  let cursorFraction = hoverFraction;
-  if (cursorFraction === null && cursor !== null) {
-    const position =
-      axis === 'distance'
-        ? cursor.distanceMeters
-        : (cursor.hikeSeconds ??
-          sampleAt(samples, (sample) => sample.distanceMeters, cursor.distanceMeters)
-            ?.elapsedSeconds ??
-          null);
-    cursorFraction =
-      position === null ? null : Math.min(1, Math.max(0, fractionOf(position)));
-  }
+      : sampleAt(samples, firstSeconds + hoverFraction * span);
   let hoverLabel: string | null = null;
   if (hovered !== null) {
     const shares = trackLightShares(hovered);
@@ -338,11 +288,7 @@ export function TrackLightingStrip({
     return {
       key: event.instantMs,
       kind: event.kind,
-      fraction: fractionOf(
-        axis === 'time'
-          ? (event.instantMs - lighting.startMs) / 1_000
-          : event.distanceMeters,
-      ),
+      fraction: fractionOf((event.instantMs - lighting.startMs) / 1_000),
       label: event.kind === 'sunrise' ? t`Sunrise ${time}` : t`Sunset ${time}`,
     };
   });
@@ -355,18 +301,18 @@ export function TrackLightingStrip({
           const fraction = pointerFraction(event);
           if (fraction === null) return;
           setHoverFraction(fraction);
-          const sample = sampleAt(samples, positionOf, firstPosition + fraction * span);
-          if (sample !== null) onHoverSample?.(sample);
+          const sample = sampleAt(samples, firstSeconds + fraction * span);
+          if (sample !== null) onHoverSample(sample);
         }}
         onClick={(event) => {
           const fraction = pointerFraction(event);
           if (fraction === null) return;
-          const sample = sampleAt(samples, positionOf, firstPosition + fraction * span);
-          if (sample !== null) onSelectDistance?.(sample.distanceMeters);
+          const sample = sampleAt(samples, firstSeconds + fraction * span);
+          if (sample !== null) onSelectDistance(sample.distanceMeters);
         }}
         onPointerLeave={() => {
           setHoverFraction(null);
-          onHoverSample?.(null);
+          onHoverSample(null);
         }}
       >
         <Box
@@ -383,7 +329,7 @@ export function TrackLightingStrip({
               {samples.map((sample) => (
                 <stop
                   key={`${String(sample.distanceMeters)}:${String(sample.elapsedSeconds)}`}
-                  offset={`${String(fractionOf(positionOf(sample)) * 100)}%`}
+                  offset={`${String(fractionOf(sample.elapsedSeconds) * 100)}%`}
                   stopColor={trackLightColor(sample)}
                 />
               ))}
@@ -412,7 +358,7 @@ export function TrackLightingStrip({
             <WbTwilightIcon sx={{ fontSize: 20, color: sunEventColors[mark.kind] }} />
           </Box>
         ))}
-        {cursorFraction === null ? null : (
+        {hoverFraction === null ? null : (
           <Box
             aria-hidden
             className="track-light-cursor"
@@ -420,7 +366,7 @@ export function TrackLightingStrip({
               position: 'absolute',
               top: -2,
               bottom: -2,
-              left: `${String(cursorFraction * 100)}%`,
+              left: `${String(hoverFraction * 100)}%`,
               width: 2,
               ml: '-1px',
               bgcolor: 'text.primary',
@@ -474,14 +420,19 @@ export function TrackLightingStrip({
 /** How the hike's duration was found, as `Route timing` describes its timeline. */
 export type TrackLightingPace = 'recorded' | 'estimated' | 'adjusted';
 
-/** Seconds of each light kind, the day's sun graph, and the finish against sunset. */
+/**
+ * The day's sun graph, the light strip along the hike, then the seconds of each light
+ * kind and the finish against sunset.
+ */
 export function TrackLightingSummary({
   lighting,
   pace,
+  onHoverSample,
+  onSelectDistance,
 }: {
   readonly lighting: TrackLightingView;
   readonly pace: TrackLightingPace;
-}): ReactElement {
+} & Pick<TrackLightingStripProps, 'onHoverSample' | 'onSelectDistance'>): ReactElement {
   const { i18n, t } = useLingui();
   const labels = useLightKindLabels();
   const { terrain, finishMs, timeZone } = lighting;
@@ -520,9 +471,14 @@ export function TrackLightingSummary({
     );
   }
   return (
-    // The sun graph, then 8 px to the light rows.
+    // The sun graph, the strip, and the light rows, 8 px apart.
     <Stack spacing={1}>
       <SunDayChart lighting={lighting} pace={pace} />
+      <TrackLightingStrip
+        lighting={lighting}
+        onHoverSample={onHoverSample}
+        onSelectDistance={onSelectDistance}
+      />
       {/* Every kind keeps its row while the light loads, so nothing below moves. */}
       {terrain.status === 'off' ? null : (
         // Rows share grid columns (dot, kind, hours, minutes, note), aligned like a table

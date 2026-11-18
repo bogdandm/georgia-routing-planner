@@ -44,6 +44,7 @@ import {
 
 import {
   elevationSegmentIndexForSample,
+  nearestPointIndex,
   sampleElevationProfilePoints,
   type ElevationProfile,
   type ElevationProfilePoint,
@@ -66,10 +67,7 @@ import {
 } from '@/presentation/tracks/trackFormatters';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
-import {
-  SunEventChartMark,
-  TrackLightingStrip,
-} from '@/presentation/tracks/TrackLighting';
+import { SunEventChartMark } from '@/presentation/tracks/TrackLighting';
 import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 
 /** A press that travels this far along the chart is a range drag, never a click. */
@@ -221,47 +219,10 @@ interface ElevationProfileChartProps {
     readonly endMeters: number;
   }) => void;
   /**
-   * The hike's light: sunrise and sunset marks on the Time axis and the light strip
-   * under the chart. Without it the chart shows neither.
+   * The hike's light: sunrise and sunset marks on the profile. Without it the chart
+   * shows none.
    */
   readonly lighting?: TrackLightingView | null;
-}
-
-/** Index of the profile point nearest `distanceMeters`; points ascend by distance. */
-function nearestPointIndex(
-  points: readonly ElevationProfilePoint[],
-  distanceMeters: number,
-  coordinate?: TrackCoordinate,
-): number {
-  let low = 0;
-  let high = points.length - 1;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((points[middle]?.distanceMeters ?? 0) < distanceMeters) low = middle + 1;
-    else high = middle;
-  }
-  if (coordinate !== undefined) {
-    for (
-      let index = low;
-      points[index]?.distanceMeters === distanceMeters;
-      index += 1
-    ) {
-      const candidate = points[index]?.coordinate;
-      if (candidate?.[0] === coordinate[0] && candidate[1] === coordinate[1]) {
-        return index;
-      }
-    }
-  }
-  const previous = points[low - 1];
-  const next = points[low];
-  if (
-    previous !== undefined &&
-    (next === undefined ||
-      distanceMeters - previous.distanceMeters < next.distanceMeters - distanceMeters)
-  ) {
-    return low - 1;
-  }
-  return low;
 }
 
 function activeChartRow(
@@ -795,57 +756,6 @@ export function ElevationProfileChart({
     );
     highlight = { startX, endX };
   }
-  /** A click on the chart or the light strip: toggle its climb or descent, then go there. */
-  function selectPoint(point: ElevationProfilePoint): void {
-    const segmentIndex = elevationSegmentIndexForSample(profile, point.sampleIndex);
-    if (segmentIndex === null || profile.segments[segmentIndex]?.type === 'flat') {
-      onSegmentSelectionChange(null);
-    } else {
-      onSegmentSelectionChange(
-        selectedSegmentIndex === segmentIndex ? null : segmentIndex,
-      );
-    }
-    onPointClick?.(point);
-  }
-  const pointAtDistance = (distanceMeters: number) =>
-    profile.points[nearestPointIndex(profile.points, distanceMeters)] ?? null;
-  // The chart and the light strip share one cursor: each draws the other's hover. The
-  // hovered row keeps its own time, so a cursor inside a recorded stop stays there.
-  const [chartHoverRow, setChartHoverRow] = useState<ProfileChartRow | null>(null);
-  const [stripCursorX, setStripCursorX] = useState<number | null>(null);
-  const stripCursor =
-    chartHoverRow === null
-      ? null
-      : {
-          distanceMeters: chartHoverRow.point.distanceMeters,
-          hikeSeconds:
-            elapsedSeconds !== null &&
-            lightingTimeScale !== null &&
-            chartHoverRow.elapsedSeconds !== null
-              ? chartHoverRow.elapsedSeconds / lightingTimeScale
-              : null,
-        };
-  // The light strip hovers and clicks route points exactly like the chart does.
-  const hoverStripSample = (
-    sample: { readonly distanceMeters: number; readonly elapsedSeconds: number } | null,
-  ) => {
-    setStripCursorX(
-      sample === null
-        ? null
-        : xOfLighting(sample.distanceMeters, sample.elapsedSeconds),
-    );
-    const point = sample === null ? null : pointAtDistance(sample.distanceMeters);
-    onActivePointChange?.(point);
-    onSegmentHoverChange(
-      point === null
-        ? null
-        : elevationSegmentIndexForSample(profile, point.sampleIndex),
-    );
-  };
-  const selectStripDistance = (distanceMeters: number) => {
-    const point = pointAtDistance(distanceMeters);
-    if (point !== null) selectPoint(point);
-  };
   const timeTicks = useMemo(
     () => (elapsedSeconds === null ? null : timeAxisTicks(elapsedSeconds.at(-1) ?? 0)),
     [elapsedSeconds],
@@ -904,11 +814,6 @@ export function ElevationProfileChart({
     event: { readonly clientX: number },
   ): ElevationProfilePoint | null {
     const point = activeProfilePoint(mouseHandlerData, rows);
-    setChartHoverRow(
-      mouseHandlerData.isTooltipActive
-        ? activeChartRow(mouseHandlerData.activeIndex, rows)
-        : null,
-    );
     onActivePointChange?.(point);
     onSegmentHoverChange(
       point === null
@@ -1013,11 +918,25 @@ export function ElevationProfileChart({
               return;
             }
             const point = activeProfilePoint(mouseHandlerData, rows);
-            if (point !== null) selectPoint(point);
+            if (point === null) return;
+            const segmentIndex = elevationSegmentIndexForSample(
+              profile,
+              point.sampleIndex,
+            );
+            if (
+              segmentIndex === null ||
+              profile.segments[segmentIndex]?.type === 'flat'
+            ) {
+              onSegmentSelectionChange(null);
+            } else {
+              onSegmentSelectionChange(
+                selectedSegmentIndex === segmentIndex ? null : segmentIndex,
+              );
+            }
+            onPointClick?.(point);
           }}
           onMouseLeave={() => {
             rangeDrag.current = null;
-            setChartHoverRow(null);
             onActivePointChange?.(null);
             onSegmentHoverChange(null);
           }}
@@ -1099,16 +1018,6 @@ export function ElevationProfileChart({
               />
             );
           })}
-          {stripCursorX === null ? null : (
-            // The light strip's hover, drawn like the chart's own tooltip cursor.
-            <ReferenceLine
-              className="elevation-profile-strip-cursor"
-              x={stripCursorX}
-              ifOverflow="hidden"
-              stroke={theme.palette.text.secondary}
-              strokeWidth={1}
-            />
-          )}
           {highlight !== null && highlight.startX !== highlight.endX ? (
             <ReferenceArea
               className="elevation-profile-highlight"
@@ -1155,13 +1064,7 @@ export function ElevationProfileChart({
         // (mx: -1) and reserves a 16px right margin.
         <Stack
           direction="row"
-          sx={{
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: 1,
-            mt: -2.5,
-            pr: 1,
-          }}
+          sx={{ flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1, mt: -2.5, pr: 1 }}
         >
           <ToggleButtonGroup
             exclusive
@@ -1196,15 +1099,6 @@ export function ElevationProfileChart({
             </ToggleButton>
           </ToggleButtonGroup>
         </Stack>
-      ) : null}
-      {showHeading && lighting !== null ? (
-        <TrackLightingStrip
-          lighting={lighting}
-          axis={axis}
-          onHoverSample={hoverStripSample}
-          onSelectDistance={selectStripDistance}
-          cursor={stripCursor}
-        />
       ) : null}
     </Stack>
   );

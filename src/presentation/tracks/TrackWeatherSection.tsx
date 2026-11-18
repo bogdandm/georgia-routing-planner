@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Divider,
   FormControlLabel,
   Skeleton,
   Slider,
@@ -522,8 +523,12 @@ export function TrackWeatherSection({
           }}
         />
         {timingExpanded ? (
-          // Sun graph and light rows, then 16 px to the date and time controls, then
-          // 8 px to the checkboxes.
+          // The sun graph and light rows, then a divider before their settings: 12 px
+          // above it, 20 px below so the date field's raised label also sits about 16 px
+          // away. The settings sit 12 px apart; a slider's 13 px hit padding above and
+          // below its thumb is pulled into those gaps, so each label stays 8 px over its
+          // thumb and every group looks about 16 px apart. Flex gap keeps those negative
+          // margins, which Stack's margin spacing would reset.
           <Stack id={timingDetailsId} sx={{ px: 1, pb: 2 }}>
             {lighting === null ? (
               <Typography variant="caption" color="text.secondary">
@@ -532,7 +537,8 @@ export function TrackWeatherSection({
             ) : (
               <TrackLightingSummary lighting={lighting} pace={pace} />
             )}
-            <Stack spacing={1} sx={{ mt: 2 }}>
+            <Divider sx={{ mt: 1.5, mb: 2.5 }} />
+            <Stack spacing={1.5} useFlexGap>
               {lighting === null ? null : (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <TextField
@@ -571,14 +577,19 @@ export function TrackWeatherSection({
                   )}
                 </Stack>
               )}
-              <Box>
-                <Typography id={startLabelId} variant="caption" color="text.secondary">
+              <Box sx={{ mb: -1 }}>
+                <Typography
+                  id={startLabelId}
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block' }}
+                >
                   <Trans>Route start</Trans>
                 </Typography>
                 <Stack
                   direction="row"
                   spacing={1.5}
-                  sx={{ alignItems: 'center', px: 0.5 }}
+                  sx={{ alignItems: 'center', px: 0.5, mt: -0.5 }}
                 >
                   <Typography variant="caption" color="text.secondary">
                     {formatStartHour(0)}
@@ -610,14 +621,19 @@ export function TrackWeatherSection({
                   </Typography>
                 </Stack>
               </Box>
-              <Box>
-                <Typography id={paceLabelId} variant="caption" color="text.secondary">
+              <Box sx={{ mb: -1 }}>
+                <Typography
+                  id={paceLabelId}
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block' }}
+                >
                   <Trans>Adjust pace</Trans>
                 </Typography>
                 <Stack
                   direction="row"
                   spacing={1.5}
-                  sx={{ alignItems: 'center', px: 0.5 }}
+                  sx={{ alignItems: 'center', px: 0.5, mt: -0.5 }}
                 >
                   <Typography variant="caption" color="text.secondary">
                     <Trans>Faster</Trans>
@@ -651,24 +667,24 @@ export function TrackWeatherSection({
                   </Typography>
                 </Stack>
               </Box>
-            </Stack>
-            <Stack spacing={1} sx={{ mt: 1 }}>
-              {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
-                ...timelineSettings,
-                timeMarkers: checked,
-              }))}
-              {timelineCheckbox(
-                t`Count map times from 00:00 at the start`,
-                timelineSettings.relativeTimeMarkers,
-                (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
-                !timeMarkers,
-              )}
-              {timelineCheckbox(
-                t`Ignore recorded time`,
-                timelineSettings.ignoreRecordedTime,
-                (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
-                metrics.elapsedSeconds === undefined,
-              )}
+              <Stack spacing={1}>
+                {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
+                  ...timelineSettings,
+                  timeMarkers: checked,
+                }))}
+                {timelineCheckbox(
+                  t`Count map times from 00:00 at the start`,
+                  timelineSettings.relativeTimeMarkers,
+                  (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
+                  !timeMarkers,
+                )}
+                {timelineCheckbox(
+                  t`Ignore recorded time`,
+                  timelineSettings.ignoreRecordedTime,
+                  (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
+                  metrics.elapsedSeconds === undefined,
+                )}
+              </Stack>
             </Stack>
           </Stack>
         ) : null}

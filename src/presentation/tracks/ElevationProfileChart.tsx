@@ -618,7 +618,8 @@ export function ElevationPreparationChart({
       }}
     />
   );
-  if (!expanded) return heading;
+  // A wrapper takes the track panel's section divider, which a button would reset.
+  if (!expanded) return <Box>{heading}</Box>;
 
   return (
     <Stack spacing={1.5}>
@@ -952,7 +953,8 @@ export function ElevationProfileChart({
       }}
     />
   );
-  if (showHeading && !expanded) return heading;
+  // A wrapper takes the track panel's section divider, which a button would reset.
+  if (showHeading && !expanded) return <Box>{heading}</Box>;
 
   return (
     <Stack spacing={1.5} useFlexGap data-tour="track-profile">

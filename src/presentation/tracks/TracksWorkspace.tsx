@@ -5624,7 +5624,9 @@ function InteractiveElevationProfile({
     );
   };
   return (
-    <Stack spacing={1.5}>
+    // Fragment: in the track panel the profile and Climbs & Descents are separate
+    // sections of the divided section list.
+    <>
       {showsPreparation ? (
         <ElevationPreparationChart
           progress={elevationProgress}
@@ -5695,7 +5697,7 @@ function InteractiveElevationProfile({
           }}
         />
       ) : null}
-    </Stack>
+    </>
   );
 }
 
@@ -5719,7 +5721,7 @@ function TrackElevationAnalysis() {
     (active.kind === 'preview' && active.preparationStatus === 'preparing');
   const emptyOrPreparing =
     preparing || profile === null ? (
-      <Stack spacing={1.5}>
+      <>
         {preparing ? (
           <ElevationPreparationChart
             progress={elevationProgress}
@@ -5777,7 +5779,7 @@ function TrackElevationAnalysis() {
             onSegmentSelectionChange={() => undefined}
           />
         )}
-      </Stack>
+      </>
     ) : null;
   if (emptyOrPreparing !== null) return emptyOrPreparing;
   if (profile === null) return null;
@@ -6713,129 +6715,141 @@ export function TrackDetailsPane({
               </Stack>
             </>
           ) : null}
-          <Box component="section">
-            <TrackSectionHeading
-              title={t`Track details`}
-              detailsId={summaryDetailsId}
-              expanded={summaryExpanded}
-              onToggle={() => {
-                setSectionExpanded('summary', !summaryExpanded);
-              }}
+          {/* Every collapsible section is a direct DOM child here, fragments included,
+              so each one after the first gets a divider with 8 px on either side. */}
+          <Stack
+            spacing={1}
+            sx={{
+              flex: '1 0 auto',
+              '& > * + *': { borderTop: 1, borderColor: 'divider', pt: 1 },
+            }}
+          >
+            <Box component="section">
+              <TrackSectionHeading
+                title={t`Track details`}
+                detailsId={summaryDetailsId}
+                expanded={summaryExpanded}
+                onToggle={() => {
+                  setSectionExpanded('summary', !summaryExpanded);
+                }}
+              />
+              {summaryExpanded ? (
+                <Box
+                  id={summaryDetailsId}
+                  sx={{ minHeight: 56, display: 'flex', alignItems: 'center' }}
+                >
+                  {metrics === null ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {active.kind === 'route-plan' ? (
+                        <Trans>
+                          Add at least two route points to see track details.
+                        </Trans>
+                      ) : (
+                        <Trans>Track details are being prepared…</Trans>
+                      )}
+                    </Typography>
+                  ) : (
+                    <Box sx={{ width: '100%' }}>
+                      <TrackStats metrics={metrics} />
+                    </Box>
+                  )}
+                </Box>
+              ) : null}
+            </Box>
+            <TrackElevationAnalysis
+              key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
             />
-            {summaryExpanded ? (
-              <Box
-                id={summaryDetailsId}
-                sx={{ minHeight: 56, display: 'flex', alignItems: 'center' }}
-              >
-                {metrics === null ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {active.kind === 'route-plan' ? (
-                      <Trans>Add at least two route points to see track details.</Trans>
-                    ) : (
-                      <Trans>Track details are being prepared…</Trans>
-                    )}
-                  </Typography>
-                ) : (
-                  <Box sx={{ width: '100%' }}>
-                    <TrackStats metrics={metrics} />
-                  </Box>
-                )}
-              </Box>
-            ) : null}
-          </Box>
-          <TrackElevationAnalysis
-            key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
-          />
-          {trackMarkers === null || activePath !== null ? null : (
-            <TrackMarkersSection
-              key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
-              elevationProvider={elevationProvider}
-              markers={trackMarkers}
-              markerTimes={activeTrackMarkerTimes}
-              onAdd={startTrackMarkerPlacement}
-              onRename={renameTrackMarker}
-              onDelete={deleteTrackMarker}
-            />
-          )}
-          {activePath !== null ||
-          activeProfile === null ||
-          metrics === null ||
-          activeTimingRoute === null ? null : (
-            <TrackWeatherSection
-              key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
-              profile={activeProfile}
-              metrics={metrics}
-              timingRoute={activeTimingRoute}
-              preferences={trackWeatherPreferences}
-              onPreferencesChange={updateTrackWeatherPreferences}
-              timelineSettings={activeTrackWeatherTimeline}
-              onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
-              lighting={activeTrackLighting}
-            />
-          )}
-          {/* Editing a saved track's points is desktop-only; phones list plan points. */}
-          {pointsList === null ||
-          (mode === 'mobile' && active.kind !== 'route-plan') ? null : (
-            <TrackPointsSection
-              key={`points:${active.kind === 'saved' ? active.summary.id : active.id}`}
-              variant={active.kind === 'route-plan' ? 'plan' : 'track'}
-              editing={activePath !== null}
-              anchors={pointsList.anchors}
-              legs={pointsList.legs}
-              insertion={
-                pathInsertion === null
-                  ? null
-                  : {
-                      afterIndex:
-                        pathInsertion.afterAnchorId === null
-                          ? -1
-                          : pointsList.path.anchors.findIndex(
-                              (anchor) => anchor.id === pathInsertion.afterAnchorId,
-                            ),
-                      mode: pathInsertion.mode,
-                    }
-              }
-              movingIndex={movingIndex < 0 ? null : movingIndex}
-              selection={pointSelection}
-              revealRequest={pointRevealRequest}
-              disabled={activePath?.status === 'saving'}
-              {...(active.kind === 'saved' && activePath === null
-                ? { onStartEditing: startTrackEdit }
-                : {})}
-              onSelectionChange={setPointSelection}
-              onDeleteSelection={deletePathSelection}
-              onMoveStart={(index) => {
-                editActivePath((draft) => startTrackPathMove(draft, index));
-                setMobileWorkspaceOpen(false);
-              }}
-              onMoveCancel={() => {
-                editActivePath(cancelTrackPathMove);
-              }}
-              onInsertionStart={(afterIndex) => {
-                editActivePath((draft) => startTrackPathInsertion(draft, afterIndex));
-                setMobileWorkspaceOpen(false);
-              }}
-              onInsertionModeChange={(mode) => {
-                editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
-              }}
-              onInsertionEnd={() => {
-                editActivePath(endTrackPathInsertion);
-              }}
-              onLegModeChange={(legIndex, mode) => {
-                editActivePath((draft) => setTrackPathLegMode(draft, legIndex, mode));
-              }}
-            />
-          )}
-          {active.kind === 'route-plan' || activePath !== null ? null : (
-            <TrackMetadata
-              calculatedMetrics={calculatedMetrics}
-              pointCount={pointCount}
-              savedAt={savedAt}
-              segmentCount={segmentCount}
-              sourceFilename={sourceFilename}
-              sourceFormat={sourceFormat}
-            />
-          )}
+            {trackMarkers === null || activePath !== null ? null : (
+              <TrackMarkersSection
+                key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                elevationProvider={elevationProvider}
+                markers={trackMarkers}
+                markerTimes={activeTrackMarkerTimes}
+                onAdd={startTrackMarkerPlacement}
+                onRename={renameTrackMarker}
+                onDelete={deleteTrackMarker}
+              />
+            )}
+            {activePath !== null ||
+            activeProfile === null ||
+            metrics === null ||
+            activeTimingRoute === null ? null : (
+              <TrackWeatherSection
+                key={`weather:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                profile={activeProfile}
+                metrics={metrics}
+                timingRoute={activeTimingRoute}
+                preferences={trackWeatherPreferences}
+                onPreferencesChange={updateTrackWeatherPreferences}
+                timelineSettings={activeTrackWeatherTimeline}
+                onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
+                lighting={activeTrackLighting}
+              />
+            )}
+            {/* Editing a saved track's points is desktop-only; phones list plan points. */}
+            {pointsList === null ||
+            (mode === 'mobile' && active.kind !== 'route-plan') ? null : (
+              <TrackPointsSection
+                key={`points:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                variant={active.kind === 'route-plan' ? 'plan' : 'track'}
+                editing={activePath !== null}
+                anchors={pointsList.anchors}
+                legs={pointsList.legs}
+                insertion={
+                  pathInsertion === null
+                    ? null
+                    : {
+                        afterIndex:
+                          pathInsertion.afterAnchorId === null
+                            ? -1
+                            : pointsList.path.anchors.findIndex(
+                                (anchor) => anchor.id === pathInsertion.afterAnchorId,
+                              ),
+                        mode: pathInsertion.mode,
+                      }
+                }
+                movingIndex={movingIndex < 0 ? null : movingIndex}
+                selection={pointSelection}
+                revealRequest={pointRevealRequest}
+                disabled={activePath?.status === 'saving'}
+                {...(active.kind === 'saved' && activePath === null
+                  ? { onStartEditing: startTrackEdit }
+                  : {})}
+                onSelectionChange={setPointSelection}
+                onDeleteSelection={deletePathSelection}
+                onMoveStart={(index) => {
+                  editActivePath((draft) => startTrackPathMove(draft, index));
+                  setMobileWorkspaceOpen(false);
+                }}
+                onMoveCancel={() => {
+                  editActivePath(cancelTrackPathMove);
+                }}
+                onInsertionStart={(afterIndex) => {
+                  editActivePath((draft) => startTrackPathInsertion(draft, afterIndex));
+                  setMobileWorkspaceOpen(false);
+                }}
+                onInsertionModeChange={(mode) => {
+                  editActivePath((draft) => setTrackPathInsertionMode(draft, mode));
+                }}
+                onInsertionEnd={() => {
+                  editActivePath(endTrackPathInsertion);
+                }}
+                onLegModeChange={(legIndex, mode) => {
+                  editActivePath((draft) => setTrackPathLegMode(draft, legIndex, mode));
+                }}
+              />
+            )}
+            {active.kind === 'route-plan' || activePath !== null ? null : (
+              <TrackMetadata
+                calculatedMetrics={calculatedMetrics}
+                pointCount={pointCount}
+                savedAt={savedAt}
+                segmentCount={segmentCount}
+                sourceFilename={sourceFilename}
+                sourceFormat={sourceFormat}
+              />
+            )}
+          </Stack>
           {segmentCount > 1 && activePath === null ? (
             <Alert severity="info">
               <Trans>Independent segments are not joined; totals exclude gaps.</Trans>

@@ -394,10 +394,11 @@ date, route start, and pace controls follow, then the map time options. Without 
 light, a sentence states the finish's sunset margin instead.
 
 Every track detail section (Track details, Elevation profile, Climbs & Descents,
-Markers, Route timing, Points, Source details, and the forecast's **By elevation** and
-**Along the route**) is a disclosure whose state is remembered in this browser for all
-tracks. Editing points or revealing one from the chart opens **Points** without changing
-that choice.
+Markers, Route timing, Points, and Source details) is a disclosure whose state is
+remembered in this browser for all tracks, with a full-width divider between sections.
+The forecast's **By elevation** and **Along the route** are plain subheadings that are
+always shown while **Weather forecast** is open. Editing points or revealing one from
+the chart opens **Points** without changing that choice.
 
 **Weather forecast** starts collapsed; whether it is expanded is remembered in this
 browser for every track, and forecasts load only while it is open. It begins with seven

@@ -90,8 +90,6 @@ describe('WorkspaceShell', () => {
       ['Route timing', 'timing'],
       ['Points', 'points'],
       ['Source details', 'metadata'],
-      ['By elevation', 'weather-elevation'],
-      ['Along the route', 'weather-route'],
     ] as const;
     for (const [name, key] of sections) {
       const button = within(details).getByRole('button', { name });

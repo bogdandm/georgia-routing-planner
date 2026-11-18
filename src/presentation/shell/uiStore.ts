@@ -9,15 +9,7 @@ export type WorkspaceTab =
   'tracks' | 'satellite' | 'weather' | 'markers' | 'layers' | 'user';
 
 export type TrackSection =
-  | 'summary'
-  | 'elevation'
-  | 'climbs'
-  | 'markers'
-  | 'timing'
-  | 'points'
-  | 'metadata'
-  | 'weather-elevation'
-  | 'weather-route';
+  'summary' | 'elevation' | 'climbs' | 'markers' | 'timing' | 'points' | 'metadata';
 
 interface UiState {
   readonly activeTab: WorkspaceTab;

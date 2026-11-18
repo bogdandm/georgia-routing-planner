@@ -151,12 +151,6 @@ export function TrackWeatherSection({
   const timingExpanded = useUiStore(
     (state) => state.trackSectionExpanded.timing ?? true,
   );
-  const elevationExpanded = useUiStore(
-    (state) => state.trackSectionExpanded['weather-elevation'] ?? true,
-  );
-  const routeExpanded = useUiStore(
-    (state) => state.trackSectionExpanded['weather-route'] ?? true,
-  );
   const setSectionExpanded = useUiStore((state) => state.setTrackSectionExpanded);
   const setActiveTab = useUiStore((state) => state.setActiveTab);
   const setMobileWorkspaceOpen = useUiStore((state) => state.setMobileWorkspaceOpen);
@@ -165,10 +159,6 @@ export function TrackWeatherSection({
   const detailsId = `track-weather-${useId().replaceAll(':', '')}`;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const timingDetailsId = `${detailsId}-timing`;
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
-  const elevationDetailsId = `${detailsId}-elevation`;
-  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
-  const routeDetailsId = `${detailsId}-route`;
   // Keyed by today's date, so the week moves at local midnight like the track lighting's.
   const today = localCalendarDate(clock.now());
   const dates = useMemo(() => trackWeatherDates(today), [today]);
@@ -730,58 +720,30 @@ export function TrackWeatherSection({
               ))}
             </ToggleButtonGroup>
             <Stack spacing={1}>
-              <TrackSectionHeading
-                title={t`By elevation`}
-                detailsId={elevationDetailsId}
-                expanded={elevationExpanded}
-                onToggle={() => {
-                  setSectionExpanded('weather-elevation', !elevationExpanded);
-                }}
-                nested
-              />
-              {elevationExpanded ? (
-                <Stack
-                  id={elevationDetailsId}
-                  role="list"
-                  aria-label={t`Forecast by elevation`}
-                  spacing={1}
-                >
-                  {elevationCard(t`Highest`, elevationLocations.highest)}
-                  {elevationCard(t`Median`, elevationLocations.median)}
-                  {elevationCard(t`Lowest`, elevationLocations.lowest)}
-                </Stack>
-              ) : null}
+              <Typography component="h4" variant="subtitle2">
+                {t`By elevation`}
+              </Typography>
+              <Stack role="list" aria-label={t`Forecast by elevation`} spacing={1}>
+                {elevationCard(t`Highest`, elevationLocations.highest)}
+                {elevationCard(t`Median`, elevationLocations.median)}
+                {elevationCard(t`Lowest`, elevationLocations.lowest)}
+              </Stack>
             </Stack>
             <Stack spacing={1}>
-              <TrackSectionHeading
-                title={t`Along the route`}
-                detailsId={routeDetailsId}
-                expanded={routeExpanded}
-                onToggle={() => {
-                  setSectionExpanded('weather-route', !routeExpanded);
-                }}
-                nested
-              />
-              {routeExpanded ? (
-                <Box id={routeDetailsId}>
-                  {timeline.status === 'available' ? (
-                    <Stack
-                      role="list"
-                      aria-label={t`Forecast along the route`}
-                      spacing={1}
-                    >
-                      {timeline.checkpoints.map(checkpointCard)}
-                    </Stack>
-                  ) : (
-                    <Typography variant="caption" color="text.secondary">
-                      <Trans>
-                        Available for day hikes shorter than {maximumDistance} and 12
-                        hours.
-                      </Trans>
-                    </Typography>
-                  )}
-                </Box>
-              ) : null}
+              <Typography component="h4" variant="subtitle2">
+                {t`Along the route`}
+              </Typography>
+              {timeline.status === 'available' ? (
+                <Stack role="list" aria-label={t`Forecast along the route`} spacing={1}>
+                  {timeline.checkpoints.map(checkpointCard)}
+                </Stack>
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  <Trans>
+                    Available for day hikes shorter than {maximumDistance} and 12 hours.
+                  </Trans>
+                </Typography>
+              )}
             </Stack>
           </Stack>
         ) : null}

@@ -5,9 +5,12 @@ import type {
   ElevationProvider,
   ElevationSample,
   ElevationSamplingProgressListener,
+  LoadedTerrainSampler,
+  TerrainSamplerSource,
 } from '@/application/ports/ElevationProvider';
 import type { IdGenerator } from '@/application/ports/IdGenerator';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
+import { terrainShadowModel } from '@/domain/terrain/terrainShadow';
 import {
   BrowserDemImageDecoder,
   type DecodedDemTile,
@@ -112,7 +115,88 @@ export function decodeDemElevation(
 type RasterDemSource = Pick<
   MapProviderConfiguration['terrain'],
   'tileUrl' | 'encoding' | 'maxZoom'
-> & { readonly tileSize: number };
+> & { readonly tileSize: number; readonly minZoom?: number };
+
+/**
+ * Detail levels of a loaded terrain sampler, mirroring the sun-shadow shader's DEM levels
+ * (z, z − 2, z − 4): each serves marches up to its reach and covers that far around
+ * every requested coordinate.
+ */
+const terrainSamplerLevels = [
+  { zoomOffset: 0, reachMeters: 5_000 },
+  { zoomOffset: 2, reachMeters: 20_000 },
+  { zoomOffset: 4, reachMeters: terrainShadowModel.maximumShadowDistanceMeters },
+] as const;
+
+const metersPerLatitudeDegree = (Math.PI * terrainShadowModel.earthRadiusMeters) / 180;
+
+/** Decoded heights of one level; `NaN` marks transparent or non-finite pixels. */
+interface TerrainSamplerLevel {
+  readonly zoom: number;
+  readonly reachMeters: number;
+  readonly tiles: ReadonlyMap<number, Float32Array>;
+}
+
+function worldPixelPosition(
+  latitudeDegrees: number,
+  longitudeDegrees: number,
+  worldPixels: number,
+): { readonly column: number; readonly row: number } {
+  const longitude = ((((longitudeDegrees + 180) % 360) + 360) % 360) - 180;
+  const latitude =
+    (Math.min(
+      maximumMercatorLatitude,
+      Math.max(-maximumMercatorLatitude, latitudeDegrees),
+    ) *
+      Math.PI) /
+    180;
+  return {
+    column: ((longitude + 180) / 360) * worldPixels,
+    row: ((1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2) * worldPixels,
+  };
+}
+
+/** Bilinear height between pixel centres of one level, or null without valid corners. */
+function levelElevation(
+  level: TerrainSamplerLevel,
+  tileSize: number,
+  latitudeDegrees: number,
+  longitudeDegrees: number,
+): number | null {
+  const tileCount = 2 ** level.zoom;
+  const worldPixels = tileCount * tileSize;
+  const position = worldPixelPosition(latitudeDegrees, longitudeDegrees, worldPixels);
+  const columnPosition = position.column - 0.5;
+  const rowPosition = position.row - 0.5;
+  const leftColumn = Math.floor(columnPosition);
+  const topRow = Math.floor(rowPosition);
+  const columnFraction = columnPosition - leftColumn;
+  const rowFraction = rowPosition - topRow;
+  let weighted = 0;
+  let weights = 0;
+  for (let rowOffset = 0; rowOffset <= 1; rowOffset += 1) {
+    const rowWeight = rowOffset === 0 ? 1 - rowFraction : rowFraction;
+    if (rowWeight <= 0) continue;
+    const row = Math.min(worldPixels - 1, Math.max(0, topRow + rowOffset));
+    const tileY = Math.floor(row / tileSize);
+    for (let columnOffset = 0; columnOffset <= 1; columnOffset += 1) {
+      const weight =
+        rowWeight * (columnOffset === 0 ? 1 - columnFraction : columnFraction);
+      if (weight <= 0) continue;
+      const column =
+        (((leftColumn + columnOffset) % worldPixels) + worldPixels) % worldPixels;
+      const tileX = Math.floor(column / tileSize);
+      const heights = level.tiles.get(tileX * tileCount + tileY);
+      if (heights === undefined) continue;
+      const meters =
+        heights[(row - tileY * tileSize) * tileSize + (column - tileX * tileSize)];
+      if (meters === undefined || Number.isNaN(meters)) continue;
+      weighted += weight * meters;
+      weights += weight;
+    }
+  }
+  return weights > 0 ? weighted / weights : null;
+}
 
 /**
  * Samples raster DEM tiles at the provider's maximum zoom with bilinear interpolation
@@ -120,7 +204,9 @@ type RasterDemSource = Pick<
  * Transparent or non-finite pixels are treated as missing; the remaining corner
  * weights are renormalised, and a sample without any valid corner is unavailable.
  */
-export class RasterDemElevationProvider implements ElevationProvider {
+export class RasterDemElevationProvider
+  implements ElevationProvider, TerrainSamplerSource
+{
   public constructor(
     private readonly httpClient: KyInstance,
     private readonly terrain: RasterDemSource,
@@ -247,5 +333,120 @@ export class RasterDemElevationProvider implements ElevationProvider {
     }
     const meters = decodeDemElevation({ red, green, blue }, this.terrain.encoding);
     return Number.isFinite(meters) ? meters : null;
+  }
+
+  public async loadTerrainSampler(
+    coordinates: readonly ElevationCoordinate[],
+    signal: AbortSignal,
+  ): Promise<LoadedTerrainSampler> {
+    const { maxZoom, tileSize } = this.terrain;
+    const minZoom = this.terrain.minZoom ?? 0;
+    let maximumElevationMeters = -Infinity;
+    const levels = await Promise.all(
+      terrainSamplerLevels.map(async ({ zoomOffset, reachMeters }) => {
+        const zoom = Math.max(minZoom, maxZoom - zoomOffset);
+        const tileCount = 2 ** zoom;
+        const keys = new Set<number>();
+        for (const coordinate of coordinates) {
+          const latitudeReach = reachMeters / metersPerLatitudeDegree;
+          const longitudeReach = Math.min(
+            180,
+            latitudeReach /
+              Math.max(0.01, Math.cos((coordinate.latitude * Math.PI) / 180)),
+          );
+          const northWest = worldPixelPosition(
+            coordinate.latitude + latitudeReach,
+            coordinate.longitude - longitudeReach,
+            tileCount,
+          );
+          const southEast = worldPixelPosition(
+            coordinate.latitude - latitudeReach,
+            coordinate.longitude + longitudeReach,
+            tileCount,
+          );
+          const firstRow = Math.max(0, Math.floor(northWest.row));
+          const lastRow = Math.min(tileCount - 1, Math.floor(southEast.row));
+          const firstColumn = Math.floor(northWest.column);
+          // Wrapped east edges continue past the antimeridian.
+          let lastColumn = Math.floor(southEast.column);
+          if (lastColumn < firstColumn) lastColumn += tileCount;
+          for (let column = firstColumn; column <= lastColumn; column += 1) {
+            for (let row = firstRow; row <= lastRow; row += 1) {
+              keys.add((column % tileCount) * tileCount + row);
+            }
+          }
+        }
+        const tiles = new Map<number, Float32Array>();
+        await Promise.all(
+          [...keys].map(async (key) => {
+            const x = Math.floor(key / tileCount);
+            const y = key % tileCount;
+            const blob = await this.httpClient
+              .get(
+                this.terrain.tileUrl
+                  .replaceAll('{z}', String(zoom))
+                  .replaceAll('{x}', String(x))
+                  .replaceAll('{y}', String(y)),
+                { signal, context: { operationId: this.idGenerator.generate() } },
+              )
+              .blob();
+            signal.throwIfAborted();
+            const decoded = await this.decoder.decode(blob, signal);
+            if (decoded.width !== tileSize || decoded.height !== tileSize) {
+              throw new Error('A DEM tile has an unexpected size.');
+            }
+            const { data } = decoded;
+            const terrarium = this.terrain.encoding === 'terrarium';
+            const heights = new Float32Array(tileSize * tileSize);
+            for (let pixel = 0; pixel < heights.length; pixel += 1) {
+              const offset = pixel * 4;
+              const red = data[offset] ?? 0;
+              const green = data[offset + 1] ?? 0;
+              const blue = data[offset + 2] ?? 0;
+              // Same decoding as `decodeDemElevation`, inlined for ~260k pixels per tile.
+              const meters =
+                data[offset + 3] !== 255
+                  ? Number.NaN
+                  : terrarium
+                    ? red * 256 + green + blue / 256 - 32_768
+                    : -10_000 + (red * 65_536 + green * 256 + blue) * 0.1;
+              heights[pixel] = meters;
+              if (meters > maximumElevationMeters) maximumElevationMeters = meters;
+            }
+            tiles.set(key, heights);
+          }),
+        );
+        return { zoom, reachMeters, tiles } satisfies TerrainSamplerLevel;
+      }),
+    );
+    const meanLatitude =
+      coordinates.reduce((sum, coordinate) => sum + coordinate.latitude, 0) /
+      Math.max(1, coordinates.length);
+    const finestZoom = levels[0]?.zoom ?? maxZoom;
+    return {
+      baseResolutionMeters:
+        (2 *
+          Math.PI *
+          terrainShadowModel.earthRadiusMeters *
+          Math.cos((meanLatitude * Math.PI) / 180)) /
+        (2 ** finestZoom * tileSize),
+      maximumElevationMeters: Number.isFinite(maximumElevationMeters)
+        ? maximumElevationMeters
+        : 0,
+      // The finest level within reach answers first; coarser levels fill its gaps.
+      elevationAt: (latitudeDegrees, longitudeDegrees, distanceMeters) => {
+        for (const level of levels) {
+          if (distanceMeters > level.reachMeters) continue;
+          const meters = levelElevation(
+            level,
+            tileSize,
+            latitudeDegrees,
+            longitudeDegrees,
+          );
+          if (meters !== null) return meters;
+        }
+        return null;
+      },
+    };
   }
 }

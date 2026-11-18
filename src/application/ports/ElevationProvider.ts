@@ -1,3 +1,8 @@
+import type {
+  TerrainElevationSampler,
+  TerrainMarchOptions,
+} from '@/domain/terrain/terrainShadow';
+
 export interface ElevationCoordinate {
   readonly longitude: number;
   readonly latitude: number;
@@ -33,4 +38,21 @@ export interface ElevationProvider {
     signal: AbortSignal,
     onProgress?: ElevationSamplingProgressListener,
   ): Promise<readonly ElevationSample[]>;
+}
+
+/** Loaded DEM heights for synchronous horizon marches, with their march options. */
+export interface LoadedTerrainSampler
+  extends TerrainElevationSampler, TerrainMarchOptions {}
+
+/** Loads raster DEM around route coordinates for the CPU sunlight march. */
+export interface TerrainSamplerSource {
+  /**
+   * Loads every DEM tile within the terrain-shadow reach of `coordinates`: full detail
+   * near them and coarser levels farther away, like the map's sun shadows. Rejects when
+   * a tile fails, since missing far terrain would silently read as sunlight.
+   */
+  loadTerrainSampler(
+    coordinates: readonly ElevationCoordinate[],
+    signal: AbortSignal,
+  ): Promise<LoadedTerrainSampler>;
 }

@@ -6780,17 +6780,6 @@ export function TrackDetailsPane({
             <TrackElevationAnalysis
               key={`elevation:${active.kind === 'saved' ? active.summary.id : active.id}`}
             />
-            {trackMarkers === null || activePath !== null ? null : (
-              <TrackMarkersSection
-                key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
-                elevationProvider={elevationProvider}
-                markers={trackMarkers}
-                markerTimes={activeTrackMarkerTimes}
-                onAdd={startTrackMarkerPlacement}
-                onRename={renameTrackMarker}
-                onDelete={deleteTrackMarker}
-              />
-            )}
             {activePath !== null ||
             activeProfile === null ||
             metrics === null ||
@@ -6805,6 +6794,17 @@ export function TrackDetailsPane({
                 timelineSettings={activeTrackWeatherTimeline}
                 onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
                 lighting={activeTrackLighting}
+              />
+            )}
+            {trackMarkers === null || activePath !== null ? null : (
+              <TrackMarkersSection
+                key={`markers:${active.kind === 'saved' ? active.summary.id : active.id}`}
+                elevationProvider={elevationProvider}
+                markers={trackMarkers}
+                markerTimes={activeTrackMarkerTimes}
+                onAdd={startTrackMarkerPlacement}
+                onRename={renameTrackMarker}
+                onDelete={deleteTrackMarker}
               />
             )}
             {/* Editing a saved track's points is desktop-only; phones list plan points. */}

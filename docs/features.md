@@ -307,10 +307,11 @@ grades, and climbs unless it has no complete run, in which case the DEM profile 
 On desktop and tablet, a lower-right grade legend explains the colors; its dismissal
 persists and the profile chart offers **Show track grade legend** to restore it.
 
-Editable single tracks show a collapsed **Markers** section with an add action, map
-navigation, inline rename, and two-stage deletion. Only the active editable track
-renders its markers, smaller than saved markers. Track markers are stored in track
-content and synchronize as track metadata without changing geometry or content hashes.
+Editable single tracks show a collapsed **Markers** section below **Weather forecast**,
+with an add action, map navigation, inline rename, and two-stage deletion. Only the
+active editable track renders its markers, smaller than saved markers. Track markers are
+stored in track content and synchronize as track metadata without changing geometry or
+content hashes.
 
 With a profile, track marker names in the list and on the map include their passage time
 from **Route timing**. Each marker uses the nearest discrete route sample, not a
@@ -320,20 +321,20 @@ rewrite the marker's saved coordinates. Start, pace, recorded-time choice, elaps
 display, and the time-marker visibility setting all apply; hiding times keeps the
 markers.
 
-Tracks with an elevation profile show **Route timing** below Markers, independently of
-the **Weather forecast** section beneath it. Its map-time options, **Route start** and
-**Adjust pace** controls remain available while the forecast is collapsed. The timeline
-follows recorded timestamps when the track has recorded time and otherwise the DIN 33466
-estimate, so climbs advance more slowly than flat walking. **Ignore recorded time**,
-offered on timed tracks, selects the estimate instead, totalling the DIN 33466 time of
-the track's distance and stored ascent and descent. **Route start** sets the start from
-00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local time at the
-route start, rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace**
-scales hiking time from ×0.5 (faster) to ×2 (slower) on release. These settings are
-remembered in this browser for each saved track and reset to the defaults for a reversed
-copy; an unsaved track keeps them while it is open and carries them over when saved.
-They are not synchronized to the account and do not change the track's recorded or
-estimated time.
+Tracks with an elevation profile show **Route timing** below Climbs & Descents,
+independently of the **Weather forecast** section beneath it. Its map-time options,
+**Route start** and **Adjust pace** controls remain available while the forecast is
+collapsed. The timeline follows recorded timestamps when the track has recorded time and
+otherwise the DIN 33466 estimate, so climbs advance more slowly than flat walking.
+**Ignore recorded time**, offered on timed tracks, selects the estimate instead,
+totalling the DIN 33466 time of the track's distance and stored ascent and descent.
+**Route start** sets the start from 00:00 to 23:30 in half-hour steps. It defaults to
+the recorded start's local time at the route start, rounded to the nearest half-hour, or
+to 09:00 without one. **Adjust pace** scales hiking time from ×0.5 (faster) to ×2
+(slower) on release. These settings are remembered in this browser for each saved track
+and reset to the defaults for a reversed copy; an unsaved track keeps them while it is
+open and carries them over when saved. They are not synchronized to the account and do
+not change the track's recorded or estimated time.
 
 Timing includes the full route even if elevation is available only in its middle.
 Complete profiles reuse filtered elevation; incomplete profiles retain the original
@@ -401,10 +402,10 @@ that day's sunset it ends. Rows keep their place while the light is calculated. 
 date, route start, and pace controls follow, then the map time and light options.
 Without terrain light, a sentence states the finish's sunset margin instead.
 
-Every track detail section (Track details, Elevation profile, Climbs & Descents,
-Markers, Route timing, Points, and Source details) is a disclosure whose state is
-remembered in this browser for all tracks, with a full-width divider between sections.
-The forecast's **By elevation** and **Along the route** are plain subheadings that are
+Every track detail section (Track details, Elevation profile, Climbs & Descents, Route
+timing, Markers, Points, and Source details) is a disclosure whose state is remembered
+in this browser for all tracks, with a full-width divider between sections. The
+forecast's **By elevation** and **Along the route** are plain subheadings that are
 always shown while **Weather forecast** is open. Editing points or revealing one from
 the chart opens **Points** without changing that choice.
 

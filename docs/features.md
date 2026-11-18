@@ -347,9 +347,10 @@ climb or descent between their endpoints.
 selected in **Weather forecast**, and choosing a date within the forecast week selects
 it there too. A date outside that week, such as next summer, is remembered with the
 track's route start and pace instead. **Today** returns to today, and a recorded track
-offers **Recording date** for the day its file was recorded. Changing the date also
-moves the map's sun shadows to that date at their current local time of day, so a winter
-visit can check summer light. Clock times use the time zone at the route start.
+offers **Recording date** for the day its file was recorded. Changing the hike date,
+including picking a forecast day while the hike follows the forecast, also moves the
+map's sun shadows to that date at their current local time of day, so a winter visit can
+check summer light. Clock times use the time zone at the route start.
 
 Light along the route comes from the terrain-shadow model behind the map's sun shadows:
 at every route station and the moment the hiker passes it, the visible fraction of the

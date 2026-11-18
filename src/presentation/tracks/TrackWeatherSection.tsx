@@ -163,10 +163,9 @@ export function TrackWeatherSection({
   const elevationDetailsId = `${detailsId}-elevation`;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const routeDetailsId = `${detailsId}-route`;
-  const dates = useMemo(
-    () => trackWeatherDates(localCalendarDate(clock.now())),
-    [clock],
-  );
+  // Keyed by today's date, so the week moves at local midnight like the track lighting's.
+  const today = localCalendarDate(clock.now());
+  const dates = useMemo(() => trackWeatherDates(today), [today]);
   const selectedDate = defaultTrackWeatherDate(dates, current.weekday);
   const elevationLocations = useMemo(
     () => selectTrackElevationLocations(profile),
@@ -473,7 +472,6 @@ export function TrackWeatherSection({
     }
     showHikeDateOnMap(mapLayers, next, lighting.timeZone);
   };
-  const today = dates[0];
 
   return (
     <>
@@ -517,9 +515,9 @@ export function TrackWeatherSection({
                   value={lighting.date}
                 />
                 <Button
-                  disabled={today === undefined || lighting.date === today}
+                  disabled={lighting.date === today}
                   onClick={() => {
-                    if (today !== undefined) changeHikeDate(today);
+                    changeHikeDate(today);
                   }}
                   size="small"
                   variant="outlined"
@@ -652,6 +650,10 @@ export function TrackWeatherSection({
                     ...current,
                     weekday: trackWeatherWeekday(value),
                   });
+                  // Without its own date the hike follows the forecast date, map included.
+                  if (lighting !== null && timelineSettings.hikeDate === null) {
+                    showHikeDateOnMap(mapLayers, value, lighting.timeZone);
+                  }
                 }
               }}
             >

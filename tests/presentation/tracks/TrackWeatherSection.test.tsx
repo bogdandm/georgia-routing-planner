@@ -581,6 +581,41 @@ describe('TrackWeatherSection', () => {
       expect(screen.getByLabelText('Hike date')).toHaveValue(inWeek);
     });
 
+    it('moves the hike date and map shadows with the forecast date until the track has its own', async () => {
+      const user = userEvent.setup();
+      mapLayerStore.setState((state) => ({
+        sunShadow: {
+          ...state.sunShadow,
+          enabled: true,
+          // 15:30 in Tbilisi.
+          instantMs: Date.UTC(2026, 6, 18, 11, 30),
+        },
+      }));
+      const { mapLayers } = services;
+      if (mapLayers === null) throw new Error('Expected test map layers.');
+      const setSunShadow = vi.spyOn(mapLayers, 'setSunShadow');
+      const inWeek = forecastDates()[2];
+      if (inWeek === undefined) throw new Error('Expected a forecast week.');
+      renderSection(
+        expandedPreferences,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        hikeLighting,
+      );
+      const forecastDay = within(
+        screen.getByRole('group', { name: 'Forecast date' }),
+      ).getAllByRole('button')[2];
+      if (forecastDay === undefined) throw new Error('Expected forecast days.');
+
+      await user.click(forecastDay);
+
+      expect(screen.getByLabelText('Hike date')).toHaveValue(inWeek);
+      expect(setSunShadow).toHaveBeenLastCalledWith({
+        enabled: true,
+        instantMs: Date.parse(`${inWeek}T11:30:00Z`),
+      });
+    });
+
     it('returns from a track date to today, which the forecast then shows', async () => {
       const user = userEvent.setup();
       const [today, , , later] = forecastDates();

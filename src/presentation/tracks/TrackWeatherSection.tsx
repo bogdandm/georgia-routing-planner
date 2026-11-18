@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import {
   useEffect,
+  useEffectEvent,
   useId,
   useMemo,
   useRef,
@@ -54,11 +55,15 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { requestWeatherForecast } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
-import { TrackLightingSummary } from '@/presentation/tracks/TrackLighting';
+import {
+  TrackLightingSummary,
+  type TrackLightingPace,
+} from '@/presentation/tracks/TrackLighting';
 import {
   parseIsoDate,
   showHikeDateOnMap,
   type TrackLightingView,
+  zonedIsoDate,
 } from '@/presentation/tracks/useTrackLighting';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
 import type { TrackStatsMetrics } from '@/presentation/tracks/TrackSummary';
@@ -445,17 +450,24 @@ export function TrackWeatherSection({
     i18n,
   );
   const duration = formatTrackDuration(timeline.durationSeconds, i18n);
-  const timelineCaption =
+  const pace: TrackLightingPace =
     paceFactor !== 1
-      ? t`Starting at ${startTime} at the adjusted pace, about ${duration} in total.`
+      ? 'adjusted'
       : timeline.durationSource === 'recorded'
+        ? 'recorded'
+        : 'estimated';
+  // The daylight widget shows the start, pace, and duration; without it, this sentence.
+  const timelineCaption =
+    pace === 'adjusted'
+      ? t`Starting at ${startTime} at the adjusted pace, about ${duration} in total.`
+      : pace === 'recorded'
         ? t`Starting at ${startTime} at the recorded pace, ${duration} in total.`
         : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
   const paceFormat = new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 2 });
   const formatPace = (value: number) => `×${paceFormat.format(value)}`;
   /**
    * A hike date within the forecast week selects that forecast date, so both stay in
-   * step; any other date is stored as the track's own. The map shows its light.
+   * step; any other date is stored as the track's own.
    */
   const changeHikeDate = (date: string) => {
     if (lighting === null) return;
@@ -470,8 +482,33 @@ export function TrackWeatherSection({
     } else {
       onTimelineSettingsChange({ ...timelineSettings, hikeDate: next });
     }
-    showHikeDateOnMap(mapLayers, next, lighting.timeZone);
   };
+  // The hike date and the map's sun-shadow date stay one date. Opening a track or
+  // changing its date moves the map; picking another date on the map moves the hike.
+  const hikeDate = lighting?.date ?? null;
+  const hikeTimeZone = lighting?.timeZone ?? null;
+  const mapSunMs = useStore(mapLayerStore, (state) => state.sunShadow.instantMs);
+  // Zero until the map sets its first instant.
+  const mapDate =
+    hikeTimeZone === null || mapSunMs <= 0
+      ? null
+      : zonedIsoDate(new Date(mapSunMs), hikeTimeZone);
+  useEffect(() => {
+    if (hikeDate === null || hikeTimeZone === null) return;
+    showHikeDateOnMap(mapLayers, hikeDate, hikeTimeZone);
+  }, [hikeDate, hikeTimeZone, mapLayers]);
+  // Only a new map instant on another day moves the hike: a new track or zone never does.
+  const previousMapSunMs = useRef(mapSunMs);
+  const followMapDate = useEffectEvent((previousMs: number) => {
+    if (hikeTimeZone === null || previousMs <= 0 || mapDate === null) return;
+    const previousDate = zonedIsoDate(new Date(previousMs), hikeTimeZone);
+    if (mapDate !== previousDate && mapDate !== hikeDate) changeHikeDate(mapDate);
+  });
+  useEffect(() => {
+    const previousMs = previousMapSunMs.current;
+    previousMapSunMs.current = mapSunMs;
+    followMapDate(previousMs);
+  }, [mapSunMs]);
 
   return (
     <>
@@ -485,145 +522,154 @@ export function TrackWeatherSection({
           }}
         />
         {timingExpanded ? (
-          <Stack id={timingDetailsId} spacing={1} sx={{ px: 1, pb: 2 }}>
-            {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
-              ...timelineSettings,
-              timeMarkers: checked,
-            }))}
-            {timelineCheckbox(
-              t`Count map times from 00:00 at the start`,
-              timelineSettings.relativeTimeMarkers,
-              (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
-              !timeMarkers,
+          // Sun graph and light rows, then 16 px to the date and time controls, then
+          // 8 px to the checkboxes.
+          <Stack id={timingDetailsId} sx={{ px: 1, pb: 2 }}>
+            {lighting === null ? (
+              <Typography variant="caption" color="text.secondary">
+                {timelineCaption}
+              </Typography>
+            ) : (
+              <TrackLightingSummary lighting={lighting} pace={pace} />
             )}
-            {timelineCheckbox(
-              t`Ignore recorded time`,
-              timelineSettings.ignoreRecordedTime,
-              (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
-              metrics.elapsedSeconds === undefined,
-            )}
-            {lighting === null ? null : (
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pt: 1 }}>
-                <TextField
-                  label={t`Hike date`}
-                  onChange={(event) => {
-                    changeHikeDate(event.target.value);
-                  }}
-                  size="small"
-                  sx={{ flex: 1 }}
-                  type="date"
-                  value={lighting.date}
-                />
-                <Button
-                  disabled={lighting.date === today}
-                  onClick={() => {
-                    changeHikeDate(today);
-                  }}
-                  size="small"
-                  variant="outlined"
-                >
-                  {t`Today`}
-                </Button>
-                {lighting.recordedDate === null ? null : (
+            <Stack spacing={1} sx={{ mt: 2 }}>
+              {lighting === null ? null : (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <TextField
+                    label={t`Hike date`}
+                    onChange={(event) => {
+                      changeHikeDate(event.target.value);
+                    }}
+                    size="small"
+                    sx={{ flex: 1 }}
+                    type="date"
+                    value={lighting.date}
+                  />
                   <Button
-                    disabled={lighting.date === lighting.recordedDate}
+                    disabled={lighting.date === today}
                     onClick={() => {
-                      if (lighting.recordedDate !== null) {
-                        changeHikeDate(lighting.recordedDate);
-                      }
+                      changeHikeDate(today);
                     }}
                     size="small"
                     variant="outlined"
                   >
-                    {t`Recording date`}
+                    {t`Today`}
                   </Button>
-                )}
-              </Stack>
-            )}
-            <Box>
-              <Typography id={startLabelId} variant="caption" color="text.secondary">
-                <Trans>Route start</Trans>
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1.5}
-                sx={{ alignItems: 'center', px: 0.5 }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  {formatStartHour(0)}
+                  {lighting.recordedDate === null ? null : (
+                    <Button
+                      disabled={lighting.date === lighting.recordedDate}
+                      onClick={() => {
+                        if (lighting.recordedDate !== null) {
+                          changeHikeDate(lighting.recordedDate);
+                        }
+                      }}
+                      size="small"
+                      variant="outlined"
+                    >
+                      {t`Recording date`}
+                    </Button>
+                  )}
+                </Stack>
+              )}
+              <Box>
+                <Typography id={startLabelId} variant="caption" color="text.secondary">
+                  <Trans>Route start</Trans>
                 </Typography>
-                <Slider
-                  size="small"
-                  aria-labelledby={startLabelId}
-                  min={0}
-                  max={TRACK_WEATHER_LATEST_START_HOUR}
-                  step={TRACK_WEATHER_START_HOUR_STEP}
-                  marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
-                  value={startHour}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatStartHour}
-                  getAriaValueText={formatStartHour}
-                  onChange={(_event, value) => {
-                    setStartDraft(value);
-                  }}
-                  onChangeCommitted={(_event, value) => {
-                    setStartDraft(null);
-                    onTimelineSettingsChange({
-                      ...timelineSettings,
-                      startHour: value,
-                    });
-                  }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ alignItems: 'center', px: 0.5 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    {formatStartHour(0)}
+                  </Typography>
+                  <Slider
+                    size="small"
+                    aria-labelledby={startLabelId}
+                    min={0}
+                    max={TRACK_WEATHER_LATEST_START_HOUR}
+                    step={TRACK_WEATHER_START_HOUR_STEP}
+                    marks={[{ value: TRACK_WEATHER_DEFAULT_START_HOUR }]}
+                    value={startHour}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatStartHour}
+                    getAriaValueText={formatStartHour}
+                    onChange={(_event, value) => {
+                      setStartDraft(value);
+                    }}
+                    onChangeCommitted={(_event, value) => {
+                      setStartDraft(null);
+                      onTimelineSettingsChange({
+                        ...timelineSettings,
+                        startHour: value,
+                      });
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    {formatStartHour(TRACK_WEATHER_LATEST_START_HOUR)}
+                  </Typography>
+                </Stack>
+              </Box>
+              <Box>
+                <Typography id={paceLabelId} variant="caption" color="text.secondary">
+                  <Trans>Adjust pace</Trans>
                 </Typography>
-              </Stack>
-            </Box>
-            <Box>
-              <Typography id={paceLabelId} variant="caption" color="text.secondary">
-                <Trans>Adjust pace</Trans>
-              </Typography>
-              <Stack
-                direction="row"
-                spacing={1.5}
-                sx={{ alignItems: 'center', px: 0.5 }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  <Trans>Faster</Trans>
-                </Typography>
-                <Slider
-                  size="small"
-                  aria-labelledby={paceLabelId}
-                  min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
-                  max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
-                  step={TRACK_WEATHER_PACE_FACTOR_STEP}
-                  marks={[{ value: 1 }]}
-                  value={paceDraft ?? paceFactor}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatPace}
-                  getAriaValueText={formatPace}
-                  onChange={(_event, value) => {
-                    setPaceDraft(value);
-                  }}
-                  onChangeCommitted={(_event, value) => {
-                    setPaceDraft(null);
-                    // Keyboard steps accumulate floating-point error (×0.5 plus ten
-                    // steps is 1.0000000000000004); hundredths keep exact steps.
-                    onTimelineSettingsChange({
-                      ...timelineSettings,
-                      paceFactor: Math.round(value * 100) / 100,
-                    });
-                  }}
-                />
-                <Typography variant="caption" color="text.secondary">
-                  <Trans>Slower</Trans>
-                </Typography>
-              </Stack>
-            </Box>
-            <Typography variant="caption" color="text.secondary">
-              {timelineCaption}
-            </Typography>
-            {lighting === null ? null : <TrackLightingSummary lighting={lighting} />}
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ alignItems: 'center', px: 0.5 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    <Trans>Faster</Trans>
+                  </Typography>
+                  <Slider
+                    size="small"
+                    aria-labelledby={paceLabelId}
+                    min={TRACK_WEATHER_MINIMUM_PACE_FACTOR}
+                    max={TRACK_WEATHER_MAXIMUM_PACE_FACTOR}
+                    step={TRACK_WEATHER_PACE_FACTOR_STEP}
+                    marks={[{ value: 1 }]}
+                    value={paceDraft ?? paceFactor}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatPace}
+                    getAriaValueText={formatPace}
+                    onChange={(_event, value) => {
+                      setPaceDraft(value);
+                    }}
+                    onChangeCommitted={(_event, value) => {
+                      setPaceDraft(null);
+                      // Keyboard steps accumulate floating-point error (×0.5 plus ten
+                      // steps is 1.0000000000000004); hundredths keep exact steps.
+                      onTimelineSettingsChange({
+                        ...timelineSettings,
+                        paceFactor: Math.round(value * 100) / 100,
+                      });
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    <Trans>Slower</Trans>
+                  </Typography>
+                </Stack>
+              </Box>
+            </Stack>
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              {timelineCheckbox(t`Show times on the map`, timeMarkers, (checked) => ({
+                ...timelineSettings,
+                timeMarkers: checked,
+              }))}
+              {timelineCheckbox(
+                t`Count map times from 00:00 at the start`,
+                timelineSettings.relativeTimeMarkers,
+                (checked) => ({ ...timelineSettings, relativeTimeMarkers: checked }),
+                !timeMarkers,
+              )}
+              {timelineCheckbox(
+                t`Ignore recorded time`,
+                timelineSettings.ignoreRecordedTime,
+                (checked) => ({ ...timelineSettings, ignoreRecordedTime: checked }),
+                metrics.elapsedSeconds === undefined,
+              )}
+            </Stack>
           </Stack>
         ) : null}
       </Box>
@@ -650,10 +696,6 @@ export function TrackWeatherSection({
                     ...current,
                     weekday: trackWeatherWeekday(value),
                   });
-                  // Without its own date the hike follows the forecast date, map included.
-                  if (lighting !== null && timelineSettings.hikeDate === null) {
-                    showHikeDateOnMap(mapLayers, value, lighting.timeZone);
-                  }
                 }
               }}
             >

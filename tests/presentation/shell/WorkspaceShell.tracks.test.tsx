@@ -2433,7 +2433,8 @@ describe('WorkspaceShell', () => {
     const markerList = within(details).getByRole('list', { name: 'Track markers' });
     expect(await within(markerList).findByText('05:00')).toBeVisible();
     expect(within(markerList).getByText('06:00')).toBeVisible();
-    expect(within(details).getByText(/3h 0m in total/)).toBeVisible();
+    // The sun graph's hike span covers the full three-hour recording.
+    expect(await within(details).findByText('05:00–08:00')).toBeVisible();
     await waitFor(() => {
       expect(labels).toHaveBeenLastCalledWith([
         { placement: 'left', coordinate: [44, 42], time: '05:00' },

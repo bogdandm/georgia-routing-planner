@@ -154,9 +154,20 @@ function distanceAtElapsed(
   );
 }
 
+/** Local `YYYY-MM-DD` date of `instant` in `timeZone`. */
+export function zonedIsoDate(instant: Date, timeZone: string): string {
+  const wall = instantToZonedWallTime(instant, timeZone);
+  return [
+    String(wall.year).padStart(4, '0'),
+    String(wall.month).padStart(2, '0'),
+    String(wall.day).padStart(2, '0'),
+  ].join('-');
+}
+
 /**
  * Moves the map's sun shadows to `date` in `timeZone`, keeping their local time of day,
- * so the relief shows the light of the chosen hike date.
+ * so the relief shows the light of the chosen hike date. A map already on that date
+ * stays untouched.
  */
 export function showHikeDateOnMap(
   mapLayers: Pick<MapLibreLayerController, 'setSunShadow'> | null,
@@ -167,10 +178,9 @@ export function showHikeDateOnMap(
   if (mapLayers === null || day === null) return;
   const { enabled, instantMs } = mapLayerStore.getState().sunShadow;
   const wall = instantToZonedWallTime(new Date(instantMs), timeZone);
-  mapLayers.setSunShadow({
-    enabled,
-    instantMs: zonedWallTimeToInstant({ ...wall, ...day }, timeZone).getTime(),
-  });
+  const next = zonedWallTimeToInstant({ ...wall, ...day }, timeZone).getTime();
+  if (next === instantMs) return;
+  mapLayers.setSunShadow({ enabled, instantMs: next });
 }
 
 /**
@@ -196,19 +206,12 @@ export function useTrackLighting({
   );
   const recordedStart =
     recordedStartAt === undefined ? null : new Date(recordedStartAt);
-  let recordedDate: string | null = null;
-  if (
+  const recordedDate =
     timeZone !== null &&
     recordedStart !== null &&
     Number.isFinite(recordedStart.getTime())
-  ) {
-    const wall = instantToZonedWallTime(recordedStart, timeZone);
-    recordedDate = [
-      String(wall.year).padStart(4, '0'),
-      String(wall.month).padStart(2, '0'),
-      String(wall.day).padStart(2, '0'),
-    ].join('-');
-  }
+      ? zonedIsoDate(recordedStart, timeZone)
+      : null;
   const date = hikeDate ?? forecastDate;
   const startMs = useMemo(() => {
     const day = parseIsoDate(date);
@@ -300,7 +303,7 @@ export function useTrackLighting({
     };
   }, [contentHash, database, logger, startMs, stations, terrainSampler, trackId]);
 
-  // One stable view per input, so the chart's hover re-renders can skip the light strip.
+  // One stable view per input, so its consumers' memos only change with the hike.
   const recordedTiming = timing.recorded;
   return useMemo(() => {
     if (

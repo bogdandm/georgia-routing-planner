@@ -1,48 +1,44 @@
+import WbTwilightIcon from '@mui/icons-material/WbTwilight';
 import { useLingui } from '@lingui/react/macro';
 import { Box, Skeleton, Stack, Typography } from '@mui/material';
-import { memo, useId, useMemo, useState, type ReactElement } from 'react';
+import { useId, useMemo, useState, type ReactElement } from 'react';
+import { useStore } from 'zustand';
 
+import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { solarPosition } from '@/domain/terrain/solarPosition';
-import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
+import {
+  instantToZonedWallTime,
+  zonedWallTimeToInstant,
+} from '@/domain/time/zonedWallTime';
 import {
   trackLightDurations,
   trackLightKinds,
   trackLightShares,
-  trackLightingModel,
   type TrackLightKind,
   type TrackLightingSample,
 } from '@/domain/tracks/trackLighting';
+import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { daylightWindow, localDayBounds } from '@/presentation/map/sunShadowDaylight';
 import { appColors } from '@/presentation/theme/appColors';
 import {
   formatTrackDistance,
   formatTrackDuration,
 } from '@/presentation/tracks/trackFormatters';
+import { trackLightColor } from '@/presentation/tracks/trackLightColor';
 import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
 
 const millisecondsPerHour = 3_600_000;
 /** Labels under the strip: at most this many, at least this far apart. */
 const maximumTickLabels = 7;
 const minimumTickGapFraction = 0.09;
+/** The strip's 12 px bar plus its 16 px label row, kept by every loading state. */
+const stripHeight = 28;
 const hourTickSteps = [1, 2, 3, 4, 6, 12, 24] as const;
 const distanceTickStepsMeters = [
   500, 1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000,
 ] as const;
 
-function hexChannels(hex: string): readonly [number, number, number] {
-  const value = Number.parseInt(hex.slice(1), 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-}
-
-const lightChannels = {
-  sun: hexChannels(appColors.trackLight.sun),
-  shade: hexChannels(appColors.trackLight.shade),
-  twilight: hexChannels(appColors.trackLight.twilight),
-  twilightEnd: hexChannels(appColors.trackLight.twilightEnd),
-  dark: hexChannels(appColors.trackLight.dark),
-};
-
-/** Legend color of each light kind; the strip darkens twilight with depth. */
+/** Legend color of each light kind; the strip shades them by the map's light model. */
 const trackLightColors: Readonly<Record<TrackLightKind, string>> = {
   sun: appColors.trackLight.sun,
   shade: appColors.trackLight.shade,
@@ -50,32 +46,56 @@ const trackLightColors: Readonly<Record<TrackLightKind, string>> = {
   dark: appColors.trackLight.dark,
 };
 
+/** `WbTwilight`'s 24-unit path: a half sun with rays over the horizon. */
+const halfSunPath =
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- SVG path data.
+  'm16.9541 8.6624 2.1206-2.122 1.4147 1.4137-2.1206 2.122zM2 18h20v2H2zm9-14h2v3h-2zM3.5427 7.9249l1.4142-1.4142L7.0782 8.632 5.664 10.0462zM5 16h14c0-3.87-3.13-7-7-7s-7 3.13-7 7';
+
+/** Sunrise in amber and sunset in orange, like the low Sun on the map. */
+const sunEventColors = {
+  sunrise: appColors.brand.amber,
+  sunset: appColors.brand.tigerOrange,
+} as const;
+
 /**
- * Strip color of a sample: its light kinds blended by share, with the blue hour fading
- * from dusk blue at sunset to deep blue at the end of civil twilight.
+ * Sunrise or sunset mark at the top of a profile chart line: the half-sun icon with its
+ * time beside it, right of a sunrise and left of a sunset so it stays inside the plot.
  */
-function sampleColor(sample: TrackLightingSample): string {
-  const shares = trackLightShares(sample);
-  const depth = Math.min(
-    1,
-    Math.max(
-      0,
-      sample.sunElevationDegrees / trackLightingModel.twilightEndElevationDegrees,
-    ),
+export function SunEventChartMark({
+  x,
+  y,
+  kind,
+  time,
+  label,
+}: {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: 'sunrise' | 'sunset';
+  readonly time: string;
+  readonly label: string;
+}): ReactElement {
+  const color = sunEventColors[kind];
+  return (
+    <g className="elevation-profile-sun-event-mark">
+      <title>{label}</title>
+      {/* A nested icon <svg> ignores its CSS size inside the chart, so draw its path. */}
+      <path
+        d={halfSunPath}
+        fill={color}
+        transform={`translate(${String(x - 10)} ${String(y + 1)}) scale(${String(20 / 24)})`}
+      />
+      <text
+        x={kind === 'sunrise' ? x + 12 : x - 12}
+        y={y + 16}
+        fill={color}
+        fontSize={11}
+        fontWeight={700}
+        textAnchor={kind === 'sunrise' ? 'start' : 'end'}
+      >
+        {time}
+      </text>
+    </g>
   );
-  const twilight = lightChannels.twilight.map(
-    (channel, index) =>
-      channel + ((lightChannels.twilightEnd[index] ?? channel) - channel) * depth,
-  );
-  const channels = [0, 1, 2].map((index) =>
-    Math.round(
-      shares.sun * (lightChannels.sun[index] ?? 0) +
-        shares.shade * (lightChannels.shade[index] ?? 0) +
-        shares.twilight * (twilight[index] ?? 0) +
-        shares.dark * (lightChannels.dark[index] ?? 0),
-    ),
-  );
-  return `#${channels.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function useClockFormat(timeZone: string): Intl.DateTimeFormat {
@@ -123,22 +143,56 @@ function sampleAt(
     elapsedSeconds: mix(before.elapsedSeconds, after.elapsedSeconds),
     sunlitFraction: mix(before.sunlitFraction, after.sunlitFraction),
     sunElevationDegrees: mix(before.sunElevationDegrees, after.sunElevationDegrees),
+    skyView: mix(before.skyView, after.skyView),
+    groundElevationMeters: mix(
+      before.groundElevationMeters,
+      after.groundElevationMeters,
+    ),
   };
+}
+
+/** Pointer position across an element's width in [0, 1]; null for an unlaid-out element. */
+function pointerFraction(event: {
+  readonly clientX: number;
+  readonly currentTarget: Element;
+}): number | null {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  if (bounds.width <= 0) return null;
+  return Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
 }
 
 interface TrackLightingStripProps {
   readonly lighting: TrackLightingView;
   /** The profile's axis: the strip runs over route distance or hike time like it. */
   readonly axis: 'distance' | 'time';
+  /** The route point under the pointer, to trace on the map; null when it leaves. */
+  readonly onHoverSample?: (
+    sample: Pick<TrackLightingSample, 'distanceMeters' | 'elapsedSeconds'> | null,
+  ) => void;
+  /** The route distance clicked, to go to on the map like a profile click. */
+  readonly onSelectDistance?: (distanceMeters: number) => void;
+  /**
+   * The profile point under the pointer, drawn as the strip's cursor so both charts
+   * share it. `hikeSeconds` places it on the Time axis when the hike follows its
+   * recording, where stops make a distance ambiguous; otherwise the distance does.
+   */
+  readonly cursor?: {
+    readonly distanceMeters: number;
+    readonly hikeSeconds: number | null;
+  } | null;
 }
 
 /**
  * Light along the route across the full width, over route distance or hike time like
- * the profile above, with distance or clock-hour labels and a hover readout.
+ * the profile above, with distance or clock-hour labels, sunrise and sunset marks, and a
+ * hover readout. Hovering and clicking act on route points like the profile does.
  */
-export const TrackLightingStrip = memo(function TrackLightingStrip({
+export function TrackLightingStrip({
   lighting,
   axis,
+  onHoverSample,
+  onSelectDistance,
+  cursor = null,
 }: TrackLightingStripProps): ReactElement | null {
   const { i18n, t } = useLingui();
   const labels = useLightKindLabels();
@@ -148,18 +202,29 @@ export const TrackLightingStrip = memo(function TrackLightingStrip({
   const [hoverFraction, setHoverFraction] = useState<number | null>(null);
   const { terrain } = lighting;
   if (terrain.status === 'off') return null;
+  // Loading and failure keep the strip's final size (12 px bar, 16 px labels): no shift.
   if (terrain.status === 'loading') {
     return (
-      <Skeleton
-        variant="rounded"
-        height={10}
-        aria-label={t`Calculating the light along the route`}
-      />
+      <Box sx={{ height: stripHeight }}>
+        <Skeleton
+          variant="rounded"
+          height={12}
+          aria-label={t`Calculating the light along the route`}
+        />
+      </Box>
     );
   }
   if (terrain.status === 'failed') {
     return (
-      <Typography variant="caption" color="text.secondary">
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{
+          display: 'block',
+          height: stripHeight,
+          lineHeight: `${String(stripHeight)}px`,
+        }}
+      >
         {t`The light along the route could not be calculated.`}
       </Typography>
     );
@@ -238,6 +303,18 @@ export const TrackLightingStrip = memo(function TrackLightingStrip({
     hoverFraction === null
       ? null
       : sampleAt(samples, positionOf, firstPosition + hoverFraction * span);
+  let cursorFraction = hoverFraction;
+  if (cursorFraction === null && cursor !== null) {
+    const position =
+      axis === 'distance'
+        ? cursor.distanceMeters
+        : (cursor.hikeSeconds ??
+          sampleAt(samples, (sample) => sample.distanceMeters, cursor.distanceMeters)
+            ?.elapsedSeconds ??
+          null);
+    cursorFraction =
+      position === null ? null : Math.min(1, Math.max(0, fractionOf(position)));
+  }
   let hoverLabel: string | null = null;
   if (hovered !== null) {
     const shares = trackLightShares(hovered);
@@ -250,16 +327,24 @@ export const TrackLightingStrip = memo(function TrackLightingStrip({
       labels[kind],
     ].join(' · ');
   }
+  // Shifting by the same share as the position keeps a label inside the strip's width.
   const anchoredAt = (fraction: number) => ({
     left: `${String(fraction * 100)}%`,
-    /* eslint-disable lingui/no-unlocalized-strings -- CSS values. */
-    transform:
-      fraction < 0.04
-        ? 'none'
-        : fraction > 0.96
-          ? 'translateX(-100%)'
-          : 'translateX(-50%)',
-    /* eslint-enable lingui/no-unlocalized-strings */
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- CSS value.
+    transform: `translateX(${String(-fraction * 100)}%)`,
+  });
+  const sunMarks = lighting.sunEvents.map((event) => {
+    const time = clock.format(new Date(event.instantMs));
+    return {
+      key: event.instantMs,
+      kind: event.kind,
+      fraction: fractionOf(
+        axis === 'time'
+          ? (event.instantMs - lighting.startMs) / 1_000
+          : event.distanceMeters,
+      ),
+      label: event.kind === 'sunrise' ? t`Sunrise ${time}` : t`Sunset ${time}`,
+    };
   });
 
   return (
@@ -267,14 +352,21 @@ export const TrackLightingStrip = memo(function TrackLightingStrip({
       <Box
         sx={{ position: 'relative', cursor: 'crosshair', touchAction: 'pan-y' }}
         onPointerMove={(event) => {
-          const bounds = event.currentTarget.getBoundingClientRect();
-          if (bounds.width <= 0) return;
-          setHoverFraction(
-            Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
-          );
+          const fraction = pointerFraction(event);
+          if (fraction === null) return;
+          setHoverFraction(fraction);
+          const sample = sampleAt(samples, positionOf, firstPosition + fraction * span);
+          if (sample !== null) onHoverSample?.(sample);
+        }}
+        onClick={(event) => {
+          const fraction = pointerFraction(event);
+          if (fraction === null) return;
+          const sample = sampleAt(samples, positionOf, firstPosition + fraction * span);
+          if (sample !== null) onSelectDistance?.(sample.distanceMeters);
         }}
         onPointerLeave={() => {
           setHoverFraction(null);
+          onHoverSample?.(null);
         }}
       >
         <Box
@@ -292,21 +384,43 @@ export const TrackLightingStrip = memo(function TrackLightingStrip({
                 <stop
                   key={`${String(sample.distanceMeters)}:${String(sample.elapsedSeconds)}`}
                   offset={`${String(fractionOf(positionOf(sample)) * 100)}%`}
-                  stopColor={sampleColor(sample)}
+                  stopColor={trackLightColor(sample)}
                 />
               ))}
             </linearGradient>
           </defs>
           <rect width="100" height="10" rx="1.5" fill={`url(#${gradientId})`} />
         </Box>
-        {hoverFraction === null ? null : (
+        {sunMarks.map((mark) => (
+          <Box
+            key={mark.key}
+            role="img"
+            aria-label={mark.label}
+            className="track-light-sun-event"
+            sx={{
+              position: 'absolute',
+              top: -4,
+              left: `${String(mark.fraction * 100)}%`,
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              bgcolor: 'background.paper',
+              borderRadius: '50%',
+              boxShadow: 1,
+              pointerEvents: 'none',
+            }}
+          >
+            <WbTwilightIcon sx={{ fontSize: 20, color: sunEventColors[mark.kind] }} />
+          </Box>
+        ))}
+        {cursorFraction === null ? null : (
           <Box
             aria-hidden
+            className="track-light-cursor"
             sx={{
               position: 'absolute',
               top: -2,
               bottom: -2,
-              left: `${String(hoverFraction * 100)}%`,
+              left: `${String(cursorFraction * 100)}%`,
               width: 2,
               ml: '-1px',
               bgcolor: 'text.primary',
@@ -355,13 +469,18 @@ export const TrackLightingStrip = memo(function TrackLightingStrip({
       </Box>
     </Box>
   );
-});
+}
 
-/** Seconds of each light kind and how the finish relates to sunset. */
+/** How the hike's duration was found, as `Route timing` describes its timeline. */
+export type TrackLightingPace = 'recorded' | 'estimated' | 'adjusted';
+
+/** Seconds of each light kind, the day's sun graph, and the finish against sunset. */
 export function TrackLightingSummary({
   lighting,
+  pace,
 }: {
   readonly lighting: TrackLightingView;
+  readonly pace: TrackLightingPace;
 }): ReactElement {
   const { i18n, t } = useLingui();
   const labels = useLightKindLabels();
@@ -376,32 +495,74 @@ export function TrackLightingSummary({
       ),
     [finishLatitude, finishLongitude, finishMs, timeZone],
   );
+  let sunsetNote: string | null = null;
   let finishLine: string | null = null;
   if (daylight !== null) {
     const margin = formatTrackDuration(
       Math.abs(daylight.sunsetMs - lighting.finishMs) / 1_000,
       i18n,
     );
-    finishLine =
-      lighting.finishMs <= daylight.sunsetMs
-        ? t`Finishing ${margin} before sunset.`
-        : t`Finishing ${margin} after sunset.`;
+    const beforeSunset = lighting.finishMs <= daylight.sunsetMs;
+    sunsetNote = beforeSunset ? t`${margin} before sunset` : t`${margin} after sunset`;
+    finishLine = beforeSunset
+      ? t`Finishing ${margin} before sunset.`
+      : t`Finishing ${margin} after sunset.`;
   }
   const durations =
     terrain.status === 'ready' ? trackLightDurations(terrain.samples) : null;
+  // The finish's sunset margin annotates the light the hike ends in.
+  const lastSample = terrain.status === 'ready' ? terrain.samples.at(-1) : undefined;
+  let finishKind: TrackLightKind | undefined;
+  if (lastSample !== undefined) {
+    const shares = trackLightShares(lastSample);
+    finishKind = trackLightKinds.reduce((best, candidate) =>
+      shares[candidate] > shares[best] ? candidate : best,
+    );
+  }
   return (
-    <Stack spacing={0.75}>
-      {durations === null ? null : (
-        <Stack component="ul" spacing={0.25} sx={{ m: 0, p: 0 }}>
-          {trackLightKinds
-            .filter((kind) => durations[kind] >= 60)
-            .map((kind) => (
-              <Stack
+    // The sun graph, then 8 px to the light rows.
+    <Stack spacing={1}>
+      <SunDayChart lighting={lighting} pace={pace} />
+      {/* Every kind keeps its row while the light loads, so nothing below moves. */}
+      {terrain.status === 'off' ? null : (
+        // Rows share grid columns (dot, kind, hours, minutes, note), aligned like a table
+        // down to the hour and minute digits.
+        <Box
+          component="ul"
+          sx={{
+            m: 0,
+            p: 0,
+            display: 'grid',
+            gridTemplateColumns: '10px max-content max-content max-content 1fr',
+            columnGap: 1,
+            rowGap: 0.25,
+            alignItems: 'center',
+          }}
+        >
+          {trackLightKinds.map((kind) => {
+            const seconds = durations?.[kind];
+            const totalMinutes = seconds === undefined ? 0 : Math.round(seconds / 60);
+            // Dimmed exactly when the shown duration rounds to nothing.
+            const met = totalMinutes > 0;
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            /* eslint-disable lingui/no-unlocalized-strings -- CSS values. */
+            const durationSx = {
+              fontWeight: 600,
+              textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums',
+            } as const;
+            /* eslint-enable lingui/no-unlocalized-strings */
+            return (
+              <Box
                 key={kind}
                 component="li"
-                direction="row"
-                spacing={0.75}
-                sx={{ alignItems: 'center', listStyle: 'none' }}
+                role="listitem"
+                sx={{
+                  display: 'contents',
+                  color:
+                    met || seconds === undefined ? 'text.primary' : 'text.disabled',
+                }}
               >
                 <Box
                   aria-hidden
@@ -410,21 +571,41 @@ export function TrackLightingSummary({
                     height: 10,
                     borderRadius: '50%',
                     bgcolor: trackLightColors[kind],
-                    flexShrink: 0,
+                    opacity: met || seconds === undefined ? 1 : 0.4,
                   }}
                 />
-                <Typography variant="body2">
-                  {labels[kind]}{' '}
-                  <Box component="span" sx={{ fontWeight: 600 }}>
-                    {formatTrackDuration(durations[kind], i18n)}
-                  </Box>
+                <Typography variant="body2">{labels[kind]}</Typography>{' '}
+                {terrain.status === 'loading' ? (
+                  <Skeleton variant="text" width={48} sx={{ gridColumn: 'span 2' }} />
+                ) : seconds === undefined ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ ...durationSx, gridColumn: 'span 2' }}
+                  >
+                    —
+                  </Typography>
+                ) : (
+                  <>
+                    <Typography variant="body2" sx={durationSx}>
+                      {t`${hours}h`}
+                    </Typography>{' '}
+                    <Typography variant="body2" sx={{ ...durationSx, ml: -0.5 }}>
+                      {t`${minutes}m`}
+                    </Typography>
+                  </>
+                )}
+                <Typography variant="body2" color="text.secondary">
+                  {kind === finishKind && sunsetNote !== null
+                    ? ` (${sunsetNote})`
+                    : null}
                 </Typography>
-              </Stack>
-            ))}
-        </Stack>
+              </Box>
+            );
+          })}
+        </Box>
       )}
-      <SunDayChart lighting={lighting} />
-      {finishLine === null ? null : (
+      {/* Without the light list, the sunset margin needs a sentence of its own. */}
+      {terrain.status !== 'off' || finishLine === null ? null : (
         <Typography variant="body2">{finishLine}</Typography>
       )}
     </Stack>
@@ -432,27 +613,42 @@ export function TrackLightingSummary({
 }
 
 const chartWidth = 300;
-const chartHeight = 112;
-const horizonY = 72;
-const daylightHeight = 56;
+const chartHeight = 120;
+/** Plot rows: room for the elevation readout above, the time labels below. */
+const plotTop = 30;
+const plotBottom = chartHeight - 4;
 const sampleStepMinutes = 10;
+/** Standard twilight limits: civil, nautical, and astronomical, Sun centre below the horizon. */
+const twilightBands = [
+  { from: 0, to: -6, opacity: 0.28 },
+  { from: -6, to: -12, opacity: 0.16 },
+  { from: -12, to: -18, opacity: 0.08 },
+] as const;
+/** The sun graph's lowest elevation: astronomical twilight ends here. */
+const sunGraphFloorDegrees = -18;
 
 /**
  * Garmin-style sun graph for the hike's start day: the Sun's elevation over the local
- * day against the horizon, sunrise and sunset marks, and the hike's span highlighted.
+ * day on one linear scale against the horizon, shaded civil, nautical, and astronomical
+ * twilight bands, sunrise and sunset marks, and the hike's span highlighted. The Sun
+ * dot stands at the map's sun-shadow time of day, and a click moves the map there.
  */
 function SunDayChart({
   lighting,
+  pace,
 }: {
   readonly lighting: TrackLightingView;
+  readonly pace: TrackLightingPace;
 }): ReactElement {
   const { i18n, t } = useLingui();
   const clock = useClockFormat(lighting.timeZone);
   const { startMs, timeZone } = lighting;
   const [hoverMs, setHoverMs] = useState<number | null>(null);
+  const { mapLayers } = useRuntimeServices();
+  const mapSunMs = useStore(mapLayerStore, (state) => state.sunShadow.instantMs);
   const [longitude, latitude] = lighting.startCoordinate;
   // A day of sun positions and its sunrise and sunset; slider drags re-render often.
-  const { day, daylight, curve, peak } = useMemo(() => {
+  const { day, daylight, curve, peak, lowest } = useMemo(() => {
     const bounds = localDayBounds(
       instantToZonedWallTime(new Date(startMs), timeZone),
       timeZone,
@@ -477,6 +673,10 @@ function SunDayChart({
         (highest, point) => (point.elevation > highest.elevation ? point : highest),
         points[0] ?? { instantMs: bounds.startMs, elevation: 0 },
       ),
+      lowest: points.reduce(
+        (minimum, point) => Math.min(minimum, point.elevation),
+        Number.POSITIVE_INFINITY,
+      ),
     };
   }, [latitude, longitude, startMs, timeZone]);
   const spanMs = day.endMs - day.startMs;
@@ -485,9 +685,31 @@ function SunDayChart({
       chartWidth,
       Math.max(0, ((instantMs - day.startMs) / spanMs) * chartWidth),
     );
-  const scale = daylightHeight / Math.max(peak.elevation, 10);
+  const pointerInstant = (event: Parameters<typeof pointerFraction>[0]) => {
+    const fraction = pointerFraction(event);
+    return fraction === null ? null : day.startMs + fraction * spanMs;
+  };
+  // One linear scale from the day's highest Sun down to the end of twilight; deeper
+  // night says nothing more about light, so the curve rests on the floor there.
+  const highestDegrees = Math.max(peak.elevation, 1);
+  const lowestDegrees = Math.max(Math.min(lowest, -1), sunGraphFloorDegrees);
   const yOf = (elevation: number) =>
-    Math.min(chartHeight - 2, horizonY - elevation * scale);
+    plotTop +
+    ((highestDegrees - Math.max(elevation, lowestDegrees)) /
+      (highestDegrees - lowestDegrees)) *
+      (plotBottom - plotTop);
+  const horizonY = yOf(0);
+  const labelY = Math.min(horizonY + 18, chartHeight - 2);
+  const durationText = formatTrackDuration(
+    (lighting.finishMs - lighting.startMs) / 1_000,
+    i18n,
+  );
+  const paceLabel =
+    pace === 'recorded'
+      ? t`Recorded pace`
+      : pace === 'estimated'
+        ? t`Estimated pace`
+        : t`Adjusted pace`;
   const pointsOf = (points: readonly { instantMs: number; elevation: number }[]) =>
     points
       .map(
@@ -514,18 +736,29 @@ function SunDayChart({
     sunrise === null || sunset === null || dayLength === null
       ? t`Sun elevation over the hike day; the Sun reaches ${peakDegrees}°.`
       : t`Sun elevation over the hike day: sunrise ${sunrise}, sunset ${sunset}, ${dayLength} of daylight; the Sun reaches ${peakDegrees}°.`;
-  // Hovering reads the Sun's elevation at any time of the day; otherwise its peak shows.
+  // The map's sun time of day on the graph's day; zero until the map sets its instant.
+  let mapSunOnDayMs: number | null = null;
+  if (mapSunMs > 0) {
+    const dayWall = instantToZonedWallTime(new Date(day.startMs), timeZone);
+    const mapWall = instantToZonedWallTime(new Date(mapSunMs), timeZone);
+    mapSunOnDayMs = zonedWallTimeToInstant(
+      { ...mapWall, year: dayWall.year, month: dayWall.month, day: dayWall.day },
+      timeZone,
+    ).getTime();
+  }
+  // Hovering reads the Sun at any time of the day; otherwise the map's sun time shows.
+  const shownMs = hoverMs ?? mapSunOnDayMs;
   const shown =
-    hoverMs === null
+    shownMs === null
       ? peak
       : {
-          instantMs: hoverMs,
-          elevation: solarPosition(new Date(hoverMs), latitude, longitude)
+          instantMs: shownMs,
+          elevation: solarPosition(new Date(shownMs), latitude, longitude)
             .apparentElevationDegrees,
         };
   const shownDegrees = new Intl.NumberFormat(i18n.locale, {
     maximumFractionDigits: 0,
-  }).format(hoverMs === null ? Math.max(0, shown.elevation) : shown.elevation);
+  }).format(shownMs === null ? Math.max(0, shown.elevation) : shown.elevation);
   const lightColor = appColors.text.inverse;
   const mutedColor = appColors.text.inverseMuted;
 
@@ -554,16 +787,20 @@ function SunDayChart({
           touchAction: 'pan-y',
         }}
         onPointerMove={(event) => {
-          const bounds = event.currentTarget.getBoundingClientRect();
-          if (bounds.width <= 0) return;
-          const fraction = Math.min(
-            1,
-            Math.max(0, (event.clientX - bounds.left) / bounds.width),
-          );
-          setHoverMs(day.startMs + fraction * spanMs);
+          const instantMs = pointerInstant(event);
+          if (instantMs !== null) setHoverMs(instantMs);
         }}
         onPointerLeave={() => {
           setHoverMs(null);
+        }}
+        onClick={(event) => {
+          const instantMs = pointerInstant(event);
+          if (mapLayers === null || instantMs === null) return;
+          // Whole minutes, like the map's sun panel; its on or off state stays.
+          mapLayers.setSunShadow({
+            enabled: mapLayerStore.getState().sunShadow.enabled,
+            instantMs: Math.round(instantMs / 60_000) * 60_000,
+          });
         }}
       >
         {[3, 6, 9, 12, 15, 18, 21].map((hour) => (
@@ -571,17 +808,30 @@ function SunDayChart({
             key={hour}
             x1={(hour / 24) * chartWidth}
             x2={(hour / 24) * chartWidth}
-            y1={8}
+            y1={plotTop - 22}
             y2={chartHeight}
             stroke={mutedColor}
             strokeOpacity={0.18}
           />
         ))}
+        {twilightBands
+          .filter((band) => band.from > lowestDegrees)
+          .map((band) => (
+            <rect
+              key={band.from}
+              x={0}
+              y={yOf(band.from)}
+              width={chartWidth}
+              height={yOf(Math.max(band.to, lowestDegrees)) - yOf(band.from)}
+              fill={appColors.trackLight.twilight}
+              fillOpacity={band.opacity}
+            />
+          ))}
         <rect
           x={hikeStartX}
-          y={8}
+          y={plotTop - 22}
           width={Math.max(1, hikeEndX - hikeStartX)}
-          height={chartHeight - 8}
+          height={chartHeight - plotTop + 22}
           fill={appColors.brand.amber}
           fillOpacity={0.16}
         />
@@ -624,24 +874,22 @@ function SunDayChart({
           <line
             x1={xOf(hoverMs)}
             x2={xOf(hoverMs)}
-            y1={8}
+            y1={plotTop - 22}
             y2={chartHeight}
             stroke={lightColor}
             strokeOpacity={0.6}
           />
         )}
-        {shown.elevation > -6 ? (
-          <circle
-            cx={xOf(shown.instantMs)}
-            cy={yOf(shown.elevation)}
-            r={6}
-            fill={appColors.brand.amber}
-          />
-        ) : null}
+        <circle
+          cx={xOf(shown.instantMs)}
+          cy={yOf(shown.elevation)}
+          r={6}
+          fill={appColors.brand.amber}
+        />
         <text x={0} y={22} fill={lightColor} fontSize={18} fontWeight={700}>
           {shownDegrees}°
         </text>
-        {hoverMs === null ? null : (
+        {shownMs === null ? null : (
           <text
             x={chartWidth}
             y={22}
@@ -650,14 +898,14 @@ function SunDayChart({
             fontWeight={700}
             textAnchor="end"
           >
-            {clock.format(new Date(hoverMs))}
+            {clock.format(new Date(shownMs))}
           </text>
         )}
         {daylight === null || sunrise === null || sunset === null ? null : (
           <>
             <text
               x={xOf(daylight.sunriseMs) + 6}
-              y={horizonY + 18}
+              y={labelY}
               fill={lightColor}
               fontSize={13}
               fontWeight={600}
@@ -666,7 +914,7 @@ function SunDayChart({
             </text>
             <text
               x={xOf(daylight.sunsetMs) - 6}
-              y={horizonY + 18}
+              y={labelY}
               fill={lightColor}
               fontSize={13}
               fontWeight={600}
@@ -684,6 +932,14 @@ function SunDayChart({
           </Typography>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             {dayLength ?? '—'}
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ color: mutedColor, display: 'block' }}>
+            {paceLabel}
+          </Typography>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            {pace === 'recorded' ? durationText : `≈ ${durationText}`}
           </Typography>
         </Box>
         <Box sx={{ textAlign: 'right' }}>

@@ -949,9 +949,14 @@ Sun from seven ground points within 50 m of each station on the main thread, yie
 the event loop every 16 stations, and the result replaces the stored row. A newer input
 aborts the run. `TrackWeatherSection` turns a **Hike date** inside the forecast week
 into that forecast weekday and clears `hikeDate`; only a date outside the week is
-stored. Any change also calls `MapLibreLayerController.setSunShadow` with the same local
-time on the new date, which then clamps it to that day's daylight window at the map
-center like any chosen instant.
+stored. Two effects keep that date and the map's sun-shadow date one: whenever the hike
+date or route zone changes, `showHikeDateOnMap` calls
+`MapLibreLayerController.setSunShadow` with the same local time on the hike date (a map
+already there is left alone), which then clamps it to that day's daylight window at the
+map center like any chosen instant; whenever the map's `sunShadow.instantMs` moves to
+another local date, that date becomes the hike date. The sun graph in **Route timing**
+reads the same instant for its Sun dot, and a click on it calls `setSunShadow` with the
+clicked minute.
 
 With an elevation profile, grade subsegments across every source run feed the highlight
 layer, visible only when both Imported tracks and Elevation gradient are enabled; the

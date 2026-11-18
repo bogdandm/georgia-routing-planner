@@ -616,6 +616,94 @@ describe('TrackWeatherSection', () => {
       });
     });
 
+    it('moves the map shadows to the hike date of an opened track', () => {
+      mapLayerStore.setState((state) => ({
+        sunShadow: {
+          ...state.sunShadow,
+          enabled: true,
+          // 15:30 in Tbilisi.
+          instantMs: Date.UTC(2026, 6, 18, 11, 30),
+        },
+      }));
+      const { mapLayers } = services;
+      if (mapLayers === null) throw new Error('Expected test map layers.');
+      const setSunShadow = vi.spyOn(mapLayers, 'setSunShadow');
+
+      renderSection(
+        expandedPreferences,
+        dayHike,
+        { ...defaultTrackWeatherTimelineSettings, hikeDate: '2026-07-04' },
+        hikeLighting,
+      );
+
+      expect(setSunShadow).toHaveBeenLastCalledWith({
+        enabled: true,
+        instantMs: Date.UTC(2026, 6, 4, 11, 30),
+      });
+    });
+
+    it('moves the hike to a date picked for the map shadows', () => {
+      const inWeek = forecastDates()[2];
+      if (inWeek === undefined) throw new Error('Expected a forecast week.');
+      const { onPreferencesChange, onTimelineSettingsChange } = renderSection(
+        expandedPreferences,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        hikeLighting,
+      );
+      const pickMapDate = (date: string) => {
+        act(() => {
+          mapLayerStore.setState((state) => ({
+            sunShadow: {
+              ...state.sunShadow,
+              instantMs: Date.parse(`${date}T11:30:00Z`),
+            },
+          }));
+        });
+      };
+
+      pickMapDate(inWeek);
+
+      expect(screen.getByLabelText('Hike date')).toHaveValue(inWeek);
+      expect(onPreferencesChange).toHaveBeenLastCalledWith({
+        ...expandedPreferences,
+        weekday: trackWeatherWeekday(inWeek),
+      });
+
+      pickMapDate('2026-07-04');
+
+      expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+        ...defaultTrackWeatherTimelineSettings,
+        hikeDate: '2026-07-04',
+      });
+    });
+
+    it('moves the map shadows to the time clicked on the sun graph', () => {
+      const { mapLayers } = services;
+      if (mapLayers === null) throw new Error('Expected test map layers.');
+      const setSunShadow = vi.spyOn(mapLayers, 'setSunShadow');
+      renderSection(
+        expandedPreferences,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        hikeLighting,
+      );
+      const graph = screen.getByRole('img', {
+        name: /^Sun elevation over the hike day/u,
+      });
+      vi.spyOn(graph, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 0, 240, 96),
+      );
+
+      // Half-way across the local day: noon in Tbilisi (UTC+4).
+      fireEvent.click(graph, { clientX: 120 });
+
+      expect(setSunShadow).toHaveBeenLastCalledWith({
+        enabled: mapLayerStore.getState().sunShadow.enabled,
+        instantMs: Date.parse(`${hikeLighting.date}T08:00:00Z`),
+      });
+    });
+
     it('returns from a track date to today, which the forecast then shows', async () => {
       const user = userEvent.setup();
       const [today, , , later] = forecastDates();
@@ -690,33 +778,45 @@ describe('TrackWeatherSection', () => {
               elapsedSeconds: 0,
               sunlitFraction: 1,
               sunElevationDegrees: 30,
+              skyView: 1,
+              groundElevationMeters: 2_000,
             },
             {
               distanceMeters: 8_000,
               elapsedSeconds: 7_200,
               sunlitFraction: 1,
               sunElevationDegrees: 18,
+              skyView: 1,
+              groundElevationMeters: 2_000,
             },
             {
               distanceMeters: 8_000,
               elapsedSeconds: 7_200,
               sunlitFraction: 0,
               sunElevationDegrees: 18,
+              skyView: 1,
+              groundElevationMeters: 2_000,
             },
             {
               distanceMeters: 12_000,
               elapsedSeconds: 10_800,
               sunlitFraction: 0,
               sunElevationDegrees: 10,
+              skyView: 1,
+              groundElevationMeters: 2_000,
             },
           ],
         }),
       );
 
       // No blue hour or darkness: the hike ends two hours before sunset.
-      expect(screen.getAllByRole('listitem').map((kind) => kind.textContent)).toEqual([
+      expect(
+        screen.getAllByRole('listitem').map((kind) => kind.textContent.trim()),
+      ).toEqual([
         'In the sun 2h 0m',
-        'In the shade 1h 0m',
+        'In the shade 1h 0m (2h 0m before sunset)',
+        'Blue hour 0h 0m',
+        'After dark 0h 0m',
       ]);
       expect(
         screen.getByRole('img', { name: /^Sun elevation over the hike day/u }),
@@ -735,6 +835,27 @@ describe('TrackWeatherSection', () => {
       );
 
       expect(screen.getByText(sentence)).toBeVisible();
+    });
+
+    it('keeps four light rows while terrain light is calculated, without a finish sentence', () => {
+      renderSection(
+        null,
+        dayHike,
+        defaultTrackWeatherTimelineSettings,
+        lightingAroundSunset(-90 * 60_000, { status: 'loading' }),
+      );
+
+      expect(screen.getAllByRole('listitem')).toHaveLength(4);
+      expect(screen.queryByText(/^Finishing /u)).not.toBeInTheDocument();
+    });
+
+    it('replaces the start caption with the estimated pace under the sun graph', () => {
+      renderSection(null, dayHike, defaultTrackWeatherTimelineSettings, hikeLighting);
+
+      expect(screen.queryByText(/^Starting at/u)).not.toBeInTheDocument();
+      expect(screen.getByText('Estimated pace')).toBeVisible();
+      // finishMs − startMs of the fixture: 09:00 to 14:30.
+      expect(screen.getByText('≈ 5h 30m')).toBeVisible();
     });
   });
 });

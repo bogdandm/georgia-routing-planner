@@ -56,6 +56,11 @@ msgstr "{heading}, {grade}, {distance}, {primary}, {opposite} ascent"
 msgid "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 msgstr "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 
+#. js-lingui-id: _oqig9
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{hours}h"
+msgstr "{hours}h"
+
 #. js-lingui-id: i3Frvq
 #: src/presentation/tracks/trackFormatters.ts
 msgid "{hours}h {minutes}m"
@@ -65,6 +70,16 @@ msgstr "{hours}h {minutes}m"
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "{label}: {value}"
 msgstr "{label}: {value}"
+
+#. js-lingui-id: JptW2N
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{margin} after sunset"
+msgstr "{margin} after sunset"
+
+#. js-lingui-id: MISIin
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{margin} before sunset"
+msgstr "{margin} before sunset"
 
 #. js-lingui-id: zpwS9F
 #: src/presentation/tracks/ElevationProfileChart.tsx
@@ -90,6 +105,11 @@ msgstr "{message} (segment {segmentNumber}, point {pointNumber})"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "{message} (segment {segmentNumber})"
 msgstr "{message} (segment {segmentNumber})"
+
+#. js-lingui-id: ZOtn9F
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{minutes}m"
+msgstr "{minutes}m"
 
 #. js-lingui-id: rXvqYW
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -212,6 +232,11 @@ msgstr "Additional valid waypoints were omitted."
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Adjust pace"
 msgstr "Adjust pace"
+
+#. js-lingui-id: JOzOwW
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Adjusted pace"
+msgstr "Adjusted pace"
 
 #. js-lingui-id: krcdgc
 #: src/presentation/tracks/TrackLighting.tsx
@@ -665,6 +690,11 @@ msgstr "Enter a folder name."
 msgid "Enter a marker name."
 msgstr "Enter a marker name."
 
+#. js-lingui-id: R9wpsN
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Estimated pace"
+msgstr "Estimated pace"
+
 #. js-lingui-id: -nuEh_
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "Estimated time"
@@ -1090,6 +1120,11 @@ msgstr "Profile value"
 msgid "Recalculate elevation"
 msgstr "Recalculate elevation"
 
+#. js-lingui-id: S-JfFg
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Recorded pace"
+msgstr "Recorded pace"
+
 #. js-lingui-id: SVCift
 #: src/presentation/tracks/TrackSummary.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1409,11 +1444,13 @@ msgstr "Sun elevation over the hike day: sunrise {sunrise}, sunset {sunset}, {da
 
 #. js-lingui-id: qrw1ZF
 #: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/TrackLighting.tsx
 msgid "Sunrise {time}"
 msgstr "Sunrise {time}"
 
 #. js-lingui-id: uomtms
 #: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/TrackLighting.tsx
 msgid "Sunset {time}"
 msgstr "Sunset {time}"
 

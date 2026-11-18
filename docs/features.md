@@ -347,10 +347,12 @@ climb or descent between their endpoints.
 selected in **Weather forecast**, and choosing a date within the forecast week selects
 it there too. A date outside that week, such as next summer, is remembered with the
 track's route start and pace instead. **Today** returns to today, and a recorded track
-offers **Recording date** for the day its file was recorded. Changing the hike date,
-including picking a forecast day while the hike follows the forecast, also moves the
-map's sun shadows to that date at their current local time of day, so a winter visit can
-check summer light. Clock times use the time zone at the route start.
+offers **Recording date** for the day its file was recorded. The hike date and the date
+of the map's sun shadows are kept as one: opening a track or changing its hike date,
+including picking a forecast day while the hike follows the forecast, moves the map's
+sun shadows to that date at their current local time of day, so a winter visit can check
+summer light, and picking another date in the map's sun panel moves the hike date there.
+Clock times use the time zone at the route start.
 
 Light along the route comes from the terrain-shadow model behind the map's sun shadows:
 at every route station and the moment the hiker passes it, the visible fraction of the
@@ -366,18 +368,30 @@ recorded-time choice changes, which mostly costs DEM tile loads. Failed DEM load
 routes scattered so widely that they need more than 160 DEM tiles, show that the light
 could not be calculated instead of guessing sunlight.
 
-Below the profile and its toggles, a full-width strip colors the route by its light:
-yellow sun, grey shade, a blue hour that deepens toward its end, and dark blue night. It
-runs over route distance with distance labels, or, on the Time axis, over hike time with
-the local clock hours. Hovering the strip reads out the time, distance, and light at
-that point. On the Time axis, dashed lines mark each sunrise and sunset the hike passes;
-a hike timed by its recording keeps its stops in place at any pace. **Route timing**
-lists the time in each light kind the hike meets, one per row, and shows a Garmin-style
-sun graph of the start day: the Sun's elevation against the horizon, red sunrise and
-sunset marks with their times, the hike's span highlighted, the day length, and the
-Sun's highest elevation. Hovering the graph shows the Sun's elevation at that time of
-day. Below it, a sentence states how long before or after that day's sunset at the
-finish the hike ends.
+Below the profile and its toggles, a full-width strip colors the route by its light with
+the same light model as the map: sunlight takes the Sun's color, reddened by air mass so
+the golden hour shows, shade takes the sky's color dimmed by the station's open sky, so
+a gorge reads darker than a boulder's shadow, and the sky light fades through twilight
+to a dark night floor, far darker than the map's readable night. It runs over route
+distance with distance labels, or, on the Time axis, over hike time with the local clock
+hours. Half-sun icons with their times mark each sunrise and sunset the hike passes, on
+the strip and on the profile on both axes. Hovering or clicking the strip acts like the
+profile: it traces the point on the map, reads out the time, distance, and light there,
+and a click goes to that point. The profile and the strip share one cursor line, each
+drawing the point hovered on the other. A hike timed by its recording keeps its stops in
+place at any pace.
+
+**Route timing** opens with a Garmin-style sun graph of the start day: the Sun's
+elevation on a true scale against the horizon, down to the end of astronomical twilight,
+with twilight bands, sunrise and sunset marks with their times, the hike's span
+highlighted, and the day length, the pace the timeline uses, and the hike's start and
+finish. The Sun's dot and readout stand at the map's sun-shadow time of day; hovering
+reads any other time, and a click moves the map's sun shadows there. Below it, all four
+light kinds are listed in aligned columns with their hours and minutes, dimming those
+the hike does not meet; the light the hike finishes in notes how long before or after
+that day's sunset it ends. Rows keep their place while the light is calculated. The
+date, route start, and pace controls follow, then the map time options. Without terrain
+light, a sentence states the finish's sunset margin instead.
 
 Every track detail section (Track details, Elevation profile, Climbs & Descents,
 Markers, Route timing, Points, Source details, and the forecast's **By elevation** and

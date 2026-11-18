@@ -56,6 +56,11 @@ msgstr "{heading}: {grade}, {distance}, {primary}, подъём {opposite}"
 msgid "{heading}, {grade}, {distance}, {primary}, {opposite} descent"
 msgstr "{heading}: {grade}, {distance}, {primary}, спуск {opposite}"
 
+#. js-lingui-id: _oqig9
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{hours}h"
+msgstr "{hours} ч"
+
 #. js-lingui-id: i3Frvq
 #: src/presentation/tracks/trackFormatters.ts
 msgid "{hours}h {minutes}m"
@@ -65,6 +70,16 @@ msgstr "{hours} ч {minutes} мин"
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "{label}: {value}"
 msgstr "{label} — {value}"
+
+#. js-lingui-id: JptW2N
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{margin} after sunset"
+msgstr "{margin} после заката"
+
+#. js-lingui-id: MISIin
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{margin} before sunset"
+msgstr "за {margin} до заката"
 
 #. js-lingui-id: zpwS9F
 #: src/presentation/tracks/ElevationProfileChart.tsx
@@ -90,6 +105,11 @@ msgstr "{message} (сегмент {segmentNumber}, точка {pointNumber})"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "{message} (segment {segmentNumber})"
 msgstr "{message} (сегмент {segmentNumber})"
+
+#. js-lingui-id: ZOtn9F
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "{minutes}m"
+msgstr "{minutes} мин"
 
 #. js-lingui-id: rXvqYW
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -212,6 +232,11 @@ msgstr "Остальные корректные путевые точки не �
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Adjust pace"
 msgstr "Темп"
+
+#. js-lingui-id: JOzOwW
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Adjusted pace"
+msgstr "Изменённый темп"
 
 #. js-lingui-id: krcdgc
 #: src/presentation/tracks/TrackLighting.tsx
@@ -665,6 +690,11 @@ msgstr "Введите название папки."
 msgid "Enter a marker name."
 msgstr "Введите название метки."
 
+#. js-lingui-id: R9wpsN
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Estimated pace"
+msgstr "Расчётный темп"
+
 #. js-lingui-id: -nuEh_
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "Estimated time"
@@ -1090,6 +1120,11 @@ msgstr "Величина профиля"
 msgid "Recalculate elevation"
 msgstr "Пересчитать высоты"
 
+#. js-lingui-id: S-JfFg
+#: src/presentation/tracks/TrackLighting.tsx
+msgid "Recorded pace"
+msgstr "Записанный темп"
+
 #. js-lingui-id: SVCift
 #: src/presentation/tracks/TrackSummary.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1409,11 +1444,13 @@ msgstr "Высота солнца в день похода: восход {sunris
 
 #. js-lingui-id: qrw1ZF
 #: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/TrackLighting.tsx
 msgid "Sunrise {time}"
 msgstr "Восход {time}"
 
 #. js-lingui-id: uomtms
 #: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/TrackLighting.tsx
 msgid "Sunset {time}"
 msgstr "Закат {time}"
 

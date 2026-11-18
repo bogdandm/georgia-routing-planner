@@ -930,42 +930,50 @@ describe('ElevationProfileChart', () => {
             elapsedSeconds: 0,
             sunlitFraction: 1,
             sunElevationDegrees: 20,
+            skyView: 1,
+            groundElevationMeters: 2_000,
           },
           {
             distanceMeters: 1_400,
             elapsedSeconds: 1_800,
             sunlitFraction: 1,
             sunElevationDegrees: 20,
+            skyView: 1,
+            groundElevationMeters: 2_000,
           },
           {
             distanceMeters: 2_800,
             elapsedSeconds: 2_400,
             sunlitFraction: 0,
             sunElevationDegrees: 20,
+            skyView: 1,
+            groundElevationMeters: 2_000,
           },
         ],
       };
 
-      it('marks a sunset on the Time axis only', async () => {
+      it('marks a sunset with its time on the Distance and the Time axis', async () => {
         const user = userEvent.setup();
         const { container } = renderElevationProfileChart({
           profile: timedProfile,
           lighting: sunsetLighting,
         });
+        const sunEventX = () =>
+          [...container.querySelectorAll('.elevation-profile-sun-event line')].map(
+            (line) => Number(line.getAttribute('x1')),
+          );
 
-        expect(container.querySelector('.elevation-profile-sun-event')).toBeNull();
-        expect(screen.queryByText(/^Sunset/u)).not.toBeInTheDocument();
+        // 933 of 2,800 m across the 68–404 px plot.
+        expect(sunEventX()).toHaveLength(1);
+        expect(sunEventX()[0]).toBeCloseTo(68 + (933 / 2_800) * 336, 0);
+        // Recharts draws reference-line labels in a separate label layer.
+        expect(screen.getByText('Sunset 12:20')).toBeInTheDocument();
+        expect(screen.getByText('12:20')).toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Time' }));
 
-        const sunEvents = container.querySelectorAll(
-          '.elevation-profile-sun-event line',
-        );
-        expect(sunEvents).toHaveLength(1);
-        // 933 m is reached after 20 of 40 minutes, mid-way across the 68–404 px plot.
-        expect(Number(sunEvents[0]?.getAttribute('x1'))).toBeCloseTo(236, 0);
-        // Recharts draws reference-line labels in a separate label layer.
-        expect(screen.getByText('Sunset 12:20')).toBeInTheDocument();
+        // 933 m is reached after 20 of 40 minutes, mid-way across the plot.
+        expect(sunEventX()[0]).toBeCloseTo(236, 0);
       });
 
       it('scales a recording-timed hike onto the recorded Time axis, whatever its pace', async () => {
@@ -1035,9 +1043,11 @@ describe('ElevationProfileChart', () => {
       });
 
       it('reads out the time, distance, and light under the pointer', () => {
+        const onActivePointChange = vi.fn();
         renderElevationProfileChart({
           profile: timedProfile,
           lighting: { ...sunsetLighting, terrain: litThenShaded },
+          onActivePointChange,
         });
         const strip = screen.getByRole('img', {
           name: /^Light along the route/u,
@@ -1051,10 +1061,82 @@ describe('ElevationProfileChart', () => {
         fireEvent.pointerMove(strip, { clientX: 50 });
 
         expect(screen.getByText('12:30 · 1.4 km · In the sun')).toBeInTheDocument();
+        expect(onActivePointChange).toHaveBeenLastCalledWith(timedProfile.points[1]);
 
         fireEvent.pointerLeave(strip);
 
         expect(screen.queryByText(/· In the sun$/u)).not.toBeInTheDocument();
+        expect(onActivePointChange).toHaveBeenLastCalledWith(null);
+      });
+
+      it('shares one cursor between the profile and the light strip', async () => {
+        const { container } = renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: { ...sunsetLighting, terrain: litThenShaded },
+        });
+        const strip = screen.getByRole('img', {
+          name: /^Light along the route/u,
+        }).parentElement;
+        if (strip === null) throw new Error('Expected the strip hover area.');
+        vi.spyOn(strip, 'getBoundingClientRect').mockReturnValue(
+          new DOMRect(0, 0, 100, 12),
+        );
+        const stripCursorX = () =>
+          container
+            .querySelector('.elevation-profile-strip-cursor line')
+            ?.getAttribute('x1');
+
+        // Half of the 2.8 km route, mid-way across the 68-404 px plot.
+        fireEvent.pointerMove(strip, { clientX: 50 });
+        expect(Number(stripCursorX())).toBeCloseTo(236, 0);
+        fireEvent.pointerLeave(strip);
+        expect(stripCursorX()).toBeUndefined();
+
+        const chartSurface = screen
+          .getByRole('img', { name: /^Elevation profile from/u })
+          .querySelector('svg');
+        if (chartSurface === null) throw new Error('Expected the chart surface.');
+        fireEvent.mouseEnter(chartSurface, { clientX: 390, clientY: 80 });
+        fireEvent.mouseMove(chartSurface, { clientX: 390, clientY: 80 });
+        // The profile's last point, 2.8 km, is the strip's right end.
+        await waitFor(() => {
+          expect(container.querySelector('.track-light-cursor')).toHaveStyle({
+            left: '100%',
+          });
+        });
+        fireEvent.mouseLeave(chartSurface);
+        expect(container.querySelector('.track-light-cursor')).toBeNull();
+      });
+
+      it('clicks the profile point nearest the pointer on the light strip', () => {
+        const onPointClick = vi.fn();
+        renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: { ...sunsetLighting, terrain: litThenShaded },
+          onPointClick,
+        });
+        const strip = screen.getByRole('img', {
+          name: /^Light along the route/u,
+        }).parentElement;
+        if (strip === null) throw new Error('Expected the strip hover area.');
+        vi.spyOn(strip, 'getBoundingClientRect').mockReturnValue(
+          new DOMRect(0, 0, 100, 12),
+        );
+
+        // 90 % of the 2.8 km route lies nearest the 2.8 km sample.
+        fireEvent.pointerMove(strip, { clientX: 90 });
+        fireEvent.click(strip, { clientX: 90 });
+
+        expect(onPointClick).toHaveBeenLastCalledWith(timedProfile.points[2]);
+      });
+
+      it('marks the sunset on the light strip', () => {
+        renderElevationProfileChart({
+          profile: timedProfile,
+          lighting: { ...sunsetLighting, terrain: litThenShaded },
+        });
+
+        expect(screen.getByRole('img', { name: 'Sunset 12:20' })).toBeInTheDocument();
       });
     });
   });

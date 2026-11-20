@@ -1669,6 +1669,7 @@ export class MapLibreLayerController {
     signal.addEventListener('abort', abort, { once: true });
     const canvas = map.getCanvas();
     let recorder: MapVideoRecorder | null = null;
+    let video: Uint8Array;
     try {
       const started = await MapVideoRecorder.start(canvas.width, canvas.height);
       recorder = started;
@@ -1683,6 +1684,7 @@ export class MapLibreLayerController {
         );
         onProgress((index + 1) / frames.length);
       }
+      video = await started.finish();
     } catch (error) {
       await recorder?.cancel();
       throw error;
@@ -1691,9 +1693,11 @@ export class MapLibreLayerController {
       if (this.#sunShadowPlaybackAbort === controller)
         this.#sunShadowPlaybackAbort = null;
     }
+    // A stop while the last frame encoded or the file finalized also discards the video.
+    controller.signal.throwIfAborted();
     this.setSunShadowInstant(startInstantMs);
     this.reconcileSunShadow(map);
-    return recorder.finish();
+    return video;
   }
 
   /**

@@ -65,6 +65,8 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 const videoCapture = vi.hoisted(() => ({
   capturedInstants: [] as number[],
   canceledRecordings: 0,
+  /** Runs while the file finalizes, after every frame was encoded. */
+  duringFinish: null as (() => void) | null,
 }));
 vi.mock('@/presentation/map/mapCapture', () => ({
   MapVideoRecorder: class {
@@ -78,6 +80,7 @@ vi.mock('@/presentation/map/mapCapture', () => ({
     }
 
     public finish(): Promise<Uint8Array> {
+      videoCapture.duringFinish?.();
       return Promise.resolve(Uint8Array.of(0x6d, 0x70, 0x34));
     }
 
@@ -3410,6 +3413,7 @@ describe('MapLibreLayerController', () => {
       function startRecording() {
         videoCapture.capturedInstants.length = 0;
         videoCapture.canceledRecordings = 0;
+        videoCapture.duringFinish = null;
         const { controller } = createSunShadowController();
         const map = new FakeLayerMap();
         controller.attach(map as unknown as MapLibreMap);
@@ -3456,6 +3460,20 @@ describe('MapLibreLayerController', () => {
           Math.floor(chosenMs / 60_000) * 60_000,
         );
         second.controller.dispose();
+      });
+
+      it('discards the video when a time is chosen while the file finalizes', async () => {
+        const chosenMs = shadowInstantMs + 60 * 60_000;
+        const { controller, recording } = startRecording();
+        videoCapture.duringFinish = () => {
+          controller.setSunShadow({ enabled: true, instantMs: chosenMs });
+        };
+
+        await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+        expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+          Math.floor(chosenMs / 60_000) * 60_000,
+        );
+        controller.dispose();
       });
 
       it('rejects an already aborted signal without recording', async () => {

@@ -31,6 +31,16 @@ export interface TrackVideoPlan {
   readonly frames: readonly TrackVideoFrame[];
 }
 
+/**
+ * MapLibre event data of a track video's own camera jumps: `movestart` handlers tell
+ * them from the user moving the map, which stops the recording.
+ */
+export const trackVideoCameraJump = { trackVideoCameraJump: true } as const;
+
+export function isTrackVideoCameraJump(event: object): boolean {
+  return 'trackVideoCameraJump' in event;
+}
+
 /** The whole hike plays in this time; the start and finish are each held for a second. */
 const trackVideoTravelSeconds = 20;
 const trackVideoHoldMs = 1_000;

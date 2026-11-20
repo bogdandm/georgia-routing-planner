@@ -22,6 +22,10 @@ import {
 import { mapLayerStore, resetMapLayerStore } from '@/presentation/map/mapLayerStore';
 import { runRenderBenchmark } from '@/presentation/map/renderBenchmark';
 import type { TerrainShadowMetricsSnapshot } from '@/presentation/map/TerrainShadowTileProvider';
+import {
+  trackVideoCameraJump,
+  type TrackVideoRoute,
+} from '@/presentation/map/trackVideo';
 import { createTestServices } from '@test/helpers/createTestServices';
 import {
   applyTrackPathDrag,
@@ -264,11 +268,11 @@ class FakeNativeMap {
     this.flyCalls.push(options);
   }
 
-  public jumpTo(options: Record<string, unknown>): void {
+  public jumpTo(options: Record<string, unknown>, eventData: object = {}): void {
     this.jumpCalls.push(options);
     this.easeTo(options);
-    this.fire('movestart');
-    this.fire('moveend');
+    this.fire('movestart', eventData);
+    this.fire('moveend', eventData);
   }
 
   public triggerRepaint(): void {
@@ -3059,6 +3063,98 @@ describe('MapLibreFacade', () => {
         [{ enabled: false, instantMs: previousInstantMs, keepNotice: true }],
         [{ enabled: true, instantMs: previousInstantMs, keepNotice: true }],
       ]);
+      facade.destroy();
+    });
+  });
+
+  describe('track video camera', () => {
+    const route: TrackVideoRoute = {
+      points: [
+        { coordinate: [43.1, 42.7], distanceMeters: 0, sourceSegmentIndex: 0 },
+        { coordinate: [43.2, 42.7], distanceMeters: 8_180, sourceSegmentIndex: 0 },
+      ],
+      elapsedSeconds: [0, 7_200],
+      startMs: Date.parse('2026-07-01T05:00:00Z'),
+      formatTime: () => 'clock',
+    };
+
+    function createTrackVideoFacade(
+      recordTrackVideo: MapLibreLayerController['recordTrackVideo'],
+    ) {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      const onViewSettled = vi.fn();
+      const facade = new MapLibreFacade(
+        services.logger,
+        onViewSettled,
+        undefined,
+        undefined,
+        {
+          attach: vi.fn(),
+          detach: vi.fn(),
+          handleRasterSourceData: vi.fn(),
+          handleRasterSourceFailure: vi.fn(),
+          handleRasterSourceRecovered: vi.fn(),
+          isRasterSourceRecoveryComplete: vi.fn(() => true),
+          setTerrainInteractionActive: vi.fn(),
+          setPlannedLinePreview: vi.fn(),
+          clearPlannedLinePreview: vi.fn(),
+          recordTrackVideo,
+        },
+      );
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      nativeMap.fire('load');
+      const before = facade.getCamera();
+      nativeMap.jumpCalls.splice(0);
+      onViewSettled.mockClear();
+      return { facade, nativeMap, onViewSettled, before };
+    }
+
+    it('persists none of its frames and restores the camera afterwards', async () => {
+      const { facade, nativeMap, onViewSettled, before } = createTrackVideoFacade(
+        () => {
+          nativeMap.jumpTo({ center: [43.15, 42.7], zoom: 14 }, trackVideoCameraJump);
+          return Promise.resolve(Uint8Array.of(1));
+        },
+      );
+
+      await expect(
+        facade.recordTrackVideo(route, new AbortController().signal, vi.fn()),
+      ).resolves.toEqual(Uint8Array.of(1));
+
+      expect(nativeMap.jumpCalls).toHaveLength(2);
+      expect(onViewSettled).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ camera: before }),
+      );
+      facade.destroy();
+    });
+
+    it("keeps the user's view when their move stops the recording", async () => {
+      // The test tsconfig predates `Promise.withResolvers`, so the executor form remains.
+      let stop: (error: unknown) => void = () => undefined;
+      const stopped = new Promise<Uint8Array>((_resolve, reject) => {
+        stop = reject;
+      });
+      const { facade, nativeMap, onViewSettled } = createTrackVideoFacade(
+        () => stopped,
+      );
+
+      const recording = facade.recordTrackVideo(
+        route,
+        new AbortController().signal,
+        vi.fn(),
+      );
+      nativeMap.easeTo({ center: [44, 42], zoom: 9 });
+      nativeMap.fire('movestart', {});
+      nativeMap.fire('moveend', {});
+      stop(new DOMException('Aborted.', 'AbortError'));
+
+      await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+      expect(nativeMap.jumpCalls).toEqual([]);
+      expect(onViewSettled).toHaveBeenCalledOnce();
+      expect(onViewSettled.mock.calls[0]?.[0]).toMatchObject({
+        camera: { longitude: 44, latitude: 42, zoom: 9 },
+      });
       facade.destroy();
     });
   });

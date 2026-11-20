@@ -44,7 +44,11 @@ import {
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { captureMapPng } from '@/presentation/map/mapCapture';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
-import { planTrackVideo, type TrackVideoRoute } from '@/presentation/map/trackVideo';
+import {
+  isTrackVideoCameraJump,
+  planTrackVideo,
+  type TrackVideoRoute,
+} from '@/presentation/map/trackVideo';
 import type {
   MapLibreLayerController,
   PlannedLineOverlay,
@@ -1031,6 +1035,15 @@ export class MapLibreFacade implements MapFacade {
     const camera = this.readCamera(map);
     const controller = new AbortController();
     this.#scriptedCamera = controller;
+    // A user's move stops the recording in the layer controller. It is the user's view
+    // from then on: its `moveend` persists, and the camera is not restored over it.
+    const stop = { byUserMove: false };
+    const noteUserMove = (event: object) => {
+      if (isTrackVideoCameraJump(event)) return;
+      stop.byUserMove = true;
+      if (this.#scriptedCamera === controller) this.#scriptedCamera = null;
+    };
+    map.on('movestart', noteUserMove);
     try {
       return await layers.recordTrackVideo(
         plan,
@@ -1038,9 +1051,10 @@ export class MapLibreFacade implements MapFacade {
         onProgress,
       );
     } finally {
-      this.#scriptedCamera = null;
+      map.off('movestart', noteUserMove);
+      if (this.#scriptedCamera === controller) this.#scriptedCamera = null;
       // Not a scripted move: `moveend` persists the restored view and snapshot camera.
-      if (this.#map === map) {
+      if (this.#map === map && !stop.byUserMove) {
         map.jumpTo({
           center: [camera.longitude, camera.latitude],
           zoom: camera.zoom,

@@ -276,10 +276,13 @@ class FakeLayerMap {
   }
 
   /** Like MapLibre's `jumpTo`: one synchronous move with its start and end events. */
-  public jumpTo(options: { readonly center: readonly [number, number] }): void {
-    this.fire('movestart', {});
+  public jumpTo(
+    options: { readonly center: readonly [number, number] },
+    eventData: object = {},
+  ): void {
+    this.fire('movestart', eventData);
     this.center = { lng: options.center[0], lat: options.center[1] };
-    this.fire('moveend', {});
+    this.fire('moveend', eventData);
   }
 
   public coveringTiles(): {
@@ -3491,6 +3494,24 @@ describe('MapLibreLayerController', () => {
         controller.dispose();
       });
 
+      it('returns to the shown minute when its caller cancels', async () => {
+        videoCapture.duringFinish = null;
+        const { controller } = createSunShadowController();
+        const map = new FakeLayerMap();
+        controller.attach(map as unknown as MapLibreMap);
+        controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+        const cancel = new AbortController();
+        const recording = controller.recordSunShadowDay(cancel.signal, () => {
+          cancel.abort();
+        });
+
+        await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+        expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+          Math.floor(shadowInstantMs / 60_000) * 60_000,
+        );
+        controller.dispose();
+      });
+
       it('rejects an already aborted signal without recording', async () => {
         videoCapture.capturedInstants.length = 0;
         const { controller } = createSunShadowController();
@@ -3526,7 +3547,10 @@ describe('MapLibreLayerController', () => {
         })),
       };
 
-      function startTrackRecording() {
+      function startTrackRecording(
+        beforeRecording: (controller: MapLibreLayerController) => void = () =>
+          undefined,
+      ) {
         videoCapture.capturedInstants.length = 0;
         videoCapture.capturedCenters.length = 0;
         videoCapture.capturedTracePoints.length = 0;
@@ -3537,6 +3561,7 @@ describe('MapLibreLayerController', () => {
         controller.attach(map as unknown as MapLibreMap);
         map.fire('styledata', {});
         controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+        beforeRecording(controller);
         const recording = controller.recordTrackVideo(
           plan,
           new AbortController().signal,
@@ -3583,6 +3608,21 @@ describe('MapLibreLayerController', () => {
           'data.features',
           [],
         );
+        controller.dispose();
+      });
+
+      it('shows the hiker even with imported tracks hidden, then hides it again', async () => {
+        const { controller, map, recording } = startTrackRecording((started) => {
+          started.setLayerVisibility('imported-tracks', false);
+        });
+        const traceVisibility: (string | undefined)[] = [];
+        videoCapture.duringFinish = () => {
+          traceVisibility.push(map.visibility.get(importedTrackLayerIds.trace));
+        };
+
+        await expect(recording).resolves.toBeInstanceOf(Uint8Array);
+        expect(traceVisibility).toEqual(['visible']);
+        expect(map.visibility.get(importedTrackLayerIds.trace)).toBe('none');
         controller.dispose();
       });
     });

@@ -1100,6 +1100,8 @@ export class MapLibreLayerController {
   #sunShadowDrawEveryStep = false;
   /** Present from Play until stop; aborting it cancels the day prefetch. */
   #sunShadowPlaybackAbort: AbortController | null = null;
+  /** Counts `setSunShadow` calls, so a recording can tell a chosen time from a clamp. */
+  #sunShadowChoices = 0;
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
   #sunShadowPlaybackFrames: readonly number[] = [];
   #sunShadowPlaybackIndex = 0;
@@ -1402,6 +1404,7 @@ export class MapLibreLayerController {
   }): void {
     this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
+    this.#sunShadowChoices += 1;
     if (value.enabled && !mapLayerStore.getState().visibility['terrain-relief']) {
       this.setLayerVisibility('terrain-relief', true);
     }
@@ -1717,6 +1720,8 @@ export class MapLibreLayerController {
             trackVideoCameraJump,
           );
           this.setImportedTrackTracePoint(frame.position);
+          // Again each frame: hiding imported tracks mid-recording must not drop the hiker.
+          showTrace(true);
         },
       );
     } finally {
@@ -1729,7 +1734,7 @@ export class MapLibreLayerController {
    * Shared loop of the video recordings: registers as playback (full-quality tiles; any
    * playback stop aborts with an `AbortError`), then per frame applies its sun minute,
    * runs `beforeFrame`, and captures the frame once MapLibre is idle. However it ends,
-   * the minute shown before returns unless a stop chose another one (the sun panel).
+   * the minute shown before returns unless `setSunShadow` chose one meanwhile.
    */
   private async recordSunShadowFrames<
     Frame extends {
@@ -1745,7 +1750,7 @@ export class MapLibreLayerController {
     beforeFrame: (frame: Frame) => void,
   ): Promise<Uint8Array> {
     const startInstantMs = this.#sunShadowInstantMs;
-    let shownInstantMs = startInstantMs;
+    const choicesBefore = this.#sunShadowChoices;
     const controller = new AbortController();
     this.#sunShadowPlaybackAbort = controller;
     const abort = () => {
@@ -1765,7 +1770,6 @@ export class MapLibreLayerController {
         this.setSunShadowInstant(frame.sunInstantMs);
         beforeFrame(frame);
         this.reconcileSunShadow(map);
-        shownInstantMs = this.#sunShadowInstantMs;
         await readWhenMapIdle(map, controller.signal, (drawn) =>
           started.addFrame(drawn, frame.durationMs, frame.caption),
         );
@@ -1779,7 +1783,7 @@ export class MapLibreLayerController {
       signal.removeEventListener('abort', abort);
       if (this.#sunShadowPlaybackAbort === controller)
         this.#sunShadowPlaybackAbort = null;
-      if (this.#map === map && this.#sunShadowInstantMs === shownInstantMs) {
+      if (this.#map === map && this.#sunShadowChoices === choicesBefore) {
         this.setSunShadowInstant(startInstantMs);
         this.reconcileSunShadow(map);
       }

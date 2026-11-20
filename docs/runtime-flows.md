@@ -551,8 +551,8 @@ an MP4 whose index precedes the media (`MapVideoRecorder`); `MapWorkspace` downl
 bytes. The recording registers as playback, so every playback stop also aborts it with
 an `AbortError`, checked again before each minute because encoding is awaited outside
 the `idle` wait; an unfinished recording cancels its encoder. However a recording ends,
-it reapplies the minute shown before it unless the current minute is no longer the one
-it last showed, which means a stop chose a newer one (the sun panel).
+it reapplies the minute shown before it unless `setSunShadow` (the sun panel or its
+keys) chose a minute meanwhile; a daylight clamp after a camera move does not count.
 
 A track video (`MapLibreFacade.recordTrackVideo`) takes the active route, its elapsed
 seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same timing as
@@ -565,8 +565,8 @@ afterwards unless a user's `movestart` stopped it: that move clears the gate at 
 its `moveend` persists the new view. `MapLibreLayerController.recordTrackVideo` shares
 the day video's frame loop. Before each capture it also calls `jumpTo` with the
 `trackVideoCameraJump` event data, which the controller's and the facade's `movestart`
-handlers recognize, so only other moves stop it. It moves the GL trace point and keeps
-the trace layer visible for the recording, then restores the layer's visibility. The
+handlers recognize, so only other moves stop it. It moves the GL trace point and makes
+the trace layer visible before every frame, then restores the layer's visibility. The
 5-minute sun steps keep distinct shadow tiles few. The clock caption is drawn into the
 2D copy before encoding.
 

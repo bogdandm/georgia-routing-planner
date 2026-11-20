@@ -3548,8 +3548,7 @@ describe('MapLibreLayerController', () => {
       };
 
       function startTrackRecording(
-        beforeRecording: (controller: MapLibreLayerController) => void = () =>
-          undefined,
+        onProgress: (controller: MapLibreLayerController) => void = () => undefined,
       ) {
         videoCapture.capturedInstants.length = 0;
         videoCapture.capturedCenters.length = 0;
@@ -3561,11 +3560,12 @@ describe('MapLibreLayerController', () => {
         controller.attach(map as unknown as MapLibreMap);
         map.fire('styledata', {});
         controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
-        beforeRecording(controller);
         const recording = controller.recordTrackVideo(
           plan,
           new AbortController().signal,
-          () => undefined,
+          () => {
+            onProgress(controller);
+          },
         );
         return { controller, map, recording };
       }
@@ -3611,8 +3611,11 @@ describe('MapLibreLayerController', () => {
         controller.dispose();
       });
 
-      it('shows the hiker even with imported tracks hidden, then hides it again', async () => {
+      it('keeps the hiker shown when imported tracks are hidden mid-recording', async () => {
+        let hidden = false;
         const { controller, map, recording } = startTrackRecording((started) => {
+          if (hidden) return;
+          hidden = true;
           started.setLayerVisibility('imported-tracks', false);
         });
         const traceVisibility: (string | undefined)[] = [];

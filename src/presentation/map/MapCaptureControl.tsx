@@ -1,7 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
-import GifBoxOutlinedIcon from '@mui/icons-material/GifBoxOutlined';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import {
   Box,
   Button,
@@ -20,10 +20,10 @@ export interface MapCaptureControlProps {
   /** Copies a PNG of the map, without controls, to the clipboard. */
   readonly onCopyScreenshot: () => Promise<void>;
   /**
-   * Records the day cycle of sun shadows as a GIF and downloads it; null while shadows
-   * are off. Rejects with an `AbortError` when `signal` or a map change stops it.
+   * Records the day cycle of sun shadows as an MP4 video and downloads it; null while
+   * shadows are off. Rejects with an `AbortError` when `signal` or a map change stops it.
    */
-  readonly onRecordDayGif:
+  readonly onRecordDayVideo:
     | ((signal: AbortSignal, onProgress: (fraction: number) => void) => Promise<void>)
     | null;
 }
@@ -71,7 +71,7 @@ interface MapCapturePopoverProps extends MapCaptureControlProps {
 }
 
 type ScreenshotStatus = 'idle' | 'copying' | 'copied' | 'failed';
-type GifStatus =
+type VideoStatus =
   | { readonly kind: 'idle' | 'saved' | 'stopped' | 'failed' }
   | { readonly kind: 'recording'; readonly progress: number };
 
@@ -81,19 +81,19 @@ export function MapCapturePopover({
   panelId,
   onClose,
   onCopyScreenshot,
-  onRecordDayGif,
+  onRecordDayVideo,
 }: MapCapturePopoverProps) {
   const { t } = useLingui();
-  const gifAbort = useRef<AbortController | null>(null);
+  const videoAbort = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
-      gifAbort.current?.abort();
+      videoAbort.current?.abort();
     },
     [],
   );
   /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
   const [screenshot, setScreenshot] = useState<ScreenshotStatus>('idle');
-  const [gif, setGif] = useState<GifStatus>({ kind: 'idle' });
+  const [video, setVideo] = useState<VideoStatus>({ kind: 'idle' });
   const copyScreenshot = () => {
     setScreenshot('copying');
     onCopyScreenshot().then(
@@ -105,26 +105,26 @@ export function MapCapturePopover({
       },
     );
   };
-  const recordGif = (record: NonNullable<typeof onRecordDayGif>) => {
+  const recordVideo = (record: NonNullable<typeof onRecordDayVideo>) => {
     const controller = new AbortController();
-    gifAbort.current = controller;
-    setGif({ kind: 'recording', progress: 0 });
+    videoAbort.current = controller;
+    setVideo({ kind: 'recording', progress: 0 });
     record(controller.signal, (progress) => {
-      setGif({ kind: 'recording', progress });
+      setVideo({ kind: 'recording', progress });
     }).then(
       () => {
-        setGif({ kind: 'saved' });
+        setVideo({ kind: 'saved' });
       },
       (error: unknown) => {
         const aborted = error instanceof DOMException && error.name === 'AbortError';
         // Cancel is the user's own choice; any other stop is reported.
-        if (controller.signal.aborted) setGif({ kind: 'idle' });
-        else setGif({ kind: aborted ? 'stopped' : 'failed' });
+        if (controller.signal.aborted) setVideo({ kind: 'idle' });
+        else setVideo({ kind: aborted ? 'stopped' : 'failed' });
       },
     );
   };
-  const recording = gif.kind === 'recording';
-  const percent = recording ? Math.floor(gif.progress * 100) : 0;
+  const recording = video.kind === 'recording';
+  const percent = recording ? Math.floor(video.progress * 100) : 0;
   /* eslint-enable lingui/no-unlocalized-strings */
   return (
     <Popper
@@ -184,17 +184,17 @@ export function MapCapturePopover({
               </Typography>
             ) : null}
             <Button
-              disabled={onRecordDayGif === null || recording}
+              disabled={onRecordDayVideo === null || recording}
               onClick={() => {
-                if (onRecordDayGif !== null) recordGif(onRecordDayGif);
+                if (onRecordDayVideo !== null) recordVideo(onRecordDayVideo);
               }}
               size="small"
-              startIcon={<GifBoxOutlinedIcon fontSize="small" />}
+              startIcon={<VideocamOutlinedIcon fontSize="small" />}
               variant="outlined"
             >
-              {t`Record a GIF of the day`}
+              {t`Record a video of the day`}
             </Button>
-            {onRecordDayGif === null && !recording ? (
+            {onRecordDayVideo === null && !recording ? (
               <Typography color="text.secondary" variant="caption">
                 {t`Turn on sun shadows to record the day.`}
               </Typography>
@@ -203,7 +203,7 @@ export function MapCapturePopover({
               <Stack spacing={0.5}>
                 <LinearProgress
                   aria-label={t`Recording the day`}
-                  value={gif.progress * 100}
+                  value={video.progress * 100}
                   variant="determinate"
                 />
                 <Stack
@@ -215,7 +215,7 @@ export function MapCapturePopover({
                   </Typography>
                   <Button
                     onClick={() => {
-                      gifAbort.current?.abort();
+                      videoAbort.current?.abort();
                     }}
                     size="small"
                   >
@@ -224,19 +224,19 @@ export function MapCapturePopover({
                 </Stack>
               </Stack>
             ) : null}
-            {gif.kind === 'saved' ? (
+            {video.kind === 'saved' ? (
               <Typography color="text.secondary" role="status" variant="caption">
-                {t`The GIF was downloaded.`}
+                {t`The video was downloaded.`}
               </Typography>
             ) : null}
-            {gif.kind === 'stopped' ? (
+            {video.kind === 'stopped' ? (
               <Typography color="text.secondary" role="status" variant="caption">
                 {t`The recording stopped because the map or the time changed.`}
               </Typography>
             ) : null}
-            {gif.kind === 'failed' ? (
+            {video.kind === 'failed' ? (
               <Typography color="error" role="alert" variant="caption">
-                {t`The GIF could not be recorded.`}
+                {t`The video could not be recorded.`}
               </Typography>
             ) : null}
           </Stack>

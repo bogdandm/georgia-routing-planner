@@ -473,10 +473,10 @@ msgstr "Play the day"
 msgid "Recomputes shadow masks on the GPU once released"
 msgstr "Recomputes shadow masks on the GPU once released"
 
-#. js-lingui-id: UEjEIZ
+#. js-lingui-id: y6MiRk
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Record a GIF of the day"
-msgstr "Record a GIF of the day"
+msgid "Record a video of the day"
+msgstr "Record a video of the day"
 
 #. js-lingui-id: 43gcG7
 #: src/presentation/map/MapCaptureControl.tsx
@@ -599,16 +599,6 @@ msgstr "Terrain elevation"
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "The current camera could not be saved. Map interaction is still available."
 
-#. js-lingui-id: c-d0U-
-#: src/presentation/map/MapCaptureControl.tsx
-msgid "The GIF could not be recorded."
-msgstr "The GIF could not be recorded."
-
-#. js-lingui-id: bNy05A
-#: src/presentation/map/MapCaptureControl.tsx
-msgid "The GIF was downloaded."
-msgstr "The GIF was downloaded."
-
 #. js-lingui-id: CHpm1i
 #: src/presentation/map/MapShareDialog.tsx
 msgid "The link could not be copied. Select it and copy it manually."
@@ -654,6 +644,16 @@ msgstr "The shared image comparison could not be opened. The shared map location
 #: src/presentation/map/MapWorkspace.tsx
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "The shared satellite image could not be restored. The shared map location is still available."
+
+#. js-lingui-id: sthMCw
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The video could not be recorded."
+msgstr "The video could not be recorded."
+
+#. js-lingui-id: UCdi11
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The video was downloaded."
+msgstr "The video was downloaded."
 
 #. js-lingui-id: hoiu-9
 #: src/presentation/map/SunShadowControl.tsx

@@ -473,10 +473,10 @@ msgstr "Показать весь день"
 msgid "Recomputes shadow masks on the GPU once released"
 msgstr "Пересчитывает маски теней на GPU после отпускания"
 
-#. js-lingui-id: UEjEIZ
+#. js-lingui-id: y6MiRk
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Record a GIF of the day"
-msgstr "Записать GIF дня"
+msgid "Record a video of the day"
+msgstr "Записать видео дня"
 
 #. js-lingui-id: 43gcG7
 #: src/presentation/map/MapCaptureControl.tsx
@@ -599,16 +599,6 @@ msgstr "Высота рельефа"
 msgid "The current camera could not be saved. Map interaction is still available."
 msgstr "Не удалось сохранить текущий вид карты. Работа с картой по-прежнему доступна."
 
-#. js-lingui-id: c-d0U-
-#: src/presentation/map/MapCaptureControl.tsx
-msgid "The GIF could not be recorded."
-msgstr "Не удалось записать GIF."
-
-#. js-lingui-id: bNy05A
-#: src/presentation/map/MapCaptureControl.tsx
-msgid "The GIF was downloaded."
-msgstr "GIF скачан."
-
 #. js-lingui-id: CHpm1i
 #: src/presentation/map/MapShareDialog.tsx
 msgid "The link could not be copied. Select it and copy it manually."
@@ -654,6 +644,16 @@ msgstr "Не удалось открыть общее сравнение сни�
 #: src/presentation/map/MapWorkspace.tsx
 msgid "The shared satellite image could not be restored. The shared map location is still available."
 msgstr "Не удалось восстановить общий спутниковый снимок. Общее местоположение на карте по-прежнему доступно."
+
+#. js-lingui-id: sthMCw
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The video could not be recorded."
+msgstr "Не удалось записать видео."
+
+#. js-lingui-id: UCdi11
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "The video was downloaded."
+msgstr "Видео скачано."
 
 #. js-lingui-id: hoiu-9
 #: src/presentation/map/SunShadowControl.tsx

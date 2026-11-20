@@ -140,7 +140,7 @@ import {
   type ImportedTrackTimeLabel,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
-import { MapGifRecorder, readWhenMapIdle } from '@/presentation/map/mapCapture';
+import { MapVideoRecorder, readWhenMapIdle } from '@/presentation/map/mapCapture';
 import {
   clampToDaylight,
   type DaylightWindow,
@@ -1640,7 +1640,7 @@ export class MapLibreLayerController {
   }
 
   /**
-   * Records the shown day as the bytes of a looping GIF of the day playback frames, from
+   * Records the shown day as the bytes of an MP4 video of the day playback frames, from
    * the first to the last, each captured once MapLibre has drawn every tile of its
    * minute. It counts as playback, so a camera move, `setSunShadow`, Play, Stop, or detach
    * aborts it and the promise rejects with an `AbortError`. A finished recording returns
@@ -1668,16 +1668,24 @@ export class MapLibreLayerController {
     };
     signal.addEventListener('abort', abort, { once: true });
     const canvas = map.getCanvas();
-    const recorder = new MapGifRecorder(canvas.width, canvas.height);
+    let recorder: MapVideoRecorder | null = null;
     try {
+      const started = await MapVideoRecorder.start(canvas.width, canvas.height);
+      recorder = started;
       for (const [index, instantMs] of frames.entries()) {
+        // Starting and encoding are awaited outside the idle wait: a stop during them
+        // must not apply another minute over the newer state.
+        controller.signal.throwIfAborted();
         this.setSunShadowInstant(instantMs);
         this.reconcileSunShadow(map);
-        await readWhenMapIdle(map, controller.signal, (drawn) => {
-          recorder.addFrame(drawn, sunShadowPlaybackFrameMs);
-        });
+        await readWhenMapIdle(map, controller.signal, (drawn) =>
+          started.addFrame(drawn, sunShadowPlaybackFrameMs),
+        );
         onProgress((index + 1) / frames.length);
       }
+    } catch (error) {
+      await recorder?.cancel();
+      throw error;
     } finally {
       signal.removeEventListener('abort', abort);
       if (this.#sunShadowPlaybackAbort === controller)

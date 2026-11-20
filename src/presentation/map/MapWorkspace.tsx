@@ -1927,7 +1927,7 @@ export function MapWorkspace({
       navigator.clipboard.write([
         new ClipboardItem({ 'image/png': facade.captureMapImage() }),
       ]),
-    onRecordDayGif:
+    onRecordDayVideo:
       mapLayers === null || !sunShadowShown
         ? null
         : async (signal, onProgress) => {
@@ -1946,9 +1946,9 @@ export function MapWorkspace({
               day: date,
             } = instantToZonedWallTime(new Date(sunShadow.instantMs), timeZone);
             const day = `${String(year)}-${String(month).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
-            const gif = await mapLayers.recordSunShadowDay(signal, onProgress);
+            const video = await mapLayers.recordSunShadowDay(signal, onProgress);
             // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
-            downloadFile(`sun-shadows-${day}.gif`, 'image/gif', gif);
+            downloadFile(`sun-shadows-${day}.mp4`, 'video/mp4', video);
           },
   };
 

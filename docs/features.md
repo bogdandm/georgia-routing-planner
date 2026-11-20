@@ -902,7 +902,19 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   panel shows progress and **Cancel**; a camera move, a time chosen in the sun panel,
   **Play the day**, or turning shadows off stops the recording and says so. A finished
   recording returns the map to the minute shown before it. Closing the panel keeps the
-  recording running.
+  recording running. **Record a track video**, available while sun shadows are on and a
+  single track with route timing is open, downloads `track-<hike date>.mp4` in the same
+  format: a 22-second time-lapse of the hike from the start to the finish of
+  [Route timing](#tracks) (date, start hour, pace, recorded or estimated time). An
+  orange point on the track marks where the hiker is at each moment and stays at the
+  center of the frame; the camera turns smoothly with the direction of travel, sees
+  about a quarter of the route across the frame (1.2–6 km), and is tilted 50° in 3D and
+  level in 2D. Sun shadows show the moment's time, rounded to 5 minutes, and the local
+  date and time in the route's time zone appear in the lower-left corner. Video time
+  runs evenly through the hike time, so the point slows on climbs and waits through
+  recorded pauses while the light keeps changing; the start and the finish are each held
+  for a second. Moving the map stops the recording; a finished one returns the camera
+  and the sun to where they were. The two recordings never run at once.
 - **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

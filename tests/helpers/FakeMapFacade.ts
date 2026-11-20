@@ -27,6 +27,7 @@ import type {
   RenderBenchmarkReport,
   RenderBenchmarkStep,
 } from '@/presentation/map/renderBenchmark';
+import type { TrackVideoRoute } from '@/presentation/map/trackVideo';
 
 export class FakeMapFacade implements MapFacade {
   readonly #listeners = new Set<() => void>();
@@ -56,6 +57,7 @@ export class FakeMapFacade implements MapFacade {
   }[] = [];
   public northResets = 0;
   public readonly cameraSteps: MapCameraStep[] = [];
+  public readonly trackVideoRequests: TrackVideoRoute[] = [];
   public pointInspection: MapPointInspection = { status: 'closed' };
   public readonly pointInspectionContent = document.createElement('div');
   public pointInspectionPopupEnabled = true;
@@ -229,6 +231,11 @@ export class FakeMapFacade implements MapFacade {
 
   public captureMapImage(): Promise<Blob> {
     return Promise.resolve(new Blob([], { type: 'image/png' }));
+  }
+
+  public recordTrackVideo(route: TrackVideoRoute): Promise<Uint8Array> {
+    this.trackVideoRequests.push(route);
+    return Promise.resolve(Uint8Array.of(0x6d, 0x70, 0x34));
   }
 
   public resetNorth(): void {

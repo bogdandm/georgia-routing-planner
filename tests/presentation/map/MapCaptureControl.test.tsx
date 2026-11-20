@@ -32,7 +32,11 @@ describe('MapCapturePopover', () => {
       .fn<() => Promise<void>>()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('denied'));
-    renderPopover({ onCopyScreenshot, onRecordDayVideo: null });
+    renderPopover({
+      onCopyScreenshot,
+      onRecordDayVideo: null,
+      onRecordTrackVideo: null,
+    });
 
     const take = screen.getByRole('button', { name: 'Take a screenshot' });
     await user.click(take);
@@ -48,13 +52,33 @@ describe('MapCapturePopover', () => {
     expect(onCopyScreenshot).toHaveBeenCalledTimes(2);
   });
 
-  it('asks for sun shadows before a day video can be recorded', () => {
-    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo: null });
+  it('asks for sun shadows, then for an open track, before recording', () => {
+    const { unmount } = renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: null,
+      onRecordTrackVideo: null,
+    });
 
     expect(
       screen.getByRole('button', { name: 'Record a video of the day' }),
     ).toBeDisabled();
-    expect(screen.getByText('Turn on sun shadows to record the day.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Record a track video' })).toBeDisabled();
+    expect(screen.getByText('Turn on sun shadows to record a video.')).toBeVisible();
+    expect(
+      screen.queryByText('Open a track to record its video.'),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: vi.fn(),
+      onRecordTrackVideo: null,
+    });
+    expect(
+      screen.getByRole('button', { name: 'Record a video of the day' }),
+    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Record a track video' })).toBeDisabled();
+    expect(screen.getByText('Open a track to record its video.')).toBeVisible();
   });
 
   it('shows recording progress and tells a cancel from a stop and a failure', async () => {
@@ -74,15 +98,19 @@ describe('MapCapturePopover', () => {
           runs.push({ signal, onProgress, resolve, reject });
         }),
     );
-    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo });
+    const onRecordTrackVideo = vi.fn<() => Promise<void>>();
+    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo, onRecordTrackVideo });
     const record = screen.getByRole('button', { name: 'Record a video of the day' });
+    const recordTrack = screen.getByRole('button', { name: 'Record a track video' });
 
     await user.click(record);
     expect(record).toBeDisabled();
+    // One recording at a time: the other kind waits for this one to end.
+    expect(recordTrack).toBeDisabled();
     act(() => {
       runs[0]?.onProgress(0.425);
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Recording the day: 42%');
+    expect(screen.getByRole('status')).toHaveTextContent('Recording the video: 42%');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(runs[0]?.signal.aborted).toBe(true);
     await waitFor(() => {

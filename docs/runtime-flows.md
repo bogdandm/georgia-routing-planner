@@ -553,6 +553,19 @@ an `AbortError`, checked again before each minute because encoding is awaited ou
 the `idle` wait; an unfinished recording cancels its encoder, and a completed one
 reapplies the minute shown before it.
 
+A track video (`MapLibreFacade.recordTrackVideo`) takes the active route, its elapsed
+seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same timing as
+the track's lighting. `planTrackVideo` (`presentation/map/trackVideo.ts`) samples 20
+seconds of video at 30 fps evenly in hike time, places the hiker with
+`locationAtElapsed`, and averages the travel bearing over a second of frames. The facade
+then marks the camera as scripted, the gate the render benchmark also uses, so no
+frame's view is persisted or published as a settled viewport, and restores the camera
+afterwards. `MapLibreLayerController.recordTrackVideo` shares the day video's frame
+loop. Before each capture it also calls `jumpTo` and moves the GL trace point. While
+that `jumpTo` runs, `#scriptedCameraMove` keeps its synchronous `movestart` from
+counting as a playback stop; any other move still aborts. The 5-minute sun steps keep
+distinct shadow tiles few. The clock caption is drawn into the 2D copy before encoding.
+
 ## Sentinel search
 
 ```mermaid

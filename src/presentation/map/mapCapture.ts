@@ -80,7 +80,7 @@ const videoShortSidePixels = 1080;
  * Social networks expect a constant rate of 24–60 frames per second, so each map frame is
  * repeated for its duration at this rate.
  */
-const videoFrameRate = 30;
+export const videoFrameRate = 30;
 
 /**
  * MP4 video of map frames: H.264 through WebCodecs, without audio, with the index at the
@@ -158,15 +158,42 @@ export class MapVideoRecorder {
   /**
    * Call within the frame that drew `canvas` (see `readWhenMapIdle`) and wait for the
    * returned promise before the next frame: the copy is taken synchronously, encoding
-   * continues after.
+   * continues after. A `caption` is drawn in the lower-left corner of the video frame.
    */
-  public async addFrame(canvas: HTMLCanvasElement, durationMs: number): Promise<void> {
+  public async addFrame(
+    canvas: HTMLCanvasElement,
+    durationMs: number,
+    caption?: string,
+  ): Promise<void> {
     this.#context.drawImage(canvas, 0, 0, this.#width, this.#height);
+    if (caption !== undefined) this.drawCaption(caption);
     this.#elapsedMs += durationMs;
     const endFrame = Math.round((this.#elapsedMs * videoFrameRate) / 1000);
     for (; this.#videoFrames < endFrame; this.#videoFrames += 1) {
       await this.#source.add(this.#videoFrames / videoFrameRate, 1 / videoFrameRate);
     }
+  }
+
+  /** Light text on a dark plate, sized to the frame so it reads after re-encoding. */
+  private drawCaption(caption: string): void {
+    const context = this.#context;
+    const fontPixels = Math.max(
+      12,
+      Math.round(Math.min(this.#width, this.#height) / 22),
+    );
+    const margin = Math.round(fontPixels * 0.8);
+    const padding = Math.round(fontPixels * 0.45);
+    context.font = `600 ${String(fontPixels)}px system-ui, sans-serif`;
+    context.textBaseline = 'middle';
+    const plateWidth = context.measureText(caption).width + padding * 2;
+    const plateHeight = fontPixels + padding * 2;
+    const plateTop = this.#height - margin - plateHeight;
+    context.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    context.beginPath();
+    context.roundRect(margin, plateTop, plateWidth, plateHeight, padding);
+    context.fill();
+    context.fillStyle = '#FFFFFF';
+    context.fillText(caption, margin + padding, plateTop + plateHeight / 2);
   }
 
   public async finish(): Promise<Uint8Array> {

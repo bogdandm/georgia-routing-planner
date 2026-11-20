@@ -428,6 +428,11 @@ msgstr "No Sentinel-2 image is shown on the map."
 msgid "Now"
 msgstr "Now"
 
+#. js-lingui-id: DRQjfW
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Open a track to record its video."
+msgstr "Open a track to record its video."
+
 #. js-lingui-id: YJQPdw
 #: src/presentation/map/MapViewControls.tsx
 msgid "Open image comparison"
@@ -473,20 +478,25 @@ msgstr "Play the day"
 msgid "Recomputes shadow masks on the GPU once released"
 msgstr "Recomputes shadow masks on the GPU once released"
 
+#. js-lingui-id: VSJdf3
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Record a track video"
+msgstr "Record a track video"
+
 #. js-lingui-id: y6MiRk
 #: src/presentation/map/MapCaptureControl.tsx
 msgid "Record a video of the day"
 msgstr "Record a video of the day"
 
-#. js-lingui-id: 43gcG7
+#. js-lingui-id: -jo9VT
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Recording the day"
-msgstr "Recording the day"
+msgid "Recording the video"
+msgstr "Recording the video"
 
-#. js-lingui-id: ryhEvd
+#. js-lingui-id: smUY1i
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Recording the day: {percent}%"
-msgstr "Recording the day: {percent}%"
+msgid "Recording the video: {percent}%"
+msgstr "Recording the video: {percent}%"
 
 #. js-lingui-id: ZiaU3x
 #: src/presentation/map/SunShadowControl.tsx
@@ -696,10 +706,10 @@ msgstr "Track grade (%)"
 msgid "Track grade color thresholds"
 msgstr "Track grade color thresholds"
 
-#. js-lingui-id: wUjgh4
+#. js-lingui-id: NQFtP3
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Turn on sun shadows to record the day."
-msgstr "Turn on sun shadows to record the day."
+msgid "Turn on sun shadows to record a video."
+msgstr "Turn on sun shadows to record a video."
 
 #. js-lingui-id: aBvon1
 #: src/presentation/map/MapPointInspectorContent.tsx

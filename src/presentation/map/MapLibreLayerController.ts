@@ -149,6 +149,7 @@ import {
   localDayBounds,
   sessionStartInstant,
 } from '@/presentation/map/sunShadowDaylight';
+import type { TrackVideoPlan } from '@/presentation/map/trackVideo';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
   type TerrainShadowMetricsSnapshot,
@@ -1095,6 +1096,8 @@ export class MapLibreLayerController {
   #sunShadowDrawEveryStep = false;
   /** Present from Play until stop; aborting it cancels the day prefetch. */
   #sunShadowPlaybackAbort: AbortController | null = null;
+  /** True only inside a track recording's own `jumpTo`, whose movestart is not a stop. */
+  #scriptedCameraMove = false;
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
   #sunShadowPlaybackFrames: readonly number[] = [];
   #sunShadowPlaybackIndex = 0;
@@ -1659,7 +1662,77 @@ export class MapLibreLayerController {
     }
     const window = this.sunShadowDaylight(map, this.#sunShadowInstantMs);
     if (window === null) throw new Error('The shown day has no sunrise and sunset.');
-    const frames = daylightFrameInstants(window, sunShadowPlaybackAverageStepMinutes);
+    const frames = daylightFrameInstants(
+      window,
+      sunShadowPlaybackAverageStepMinutes,
+    ).map((sunInstantMs) => ({ sunInstantMs, durationMs: sunShadowPlaybackFrameMs }));
+    return this.recordSunShadowFrames(map, frames, signal, onProgress, () => undefined);
+  }
+
+  /**
+   * Records a track time-lapse planned by `planTrackVideo` as the bytes of an MP4 video:
+   * per frame, the camera jumps to the hiker, the track trace point marks them, and sun
+   * shadows show the frame's minute. It counts as playback exactly like
+   * `recordSunShadowDay`, except that its own camera jumps are not moves that stop it; a
+   * user's move still does. The caller restores the camera; the minute shown before
+   * returns here and the trace point is cleared.
+   */
+  public async recordTrackVideo(
+    plan: TrackVideoPlan,
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+  ): Promise<Uint8Array> {
+    signal.throwIfAborted();
+    this.stopSunShadowPlayback();
+    const map = this.#map;
+    if (map === null || map.isMoving() || !this.sunShadowsDrawn()) {
+      throw new Error('Sun shadows are not drawn.');
+    }
+    try {
+      return await this.recordSunShadowFrames(
+        map,
+        plan.frames,
+        signal,
+        onProgress,
+        (frame) => {
+          this.#scriptedCameraMove = true;
+          try {
+            map.jumpTo({
+              center: [...frame.position],
+              zoom: plan.zoom,
+              bearing: frame.bearing,
+              pitch: plan.pitch,
+            });
+          } finally {
+            this.#scriptedCameraMove = false;
+          }
+          this.setImportedTrackTracePoint(frame.position);
+        },
+      );
+    } finally {
+      this.setImportedTrackTracePoint(null);
+    }
+  }
+
+  /**
+   * Shared loop of the video recordings: registers as playback (full-quality tiles; any
+   * playback stop aborts with an `AbortError`), then per frame applies its sun minute,
+   * runs `beforeFrame`, and captures the frame once MapLibre is idle. A completed
+   * recording reapplies the minute shown before it.
+   */
+  private async recordSunShadowFrames<
+    Frame extends {
+      readonly sunInstantMs: number;
+      readonly durationMs: number;
+      readonly caption?: string;
+    },
+  >(
+    map: MapLibreMap,
+    frames: readonly Frame[],
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+    beforeFrame: (frame: Frame) => void,
+  ): Promise<Uint8Array> {
     const startInstantMs = this.#sunShadowInstantMs;
     const controller = new AbortController();
     this.#sunShadowPlaybackAbort = controller;
@@ -1673,14 +1746,15 @@ export class MapLibreLayerController {
     try {
       const started = await MapVideoRecorder.start(canvas.width, canvas.height);
       recorder = started;
-      for (const [index, instantMs] of frames.entries()) {
+      for (const [index, frame] of frames.entries()) {
         // Starting and encoding are awaited outside the idle wait: a stop during them
         // must not apply another minute over the newer state.
         controller.signal.throwIfAborted();
-        this.setSunShadowInstant(instantMs);
+        this.setSunShadowInstant(frame.sunInstantMs);
+        beforeFrame(frame);
         this.reconcileSunShadow(map);
         await readWhenMapIdle(map, controller.signal, (drawn) =>
-          started.addFrame(drawn, sunShadowPlaybackFrameMs),
+          started.addFrame(drawn, frame.durationMs, frame.caption),
         );
         onProgress((index + 1) / frames.length);
       }
@@ -1705,6 +1779,8 @@ export class MapLibreLayerController {
    * or failure note, which described the previous view.
    */
   private readonly handleSunShadowPlaybackMove = (): void => {
+    // A track recording's own camera jumps are not the user moving the map.
+    if (this.#scriptedCameraMove) return;
     this.stopSunShadowPlayback();
   };
 

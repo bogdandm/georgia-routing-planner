@@ -61,9 +61,11 @@ import { FakeTerrainShadowTileProvider } from '@test/helpers/fakeTerrainShadowTi
 import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 
 // jsdom has no 2D canvas or rendering loop: a frame is "drawn" on the next microtask and
-// records the shadow minute shown at that moment.
+// records the shadow minute, map center, and trace point shown at that moment.
 const videoCapture = vi.hoisted(() => ({
   capturedInstants: [] as number[],
+  capturedCenters: [] as { readonly lng: number; readonly lat: number }[],
+  capturedTracePoints: [] as unknown[],
   canceledRecordings: 0,
   /** Runs while the file finalizes, after every frame was encoded. */
   duringFinish: null as (() => void) | null,
@@ -90,12 +92,18 @@ vi.mock('@/presentation/map/mapCapture', () => ({
     }
   },
   readWhenMapIdle: async (
-    map: { getCanvas: () => HTMLCanvasElement },
+    map: {
+      getCanvas: () => HTMLCanvasElement;
+      getCenter: () => { readonly lng: number; readonly lat: number };
+      readonly sources: ReadonlyMap<string, unknown>;
+    },
     signal: AbortSignal,
     read: (canvas: HTMLCanvasElement) => unknown,
   ) => {
     await Promise.resolve();
     if (signal.aborted) throw new DOMException('Aborted.', 'AbortError');
+    videoCapture.capturedCenters.push(map.getCenter());
+    videoCapture.capturedTracePoints.push(map.sources.get('imported-track-trace'));
     return read(map.getCanvas());
   },
 }));
@@ -265,6 +273,13 @@ class FakeLayerMap {
 
   public isMoving(): boolean {
     return this.moving;
+  }
+
+  /** Like MapLibre's `jumpTo`: one synchronous move with its start and end events. */
+  public jumpTo(options: { readonly center: readonly [number, number] }): void {
+    this.fire('movestart', {});
+    this.center = { lng: options.center[0], lat: options.center[1] };
+    this.fire('moveend', {});
   }
 
   public coveringTiles(): {
@@ -3489,6 +3504,85 @@ describe('MapLibreLayerController', () => {
           controller.recordSunShadowDay(aborted.signal, () => undefined),
         ).rejects.toMatchObject({ name: 'AbortError' });
         expect(videoCapture.capturedInstants).toEqual([]);
+        controller.dispose();
+      });
+    });
+
+    describe('track video recording', () => {
+      const minute = 60_000;
+      const plan = {
+        zoom: 14,
+        pitch: 50,
+        frames: [
+          { position: [43.1, 42.7], sunMinute: 0 },
+          { position: [43.12, 42.71], sunMinute: 5 },
+          { position: [43.14, 42.72], sunMinute: 10 },
+        ].map(({ position, sunMinute }) => ({
+          position: position as [number, number],
+          bearing: 30,
+          sunInstantMs: Date.UTC(2026, 6, 1, 6, 0) + sunMinute * minute,
+          caption: 'clock',
+          durationMs: 1_000,
+        })),
+      };
+
+      function startTrackRecording() {
+        videoCapture.capturedInstants.length = 0;
+        videoCapture.capturedCenters.length = 0;
+        videoCapture.capturedTracePoints.length = 0;
+        videoCapture.canceledRecordings = 0;
+        videoCapture.duringFinish = null;
+        const { controller } = createSunShadowController();
+        const map = new FakeLayerMap();
+        controller.attach(map as unknown as MapLibreMap);
+        map.fire('styledata', {});
+        controller.setSunShadow({ enabled: true, instantMs: shadowInstantMs });
+        const recording = controller.recordTrackVideo(
+          plan,
+          new AbortController().signal,
+          () => undefined,
+        );
+        return { controller, map, recording };
+      }
+
+      it('moves the camera, hiker, and sun through every frame despite its own jumps', async () => {
+        const { controller, map, recording } = startTrackRecording();
+
+        await expect(recording).resolves.toEqual(Uint8Array.of(0x6d, 0x70, 0x34));
+        expect(videoCapture.capturedInstants).toEqual(
+          plan.frames.map((frame) => frame.sunInstantMs),
+        );
+        expect(videoCapture.capturedCenters).toEqual(
+          plan.frames.map(({ position }) => ({ lng: position[0], lat: position[1] })),
+        );
+        expect(videoCapture.capturedTracePoints).toHaveLength(plan.frames.length);
+        for (const [index, source] of videoCapture.capturedTracePoints.entries()) {
+          expect(source).toHaveProperty(
+            'data.features.0.geometry.coordinates',
+            plan.frames[index]?.position,
+          );
+        }
+        // The hiker leaves with the recording, and the shown minute returns.
+        expect(map.sources.get(mapSourceIds.importedTrackTrace)).toHaveProperty(
+          'data.features',
+          [],
+        );
+        expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+          Math.floor(shadowInstantMs / minute) * minute,
+        );
+        controller.dispose();
+      });
+
+      it('stops when the user moves the map and removes the hiker', async () => {
+        const { controller, map, recording } = startTrackRecording();
+        map.fire('movestart', {});
+
+        await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+        expect(videoCapture.canceledRecordings).toBe(1);
+        expect(map.sources.get(mapSourceIds.importedTrackTrace)).toHaveProperty(
+          'data.features',
+          [],
+        );
         controller.dispose();
       });
     });

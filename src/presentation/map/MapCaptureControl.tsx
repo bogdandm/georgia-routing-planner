@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
+import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
 import {
   Box,
@@ -23,10 +24,18 @@ export interface MapCaptureControlProps {
    * Records the day cycle of sun shadows as an MP4 video and downloads it; null while
    * shadows are off. Rejects with an `AbortError` when `signal` or a map change stops it.
    */
-  readonly onRecordDayVideo:
-    | ((signal: AbortSignal, onProgress: (fraction: number) => void) => Promise<void>)
-    | null;
+  readonly onRecordDayVideo: RecordVideo | null;
+  /**
+   * Records a time-lapse of the open track's hike with its sun shadows and downloads it;
+   * null while shadows are off or no single timed track is open.
+   */
+  readonly onRecordTrackVideo: RecordVideo | null;
 }
+
+type RecordVideo = (
+  signal: AbortSignal,
+  onProgress: (fraction: number) => void,
+) => Promise<void>;
 
 interface MapCaptureButtonProps {
   readonly open: boolean;
@@ -82,6 +91,7 @@ export function MapCapturePopover({
   onClose,
   onCopyScreenshot,
   onRecordDayVideo,
+  onRecordTrackVideo,
 }: MapCapturePopoverProps) {
   const { t } = useLingui();
   const videoAbort = useRef<AbortController | null>(null);
@@ -105,7 +115,7 @@ export function MapCapturePopover({
       },
     );
   };
-  const recordVideo = (record: NonNullable<typeof onRecordDayVideo>) => {
+  const recordVideo = (record: RecordVideo) => {
     const controller = new AbortController();
     videoAbort.current = controller;
     setVideo({ kind: 'recording', progress: 0 });
@@ -194,15 +204,31 @@ export function MapCapturePopover({
             >
               {t`Record a video of the day`}
             </Button>
+            <Button
+              disabled={onRecordTrackVideo === null || recording}
+              onClick={() => {
+                if (onRecordTrackVideo !== null) recordVideo(onRecordTrackVideo);
+              }}
+              size="small"
+              startIcon={<RouteOutlinedIcon fontSize="small" />}
+              variant="outlined"
+            >
+              {t`Record a track video`}
+            </Button>
             {onRecordDayVideo === null && !recording ? (
               <Typography color="text.secondary" variant="caption">
-                {t`Turn on sun shadows to record the day.`}
+                {t`Turn on sun shadows to record a video.`}
+              </Typography>
+            ) : null}
+            {onRecordDayVideo !== null && onRecordTrackVideo === null && !recording ? (
+              <Typography color="text.secondary" variant="caption">
+                {t`Open a track to record its video.`}
               </Typography>
             ) : null}
             {recording ? (
               <Stack spacing={0.5}>
                 <LinearProgress
-                  aria-label={t`Recording the day`}
+                  aria-label={t`Recording the video`}
                   value={video.progress * 100}
                   variant="determinate"
                 />
@@ -211,7 +237,7 @@ export function MapCapturePopover({
                   sx={{ alignItems: 'center', justifyContent: 'space-between' }}
                 >
                   <Typography color="text.secondary" role="status" variant="caption">
-                    {t`Recording the day: ${percent}%`}
+                    {t`Recording the video: ${percent}%`}
                   </Typography>
                   <Button
                     onClick={() => {

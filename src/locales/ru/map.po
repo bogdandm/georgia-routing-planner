@@ -428,6 +428,11 @@ msgstr "На карте не показан снимок Sentinel-2."
 msgid "Now"
 msgstr "Сейчас"
 
+#. js-lingui-id: DRQjfW
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Open a track to record its video."
+msgstr "Откройте трек, чтобы записать его видео."
+
 #. js-lingui-id: YJQPdw
 #: src/presentation/map/MapViewControls.tsx
 msgid "Open image comparison"
@@ -473,20 +478,25 @@ msgstr "Показать весь день"
 msgid "Recomputes shadow masks on the GPU once released"
 msgstr "Пересчитывает маски теней на GPU после отпускания"
 
+#. js-lingui-id: VSJdf3
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Record a track video"
+msgstr "Записать видео трека"
+
 #. js-lingui-id: y6MiRk
 #: src/presentation/map/MapCaptureControl.tsx
 msgid "Record a video of the day"
 msgstr "Записать видео дня"
 
-#. js-lingui-id: 43gcG7
+#. js-lingui-id: -jo9VT
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Recording the day"
-msgstr "Запись дня"
+msgid "Recording the video"
+msgstr "Запись видео"
 
-#. js-lingui-id: ryhEvd
+#. js-lingui-id: smUY1i
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Recording the day: {percent}%"
-msgstr "Запись дня: {percent}%"
+msgid "Recording the video: {percent}%"
+msgstr "Запись видео: {percent}%"
 
 #. js-lingui-id: ZiaU3x
 #: src/presentation/map/SunShadowControl.tsx
@@ -696,10 +706,10 @@ msgstr "Уклон трека (%)"
 msgid "Track grade color thresholds"
 msgstr "Пороги цветов уклона трека"
 
-#. js-lingui-id: wUjgh4
+#. js-lingui-id: NQFtP3
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Turn on sun shadows to record the day."
-msgstr "Включите тени от солнца, чтобы записать день."
+msgid "Turn on sun shadows to record a video."
+msgstr "Включите тени от солнца, чтобы записать видео."
 
 #. js-lingui-id: aBvon1
 #: src/presentation/map/MapPointInspectorContent.tsx

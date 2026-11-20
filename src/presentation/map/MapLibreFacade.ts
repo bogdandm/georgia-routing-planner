@@ -44,6 +44,11 @@ import {
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { captureMapPng } from '@/presentation/map/mapCapture';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
+import {
+  isTrackVideoCameraJump,
+  planTrackVideo,
+  type TrackVideoRoute,
+} from '@/presentation/map/trackVideo';
 import type {
   MapLibreLayerController,
   PlannedLineOverlay,
@@ -84,6 +89,11 @@ import {
 
 /** Navigator-style camera pitch for fits that face a travel path in 3D. */
 const directedFitPitchDegrees = 45;
+/**
+ * Track-video pitch in 3D: low enough that a ridge between the camera and the hiker it
+ * centers on rarely hides them, high enough to show relief.
+ */
+const trackVideoTerrainPitchDegrees = 50;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
@@ -170,6 +180,7 @@ type MapLayerControllerLifecycle = Pick<
       | 'getSunShadowMetrics'
       | 'getTerrainOverlayPreferences'
       | 'isExpectedRasterCancellation'
+      | 'recordTrackVideo'
       | 'resetSunShadowMetrics'
       | 'setLayerVisibility'
       | 'setSunShadow'
@@ -324,8 +335,11 @@ export class MapLibreFacade implements MapFacade {
     readonly promise: Promise<TerrainTransitionResult>;
   } | null = null;
   #terrainCameraAdjustmentActive = false;
-  /** Set while the render benchmark runs; detaching the map aborts it. */
-  #renderBenchmark: AbortController | null = null;
+  /**
+   * Set while the render benchmark or a track video scripts the camera, whose views are
+   * never the user's; detaching the map aborts it.
+   */
+  #scriptedCamera: AbortController | null = null;
   #terrainSourceRefreshRequired = false;
   #terrainRetryRevision = 0;
   #cancelTerrainWait: (() => void) | null = null;
@@ -915,7 +929,7 @@ export class MapLibreFacade implements MapFacade {
     options: RenderBenchmarkOptions,
   ): Promise<RenderBenchmarkReport> {
     const map = this.#map;
-    if (map === null || this.#renderBenchmark !== null) {
+    if (map === null || this.#scriptedCamera !== null) {
       throw new Error('The map is not ready for a render benchmark.');
     }
     const layers = this.layerController;
@@ -951,7 +965,7 @@ export class MapLibreFacade implements MapFacade {
     const camera = this.readCamera(map);
     const previousMode = this.#snapshot.terrainMode;
     const controller = new AbortController();
-    this.#renderBenchmark = controller;
+    this.#scriptedCamera = controller;
     try {
       // Sun shadows are the default relief shading; the plain run measures the map without.
       if (!options.sunShadows) {
@@ -986,7 +1000,7 @@ export class MapLibreFacade implements MapFacade {
       const attached = this.#map === map;
       if (attached && previousMode !== 'terrain')
         await this.setTerrainMode(previousMode);
-      this.#renderBenchmark = null;
+      this.#scriptedCamera = null;
       // Not a benchmark move: `moveend` persists the restored view and snapshot camera.
       if (attached) {
         map.jumpTo({
@@ -999,9 +1013,61 @@ export class MapLibreFacade implements MapFacade {
     }
   }
 
-  /** Hands a settled view to persistence, except the benchmark's temporary views. */
+  public async recordTrackVideo(
+    route: TrackVideoRoute,
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+  ): Promise<Uint8Array> {
+    const map = this.#map;
+    const layers = this.layerController;
+    if (
+      map === null ||
+      this.#scriptedCamera !== null ||
+      layers?.recordTrackVideo === undefined
+    ) {
+      throw new Error('The map is not ready for a track video.');
+    }
+    const plan = planTrackVideo(route, {
+      widthPixels: map.getCanvas().clientWidth,
+      pitch:
+        this.#snapshot.terrainMode === 'terrain' ? trackVideoTerrainPitchDegrees : 0,
+    });
+    const camera = this.readCamera(map);
+    const controller = new AbortController();
+    this.#scriptedCamera = controller;
+    // A user's move stops the recording in the layer controller. It is the user's view
+    // from then on: its `moveend` persists, and the camera is not restored over it.
+    const stop = { byUserMove: false };
+    const noteUserMove = (event: object) => {
+      if (isTrackVideoCameraJump(event)) return;
+      stop.byUserMove = true;
+      if (this.#scriptedCamera === controller) this.#scriptedCamera = null;
+    };
+    map.on('movestart', noteUserMove);
+    try {
+      return await layers.recordTrackVideo(
+        plan,
+        AbortSignal.any([signal, controller.signal]),
+        onProgress,
+      );
+    } finally {
+      map.off('movestart', noteUserMove);
+      if (this.#scriptedCamera === controller) this.#scriptedCamera = null;
+      // Not a scripted move: `moveend` persists the restored view and snapshot camera.
+      if (this.#map === map && !stop.byUserMove) {
+        map.jumpTo({
+          center: [camera.longitude, camera.latitude],
+          zoom: camera.zoom,
+          bearing: camera.bearing,
+          pitch: camera.pitch,
+        });
+      }
+    }
+  }
+
+  /** Hands a settled view to persistence, except scripted temporary views. */
   private persistSettledView(view: MapViewState): void {
-    if (this.#renderBenchmark !== null) return;
+    if (this.#scriptedCamera !== null) return;
     this.onViewSettled(view);
   }
 
@@ -1170,8 +1236,8 @@ export class MapLibreFacade implements MapFacade {
     this.layerController?.setTerrainInteractionActive(false);
     // Terrain mode changes deliberately issue intermediate camera commands. Persisting
     // one of those transient views can restore a pitched flat map or a level 3D map.
-    // The render benchmark's scripted scene is never the user's view either.
-    if (this.#terrainCameraAdjustmentActive || this.#renderBenchmark !== null) return;
+    // Scripted benchmark and track-video scenes are never the user's view either.
+    if (this.#terrainCameraAdjustmentActive || this.#scriptedCamera !== null) return;
     if (this.#map !== null) {
       const camera = this.readCamera(this.#map);
       this.updateSnapshot({ camera });
@@ -2354,7 +2420,9 @@ export class MapLibreFacade implements MapFacade {
     this.clearTrackBendHover();
     this.finishTrackPointDrag(null);
     this.#suppressTrackPointClick = false;
-    this.#renderBenchmark?.abort(new Error('The map closed during the benchmark.'));
+    this.#scriptedCamera?.abort(
+      new Error('The map closed during a scripted camera run.'),
+    );
     this.cancelAllSourceRecoveries();
     this.#initialViewportSettled = false;
     const map = this.#map;

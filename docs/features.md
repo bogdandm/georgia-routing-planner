@@ -900,9 +900,24 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   messengers accept for upload. Frames have the same content as the screenshot and are
   scaled to fit 1920×1080 in the map's orientation (smaller maps keep their size). The
   panel shows progress and **Cancel**; a camera move, a time chosen in the sun panel,
-  **Play the day**, or turning shadows off stops the recording and says so. A finished
-  recording returns the map to the minute shown before it. Closing the panel keeps the
-  recording running.
+  **Play the day**, or turning shadows off stops the recording and says so. Unless a
+  time was chosen in the sun panel, the map returns to the minute shown before the
+  recording, however it ended. Closing the panel keeps the recording running. **Record a
+  track video**, available while sun shadows are on and a single track with route timing
+  is open, downloads `track-<hike date>.mp4` in the same format: a 22-second time-lapse
+  of the hike from the start to the finish of [Route timing](#tracks) (date, start hour,
+  pace, recorded or estimated time). An orange point on the track marks where the hiker
+  is at each moment and stays at the center of the frame, shown even while imported
+  tracks are hidden; the camera turns smoothly with the direction of travel, sees about
+  a quarter of the route across the frame (1.2–6 km), and is tilted 50° in 3D and level
+  in 2D. Sun shadows show the moment's time, rounded to 5 minutes; like the sun panel
+  they draw only from two hours before sunrise to two hours after sunset, so night hours
+  keep that edge's night look. The local date and time in the route's time zone appear
+  in the lower-left corner. Video time runs evenly through the hike time, so the point
+  slows on climbs and waits through recorded pauses while the light keeps changing; the
+  start and the finish are each held for a second. Moving the map stops the recording
+  and keeps the new view; otherwise the camera returns to where it was. The two
+  recordings never run at once.
 - **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

@@ -67,6 +67,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: false,
+      // Deployed with the app: names every bundled package and version with its license
+      // text, as MPL-2.0 (mediabunny) requires for code shipped in executable form.
+      license: { fileName: 'third-party-licenses.md' },
     },
   };
 });

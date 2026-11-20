@@ -139,6 +139,8 @@ Trail Planner is a static TypeScript application built with React, Vite, Materia
 and MapLibre GL JS. IndexedDB stores local tracks, folders, markers, and preferences.
 Supabase provides optional accounts, synchronization, and track sharing. The production
 build is deployed to GitHub Pages, and the core workflows need no application server.
+The build also publishes `third-party-licenses.md`, the name, version, and license text
+of every bundled dependency.
 
 ### Local development
 

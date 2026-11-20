@@ -32,7 +32,7 @@ describe('MapCapturePopover', () => {
       .fn<() => Promise<void>>()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('denied'));
-    renderPopover({ onCopyScreenshot, onRecordDayGif: null });
+    renderPopover({ onCopyScreenshot, onRecordDayVideo: null });
 
     const take = screen.getByRole('button', { name: 'Take a screenshot' });
     await user.click(take);
@@ -48,11 +48,11 @@ describe('MapCapturePopover', () => {
     expect(onCopyScreenshot).toHaveBeenCalledTimes(2);
   });
 
-  it('asks for sun shadows before a day GIF can be recorded', () => {
-    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayGif: null });
+  it('asks for sun shadows before a day video can be recorded', () => {
+    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo: null });
 
     expect(
-      screen.getByRole('button', { name: 'Record a GIF of the day' }),
+      screen.getByRole('button', { name: 'Record a video of the day' }),
     ).toBeDisabled();
     expect(screen.getByText('Turn on sun shadows to record the day.')).toBeVisible();
   });
@@ -65,7 +65,7 @@ describe('MapCapturePopover', () => {
       readonly resolve: () => void;
       readonly reject: (error: unknown) => void;
     }[] = [];
-    const onRecordDayGif = vi.fn(
+    const onRecordDayVideo = vi.fn(
       (signal: AbortSignal, onProgress: (fraction: number) => void) =>
         new Promise<void>((resolve, reject) => {
           signal.addEventListener('abort', () => {
@@ -74,8 +74,8 @@ describe('MapCapturePopover', () => {
           runs.push({ signal, onProgress, resolve, reject });
         }),
     );
-    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayGif });
-    const record = screen.getByRole('button', { name: 'Record a GIF of the day' });
+    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo });
+    const record = screen.getByRole('button', { name: 'Record a video of the day' });
 
     await user.click(record);
     expect(record).toBeDisabled();
@@ -94,7 +94,7 @@ describe('MapCapturePopover', () => {
     act(() => {
       runs[1]?.resolve();
     });
-    expect(await screen.findByText('The GIF was downloaded.')).toHaveAttribute(
+    expect(await screen.findByText('The video was downloaded.')).toHaveAttribute(
       'role',
       'status',
     );
@@ -114,7 +114,7 @@ describe('MapCapturePopover', () => {
       runs[3]?.reject(new Error('No 2D canvas.'));
     });
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The GIF could not be recorded.',
+      'The video could not be recorded.',
     );
   });
 });

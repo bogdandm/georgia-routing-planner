@@ -62,15 +62,31 @@ import type { RuntimeServices } from '@/bootstrap/createRuntimeServices';
 
 // jsdom has no 2D canvas or rendering loop: a frame is "drawn" on the next microtask and
 // records the shadow minute shown at that moment.
-const gifCapture = vi.hoisted(() => ({ capturedInstants: [] as number[] }));
+const videoCapture = vi.hoisted(() => ({
+  capturedInstants: [] as number[],
+  canceledRecordings: 0,
+  /** Runs while the file finalizes, after every frame was encoded. */
+  duringFinish: null as (() => void) | null,
+}));
 vi.mock('@/presentation/map/mapCapture', () => ({
-  MapGifRecorder: class {
-    public addFrame(): void {
-      gifCapture.capturedInstants.push(mapLayerStore.getState().sunShadow.instantMs);
+  MapVideoRecorder: class {
+    public static start(): Promise<object> {
+      return Promise.resolve(new this());
     }
 
-    public finish(): Uint8Array {
-      return Uint8Array.of(0x47, 0x49, 0x46);
+    public addFrame(): Promise<void> {
+      videoCapture.capturedInstants.push(mapLayerStore.getState().sunShadow.instantMs);
+      return Promise.resolve();
+    }
+
+    public finish(): Promise<Uint8Array> {
+      videoCapture.duringFinish?.();
+      return Promise.resolve(Uint8Array.of(0x6d, 0x70, 0x34));
+    }
+
+    public cancel(): Promise<void> {
+      videoCapture.canceledRecordings += 1;
+      return Promise.resolve();
     }
   },
   readWhenMapIdle: async (
@@ -3393,9 +3409,11 @@ describe('MapLibreLayerController', () => {
       controller.dispose();
     });
 
-    describe('GIF recording', () => {
+    describe('video recording', () => {
       function startRecording() {
-        gifCapture.capturedInstants.length = 0;
+        videoCapture.capturedInstants.length = 0;
+        videoCapture.canceledRecordings = 0;
+        videoCapture.duringFinish = null;
         const { controller } = createSunShadowController();
         const map = new FakeLayerMap();
         controller.attach(map as unknown as MapLibreMap);
@@ -3415,9 +3433,10 @@ describe('MapLibreLayerController', () => {
       it('captures every day frame from the first, then returns to the shown minute', async () => {
         const { controller, recording, progress, window } = startRecording();
 
-        await expect(recording).resolves.toEqual(Uint8Array.of(0x47, 0x49, 0x46));
+        await expect(recording).resolves.toEqual(Uint8Array.of(0x6d, 0x70, 0x34));
         const frames = daylightFrameInstants(window, 10);
-        expect(gifCapture.capturedInstants).toEqual(frames);
+        expect(videoCapture.capturedInstants).toEqual(frames);
+        expect(videoCapture.canceledRecordings).toBe(0);
         expect(progress.at(-1)).toBe(1);
         expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
           Math.floor(shadowInstantMs / 60_000) * 60_000,
@@ -3429,7 +3448,8 @@ describe('MapLibreLayerController', () => {
         const first = startRecording();
         first.map.fire('movestart', {});
         await expect(first.recording).rejects.toMatchObject({ name: 'AbortError' });
-        expect(gifCapture.capturedInstants.length).toBeLessThanOrEqual(1);
+        expect(videoCapture.capturedInstants.length).toBeLessThanOrEqual(1);
+        expect(videoCapture.canceledRecordings).toBe(1);
         first.controller.dispose();
 
         const second = startRecording();
@@ -3442,8 +3462,22 @@ describe('MapLibreLayerController', () => {
         second.controller.dispose();
       });
 
+      it('discards the video when a time is chosen while the file finalizes', async () => {
+        const chosenMs = shadowInstantMs + 60 * 60_000;
+        const { controller, recording } = startRecording();
+        videoCapture.duringFinish = () => {
+          controller.setSunShadow({ enabled: true, instantMs: chosenMs });
+        };
+
+        await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+        expect(mapLayerStore.getState().sunShadow.instantMs).toBe(
+          Math.floor(chosenMs / 60_000) * 60_000,
+        );
+        controller.dispose();
+      });
+
       it('rejects an already aborted signal without recording', async () => {
-        gifCapture.capturedInstants.length = 0;
+        videoCapture.capturedInstants.length = 0;
         const { controller } = createSunShadowController();
         const map = new FakeLayerMap();
         controller.attach(map as unknown as MapLibreMap);
@@ -3454,7 +3488,7 @@ describe('MapLibreLayerController', () => {
         await expect(
           controller.recordSunShadowDay(aborted.signal, () => undefined),
         ).rejects.toMatchObject({ name: 'AbortError' });
-        expect(gifCapture.capturedInstants).toEqual([]);
+        expect(videoCapture.capturedInstants).toEqual([]);
         controller.dispose();
       });
     });

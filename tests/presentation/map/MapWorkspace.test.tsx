@@ -2767,7 +2767,7 @@ describe('MapWorkspace', () => {
       { timeout: 2_000 },
     );
   });
-  it('names a recorded day GIF by the local date at the map center', async () => {
+  it('names a recorded day video by the local date at the map center', async () => {
     const user = userEvent.setup();
     const services = createTestServices();
     const mapLayers = services.mapLayers;
@@ -2783,10 +2783,10 @@ describe('MapWorkspace', () => {
     facade.setSnapshot({ lifecycle: 'ready' });
     renderWithI18n(
       <RuntimeServicesProvider services={services}>
-        <MapWorkspace facade={facade} mapCanvas={<div>GIF map</div>} />
+        <MapWorkspace facade={facade} mapCanvas={<div>Video map</div>} />
       </RuntimeServicesProvider>,
     );
-    await screen.findByText('GIF map');
+    await screen.findByText('Video map');
     // 03:30 in Tbilisi (UTC+4) on June 21 is still June 20 in UTC.
     act(() => {
       mapLayerStore.setState((state) => ({
@@ -2799,10 +2799,10 @@ describe('MapWorkspace', () => {
     });
 
     await user.click(screen.getByRole('button', { name: 'Capture the map' }));
-    await user.click(screen.getByRole('button', { name: 'Record a GIF of the day' }));
+    await user.click(screen.getByRole('button', { name: 'Record a video of the day' }));
 
     await waitFor(() => {
-      expect(downloads).toEqual(['sun-shadows-2026-06-21.gif']);
+      expect(downloads).toEqual(['sun-shadows-2026-06-21.mp4']);
     });
     click.mockRestore();
   });

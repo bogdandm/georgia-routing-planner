@@ -316,7 +316,7 @@ created mid-move), so DEM downloads and cached masks never wait for a move to en
 bounded 1024-coordinate history prevents another draft on refresh or a minute
 replacement. It also suppresses drafts wherever an already computed parent or child
 relief tile overlaps: zoom changes retain MapLibre's existing detail transition, never
-replacing relief with a flat preview. Play and GIF URLs carry `quality=full`, so even
+replacing relief with a flat preview. Play and video URLs carry `quality=full`, so even
 cache misses never show draft frames. Aborted requests cancel their worker job. The
 worker answers with an `ImageBitmap`, which MapLibre accepts directly, so no image is
 encoded.
@@ -540,14 +540,18 @@ The camera panel (`MapCaptureControl.tsx`) reads the map canvas through
 its pixels exist only inside the frame that drew them: a screenshot reads the canvas in
 the next `render` event (`MapLibreFacade.captureMapImage`, PNG via `toBlob`), and the
 PNG promise goes straight into a `ClipboardItem` so the clipboard write keeps the
-click's user activation. A day GIF (`MapLibreLayerController.recordSunShadowDay`) takes
-the same frames as playback, unrotated, applies each minute through the sun-shadow
+click's user activation. A day video (`MapLibreLayerController.recordSunShadowDay`)
+takes the same frames as playback, unrotated, applies each minute through the sun-shadow
 reconciliation, and captures it in the `idle` event, which MapLibre fires right after
-the frame that leaves every tile loaded and no fade running. Each frame is scaled down
-to a 1080 px shorter side when larger, quantized to its own 256-color palette, and
-appended by `gifenc` at the 150 ms playback delay; `MapWorkspace` downloads the bytes.
-The recording registers as playback, so every playback stop also aborts it with an
-`AbortError`; a completed recording reapplies the minute shown before it.
+the frame that leaves every tile loaded and no fade running. Each frame is copied into a
+2D canvas that fits 1920×1080 in the map's orientation with even sides, and
+`mediabunny`, loaded as a separate chunk on the first recording, encodes it with
+WebCodecs H.264, repeating it at a constant 30 fps for the 150 ms playback delay, into
+an MP4 whose index precedes the media (`MapVideoRecorder`); `MapWorkspace` downloads the
+bytes. The recording registers as playback, so every playback stop also aborts it with
+an `AbortError`, checked again before each minute because encoding is awaited outside
+the `idle` wait; an unfinished recording cancels its encoder, and a completed one
+reapplies the minute shown before it.
 
 ## Sentinel search
 

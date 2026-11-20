@@ -1,5 +1,5 @@
-import { applyPalette, GIFEncoder, quantize } from 'gifenc';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import type * as Mediabunny from 'mediabunny';
 
 /**
  * Calls `read` with the map canvas right after MapLibre draws the next frame. The canvas
@@ -71,46 +71,113 @@ export function readWhenMapIdle<T>(
 }
 
 /**
- * Shorter side of a recorded GIF frame (1080p): a high-DPI canvas above it is scaled down
- * to it, and a smaller canvas keeps its own size.
+ * Largest recorded video frame, 1080p in the map's own orientation: a larger canvas is
+ * scaled down to fit it, and a smaller canvas keeps its own size.
  */
-const gifShortSidePixels = 1080;
+const videoLongSidePixels = 1920;
+const videoShortSidePixels = 1080;
+/**
+ * Social networks expect a constant rate of 24–60 frames per second, so each map frame is
+ * repeated for its duration at this rate.
+ */
+const videoFrameRate = 30;
 
-/** Looping GIF of map frames, each given its own 256-color palette. */
-export class MapGifRecorder {
-  readonly #encoder = GIFEncoder();
+/**
+ * MP4 video of map frames: H.264 through WebCodecs, without audio, with the index at the
+ * start of the file, which is what social networks and messengers accept for upload.
+ */
+export class MapVideoRecorder {
+  readonly #output: Mediabunny.Output<
+    Mediabunny.Mp4OutputFormat,
+    Mediabunny.BufferTarget
+  >;
+  readonly #source: Mediabunny.CanvasSource;
   readonly #context: CanvasRenderingContext2D;
   readonly #width: number;
   readonly #height: number;
+  #elapsedMs = 0;
+  #videoFrames = 0;
 
-  public constructor(sourceWidth: number, sourceHeight: number) {
-    const scale = Math.min(1, gifShortSidePixels / Math.min(sourceWidth, sourceHeight));
-    this.#width = Math.max(1, Math.round(sourceWidth * scale));
-    this.#height = Math.max(1, Math.round(sourceHeight * scale));
+  private constructor(
+    {
+      BufferTarget,
+      CanvasSource,
+      Mp4OutputFormat,
+      Output,
+      Quality,
+    }: Pick<
+      typeof Mediabunny,
+      'BufferTarget' | 'CanvasSource' | 'Mp4OutputFormat' | 'Output' | 'Quality'
+    >,
+    sourceWidth: number,
+    sourceHeight: number,
+  ) {
+    const scale = Math.min(
+      1,
+      videoLongSidePixels / Math.max(sourceWidth, sourceHeight),
+      videoShortSidePixels / Math.min(sourceWidth, sourceHeight),
+    );
+    // H.264 stores color at half resolution, so both sides must be even.
+    this.#width = Math.max(2, 2 * Math.round((sourceWidth * scale) / 2));
+    this.#height = Math.max(2, 2 * Math.round((sourceHeight * scale) / 2));
     const canvas = document.createElement('canvas');
     canvas.width = this.#width;
     canvas.height = this.#height;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const context = canvas.getContext('2d');
     if (context === null) throw new Error('A 2D canvas is unavailable.');
     this.#context = context;
-  }
-
-  /** Call within the frame that drew `canvas`; see `readWhenMapIdle`. */
-  public addFrame(canvas: HTMLCanvasElement, delayMs: number): void {
-    const width = this.#width;
-    const height = this.#height;
-    this.#context.drawImage(canvas, 0, 0, width, height);
-    const { data } = this.#context.getImageData(0, 0, width, height);
-    const palette = quantize(data, 256);
-    this.#encoder.writeFrame(applyPalette(data, palette), width, height, {
-      palette,
-      delay: delayMs,
-      repeat: 0,
+    this.#source = new CanvasSource(canvas, {
+      codec: 'avc',
+      quality: new Quality('high'),
     });
+    this.#output = new Output({
+      format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+      target: new BufferTarget(),
+    });
+    this.#output.addVideoTrack(this.#source, { frameRate: videoFrameRate });
   }
 
-  public finish(): Uint8Array {
-    this.#encoder.finish();
-    return this.#encoder.bytes();
+  public static async start(
+    sourceWidth: number,
+    sourceHeight: number,
+  ): Promise<MapVideoRecorder> {
+    // Dynamic, not static: the encoder is about 200 kB that only a recording needs, so
+    // Vite splits it out of the startup bundle and loads it with the first recording.
+    // Destructuring at the import lets the bundler drop the unused rest of the library.
+    const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality } =
+      await import('mediabunny');
+    const recorder = new MapVideoRecorder(
+      { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality },
+      sourceWidth,
+      sourceHeight,
+    );
+    await recorder.#output.start();
+    return recorder;
+  }
+
+  /**
+   * Call within the frame that drew `canvas` (see `readWhenMapIdle`) and wait for the
+   * returned promise before the next frame: the copy is taken synchronously, encoding
+   * continues after.
+   */
+  public async addFrame(canvas: HTMLCanvasElement, durationMs: number): Promise<void> {
+    this.#context.drawImage(canvas, 0, 0, this.#width, this.#height);
+    this.#elapsedMs += durationMs;
+    const endFrame = Math.round((this.#elapsedMs * videoFrameRate) / 1000);
+    for (; this.#videoFrames < endFrame; this.#videoFrames += 1) {
+      await this.#source.add(this.#videoFrames / videoFrameRate, 1 / videoFrameRate);
+    }
+  }
+
+  public async finish(): Promise<Uint8Array> {
+    await this.#output.finalize();
+    const { buffer } = this.#output.target;
+    if (buffer === null) throw new Error('The video has no data.');
+    return new Uint8Array(buffer);
+  }
+
+  /** Releases the encoder of an unfinished recording. */
+  public cancel(): Promise<void> {
+    return this.#output.cancel();
   }
 }

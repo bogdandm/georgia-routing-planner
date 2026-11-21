@@ -1027,35 +1027,32 @@ export class MapLibreFacade implements MapFacade {
     ) {
       throw new Error('The map is not ready for a track video.');
     }
-    // The video keeps the user's zoom and pitch, within the planner's bounds.
-    const plan = await this.unhideTrackVideoHiker(
-      map,
-      planTrackVideo(route, this.readCamera(map)),
-      signal,
-    );
-    signal.throwIfAborted();
-    if (this.#map !== map) {
-      throw new Error('The map changed while the track video was prepared.');
-    }
-    // The view to return to, as it is when the recording starts.
+    // The view to return to; the video keeps its zoom and pitch, within bounds.
     const camera = this.readCamera(map);
+    // The gate is held from the start, through DEM preparation, so no other scripted
+    // camera starts meanwhile and detaching the map aborts the preparation too.
     const controller = new AbortController();
     this.#scriptedCamera = controller;
-    // A user's move stops the recording in the layer controller. It is the user's view
-    // from then on: its `moveend` persists, and the camera is not restored over it.
+    // A user's move stops the video, prepared or recording; the layer controller sees
+    // the same move. It is the user's view from then on: its `moveend` persists, and
+    // the camera is not restored over it.
     const stop = { byUserMove: false };
     const noteUserMove = (event: object) => {
       if (isTrackVideoCameraJump(event)) return;
       stop.byUserMove = true;
       if (this.#scriptedCamera === controller) this.#scriptedCamera = null;
+      controller.abort();
     };
     map.on('movestart', noteUserMove);
+    const videoSignal = AbortSignal.any([signal, controller.signal]);
     try {
-      return await layers.recordTrackVideo(
-        plan,
-        AbortSignal.any([signal, controller.signal]),
-        onProgress,
+      const plan = await this.unhideTrackVideoHiker(
+        map,
+        planTrackVideo(route, camera),
+        videoSignal,
       );
+      videoSignal.throwIfAborted();
+      return await layers.recordTrackVideo(plan, videoSignal, onProgress);
     } finally {
       map.off('movestart', noteUserMove);
       if (this.#scriptedCamera === controller) this.#scriptedCamera = null;

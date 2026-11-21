@@ -140,7 +140,11 @@ import {
   type ImportedTrackTimeLabel,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
-import { MapVideoRecorder, readWhenMapIdle } from '@/presentation/map/mapCapture';
+import {
+  MapVideoRecorder,
+  readWhenMapIdle,
+  type VideoOverlay,
+} from '@/presentation/map/mapCapture';
 import {
   clampToDaylight,
   type DaylightWindow,
@@ -1740,7 +1744,7 @@ export class MapLibreLayerController {
     Frame extends {
       readonly sunInstantMs: number;
       readonly durationMs: number;
-      readonly caption?: string;
+      readonly overlay?: VideoOverlay;
     },
   >(
     map: MapLibreMap,
@@ -1771,7 +1775,7 @@ export class MapLibreLayerController {
         beforeFrame(frame);
         this.reconcileSunShadow(map);
         await readWhenMapIdle(map, controller.signal, (drawn) =>
-          started.addFrame(drawn, frame.durationMs, frame.caption),
+          started.addFrame(drawn, frame.durationMs, frame.overlay),
         );
         onProgress((index + 1) / frames.length);
       }

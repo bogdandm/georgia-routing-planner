@@ -1,9 +1,7 @@
-import {
-  locationAtElapsed,
-  type TrackTimingPoint,
-} from '@/application/weather/TrackWeatherForecast';
+import type { TrackTimingPoint } from '@/application/weather/TrackWeatherForecast';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
-import { videoFrameRate } from '@/presentation/map/mapCapture';
+import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
+import { videoFrameRate, type VideoOverlay } from '@/presentation/map/mapCapture';
 
 /** A timed route: `elapsedSeconds[i]` is when the hiker reaches `points[i]`. */
 export interface TrackVideoRoute {
@@ -11,17 +9,23 @@ export interface TrackVideoRoute {
   readonly elapsedSeconds: readonly number[];
   /** When the hike starts; the finish is `startMs` plus the last elapsed second. */
   readonly startMs: number;
-  /** Clock text drawn on each frame, in the route's time zone. */
-  readonly formatTime: (instantMs: number) => string;
+  /** The track's stated ascent: the climb shown in the video ends at it. */
+  readonly ascentMeters: number | undefined;
+  /** Display text for the frame overlay, in the route's time zone and the UI locale. */
+  readonly labels: {
+    readonly time: (instantMs: number) => string;
+    readonly distance: (meters: number) => string;
+    readonly ascent: (meters: number) => string;
+  };
 }
 
 export interface TrackVideoFrame {
   /** The hiker at this moment: the marker and the camera center. */
   readonly position: TrackCoordinate;
   readonly bearing: number;
-  /** Sun-shadow minute of this moment, rounded to `trackVideoSunStepMs`. */
+  /** Sun-shadow instant of this moment, rounded to the minute. */
   readonly sunInstantMs: number;
-  readonly caption: string;
+  readonly overlay: VideoOverlay;
   readonly durationMs: number;
 }
 
@@ -41,38 +45,162 @@ export function isTrackVideoCameraJump(event: object): boolean {
   return 'trackVideoCameraJump' in event;
 }
 
-/** The whole hike plays in this time; the start and finish are each held for a second. */
+/** The walking plays in this time; the start and finish are each held for a second. */
 const trackVideoTravelSeconds = 20;
 const trackVideoHoldMs = 1_000;
+/** Share of the travel time spent speeding up at the start and slowing at the finish. */
+const easeShare = 0.12;
 /**
- * Shadows barely move in five minutes, and every distinct minute costs a fresh render of
- * each visible shadow tile, so the sun advances in these steps.
+ * The user's zoom and pitch are kept within these bounds: closer or farther than this
+ * the hiker's surroundings stop reading, and above this pitch the horizon fills the
+ * frame and nearby ridges hide the hiker.
  */
-export const trackVideoSunStepMs = 5 * 60_000;
-/** Ground width across the canvas: about a quarter of the route, within these bounds. */
-const minimumSpanMeters = 1_200;
-const maximumSpanMeters = 6_000;
-const earthCircumferenceMeters = 40_075_016.686;
-const mapTileSizePixels = 512;
+const minimumZoom = 12;
+const maximumZoom = 16;
+const maximumPitchDegrees = 60;
+/** Staying within this radius for at least this long is a stop the video skips. */
+const stopRadiusMeters = 25;
+const stopMinimumSeconds = 3 * 60;
+/**
+ * A recording gap at least `gapMinimumSeconds` long, covered slower than this speed, is
+ * a paused recorder: the hiker covers its distance at `gapWalkingMetersPerSecond`.
+ */
+const gapMinimumSeconds = 60;
+const gapMaximumMetersPerSecond = 0.2;
+const gapWalkingMetersPerSecond = 1;
+/** Mini-profile resolution: elevation samples across the whole route. */
+const profileSamples = 120;
+const minuteMs = 60_000;
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+/** First index whose value reaches `target` in a non-decreasing array, or the last. */
+function firstAtLeast(values: readonly number[], target: number): number {
+  let low = 0;
+  let high = values.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((values[middle] ?? Infinity) < target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+/** `values` at fractional position `position` between neighbouring entries. */
+function valueAt(values: readonly number[], position: number): number {
+  const below = clamp(Math.floor(position), 0, values.length - 1);
+  const above = Math.min(values.length - 1, below + 1);
+  const start = values[below] ?? 0;
+  return start + ((values[above] ?? start) - start) * (position - below);
+}
+
+/**
+ * Seconds of walking up to each point. Time spent within `stopRadiusMeters` of one
+ * place for at least `stopMinimumSeconds` (a break, GPS jitter included) and waits
+ * between recorded segments add none, and a paused recorder's gap only the time to
+ * walk its distance, so the video skips them.
+ */
+function walkingSeconds(
+  points: readonly TrackTimingPoint[],
+  elapsed: readonly number[],
+): number[] {
+  const walking = points.map(() => 0);
+  let index = 0;
+  while (index < points.length - 1) {
+    const anchor = points[index];
+    if (anchor === undefined) break;
+    let end = index;
+    while (
+      end + 1 < points.length &&
+      points[end + 1]?.sourceSegmentIndex === anchor.sourceSegmentIndex &&
+      geodesicDistanceMeters(
+        anchor.coordinate,
+        points[end + 1]?.coordinate ?? anchor.coordinate,
+      ) <= stopRadiusMeters
+    ) {
+      end += 1;
+    }
+    const base = walking[index] ?? 0;
+    if (
+      end > index &&
+      (elapsed[end] ?? 0) - (elapsed[index] ?? 0) >= stopMinimumSeconds
+    ) {
+      for (let stopped = index + 1; stopped <= end; stopped += 1)
+        walking[stopped] = base;
+      index = end;
+      continue;
+    }
+    const next = points[index + 1];
+    const seconds = Math.max(0, (elapsed[index + 1] ?? 0) - (elapsed[index] ?? 0));
+    const meters = (next?.distanceMeters ?? 0) - anchor.distanceMeters;
+    const step =
+      next?.sourceSegmentIndex !== anchor.sourceSegmentIndex
+        ? 0
+        : seconds >= gapMinimumSeconds && meters < seconds * gapMaximumMetersPerSecond
+          ? Math.min(seconds, meters / gapWalkingMetersPerSecond)
+          : seconds;
+    walking[index + 1] = base + step;
+    index += 1;
+  }
+  return walking;
+}
+
+/**
+ * Climb up to each point from elevation rises within recorded segments, scaled so the
+ * finish matches the track's stated ascent; null when the route has no elevation.
+ */
+function cumulativeAscent(
+  points: readonly TrackTimingPoint[],
+  statedMeters: number | undefined,
+): number[] | null {
+  if (points.every((point) => point.elevationMeters === undefined)) return null;
+  let climbed = 0;
+  const ascent = points.map((point, index) => {
+    const previous = points[index - 1];
+    if (
+      previous?.sourceSegmentIndex === point.sourceSegmentIndex &&
+      previous.elevationMeters !== undefined &&
+      point.elevationMeters !== undefined
+    ) {
+      climbed += Math.max(0, point.elevationMeters - previous.elevationMeters);
+    }
+    return climbed;
+  });
+  if (statedMeters === undefined || climbed <= 0) return ascent;
+  return ascent.map((meters) => (meters * statedMeters) / climbed);
+}
+
+/** Elevation at `profileSamples` evenly spaced distances; null without elevation. */
+function elevationProfile(points: readonly TrackTimingPoint[]): number[] | null {
+  const known = points.filter((point) => point.elevationMeters !== undefined);
+  const totalMeters = points.at(-1)?.distanceMeters ?? 0;
+  if (known.length < 2 || totalMeters <= 0) return null;
+  const distances = known.map((point) => point.distanceMeters);
+  return Array.from({ length: profileSamples }, (_, index) => {
+    const distance = (totalMeters * index) / (profileSamples - 1);
+    const after = Math.max(1, firstAtLeast(distances, distance));
+    const before = known[after - 1];
+    const next = known[after];
+    if (before === undefined || next === undefined) return 0;
+    const span = next.distanceMeters - before.distanceMeters;
+    const fraction =
+      span <= 0 ? 1 : clamp((distance - before.distanceMeters) / span, 0, 1);
+    const low = before.elevationMeters ?? 0;
+    return low + ((next.elevationMeters ?? low) - low) * fraction;
+  });
+}
+
 /** Route position `distanceMeters` along it, clamped to its ends. */
 function coordinateAtDistance(
   points: readonly TrackTimingPoint[],
+  distances: readonly number[],
   distanceMeters: number,
 ): TrackCoordinate {
-  let low = 0;
-  let high = points.length - 1;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((points[middle]?.distanceMeters ?? Infinity) < distanceMeters) low = middle + 1;
-    else high = middle;
-  }
-  const after = points[low];
-  const before = points[Math.max(0, low - 1)];
+  const index = firstAtLeast(distances, distanceMeters);
+  const after = points[index];
+  const before = points[Math.max(0, index - 1)];
   if (after === undefined || before === undefined) throw new RangeError('Empty route.');
   const span = after.distanceMeters - before.distanceMeters;
   const fraction =
@@ -92,46 +220,78 @@ function screenBearing(from: TrackCoordinate, to: TrackCoordinate): number | nul
 }
 
 /**
- * Frames of a time-lapse of the hike: the video's time runs linearly through the hike's
- * time, so the hiker slows on climbs and waits through recorded pauses while the sun
- * keeps moving. The camera stays centered on the hiker, turned to the travel direction
- * across about two percent of the route ahead and behind, averaged over a second of
- * video so turns are smooth. `widthPixels` is the canvas width in CSS pixels.
+ * Walked share of the route at travel-time share `time`: the speed rises along a half
+ * cosine over the first `easeShare` of the time, stays even, and falls the same way
+ * before the finish, so the hiker starts and stops smoothly (ease in-out).
+ */
+function easedTravel(time: number): number {
+  const ramp = (share: number) =>
+    (share - (easeShare / Math.PI) * Math.sin((Math.PI * share) / easeShare)) / 2;
+  const area = 1 - easeShare;
+  if (time <= easeShare) return ramp(time) / area;
+  if (time >= 1 - easeShare) return 1 - ramp(1 - time) / area;
+  return (easeShare / 2 + time - easeShare) / area;
+}
+
+/**
+ * Frames of a time-lapse of the hike. The video's travel runs evenly through walking
+ * time, eased at both ends; stops are skipped, while the clock and the sun show the
+ * real time of each moment. The camera keeps the user's zoom and pitch within bounds,
+ * stays centered on the hiker, and turns to the travel direction across about two
+ * percent of the route ahead and behind, averaged over a second of video.
  */
 export function planTrackVideo(
   route: TrackVideoRoute,
-  view: { readonly widthPixels: number; readonly pitch: number },
+  camera: { readonly zoom: number; readonly pitch: number },
 ): TrackVideoPlan {
-  const { points, elapsedSeconds, startMs } = route;
-  const first = points[0];
-  if (first === undefined) throw new RangeError('The route has no points.');
-  const totalSeconds = elapsedSeconds.at(-1) ?? 0;
+  const { points, elapsedSeconds, startMs, labels } = route;
+  if (points.length === 0) throw new RangeError('The route has no points.');
+  const walking = walkingSeconds(points, elapsedSeconds);
+  const totalWalking = walking.at(-1) ?? 0;
+  const ascent = cumulativeAscent(points, route.ascentMeters);
+  const profile = elevationProfile(points);
   const totalMeters = points.at(-1)?.distanceMeters ?? 0;
   const travelFrames = trackVideoTravelSeconds * videoFrameRate;
   const lookMeters = clamp(totalMeters * 0.02, 100, 1_000);
+  const distances = points.map((point) => point.distanceMeters);
 
-  const moments = Array.from({ length: travelFrames + 1 }, (_, index) => {
-    const seconds = (totalSeconds * index) / travelFrames;
-    const location = locationAtElapsed(points, elapsedSeconds, seconds);
+  const moments = Array.from({ length: travelFrames + 1 }, (_, frame) => {
+    const target = easedTravel(frame / travelFrames) * totalWalking;
+    // Between the points whose walking time brackets the target; a stop's points all
+    // share one walking time, so the target never lands inside a stop.
+    const after = target <= 0 ? 0 : firstAtLeast(walking, target);
+    const before = Math.max(0, after - 1);
+    const span = (walking[after] ?? 0) - (walking[before] ?? 0);
+    const fraction =
+      after === 0 || span <= 0 ? 1 : (target - (walking[before] ?? 0)) / span;
+    const position = before + (after - before) * fraction;
+    const from = points[before];
+    const to = points[after];
+    if (from === undefined || to === undefined) throw new RangeError('Empty route.');
+    const distanceMeters = valueAt(distances, position);
     return {
-      seconds,
-      position: location.coordinate,
+      position: [
+        from.coordinate[0] + (to.coordinate[0] - from.coordinate[0]) * fraction,
+        from.coordinate[1] + (to.coordinate[1] - from.coordinate[1]) * fraction,
+      ] as TrackCoordinate,
+      instantMs: startMs + valueAt(elapsedSeconds, position) * 1_000,
+      distanceMeters,
+      ascentMeters: ascent === null ? null : valueAt(ascent, position),
       heading: screenBearing(
-        coordinateAtDistance(points, location.distanceMeters - lookMeters),
-        coordinateAtDistance(points, location.distanceMeters + lookMeters),
+        coordinateAtDistance(points, distances, distanceMeters - lookMeters),
+        coordinateAtDistance(points, distances, distanceMeters + lookMeters),
       ),
     };
   });
 
   // Averaging unit vectors keeps the mean correct across north (359° and 1° give 0°).
-  const window = videoFrameRate;
   let previousBearing = 0;
-  const frames = moments.map(({ seconds, position }, index): TrackVideoFrame => {
+  const frames = moments.map((moment, index): TrackVideoFrame => {
     let east = 0;
     let north = 0;
     for (
-      let other = Math.max(0, index - window);
-      other <= Math.min(moments.length - 1, index + window);
+      let other = Math.max(0, index - videoFrameRate);
+      other <= Math.min(moments.length - 1, index + videoFrameRate);
       other += 1
     ) {
       const heading = moments[other]?.heading ?? null;
@@ -139,14 +299,26 @@ export function planTrackVideo(
       east += Math.sin((heading * Math.PI) / 180);
       north += Math.cos((heading * Math.PI) / 180);
     }
-    if (east !== 0 || north !== 0)
+    if (east !== 0 || north !== 0) {
       previousBearing = (Math.atan2(east, north) * 180) / Math.PI;
-    const instantMs = startMs + seconds * 1_000;
+    }
     return {
-      position,
+      position: moment.position,
       bearing: previousBearing,
-      sunInstantMs: Math.round(instantMs / trackVideoSunStepMs) * trackVideoSunStepMs,
-      caption: route.formatTime(instantMs),
+      sunInstantMs: Math.round(moment.instantMs / minuteMs) * minuteMs,
+      overlay: {
+        time: labels.time(moment.instantMs),
+        distance: labels.distance(moment.distanceMeters),
+        ascent:
+          moment.ascentMeters === null ? null : labels.ascent(moment.ascentMeters),
+        profile:
+          profile === null
+            ? null
+            : {
+                elevations: profile,
+                progress: totalMeters <= 0 ? 0 : moment.distanceMeters / totalMeters,
+              },
+      },
       // Each frame lasts until the next; the start adds the hold before travel begins.
       durationMs:
         index === travelFrames
@@ -155,16 +327,9 @@ export function planTrackVideo(
     };
   });
 
-  const middle = points[Math.floor(points.length / 2)] ?? first;
-  const spanMeters = clamp(totalMeters / 4, minimumSpanMeters, maximumSpanMeters);
-  const metersAcrossAtZoomZero =
-    (earthCircumferenceMeters *
-      Math.cos((middle.coordinate[1] * Math.PI) / 180) *
-      view.widthPixels) /
-    mapTileSizePixels;
   return {
-    zoom: clamp(Math.log2(metersAcrossAtZoomZero / spanMeters), 10, 16),
-    pitch: view.pitch,
+    zoom: clamp(camera.zoom, minimumZoom, maximumZoom),
+    pitch: clamp(camera.pitch, 0, maximumPitchDegrees),
     frames,
   };
 }

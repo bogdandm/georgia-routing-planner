@@ -280,11 +280,7 @@ function interpolate(start: number, end: number, fraction: number): number {
   return start + (end - start) * fraction;
 }
 
-/**
- * Where the hiker is `seconds` into the route, interpolated between the points whose
- * `elapsed` values bracket it; before the start or after the finish it is the endpoint.
- */
-export function locationAtElapsed(
+function locationAtElapsed(
   points: readonly TrackTimingPoint[],
   elapsed: readonly number[],
   seconds: number,

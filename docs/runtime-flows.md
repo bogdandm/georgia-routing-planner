@@ -556,19 +556,25 @@ keys) chose a minute meanwhile; a daylight clamp after a camera move does not co
 
 A track video (`MapLibreFacade.recordTrackVideo`) takes the active route, its elapsed
 seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same timing as
-the track's lighting. `planTrackVideo` (`presentation/map/trackVideo.ts`) samples 20
-seconds of video at 30 fps evenly in hike time, places the hiker with
-`locationAtElapsed`, and averages the travel bearing over a second of frames. The facade
-then marks the camera as scripted, the gate the render benchmark also uses, so no
-frame's view is persisted or published as a settled viewport, and restores the camera
-afterwards unless a user's `movestart` stopped it: that move clears the gate at once so
-its `moveend` persists the new view. `MapLibreLayerController.recordTrackVideo` shares
-the day video's frame loop. Before each capture it also calls `jumpTo` with the
+the track's lighting, and the track's ascent. `planTrackVideo`
+(`presentation/map/trackVideo.ts`) turns elapsed time into walking time, which stops (25
+m for 3 minutes), paused-recorder gaps, and segment waits do not advance. It samples 20
+seconds of video at 30 fps evenly in walking time through a half-cosine ease at both
+ends. Each frame interpolates position, real time, distance, and scaled climb between
+the bracketing points, and the travel bearing is averaged over a second of frames. Zoom
+and pitch come from the user's camera, clamped to 12–16 and at most 60°. The facade then
+marks the camera as scripted, the gate the render benchmark also uses, so no frame's
+view is persisted or published as a settled viewport, and restores the camera afterwards
+unless a user's `movestart` stopped it: that move clears the gate at once so its
+`moveend` persists the new view. `MapLibreLayerController.recordTrackVideo` shares the
+day video's frame loop. Before each capture it also calls `jumpTo` with the
 `trackVideoCameraJump` event data, which the controller's and the facade's `movestart`
 handlers recognize, so only other moves stop it. It moves the GL trace point and makes
-the trace layer visible before every frame, then restores the layer's visibility. The
-5-minute sun steps keep distinct shadow tiles few. The clock caption is drawn into the
-2D copy before encoding.
+the trace layer visible before every frame, then restores the layer's visibility. Sun
+instants are rounded to the minute, the shadow tiles' own resolution.
+`MapVideoRecorder.addFrame` draws each frame's `VideoOverlay` into the 2D copy before
+encoding: time, distance, climb, and a 120-sample elevation profile clipped at the
+walked share.
 
 ## Sentinel search
 

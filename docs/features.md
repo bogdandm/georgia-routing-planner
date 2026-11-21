@@ -908,16 +908,20 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   of the hike from the start to the finish of [Route timing](#tracks) (date, start hour,
   pace, recorded or estimated time). An orange point on the track marks where the hiker
   is at each moment and stays at the center of the frame, shown even while imported
-  tracks are hidden; the camera turns smoothly with the direction of travel, sees about
-  a quarter of the route across the frame (1.2–6 km), and is tilted 50° in 3D and level
-  in 2D. Sun shadows show the moment's time, rounded to 5 minutes; like the sun panel
-  they draw only from two hours before sunrise to two hours after sunset, so night hours
-  keep that edge's night look. The local date and time in the route's time zone appear
-  in the lower-left corner. Video time runs evenly through the hike time, so the point
-  slows on climbs and waits through recorded pauses while the light keeps changing; the
-  start and the finish are each held for a second. Moving the map stops the recording
-  and keeps the new view; otherwise the camera returns to where it was. The two
-  recordings never run at once.
+  tracks are hidden. The camera keeps the map's current zoom, limited to 12–16, and its
+  tilt, limited to 60°, and turns smoothly with the direction of travel. The point
+  speeds up gently from the start and slows down before the finish, and each end is held
+  for a second. Video time runs evenly through walking time, so stops are skipped:
+  staying within 25 m for at least 3 minutes, a recorder paused for a minute or more
+  (its gap passes at walking pace), and waits between recorded segments. The clock and
+  the sun jump over a skipped stop. Sun shadows show the moment's minute; like the sun
+  panel they draw only from two hours before sunrise to two hours after sunset, so night
+  hours keep that edge's night look. A compact plate in the lower-left corner shows the
+  local date and time in the route's time zone in small text, the distance and climb so
+  far (the climb ends at the track's ascent), and a mini elevation profile filled up to
+  the hiker; at 1080p it is about 210 × 100 px. Moving the map stops the recording and
+  keeps the new view; otherwise the camera returns to where it was. The two recordings
+  never run at once.
 - **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

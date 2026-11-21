@@ -84,6 +84,10 @@ import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import { routeElapsedSeconds } from '@/application/weather/TrackWeatherForecast';
 import {
+  formatTrackDistance,
+  formatTrackElevation,
+} from '@/presentation/tracks/trackFormatters';
+import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
   previewTrackPathDrag,
@@ -1984,7 +1988,12 @@ export function MapWorkspace({
                 points: trackRoute.points,
                 elapsedSeconds: elapsed,
                 startMs: trackLighting.startMs,
-                formatTime: (instantMs) => clock.format(instantMs),
+                ascentMeters: trackMetrics.ascentMeters,
+                labels: {
+                  time: (instantMs) => clock.format(instantMs),
+                  distance: (meters) => formatTrackDistance(meters, i18n),
+                  ascent: (meters) => formatTrackElevation(meters, i18n),
+                },
               },
               signal,
               onProgress,

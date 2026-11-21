@@ -2,113 +2,219 @@ import { describe, expect, it } from 'vitest';
 
 import type { TrackTimingPoint } from '@/application/weather/TrackWeatherForecast';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
-import {
-  planTrackVideo,
-  trackVideoSunStepMs,
-  type TrackVideoRoute,
-} from '@/presentation/map/trackVideo';
+import { planTrackVideo, type TrackVideoRoute } from '@/presentation/map/trackVideo';
 
 const startMs = Date.UTC(2026, 6, 1, 5, 0);
-const view = { widthPixels: 1_280, pitch: 50 };
+const camera = { zoom: 14, pitch: 45 };
+const labels = {
+  time: (instantMs: number) => new Date(instantMs).toISOString(),
+  distance: (meters: number) => `${String(Math.round(meters))} m`,
+  ascent: (meters: number) => `+${String(Math.round(meters))}`,
+};
 
-/** A straight route from `from` by `step` per point, timed `secondsPerPoint` apart. */
+/** Timed points through `coordinates`, with cumulative distance along them. */
+function timedRoute(
+  coordinates: readonly (readonly [number, number])[],
+  elapsedSeconds: readonly number[],
+  elevations?: readonly number[],
+): TrackVideoRoute {
+  const points: TrackTimingPoint[] = [];
+  for (const [index, coordinate] of coordinates.entries()) {
+    const previous = points.at(-1);
+    const elevationMeters = elevations?.[index];
+    points.push({
+      coordinate: [coordinate[0], coordinate[1]],
+      distanceMeters:
+        previous === undefined
+          ? 0
+          : previous.distanceMeters +
+            geodesicDistanceMeters(previous.coordinate, [coordinate[0], coordinate[1]]),
+      ...(elevationMeters === undefined ? {} : { elevationMeters }),
+      sourceSegmentIndex: 0,
+    });
+  }
+  return { points, elapsedSeconds, startMs, ascentMeters: undefined, labels };
+}
+
+/** `count` points from `from` by `step` each, `secondsPerPoint` apart. */
 function straightRoute(
   from: readonly [number, number],
   step: readonly [number, number],
   count: number,
   secondsPerPoint: number,
 ): TrackVideoRoute {
-  const points: TrackTimingPoint[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const coordinate: [number, number] = [
+  return timedRoute(
+    Array.from({ length: count }, (_, index) => [
       from[0] + step[0] * index,
       from[1] + step[1] * index,
-    ];
-    const previous = points.at(-1);
-    points.push({
-      coordinate,
-      distanceMeters:
-        previous === undefined
-          ? 0
-          : previous.distanceMeters +
-            geodesicDistanceMeters(previous.coordinate, coordinate),
-      sourceSegmentIndex: 0,
-    });
-  }
-  return {
-    points,
-    elapsedSeconds: points.map((_, index) => index * secondsPerPoint),
-    startMs,
-    formatTime: (instantMs) => new Date(instantMs).toISOString(),
-  };
+    ]),
+    Array.from({ length: count }, (_, index) => index * secondsPerPoint),
+  );
 }
 
 describe('planTrackVideo', () => {
-  it('plays the hike from start to finish in video time and holds both ends', () => {
+  it('eases out of the start and into the finish, holding both ends', () => {
     const route = straightRoute([43.1, 42.7], [0.01, 0], 11, 1_800);
-    const finishMs = startMs + 10 * 1_800 * 1_000;
 
-    const { frames } = planTrackVideo(route, view);
+    const { frames } = planTrackVideo(route, camera);
 
     const first = frames[0];
     const last = frames.at(-1);
     expect(first?.position).toEqual([43.1, 42.7]);
-    expect(first?.caption).toBe(new Date(startMs).toISOString());
-    expect(last?.position).toEqual([43.2, 42.7]);
-    expect(last?.caption).toBe(new Date(finishMs).toISOString());
-    expect(first?.durationMs).toBeGreaterThan(1_000);
-    expect(last?.durationMs).toBe(1_000);
+    expect(first?.overlay.time).toBe(new Date(startMs).toISOString());
+    expect(last?.position[0]).toBeCloseTo(43.2);
+    expect(last?.overlay.time).toBe(new Date(startMs + 18_000_000).toISOString());
     expect(frames.reduce((sum, frame) => sum + frame.durationMs, 0)).toBeCloseTo(
       22_000,
     );
-    for (const frame of frames) {
-      expect(frame.sunInstantMs % trackVideoSunStepMs).toBe(0);
-      expect(frame.sunInstantMs).toBeGreaterThanOrEqual(startMs);
-      expect(frame.sunInstantMs).toBeLessThanOrEqual(finishMs);
-    }
-    // Halfway through the video is halfway through the hike, in time and place.
-    const middle = frames[(frames.length - 1) / 2];
-    expect(middle?.sunInstantMs).toBe(startMs + 5 * 1_800 * 1_000);
-    expect(middle?.position[0]).toBeCloseTo(43.15);
+    const step = (index: number) =>
+      (frames[index + 1]?.position[0] ?? 0) - (frames[index]?.position[0] ?? 0);
+    // Barely moving at either end, at full speed in the middle.
+    expect(step(0)).toBeLessThan(step(300) / 50);
+    expect(step(frames.length - 2)).toBeLessThan(step(300) / 50);
+    // Even speed through the middle: halfway in video is halfway along the route.
+    expect(frames[300]?.position[0]).toBeCloseTo(43.15);
   });
 
-  it('keeps the hiker in place through a recorded pause while time runs on', () => {
-    const route = straightRoute([43.1, 42.7], [0.01, 0], 3, 600);
-    // A two-hour break at the middle point: same place, later time.
-    const middle = route.points[1];
-    if (middle === undefined) throw new Error('The route has a middle point.');
-    const paused: TrackVideoRoute = {
-      ...route,
-      points: [route.points[0], middle, middle, route.points[2]].filter(
-        (point) => point !== undefined,
-      ),
-      elapsedSeconds: [0, 600, 600 + 7_200, 1_200 + 7_200],
-    };
-
-    const { frames } = planTrackVideo(paused, view);
-
-    const breakFrames = frames.filter(
-      (frame) =>
-        frame.sunInstantMs >= startMs + 900 * 1_000 &&
-        frame.sunInstantMs <= startMs + 7_500 * 1_000,
+  it('skips a stop where GPS jitters in place, while the clock jumps over it', () => {
+    const walkIn = Array.from(
+      { length: 10 },
+      (_, index) => [43.1 + 0.002 * index, 42.7] as const,
     );
-    expect(breakFrames.length).toBeGreaterThan(frames.length / 2);
-    for (const frame of breakFrames) expect(frame.position).toEqual(middle.coordinate);
+    const stopCenter = [43.1 + 0.002 * 10, 42.7] as const;
+    const stop = Array.from(
+      { length: 31 },
+      (_, index) =>
+        [
+          stopCenter[0] + (index % 2) * 0.0001,
+          stopCenter[1] + (index % 3) * 0.00005,
+        ] as const,
+    );
+    const walkOut = Array.from(
+      { length: 10 },
+      (_, index) => [stopCenter[0] + 0.002 * (index + 1), 42.7] as const,
+    );
+    const walkInSeconds = walkIn.map((_, index) => index * 60);
+    const stopStartSeconds = 10 * 60;
+    const stopSeconds = stop.map((_, index) => stopStartSeconds + index * 120);
+    const stopEndSeconds = stopSeconds.at(-1) ?? 0;
+    const walkOutSeconds = walkOut.map((_, index) => stopEndSeconds + (index + 1) * 60);
+    const route = timedRoute(
+      [...walkIn, ...stop, ...walkOut],
+      [...walkInSeconds, ...stopSeconds, ...walkOutSeconds],
+    );
+
+    const { frames } = planTrackVideo(route, camera);
+
+    const inStop = frames.filter(
+      (frame) =>
+        frame.sunInstantMs > startMs + (stopStartSeconds + 120) * 1_000 &&
+        frame.sunInstantMs < startMs + (stopEndSeconds - 120) * 1_000,
+    );
+    expect(inStop).toEqual([]);
+    const jumps = frames
+      .slice(1)
+      .map((frame, index) => frame.sunInstantMs - (frames[index]?.sunInstantMs ?? 0));
+    expect(Math.max(...jumps)).toBeGreaterThanOrEqual(55 * 60_000);
+  });
+
+  it('skips a paused recorder gap without stopping the hiker on it', () => {
+    const coordinates = Array.from(
+      { length: 21 },
+      (_, index) => [43.1 + 0.002 * index, 42.7] as const,
+    );
+    // Two minutes between points, and an hour between the 10th and the 11th.
+    const elapsed = coordinates.map(
+      (_, index) => index * 120 + (index > 10 ? 3_600 : 0),
+    );
+    const route = timedRoute(coordinates, elapsed);
+
+    const { frames } = planTrackVideo(route, camera);
+
+    const gapStartMs = startMs + 1_200 * 1_000;
+    const inGap = frames.filter(
+      (frame) =>
+        frame.sunInstantMs > gapStartMs + 10 * 60_000 &&
+        frame.sunInstantMs < gapStartMs + 50 * 60_000,
+    );
+    // The 164 m gap takes as long as walking it, not an hour of the video.
+    expect(inGap.length).toBeLessThan(frames.length / 20);
+  });
+
+  it('rounds the sun to the minute of each moment', () => {
+    const { frames } = planTrackVideo(
+      straightRoute([43.1, 42.7], [0.01, 0], 11, 1_237),
+      camera,
+    );
+
+    for (const frame of frames) {
+      expect(frame.sunInstantMs % 60_000).toBe(0);
+      expect(
+        Math.abs(frame.sunInstantMs - Date.parse(frame.overlay.time)),
+      ).toBeLessThanOrEqual(30_000);
+    }
+  });
+
+  it("keeps the user's zoom and pitch within readable bounds", () => {
+    const route = straightRoute([43.1, 42.7], [0.01, 0], 11, 600);
+
+    expect(planTrackVideo(route, { zoom: 14.3, pitch: 35 })).toMatchObject({
+      zoom: 14.3,
+      pitch: 35,
+    });
+    expect(planTrackVideo(route, { zoom: 8, pitch: 80 })).toMatchObject({
+      zoom: 12,
+      pitch: 60,
+    });
+    expect(planTrackVideo(route, { zoom: 18, pitch: 0 })).toMatchObject({
+      zoom: 16,
+      pitch: 0,
+    });
   });
 
   it('turns the camera to the direction of travel', () => {
-    const east = planTrackVideo(straightRoute([43.1, 42.7], [0.01, 0], 11, 600), view);
-    const north = planTrackVideo(straightRoute([43.1, 42.7], [0, 0.01], 11, 600), view);
+    const east = planTrackVideo(
+      straightRoute([43.1, 42.7], [0.01, 0], 11, 600),
+      camera,
+    );
+    const north = planTrackVideo(
+      straightRoute([43.1, 42.7], [0, 0.01], 11, 600),
+      camera,
+    );
 
     expect(east.frames[300]?.bearing).toBeCloseTo(90);
     expect(north.frames[300]?.bearing).toBeCloseTo(0);
   });
 
-  it('shows more ground around the hiker on a longer route', () => {
-    const short = planTrackVideo(straightRoute([43.1, 42.7], [0.01, 0], 11, 600), view);
-    const long = planTrackVideo(straightRoute([43.1, 42.7], [0.03, 0], 11, 600), view);
+  it("counts distance and climb up to the track's stated ascent along the profile", () => {
+    const flat = straightRoute([43.1, 42.7], [0.01, 0], 11, 600);
+    const climbing: TrackVideoRoute = {
+      ...timedRoute(
+        flat.points.map((point) => point.coordinate),
+        flat.elapsedSeconds,
+        flat.points.map((_, index) => 1_000 + index * 10),
+      ),
+      ascentMeters: 150,
+    };
+    const totalMeters = climbing.points.at(-1)?.distanceMeters ?? 0;
 
-    expect(long.zoom).toBeLessThan(short.zoom);
-    expect(long.pitch).toBe(50);
+    const { frames } = planTrackVideo(climbing, camera);
+
+    expect(frames[0]?.overlay).toMatchObject({ distance: '0 m', ascent: '+0' });
+    expect(frames.at(-1)?.overlay).toMatchObject({
+      distance: `${String(Math.round(totalMeters))} m`,
+      ascent: '+150',
+    });
+    const profile = frames[300]?.overlay.profile;
+    expect(profile?.elevations).toHaveLength(120);
+    expect(profile?.elevations[0]).toBeCloseTo(1_000);
+    expect(profile?.elevations.at(-1)).toBeCloseTo(1_100);
+    expect(profile?.progress).toBeCloseTo(0.5);
+    expect(frames.at(-1)?.overlay.profile?.progress).toBeCloseTo(1);
+
+    expect(planTrackVideo(flat, camera).frames[300]?.overlay).toMatchObject({
+      ascent: null,
+      profile: null,
+    });
   });
 });

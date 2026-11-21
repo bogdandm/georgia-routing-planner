@@ -3075,7 +3075,8 @@ describe('MapLibreFacade', () => {
       ],
       elapsedSeconds: [0, 7_200],
       startMs: Date.parse('2026-07-01T05:00:00Z'),
-      formatTime: () => 'clock',
+      ascentMeters: undefined,
+      labels: { time: () => 'clock', distance: () => 'km', ascent: () => 'm' },
     };
 
     function createTrackVideoFacade(

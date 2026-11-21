@@ -3542,7 +3542,7 @@ describe('MapLibreLayerController', () => {
           position: position as [number, number],
           bearing: 30,
           sunInstantMs: Date.UTC(2026, 6, 1, 6, 0) + sunMinute * minute,
-          caption: 'clock',
+          overlay: { time: 'clock', distance: '1 km', ascent: null, profile: null },
           durationMs: 1_000,
         })),
       };

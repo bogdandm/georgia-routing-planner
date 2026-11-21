@@ -89,11 +89,6 @@ import {
 
 /** Navigator-style camera pitch for fits that face a travel path in 3D. */
 const directedFitPitchDegrees = 45;
-/**
- * Track-video pitch in 3D: low enough that a ridge between the camera and the hiker it
- * centers on rarely hides them, high enough to show relief.
- */
-const trackVideoTerrainPitchDegrees = 50;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
@@ -1027,12 +1022,9 @@ export class MapLibreFacade implements MapFacade {
     ) {
       throw new Error('The map is not ready for a track video.');
     }
-    const plan = planTrackVideo(route, {
-      widthPixels: map.getCanvas().clientWidth,
-      pitch:
-        this.#snapshot.terrainMode === 'terrain' ? trackVideoTerrainPitchDegrees : 0,
-    });
+    // The video keeps the user's zoom and pitch, within the planner's bounds.
     const camera = this.readCamera(map);
+    const plan = planTrackVideo(route, camera);
     const controller = new AbortController();
     this.#scriptedCamera = controller;
     // A user's move stops the recording in the layer controller. It is the user's view

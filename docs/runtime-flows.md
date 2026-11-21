@@ -556,18 +556,21 @@ keys) chose a minute meanwhile; a daylight clamp after a camera move does not co
 
 A track video (`MapLibreFacade.recordTrackVideo`) takes the active route, its elapsed
 seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same timing as
-the track's lighting, and the track's ascent. `planTrackVideo`
-(`presentation/map/trackVideo.ts`) turns elapsed time into walking time, which stops (25
-m for 3 minutes), paused-recorder gaps, and segment waits do not advance. It samples 20
-seconds of video at 30 fps evenly in walking time through a half-cosine ease at both
-ends. Each frame interpolates position, real time, distance, and scaled climb between
-the bracketing points, and the travel bearing is averaged over a second of frames. Zoom
-and pitch come from the user's camera, clamped to 12–16 and at most 60°. The facade then
-marks the camera as scripted, the gate the render benchmark also uses, so no frame's
-view is persisted or published as a settled viewport, and restores the camera afterwards
-unless a user's `movestart` stopped it: that move clears the gate at once so its
-`moveend` persists the new view. `MapLibreLayerController.recordTrackVideo` shares the
-day video's frame loop. Before each capture it also calls `jumpTo` with the
+the track's lighting, whether that time is recorded, and the track's ascent.
+`planTrackVideo` (`presentation/map/trackVideo.ts`) turns elapsed time into walking
+time, which segment waits never advance and, on recorded time only, neither do stops (25
+m for 3 minutes) nor paused-recorder gaps. The stop scan from each point stops at three
+minutes or the radius, and a scan that runs out of segment ends the search in that
+segment, so dense recordings stay cheap. It samples 20 seconds of video at 30 fps evenly
+in walking time through a half-cosine ease at both ends, the last frame pinned to the
+route's last point. Each frame interpolates position, real time, distance, and scaled
+climb between the bracketing points, and the travel bearing is averaged over a second of
+frames. Zoom and pitch come from the user's camera, clamped to 12–16 and at most 60°.
+The facade then marks the camera as scripted, the gate the render benchmark also uses,
+so no frame's view is persisted or published as a settled viewport, and restores the
+camera afterwards unless a user's `movestart` stopped it: that move clears the gate at
+once so its `moveend` persists the new view. `MapLibreLayerController.recordTrackVideo`
+shares the day video's frame loop. Before each capture it also calls `jumpTo` with the
 `trackVideoCameraJump` event data, which the controller's and the facade's `movestart`
 handlers recognize, so only other moves stop it. It moves the GL trace point and makes
 the trace layer visible before every frame, then restores the layer's visibility. Sun

@@ -7,6 +7,11 @@ import { videoFrameRate, type VideoOverlay } from '@/presentation/map/mapCapture
 export interface TrackVideoRoute {
   readonly points: readonly TrackTimingPoint[];
   readonly elapsedSeconds: readonly number[];
+  /**
+   * Whether `elapsedSeconds` are recorded timestamps, whose breaks the video skips; an
+   * estimate has none, and its slow steep stretches are walking.
+   */
+  readonly recordedTime: boolean;
   /** When the hike starts; the finish is `startMs` plus the last elapsed second. */
   readonly startMs: number;
   /** The track's stated ascent: the climb shown in the video ends at it. */
@@ -97,40 +102,50 @@ function valueAt(values: readonly number[], position: number): number {
 }
 
 /**
- * Seconds of walking up to each point. Time spent within `stopRadiusMeters` of one
- * place for at least `stopMinimumSeconds` (a break, GPS jitter included) and waits
- * between recorded segments add none, and a paused recorder's gap only the time to
- * walk its distance, so the video skips them.
+ * Seconds of walking up to each point. Waits between recorded segments add none. On
+ * recorded time, so do stays within `stopRadiusMeters` of one place for at least
+ * `stopMinimumSeconds` (a break, GPS jitter included), and a paused recorder's gap adds
+ * only the time to walk its distance, so the video skips them.
  */
 function walkingSeconds(
   points: readonly TrackTimingPoint[],
   elapsed: readonly number[],
+  recordedTime: boolean,
 ): number[] {
   const walking = points.map(() => 0);
+  const within = (anchor: TrackTimingPoint, other: TrackTimingPoint | undefined) =>
+    other?.sourceSegmentIndex === anchor.sourceSegmentIndex &&
+    geodesicDistanceMeters(anchor.coordinate, other.coordinate) <= stopRadiusMeters;
   let index = 0;
+  // A scan that reaches its segment's end too soon proves no later point of the segment
+  // starts a stop either, since each has less time left; their scans are skipped.
+  let noStopThrough = -1;
   while (index < points.length - 1) {
     const anchor = points[index];
     if (anchor === undefined) break;
-    let end = index;
-    while (
-      end + 1 < points.length &&
-      points[end + 1]?.sourceSegmentIndex === anchor.sourceSegmentIndex &&
-      geodesicDistanceMeters(
-        anchor.coordinate,
-        points[end + 1]?.coordinate ?? anchor.coordinate,
-      ) <= stopRadiusMeters
-    ) {
-      end += 1;
-    }
     const base = walking[index] ?? 0;
-    if (
-      end > index &&
-      (elapsed[end] ?? 0) - (elapsed[index] ?? 0) >= stopMinimumSeconds
-    ) {
-      for (let stopped = index + 1; stopped <= end; stopped += 1)
-        walking[stopped] = base;
-      index = end;
-      continue;
+    if (recordedTime && index > noStopThrough) {
+      // The scan ends at the first point out of reach or once the stay is long enough
+      // to be a stop, so a point is revisited only within three minutes of it.
+      const startSeconds = elapsed[index] ?? 0;
+      let end = index;
+      while (
+        (elapsed[end] ?? 0) - startSeconds < stopMinimumSeconds &&
+        within(anchor, points[end + 1])
+      ) {
+        end += 1;
+      }
+      if ((elapsed[end] ?? 0) - startSeconds >= stopMinimumSeconds) {
+        while (within(anchor, points[end + 1])) end += 1;
+        for (let stopped = index + 1; stopped <= end; stopped += 1) {
+          walking[stopped] = base;
+        }
+        index = end;
+        continue;
+      }
+      if (points[end + 1]?.sourceSegmentIndex !== anchor.sourceSegmentIndex) {
+        noStopThrough = end;
+      }
     }
     const next = points[index + 1];
     const seconds = Math.max(0, (elapsed[index + 1] ?? 0) - (elapsed[index] ?? 0));
@@ -138,7 +153,9 @@ function walkingSeconds(
     const step =
       next?.sourceSegmentIndex !== anchor.sourceSegmentIndex
         ? 0
-        : seconds >= gapMinimumSeconds && meters < seconds * gapMaximumMetersPerSecond
+        : recordedTime &&
+            seconds >= gapMinimumSeconds &&
+            meters < seconds * gapMaximumMetersPerSecond
           ? Math.min(seconds, meters / gapWalkingMetersPerSecond)
           : seconds;
     walking[index + 1] = base + step;
@@ -246,7 +263,7 @@ export function planTrackVideo(
 ): TrackVideoPlan {
   const { points, elapsedSeconds, startMs, labels } = route;
   if (points.length === 0) throw new RangeError('The route has no points.');
-  const walking = walkingSeconds(points, elapsedSeconds);
+  const walking = walkingSeconds(points, elapsedSeconds, route.recordedTime);
   const totalWalking = walking.at(-1) ?? 0;
   const ascent = cumulativeAscent(points, route.ascentMeters);
   const profile = elevationProfile(points);
@@ -258,8 +275,14 @@ export function planTrackVideo(
   const moments = Array.from({ length: travelFrames + 1 }, (_, frame) => {
     const target = easedTravel(frame / travelFrames) * totalWalking;
     // Between the points whose walking time brackets the target; a stop's points all
-    // share one walking time, so the target never lands inside a stop.
-    const after = target <= 0 ? 0 : firstAtLeast(walking, target);
+    // share one walking time, so the target never lands inside a stop. The last frame
+    // is the real finish, even after a final stop.
+    const after =
+      frame === travelFrames
+        ? points.length - 1
+        : target <= 0
+          ? 0
+          : firstAtLeast(walking, target);
     const before = Math.max(0, after - 1);
     const span = (walking[after] ?? 0) - (walking[before] ?? 0);
     const fraction =

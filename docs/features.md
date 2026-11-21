@@ -911,10 +911,11 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   tracks are hidden. The camera keeps the map's current zoom, limited to 12–16, and its
   tilt, limited to 60°, and turns smoothly with the direction of travel. The point
   speeds up gently from the start and slows down before the finish, and each end is held
-  for a second. Video time runs evenly through walking time, so stops are skipped:
-  staying within 25 m for at least 3 minutes, a recorder paused for a minute or more
-  (its gap passes at walking pace), and waits between recorded segments. The clock and
-  the sun jump over a skipped stop. Sun shadows show the moment's minute; like the sun
+  for a second. Video time runs evenly through walking time, so stops in recorded time
+  are skipped: staying within 25 m for at least 3 minutes and a recorder paused for a
+  minute or more (its gap passes at walking pace); waits between recorded segments are
+  skipped for estimated time too. The clock and the sun jump over a skipped stop, and
+  the last frame is the real finish. Sun shadows show the moment's minute; like the sun
   panel they draw only from two hours before sunrise to two hours after sunset, so night
   hours keep that edge's night look. A compact plate in the lower-left corner shows the
   local date and time in the route's time zone in small text, the distance and climb so

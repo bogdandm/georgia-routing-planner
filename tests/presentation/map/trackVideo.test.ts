@@ -12,7 +12,7 @@ const labels = {
   ascent: (meters: number) => `+${String(Math.round(meters))}`,
 };
 
-/** Timed points through `coordinates`, with cumulative distance along them. */
+/** Recorded points through `coordinates`, with cumulative distance along them. */
 function timedRoute(
   coordinates: readonly (readonly [number, number])[],
   elapsedSeconds: readonly number[],
@@ -33,7 +33,14 @@ function timedRoute(
       sourceSegmentIndex: 0,
     });
   }
-  return { points, elapsedSeconds, startMs, ascentMeters: undefined, labels };
+  return {
+    points,
+    elapsedSeconds,
+    recordedTime: true,
+    startMs,
+    ascentMeters: undefined,
+    labels,
+  };
 }
 
 /** `count` points from `from` by `step` each, `secondsPerPoint` apart. */
@@ -139,6 +146,35 @@ describe('planTrackVideo', () => {
     );
     // The 164 m gap takes as long as walking it, not an hour of the video.
     expect(inGap.length).toBeLessThan(frames.length / 20);
+  });
+
+  it('ends on the real finish after a final stop', () => {
+    const walk = Array.from(
+      { length: 10 },
+      (_, index) => [43.1 + 0.002 * index, 42.7] as const,
+    );
+    const finish = [43.1 + 0.002 * 9, 42.7] as const;
+    const route = timedRoute(
+      [...walk, finish, finish, finish],
+      [...walk.map((_, index) => index * 60), 1_200, 1_800, 2_400],
+    );
+
+    const last = planTrackVideo(route, camera).frames.at(-1);
+
+    expect(last?.overlay.time).toBe(new Date(startMs + 2_400_000).toISOString());
+  });
+
+  it('keeps slow estimated stretches, which are walking, not stops', () => {
+    // Ten metres every two minutes, as a DIN estimate gives a steep climb.
+    const route: TrackVideoRoute = {
+      ...straightRoute([43.1, 42.7], [0.000122, 0], 21, 120),
+      recordedTime: false,
+    };
+
+    const { frames } = planTrackVideo(route, camera);
+
+    // Even progress through time: halfway in video is halfway along the climb.
+    expect(frames[300]?.sunInstantMs).toBe(startMs + 1_200_000);
   });
 
   it('rounds the sun to the minute of each moment', () => {

@@ -1969,7 +1969,7 @@ export function MapWorkspace({
         ? null
         : async (signal, onProgress) => {
             // The same route timing as the track's lighting: start, date, and pace.
-            const { elapsed } = routeElapsedSeconds(
+            const { elapsed, recorded } = routeElapsedSeconds(
               trackRoute.points,
               trackMetrics,
               tracksWorkspace.activeTrackWeatherTimeline,
@@ -1987,6 +1987,7 @@ export function MapWorkspace({
               {
                 points: trackRoute.points,
                 elapsedSeconds: elapsed,
+                recordedTime: recorded,
                 startMs: trackLighting.startMs,
                 ascentMeters: trackMetrics.ascentMeters,
                 labels: {

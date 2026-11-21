@@ -3074,6 +3074,7 @@ describe('MapLibreFacade', () => {
         { coordinate: [43.2, 42.7], distanceMeters: 8_180, sourceSegmentIndex: 0 },
       ],
       elapsedSeconds: [0, 7_200],
+      recordedTime: false,
       startMs: Date.parse('2026-07-01T05:00:00Z'),
       ascentMeters: undefined,
       labels: { time: () => 'clock', distance: () => 'km', ascent: () => 'm' },

@@ -1,5 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
@@ -15,7 +16,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import { keyframes } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
+
+/** The camcorder recording light: on for half a second, off for half a second. */
+const recordingBlink = keyframes`
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+`;
+/** The remaining time is shown once this much of the recording lies behind it. */
+const minimumEstimateMs = 3_000;
 
 export interface MapCaptureControlProps {
   /** Copies a PNG of the map, without controls, to the clipboard. */
@@ -82,7 +92,12 @@ interface MapCapturePopoverProps extends MapCaptureControlProps {
 type ScreenshotStatus = 'idle' | 'copying' | 'copied' | 'failed';
 type VideoStatus =
   | { readonly kind: 'idle' | 'saved' | 'stopped' | 'failed' }
-  | { readonly kind: 'recording'; readonly progress: number };
+  | {
+      readonly kind: 'recording';
+      readonly progress: number;
+      /** Time left at the pace so far; null until there is enough to judge it. */
+      readonly remainingMs: number | null;
+    };
 
 /** Non-modal like the sun panel: map gestures keep working while it is open. */
 export function MapCapturePopover({
@@ -93,7 +108,7 @@ export function MapCapturePopover({
   onRecordDayVideo,
   onRecordTrackVideo,
 }: MapCapturePopoverProps) {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const videoAbort = useRef<AbortController | null>(null);
   useEffect(
     () => () => {
@@ -118,9 +133,18 @@ export function MapCapturePopover({
   const recordVideo = (record: RecordVideo) => {
     const controller = new AbortController();
     videoAbort.current = controller;
-    setVideo({ kind: 'recording', progress: 0 });
+    const startedAtMs = performance.now();
+    setVideo({ kind: 'recording', progress: 0, remainingMs: null });
     record(controller.signal, (progress) => {
-      setVideo({ kind: 'recording', progress });
+      const elapsedMs = performance.now() - startedAtMs;
+      setVideo({
+        kind: 'recording',
+        progress,
+        remainingMs:
+          progress > 0 && elapsedMs >= minimumEstimateMs
+            ? (elapsedMs * (1 - progress)) / progress
+            : null,
+      });
     }).then(
       () => {
         setVideo({ kind: 'saved' });
@@ -135,6 +159,21 @@ export function MapCapturePopover({
   };
   const recording = video.kind === 'recording';
   const percent = recording ? Math.floor(video.progress * 100) : 0;
+  const remainingMs = recording ? video.remainingMs : null;
+  const remaining =
+    remainingMs === null
+      ? null
+      : remainingMs < 60_000
+        ? new Intl.NumberFormat(i18n.locale, {
+            style: 'unit',
+            unit: 'second',
+            unitDisplay: 'short',
+          }).format(Math.max(5, Math.ceil(remainingMs / 5_000) * 5))
+        : new Intl.NumberFormat(i18n.locale, {
+            style: 'unit',
+            unit: 'minute',
+            unitDisplay: 'short',
+          }).format(Math.round(remainingMs / 60_000));
   /* eslint-enable lingui/no-unlocalized-strings */
   return (
     <Popper
@@ -228,7 +267,7 @@ export function MapCapturePopover({
             {recording ? (
               <Stack spacing={0.5}>
                 <LinearProgress
-                  aria-label={t`Recording the video`}
+                  aria-label={t`Recording progress`}
                   value={video.progress * 100}
                   variant="determinate"
                 />
@@ -236,9 +275,26 @@ export function MapCapturePopover({
                   direction="row"
                   sx={{ alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <Typography color="text.secondary" role="status" variant="caption">
-                    {t`Recording the video: ${percent}%`}
-                  </Typography>
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                    <FiberManualRecordIcon
+                      aria-hidden
+                      sx={{
+                        color: 'error.main',
+                        fontSize: 14,
+                        animation: `${recordingBlink} 1s step-end infinite`,
+                        '@media (prefers-reduced-motion: reduce)': {
+                          animation: 'none',
+                        },
+                      }}
+                    />
+                    <Typography
+                      role="status"
+                      sx={{ fontWeight: 600 }}
+                      variant="caption"
+                    >
+                      {t`Recording…`}
+                    </Typography>
+                  </Stack>
                   <Button
                     onClick={() => {
                       videoAbort.current?.abort();
@@ -249,6 +305,11 @@ export function MapCapturePopover({
                   </Button>
                 </Stack>
               </Stack>
+            ) : null}
+            {remaining !== null ? (
+              <Typography color="text.secondary" variant="caption">
+                {t`${percent}% · ${remaining} left`}
+              </Typography>
             ) : null}
             {video.kind === 'saved' ? (
               <Typography color="text.secondary" role="status" variant="caption">

@@ -103,14 +103,30 @@ describe('MapCapturePopover', () => {
     const record = screen.getByRole('button', { name: 'Record a video of the day' });
     const recordTrack = screen.getByRole('button', { name: 'Record a track video' });
 
+    let nowMs = 1_000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
     await user.click(record);
     expect(record).toBeDisabled();
     // One recording at a time: the other kind waits for this one to end.
     expect(recordTrack).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Recording…');
     act(() => {
-      runs[0]?.onProgress(0.425);
+      nowMs = 2_000;
+      runs[0]?.onProgress(0.1);
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Recording the video: 42%');
+    // One second is too little to judge the pace.
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument();
+    act(() => {
+      nowMs = 41_000;
+      runs[0]?.onProgress(0.25);
+    });
+    expect(screen.getByText('25% · 2 min left')).toBeVisible();
+    act(() => {
+      nowMs = 81_000;
+      runs[0]?.onProgress(0.95);
+    });
+    expect(screen.getByText('95% · 5 sec left')).toBeVisible();
+    clock.mockRestore();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(runs[0]?.signal.aborted).toBe(true);
     await waitFor(() => {

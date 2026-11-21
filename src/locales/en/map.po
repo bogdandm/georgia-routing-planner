@@ -33,6 +33,11 @@ msgstr "{name} ({category}), {distance} m away"
 msgid "{name}, {distance} m away"
 msgstr "{name}, {distance} m away"
 
+#. js-lingui-id: _jDbJz
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "{percent}% · {remaining} left"
+msgstr "{percent}% · {remaining} left"
+
 #. js-lingui-id: WbW5zx
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "{time} · {cloud} cloud"
@@ -488,15 +493,15 @@ msgstr "Record a track video"
 msgid "Record a video of the day"
 msgstr "Record a video of the day"
 
-#. js-lingui-id: -jo9VT
+#. js-lingui-id: Md1tAF
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Recording the video"
-msgstr "Recording the video"
+msgid "Recording progress"
+msgstr "Recording progress"
 
-#. js-lingui-id: smUY1i
+#. js-lingui-id: YGSzvb
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "Recording the video: {percent}%"
-msgstr "Recording the video: {percent}%"
+msgid "Recording…"
+msgstr "Recording…"
 
 #. js-lingui-id: ZiaU3x
 #: src/presentation/map/SunShadowControl.tsx

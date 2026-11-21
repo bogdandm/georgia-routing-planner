@@ -564,20 +564,34 @@ minutes or the radius, and a scan that runs out of segment ends the search in th
 segment, so dense recordings stay cheap. It samples 20 seconds of video at 30 fps evenly
 in walking time through a half-cosine ease at both ends, the last frame pinned to the
 route's last point. Each frame interpolates position, real time, distance, and scaled
-climb between the bracketing points, and the travel bearing is averaged over a second of
-frames. Zoom and pitch come from the user's camera, clamped to 12–16 and at most 60°.
-The facade then marks the camera as scripted, the gate the render benchmark also uses,
-so no frame's view is persisted or published as a settled viewport, and restores the
-camera afterwards unless a user's `movestart` stopped it: that move clears the gate at
-once so its `moveend` persists the new view. `MapLibreLayerController.recordTrackVideo`
-shares the day video's frame loop. Before each capture it also calls `jumpTo` with the
-`trackVideoCameraJump` event data, which the controller's and the facade's `movestart`
-handlers recognize, so only other moves stop it. It moves the GL trace point and makes
-the trace layer visible before every frame, then restores the layer's visibility. Sun
-instants are rounded to the minute, the shadow tiles' own resolution.
-`MapVideoRecorder.addFrame` draws each frame's `VideoOverlay` into the 2D copy before
-encoding: time, distance, climb, and a 120-sample elevation profile clipped at the
-walked share.
+climb between the bracketing points; the travel bearing is averaged over a second of
+frames and the camera center over a triangular half second each side, while the trace
+point keeps the exact position. Zoom and pitch come from the user's camera, clamped to
+12–16 and at most 60°. In 3D at 15° of pitch or more, the facade then checks the terrain
+in front of the hiker: `trackVideoSightLines` builds, for every sixth frame and each
+view (planned, ±90°, 180°, 20° pitch), 24 ground points from the hiker toward the
+camera, denser near the hiker, with the sight line's rise above the hiker at each. The
+camera sits `height / 2 / tan(fov / 2)` pixels from the center as in
+`directedCameraFit`. The elevation provider samples the bare-earth DEM there, since the
+map holds tiles only around the current view. `avoidTerrainOcclusion` marks frames where
+exaggerated relief rises 3 m above the line. Each hidden stretch, widened by 1.5 s and
+merged with neighbours closer than 3 s, takes the first view that sees the hiker on most
+of it, and bearing offsets and pitches are eased by two ±20-frame moving averages. A
+failed sampling keeps the plan and logs `map.track-video.occlusion-failed`. The camera
+to return to is read after this preparation. The facade then marks the camera as
+scripted, the gate the render benchmark also uses, so no frame's view is persisted or
+published as a settled viewport, and restores the camera afterwards unless a user's
+`movestart` stopped it: that move clears the gate at once so its `moveend` persists the
+new view. `MapLibreLayerController.recordTrackVideo` shares the day video's frame loop.
+Before each capture it also calls `jumpTo` with the `trackVideoCameraJump` event data,
+which the controller's and the facade's `movestart` handlers recognize, so only other
+moves stop it. It moves the GL trace point and makes the trace layer visible before
+every frame, then restores the layer's visibility. Sun instants are rounded to the
+minute, the shadow tiles' own resolution. `MapVideoRecorder.addFrame` draws each frame's
+`VideoOverlay` into the 2D copy before encoding: time over distance and climb, and
+beside them a 320 × 44 px (at 1080p) profile of 120 samples clipped at the walked share;
+the text column keeps a minimum width, so the profile does not shift as the figures
+grow.
 
 ## Sentinel search
 

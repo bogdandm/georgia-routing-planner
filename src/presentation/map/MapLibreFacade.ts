@@ -45,8 +45,11 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { captureMapPng } from '@/presentation/map/mapCapture';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import {
+  avoidTerrainOcclusion,
   isTrackVideoCameraJump,
   planTrackVideo,
+  trackVideoSightLines,
+  type TrackVideoPlan,
   type TrackVideoRoute,
 } from '@/presentation/map/trackVideo';
 import type {
@@ -89,6 +92,8 @@ import {
 
 /** Navigator-style camera pitch for fits that face a travel path in 3D. */
 const directedFitPitchDegrees = 45;
+/** Below this pitch a track video looks almost straight down, and no relief hides the hiker. */
+const minimumOcclusionPitchDegrees = 15;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
@@ -1023,8 +1028,17 @@ export class MapLibreFacade implements MapFacade {
       throw new Error('The map is not ready for a track video.');
     }
     // The video keeps the user's zoom and pitch, within the planner's bounds.
+    const plan = await this.unhideTrackVideoHiker(
+      map,
+      planTrackVideo(route, this.readCamera(map)),
+      signal,
+    );
+    signal.throwIfAborted();
+    if (this.#map !== map) {
+      throw new Error('The map changed while the track video was prepared.');
+    }
+    // The view to return to, as it is when the recording starts.
     const camera = this.readCamera(map);
-    const plan = planTrackVideo(route, camera);
     const controller = new AbortController();
     this.#scriptedCamera = controller;
     // A user's move stops the recording in the layer controller. It is the user's view
@@ -1054,6 +1068,54 @@ export class MapLibreFacade implements MapFacade {
           pitch: camera.pitch,
         });
       }
+    }
+  }
+
+  /**
+   * In 3D, turns the planned camera wherever relief would hide the hiker. The bare-earth
+   * DEM along each sight line comes from the elevation provider, since the map holds
+   * terrain tiles only around the current view. Without terrain, a provider, or a
+   * pitch, nothing can hide the hiker; if sampling fails, the plan stays as it is.
+   */
+  private async unhideTrackVideoHiker(
+    map: MapLibreMap,
+    plan: TrackVideoPlan,
+    signal: AbortSignal,
+  ): Promise<TrackVideoPlan> {
+    const provider = this.elevationProvider;
+    if (
+      provider === undefined ||
+      this.#snapshot.terrainMode !== 'terrain' ||
+      (plan.frames[0]?.pitch ?? 0) < minimumOcclusionPitchDegrees
+    ) {
+      return plan;
+    }
+    const view = {
+      heightPixels: map.getCanvas().clientHeight,
+      fieldOfViewDegrees: map.getVerticalFieldOfView(),
+      terrainExaggeration: this.provider?.terrain.exaggeration ?? 1,
+    };
+    const lines = trackVideoSightLines(plan, view);
+    try {
+      const samples = await provider.sampleMany(
+        lines.flatMap((line) =>
+          line.coordinates.map(([longitude, latitude]) => ({ longitude, latitude })),
+        ),
+        signal,
+      );
+      let next = 0;
+      const elevations = lines.map((line) =>
+        line.coordinates.map(() => {
+          const sample = samples[next];
+          next += 1;
+          return sample?.status === 'available' ? sample.meters : null;
+        }),
+      );
+      return avoidTerrainOcclusion(plan, lines, elevations, view);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      this.logger.log({ level: 'warn', name: 'map.track-video.occlusion-failed' });
+      return plan;
     }
   }
 

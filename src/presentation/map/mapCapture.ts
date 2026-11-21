@@ -191,22 +191,28 @@ export class MapVideoRecorder {
   }
 
   /**
-   * A compact dark plate: the clock in small text, then distance and climb, then a mini
-   * elevation profile walked in the hiker's color. Sizes follow the frame's short side,
-   * so at 1080p the plate is about 210 × 110 px.
+   * A dark plate in the lower-left corner: the clock above the distance and climb, and
+   * beside them a wide, low elevation profile walked in the hiker's color. Sizes follow
+   * the frame's short side, so at 1080p the plate is about 640 × 82 px. The text column
+   * keeps a minimum width, so the profile does not shift as the figures grow.
    */
   private drawOverlay(overlay: VideoOverlay): void {
     const context = this.#context;
     const unit = Math.min(this.#width, this.#height) / 1080;
     const size = (pixels: number) => Math.max(1, Math.round(pixels * unit));
-    const margin = size(16);
-    const padding = size(10);
-    const timeFont = `500 ${String(size(15))}px system-ui, sans-serif`;
-    const statsFont = `600 ${String(size(18))}px system-ui, sans-serif`;
-    const gap = size(12);
-    const arrowWidth = size(9);
-    const chartWidth = size(180);
-    const chartHeight = size(34);
+    const margin = size(20);
+    const padding = size(14);
+    const timeHeight = size(20);
+    const statsHeight = size(28);
+    const lineGap = size(6);
+    const timeFont = `500 ${String(timeHeight)}px system-ui, sans-serif`;
+    const statsFont = `600 ${String(statsHeight)}px system-ui, sans-serif`;
+    const gap = size(14);
+    const arrowWidth = size(14);
+    const arrowHeight = size(18);
+    const chartGap = size(18);
+    const chartWidth = size(320);
+    const chartHeight = size(44);
     const hiker = mapVisualPalette.userGeometry.gpxTrackHighlight;
 
     context.font = timeFont;
@@ -216,23 +222,19 @@ export class MapVideoRecorder {
     const ascentWidth =
       overlay.ascent === null
         ? 0
-        : gap + arrowWidth + size(4) + context.measureText(overlay.ascent).width;
-    const contentWidth = Math.max(
-      timeWidth,
-      distanceWidth + ascentWidth,
-      overlay.profile === null ? 0 : chartWidth,
-    );
-    const timeHeight = size(15);
-    const statsHeight = size(18);
-    const chartBlock = overlay.profile === null ? 0 : size(8) + chartHeight;
-    const plateWidth = contentWidth + padding * 2;
-    const plateHeight = padding * 2 + timeHeight + size(6) + statsHeight + chartBlock;
+        : gap + arrowWidth + size(5) + context.measureText(overlay.ascent).width;
+    const textWidth = Math.max(size(250), timeWidth, distanceWidth + ascentWidth);
+    const textHeight = timeHeight + lineGap + statsHeight;
+    const profile = overlay.profile;
+    const charted = profile !== null && profile.elevations.length >= 2;
+    const plateWidth = padding * 2 + textWidth + (charted ? chartGap + chartWidth : 0);
+    const plateHeight = padding * 2 + textHeight;
     const left = margin;
     const top = this.#height - margin - plateHeight;
 
     context.fillStyle = 'rgba(0, 0, 0, 0.5)';
     context.beginPath();
-    context.roundRect(left, top, plateWidth, plateHeight, size(8));
+    context.roundRect(left, top, plateWidth, plateHeight, size(10));
     context.fill();
 
     const textLeft = left + padding;
@@ -241,27 +243,26 @@ export class MapVideoRecorder {
     context.fillStyle = 'rgba(255, 255, 255, 0.8)';
     context.fillText(overlay.time, textLeft, top + padding);
 
-    const statsTop = top + padding + timeHeight + size(6);
+    const statsTop = top + padding + timeHeight + lineGap;
     context.font = statsFont;
     context.fillStyle = '#FFFFFF';
     context.fillText(overlay.distance, textLeft, statsTop);
     if (overlay.ascent !== null) {
       // A drawn triangle, not a glyph: every font has it, and it needs no translation.
       const arrowLeft = textLeft + distanceWidth + gap;
-      const arrowTop = statsTop + size(3);
+      const arrowTop = statsTop + size(5);
       context.beginPath();
-      context.moveTo(arrowLeft, arrowTop + size(12));
+      context.moveTo(arrowLeft, arrowTop + arrowHeight);
       context.lineTo(arrowLeft + arrowWidth / 2, arrowTop);
-      context.lineTo(arrowLeft + arrowWidth, arrowTop + size(12));
+      context.lineTo(arrowLeft + arrowWidth, arrowTop + arrowHeight);
       context.closePath();
       context.fill();
-      context.fillText(overlay.ascent, arrowLeft + arrowWidth + size(4), statsTop);
+      context.fillText(overlay.ascent, arrowLeft + arrowWidth + size(5), statsTop);
     }
 
-    const profile = overlay.profile;
-    if (profile === null || profile.elevations.length < 2) return;
-    const chartLeft = textLeft;
-    const chartBottom = statsTop + statsHeight + size(8) + chartHeight;
+    if (!charted) return;
+    const chartLeft = textLeft + textWidth + chartGap;
+    const chartBottom = top + padding + (textHeight + chartHeight) / 2;
     const lowest = Math.min(...profile.elevations);
     const range = Math.max(1, Math.max(...profile.elevations) - lowest);
     const last = profile.elevations.length - 1;
@@ -276,7 +277,7 @@ export class MapVideoRecorder {
     area.lineTo(chartLeft + chartWidth, chartBottom);
     area.lineTo(chartLeft, chartBottom);
     area.closePath();
-    context.lineWidth = size(1.5);
+    context.lineWidth = size(2);
     context.lineJoin = 'round';
     context.fillStyle = 'rgba(255, 255, 255, 0.15)';
     context.fill(area);
@@ -312,13 +313,13 @@ export class MapVideoRecorder {
     context.arc(
       walkedRight,
       chartBottom - ((elevation - lowest) / range) * chartHeight,
-      size(3.5),
+      size(5),
       0,
       Math.PI * 2,
     );
     context.fillStyle = hiker;
     context.fill();
-    context.lineWidth = size(1.5);
+    context.lineWidth = size(2);
     context.strokeStyle = '#FFFFFF';
     context.stroke();
   }

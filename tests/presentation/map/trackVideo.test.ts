@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { TrackTimingPoint } from '@/application/weather/TrackWeatherForecast';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
-import { planTrackVideo, type TrackVideoRoute } from '@/presentation/map/trackVideo';
+import {
+  avoidTerrainOcclusion,
+  planTrackVideo,
+  trackVideoSightLines,
+  type TrackVideoPlan,
+  type TrackVideoRoute,
+} from '@/presentation/map/trackVideo';
 
 const startMs = Date.UTC(2026, 6, 1, 5, 0);
 const camera = { zoom: 14, pitch: 45 };
@@ -194,18 +200,13 @@ describe('planTrackVideo', () => {
   it("keeps the user's zoom and pitch within readable bounds", () => {
     const route = straightRoute([43.1, 42.7], [0.01, 0], 11, 600);
 
-    expect(planTrackVideo(route, { zoom: 14.3, pitch: 35 })).toMatchObject({
-      zoom: 14.3,
-      pitch: 35,
-    });
-    expect(planTrackVideo(route, { zoom: 8, pitch: 80 })).toMatchObject({
-      zoom: 12,
-      pitch: 60,
-    });
-    expect(planTrackVideo(route, { zoom: 18, pitch: 0 })).toMatchObject({
-      zoom: 16,
-      pitch: 0,
-    });
+    const view = (zoom: number, pitch: number) => {
+      const plan = planTrackVideo(route, { zoom, pitch });
+      return { zoom: plan.zoom, pitch: plan.frames[300]?.pitch };
+    };
+    expect(view(14.3, 35)).toEqual({ zoom: 14.3, pitch: 35 });
+    expect(view(8, 80)).toEqual({ zoom: 12, pitch: 60 });
+    expect(view(18, 0)).toEqual({ zoom: 16, pitch: 0 });
   });
 
   it('turns the camera to the direction of travel', () => {
@@ -252,5 +253,110 @@ describe('planTrackVideo', () => {
       ascent: null,
       profile: null,
     });
+  });
+
+  it('glides the camera over a zigzag while the hiker stays on the track and in frame', () => {
+    const zigzag = timedRoute(
+      Array.from({ length: 41 }, (_, index) => [
+        43.1 + 0.0025 * index,
+        42.7 + (index % 2) * 0.002,
+      ]),
+      Array.from({ length: 41 }, (_, index) => index * 150),
+    );
+
+    const { frames } = planTrackVideo(zigzag, camera);
+
+    const sideways = (pick: (frame: (typeof frames)[number]) => number) => {
+      const middle = frames.slice(100, 500).map(pick);
+      return Math.max(...middle) - Math.min(...middle);
+    };
+    // The hiker swings the full 220 m of each zag; the camera much less.
+    expect(sideways((frame) => frame.position[1])).toBeCloseTo(0.002);
+    expect(sideways((frame) => frame.center[1])).toBeLessThan(0.0008);
+    for (const frame of frames) {
+      expect(geodesicDistanceMeters(frame.center, frame.position)).toBeLessThan(250);
+    }
+  });
+});
+
+describe('avoidTerrainOcclusion', () => {
+  const view = {
+    heightPixels: 900,
+    fieldOfViewDegrees: 36.87,
+    terrainExaggeration: 1.15,
+  };
+  const plan = planTrackVideo(straightRoute([43.1, 42.7], [0.01, 0], 11, 1_800), {
+    zoom: 14,
+    pitch: 50,
+  });
+  const lines = trackVideoSightLines(plan, view);
+
+  /**
+   * Bare-earth heights for every sight line: a 400 m wall right behind the hiker during
+   * frames 240–360, for the views in `blocked` (-1 the planned view, then the fallback
+   * angles in order: right, left, ahead, top-down).
+   */
+  function terrain(blocked: readonly number[]) {
+    return lines.map((line) =>
+      line.coordinates.map((_, index) =>
+        index === 3 &&
+        blocked.includes(line.angle) &&
+        line.frameIndex >= 240 &&
+        line.frameIndex <= 360
+          ? 400
+          : 0,
+      ),
+    );
+  }
+
+  const bearingTurn = (adjusted: TrackVideoPlan, index: number) =>
+    (adjusted.frames[index]?.bearing ?? 0) - (plan.frames[index]?.bearing ?? 0);
+
+  it('places the camera behind the hiker and the line rising toward it', () => {
+    const planned = lines.find((line) => line.frameIndex === 300 && line.angle === -1);
+    const fromSide = lines.find((line) => line.frameIndex === 300 && line.angle === 0);
+    const hiker = plan.frames[300]?.position ?? [0, 0];
+
+    expect(planned?.coordinates[0]).toEqual(hiker);
+    // Travelling east, the camera is to the west; turned right, it looks from the north.
+    expect(planned?.coordinates.at(-1)?.[0]).toBeLessThan(hiker[0]);
+    expect(fromSide?.coordinates.at(-1)?.[1]).toBeGreaterThan(hiker[1]);
+    const rises = planned?.rises ?? [];
+    expect(
+      rises.every((rise, index) => index === 0 || rise > (rises[index - 1] ?? 0)),
+    ).toBe(true);
+  });
+
+  it('turns the camera to the side around hidden stretches, easing in and out', () => {
+    const adjusted = avoidTerrainOcclusion(plan, lines, terrain([-1]), view);
+
+    expect(bearingTurn(adjusted, 300)).toBeCloseTo(90);
+    expect(bearingTurn(adjusted, 240)).toBeCloseTo(90);
+    expect(bearingTurn(adjusted, 100)).toBeCloseTo(0);
+    expect(bearingTurn(adjusted, 500)).toBeCloseTo(0);
+    const steps = adjusted.frames
+      .slice(1)
+      .map((_, index) =>
+        Math.abs(bearingTurn(adjusted, index + 1) - bearingTurn(adjusted, index)),
+      );
+    expect(Math.max(...steps)).toBeLessThan(5);
+    expect(adjusted.frames[300]?.pitch).toBe(50);
+  });
+
+  it('takes the other side, then a higher camera, when nearer angles are blocked too', () => {
+    const left = avoidTerrainOcclusion(plan, lines, terrain([-1, 0]), view);
+    expect(bearingTurn(left, 300)).toBeCloseTo(-90);
+
+    const higher = avoidTerrainOcclusion(plan, lines, terrain([-1, 0, 1, 2]), view);
+    expect(bearingTurn(higher, 300)).toBeCloseTo(0);
+    expect(higher.frames[300]?.pitch).toBeCloseTo(20);
+    expect(higher.frames[100]?.pitch).toBeCloseTo(50);
+  });
+
+  it('keeps the plan where nothing is hidden or no angle helps', () => {
+    expect(avoidTerrainOcclusion(plan, lines, terrain([]), view)).toBe(plan);
+    const stuck = avoidTerrainOcclusion(plan, lines, terrain([-1, 0, 1, 2, 3]), view);
+    expect(bearingTurn(stuck, 300)).toBeCloseTo(0);
+    expect(stuck.frames[300]?.pitch).toBeCloseTo(50);
   });
 });

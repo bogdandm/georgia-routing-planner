@@ -899,30 +899,36 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   second, each minute shown for 150 ms as in playback, a format that social networks and
   messengers accept for upload. Frames have the same content as the screenshot and are
   scaled to fit 1920×1080 in the map's orientation (smaller maps keep their size). The
-  panel shows progress and **Cancel**; a camera move, a time chosen in the sun panel,
-  **Play the day**, or turning shadows off stops the recording and says so. Unless a
-  time was chosen in the sun panel, the map returns to the minute shown before the
-  recording, however it ended. Closing the panel keeps the recording running. **Record a
-  track video**, available while sun shadows are on and a single track with route timing
-  is open, downloads `track-<hike date>.mp4` in the same format: a 22-second time-lapse
-  of the hike from the start to the finish of [Route timing](#tracks) (date, start hour,
-  pace, recorded or estimated time). An orange point on the track marks where the hiker
-  is at each moment and stays at the center of the frame, shown even while imported
-  tracks are hidden. The camera keeps the map's current zoom, limited to 12–16, and its
-  tilt, limited to 60°, and turns smoothly with the direction of travel. The point
-  speeds up gently from the start and slows down before the finish, and each end is held
-  for a second. Video time runs evenly through walking time, so stops in recorded time
-  are skipped: staying within 25 m for at least 3 minutes and a recorder paused for a
-  minute or more (its gap passes at walking pace); waits between recorded segments are
-  skipped for estimated time too. The clock and the sun jump over a skipped stop, and
-  the last frame is the real finish. Sun shadows show the moment's minute; like the sun
-  panel they draw only from two hours before sunrise to two hours after sunset, so night
-  hours keep that edge's night look. A compact plate in the lower-left corner shows the
-  local date and time in the route's time zone in small text, the distance and climb so
-  far (the climb ends at the track's ascent), and a mini elevation profile filled up to
-  the hiker; at 1080p it is about 210 × 100 px. Moving the map stops the recording and
-  keeps the new view; otherwise the camera returns to where it was. The two recordings
-  never run at once.
+  panel shows a blinking red recording light with **Recording…**, a progress bar, the
+  percent done and the time left at the pace so far (once three seconds have passed),
+  and **Cancel**; a camera move, a time chosen in the sun panel, **Play the day**, or
+  turning shadows off stops the recording and says so. Unless a time was chosen in the
+  sun panel, the map returns to the minute shown before the recording, however it ended.
+  Closing the panel keeps the recording running. **Record a track video**, available
+  while sun shadows are on and a single track with route timing is open, downloads
+  `track-<hike date>.mp4` in the same format: a 22-second time-lapse of the hike from
+  the start to the finish of [Route timing](#tracks) (date, start hour, pace, recorded
+  or estimated time). An orange point on the track marks where the hiker is at each
+  moment, shown even while imported tracks are hidden. The camera keeps the map's
+  current zoom, limited to 12–16, and its tilt, limited to 60°, and follows the hiker's
+  path averaged over a second, so it glides over the track's kinks while the point stays
+  near the middle; it turns smoothly with the direction of travel. In 3D, where relief
+  would hide the point, often on a descent past a slope's brow, the camera turns over
+  about two seconds to look from the side (90° either way), then from ahead, and as a
+  last resort looks down from 20° of tilt, and turns back afterwards. The point speeds
+  up gently from the start and slows down before the finish, and each end is held for a
+  second. Video time runs evenly through walking time, so stops in recorded time are
+  skipped: staying within 25 m for at least 3 minutes and a recorder paused for a minute
+  or more (its gap passes at walking pace); waits between recorded segments are skipped
+  for estimated time too. The clock and the sun jump over a skipped stop, and the last
+  frame is the real finish. Sun shadows show the moment's minute; like the sun panel
+  they draw only from two hours before sunrise to two hours after sunset, so night hours
+  keep that edge's night look. A plate in the lower-left corner shows the local date and
+  time in the route's time zone above the distance and climb so far (the climb ends at
+  the track's ascent), with a wide, low elevation profile beside them filled up to the
+  hiker; at 1080p it is about 640 × 82 px. Moving the map stops the recording and keeps
+  the new view; otherwise the camera returns to where it was. The two recordings never
+  run at once.
 - **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

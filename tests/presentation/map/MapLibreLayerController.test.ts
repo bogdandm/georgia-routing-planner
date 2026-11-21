@@ -3533,14 +3533,18 @@ describe('MapLibreLayerController', () => {
       const minute = 60_000;
       const plan = {
         zoom: 14,
-        pitch: 50,
-        frames: [
-          { position: [43.1, 42.7], sunMinute: 0 },
-          { position: [43.12, 42.71], sunMinute: 5 },
-          { position: [43.14, 42.72], sunMinute: 10 },
-        ].map(({ position, sunMinute }) => ({
-          position: position as [number, number],
+        frames: (
+          [
+            { position: [43.1, 42.7], sunMinute: 0 },
+            { position: [43.12, 42.71], sunMinute: 5 },
+            { position: [43.14, 42.72], sunMinute: 10 },
+          ] as const
+        ).map(({ position, sunMinute }) => ({
+          position: [position[0], position[1]] as [number, number],
+          // The smoothed camera center trails the hiker slightly.
+          center: [position[0] - 0.001, position[1]] as [number, number],
           bearing: 30,
+          pitch: 50,
           sunInstantMs: Date.UTC(2026, 6, 1, 6, 0) + sunMinute * minute,
           overlay: { time: 'clock', distance: '1 km', ascent: null, profile: null },
           durationMs: 1_000,
@@ -3578,7 +3582,7 @@ describe('MapLibreLayerController', () => {
           plan.frames.map((frame) => frame.sunInstantMs),
         );
         expect(videoCapture.capturedCenters).toEqual(
-          plan.frames.map(({ position }) => ({ lng: position[0], lat: position[1] })),
+          plan.frames.map(({ center }) => ({ lng: center[0], lat: center[1] })),
         );
         expect(videoCapture.capturedTracePoints).toHaveLength(plan.frames.length);
         for (const [index, source] of videoCapture.capturedTracePoints.entries()) {

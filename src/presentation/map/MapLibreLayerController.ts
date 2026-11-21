@@ -1716,10 +1716,10 @@ export class MapLibreLayerController {
         (frame) => {
           map.jumpTo(
             {
-              center: [...frame.position],
+              center: [...frame.center],
               zoom: plan.zoom,
               bearing: frame.bearing,
-              pitch: plan.pitch,
+              pitch: frame.pitch,
             },
             trackVideoCameraJump,
           );

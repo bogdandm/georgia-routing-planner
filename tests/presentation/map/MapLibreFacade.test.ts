@@ -3137,15 +3137,21 @@ describe('MapLibreFacade', () => {
       const stopped = new Promise<Uint8Array>((_resolve, reject) => {
         stop = reject;
       });
-      const { facade, nativeMap, onViewSettled } = createTrackVideoFacade(
-        () => stopped,
-      );
+      let started: () => void = () => undefined;
+      const running = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const { facade, nativeMap, onViewSettled } = createTrackVideoFacade(() => {
+        started();
+        return stopped;
+      });
 
       const recording = facade.recordTrackVideo(
         route,
         new AbortController().signal,
         vi.fn(),
       );
+      await running;
       nativeMap.easeTo({ center: [44, 42], zoom: 9 });
       nativeMap.fire('movestart', {});
       nativeMap.fire('moveend', {});
@@ -3157,6 +3163,55 @@ describe('MapLibreFacade', () => {
       expect(onViewSettled.mock.calls[0]?.[0]).toMatchObject({
         camera: { longitude: 44, latitude: 42, zoom: 9 },
       });
+      facade.destroy();
+    });
+
+    it('turns the 3D camera aside where the DEM rises between it and the hiker', async () => {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+      // A slope climbing steeply westward along the route, behind an eastbound hiker.
+      const sampleMany = vi.fn<ElevationProvider['sampleMany']>((coordinates) =>
+        Promise.resolve(
+          coordinates.map(({ longitude, latitude }) => ({
+            status: 'available' as const,
+            meters:
+              Math.abs(latitude - 42.7) < 1e-9
+                ? 1_000 + (43.2 - longitude) * 300_000
+                : 0,
+          })),
+        ),
+      );
+      const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>(() =>
+        Promise.resolve(Uint8Array.of(1)),
+      );
+      const facade = new MapLibreFacade(
+        services.logger,
+        undefined,
+        undefined,
+        undefined,
+        {
+          attach: vi.fn(),
+          detach: vi.fn(),
+          handleRasterSourceData: vi.fn(),
+          handleRasterSourceFailure: vi.fn(),
+          handleRasterSourceRecovered: vi.fn(),
+          isRasterSourceRecoveryComplete: vi.fn(() => true),
+          setTerrainInteractionActive: vi.fn(),
+          setPlannedLinePreview: vi.fn(),
+          clearPlannedLinePreview: vi.fn(),
+          recordTrackVideo,
+        },
+        { sample: vi.fn(), sampleMany },
+      );
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      nativeMap.fire('load');
+
+      await facade.recordTrackVideo(route, new AbortController().signal, vi.fn());
+
+      const frame = recordTrackVideo.mock.calls[0]?.[0].frames[300];
+      // Eastbound travel faces 90°; turned to the side, the camera faces 180°.
+      expect(frame?.bearing).toBeCloseTo(180);
       facade.destroy();
     });
   });

@@ -144,7 +144,9 @@ export class MapVideoRecorder {
     this.#context = context;
     this.#source = new CanvasSource(canvas, {
       codec: 'avc',
-      quality: new Quality('high'),
+      // The whole map moves every frame, and satellite imagery is detailed: below this
+      // level the encoder smears the imagery and the labels, even on held frames.
+      quality: new Quality('very-high'),
     });
     this.#output = new Output({
       format: new Mp4OutputFormat({ fastStart: 'in-memory' }),

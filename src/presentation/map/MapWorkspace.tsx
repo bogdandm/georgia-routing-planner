@@ -87,7 +87,7 @@ import {
   formatTrackDistance,
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
-import { trackVideoSegments } from '@/presentation/map/trackVideo';
+import { trackVideoFilename, trackVideoSegments } from '@/presentation/map/trackVideo';
 import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
@@ -2007,8 +2007,22 @@ export function MapWorkspace({
               signal,
               onProgress,
             );
-            // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
-            downloadFile(`track-${trackLighting.date}.mp4`, 'video/mp4', video);
+            const active = tracksWorkspace.active;
+            downloadFile(
+              trackVideoFilename(
+                active === null
+                  ? ''
+                  : active.kind === 'saved'
+                    ? active.summary.name
+                    : active.name,
+                trackLighting.date,
+                trackLighting.startMs,
+                trackLighting.timeZone,
+              ),
+              // eslint-disable-next-line lingui/no-unlocalized-strings -- MIME type.
+              'video/mp4',
+              video,
+            );
           },
   };
 

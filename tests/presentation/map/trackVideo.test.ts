@@ -9,6 +9,7 @@ import type { TrackPoint } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import {
   planTrackVideo,
+  trackVideoFilename,
   trackVideoSegments,
   type TrackVideoFrame,
   type TrackVideoPlan,
@@ -204,6 +205,23 @@ function hiddenRun(plan: TrackVideoPlan, terrain: TrackVideoTerrain): number {
   }
   return longest;
 }
+
+describe('trackVideoFilename', () => {
+  it("names the video by the track, the hike's date, and its local start time", () => {
+    // 04:05 UTC is 08:05 in Tbilisi.
+    const startMs = Date.parse('2026-07-11T04:05:00Z');
+
+    expect(
+      trackVideoFilename('Сахизаре сверху', '2026-07-11', startMs, 'Asia/Tbilisi'),
+    ).toBe('Сахизаре сверху-2026-07-11-08-05.mp4');
+    expect(
+      trackVideoFilename('Kazbegi: Gergeti / Sameba', '2026-07-11', startMs, 'UTC'),
+    ).toBe('Kazbegi- Gergeti - Sameba-2026-07-11-04-05.mp4');
+    expect(trackVideoFilename('  ', '2026-07-11', startMs, 'UTC')).toBe(
+      'track-2026-07-11-04-05.mp4',
+    );
+  });
+});
 
 describe('planTrackVideo', () => {
   // 8.2 km east, 24 s of travel: 720 travel frames and the finish.

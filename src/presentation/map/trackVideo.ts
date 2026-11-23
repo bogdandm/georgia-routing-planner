@@ -7,6 +7,7 @@ import type {
 } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
+import { safeTrackFilename } from '@/domain/tracks/trackExport';
 import { videoFrameRate, type VideoOverlay } from '@/presentation/map/mapCapture';
 
 /** A timed route: `elapsedSeconds[i]` is when the hiker reaches `points[i]`. */
@@ -567,6 +568,29 @@ function coordinateAtDistance(
 function screenBearing(from: TrackCoordinate, to: TrackCoordinate): number {
   const east = (to[0] - from[0]) * Math.cos((((from[1] + to[1]) / 2) * Math.PI) / 180);
   return (Math.atan2(east, to[1] - from[1]) * 180) / Math.PI;
+}
+
+/**
+ * Download name of a track video, `<track name>-<YYYY-MM-DD>-<HH-MM>.mp4`: the hike's
+ * local date and start time in the route's time zone, made filesystem-safe like the
+ * track's GPX download. A track without a name is called `track`.
+ */
+export function trackVideoFilename(
+  trackName: string,
+  date: string,
+  startMs: number,
+  timeZone: string,
+): string {
+  const startTime = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+    .format(startMs)
+    .replace(':', '-');
+  const name = trackName.trim().length === 0 ? 'track' : trackName.trim();
+  return safeTrackFilename(`${name}-${date}-${startTime}`, 'mp4');
 }
 
 /**

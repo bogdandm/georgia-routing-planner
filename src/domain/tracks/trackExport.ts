@@ -99,7 +99,10 @@ export function safeFilenameStem(name: string): string {
     .slice(0, 120);
 }
 
-export function safeTrackFilename(name: string, extension: 'gpx' | 'kml'): string {
+export function safeTrackFilename(
+  name: string,
+  extension: 'gpx' | 'kml' | 'mp4',
+): string {
   const stem = safeFilenameStem(name);
   return `${stem.length === 0 ? 'track' : stem}.${extension}`;
 }

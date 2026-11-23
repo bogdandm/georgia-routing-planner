@@ -912,27 +912,30 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   moment, shown even while imported tracks are hidden. The camera keeps the map's
   current zoom, limited to 12–16, and its tilt, limited to 60°, and follows the hiker's
   path averaged over a second (never more than 120 px off), so it glides over the
-  track's kinks while the point stays near the middle; it turns smoothly with the
-  direction of travel. In 3D, where relief would hide the point, often on a descent past
-  a slope's brow, the camera turns over about two seconds to look from the side (90°
-  either way), then from ahead, and as a last resort looks down from 20° of tilt, and
-  turns back afterwards; where no single view sees the point throughout, it changes view
-  part way. The point is already moving in the first frame, eases in over two seconds
-  and out before the finish, and the finish is held for the last second. It travels the
-  route at an even speed, nudged by the hike's pace: a stretch walked faster plays
-  somewhat faster, but never more than 1.35 times the average, and a slower one never
-  below 0.75 times it. In recorded time, a stop (staying within 25 m for at least 3
-  minutes, or a recorder paused for a minute or more) shows the point resting for up to
-  0.6 seconds while the clock and the light run on; stops together take at most a
-  quarter of the video, and waiting before the start or after the finish is left out.
-  The last frame is the real finish. Sun shadows show the moment's minute; like the sun
-  panel they draw only from two hours before sunrise to two hours after sunset, so night
-  hours keep that edge's night look. A plate in the lower-left corner shows the local
-  date and time in the route's time zone above the distance and climb so far (the climb
-  ends at the track's ascent), with a wide, low elevation profile beside them filled up
-  to the hiker; at 1080p it is about 640 × 82 px. Moving the map stops the recording and
-  keeps the new view; otherwise the camera returns to where it was. The two recordings
-  never run at once.
+  track's kinks while the point stays near the middle. It faces the route's general
+  direction, measured over a tenth of the route (0.6–3 km) each side of the hiker and
+  smoothed over several seconds, so switchbacks do not swing it: on climbs it looks
+  ahead along the way. In 3D, on a descent of the track's elevation profile (descents
+  closer than two seconds of video count as one, and shorter than three are ignored),
+  where relief would hide the point for more than two seconds on end, the camera turns
+  aside by 60°, either way, or else by 90°, holds that turn through the whole descent,
+  and eases in and out of it over about four seconds; it never turns to look back. The
+  point may drop out of view for a second or two elsewhere. The point is already moving
+  in the first frame, eases in over two seconds and out before the finish, and the
+  finish is held for the last second. It travels the route at an even speed, nudged by
+  the hike's pace: a stretch walked faster plays somewhat faster, but never more than
+  1.35 times the average, and a slower one never below 0.75 times it. In recorded time,
+  a stop (staying within 25 m for at least 3 minutes, or a recorder paused for a minute
+  or more) shows the point resting for up to 0.6 seconds while the clock and the light
+  run on; stops together take at most a quarter of the video, and waiting before the
+  start or after the finish is left out. The last frame is the real finish. Sun shadows
+  show the moment's minute; like the sun panel they draw only from two hours before
+  sunrise to two hours after sunset, so night hours keep that edge's night look. A plate
+  in the lower-left corner shows the local date and time in the route's time zone above
+  the distance and climb so far (the climb ends at the track's ascent), with a wide, low
+  elevation profile beside them filled up to the hiker; at 1080p it is about 640 × 82
+  px. Moving the map stops the recording and keeps the new view; otherwise the camera
+  returns to where it was. The two recordings never run at once.
 - **Image comparison:** on desktop, the compare button below the camera button opens the
   Satellite comparison grid from any section (see [Comparison](#comparison)).
 - **Ruler:** the last button of that group toggles a session-only measurement; pressing

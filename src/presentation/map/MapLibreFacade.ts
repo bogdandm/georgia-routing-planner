@@ -1020,8 +1020,10 @@ export class MapLibreFacade implements MapFacade {
   ): Promise<Uint8Array> {
     const map = this.#map;
     const layers = this.layerController;
+    // A move already under way is the user's: restoring over it would undo it.
     if (
       map === null ||
+      map.isMoving() ||
       this.#scriptedCamera !== null ||
       layers?.recordTrackVideo === undefined
     ) {
@@ -1053,6 +1055,12 @@ export class MapLibreFacade implements MapFacade {
       );
       videoSignal.throwIfAborted();
       return await layers.recordTrackVideo(plan, videoSignal, onProgress);
+    } catch (error) {
+      // Detaching the map aborts with a plain error; every stop is an `AbortError`.
+      if (videoSignal.aborted && !(error instanceof DOMException)) {
+        throw new DOMException('The track video was stopped.', 'AbortError');
+      }
+      throw error;
     } finally {
       map.off('movestart', noteUserMove);
       if (this.#scriptedCamera === controller) this.#scriptedCamera = null;
@@ -1069,10 +1077,11 @@ export class MapLibreFacade implements MapFacade {
   }
 
   /**
-   * In 3D, turns the planned camera wherever relief would hide the hiker. The bare-earth
-   * DEM along each sight line comes from the elevation provider, since the map holds
-   * terrain tiles only around the current view. Without terrain, a provider, or a
-   * pitch, nothing can hide the hiker; if sampling fails, the plan stays as it is.
+   * In 3D, turns the planned camera aside on descents where relief would hide the
+   * hiker (see `avoidTerrainOcclusion`). The bare-earth DEM along each sight line comes
+   * from the elevation provider, since the map holds terrain tiles only around the
+   * current view. Without terrain, a provider, a pitch, or a descent, nothing turns; if
+   * sampling fails, the plan stays as it is.
    */
   private async unhideTrackVideoHiker(
     map: MapLibreMap,
@@ -1093,6 +1102,7 @@ export class MapLibreFacade implements MapFacade {
       terrainExaggeration: this.provider?.terrain.exaggeration ?? 1,
     };
     const lines = trackVideoSightLines(plan, view);
+    if (lines.length === 0) return plan;
     try {
       const samples = await provider.sampleMany(
         lines.flatMap((line) =>

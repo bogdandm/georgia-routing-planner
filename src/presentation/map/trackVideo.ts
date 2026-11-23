@@ -1,4 +1,5 @@
 import type { TrackTimingPoint } from '@/application/weather/TrackWeatherForecast';
+import type { ElevationProfile } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import { videoFrameRate, type VideoOverlay } from '@/presentation/map/mapCapture';
@@ -16,6 +17,14 @@ export interface TrackVideoRoute {
   readonly startMs: number;
   /** The track's stated ascent: the climb shown in the video ends at it. */
   readonly ascentMeters: number | undefined;
+  /**
+   * Route distances, in meters, of the descents of the track's elevation profile (its
+   * macro segments): where the camera may turn aside to keep the hiker in view.
+   */
+  readonly descents: readonly {
+    readonly startMeters: number;
+    readonly endMeters: number;
+  }[];
   /** Display text for the frame overlay, in the route's time zone and the UI locale. */
   readonly labels: {
     readonly time: (instantMs: number) => string;
@@ -43,6 +52,8 @@ export interface TrackVideoFrame {
 export interface TrackVideoPlan {
   readonly zoom: number;
   readonly frames: readonly TrackVideoFrame[];
+  /** Frame ranges, `to` exclusive, of descents long enough for the camera to turn. */
+  readonly descents: readonly { readonly from: number; readonly to: number }[];
 }
 
 /**
@@ -92,6 +103,12 @@ const stopMinimumSeconds = 3 * 60;
  */
 const gapMinimumSeconds = 60;
 const gapMaximumMetersPerSecond = 0.2;
+const gapWalkingMetersPerSecond = 1;
+/**
+ * The stop scan starts at most this often, bounding its work on dense recordings; a
+ * stay that began among skipped points is measured from its first one.
+ */
+const stopAnchorSpacingSeconds = 5;
 /**
  * A stop plays this much video per minute it lasted, up to the maximum: the hiker
  * visibly rests while the clock and the light run on, without long still stretches.
@@ -108,6 +125,31 @@ const centerSmoothingFrames = 15;
  * hiker in view where the route jumps between recorded segments.
  */
 const maximumCenterOffsetPixels = 120;
+/**
+ * The camera faces the route's general direction, from this far behind the hiker to
+ * as far ahead (a share of the route, within bounds), so switchbacks and kinks cancel
+ * out instead of swinging the view.
+ */
+const headingBaselineShare = 0.1;
+const minimumHeadingBaselineMeters = 600;
+const maximumHeadingBaselineMeters = 3_000;
+/**
+ * Where the route behind and ahead lie closer than this share of the baseline, right
+ * at a turnaround, they give no direction and the previous heading holds. Kept small:
+ * across switchbacks the chord is short too, yet still points up the slope.
+ */
+const minimumHeadingChordShare = 0.05;
+/**
+ * The heading is then averaged twice over this many frames each side: the view turns
+ * gently over several seconds.
+ */
+const headingSmoothingFrames = 60;
+/**
+ * Descents shorter than this many frames are not worth a turn, and descents closer
+ * than `descentMergeFrames` count as one, so the camera does not turn on short pieces.
+ */
+const minimumDescentFrames = 3 * videoFrameRate;
+const descentMergeFrames = 2 * videoFrameRate;
 const earthCircumferenceMeters = 40_075_016.686;
 /** MapLibre world units per tile at zoom 0. */
 const mapTileSizePixels = 512;
@@ -145,8 +187,13 @@ function metersPerPixel(latitude: number, zoom: number): number {
 
 /** How a route plays: video seconds and the drawn hiker at each point. */
 interface VideoTimeline {
-  /** Video seconds of travel up to each point. */
+  /** Video seconds of travel up to each point, the walking eased (see `videoAt`). */
   readonly seconds: readonly number[];
+  /**
+   * Video seconds at `fraction` of the way from point `step − 1` to point `step`. The
+   * ease bends time within a step too, which matters where points are sparse.
+   */
+  readonly videoAt: (step: number, fraction: number) => number;
   /** Where the hiker is drawn at each point: through a stop, where it began. */
   readonly display: readonly TrackCoordinate[];
   /** Route distance shown at each point; a stop holds it as well. */
@@ -154,16 +201,88 @@ interface VideoTimeline {
 }
 
 /**
- * Lays the route out in video time. Walking gets a length-based total, spread along the
- * drawn path by distance and nudged by the local pace (see `paceInfluence`). On
- * recorded time, a stop (a stay within `stopRadiusMeters` for `stopMinimumSeconds`,
- * GPS jitter included, or a paused recorder's gap) plays briefly with the hiker held at
- * its first point. Waits between recorded segments take no time.
+ * On recorded time, a paused recorder (a gap of at least `gapMinimumSeconds` covered
+ * slower than `gapMaximumMetersPerSecond`) gets a resting point at the gap's start,
+ * timed so the gap's distance is then walked at `gapWalkingMetersPerSecond`. The step
+ * to that point is a rest (`pausedSteps`), a stop however short the pause was.
+ */
+function withRestPoints(
+  points: readonly TrackTimingPoint[],
+  elapsed: readonly number[],
+  recordedTime: boolean,
+): {
+  readonly points: TrackTimingPoint[];
+  readonly elapsed: number[];
+  readonly pausedSteps: number[];
+} {
+  const restedPoints: TrackTimingPoint[] = [];
+  const restedElapsed: number[] = [];
+  const pausedSteps: number[] = [];
+  for (const [index, point] of points.entries()) {
+    const previous = points[index - 1];
+    const previousSeconds = elapsed[index - 1] ?? 0;
+    const seconds = elapsed[index] ?? previousSeconds;
+    if (
+      recordedTime &&
+      previous?.sourceSegmentIndex === point.sourceSegmentIndex &&
+      seconds - previousSeconds >= gapMinimumSeconds
+    ) {
+      const meters = point.distanceMeters - previous.distanceMeters;
+      if (meters < (seconds - previousSeconds) * gapMaximumMetersPerSecond) {
+        pausedSteps.push(restedPoints.length);
+        restedPoints.push(previous);
+        restedElapsed.push(
+          Math.max(previousSeconds, seconds - meters / gapWalkingMetersPerSecond),
+        );
+      }
+    }
+    restedPoints.push(point);
+    restedElapsed.push(seconds);
+  }
+  return { points: restedPoints, elapsed: restedElapsed, pausedSteps };
+}
+
+/**
+ * Longitudes made continuous, so the hiker and the camera cross the antimeridian the
+ * short way instead of travelling around the world.
+ */
+function unwrappedPoints(points: readonly TrackTimingPoint[]): TrackTimingPoint[] {
+  let previous: number | null = null;
+  return points.map((point) => {
+    let longitude = point.coordinate[0];
+    if (previous !== null) longitude += Math.round((previous - longitude) / 360) * 360;
+    previous = longitude;
+    return longitude === point.coordinate[0]
+      ? point
+      : { ...point, coordinate: [longitude, point.coordinate[1]] };
+  });
+}
+
+/** Inverse of `easedTravel`, by bisection: the time share at travel share `share`. */
+function easedTime(share: number): number {
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 40; step += 1) {
+    const middle = (low + high) / 2;
+    if (easedTravel(middle) < share) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+/**
+ * Lays the route out in `travelVideoSeconds` of video. Walking is spread along the
+ * drawn path by distance, nudged by the local pace (see `paceInfluence`), and eased in
+ * and out at its ends. On recorded time, a stop (a stay within `stopRadiusMeters` for
+ * `stopMinimumSeconds`, GPS jitter included, or a paused recorder's rest in
+ * `pausedSteps`) plays briefly with the hiker held at its first point; stops at the
+ * very start and end take no time. Waits between recorded segments take no time either.
  */
 function videoTimeline(
   points: readonly TrackTimingPoint[],
   elapsed: readonly number[],
   recordedTime: boolean,
+  pausedSteps: readonly number[],
 ): VideoTimeline {
   const display = points.map((point) => point.coordinate);
   const distances = points.map((point) => point.distanceMeters);
@@ -178,6 +297,10 @@ function videoTimeline(
     // segment starts a stop either, since each has less time left; their scans are
     // skipped.
     let noStopThrough = -1;
+    // Scans start at most every `stopAnchorSpacingSeconds` and cover three minutes, so
+    // a point is visited a bounded number of times however dense the recording is.
+    let lastScanSeconds = -Infinity;
+    let lastScanIndex = -1;
     // A stop that starts where the previous one ended continues it: a long break with
     // GPS jitter beyond `stopRadiusMeters` stays one short pause, held in one place.
     let previousStopEnd = -1;
@@ -185,10 +308,22 @@ function videoTimeline(
     while (index < points.length - 1) {
       const anchor = points[index];
       if (anchor === undefined) break;
-      const startSeconds = elapsed[index] ?? 0;
-      if (index > noStopThrough) {
-        // The scan ends at the first point out of reach or once the stay is long
-        // enough to be a stop, so a point is revisited only within three minutes.
+      if (
+        index > noStopThrough &&
+        (index === previousStopEnd ||
+          (elapsed[index] ?? 0) - lastScanSeconds >= stopAnchorSpacingSeconds)
+      ) {
+        lastScanSeconds = elapsed[index] ?? 0;
+        // The stay may have begun among the points skipped since the last scan.
+        let first = index;
+        while (
+          first - 1 > Math.max(lastScanIndex, previousStopEnd) &&
+          within(anchor, points[first - 1])
+        ) {
+          first -= 1;
+        }
+        lastScanIndex = index;
+        const startSeconds = elapsed[first] ?? 0;
         let end = index;
         while (
           (elapsed[end] ?? 0) - startSeconds < stopMinimumSeconds &&
@@ -199,13 +334,13 @@ function videoTimeline(
         if ((elapsed[end] ?? 0) - startSeconds >= stopMinimumSeconds) {
           while (within(anchor, points[end + 1])) end += 1;
           const duration = (elapsed[end] ?? 0) - startSeconds;
-          const continued = index === previousStopEnd ? (stopOfStep[index] ?? -1) : -1;
+          const continued = first === previousStopEnd ? (stopOfStep[first] ?? -1) : -1;
           const stop = continued === -1 ? stops.push(duration) - 1 : continued;
           if (continued !== -1) stops[stop] = (stops[stop] ?? 0) + duration;
-          // `display[index]` is the anchor, or the place a continued stop is held at.
-          const heldAt = display[index] ?? anchor.coordinate;
-          const heldDistance = distances[index] ?? anchor.distanceMeters;
-          for (let held = index + 1; held <= end; held += 1) {
+          // `display[first]` is where the stay began, or where a continued stop is held.
+          const heldAt = display[first] ?? anchor.coordinate;
+          const heldDistance = distances[first] ?? anchor.distanceMeters;
+          for (let held = first + 1; held <= end; held += 1) {
             stopOfStep[held] = stop;
             display[held] = heldAt;
             distances[held] = heldDistance;
@@ -218,18 +353,20 @@ function videoTimeline(
           noStopThrough = end;
         }
       }
-      const next = points[index + 1];
-      const seconds = (elapsed[index + 1] ?? 0) - startSeconds;
-      if (
-        next?.sourceSegmentIndex === anchor.sourceSegmentIndex &&
-        seconds >= gapMinimumSeconds &&
-        next.distanceMeters - anchor.distanceMeters <
-          seconds * gapMaximumMetersPerSecond
-      ) {
-        stopOfStep[index + 1] = stops.push(seconds) - 1;
-      }
       index += 1;
     }
+  }
+  // A paused recorder rests in place however short the pause, joining a stop just
+  // before it.
+  for (const step of pausedSteps) {
+    if (stopOfStep[step] !== -1) continue;
+    const seconds = Math.max(0, (elapsed[step] ?? 0) - (elapsed[step - 1] ?? 0));
+    const joined = stopOfStep[step - 1] ?? -1;
+    const stop = joined === -1 ? stops.push(seconds) - 1 : joined;
+    if (joined !== -1) stops[stop] = (stops[stop] ?? 0) + seconds;
+    stopOfStep[step] = stop;
+    display[step] = display[step - 1] ?? display[step] ?? [0, 0];
+    distances[step] = distances[step - 1] ?? distances[step] ?? 0;
   }
 
   const sameSegment = (step: number) =>
@@ -254,7 +391,7 @@ function videoTimeline(
   const cumulativeWalking = stepWalking.map((step) => (walking += step));
   const averagePace = walking > 0 ? meters / walking : 0;
 
-  // Video time per step: distance over the pace factor of the stretch around it.
+  // Walking weight per step: distance over the pace factor of the stretch around it.
   const weights = stepMeters.map((stepLength, step) => {
     if (stepLength <= 0) return 0;
     if (averagePace <= 0) return stepLength;
@@ -297,22 +434,32 @@ function videoTimeline(
         );
   const walkingVideoSeconds =
     totalWeight <= 0 ? 0 : travelVideoSeconds - allStopsSeconds * stopScale;
-  let videoSeconds = 0;
-  const seconds = points.map((_, step) => {
-    if (totalWeight > 0) {
-      videoSeconds += (walkingVideoSeconds * (weights[step] ?? 0)) / totalWeight;
-    }
+  // Walking progress and stop time accumulate separately; only the walking is eased,
+  // so a stop lasts its share of video wherever it falls.
+  let walked = 0;
+  let rested = 0;
+  const walkedShares: number[] = [];
+  const restedSeconds: number[] = [];
+  for (let step = 0; step < points.length; step += 1) {
+    if (totalWeight > 0) walked += (weights[step] ?? 0) / totalWeight;
     const stop = stopOfStep[step] ?? -1;
     const stopSeconds = stops[stop] ?? 0;
     if (stop !== -1 && stopSeconds > 0) {
       // Spread over the stop's points by their real time, so the clock runs evenly.
       const stepSeconds = Math.max(0, (elapsed[step] ?? 0) - (elapsed[step - 1] ?? 0));
-      videoSeconds +=
-        ((stopVideoSeconds[stop] ?? 0) * stopScale * stepSeconds) / stopSeconds;
+      rested += ((stopVideoSeconds[stop] ?? 0) * stopScale * stepSeconds) / stopSeconds;
     }
-    return videoSeconds;
-  });
-  return { seconds, display, distances };
+    walkedShares.push(Math.min(1, walked));
+    restedSeconds.push(rested);
+  }
+  const videoAt = (step: number, fraction: number) => {
+    const before = Math.max(0, step - 1);
+    const share = valueAt(walkedShares, before + (step - before) * fraction);
+    const rest = valueAt(restedSeconds, before + (step - before) * fraction);
+    return walkingVideoSeconds * easedTime(share) + rest;
+  };
+  const seconds = points.map((_, step) => videoAt(step, 1));
+  return { seconds, videoAt, display, distances };
 }
 
 /**
@@ -379,12 +526,87 @@ function coordinateAtDistance(
   ];
 }
 
-/** Screen bearing on a north-up Web Mercator map, or null for no movement. */
-function screenBearing(from: TrackCoordinate, to: TrackCoordinate): number | null {
+/** Screen bearing on a north-up Web Mercator map from `from` to `to`. */
+function screenBearing(from: TrackCoordinate, to: TrackCoordinate): number {
   const east = (to[0] - from[0]) * Math.cos((((from[1] + to[1]) / 2) * Math.PI) / 180);
-  const north = to[1] - from[1];
-  if (east === 0 && north === 0) return null;
-  return (Math.atan2(east, north) * 180) / Math.PI;
+  return (Math.atan2(east, to[1] - from[1]) * 180) / Math.PI;
+}
+
+/**
+ * Headings averaged twice with their neighbours `reach` frames each side. Each heading
+ * is first taken the short way round from the one before, so the series is continuous:
+ * a reversal, as at an out-and-back's turnaround, turns the view smoothly through a
+ * side instead of cancelling out into a jump. A frame without a heading keeps the
+ * previous one; the first known heading covers the frames before it.
+ */
+function smoothedBearings(
+  headings: readonly (number | null)[],
+  reach: number,
+): number[] {
+  let previous = headings.find((heading) => heading !== null) ?? 0;
+  const continuous = headings.map((heading) => {
+    if (heading !== null)
+      previous += ((((heading - previous) % 360) + 540) % 360) - 180;
+    return previous;
+  });
+  return smoothed(smoothed(continuous, reach), reach);
+}
+
+/**
+ * Descents of the track's elevation profile at the timing route's own distances. A
+ * profile leaves out spans without elevation, so its distances can run short of the
+ * route's: each descent's ends are found among the route's points by coordinate, in
+ * route order. A descent whose ends are not found, and those after it, are left out.
+ */
+export function trackVideoDescents(
+  profile: ElevationProfile | null,
+  points: readonly TrackTimingPoint[],
+): TrackVideoRoute['descents'] {
+  const descents: { startMeters: number; endMeters: number }[] = [];
+  if (profile === null) return descents;
+  let cursor = 0;
+  const routeMeters = (sampleIndex: number): number | null => {
+    const coordinate = profile.points[sampleIndex]?.coordinate;
+    if (coordinate === undefined) return null;
+    for (; cursor < points.length; cursor += 1) {
+      const point = points[cursor];
+      if (
+        point?.coordinate[0] === coordinate[0] &&
+        point.coordinate[1] === coordinate[1]
+      ) {
+        return point.distanceMeters;
+      }
+    }
+    return null;
+  };
+  for (const segment of profile.segments) {
+    if (segment.type !== 'descent') continue;
+    const startMeters = routeMeters(segment.startSampleIndex);
+    const endMeters = routeMeters(segment.endSampleIndex);
+    if (startMeters === null || endMeters === null) break;
+    descents.push({ startMeters, endMeters });
+  }
+  return descents;
+}
+
+/**
+ * Frame ranges of the route's descents: frames whose distance lies within one, merged
+ * across gaps under `descentMergeFrames`, without those under `minimumDescentFrames`.
+ */
+function descentFrames(
+  descents: TrackVideoRoute['descents'],
+  frameDistances: readonly number[],
+): { from: number; to: number }[] {
+  const ranges: { from: number; to: number }[] = [];
+  for (const { startMeters, endMeters } of descents) {
+    const from = firstAtLeast(frameDistances, startMeters);
+    const to = firstAtLeast(frameDistances, endMeters);
+    if (to <= from) continue;
+    const last = ranges.at(-1);
+    if (last !== undefined && from - last.to < descentMergeFrames) last.to = to;
+    else ranges.push({ from, to });
+  }
+  return ranges.filter(({ from, to }) => to - from >= minimumDescentFrames);
 }
 
 /**
@@ -405,28 +627,47 @@ function easedTravel(time: number): number {
  * Frames of a 25-second time-lapse of the hike (see `videoTimeline` for its pacing),
  * eased at both ends and held on the finish, while the clock and the sun show the real
  * time of each moment. The camera keeps the user's zoom and pitch within bounds,
- * follows the hiker's averaged path, and turns to the travel direction across about two
- * percent of the route ahead and behind, averaged over a second of video.
+ * follows the hiker's averaged path, and faces the route's general direction (see
+ * `headingBaselineShare`), turning gently.
  */
 export function planTrackVideo(
   route: TrackVideoRoute,
   camera: { readonly zoom: number; readonly pitch: number },
 ): TrackVideoPlan {
-  const { points, elapsedSeconds, startMs, labels } = route;
-  if (points.length === 0) throw new RangeError('The route has no points.');
-  const timeline = videoTimeline(points, elapsedSeconds, route.recordedTime);
+  const { startMs, labels } = route;
+  if (route.points.length === 0) throw new RangeError('The route has no points.');
+  const {
+    points,
+    elapsed: elapsedSeconds,
+    pausedSteps,
+  } = withRestPoints(
+    unwrappedPoints(route.points),
+    route.elapsedSeconds,
+    route.recordedTime,
+  );
+  const timeline = videoTimeline(
+    points,
+    elapsedSeconds,
+    route.recordedTime,
+    pausedSteps,
+  );
   // `travelVideoSeconds`, or less only for a route that never moves.
   const travelSeconds = timeline.seconds.at(-1) ?? 0;
   const ascent = cumulativeAscent(points, route.ascentMeters);
   const profile = elevationProfile(points);
   const totalMeters = points.at(-1)?.distanceMeters ?? 0;
   const travelFrames = travelVideoSeconds * videoFrameRate;
-  const lookMeters = clamp(totalMeters * 0.02, 100, 1_000);
+  const baselineMeters = clamp(
+    totalMeters * headingBaselineShare,
+    minimumHeadingBaselineMeters,
+    maximumHeadingBaselineMeters,
+  );
   const routeDistances = points.map((point) => point.distanceMeters);
   const zoom = clamp(camera.zoom, minimumZoom, maximumZoom);
 
   const moments = Array.from({ length: travelFrames + 1 }, (_, frame) => {
-    const target = easedTravel(frame / travelFrames) * travelSeconds;
+    // The timeline is already eased, so frames sample it evenly.
+    const target = (frame / travelFrames) * travelSeconds;
     // Between the points whose video time brackets the target. The last frame is the
     // real finish, even after a final stop.
     const after =
@@ -436,9 +677,23 @@ export function planTrackVideo(
           ? 0
           : firstAtLeast(timeline.seconds, target);
     const before = Math.max(0, after - 1);
-    const span = (timeline.seconds[after] ?? 0) - (timeline.seconds[before] ?? 0);
-    const fraction =
-      after === 0 || span <= 0 ? 1 : (target - (timeline.seconds[before] ?? 0)) / span;
+    // Within the step, the fraction whose eased video time is the target; a step that
+    // takes no video time, and the finish, sit at its end.
+    let fraction = 1;
+    if (
+      frame !== travelFrames &&
+      after > 0 &&
+      (timeline.seconds[after] ?? 0) > (timeline.seconds[before] ?? 0)
+    ) {
+      let low = 0;
+      let high = 1;
+      for (let iteration = 0; iteration < 30; iteration += 1) {
+        const middle = (low + high) / 2;
+        if (timeline.videoAt(after, middle) < target) low = middle;
+        else high = middle;
+      }
+      fraction = (low + high) / 2;
+    }
     const position = before + (after - before) * fraction;
     const from = timeline.display[before];
     const to = timeline.display[after];
@@ -452,55 +707,60 @@ export function planTrackVideo(
       instantMs: startMs + valueAt(elapsedSeconds, position) * 1_000,
       distanceMeters,
       ascentMeters: ascent === null ? null : valueAt(ascent, position),
-      heading: screenBearing(
-        coordinateAtDistance(points, routeDistances, distanceMeters - lookMeters),
-        coordinateAtDistance(points, routeDistances, distanceMeters + lookMeters),
-      ),
     };
   });
+  // The general direction from the route behind the hiker to the route ahead. Where
+  // those nearly meet, as around an out-and-back's turnaround, it is no direction.
+  const headings = moments.map((moment) => {
+    const behind = coordinateAtDistance(
+      points,
+      routeDistances,
+      moment.distanceMeters - baselineMeters,
+    );
+    const ahead = coordinateAtDistance(
+      points,
+      routeDistances,
+      moment.distanceMeters + baselineMeters,
+    );
+    return geodesicDistanceMeters(behind, ahead) >=
+      baselineMeters * minimumHeadingChordShare
+      ? screenBearing(behind, ahead)
+      : null;
+  });
 
-  // Averaging unit vectors keeps the mean correct across north (359° and 1° give 0°).
-  let previousBearing = 0;
   const pitch = clamp(camera.pitch, 0, maximumPitchDegrees);
+  const bearings = smoothedBearings(headings, headingSmoothingFrames);
   const frames = moments.map((moment, index): TrackVideoFrame => {
-    let east = 0;
-    let north = 0;
     let weight = 0;
     let longitude = 0;
     let latitude = 0;
     for (
-      let other = Math.max(0, index - videoFrameRate);
-      other <= Math.min(moments.length - 1, index + videoFrameRate);
+      let other = Math.max(0, index - centerSmoothingFrames);
+      other <= Math.min(moments.length - 1, index + centerSmoothingFrames);
       other += 1
     ) {
       const nearby = moments[other];
       if (nearby === undefined) continue;
-      const offset = Math.abs(other - index);
-      if (offset <= centerSmoothingFrames) {
-        const share = centerSmoothingFrames + 1 - offset;
-        longitude += nearby.position[0] * share;
-        latitude += nearby.position[1] * share;
-        weight += share;
-      }
-      if (nearby.heading === null) continue;
-      east += Math.sin((nearby.heading * Math.PI) / 180);
-      north += Math.cos((nearby.heading * Math.PI) / 180);
-    }
-    if (east !== 0 || north !== 0) {
-      previousBearing = (Math.atan2(east, north) * 180) / Math.PI;
+      const share = centerSmoothingFrames + 1 - Math.abs(other - index);
+      longitude += nearby.position[0] * share;
+      latitude += nearby.position[1] * share;
+      weight += share;
     }
     const averaged: TrackCoordinate = [longitude / weight, latitude / weight];
     const offsetMeters = geodesicDistanceMeters(moment.position, averaged);
     const allowedMeters =
       maximumCenterOffsetPixels * metersPerPixel(moment.position[1], zoom);
     const keep = offsetMeters <= allowedMeters ? 1 : allowedMeters / offsetMeters;
+    const center: TrackCoordinate = [
+      moment.position[0] + (averaged[0] - moment.position[0]) * keep,
+      moment.position[1] + (averaged[1] - moment.position[1]) * keep,
+    ];
+    // Back within ±180° of longitude, the hiker shifted along so it stays beside it.
+    const shift = Math.round(center[0] / 360) * -360;
     return {
-      position: moment.position,
-      center: [
-        moment.position[0] + (averaged[0] - moment.position[0]) * keep,
-        moment.position[1] + (averaged[1] - moment.position[1]) * keep,
-      ],
-      bearing: previousBearing,
+      position: [moment.position[0] + shift, moment.position[1]],
+      center: [center[0] + shift, center[1]],
+      bearing: bearings[index] ?? 0,
       pitch,
       sunInstantMs: Math.round(moment.instantMs / minuteMs) * minuteMs,
       overlay: {
@@ -521,7 +781,14 @@ export function planTrackVideo(
     };
   });
 
-  return { zoom, frames };
+  return {
+    zoom,
+    frames,
+    descents: descentFrames(
+      route.descents,
+      moments.map((moment) => moment.distanceMeters),
+    ),
+  };
 }
 
 /** Canvas and terrain of the map, for sight lines from its camera. */
@@ -533,18 +800,17 @@ export interface TrackVideoView {
 }
 
 /**
- * Ways to look at the hiker when relief hides them, in order of preference: from the
- * side (descents, where the hiker drops behind a slope's brow, read well side on), from
- * ahead, and finally from higher up.
+ * Turns tried on a descent, in order of preference: the smaller angle first, either
+ * side. The view never turns to look back at the hiker: wide swings disorient.
  */
-const occlusionAngles = [
-  { bearingOffset: 90, topDownPitch: false },
-  { bearingOffset: -90, topDownPitch: false },
-  { bearingOffset: 180, topDownPitch: false },
-  { bearingOffset: 0, topDownPitch: true },
-] as const;
-/** Pitch of the last resort angle: steep enough to look over most ridges. */
-const topDownPitchDegrees = 20;
+const descentTurns = [60, -60, 90, -90] as const;
+/** The hiker may drop out of view for this many frames on end before the camera turns. */
+const toleratedHiddenFrames = 2 * videoFrameRate;
+/**
+ * A turn is eased by two moving averages over this many frames each side: about four
+ * seconds in all, starting before the descent and ending after it.
+ */
+const turnSmoothingFrames = 60;
 /** Every this many frames gets sight lines; frames between share their verdict. */
 const occlusionStride = 6;
 /** Samples along each sight line, denser near the hiker where slopes hide them. */
@@ -552,19 +818,12 @@ const sightLineSamples = 24;
 const sightLineNearestMeters = 15;
 /** Relief must rise this far above a sight line to hide the hiker's dot. */
 const sightLineClearanceMeters = 3;
-/**
- * The camera turns up to this long before relief hides the hiker and back up to this
- * long after, where its new angle sees the hiker; two smoothing passes spread each
- * turn over most of it.
- */
-const occlusionLeadFrames = 45;
-const occlusionSmoothingFrames = 20;
 
 /** One sight line from the hiker to the camera, as MapLibre places the camera. */
 export interface TrackVideoSightLine {
   readonly frameIndex: number;
-  /** -1 for the planned view, otherwise an index into `occlusionAngles`. */
-  readonly angle: number;
+  /** Turn from the planned bearing: 0, or one of `descentTurns`. */
+  readonly bearingOffset: number;
   /** The hiker, the camera center, then the ground under the line, nearest first. */
   readonly coordinates: readonly TrackCoordinate[];
   /** Share of the way from the hiker to the camera at each ground point. */
@@ -590,10 +849,11 @@ function offsetCoordinate(
 }
 
 /**
- * Sight lines from the hiker to the camera for every `occlusionStride`-th frame and the
- * last, for the planned view and each fallback angle. MapLibre places the camera
- * `height / 2 / tan(fov / 2)` pixels from the center (see `directedCameraFit`), behind
- * it by sin(pitch) of that and above the center's rendered terrain by cos(pitch).
+ * Sight lines from the hiker to the camera on the plan's descents, every
+ * `occlusionStride`-th frame, for the planned bearing and each of `descentTurns`.
+ * MapLibre places the camera `height / 2 / tan(fov / 2)` pixels from the center (see
+ * `directedCameraFit`), behind it by sin(pitch) of that and above the center's rendered
+ * terrain by cos(pitch).
  */
 export function trackVideoSightLines(
   plan: TrackVideoPlan,
@@ -602,47 +862,45 @@ export function trackVideoSightLines(
   const cameraPixels =
     view.heightPixels / 2 / Math.tan((view.fieldOfViewDegrees * Math.PI) / 360);
   const lines: TrackVideoSightLine[] = [];
-  for (const [frameIndex, frame] of plan.frames.entries()) {
-    if (frameIndex % occlusionStride !== 0 && frameIndex !== plan.frames.length - 1) {
-      continue;
-    }
-    const cameraMeters = cameraPixels * metersPerPixel(frame.center[1], plan.zoom);
-    const views = [{ bearingOffset: 0, topDownPitch: false }, ...occlusionAngles];
-    for (const [index, { bearingOffset, topDownPitch }] of views.entries()) {
-      const pitchDegrees = topDownPitch
-        ? Math.min(frame.pitch, topDownPitchDegrees)
-        : frame.pitch;
-      const pitch = (pitchDegrees * Math.PI) / 180;
-      const cameraGround = offsetCoordinate(
-        frame.center,
-        frame.bearing + bearingOffset + 180,
-        cameraMeters * Math.sin(pitch),
-      );
-      const groundMeters = Math.max(
-        1,
-        geodesicDistanceMeters(frame.position, cameraGround),
-      );
-      const coordinates: TrackCoordinate[] = [frame.position, frame.center];
-      const shares: number[] = [];
-      for (let sample = 1; sample <= sightLineSamples; sample += 1) {
-        const share = Math.max(
-          sightLineNearestMeters / groundMeters,
-          (sample / sightLineSamples) ** 2,
+  for (const { from, to } of plan.descents) {
+    const first = from - (from % occlusionStride);
+    for (let frameIndex = first; frameIndex < to; frameIndex += occlusionStride) {
+      const frame = plan.frames[frameIndex];
+      if (frame === undefined) continue;
+      const cameraMeters = cameraPixels * metersPerPixel(frame.center[1], plan.zoom);
+      const pitch = (frame.pitch * Math.PI) / 180;
+      for (const bearingOffset of [0, ...descentTurns]) {
+        const cameraGround = offsetCoordinate(
+          frame.center,
+          frame.bearing + bearingOffset + 180,
+          cameraMeters * Math.sin(pitch),
         );
-        if (share >= 1) break;
-        coordinates.push([
-          frame.position[0] + (cameraGround[0] - frame.position[0]) * share,
-          frame.position[1] + (cameraGround[1] - frame.position[1]) * share,
-        ]);
-        shares.push(share);
+        const groundMeters = Math.max(
+          1,
+          geodesicDistanceMeters(frame.position, cameraGround),
+        );
+        const coordinates: TrackCoordinate[] = [frame.position, frame.center];
+        const shares: number[] = [];
+        for (let sample = 1; sample <= sightLineSamples; sample += 1) {
+          const share = Math.max(
+            sightLineNearestMeters / groundMeters,
+            (sample / sightLineSamples) ** 2,
+          );
+          if (share >= 1) break;
+          coordinates.push([
+            frame.position[0] + (cameraGround[0] - frame.position[0]) * share,
+            frame.position[1] + (cameraGround[1] - frame.position[1]) * share,
+          ]);
+          shares.push(share);
+        }
+        lines.push({
+          frameIndex,
+          bearingOffset,
+          coordinates,
+          shares,
+          cameraHeightMeters: cameraMeters * Math.cos(pitch),
+        });
       }
-      lines.push({
-        frameIndex,
-        angle: index - 1,
-        coordinates,
-        shares,
-        cameraHeightMeters: cameraMeters * Math.cos(pitch),
-      });
     }
   }
   return lines;
@@ -690,16 +948,13 @@ function smoothed(values: readonly number[], reach: number): number[] {
 }
 
 /**
- * Turns the camera where relief would hide the hiker. A hidden stretch runs from a
- * hidden frame to the last one before the planned view has been clear for two lead
- * times. The most preferred fallback that sees the hiker through the whole stretch
- * takes it; failing that, the one that sees the hiker longest from its first hidden
- * frame takes those frames, ties going to the more preferred, and the next pick
- * continues where it fails, so a stretch may change angle part way. A fallback also
- * takes up to `occlusionLeadFrames` before and after where it still sees the hiker,
- * and the turns are eased over about two seconds. Frames no view sees keep the planned
- * one. `elevations[i]` are the bare-earth heights at `lines[i].coordinates`, null where
- * unknown.
+ * On each descent, turns the camera aside where relief would hide the hiker. A descent
+ * keeps the planned view when it loses the hiker for at most `toleratedHiddenFrames` on
+ * end; otherwise it takes the first of `descentTurns` that does, or failing all, the
+ * view hiding the hiker least, ties going to the planned view and then the earlier
+ * turn. One turn holds through the whole descent, eased in and out (see
+ * `turnSmoothingFrames`), so the camera never swings on short pieces. Unknown heights
+ * hide nothing. `elevations[i]` are the bare-earth heights at `lines[i].coordinates`.
  */
 export function avoidTerrainOcclusion(
   plan: TrackVideoPlan,
@@ -707,101 +962,54 @@ export function avoidTerrainOcclusion(
   elevations: readonly (readonly (number | null)[])[],
   view: Pick<TrackVideoView, 'terrainExaggeration'>,
 ): TrackVideoPlan {
-  const frameCount = plan.frames.length;
-  // Visible verdicts per view (-1 the planned one), spread to the frames between.
-  const visible = new Map<number, boolean[]>();
+  // Hidden verdicts by bearing offset, then by sampled frame.
+  const hidden = new Map<number, Map<number, boolean>>();
   for (const [index, line] of lines.entries()) {
-    const verdicts =
-      visible.get(line.angle) ?? Array.from({ length: frameCount }, () => true);
-    visible.set(line.angle, verdicts);
-    const sees = !hidesHiker(line, elevations[index] ?? [], view.terrainExaggeration);
-    const end = Math.min(frameCount, line.frameIndex + occlusionStride);
-    for (let frame = line.frameIndex; frame < end; frame += 1) verdicts[frame] = sees;
+    const verdicts = hidden.get(line.bearingOffset) ?? new Map<number, boolean>();
+    hidden.set(line.bearingOffset, verdicts);
+    verdicts.set(
+      line.frameIndex,
+      hidesHiker(line, elevations[index] ?? [], view.terrainExaggeration),
+    );
   }
-  const planned = visible.get(-1);
-  if (planned === undefined || planned.every(Boolean)) return plan;
 
-  // The view of each frame: -1 planned, otherwise an index into `occlusionAngles`.
-  const chosen = plan.frames.map(() => -1);
-  const runLength = (angle: number, start: number) => {
-    const verdicts = visible.get(angle);
-    let end = start;
-    while (end < frameCount && verdicts?.[end] !== false) end += 1;
-    return end - start;
-  };
-  let frame = 0;
-  while (frame < frameCount) {
-    if (planned[frame] !== false) {
-      frame += 1;
-      continue;
-    }
-    let lastHidden = frame;
-    for (
-      let ahead = frame + 1;
-      ahead < frameCount && ahead - lastHidden <= 2 * occlusionLeadFrames;
-      ahead += 1
-    ) {
-      if (planned[ahead] === false) lastHidden = ahead;
-    }
-    let best = -1;
-    let bestLength = 0;
-    for (let angle = 0; angle < occlusionAngles.length; angle += 1) {
-      const length = runLength(angle, frame);
-      if (frame + length > lastHidden) {
-        best = angle;
-        bestLength = length;
+  const offsets = plan.frames.map(() => 0);
+  for (const { from, to } of plan.descents) {
+    let chosen = 0;
+    let leastHidden = Infinity;
+    for (const offset of [0, ...descentTurns]) {
+      const verdicts = hidden.get(offset);
+      let total = 0;
+      let run = 0;
+      let longest = 0;
+      for (let frame = from; frame < to; frame += 1) {
+        if (verdicts?.get(frame - (frame % occlusionStride)) === true) {
+          total += 1;
+          run += 1;
+          longest = Math.max(longest, run);
+        } else {
+          run = 0;
+        }
+      }
+      if (longest <= toleratedHiddenFrames) {
+        chosen = offset;
         break;
       }
-      if (length > bestLength) {
-        best = angle;
-        bestLength = length;
+      if (total < leastHidden) {
+        chosen = offset;
+        leastHidden = total;
       }
     }
-    if (best === -1) {
-      frame += 1;
-      continue;
-    }
-    const end = Math.min(frame + bestLength, lastHidden + 1 + occlusionLeadFrames);
-    const fallback = visible.get(best);
-    let start = frame;
-    while (
-      start > 0 &&
-      frame - start < occlusionLeadFrames &&
-      chosen[start - 1] === -1 &&
-      fallback?.[start - 1] !== false
-    ) {
-      start -= 1;
-    }
-    for (let assigned = start; assigned < end; assigned += 1) chosen[assigned] = best;
-    frame = end;
+    for (let frame = from; frame < to; frame += 1) offsets[frame] = chosen;
   }
+  if (offsets.every((offset) => offset === 0)) return plan;
 
-  const angleAt = (index: number) => {
-    const angle = chosen[index] ?? -1;
-    return angle === -1 ? null : occlusionAngles[angle];
-  };
-  const bearingOffsets = plan.frames.map(
-    (_, index) => angleAt(index)?.bearingOffset ?? 0,
-  );
-  const pitches = plan.frames.map((planned, index) =>
-    angleAt(index)?.topDownPitch === true
-      ? Math.min(planned.pitch, topDownPitchDegrees)
-      : planned.pitch,
-  );
-  const easedOffsets = smoothed(
-    smoothed(bearingOffsets, occlusionSmoothingFrames),
-    occlusionSmoothingFrames,
-  );
-  const easedPitches = smoothed(
-    smoothed(pitches, occlusionSmoothingFrames),
-    occlusionSmoothingFrames,
-  );
+  const eased = smoothed(smoothed(offsets, turnSmoothingFrames), turnSmoothingFrames);
   return {
     ...plan,
-    frames: plan.frames.map((planned, index) => ({
-      ...planned,
-      bearing: planned.bearing + (easedOffsets[index] ?? 0),
-      pitch: easedPitches[index] ?? planned.pitch,
+    frames: plan.frames.map((frame, index) => ({
+      ...frame,
+      bearing: frame.bearing + (eased[index] ?? 0),
     })),
   };
 }

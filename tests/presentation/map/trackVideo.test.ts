@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import type { TrackTimingPoint } from '@/application/weather/TrackWeatherForecast';
+import {
+  createTrackTimingRoute,
+  type TrackTimingPoint,
+} from '@/application/weather/TrackWeatherForecast';
+import { storedTrackElevationProfile } from '@/domain/tracks/elevationProfile';
+import type { TrackPoint } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import {
   avoidTerrainOcclusion,
   planTrackVideo,
+  trackVideoDescents,
   trackVideoSightLines,
   type TrackVideoPlan,
   type TrackVideoRoute,
@@ -55,6 +61,7 @@ function timedRoute(
     recordedTime: true,
     startMs,
     ascentMeters: undefined,
+    descents: [],
     labels,
   };
 }
@@ -82,6 +89,11 @@ function frameMoves(plan: TrackVideoPlan): number[] {
     .map((frame, index) =>
       geodesicDistanceMeters(plan.frames[index]?.position ?? [0, 0], frame.position),
     );
+}
+
+/** Signed turn from bearing `from` to bearing `to`, in −180–180°. */
+function bearingTurn(from: number, to: number): number {
+  return ((((to - from) % 360) + 540) % 360) - 180;
 }
 
 describe('planTrackVideo', () => {
@@ -186,7 +198,7 @@ describe('planTrackVideo', () => {
     expect(Math.max(...clockSteps)).toBeLessThan(10 * 60_000);
   });
 
-  it('plays a paused recorder gap briefly while the hiker crosses it', () => {
+  it('plays a paused recorder as a brief rest, then walks the gap', () => {
     const coordinates = Array.from(
       { length: 21 },
       (_, index) => [43.1 + 0.002 * index, 42.7] as const,
@@ -198,17 +210,58 @@ describe('planTrackVideo', () => {
     const plan = planTrackVideo(timedRoute(coordinates, elapsed), camera);
 
     const gapStartMs = startMs + 1_200 * 1_000;
-    const crossing = plan.frames
-      .map((frame, index) => ({ frame, index }))
-      .filter(
-        ({ frame }) =>
-          frame.sunInstantMs > gapStartMs + 5 * 60_000 &&
-          frame.sunInstantMs < gapStartMs + 55 * 60_000,
-      );
-    // Its 164 m take their twentieth of the walk plus a short rest, under 2 s.
-    expect(crossing.length).toBeLessThan(60);
-    const moves = frameMoves(plan);
-    for (const { index } of crossing) expect(moves[index]).toBeGreaterThan(0);
+    const restingAt = coordinates[10];
+    const crossing = plan.frames.filter(
+      (frame) =>
+        frame.sunInstantMs > gapStartMs + 5 * 60_000 &&
+        frame.sunInstantMs < gapStartMs + 55 * 60_000,
+    );
+    // The hour plays as the usual short rest, held where the recorder paused.
+    expect(crossing.length).toBeGreaterThan(10);
+    expect(crossing.length).toBeLessThanOrEqual(19);
+    for (const frame of crossing) expect(frame.position).toEqual(restingAt);
+    // Then the 164 m are walked over several frames, not jumped.
+    expect(Math.max(...frameMoves(plan))).toBeLessThan(40);
+  });
+
+  it('rests on a paused recorder shorter than a GPS stop', () => {
+    const coordinates = Array.from(
+      { length: 21 },
+      (_, index) => [43.1 + 0.002 * (index > 10 ? index - 1 : index), 42.7] as const,
+    );
+    // Two minutes between points; the 10th and 11th are the same place: a 2-minute pause.
+    const elapsed = coordinates.map((_, index) => index * 120);
+    const { frames } = planTrackVideo(timedRoute(coordinates, elapsed), camera);
+
+    const resting = frames.filter(
+      (frame) => frame.position[0] === coordinates[10]?.[0],
+    );
+    // 0.2 s of rest while the clock runs over the pause.
+    expect(resting.length).toBeGreaterThanOrEqual(5);
+    const restClock =
+      (resting.at(-1)?.sunInstantMs ?? 0) - (resting[0]?.sunInstantMs ?? 0);
+    expect(restClock).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it('finds a three-minute stay that begins between stop-scan anchors', () => {
+    // One point a second: walking 30 m a second, arriving at t = 11, staying exactly
+    // three minutes, then walking on.
+    const coordinates: (readonly [number, number])[] = [];
+    const elapsed: number[] = [];
+    for (let second = 0; second <= 260; second += 1) {
+      const walked = Math.min(second, 11) + Math.max(0, second - 191);
+      coordinates.push([43.1 + 0.00037 * walked, 42.7]);
+      elapsed.push(second);
+    }
+    const { frames } = planTrackVideo(timedRoute(coordinates, elapsed), camera);
+
+    const stayAt = coordinates[11]?.[0];
+    const resting = frames.filter((frame) => frame.position[0] === stayAt);
+    const restClock =
+      (resting.at(-1)?.sunInstantMs ?? 0) - (resting[0]?.sunInstantMs ?? 0);
+    // Without the stop the stay's three minutes pass within a frame or two.
+    expect(resting.length).toBeGreaterThanOrEqual(5);
+    expect(restClock).toBeGreaterThanOrEqual(120_000);
   });
 
   it('ends on the real finish after a final stop', () => {
@@ -271,6 +324,21 @@ describe('planTrackVideo', () => {
 
     expect(planTrackVideo(eastward, camera).frames[middle]?.bearing).toBeCloseTo(90);
     expect(north.frames[middle]?.bearing).toBeCloseTo(0);
+  });
+
+  it('crosses the antimeridian the short way', () => {
+    const route = straightRoute([179.99, 0], [0.004, 0], 6, 600);
+    const { frames } = planTrackVideo(route, camera);
+
+    expect(Math.max(...frameMoves({ zoom: 14, frames, descents: [] }))).toBeLessThan(
+      10,
+    );
+    expect(frames[middle]?.bearing).toBeCloseTo(90);
+    for (const frame of frames) {
+      expect(Math.abs(frame.center[0])).toBeLessThanOrEqual(180);
+      expect(geodesicDistanceMeters(frame.center, frame.position)).toBeLessThan(430);
+    }
+    expect(frames.at(-1)?.position[0]).toBeCloseTo(-180 + 0.01);
   });
 
   it("counts distance and climb up to the track's stated ascent along the profile", () => {
@@ -349,6 +417,113 @@ describe('planTrackVideo', () => {
       expect(geodesicDistanceMeters(frame.center, frame.position)).toBeLessThan(430);
     }
   });
+
+  it('faces the general direction up a switchback trail instead of swinging with it', () => {
+    // 300 m legs east and west, each 60 m further north: a serpentine climbing north.
+    const coordinates = Array.from(
+      { length: 61 },
+      (_, index) =>
+        [
+          43.1 + (index % 2 === 0 ? 0 : 0.0037),
+          42.7 + Math.floor(index / 2) * 0.00054,
+        ] as const,
+    );
+    const route = timedRoute(
+      coordinates,
+      coordinates.map((_, index) => index * 300),
+    );
+
+    const { frames } = planTrackVideo(route, camera);
+
+    for (const frame of frames.slice(60, 660)) {
+      expect(Math.abs(bearingTurn(0, frame.bearing))).toBeLessThan(30);
+    }
+    const steps = frames
+      .slice(1)
+      .map((frame, index) =>
+        Math.abs(bearingTurn(frames[index]?.bearing ?? 0, frame.bearing)),
+      );
+    // Never faster than 20° a second.
+    expect(Math.max(...steps)).toBeLessThan(20 / 30);
+  });
+
+  it('turns around smoothly at the end of an out-and-back route', () => {
+    // 4 km east, then back along the same line.
+    const out = Array.from(
+      { length: 41 },
+      (_, index) => [43.1 + 0.00122 * index, 42.7] as const,
+    );
+    const coordinates = [...out, ...out.slice(0, -1).reverse()];
+    const route = timedRoute(
+      coordinates,
+      coordinates.map((_, index) => index * 90),
+    );
+
+    const { frames } = planTrackVideo(route, camera);
+
+    expect(bearingTurn(0, frames[60]?.bearing ?? 0)).toBeCloseTo(90);
+    expect(Math.abs(bearingTurn(0, frames[660]?.bearing ?? 0))).toBeCloseTo(90);
+    expect(bearingTurn(0, frames[660]?.bearing ?? 0)).toBeCloseTo(-90);
+    const steps = frames
+      .slice(1)
+      .map((frame, index) =>
+        Math.abs(bearingTurn(frames[index]?.bearing ?? 0, frame.bearing)),
+      );
+    // The half turn spreads over seconds instead of a jump.
+    expect(Math.max(...steps)).toBeLessThan(2);
+  });
+
+  it('turns only on descents long enough, merging close ones', () => {
+    const descents = (ranges: readonly (readonly [number, number])[]) =>
+      planTrackVideo(
+        {
+          ...eastward,
+          descents: ranges.map(([startMeters, endMeters]) => ({
+            startMeters,
+            endMeters,
+          })),
+        },
+        camera,
+      ).descents;
+
+    // 8.2 km in 720 frames: about 11 m a frame.
+    expect(descents([[100, 300]])).toEqual([]);
+    const merged = descents([
+      [2_000, 4_000],
+      [4_200, 6_000],
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.from).toBeLessThan(middle);
+    expect(merged[0]?.to).toBeGreaterThan(middle + 100);
+  });
+
+  it("places profile descents at the route's distances when elevation starts late", () => {
+    // 2 km without elevation, then 2 km climbing 300 m and 2 km back down, 50 m apart.
+    const track: TrackPoint[] = Array.from({ length: 121 }, (_, index) => {
+      const coordinate: [number, number] = [43.1 + 0.00061 * index, 42.7];
+      if (index < 40) return { coordinate };
+      const elevationMeters = index <= 80 ? (index - 40) * 7.5 : (120 - index) * 7.5;
+      return { coordinate, elevationMeters };
+    });
+    const profile = storedTrackElevationProfile([track], undefined);
+    if (profile === null) throw new Error('Expected an elevation profile.');
+    const routeMeters = geodesicDistanceMeters(
+      track[0]?.coordinate ?? [0, 0],
+      track[120]?.coordinate ?? [0, 0],
+    );
+    const route = createTrackTimingRoute(profile, [track], routeMeters);
+
+    const profileDescent = profile.segments.find(
+      (segment) => segment.type === 'descent',
+    );
+    const [descent] = trackVideoDescents(profile, route.points);
+
+    // The profile counts from where elevation starts; the route from its real start.
+    expect(profileDescent?.startDistanceMeters).toBeLessThan(2_500);
+    expect(descent?.startMeters).toBeGreaterThan(3_500);
+    expect(descent?.endMeters).toBeCloseTo(routeMeters, -2);
+    expect(trackVideoDescents(null, route.points)).toEqual([]);
+  });
 });
 
 describe('avoidTerrainOcclusion', () => {
@@ -357,107 +532,95 @@ describe('avoidTerrainOcclusion', () => {
     fieldOfViewDegrees: 36.87,
     terrainExaggeration: 1.15,
   };
-  const plan = planTrackVideo(straightRoute([43.1, 42.7], [0.01, 0], 11, 1_800), {
-    zoom: 14,
-    pitch: 50,
-  });
+  // 8.2 km east; the descent from 2 to 6 km is frames 190–520 or so.
+  const plan = planTrackVideo(
+    {
+      ...straightRoute([43.1, 42.7], [0.01, 0], 11, 1_800),
+      descents: [{ startMeters: 2_000, endMeters: 6_000 }],
+    },
+    { zoom: 14, pitch: 50 },
+  );
   const lines = trackVideoSightLines(plan, view);
+  const descent = plan.descents[0] ?? { from: 0, to: 0 };
+  const inside = Math.round((descent.from + descent.to) / 2);
 
-  /**
-   * Bare-earth heights for every sight line: flat ground, except a 400 m wall right in
-   * front of the hiker for each listed view (-1 the planned one, then the fallback
-   * angles in order: right, left, ahead, top-down) between frames `from` and `to`.
-   */
-  function terrain(
-    walls: readonly {
-      readonly angle: number;
-      readonly from: number;
-      readonly to: number;
-    }[],
-  ) {
+  /** Bare ground, with a wall right in front of the hiker on the listed views. */
+  function terrain(hides: (bearingOffset: number, frame: number) => boolean) {
     return lines.map((line) =>
       line.coordinates.map((_, index) =>
-        index === 3 &&
-        walls.some(
-          (wall) =>
-            wall.angle === line.angle &&
-            line.frameIndex >= wall.from &&
-            line.frameIndex <= wall.to,
-        )
-          ? 400
-          : 0,
+        index === 3 && hides(line.bearingOffset, line.frameIndex) ? 10_000 : 0,
       ),
     );
   }
-  const hidden = (angles: readonly number[], from = 200, to = 280) =>
-    terrain(angles.map((angle) => ({ angle, from, to })));
+  const turnAt = (adjusted: TrackVideoPlan, index: number) =>
+    bearingTurn(plan.frames[index]?.bearing ?? 0, adjusted.frames[index]?.bearing ?? 0);
 
-  const bearingTurn = (adjusted: TrackVideoPlan, index: number) =>
-    (adjusted.frames[index]?.bearing ?? 0) - (plan.frames[index]?.bearing ?? 0);
-
-  it('traces the line from the hiker to the camera behind the averaged center', () => {
-    const planned = lines.find((line) => line.frameIndex === 240 && line.angle === -1);
-    const fromSide = lines.find((line) => line.frameIndex === 240 && line.angle === 0);
-    const frame = plan.frames[240];
-
+  it('traces sight lines only on descents, from the hiker back to the camera', () => {
+    expect(new Set(lines.map((line) => line.bearingOffset))).toEqual(
+      new Set([0, 60, -60, 90, -90]),
+    );
+    for (const line of lines) {
+      expect(line.frameIndex).toBeGreaterThan(descent.from - 6);
+      expect(line.frameIndex).toBeLessThan(descent.to);
+    }
+    const planned = lines.find(
+      (line) => line.frameIndex === inside - (inside % 6) && line.bearingOffset === 0,
+    );
+    const frame = plan.frames[inside - (inside % 6)];
     expect(planned?.coordinates[0]).toEqual(frame?.position);
     expect(planned?.coordinates[1]).toEqual(frame?.center);
-    // Travelling east, the camera is to the west; turned right, it looks from the north.
+    // Travelling east, the camera is to the west, about 1 km up.
     expect(planned?.coordinates.at(-1)?.[0]).toBeLessThan(frame?.position[0] ?? 0);
-    expect(fromSide?.coordinates.at(-1)?.[1]).toBeGreaterThan(frame?.position[1] ?? 0);
-    const shares = planned?.shares ?? [];
-    expect(shares.every((share, index) => share > (shares[index - 1] ?? 0))).toBe(true);
-    // 450 px from the center at zoom 14 and 50° pitch: about 1 km up.
     expect(planned?.cameraHeightMeters).toBeGreaterThan(900);
+    expect(trackVideoSightLines({ ...plan, descents: [] }, view)).toEqual([]);
   });
 
-  it('turns the camera to the side around hidden stretches, easing in and out', () => {
-    const adjusted = avoidTerrainOcclusion(plan, lines, hidden([-1]), view);
+  it('keeps the planned view when the hiker drops out of it for up to 2 s', () => {
+    const blips = terrain(
+      (offset, frame) => offset === 0 && frame >= inside && frame < inside + 60 - 6,
+    );
+    expect(avoidTerrainOcclusion(plan, lines, blips, view)).toBe(plan);
+    const unknown = lines.map((line) => line.coordinates.map(() => null));
+    expect(avoidTerrainOcclusion(plan, lines, unknown, view)).toBe(plan);
+  });
 
-    expect(bearingTurn(adjusted, 200)).toBeCloseTo(90);
-    expect(bearingTurn(adjusted, 280)).toBeCloseTo(90);
-    expect(bearingTurn(adjusted, 100)).toBeCloseTo(0);
-    expect(bearingTurn(adjusted, 420)).toBeCloseTo(0);
+  it('turns 60° for the whole descent, easing in and out', () => {
+    const adjusted = avoidTerrainOcclusion(
+      plan,
+      lines,
+      terrain(
+        (offset, frame) => offset === 0 && frame >= inside && frame < inside + 90,
+      ),
+      view,
+    );
+
+    expect(turnAt(adjusted, inside)).toBeCloseTo(60);
+    // Two ±60-frame averages: fully turned from 120 frames into the descent.
+    expect(turnAt(adjusted, descent.from + 120)).toBeCloseTo(60);
+    expect(turnAt(adjusted, descent.to - 121)).toBeCloseTo(60);
+    expect(turnAt(adjusted, 0)).toBeCloseTo(0);
+    expect(turnAt(adjusted, 720)).toBeCloseTo(0);
     const steps = adjusted.frames
       .slice(1)
       .map((_, index) =>
-        Math.abs(bearingTurn(adjusted, index + 1) - bearingTurn(adjusted, index)),
+        Math.abs(turnAt(adjusted, index + 1) - turnAt(adjusted, index)),
       );
-    expect(Math.max(...steps)).toBeLessThan(5);
-    expect(adjusted.frames[240]?.pitch).toBe(50);
+    // At most 30° a second for the turn.
+    expect(Math.max(...steps)).toBeLessThan(1);
   });
 
-  it('takes the other side, then a higher camera, when nearer angles are blocked too', () => {
-    const left = avoidTerrainOcclusion(plan, lines, hidden([-1, 0]), view);
-    expect(bearingTurn(left, 240)).toBeCloseTo(-90);
-
-    const higher = avoidTerrainOcclusion(plan, lines, hidden([-1, 0, 1, 2]), view);
-    expect(bearingTurn(higher, 240)).toBeCloseTo(0);
-    expect(higher.frames[240]?.pitch).toBeCloseTo(20);
-    expect(higher.frames[100]?.pitch).toBeCloseTo(50);
-  });
-
-  it('changes angle part way when the first one is blocked later in the stretch', () => {
-    const walls = terrain([
-      { angle: -1, from: 120, to: 360 },
-      // No view sees the hiker through the whole stretch: the right side only in its
-      // first half, the left side only in its second, ahead and above never late.
-      { angle: 0, from: 240, to: 480 },
-      { angle: 1, from: 60, to: 180 },
-      { angle: 2, from: 180, to: 480 },
-      { angle: 3, from: 180, to: 480 },
-    ]);
-
-    const adjusted = avoidTerrainOcclusion(plan, lines, walls, view);
-
-    expect(bearingTurn(adjusted, 150)).toBeCloseTo(90);
-    expect(bearingTurn(adjusted, 320)).toBeCloseTo(-90);
-  });
-
-  it('keeps the plan where nothing is hidden or no angle helps', () => {
-    expect(avoidTerrainOcclusion(plan, lines, hidden([]), view)).toBe(plan);
-    const stuck = avoidTerrainOcclusion(plan, lines, hidden([-1, 0, 1, 2, 3]), view);
-    expect(bearingTurn(stuck, 240)).toBeCloseTo(0);
-    expect(stuck.frames[240]?.pitch).toBeCloseTo(50);
+  it('takes the other side, then 90°, never looking back', () => {
+    const hidden = (offsets: readonly number[]) =>
+      terrain((offset, frame) => offsets.includes(offset) && frame >= inside);
+    expect(
+      turnAt(avoidTerrainOcclusion(plan, lines, hidden([0, 60]), view), inside),
+    ).toBeCloseTo(-60);
+    expect(
+      turnAt(avoidTerrainOcclusion(plan, lines, hidden([0, 60, -60]), view), inside),
+    ).toBeCloseTo(90);
+    // Hidden from everywhere: the least hidden view, the planned one on a tie.
+    expect(
+      avoidTerrainOcclusion(plan, lines, hidden([0, 60, -60, 90, -90]), view),
+    ).toBe(plan);
   });
 });

@@ -559,49 +559,63 @@ seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same ti
 the track's lighting, whether that time is recorded, and the track's ascent.
 `planTrackVideo` (`presentation/map/trackVideo.ts`) lays the route out in 24 seconds of
 video at 30 fps (`videoTimeline`), then holds the finish for one more second. On
-recorded time it finds stops: stays within 25 m for 3 minutes, where the scan from each
-point ends at three minutes or the radius and a scan that runs out of segment ends the
-search in that segment, and paused-recorder gaps. A stop that starts where the previous
-ended continues it, its points draw at its first one, and it plays 0.1 s per minute up
-to 0.6 s, scaled down so stops stay within a quarter of the video; stops at the very
-start and end play none. The rest of the video goes to walking along the drawn path:
-each step takes time in proportion to its length over a pace factor, the walking pace
-over ±150 m around it relative to the route's average raised to 0.35 and clamped to
-0.75–1.35. Segment waits take no time. Frames sample this axis through a half-cosine
-ease over the first and last 8 %, the last pinned to the route's last point, and
-interpolate position, real time, distance, and scaled climb between the bracketing
-points. The travel bearing is averaged over a second of frames, and the camera center
-over a triangular half second each side, kept within 120 px of the hiker, while the
-trace point keeps the exact position. Zoom and pitch come from the user's camera,
+recorded time it finds stops: stays within 25 m for 3 minutes, where scans start at most
+every 5 s of hike time and measure the stay from its first point among those skipped,
+each scan ends at three minutes or the radius, and a scan that runs out of segment ends
+the search in that segment; and paused-recorder gaps, which rest at the gap's start
+however short they are. A stop that starts where the previous ended continues it, its
+points draw at its first one, and it plays 0.1 s per minute up to 0.6 s, scaled down so
+stops stay within a quarter of the video; stops at the very start and end play none. The
+rest of the video goes to walking along the drawn path: each step takes time in
+proportion to its length over a pace factor, the walking pace over ±150 m around it
+relative to the route's average raised to 0.35 and clamped to 0.75–1.35. Segment waits
+take no time. Frames sample this axis through a half-cosine ease over the first and last
+8 %, the last pinned to the route's last point, and interpolate position, real time,
+distance, and scaled climb between the bracketing points. Longitudes are unwrapped
+first, so a route across the antimeridian is travelled the short way, and each frame's
+center and hiker are shifted back within ±180°. The camera center uses a triangular
+half-second average each side, kept within 120 px of the hiker, while the trace point
+keeps the exact position. The bearing faces from the route a tenth of its length (0.6–3
+km) behind the hiker to as far ahead; where those two points lie closer than 5 % of that
+distance, right at a turnaround, the previous heading holds. Headings are made
+continuous, each taken the short way round from the one before, then averaged twice over
+±2 s of frames, so even a reversal turns the view smoothly through a side. The route's
+profile descents (macro segments of `ElevationProfile`) are placed on the timing route
+by `trackVideoDescents`, which finds each end among the route's points by coordinate,
+since a profile leaves out spans without elevation; they become frame ranges, merged
+across gaps under 2 s and dropped under 3 s. Zoom and pitch come from the user's camera,
 clamped to 12–16 and at most 60°.
 
-The facade first claims the scripted-camera gate (shared with the render benchmark), so
-no frame's view is persisted or published as a settled viewport and no other scripted
-camera starts, and listens for a user's `movestart`, which aborts the video in
-preparation or recording, clears the gate so its `moveend` persists, and keeps that view
-instead of restoring the camera. In 3D at 15° of pitch or more it then checks the
-terrain: `trackVideoSightLines` builds, for every sixth frame and each view (planned,
-±90°, 180°, 20° pitch), the line from the hiker to the camera, which MapLibre places
-`height / 2 / tan(fov / 2)` pixels from the averaged center (as in `directedCameraFit`),
-behind it by sin(pitch) and above its rendered terrain by cos(pitch). The elevation
-provider samples the bare-earth DEM at the hiker, the center, and 24 ground points under
-the line, denser near the hiker, since the map holds tiles only around the current view.
-`avoidTerrainOcclusion` marks frames where exaggerated relief rises 3 m above the line.
-A hidden stretch runs until the planned view has been clear for 3 s; the most preferred
-view that sees the hiker throughout takes it, otherwise the view that sees the hiker
-longest takes those frames and the next pick continues. A view also takes up to 1.5 s
-before and after where it still sees the hiker, and bearing offsets and pitches are
-eased by two ±20-frame moving averages. A failed sampling keeps the plan and logs
-`map.track-video.occlusion-failed`. `MapLibreLayerController.recordTrackVideo` shares
-the day video's frame loop. Before each capture it also calls `jumpTo` with the
-`trackVideoCameraJump` event data, which the controller's and the facade's `movestart`
-handlers recognize, so only other moves stop it. It moves the GL trace point and makes
-the trace layer visible before every frame, then restores the layer's visibility. Sun
-instants are rounded to the minute, the shadow tiles' own resolution.
-`MapVideoRecorder.addFrame` draws each frame's `VideoOverlay` into the 2D copy before
-encoding: time over distance and climb, and beside them a 320 × 44 px (at 1080p) profile
-of 120 samples clipped at the walked share; the text column keeps a minimum width, so
-the profile does not shift as the figures grow.
+The facade refuses to start while the map is moving, so it never restores over a move
+already under way. It then claims the scripted-camera gate (shared with the render
+benchmark), so no frame's view is persisted or published as a settled viewport and no
+other scripted camera starts, and listens for a user's `movestart`, which aborts the
+video in preparation or recording, clears the gate so its `moveend` persists, and keeps
+that view instead of restoring the camera. Every stop, detaching the map included,
+rejects with an `AbortError`. In 3D at 15° of pitch or more, with at least one descent,
+it then checks the terrain: `trackVideoSightLines` builds, for every sixth frame of each
+descent, the line from the hiker to the camera for the planned bearing and turned by
+±60° and ±90°. MapLibre places the camera `height / 2 / tan(fov / 2)` pixels from the
+center (as in `directedCameraFit`), behind it by sin(pitch) and above its rendered
+terrain by cos(pitch). The elevation provider samples the bare-earth DEM at the hiker,
+the center, and up to 24 ground points under the line, denser near the hiker, since the
+map holds tiles only around the current view. `avoidTerrainOcclusion` marks a sampled
+frame hidden where exaggerated relief rises 3 m above the line; unknown heights hide
+nothing. A descent keeps the planned bearing when its longest hidden run is at most 2 s;
+otherwise it takes the first of +60°, −60°, +90°, −90° that meets that bound, or else
+the view hidden for the fewest frames, the planned one on a tie. The turn holds over the
+whole descent and is eased by two ±60-frame moving averages. A failed sampling keeps the
+plan and logs `map.track-video.occlusion-failed`.
+`MapLibreLayerController.recordTrackVideo` shares the day video's frame loop. Before
+each capture it also calls `jumpTo` with the `trackVideoCameraJump` event data, which
+the controller's and the facade's `movestart` handlers recognize, so only other moves
+stop it. It moves the GL trace point and makes the trace layer visible before every
+frame, then restores the layer's visibility. Sun instants are rounded to the minute, the
+shadow tiles' own resolution. `MapVideoRecorder.addFrame` draws each frame's
+`VideoOverlay` into the 2D copy before encoding: time over distance and climb, and
+beside them a 320 × 44 px (at 1080p) profile of 120 samples clipped at the walked share;
+the text column keeps a minimum width, so the profile does not shift as the figures
+grow.
 
 ## Sentinel search
 

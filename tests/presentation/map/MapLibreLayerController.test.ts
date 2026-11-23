@@ -71,6 +71,7 @@ const videoCapture = vi.hoisted(() => ({
   duringFinish: null as (() => void) | null,
 }));
 vi.mock('@/presentation/map/mapCapture', () => ({
+  videoFrameRate: 30,
   MapVideoRecorder: class {
     public static start(): Promise<object> {
       return Promise.resolve(new this());
@@ -3549,6 +3550,7 @@ describe('MapLibreLayerController', () => {
           overlay: { time: 'clock', distance: '1 km', ascent: null, profile: null },
           durationMs: 1_000,
         })),
+        descents: [],
       };
 
       function startTrackRecording(

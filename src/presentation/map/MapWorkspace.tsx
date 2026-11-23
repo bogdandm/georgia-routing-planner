@@ -87,6 +87,7 @@ import {
   formatTrackDistance,
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
+import { trackVideoDescents } from '@/presentation/map/trackVideo';
 import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
@@ -1990,6 +1991,10 @@ export function MapWorkspace({
                 recordedTime: recorded,
                 startMs: trackLighting.startMs,
                 ascentMeters: trackMetrics.ascentMeters,
+                descents: trackVideoDescents(
+                  tracksWorkspace.activeProfile,
+                  trackRoute.points,
+                ),
                 labels: {
                   time: (instantMs) => clock.format(instantMs),
                   distance: (meters) => formatTrackDistance(meters, i18n),

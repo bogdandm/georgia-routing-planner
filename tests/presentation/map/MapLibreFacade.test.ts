@@ -3077,6 +3077,7 @@ describe('MapLibreFacade', () => {
       recordedTime: false,
       startMs: Date.parse('2026-07-01T05:00:00Z'),
       ascentMeters: undefined,
+      descents: [{ startMeters: 0, endMeters: 8_180 }],
       labels: { time: () => 'clock', distance: () => 'km', ascent: () => 'm' },
     };
 
@@ -3212,8 +3213,8 @@ describe('MapLibreFacade', () => {
       await facade.recordTrackVideo(route, new AbortController().signal, vi.fn());
 
       const frame = recordTrackVideo.mock.calls[0]?.[0].frames[300];
-      // Eastbound travel faces 90°; turned to the side, the camera faces 180°.
-      expect(frame?.bearing).toBeCloseTo(180);
+      // Eastbound travel faces 90°; turned 60° to the side, the camera faces 150°.
+      expect(frame?.bearing).toBeCloseTo(150);
       facade.destroy();
     });
 
@@ -3271,6 +3272,68 @@ describe('MapLibreFacade', () => {
       expect(onViewSettled.mock.calls[0]?.[0]).toMatchObject({
         camera: { longitude: 44, latitude: 42, zoom: 9 },
       });
+      facade.destroy();
+    });
+
+    it('stops as stopped when the map closes while it prepares', async () => {
+      const services = createTestServices();
+      const nativeMap = new FakeNativeMap();
+      nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+      // DEM sampling that fails with the abort reason, as the raster provider does.
+      const sampleMany = vi.fn<ElevationProvider['sampleMany']>(
+        (_coordinates, abort) =>
+          new Promise((_resolve, reject) => {
+            abort.addEventListener('abort', () => {
+              try {
+                abort.throwIfAborted();
+              } catch (error) {
+                reject(error instanceof Error ? error : new Error(String(error)));
+              }
+            });
+          }),
+      );
+      const facade = new MapLibreFacade(
+        services.logger,
+        undefined,
+        undefined,
+        undefined,
+        {
+          attach: vi.fn(),
+          detach: vi.fn(),
+          handleRasterSourceData: vi.fn(),
+          handleRasterSourceFailure: vi.fn(),
+          handleRasterSourceRecovered: vi.fn(),
+          isRasterSourceRecoveryComplete: vi.fn(() => true),
+          setTerrainInteractionActive: vi.fn(),
+          setPlannedLinePreview: vi.fn(),
+          clearPlannedLinePreview: vi.fn(),
+          recordTrackVideo: vi.fn(),
+        },
+        { sample: vi.fn(), sampleMany },
+      );
+      facade.attach(nativeMap as unknown as MapLibreMap);
+      nativeMap.fire('load');
+
+      const recording = facade.recordTrackVideo(
+        route,
+        new AbortController().signal,
+        vi.fn(),
+      );
+      facade.destroy();
+
+      await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('refuses to start over a camera move under way, leaving it alone', async () => {
+      const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>();
+      const { facade, nativeMap } = createTrackVideoFacade(recordTrackVideo);
+      nativeMap.moving = true;
+
+      await expect(
+        facade.recordTrackVideo(route, new AbortController().signal, vi.fn()),
+      ).rejects.toThrow('not ready');
+      expect(recordTrackVideo).not.toHaveBeenCalled();
+      expect(nativeMap.jumpCalls).toEqual([]);
       facade.destroy();
     });
   });

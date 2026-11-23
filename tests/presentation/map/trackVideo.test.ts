@@ -683,6 +683,43 @@ describe('planTrackVideo', () => {
     expect(Math.max(...bearingSteps(plan))).toBeLessThanOrEqual(fastestTurnPerFrame);
   });
 
+  it('turns to see a descent from the side where it drops away along the view', () => {
+    // 2 km east on a plateau, then 3 km east down an even 24° slope: nothing hides the
+    // hiker, but seen down its fall line the descent is foreshortened.
+    const route = withSegments(straightRoute([43.1, 42.7], [0.000612, 0], 101, 60), [
+      ['flat', 0.4],
+      ['descent', 1],
+    ]);
+    const slope = 0.45;
+    const terrain = slopeTerrain((east) =>
+      east <= 2_000 ? 1_000 : 1_000 - slope * (east - 2_000),
+    );
+    const view = { zoom: 15, pitch: 50 };
+
+    const plan = planTrackVideo(route, view, terrain);
+    const control = planTrackVideo(route, view, null);
+
+    expect(hiddenRun(control, terrain)).toBe(0);
+    // How squarely the slope faces the camera, relative to level ground.
+    const pitch = (view.pitch * Math.PI) / 180;
+    const rise = slope * terrain.exaggeration;
+    const facing = (bearing: number) =>
+      (-rise * Math.sin((bearing * Math.PI) / 180) * Math.sin(pitch) +
+        Math.cos(pitch)) /
+      Math.hypot(rise, 1) /
+      Math.cos(pitch);
+    const middle = plan.frames.findIndex((frame) => frameMeters(frame) >= 3_500);
+    expect(facing(control.frames[middle]?.bearing ?? 0)).toBeLessThan(0.5);
+    // Nearly as squarely as level ground: the aim targets 0.85 at its chosen frames.
+    expect(facing(plan.frames[middle]?.bearing ?? 0)).toBeGreaterThanOrEqual(0.8);
+    for (const [index, frame] of plan.frames.entries()) {
+      if (frameMeters(frame) < 1_000) {
+        expect(frame.bearing).toBeCloseTo(control.frames[index]?.bearing ?? 0);
+      }
+    }
+    expect(Math.max(...bearingSteps(plan))).toBeLessThanOrEqual(fastestTurnPerFrame);
+  });
+
   it('turns aside where a descent drops behind relief, keeping the hiker in view', () => {
     // 2 km east on a plateau, then 3 km east down a slope that steepens over its edge.
     const route = withSegments(straightRoute([43.1, 42.7], [0.000612, 0], 101, 60), [

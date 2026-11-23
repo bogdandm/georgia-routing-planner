@@ -929,18 +929,31 @@ const descentAimLimitDegrees = 120;
 const descentSwingLimitDegrees = 150;
 /**
  * Costs of a camera path, per chosen frame: the turn aside per degree, a change of the
- * turn per degree, the hiker hidden, and each hidden route point ahead. A turn is
- * cheap next to a hidden hiker, so the camera turns early where it must, and it turns
- * back to the course where nothing hides.
+ * turn per degree, the hiker hidden, each hidden route point ahead, and the slope ahead
+ * turned away (see `minimumSlopeFacing`). A turn is cheap next to a hidden hiker, so the
+ * camera turns early where it must, and it turns back to the course where nothing
+ * hides or turns away.
  */
 const aimTurnCost = 0.01;
 const aimChangeCost = 0.02;
 const hiddenHikerCost = 10;
 const hiddenRouteCost = 1;
+const awaySlopeCost = 4;
 /** Leaving the limits above costs this much: only when nothing else is possible. */
 const outsideLimitsCost = 1e6;
 /** Route points ahead of the hiker that should stay in view, in route meters. */
 const routeLookoutMeters = [150, 300, 500] as const;
+/**
+ * The ground under the next `slopeLookoutMeters` of the route should face the camera
+ * at least this share as squarely as level ground does: a slope turned away, as a
+ * descent seen down its fall line, shows the route foreshortened, its switchbacks
+ * folded onto each other. Each missing share costs up to `awaySlopeCost`; a side or
+ * an uphill view of the slope shows it fully.
+ */
+const minimumSlopeFacing = 0.85;
+const slopeLookoutMeters = 300;
+/** The slope at a point is measured across this many meters each way. */
+const slopeSampleMeters = 25;
 /** The chosen turns, interpolated between frames, are averaged over this many frames each side. */
 const aimSmoothingFrames = 6;
 /** Height of the hiker's dot, and how far relief must rise over a sight line to hide it. */
@@ -952,6 +965,61 @@ const sightLineClearanceMeters = 3;
  */
 const sightLineStepMeters = 12;
 const sightLineStepShare = 0.02;
+
+/**
+ * Upward unit normal (east, north, up) of the rendered terrain averaged over
+ * `coordinates`, or null where no height is known.
+ */
+function terrainNormal(
+  terrain: TrackVideoTerrain,
+  coordinates: readonly TrackCoordinate[],
+): readonly [number, number, number] | null {
+  const metersPerDegree = earthCircumferenceMeters / 360;
+  let east = 0;
+  let north = 0;
+  let count = 0;
+  for (const [longitude, latitude] of coordinates) {
+    const longitudeStep =
+      slopeSampleMeters / (metersPerDegree * Math.cos((latitude * Math.PI) / 180));
+    const latitudeStep = slopeSampleMeters / metersPerDegree;
+    const eastward = terrain.sampler.elevationAt(
+      latitude,
+      longitude + longitudeStep,
+      0,
+    );
+    const westward = terrain.sampler.elevationAt(
+      latitude,
+      longitude - longitudeStep,
+      0,
+    );
+    const northward = terrain.sampler.elevationAt(
+      latitude + latitudeStep,
+      longitude,
+      0,
+    );
+    const southward = terrain.sampler.elevationAt(
+      latitude - latitudeStep,
+      longitude,
+      0,
+    );
+    if (
+      eastward === null ||
+      westward === null ||
+      northward === null ||
+      southward === null
+    ) {
+      continue;
+    }
+    east += (eastward - westward) / (2 * slopeSampleMeters);
+    north += (northward - southward) / (2 * slopeSampleMeters);
+    count += 1;
+  }
+  if (count === 0) return null;
+  const eastSlope = (terrain.exaggeration * east) / count;
+  const northSlope = (terrain.exaggeration * north) / count;
+  const length = Math.hypot(eastSlope, northSlope, 1);
+  return [-eastSlope / length, -northSlope / length, 1 / length];
+}
 
 /** Point `meters` from `origin` toward screen bearing `bearing` on a local tangent. */
 function offsetCoordinate(
@@ -1065,8 +1133,21 @@ function aimOffsets(
     });
     const cameraMeters = cameraPixels * metersPerPixel(frame.center[1], zoom);
     const pitch = (frame.pitch * Math.PI) / 180;
+    // The hiker, then the lookouts in `routeLookoutMeters` order.
+    const hiker = points[0];
+    const slope = terrainNormal(
+      terrain,
+      points
+        .filter(
+          (_, index) =>
+            index === 0 ||
+            (routeLookoutMeters[index - 1] ?? Infinity) <= slopeLookoutMeters,
+        )
+        .map(({ coordinate }) => coordinate),
+    );
+    const metersPerDegree = earthCircumferenceMeters / 360;
     return candidates.map((turn) => {
-      const cost = aimTurnCost * Math.abs(turn);
+      let cost = aimTurnCost * Math.abs(turn);
       if (
         Math.abs(turn) > limit ||
         (reference !== null &&
@@ -1082,14 +1163,32 @@ function aimOffsets(
       );
       const cameraHeight =
         center * terrain.exaggeration + cameraMeters * Math.cos(pitch);
-      return points.reduce(
-        (total, { coordinate, height }, index) =>
+      for (const [index, { coordinate, height }] of points.entries()) {
+        if (
           height !== null &&
           hidesTarget(terrain, coordinate, height, cameraGround, cameraHeight)
-            ? total + (index === 0 ? hiddenHikerCost : hiddenRouteCost)
-            : total,
-        cost,
-      );
+        ) {
+          cost += index === 0 ? hiddenHikerCost : hiddenRouteCost;
+        }
+      }
+      if (slope !== null && hiker?.height != null) {
+        // How squarely the slope faces the camera, relative to level ground (cos pitch).
+        const toCamera = [
+          (cameraGround[0] - hiker.coordinate[0]) *
+            metersPerDegree *
+            Math.cos((hiker.coordinate[1] * Math.PI) / 180),
+          (cameraGround[1] - hiker.coordinate[1]) * metersPerDegree,
+          cameraHeight - hiker.height,
+        ] as const;
+        const facing =
+          (slope[0] * toCamera[0] + slope[1] * toCamera[1] + slope[2] * toCamera[2]) /
+          Math.hypot(...toCamera) /
+          Math.cos(pitch);
+        cost +=
+          (awaySlopeCost * Math.max(0, minimumSlopeFacing - facing)) /
+          minimumSlopeFacing;
+      }
+      return cost;
     });
   };
 

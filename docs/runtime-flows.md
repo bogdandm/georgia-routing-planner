@@ -608,10 +608,14 @@ climbs and flat stretches, up to 120° on descents, and on a descent within 150�
 course at its first frame. A turn costs 0.01 per degree; a sight line from the hiker's 2
 m dot to the camera, sampled from 12 m on in steps of 12 m or 2 % of the distance, costs
 10 where exaggerated relief rises 3 m above it, and each line from the route 150, 300,
-and 500 m ahead costs 1; unknown heights hide nothing. A Viterbi pass picks the cheapest
-path, changing by at most one step between chosen frames (50° a second) at 0.02 per
-degree; the target is the hiker hidden for at most about ten frames on end. The turns
-are interpolated between chosen frames and averaged over ±6 frames.
+and 500 m ahead costs 1; unknown heights hide nothing. The rendered terrain's normal,
+averaged over the hiker and the route 150 and 300 m ahead (gradients across ±25 m), is
+compared with the direction from the hiker to the camera: where the slope faces the
+camera less than 0.85 times as squarely as level ground (cos pitch), the shortfall costs
+up to 4, so a descent dropping away along the view turns to a side view. A Viterbi pass
+picks the cheapest path, changing by at most one step between chosen frames (50° a
+second) at 0.02 per degree; the target is the hiker hidden for at most about ten frames
+on end. The turns are interpolated between chosen frames and averaged over ±6 frames.
 `MapLibreLayerController.recordTrackVideo` shares the day video's frame loop. Before
 each capture it also calls `jumpTo` with the `trackVideoCameraJump` event data, which
 the controller's and the facade's `movestart` handlers recognize, so only other moves

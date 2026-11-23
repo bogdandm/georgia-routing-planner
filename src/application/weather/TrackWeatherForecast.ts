@@ -117,7 +117,7 @@ export interface TrackWeatherCheckpointPeriod {
   readonly period: PointWeatherForecastPeriod;
 }
 
-interface TrackTimingPoint extends TrackPoint {
+export interface TrackTimingPoint extends TrackPoint {
   readonly distanceMeters: number;
   readonly sourceSegmentIndex: number;
 }

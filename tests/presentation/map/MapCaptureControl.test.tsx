@@ -32,7 +32,11 @@ describe('MapCapturePopover', () => {
       .fn<() => Promise<void>>()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('denied'));
-    renderPopover({ onCopyScreenshot, onRecordDayVideo: null });
+    renderPopover({
+      onCopyScreenshot,
+      onRecordDayVideo: null,
+      onRecordTrackVideo: null,
+    });
 
     const take = screen.getByRole('button', { name: 'Take a screenshot' });
     await user.click(take);
@@ -48,13 +52,33 @@ describe('MapCapturePopover', () => {
     expect(onCopyScreenshot).toHaveBeenCalledTimes(2);
   });
 
-  it('asks for sun shadows before a day video can be recorded', () => {
-    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo: null });
+  it('asks for sun shadows, then for an open track, before recording', () => {
+    const { unmount } = renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: null,
+      onRecordTrackVideo: null,
+    });
 
     expect(
       screen.getByRole('button', { name: 'Record a video of the day' }),
     ).toBeDisabled();
-    expect(screen.getByText('Turn on sun shadows to record the day.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Record a track video' })).toBeDisabled();
+    expect(screen.getByText('Turn on sun shadows to record a video.')).toBeVisible();
+    expect(
+      screen.queryByText('Open a track to record its video.'),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: vi.fn(),
+      onRecordTrackVideo: null,
+    });
+    expect(
+      screen.getByRole('button', { name: 'Record a video of the day' }),
+    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Record a track video' })).toBeDisabled();
+    expect(screen.getByText('Open a track to record its video.')).toBeVisible();
   });
 
   it('shows recording progress and tells a cancel from a stop and a failure', async () => {
@@ -74,15 +98,35 @@ describe('MapCapturePopover', () => {
           runs.push({ signal, onProgress, resolve, reject });
         }),
     );
-    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo });
+    const onRecordTrackVideo = vi.fn<() => Promise<void>>();
+    renderPopover({ onCopyScreenshot: vi.fn(), onRecordDayVideo, onRecordTrackVideo });
     const record = screen.getByRole('button', { name: 'Record a video of the day' });
+    const recordTrack = screen.getByRole('button', { name: 'Record a track video' });
 
+    let nowMs = 1_000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
     await user.click(record);
     expect(record).toBeDisabled();
+    // One recording at a time: the other kind waits for this one to end.
+    expect(recordTrack).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Recording…');
     act(() => {
-      runs[0]?.onProgress(0.425);
+      nowMs = 2_000;
+      runs[0]?.onProgress(0.1);
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Recording the day: 42%');
+    // One second is too little to judge the pace.
+    expect(screen.queryByText(/left$/)).not.toBeInTheDocument();
+    act(() => {
+      nowMs = 41_000;
+      runs[0]?.onProgress(0.25);
+    });
+    expect(screen.getByText('25% · 2 min left')).toBeVisible();
+    act(() => {
+      nowMs = 81_000;
+      runs[0]?.onProgress(0.95);
+    });
+    expect(screen.getByText('95% · 5 sec left')).toBeVisible();
+    clock.mockRestore();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(runs[0]?.signal.aborted).toBe(true);
     await waitFor(() => {
@@ -116,5 +160,28 @@ describe('MapCapturePopover', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The video could not be recorded.',
     );
+  });
+
+  it('records a track video with or without changing light, as the toggle says', async () => {
+    const user = userEvent.setup();
+    const onRecordTrackVideo = vi.fn<
+      NonNullable<MapCaptureControlProps['onRecordTrackVideo']>
+    >(() => Promise.resolve());
+    renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: vi.fn(),
+      onRecordTrackVideo,
+    });
+    const lighting = screen.getByRole('button', { name: 'Change the lighting' });
+    const record = screen.getByRole('button', { name: 'Record a track video' });
+
+    expect(lighting).toHaveAttribute('aria-pressed', 'true');
+    await user.click(record);
+    await screen.findByText('The video was downloaded.');
+    await user.click(lighting);
+    expect(lighting).toHaveAttribute('aria-pressed', 'false');
+    await user.click(record);
+
+    expect(onRecordTrackVideo.mock.calls.map((call) => call[2])).toEqual([true, false]);
   });
 });

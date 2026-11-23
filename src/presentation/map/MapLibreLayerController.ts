@@ -140,7 +140,11 @@ import {
   type ImportedTrackTimeLabel,
 } from '@/presentation/map/mapStyleFactory';
 import type { ContourTileGenerator } from '@/presentation/map/ContourTileGenerator';
-import { MapVideoRecorder, readWhenMapIdle } from '@/presentation/map/mapCapture';
+import {
+  MapVideoRecorder,
+  readWhenMapIdle,
+  type VideoOverlay,
+} from '@/presentation/map/mapCapture';
 import {
   clampToDaylight,
   type DaylightWindow,
@@ -149,6 +153,11 @@ import {
   localDayBounds,
   sessionStartInstant,
 } from '@/presentation/map/sunShadowDaylight';
+import {
+  isTrackVideoCameraJump,
+  trackVideoCameraJump,
+  type TrackVideoPlan,
+} from '@/presentation/map/trackVideo';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
   type TerrainShadowMetricsSnapshot,
@@ -1095,6 +1104,8 @@ export class MapLibreLayerController {
   #sunShadowDrawEveryStep = false;
   /** Present from Play until stop; aborting it cancels the day prefetch. */
   #sunShadowPlaybackAbort: AbortController | null = null;
+  /** Counts `setSunShadow` calls, so a recording can tell a chosen time from a clamp. */
+  #sunShadowChoices = 0;
   #sunShadowPlaybackTimer: ReturnType<typeof setTimeout> | null = null;
   #sunShadowPlaybackFrames: readonly number[] = [];
   #sunShadowPlaybackIndex = 0;
@@ -1397,6 +1408,7 @@ export class MapLibreLayerController {
   }): void {
     this.stopSunShadowPlayback();
     if (!Number.isFinite(value.instantMs)) return;
+    this.#sunShadowChoices += 1;
     if (value.enabled && !mapLayerStore.getState().visibility['terrain-relief']) {
       this.setLayerVisibility('terrain-relief', true);
     }
@@ -1643,9 +1655,9 @@ export class MapLibreLayerController {
    * Records the shown day as the bytes of an MP4 video of the day playback frames, from
    * the first to the last, each captured once MapLibre has drawn every tile of its
    * minute. It counts as playback, so a camera move, `setSunShadow`, Play, Stop, or detach
-   * aborts it and the promise rejects with an `AbortError`. A finished recording returns
-   * to the instant it started from. Requires sun shadows to be on. An already aborted
-   * `signal` rejects with its `AbortError` before anything changes.
+   * aborts it and the promise rejects with an `AbortError`. It then returns to the
+   * instant it started from unless a stop chose another. Requires sun shadows to be on.
+   * An already aborted `signal` rejects with its `AbortError` before anything changes.
    */
   public async recordSunShadowDay(
     signal: AbortSignal,
@@ -1659,8 +1671,90 @@ export class MapLibreLayerController {
     }
     const window = this.sunShadowDaylight(map, this.#sunShadowInstantMs);
     if (window === null) throw new Error('The shown day has no sunrise and sunset.');
-    const frames = daylightFrameInstants(window, sunShadowPlaybackAverageStepMinutes);
+    const frames = daylightFrameInstants(
+      window,
+      sunShadowPlaybackAverageStepMinutes,
+    ).map((sunInstantMs) => ({ sunInstantMs, durationMs: sunShadowPlaybackFrameMs }));
+    return this.recordSunShadowFrames(map, frames, signal, onProgress, () => undefined);
+  }
+
+  /**
+   * Records a track time-lapse planned by `planTrackVideo` as the bytes of an MP4 video:
+   * per frame, the camera jumps to the hiker, the track trace point marks them, and sun
+   * shadows show the frame's minute. It counts as playback exactly like
+   * `recordSunShadowDay`, except that its own camera jumps, tagged with
+   * `trackVideoCameraJump`, are not moves that stop it; a user's move still does. The
+   * caller restores the camera; the trace point is cleared here.
+   */
+  public async recordTrackVideo(
+    plan: TrackVideoPlan,
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+  ): Promise<Uint8Array> {
+    signal.throwIfAborted();
+    this.stopSunShadowPlayback();
+    const map = this.#map;
+    if (map === null || map.isMoving() || !this.sunShadowsDrawn()) {
+      throw new Error('Sun shadows are not drawn.');
+    }
+    const showTrace = (visible: boolean) => {
+      if (map.getLayer(importedTrackLayerIds.trace) === undefined) return;
+      map.setLayoutProperty(
+        importedTrackLayerIds.trace,
+        'visibility',
+        visible ? 'visible' : 'none',
+      );
+    };
+    // The hiker is the point of the video, so it shows even with imported tracks hidden.
+    showTrace(true);
+    try {
+      return await this.recordSunShadowFrames(
+        map,
+        plan.frames,
+        signal,
+        onProgress,
+        (frame) => {
+          map.jumpTo(
+            {
+              center: [...frame.center],
+              zoom: plan.zoom,
+              bearing: frame.bearing,
+              pitch: frame.pitch,
+            },
+            trackVideoCameraJump,
+          );
+          this.setImportedTrackTracePoint(frame.position);
+          // Again each frame: hiding imported tracks mid-recording must not drop the hiker.
+          showTrace(true);
+        },
+      );
+    } finally {
+      this.setImportedTrackTracePoint(null);
+      showTrace(mapLayerStore.getState().visibility['imported-tracks']);
+    }
+  }
+
+  /**
+   * Shared loop of the video recordings: registers as playback (full-quality tiles; any
+   * playback stop aborts with an `AbortError`), then per frame applies its sun minute,
+   * runs `beforeFrame`, and captures the frame once MapLibre is idle. However it ends,
+   * the minute shown before returns unless `setSunShadow` chose one meanwhile.
+   */
+  private async recordSunShadowFrames<
+    Frame extends {
+      readonly sunInstantMs: number;
+      readonly durationMs: number;
+      readonly overlay?: VideoOverlay;
+    },
+  >(
+    map: MapLibreMap,
+    frames: readonly Frame[],
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+    beforeFrame: (frame: Frame) => void,
+  ): Promise<Uint8Array> {
     const startInstantMs = this.#sunShadowInstantMs;
+    const choicesBefore = this.#sunShadowChoices;
     const controller = new AbortController();
     this.#sunShadowPlaybackAbort = controller;
     const abort = () => {
@@ -1673,14 +1767,15 @@ export class MapLibreLayerController {
     try {
       const started = await MapVideoRecorder.start(canvas.width, canvas.height);
       recorder = started;
-      for (const [index, instantMs] of frames.entries()) {
+      for (const [index, frame] of frames.entries()) {
         // Starting and encoding are awaited outside the idle wait: a stop during them
         // must not apply another minute over the newer state.
         controller.signal.throwIfAborted();
-        this.setSunShadowInstant(instantMs);
+        this.setSunShadowInstant(frame.sunInstantMs);
+        beforeFrame(frame);
         this.reconcileSunShadow(map);
         await readWhenMapIdle(map, controller.signal, (drawn) =>
-          started.addFrame(drawn, sunShadowPlaybackFrameMs),
+          started.addFrame(drawn, frame.durationMs, frame.overlay),
         );
         onProgress((index + 1) / frames.length);
       }
@@ -1692,11 +1787,13 @@ export class MapLibreLayerController {
       signal.removeEventListener('abort', abort);
       if (this.#sunShadowPlaybackAbort === controller)
         this.#sunShadowPlaybackAbort = null;
+      if (this.#map === map && this.#sunShadowChoices === choicesBefore) {
+        this.setSunShadowInstant(startInstantMs);
+        this.reconcileSunShadow(map);
+      }
     }
     // A stop while the last frame encoded or the file finalized also discards the video.
     controller.signal.throwIfAborted();
-    this.setSunShadowInstant(startInstantMs);
-    this.reconcileSunShadow(map);
     return video;
   }
 
@@ -1704,7 +1801,8 @@ export class MapLibreLayerController {
    * Registered for the whole attachment: a move stops playback and also clears a refusal
    * or failure note, which described the previous view.
    */
-  private readonly handleSunShadowPlaybackMove = (): void => {
+  private readonly handleSunShadowPlaybackMove = (event: object): void => {
+    if (isTrackVideoCameraJump(event)) return;
     this.stopSunShadowPlayback();
   };
 

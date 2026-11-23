@@ -18,6 +18,7 @@ import type {
   RenderBenchmarkReport,
   RenderBenchmarkStep,
 } from '@/presentation/map/renderBenchmark';
+import type { TrackVideoRoute } from '@/presentation/map/trackVideo';
 import type { TrackPathProjection } from '@/presentation/tracks/trackPathEditor';
 
 /**
@@ -132,6 +133,19 @@ export interface MapFacade {
 
   /** PNG of the GL map as drawn in the next frame, without controls or HTML overlays. */
   captureMapImage(): Promise<Blob>;
+
+  /**
+   * Records a time-lapse MP4 of a timed route with sun shadows (see `planTrackVideo`),
+   * then restores the camera; its camera steps are never persisted. In 3D the camera
+   * turns aside where sight lines over the route's DEM show relief hiding the hiker. A
+   * map not ready to start, a user's map move, a sun-shadow change, `signal`, or
+   * detaching the map stops it with an `AbortError`.
+   */
+  recordTrackVideo(
+    route: TrackVideoRoute,
+    signal: AbortSignal,
+    onProgress: (fraction: number) => void,
+  ): Promise<Uint8Array>;
 
   /** Turns the camera north; 3D keeps the directed-fit pitch. */
   resetNorth(): void;

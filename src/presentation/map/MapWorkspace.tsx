@@ -82,6 +82,12 @@ import type { SatelliteScene } from '@/domain/satellite/SatelliteScene';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
+import { routeElapsedSeconds } from '@/application/weather/TrackWeatherForecast';
+import {
+  formatTrackDistance,
+  formatTrackElevation,
+} from '@/presentation/tracks/trackFormatters';
+import { trackVideoSegments } from '@/presentation/map/trackVideo';
 import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
@@ -376,7 +382,7 @@ export function MapWorkspace({
   getNavigationPadding,
   onElevationGradeLegendDismissedChange,
 }: MapWorkspaceProps) {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const {
     database,
     logger,
@@ -388,6 +394,7 @@ export function MapWorkspace({
     mapViewport,
     satelliteCatalogGateway,
     idGenerator,
+    terrainSampler,
   } = useRuntimeServices();
   const satelliteMode = useSatelliteMode();
   const mosaicActive = satelliteMode === 'mosaic';
@@ -1920,6 +1927,9 @@ export function MapWorkspace({
             mapLayers.dismissSunShadowNotice();
           },
         };
+  const trackRoute = tracksWorkspace?.activeTimingRoute ?? null;
+  const trackMetrics = tracksWorkspace?.activeStatsMetrics ?? null;
+  const trackLighting = tracksWorkspace?.activeTrackLighting ?? null;
   const mapCapture: MapCaptureControlProps = {
     // The PNG promise goes straight into the clipboard item, so the write keeps the
     // click's user activation while the next frame is read and encoded.
@@ -1949,6 +1959,56 @@ export function MapWorkspace({
             const video = await mapLayers.recordSunShadowDay(signal, onProgress);
             // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
             downloadFile(`sun-shadows-${day}.mp4`, 'video/mp4', video);
+          },
+    onRecordTrackVideo:
+      mapLayers === null ||
+      !sunShadowShown ||
+      tracksWorkspace === null ||
+      trackRoute === null ||
+      trackMetrics === null ||
+      trackLighting === null ||
+      trackLighting.finishMs <= trackLighting.startMs
+        ? null
+        : async (signal, onProgress, lightingChanges) => {
+            // The same route timing as the track's lighting: start, date, and pace.
+            const { elapsed, recorded } = routeElapsedSeconds(
+              trackRoute.points,
+              trackMetrics,
+              tracksWorkspace.activeTrackWeatherTimeline,
+            );
+            const clock = new Intl.DateTimeFormat(i18n.locale, {
+              timeZone: trackLighting.timeZone,
+              /* eslint-disable lingui/no-unlocalized-strings -- Intl option tokens. */
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+              /* eslint-enable lingui/no-unlocalized-strings */
+            });
+            const video = await facade.recordTrackVideo(
+              {
+                points: trackRoute.points,
+                elapsedSeconds: elapsed,
+                recordedTime: recorded,
+                startMs: trackLighting.startMs,
+                ascentMeters: trackMetrics.ascentMeters,
+                segments: trackVideoSegments(
+                  tracksWorkspace.activeProfile,
+                  trackRoute.points,
+                ),
+                terrain: terrainSampler,
+                fixedSunInstantMs: lightingChanges ? null : sunShadow.instantMs,
+                labels: {
+                  time: (instantMs) => clock.format(instantMs),
+                  distance: (meters) => formatTrackDistance(meters, i18n),
+                  ascent: (meters) => formatTrackElevation(meters, i18n),
+                },
+              },
+              signal,
+              onProgress,
+            );
+            // eslint-disable-next-line lingui/no-unlocalized-strings -- File name and MIME type.
+            downloadFile(`track-${trackLighting.date}.mp4`, 'video/mp4', video);
           },
   };
 

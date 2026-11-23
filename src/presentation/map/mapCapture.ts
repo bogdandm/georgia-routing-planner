@@ -1,6 +1,22 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type * as Mediabunny from 'mediabunny';
 
+import { mapVisualPalette } from '@/presentation/map/mapVisualPalette';
+
+/** Hike readout drawn into a video frame's lower-left corner. */
+export interface VideoOverlay {
+  readonly time: string;
+  readonly distance: string;
+  /** Climb so far; null when the route has no elevation. */
+  readonly ascent: string | null;
+  /** Elevation profile of the whole route with the walked share; null without elevation. */
+  readonly profile: {
+    /** Elevation at evenly spaced distances from the start to the finish. */
+    readonly elevations: readonly number[];
+    /** Walked share of the route distance, 0–1. */
+    readonly progress: number;
+  } | null;
+}
 /**
  * Calls `read` with the map canvas right after MapLibre draws the next frame. The canvas
  * is created without `preserveDrawingBuffer`, so its pixels are only defined inside the
@@ -80,7 +96,7 @@ const videoShortSidePixels = 1080;
  * Social networks expect a constant rate of 24–60 frames per second, so each map frame is
  * repeated for its duration at this rate.
  */
-const videoFrameRate = 30;
+export const videoFrameRate = 30;
 
 /**
  * MP4 video of map frames: H.264 through WebCodecs, without audio, with the index at the
@@ -128,7 +144,9 @@ export class MapVideoRecorder {
     this.#context = context;
     this.#source = new CanvasSource(canvas, {
       codec: 'avc',
-      quality: new Quality('high'),
+      // The whole map moves every frame, and satellite imagery is detailed: below this
+      // level the encoder smears the imagery and the labels, even on held frames.
+      quality: new Quality('very-high'),
     });
     this.#output = new Output({
       format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
@@ -158,15 +176,154 @@ export class MapVideoRecorder {
   /**
    * Call within the frame that drew `canvas` (see `readWhenMapIdle`) and wait for the
    * returned promise before the next frame: the copy is taken synchronously, encoding
-   * continues after.
+   * continues after. An `overlay` is drawn in the lower-left corner of the video frame.
    */
-  public async addFrame(canvas: HTMLCanvasElement, durationMs: number): Promise<void> {
+  public async addFrame(
+    canvas: HTMLCanvasElement,
+    durationMs: number,
+    overlay?: VideoOverlay,
+  ): Promise<void> {
     this.#context.drawImage(canvas, 0, 0, this.#width, this.#height);
+    if (overlay !== undefined) this.drawOverlay(overlay);
     this.#elapsedMs += durationMs;
     const endFrame = Math.round((this.#elapsedMs * videoFrameRate) / 1000);
     for (; this.#videoFrames < endFrame; this.#videoFrames += 1) {
       await this.#source.add(this.#videoFrames / videoFrameRate, 1 / videoFrameRate);
     }
+  }
+
+  /**
+   * A dark plate in the lower-left corner: the clock above the distance and climb, and
+   * beside them a wide, low elevation profile walked in the hiker's color. Sizes follow
+   * the frame's short side, so at 1080p the plate is about 640 × 82 px. The text column
+   * keeps a minimum width, so the profile does not shift as the figures grow.
+   */
+  private drawOverlay(overlay: VideoOverlay): void {
+    const context = this.#context;
+    const unit = Math.min(this.#width, this.#height) / 1080;
+    const size = (pixels: number) => Math.max(1, Math.round(pixels * unit));
+    const margin = size(20);
+    const padding = size(14);
+    const timeHeight = size(20);
+    const statsHeight = size(28);
+    const lineGap = size(6);
+    const timeFont = `500 ${String(timeHeight)}px system-ui, sans-serif`;
+    const statsFont = `600 ${String(statsHeight)}px system-ui, sans-serif`;
+    const gap = size(14);
+    const arrowWidth = size(14);
+    const arrowHeight = size(18);
+    const chartGap = size(18);
+    const chartWidth = size(320);
+    const chartHeight = size(44);
+    const hiker = mapVisualPalette.userGeometry.gpxTrackHighlight;
+
+    context.font = timeFont;
+    const timeWidth = context.measureText(overlay.time).width;
+    context.font = statsFont;
+    const distanceWidth = context.measureText(overlay.distance).width;
+    const ascentWidth =
+      overlay.ascent === null
+        ? 0
+        : gap + arrowWidth + size(5) + context.measureText(overlay.ascent).width;
+    const textWidth = Math.max(size(250), timeWidth, distanceWidth + ascentWidth);
+    const textHeight = timeHeight + lineGap + statsHeight;
+    const profile = overlay.profile;
+    const charted = profile !== null && profile.elevations.length >= 2;
+    const plateWidth = padding * 2 + textWidth + (charted ? chartGap + chartWidth : 0);
+    const plateHeight = padding * 2 + textHeight;
+    const left = margin;
+    const top = this.#height - margin - plateHeight;
+
+    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    context.beginPath();
+    context.roundRect(left, top, plateWidth, plateHeight, size(10));
+    context.fill();
+
+    const textLeft = left + padding;
+    context.textBaseline = 'top';
+    context.font = timeFont;
+    context.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    context.fillText(overlay.time, textLeft, top + padding);
+
+    const statsTop = top + padding + timeHeight + lineGap;
+    context.font = statsFont;
+    context.fillStyle = '#FFFFFF';
+    context.fillText(overlay.distance, textLeft, statsTop);
+    if (overlay.ascent !== null) {
+      // A drawn triangle, not a glyph: every font has it, and it needs no translation.
+      const arrowLeft = textLeft + distanceWidth + gap;
+      const arrowTop = statsTop + size(5);
+      context.beginPath();
+      context.moveTo(arrowLeft, arrowTop + arrowHeight);
+      context.lineTo(arrowLeft + arrowWidth / 2, arrowTop);
+      context.lineTo(arrowLeft + arrowWidth, arrowTop + arrowHeight);
+      context.closePath();
+      context.fill();
+      context.fillText(overlay.ascent, arrowLeft + arrowWidth + size(5), statsTop);
+    }
+
+    if (!charted) return;
+    const chartLeft = textLeft + textWidth + chartGap;
+    const chartBottom = top + padding + (textHeight + chartHeight) / 2;
+    const lowest = Math.min(...profile.elevations);
+    const range = Math.max(1, Math.max(...profile.elevations) - lowest);
+    const last = profile.elevations.length - 1;
+    const outline = new Path2D();
+    for (const [index, elevation] of profile.elevations.entries()) {
+      const x = chartLeft + (index / last) * chartWidth;
+      const y = chartBottom - ((elevation - lowest) / range) * chartHeight;
+      if (index === 0) outline.moveTo(x, y);
+      else outline.lineTo(x, y);
+    }
+    const area = new Path2D(outline);
+    area.lineTo(chartLeft + chartWidth, chartBottom);
+    area.lineTo(chartLeft, chartBottom);
+    area.closePath();
+    context.lineWidth = size(2);
+    context.lineJoin = 'round';
+    context.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    context.fill(area);
+    context.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    context.stroke(outline);
+
+    const walkedRight = chartLeft + profile.progress * chartWidth;
+    context.save();
+    context.beginPath();
+    context.rect(
+      chartLeft,
+      chartBottom - chartHeight - size(2),
+      walkedRight - chartLeft,
+      chartHeight + size(4),
+    );
+    context.clip();
+    context.globalAlpha = 0.45;
+    context.fillStyle = hiker;
+    context.fill(area);
+    context.globalAlpha = 1;
+    context.strokeStyle = hiker;
+    context.stroke(outline);
+    context.restore();
+
+    const position = profile.progress * last;
+    const below = Math.floor(position);
+    const elevation =
+      (profile.elevations[below] ?? lowest) +
+      ((profile.elevations[Math.min(last, below + 1)] ?? lowest) -
+        (profile.elevations[below] ?? lowest)) *
+        (position - below);
+    context.beginPath();
+    context.arc(
+      walkedRight,
+      chartBottom - ((elevation - lowest) / range) * chartHeight,
+      size(5),
+      0,
+      Math.PI * 2,
+    );
+    context.fillStyle = hiker;
+    context.fill();
+    context.lineWidth = size(2);
+    context.strokeStyle = '#FFFFFF';
+    context.stroke();
   }
 
   public async finish(): Promise<Uint8Array> {

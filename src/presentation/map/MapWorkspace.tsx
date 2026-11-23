@@ -87,7 +87,7 @@ import {
   formatTrackDistance,
   formatTrackElevation,
 } from '@/presentation/tracks/trackFormatters';
-import { trackVideoDescents } from '@/presentation/map/trackVideo';
+import { trackVideoSegments } from '@/presentation/map/trackVideo';
 import {
   applyTrackPathDrag,
   nearestTrackPathDragTarget,
@@ -394,6 +394,7 @@ export function MapWorkspace({
     mapViewport,
     satelliteCatalogGateway,
     idGenerator,
+    terrainSampler,
   } = useRuntimeServices();
   const satelliteMode = useSatelliteMode();
   const mosaicActive = satelliteMode === 'mosaic';
@@ -1991,10 +1992,11 @@ export function MapWorkspace({
                 recordedTime: recorded,
                 startMs: trackLighting.startMs,
                 ascentMeters: trackMetrics.ascentMeters,
-                descents: trackVideoDescents(
+                segments: trackVideoSegments(
                   tracksWorkspace.activeProfile,
                   trackRoute.points,
                 ),
+                terrain: terrainSampler,
                 fixedSunInstantMs: lightingChanges ? null : sunShadow.instantMs,
                 labels: {
                   time: (instantMs) => clock.format(instantMs),

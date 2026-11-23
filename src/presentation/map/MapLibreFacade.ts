@@ -9,7 +9,10 @@ import {
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
 import { defaultTerrainOverlayPreferences } from '@/application/ports/MapLayerPreferencesRepository';
-import type { ElevationProvider } from '@/application/ports/ElevationProvider';
+import type {
+  ElevationCoordinate,
+  ElevationProvider,
+} from '@/application/ports/ElevationProvider';
 import type { MapViewState } from '@/application/ports/MapCameraRepository';
 import type { MapProviderConfiguration } from '@/bootstrap/configuration/MapProviderConfiguration';
 import type { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnosticsSnapshotStore';
@@ -45,12 +48,10 @@ import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import { captureMapPng } from '@/presentation/map/mapCapture';
 import { directedCameraFit } from '@/presentation/map/directedCameraFit';
 import {
-  avoidTerrainOcclusion,
   isTrackVideoCameraJump,
   planTrackVideo,
-  trackVideoSightLines,
-  type TrackVideoPlan,
   type TrackVideoRoute,
+  type TrackVideoTerrain,
 } from '@/presentation/map/trackVideo';
 import type {
   MapLibreLayerController,
@@ -94,6 +95,8 @@ import {
 const directedFitPitchDegrees = 45;
 /** Below this pitch a track video looks almost straight down, and no relief hides the hiker. */
 const minimumOcclusionPitchDegrees = 15;
+/** A track video loads the DEM around one route point per this many meters. */
+const trackVideoTerrainSpacingMeters = 100;
 
 /** Space kept between a revealed inspection point and the visible map edges. */
 const pointRevealMarginPx = 24;
@@ -1020,14 +1023,13 @@ export class MapLibreFacade implements MapFacade {
   ): Promise<Uint8Array> {
     const map = this.#map;
     const layers = this.layerController;
-    // A move already under way is the user's: restoring over it would undo it.
-    if (
-      map === null ||
-      map.isMoving() ||
-      this.#scriptedCamera !== null ||
-      layers?.recordTrackVideo === undefined
-    ) {
+    if (layers?.recordTrackVideo === undefined) {
       throw new Error('The map is not ready for a track video.');
+    }
+    // A move already under way is the user's: restoring over it would undo it. Not
+    // starting is a stop, like the user moving the map during the recording.
+    if (map === null || map.isMoving() || this.#scriptedCamera !== null) {
+      throw new DOMException('The map is not ready for a track video.', 'AbortError');
     }
     // The view to return to; the video keeps its zoom and pitch, within bounds.
     const camera = this.readCamera(map);
@@ -1048,11 +1050,14 @@ export class MapLibreFacade implements MapFacade {
     map.on('movestart', noteUserMove);
     const videoSignal = AbortSignal.any([signal, controller.signal]);
     try {
-      const plan = await this.unhideTrackVideoHiker(
+      const terrain = await this.trackVideoTerrain(
         map,
-        planTrackVideo(route, camera),
+        route,
+        camera.pitch,
         videoSignal,
       );
+      videoSignal.throwIfAborted();
+      const plan = planTrackVideo(route, camera, terrain);
       videoSignal.throwIfAborted();
       return await layers.recordTrackVideo(plan, videoSignal, onProgress);
     } catch (error) {
@@ -1077,52 +1082,46 @@ export class MapLibreFacade implements MapFacade {
   }
 
   /**
-   * In 3D, turns the planned camera aside on descents where relief would hide the
-   * hiker (see `avoidTerrainOcclusion`). The bare-earth DEM along each sight line comes
-   * from the elevation provider, since the map holds terrain tiles only around the
-   * current view. Without terrain, a provider, a pitch, or a descent, nothing turns; if
-   * sampling fails, the plan stays as it is.
+   * In 3D at `minimumOcclusionPitchDegrees` or more, the terrain for a track video's
+   * sight lines: the bare-earth DEM around the route, loaded like the route lighting's,
+   * since the map holds terrain tiles only around the current view. Null without
+   * terrain, a DEM source, or a pitch, and, logged, when loading fails.
    */
-  private async unhideTrackVideoHiker(
+  private async trackVideoTerrain(
     map: MapLibreMap,
-    plan: TrackVideoPlan,
+    route: TrackVideoRoute,
+    pitch: number,
     signal: AbortSignal,
-  ): Promise<TrackVideoPlan> {
-    const provider = this.elevationProvider;
+  ): Promise<TrackVideoTerrain | null> {
     if (
-      provider === undefined ||
+      route.terrain === null ||
       this.#snapshot.terrainMode !== 'terrain' ||
-      (plan.frames[0]?.pitch ?? 0) < minimumOcclusionPitchDegrees
+      pitch < minimumOcclusionPitchDegrees
     ) {
-      return plan;
+      return null;
     }
-    const view = {
-      heightPixels: map.getCanvas().clientHeight,
-      fieldOfViewDegrees: map.getVerticalFieldOfView(),
-      terrainExaggeration: this.provider?.terrain.exaggeration ?? 1,
-    };
-    const lines = trackVideoSightLines(plan, view);
-    if (lines.length === 0) return plan;
+    const coordinates: ElevationCoordinate[] = [];
+    let nextMeters = 0;
+    for (const [index, point] of route.points.entries()) {
+      if (point.distanceMeters < nextMeters && index < route.points.length - 1)
+        continue;
+      coordinates.push({
+        longitude: point.coordinate[0],
+        latitude: point.coordinate[1],
+      });
+      nextMeters = point.distanceMeters + trackVideoTerrainSpacingMeters;
+    }
     try {
-      const samples = await provider.sampleMany(
-        lines.flatMap((line) =>
-          line.coordinates.map(([longitude, latitude]) => ({ longitude, latitude })),
-        ),
-        signal,
-      );
-      let next = 0;
-      const elevations = lines.map((line) =>
-        line.coordinates.map(() => {
-          const sample = samples[next];
-          next += 1;
-          return sample?.status === 'available' ? sample.meters : null;
-        }),
-      );
-      return avoidTerrainOcclusion(plan, lines, elevations, view);
+      return {
+        sampler: await route.terrain.loadTerrainSampler(coordinates, signal),
+        heightPixels: map.getCanvas().clientHeight,
+        fieldOfViewDegrees: map.getVerticalFieldOfView(),
+        exaggeration: this.provider?.terrain.exaggeration ?? 1,
+      };
     } catch (error) {
       if (signal.aborted) throw error;
       this.logger.log({ level: 'warn', name: 'map.track-video.occlusion-failed' });
-      return plan;
+      return null;
     }
   }
 

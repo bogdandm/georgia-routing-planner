@@ -3550,7 +3550,6 @@ describe('MapLibreLayerController', () => {
           overlay: { time: 'clock', distance: '1 km', ascent: null, profile: null },
           durationMs: 1_000,
         })),
-        descents: [],
       };
 
       function startTrackRecording(

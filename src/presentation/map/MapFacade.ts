@@ -136,8 +136,10 @@ export interface MapFacade {
 
   /**
    * Records a time-lapse MP4 of a timed route with sun shadows (see `planTrackVideo`),
-   * then restores the camera; its camera steps are never persisted. A user's map move,
-   * a sun-shadow change, `signal`, or detaching the map stops it with an `AbortError`.
+   * then restores the camera; its camera steps are never persisted. In 3D the camera
+   * turns aside where sight lines over the route's DEM show relief hiding the hiker. A
+   * map not ready to start, a user's map move, a sun-shadow change, `signal`, or
+   * detaching the map stops it with an `AbortError`.
    */
   recordTrackVideo(
     route: TrackVideoRoute,

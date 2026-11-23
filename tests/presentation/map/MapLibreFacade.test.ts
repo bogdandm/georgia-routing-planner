@@ -1,7 +1,11 @@
 import type { GeoJSONFeature, Map as MapLibreMap } from 'maplibre-gl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ElevationProvider } from '@/application/ports/ElevationProvider';
+import type {
+  ElevationProvider,
+  LoadedTerrainSampler,
+  TerrainSamplerSource,
+} from '@/application/ports/ElevationProvider';
 import { defaultSunShadowStartTime } from '@/application/ports/MapLayerPreferencesRepository';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import { MapLibreFacade } from '@/presentation/map/MapLibreFacade';
@@ -3077,16 +3081,39 @@ describe('MapLibreFacade', () => {
       recordedTime: false,
       startMs: Date.parse('2026-07-01T05:00:00Z'),
       ascentMeters: undefined,
-      descents: [{ startMeters: 0, endMeters: 8_180 }],
+      segments: [{ type: 'descent', startMeters: 0, endMeters: 8_180 }],
+      terrain: null,
       fixedSunInstantMs: null,
       labels: { time: () => 'clock', distance: () => 'km', ascent: () => 'm' },
     };
 
+    /** The route with DEM from `elevationAt`, loaded through `loadTerrainSampler`. */
+    function withTerrain(
+      loadTerrainSampler: TerrainSamplerSource['loadTerrainSampler'],
+    ): TrackVideoRoute {
+      return {
+        ...route,
+        points: [
+          { coordinate: [43.1, 42.7], distanceMeters: 0, sourceSegmentIndex: 0 },
+          { coordinate: [43.1006, 42.7], distanceMeters: 50, sourceSegmentIndex: 0 },
+          { coordinate: [43.1015, 42.7], distanceMeters: 120, sourceSegmentIndex: 0 },
+          { coordinate: [43.102, 42.7], distanceMeters: 180, sourceSegmentIndex: 0 },
+          { coordinate: [43.2, 42.7], distanceMeters: 8_180, sourceSegmentIndex: 0 },
+        ],
+        elapsedSeconds: [0, 45, 105, 160, 7_200],
+        terrain: { loadTerrainSampler },
+      };
+    }
+
     function createTrackVideoFacade(
       recordTrackVideo: MapLibreLayerController['recordTrackVideo'],
+      options: { readonly terrain?: boolean } = {},
     ) {
       const services = createTestServices();
       const nativeMap = new FakeNativeMap();
+      if (options.terrain === true) {
+        nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
+      }
       const onViewSettled = vi.fn();
       const facade = new MapLibreFacade(
         services.logger,
@@ -3106,12 +3133,14 @@ describe('MapLibreFacade', () => {
           recordTrackVideo,
         },
       );
+      // jsdom lays nothing out; the camera's distance follows the canvas height.
+      Object.defineProperty(nativeMap.getCanvas(), 'clientHeight', { value: 900 });
       facade.attach(nativeMap as unknown as MapLibreMap);
       nativeMap.fire('load');
       const before = facade.getCamera();
       nativeMap.jumpCalls.splice(0);
       onViewSettled.mockClear();
-      return { facade, nativeMap, onViewSettled, before };
+      return { facade, nativeMap, onViewSettled, before, services };
     }
 
     it('persists none of its frames and restores the camera afterwards', async () => {
@@ -3168,63 +3197,88 @@ describe('MapLibreFacade', () => {
       facade.destroy();
     });
 
-    it('turns the 3D camera aside where the DEM rises between it and the hiker', async () => {
-      const services = createTestServices();
-      const nativeMap = new FakeNativeMap();
-      nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
-      // A slope climbing steeply westward along the route, behind an eastbound hiker.
-      const sampleMany = vi.fn<ElevationProvider['sampleMany']>((coordinates) =>
-        Promise.resolve(
-          coordinates.map(({ longitude, latitude }) => ({
-            status: 'available' as const,
-            meters:
-              Math.abs(latitude - 42.7) < 1e-6
-                ? 1_000 + (43.2 - longitude) * 300_000
-                : 0,
-          })),
-        ),
+    it("turns the 3D camera aside where the route's DEM hides the hiker", async () => {
+      // A slope climbing steeply westward, behind an eastbound hiker.
+      const sampler: LoadedTerrainSampler = {
+        elevationAt: (_latitude, longitude) => 1_000 + (43.2 - longitude) * 300_000,
+        baseResolutionMeters: 30,
+        maximumElevationMeters: 5_000_000,
+      };
+      const loadTerrainSampler = vi.fn<TerrainSamplerSource['loadTerrainSampler']>(() =>
+        Promise.resolve(sampler),
       );
       const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>(() =>
         Promise.resolve(Uint8Array.of(1)),
       );
-      const facade = new MapLibreFacade(
-        services.logger,
-        undefined,
-        undefined,
-        undefined,
-        {
-          attach: vi.fn(),
-          detach: vi.fn(),
-          handleRasterSourceData: vi.fn(),
-          handleRasterSourceFailure: vi.fn(),
-          handleRasterSourceRecovered: vi.fn(),
-          isRasterSourceRecoveryComplete: vi.fn(() => true),
-          setTerrainInteractionActive: vi.fn(),
-          setPlannedLinePreview: vi.fn(),
-          clearPlannedLinePreview: vi.fn(),
-          recordTrackVideo,
-        },
-        { sample: vi.fn(), sampleMany },
+      const { facade } = createTrackVideoFacade(recordTrackVideo, { terrain: true });
+
+      await facade.recordTrackVideo(
+        withTerrain(loadTerrainSampler),
+        new AbortController().signal,
+        vi.fn(),
       );
-      // jsdom lays nothing out; the camera's distance follows the canvas height.
-      Object.defineProperty(nativeMap.getCanvas(), 'clientHeight', { value: 900 });
-      facade.attach(nativeMap as unknown as MapLibreMap);
-      nativeMap.fire('load');
 
-      await facade.recordTrackVideo(route, new AbortController().signal, vi.fn());
-
+      // One route point per 100 m, and the finish.
+      expect(loadTerrainSampler).toHaveBeenCalledExactlyOnceWith(
+        [
+          { longitude: 43.1, latitude: 42.7 },
+          { longitude: 43.1015, latitude: 42.7 },
+          { longitude: 43.2, latitude: 42.7 },
+        ],
+        expect.any(AbortSignal),
+      );
+      // Eastbound travel faces 90°; the camera has turned well to the side.
       const frame = recordTrackVideo.mock.calls[0]?.[0].frames[300];
-      // Eastbound travel faces 90°; turned 60° to the side, the camera faces 150°.
-      expect(frame?.bearing).toBeCloseTo(150);
+      expect(Math.abs((frame?.bearing ?? 90) - 90)).toBeGreaterThan(30);
+      facade.destroy();
+    });
+
+    it('loads no DEM in 2D and faces the course', async () => {
+      const loadTerrainSampler = vi.fn<TerrainSamplerSource['loadTerrainSampler']>();
+      const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>(() =>
+        Promise.resolve(Uint8Array.of(1)),
+      );
+      const { facade } = createTrackVideoFacade(recordTrackVideo);
+
+      await facade.recordTrackVideo(
+        withTerrain(loadTerrainSampler),
+        new AbortController().signal,
+        vi.fn(),
+      );
+
+      expect(loadTerrainSampler).not.toHaveBeenCalled();
+      expect(recordTrackVideo.mock.calls[0]?.[0].frames[300]?.bearing).toBeCloseTo(90);
+      facade.destroy();
+    });
+
+    it('records facing the course when the DEM fails to load', async () => {
+      const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>(() =>
+        Promise.resolve(Uint8Array.of(1)),
+      );
+      const { facade, services } = createTrackVideoFacade(recordTrackVideo, {
+        terrain: true,
+      });
+
+      await expect(
+        facade.recordTrackVideo(
+          withTerrain(() => Promise.reject(new Error('Tile failed.'))),
+          new AbortController().signal,
+          vi.fn(),
+        ),
+      ).resolves.toEqual(Uint8Array.of(1));
+
+      expect(
+        services.logger
+          .getEvents()
+          .filter((event) => event.name === 'map.track-video.occlusion-failed'),
+      ).toMatchObject([{ level: 'warn' }]);
+      expect(recordTrackVideo.mock.calls[0]?.[0].frames[300]?.bearing).toBeCloseTo(90);
       facade.destroy();
     });
 
     it("stops while it prepares when the user moves the map, keeping the user's view", async () => {
-      const services = createTestServices();
-      const nativeMap = new FakeNativeMap();
-      nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
-      // DEM sampling that only ends when aborted.
-      const sampleMany = vi.fn<ElevationProvider['sampleMany']>(
+      // DEM loading that only ends when aborted.
+      const loadTerrainSampler = vi.fn<TerrainSamplerSource['loadTerrainSampler']>(
         (_coordinates, abort) =>
           new Promise((_resolve, reject) => {
             abort.addEventListener('abort', () => {
@@ -3233,33 +3287,13 @@ describe('MapLibreFacade', () => {
           }),
       );
       const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>();
-      const onViewSettled = vi.fn();
-      const facade = new MapLibreFacade(
-        services.logger,
-        onViewSettled,
-        undefined,
-        undefined,
-        {
-          attach: vi.fn(),
-          detach: vi.fn(),
-          handleRasterSourceData: vi.fn(),
-          handleRasterSourceFailure: vi.fn(),
-          handleRasterSourceRecovered: vi.fn(),
-          isRasterSourceRecoveryComplete: vi.fn(() => true),
-          setTerrainInteractionActive: vi.fn(),
-          setPlannedLinePreview: vi.fn(),
-          clearPlannedLinePreview: vi.fn(),
-          recordTrackVideo,
-        },
-        { sample: vi.fn(), sampleMany },
+      const { facade, nativeMap, onViewSettled } = createTrackVideoFacade(
+        recordTrackVideo,
+        { terrain: true },
       );
-      facade.attach(nativeMap as unknown as MapLibreMap);
-      nativeMap.fire('load');
-      nativeMap.jumpCalls.splice(0);
-      onViewSettled.mockClear();
 
       const recording = facade.recordTrackVideo(
-        route,
+        withTerrain(loadTerrainSampler),
         new AbortController().signal,
         vi.fn(),
       );
@@ -3268,6 +3302,7 @@ describe('MapLibreFacade', () => {
       nativeMap.fire('moveend', {});
 
       await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
+      expect(loadTerrainSampler).toHaveBeenCalledOnce();
       expect(recordTrackVideo).not.toHaveBeenCalled();
       expect(nativeMap.jumpCalls).toEqual([]);
       expect(onViewSettled.mock.calls[0]?.[0]).toMatchObject({
@@ -3277,11 +3312,8 @@ describe('MapLibreFacade', () => {
     });
 
     it('stops as stopped when the map closes while it prepares', async () => {
-      const services = createTestServices();
-      const nativeMap = new FakeNativeMap();
-      nativeMap.initialTerrain = { source: 'terrain-dem', exaggeration: 1.15 };
-      // DEM sampling that fails with the abort reason, as the raster provider does.
-      const sampleMany = vi.fn<ElevationProvider['sampleMany']>(
+      // DEM loading that fails with the abort reason, as the raster provider does.
+      const loadTerrainSampler = vi.fn<TerrainSamplerSource['loadTerrainSampler']>(
         (_coordinates, abort) =>
           new Promise((_resolve, reject) => {
             abort.addEventListener('abort', () => {
@@ -3293,30 +3325,10 @@ describe('MapLibreFacade', () => {
             });
           }),
       );
-      const facade = new MapLibreFacade(
-        services.logger,
-        undefined,
-        undefined,
-        undefined,
-        {
-          attach: vi.fn(),
-          detach: vi.fn(),
-          handleRasterSourceData: vi.fn(),
-          handleRasterSourceFailure: vi.fn(),
-          handleRasterSourceRecovered: vi.fn(),
-          isRasterSourceRecoveryComplete: vi.fn(() => true),
-          setTerrainInteractionActive: vi.fn(),
-          setPlannedLinePreview: vi.fn(),
-          clearPlannedLinePreview: vi.fn(),
-          recordTrackVideo: vi.fn(),
-        },
-        { sample: vi.fn(), sampleMany },
-      );
-      facade.attach(nativeMap as unknown as MapLibreMap);
-      nativeMap.fire('load');
+      const { facade } = createTrackVideoFacade(vi.fn(), { terrain: true });
 
       const recording = facade.recordTrackVideo(
-        route,
+        withTerrain(loadTerrainSampler),
         new AbortController().signal,
         vi.fn(),
       );
@@ -3325,14 +3337,14 @@ describe('MapLibreFacade', () => {
       await expect(recording).rejects.toMatchObject({ name: 'AbortError' });
     });
 
-    it('refuses to start over a camera move under way, leaving it alone', async () => {
+    it('stops without starting over a camera move under way, leaving it alone', async () => {
       const recordTrackVideo = vi.fn<MapLibreLayerController['recordTrackVideo']>();
       const { facade, nativeMap } = createTrackVideoFacade(recordTrackVideo);
       nativeMap.moving = true;
 
       await expect(
         facade.recordTrackVideo(route, new AbortController().signal, vi.fn()),
-      ).rejects.toThrow('not ready');
+      ).rejects.toMatchObject({ name: 'AbortError' });
       expect(recordTrackVideo).not.toHaveBeenCalled();
       expect(nativeMap.jumpCalls).toEqual([]);
       facade.destroy();

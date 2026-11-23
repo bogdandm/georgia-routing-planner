@@ -549,6 +549,42 @@ describe('planTrackVideo', () => {
     }
   });
 
+  it('faces along a new recorded segment, not across the jump to it', () => {
+    // Two eastward segments, the second 5.5 km north, its profile segment starting at
+    // the jump.
+    const coordinates = [
+      ...Array.from(
+        { length: 11 },
+        (_, index) => [43.1 + 0.002 * index, 42.7] as const,
+      ),
+      ...Array.from(
+        { length: 11 },
+        (_, index) => [43.1 + 0.002 * index, 42.75] as const,
+      ),
+    ];
+    const route = timedRoute(
+      coordinates,
+      coordinates.map((_, index) => index * 120),
+      { segments: coordinates.map((_, index) => (index < 11 ? 0 : 1)) },
+    );
+    const jumpMeters = route.points[11]?.distanceMeters ?? 0;
+    const totalMeters = route.points.at(-1)?.distanceMeters ?? 0;
+
+    const { frames } = planTrackVideo(
+      {
+        ...route,
+        segments: [
+          { type: 'climb', startMeters: 0, endMeters: jumpMeters },
+          { type: 'descent', startMeters: jumpMeters, endMeters: totalMeters },
+        ],
+      },
+      camera,
+      null,
+    );
+
+    for (const frame of frames) expect(frame.bearing).toBeCloseTo(90, 0);
+  });
+
   it('faces up a switchback climb instead of swinging with it', () => {
     // 300 m legs east and west, each 60 m further north: a serpentine climbing north.
     const coordinates = Array.from(

@@ -1022,14 +1022,14 @@ export class MapLibreFacade implements MapFacade {
     onProgress: (fraction: number) => void,
   ): Promise<Uint8Array> {
     const map = this.#map;
-    const layers = this.layerController;
-    if (layers?.recordTrackVideo === undefined) {
-      throw new Error('The map is not ready for a track video.');
-    }
     // A move already under way is the user's: restoring over it would undo it. Not
     // starting is a stop, like the user moving the map during the recording.
     if (map === null || map.isMoving() || this.#scriptedCamera !== null) {
       throw new DOMException('The map is not ready for a track video.', 'AbortError');
+    }
+    const layers = this.layerController;
+    if (layers?.recordTrackVideo === undefined) {
+      throw new Error('The map is not ready for a track video.');
     }
     // The view to return to; the video keeps its zoom and pitch, within bounds.
     const camera = this.readCamera(map);

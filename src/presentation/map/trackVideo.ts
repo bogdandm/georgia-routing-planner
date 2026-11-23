@@ -536,13 +536,21 @@ function elevationProfile(points: readonly TrackTimingPoint[]): number[] | null 
   });
 }
 
-/** Route position `distanceMeters` along it, clamped to its ends. */
+/**
+ * Route position `distanceMeters` along it, clamped to its ends. Where recorded segments
+ * jump, the end of one and the start of the next share a distance: `side` picks the
+ * earlier point or the later one.
+ */
 function coordinateAtDistance(
   points: readonly TrackTimingPoint[],
   distances: readonly number[],
   distanceMeters: number,
+  side: 'earlier' | 'later' = 'earlier',
 ): TrackCoordinate {
-  const index = firstAtLeast(distances, distanceMeters);
+  let index = firstAtLeast(distances, distanceMeters);
+  if (side === 'later') {
+    while (distances[index + 1] === distanceMeters) index += 1;
+  }
   const after = points[index];
   const before = points[Math.max(0, index - 1)];
   if (after === undefined || before === undefined) throw new RangeError('Empty route.');
@@ -681,7 +689,8 @@ function courseBearings(
       segment.startMeters,
       segment.endMeters - spanMeters,
     );
-    const behind = coordinateAtDistance(points, routeDistances, behindMeters);
+    // A window starting at a jump between recorded segments starts on the later one.
+    const behind = coordinateAtDistance(points, routeDistances, behindMeters, 'later');
     const ahead = coordinateAtDistance(
       points,
       routeDistances,

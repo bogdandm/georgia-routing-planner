@@ -168,7 +168,11 @@ export function MapCapturePopover({
     );
   };
   const recording = video.kind === 'recording';
-  const percent = recording ? Math.floor(video.progress * 100) : 0;
+  // Whole percents, spaced as the locale writes them ("1 %" in Russian).
+  const percent = new Intl.NumberFormat(i18n.locale, {
+    style: 'percent',
+    maximumFractionDigits: 0,
+  }).format(recording ? Math.floor(video.progress * 100) / 100 : 0);
   const remainingMs = recording ? video.remainingMs : null;
   const remaining =
     remainingMs === null
@@ -342,7 +346,7 @@ export function MapCapturePopover({
             ) : null}
             {remaining !== null ? (
               <Typography color="text.secondary" variant="caption">
-                {t`${percent}% · ${remaining} left`}
+                {t`${percent} · ${remaining} left`}
               </Typography>
             ) : null}
             {video.kind === 'saved' ? (

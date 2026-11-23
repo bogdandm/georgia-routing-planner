@@ -33,10 +33,10 @@ msgstr "{name} ({category}), {distance} м отсюда"
 msgid "{name}, {distance} m away"
 msgstr "{name}, {distance} м отсюда"
 
-#. js-lingui-id: _jDbJz
+#. js-lingui-id: VXT2dF
 #: src/presentation/map/MapCaptureControl.tsx
-msgid "{percent}% · {remaining} left"
-msgstr "{percent}% · осталось {remaining}"
+msgid "{percent} · {remaining} left"
+msgstr "{percent} · осталось {remaining}"
 
 #. js-lingui-id: WbW5zx
 #: src/presentation/map/SatelliteCompareMaps.tsx

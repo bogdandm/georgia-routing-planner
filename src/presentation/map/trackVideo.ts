@@ -25,6 +25,11 @@ export interface TrackVideoRoute {
     readonly startMeters: number;
     readonly endMeters: number;
   }[];
+  /**
+   * Sun-shadow instant held through the whole video, or null for each moment's own
+   * minute. A held instant renders the shadows once, so the recording is much faster.
+   */
+  readonly fixedSunInstantMs: number | null;
   /** Display text for the frame overlay, in the route's time zone and the UI locale. */
   readonly labels: {
     readonly time: (instantMs: number) => string;
@@ -762,7 +767,8 @@ export function planTrackVideo(
       center: [center[0] + shift, center[1]],
       bearing: bearings[index] ?? 0,
       pitch,
-      sunInstantMs: Math.round(moment.instantMs / minuteMs) * minuteMs,
+      sunInstantMs:
+        route.fixedSunInstantMs ?? Math.round(moment.instantMs / minuteMs) * minuteMs,
       overlay: {
         time: labels.time(moment.instantMs),
         distance: labels.distance(moment.distanceMeters),

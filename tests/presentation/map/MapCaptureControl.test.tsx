@@ -161,4 +161,27 @@ describe('MapCapturePopover', () => {
       'The video could not be recorded.',
     );
   });
+
+  it('records a track video with or without changing light, as the toggle says', async () => {
+    const user = userEvent.setup();
+    const onRecordTrackVideo = vi.fn<
+      NonNullable<MapCaptureControlProps['onRecordTrackVideo']>
+    >(() => Promise.resolve());
+    renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: vi.fn(),
+      onRecordTrackVideo,
+    });
+    const lighting = screen.getByRole('button', { name: 'Change the lighting' });
+    const record = screen.getByRole('button', { name: 'Record a track video' });
+
+    expect(lighting).toHaveAttribute('aria-pressed', 'true');
+    await user.click(record);
+    await screen.findByText('The video was downloaded.');
+    await user.click(lighting);
+    expect(lighting).toHaveAttribute('aria-pressed', 'false');
+    await user.click(record);
+
+    expect(onRecordTrackVideo.mock.calls.map((call) => call[2])).toEqual([true, false]);
+  });
 });

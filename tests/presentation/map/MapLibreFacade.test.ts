@@ -3078,6 +3078,7 @@ describe('MapLibreFacade', () => {
       startMs: Date.parse('2026-07-01T05:00:00Z'),
       ascentMeters: undefined,
       descents: [{ startMeters: 0, endMeters: 8_180 }],
+      fixedSunInstantMs: null,
       labels: { time: () => 'clock', distance: () => 'km', ascent: () => 'm' },
     };
 

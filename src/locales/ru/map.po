@@ -101,6 +101,11 @@ msgstr "Снимок карты"
 msgid "Change image date, {date}"
 msgstr "Сменить дату снимка, {date}"
 
+#. js-lingui-id: JT_-mF
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "Change the lighting"
+msgstr "Менять освещение"
+
 #. js-lingui-id: WdJ-u8
 #: src/presentation/map/MapPointInspectorContent.tsx
 msgid "Checking nearby map data…"

@@ -62,6 +62,7 @@ function timedRoute(
     startMs,
     ascentMeters: undefined,
     descents: [],
+    fixedSunInstantMs: null,
     labels,
   };
 }
@@ -304,6 +305,20 @@ describe('planTrackVideo', () => {
         Math.abs(frame.sunInstantMs - Date.parse(frame.overlay.time)),
       ).toBeLessThanOrEqual(30_000);
     }
+  });
+
+  it('holds a fixed sun instant while the clock runs on', () => {
+    const fixed = Date.UTC(2026, 6, 1, 9, 0);
+    const { frames } = planTrackVideo(
+      {
+        ...straightRoute([43.1, 42.7], [0.01, 0], 11, 1_237),
+        fixedSunInstantMs: fixed,
+      },
+      camera,
+    );
+
+    for (const frame of frames) expect(frame.sunInstantMs).toBe(fixed);
+    expect(frames.at(-1)?.overlay.time).not.toBe(frames[0]?.overlay.time);
   });
 
   it("keeps the user's zoom and pitch within readable bounds", () => {

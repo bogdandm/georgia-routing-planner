@@ -1968,7 +1968,7 @@ export function MapWorkspace({
       trackLighting === null ||
       trackLighting.finishMs <= trackLighting.startMs
         ? null
-        : async (signal, onProgress) => {
+        : async (signal, onProgress, lightingChanges) => {
             // The same route timing as the track's lighting: start, date, and pace.
             const { elapsed, recorded } = routeElapsedSeconds(
               trackRoute.points,
@@ -1995,6 +1995,7 @@ export function MapWorkspace({
                   tracksWorkspace.activeProfile,
                   trackRoute.points,
                 ),
+                fixedSunInstantMs: lightingChanges ? null : sunShadow.instantMs,
                 labels: {
                   time: (instantMs) => clock.format(instantMs),
                   distance: (meters) => formatTrackDistance(meters, i18n),

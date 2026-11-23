@@ -4,6 +4,7 @@ import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined';
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined';
 import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined';
+import WbTwilightIcon from '@mui/icons-material/WbTwilight';
 import {
   Box,
   Button,
@@ -37,9 +38,17 @@ export interface MapCaptureControlProps {
   readonly onRecordDayVideo: RecordVideo | null;
   /**
    * Records a time-lapse of the open track's hike with its sun shadows and downloads it;
-   * null while shadows are off or no single timed track is open.
+   * null while shadows are off or no single timed track is open. With
+   * `lightingChanges` off, the shadows stay at the shown minute throughout, which
+   * records much faster.
    */
-  readonly onRecordTrackVideo: RecordVideo | null;
+  readonly onRecordTrackVideo:
+    | ((
+        signal: AbortSignal,
+        onProgress: (fraction: number) => void,
+        lightingChanges: boolean,
+      ) => Promise<void>)
+    | null;
 }
 
 type RecordVideo = (
@@ -119,6 +128,7 @@ export function MapCapturePopover({
   /* eslint-disable lingui/no-unlocalized-strings -- State tokens. */
   const [screenshot, setScreenshot] = useState<ScreenshotStatus>('idle');
   const [video, setVideo] = useState<VideoStatus>({ kind: 'idle' });
+  const [lightingChanges, setLightingChanges] = useState(true);
   const copyScreenshot = () => {
     setScreenshot('copying');
     onCopyScreenshot().then(
@@ -243,17 +253,41 @@ export function MapCapturePopover({
             >
               {t`Record a video of the day`}
             </Button>
-            <Button
-              disabled={onRecordTrackVideo === null || recording}
-              onClick={() => {
-                if (onRecordTrackVideo !== null) recordVideo(onRecordTrackVideo);
-              }}
-              size="small"
-              startIcon={<RouteOutlinedIcon fontSize="small" />}
-              variant="outlined"
-            >
-              {t`Record a track video`}
-            </Button>
+            <Stack direction="row" spacing={1}>
+              <Button
+                disabled={onRecordTrackVideo === null || recording}
+                onClick={() => {
+                  if (onRecordTrackVideo === null) return;
+                  recordVideo((signal, onProgress) =>
+                    onRecordTrackVideo(signal, onProgress, lightingChanges),
+                  );
+                }}
+                size="small"
+                startIcon={<RouteOutlinedIcon fontSize="small" />}
+                sx={{ flexGrow: 1 }}
+                variant="outlined"
+              >
+                {t`Record a track video`}
+              </Button>
+              <Tooltip describeChild disableInteractive title={t`Change the lighting`}>
+                {/* A disabled button fires no events, so the tooltip needs a wrapper. */}
+                <Box component="span" sx={{ display: 'flex' }}>
+                  <ToggleButton
+                    aria-label={t`Change the lighting`}
+                    disabled={onRecordTrackVideo === null || recording}
+                    onChange={() => {
+                      setLightingChanges((changes) => !changes);
+                    }}
+                    selected={lightingChanges}
+                    size="small"
+                    sx={{ px: 0.75, py: 0 }}
+                    value="track-video-lighting"
+                  >
+                    <WbTwilightIcon fontSize="small" />
+                  </ToggleButton>
+                </Box>
+              </Tooltip>
+            </Stack>
             {onRecordDayVideo === null && !recording ? (
               <Typography color="text.secondary" variant="caption">
                 {t`Turn on sun shadows to record a video.`}

@@ -575,37 +575,43 @@ distance, and scaled climb between the bracketing points. Longitudes are unwrapp
 first, so a route across the antimeridian is travelled the short way, and each frame's
 center and hiker are shifted back within ±180°. The camera center uses a triangular
 half-second average each side, kept within 120 px of the hiker, while the trace point
-keeps the exact position. The bearing faces from the route a tenth of its length (0.6–3
-km) behind the hiker to as far ahead; where those two points lie closer than 5 % of that
-distance, right at a turnaround, the previous heading holds. Headings are made
-continuous, each taken the short way round from the one before, then averaged twice over
-±2 s of frames, so even a reversal turns the view smoothly through a side. The route's
-profile descents (macro segments of `ElevationProfile`) are placed on the timing route
-by `trackVideoDescents`, which finds each end among the route's points by coordinate,
-since a profile leaves out spans without elevation; they become frame ranges, merged
-across gaps under 2 s and dropped under 3 s. Zoom and pitch come from the user's camera,
-clamped to 12–16 and at most 60°.
+keeps the exact position. The route's profile segments (macro segments of
+`ElevationProfile`) are placed on the timing route by `trackVideoSegments`, which finds
+each end among the route's points by coordinate, since a profile leaves out spans
+without elevation. `courseSegments` makes them back-to-back from the start to the
+finish, joins one shorter than 300 m to its neighbour, and treats a route without
+segments as one flat stretch. `courseBearings` reads each frame's course 12 frames
+ahead: the bearing across a window of 7 % of the route (0.4–1.2 km) each side, slid to
+stay inside that position's segment; where the window's ends lie closer than a tenth of
+its length, at a turnaround or around a loop, the previous heading holds. Headings are
+made continuous, each taken the short way round from the one before, then averaged twice
+over ±22 frames, so a turn into the next segment is more than half done when the hiker
+reaches it and a reversal turns through a side. Zoom and pitch come from the user's
+camera, clamped to 12–16 and at most 60°.
 
-The facade refuses to start while the map is moving, so it never restores over a move
-already under way. It then claims the scripted-camera gate (shared with the render
-benchmark), so no frame's view is persisted or published as a settled viewport and no
-other scripted camera starts, and listens for a user's `movestart`, which aborts the
-video in preparation or recording, clears the gate so its `moveend` persists, and keeps
-that view instead of restoring the camera. Every stop, detaching the map included,
-rejects with an `AbortError`. In 3D at 15° of pitch or more, with at least one descent,
-it then checks the terrain: `trackVideoSightLines` builds, for every sixth frame of each
-descent, the line from the hiker to the camera for the planned bearing and turned by
-±60° and ±90°. MapLibre places the camera `height / 2 / tan(fov / 2)` pixels from the
-center (as in `directedCameraFit`), behind it by sin(pitch) and above its rendered
-terrain by cos(pitch). The elevation provider samples the bare-earth DEM at the hiker,
-the center, and up to 24 ground points under the line, denser near the hiker, since the
-map holds tiles only around the current view. `avoidTerrainOcclusion` marks a sampled
-frame hidden where exaggerated relief rises 3 m above the line; unknown heights hide
-nothing. A descent keeps the planned bearing when its longest hidden run is at most 2 s;
-otherwise it takes the first of +60°, −60°, +90°, −90° that meets that bound, or else
-the view hidden for the fewest frames, the planned one on a tie. The turn holds over the
-whole descent and is eased by two ±60-frame moving averages. A failed sampling keeps the
-plan and logs `map.track-video.occlusion-failed`.
+The facade stops with an `AbortError` without starting while the map is moving or
+another scripted camera runs, so it never restores over a move already under way. It
+then claims the scripted-camera gate (shared with the render benchmark), so no frame's
+view is persisted or published as a settled viewport and no other scripted camera
+starts, and listens for a user's `movestart`, which aborts the video in preparation or
+recording, clears the gate so its `moveend` persists, and keeps that view instead of
+restoring the camera. Every stop, detaching the map included, rejects with an
+`AbortError`. In 3D at 15° of pitch or more, it loads the bare-earth DEM around one
+route point per 100 m through `TerrainSamplerSource.loadTerrainSampler`, as the route
+lighting does, since the map holds terrain tiles only around the current view; a failed
+load logs `map.track-video.occlusion-failed` and records with course bearings only. With
+the DEM, `planTrackVideo` turns the camera aside from the course (`aimOffsets`).
+MapLibre places the camera `height / 2 / tan(fov / 2)` pixels from the center (as in
+`directedCameraFit`), behind it by sin(pitch) and above its rendered terrain by
+cos(pitch). Every third frame tries turns of −120° to 120° in 5° steps: up to 45° on
+climbs and flat stretches, up to 120° on descents, and on a descent within 150° of the
+course at its first frame. A turn costs 0.01 per degree; a sight line from the hiker's 2
+m dot to the camera, sampled from 12 m on in steps of 12 m or 2 % of the distance, costs
+10 where exaggerated relief rises 3 m above it, and each line from the route 150, 300,
+and 500 m ahead costs 1; unknown heights hide nothing. A Viterbi pass picks the cheapest
+path, changing by at most one step between chosen frames (50° a second) at 0.02 per
+degree; the target is the hiker hidden for at most about ten frames on end. The turns
+are interpolated between chosen frames and averaged over ±6 frames.
 `MapLibreLayerController.recordTrackVideo` shares the day video's frame loop. Before
 each capture it also calls `jumpTo` with the `trackVideoCameraJump` event data, which
 the controller's and the facade's `movestart` handlers recognize, so only other moves

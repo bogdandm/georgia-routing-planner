@@ -10,8 +10,8 @@ import {
   routeElapsedSeconds,
   type TrackTimingMetrics,
   type TrackTimingRoute,
+  type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
-import type { TrackWeatherTimelineSettings } from '@/domain/tracks/localTrack';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { solarDayEvents } from '@/domain/terrain/solarPosition';
 import {

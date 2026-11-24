@@ -1,7 +1,10 @@
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { defaultTrackWeatherTimelineSettings } from '@/application/weather/TrackWeatherForecast';
+import {
+  defaultTrackRouteTiming,
+  defaultTrackWeatherTimelineSettings,
+} from '@/application/weather/TrackWeatherForecast';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
   markerIconKeys,
@@ -254,7 +257,7 @@ describe('AppDatabase', () => {
       pendingKind: null,
     });
     const routeTiming = {
-      ...defaultTrackWeatherTimelineSettings,
+      ...defaultTrackRouteTiming,
       startHour: 6.5,
       paceFactor: 1.25,
       ignoreRecordedTime: true,
@@ -1205,7 +1208,13 @@ describe('AppDatabase', () => {
         timelines: {
           // Entries saved before the map options existed load their defaults.
           [synced.id]: { startHour: 7, paceFactor: 1 },
-          [unsent.id]: { ...defaultTrackWeatherTimelineSettings, lightOnMap: true },
+          [unsent.id]: {
+            ...defaultTrackWeatherTimelineSettings,
+            relativeTimeMarkers: true,
+            lightOnMap: true,
+          },
+          // Light coloring alone is session view state now and is not migrated.
+          [untouched.id]: { ...defaultTrackWeatherTimelineSettings, lightOnMap: true },
           'local:deleted': { ...defaultTrackWeatherTimelineSettings, startHour: 6 },
         },
       },
@@ -1218,8 +1227,8 @@ describe('AppDatabase', () => {
     const tracks = await database.listLocalTracks();
     expect(new Map(tracks.map((track) => [track.id, track.routeTiming]))).toEqual(
       new Map([
-        [synced.id, { ...defaultTrackWeatherTimelineSettings, startHour: 7 }],
-        [unsent.id, { ...defaultTrackWeatherTimelineSettings, lightOnMap: true }],
+        [synced.id, { ...defaultTrackRouteTiming, startHour: 7 }],
+        [unsent.id, { ...defaultTrackRouteTiming, relativeTimeMarkers: true }],
         [untouched.id, undefined],
       ]),
     );

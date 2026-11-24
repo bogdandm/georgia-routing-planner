@@ -48,7 +48,7 @@ import {
 } from '@test/helpers/workspaceShellTestSupport';
 import { PlaceSearchFailure } from '@/application/ports/PlaceSearchGateway';
 import {
-  defaultTrackWeatherTimelineSettings,
+  defaultTrackRouteTiming,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
 
@@ -2092,7 +2092,7 @@ describe('WorkspaceShell', () => {
   it("keeps an early forecast disclosure and shows the track's own route timing", async () => {
     const source: LocalTrackSummary = {
       ...savedTrackSummary('local:ridge', 'Ridge trail'),
-      routeTiming: { ...defaultTrackWeatherTimelineSettings, startHour: 7 },
+      routeTiming: { ...defaultTrackRouteTiming, startHour: 7 },
     };
     await services.database.saveLocalTrack(source, savedTrackContent(source.id));
     await services.database.saveLatestOpenedTrackId(source.id);
@@ -2149,7 +2149,7 @@ describe('WorkspaceShell', () => {
     await waitFor(async () => {
       const [saved] = await services.database.listLocalTracks();
       expect(saved?.routeTiming).toEqual({
-        ...defaultTrackWeatherTimelineSettings,
+        ...defaultTrackRouteTiming,
         startHour: 8,
       });
     });
@@ -2197,7 +2197,7 @@ describe('WorkspaceShell', () => {
     await waitFor(async () => {
       const [saved] = await services.database.listLocalTracks();
       expect(saved?.routeTiming).toEqual({
-        ...defaultTrackWeatherTimelineSettings,
+        ...defaultTrackRouteTiming,
         timeMarkers: false,
       });
     });

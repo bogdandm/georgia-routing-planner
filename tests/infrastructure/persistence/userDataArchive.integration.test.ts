@@ -404,7 +404,6 @@ describe('user data archive', () => {
       ignoreRecordedTime: true,
       timeMarkers: null,
       relativeTimeMarkers: false,
-      lightOnMap: false,
       hikeDate: null,
     };
 
@@ -416,7 +415,7 @@ describe('user data archive', () => {
         'weather.track-preferences': {
           expanded: true,
           weekday: 2,
-          timelines: { [summary.id]: routeTiming },
+          timelines: { [summary.id]: { ...routeTiming, lightOnMap: true } },
         },
       },
     });

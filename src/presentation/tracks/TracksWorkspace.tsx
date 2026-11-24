@@ -134,7 +134,6 @@ import {
   type LocalTrackSummary,
   type TrackMarker,
   type TrackSort,
-  type TrackWeatherTimelineSettings,
 } from '@/domain/tracks/localTrack';
 import { reverseTrack } from '@/domain/tracks/reverseTrack';
 import {
@@ -202,7 +201,7 @@ import {
   type TrackLightingView,
 } from '@/presentation/tracks/useTrackLighting';
 import {
-  adjustedTrackWeatherTimeline,
+  adjustedTrackRouteTiming,
   createTrackTimingRoute,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
@@ -210,11 +209,13 @@ import {
   trackWeatherDates,
   planTrackClockTimes,
   planTrackMarkerTimes,
+  sameTrackRouteTiming,
   trackWeatherTimeline,
   type TrackClockTimes,
   type RecordedRouteStart,
   type TrackTimingRoute,
   type TrackWeatherPreferences,
+  type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type { ImportedTrackHighlightSegment } from '@/presentation/map/MapLibreLayerController';
@@ -787,6 +788,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     readonly trackId: string;
     readonly settings: TrackWeatherTimelineSettings;
   } | null>(null);
+  // Saved tracks the map colors by light. Session view state only: never stored or
+  // synchronized, so a reload turns it off.
+  const [lightOnMapTrackIds, setLightOnMapTrackIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
@@ -1124,7 +1130,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   ) {
     setUnsavedTrackTimeline(null);
   }
-  const activeIsSaved = active?.kind === 'saved';
+  const savedTimingTrackId = active?.kind === 'saved' ? active.summary.id : null;
   const savedRouteTiming =
     active?.kind === 'saved' ? active.summary.routeTiming : undefined;
   const timingMetrics =
@@ -1141,15 +1147,19 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
   const activeTrackWeatherTimeline = useMemo(
     () =>
-      activeIsSaved
-        ? trackWeatherTimeline(savedRouteTiming, activeRecordedStart)
+      savedTimingTrackId !== null
+        ? {
+            ...trackWeatherTimeline(savedRouteTiming, activeRecordedStart),
+            lightOnMap: lightOnMapTrackIds.has(savedTimingTrackId),
+          }
         : unsavedTrackTimeline !== null &&
             unsavedTrackTimeline.trackId === activeUnsavedTrackId
           ? unsavedTrackTimeline.settings
           : trackWeatherTimeline(undefined, activeRecordedStart),
     [
-      activeIsSaved,
+      savedTimingTrackId,
       savedRouteTiming,
+      lightOnMapTrackIds,
       activeRecordedStart,
       unsavedTrackTimeline,
       activeUnsavedTrackId,
@@ -1163,10 +1173,25 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       }
       if (active?.kind !== 'saved') return;
       const trackId = active.summary.id;
-      const routeTiming = adjustedTrackWeatherTimeline(
+      setLightOnMapTrackIds((current) => {
+        if (current.has(trackId) === settings.lightOnMap) return current;
+        const next = new Set(current);
+        if (settings.lightOnMap) next.add(trackId);
+        else next.delete(trackId);
+        return next;
+      });
+      const routeTiming = adjustedTrackRouteTiming(
         settings,
         recordedRouteStart(active.summary.metrics),
       );
+      const stored = active.summary.routeTiming ?? null;
+      if (
+        routeTiming === null
+          ? stored === null
+          : stored !== null && sameTrackRouteTiming(routeTiming, stored)
+      ) {
+        return;
+      }
       const withRouteTiming = (summary: LocalTrackSummary): LocalTrackSummary => {
         const { routeTiming: _previous, ...rest } = summary;
         return routeTiming === null ? rest : { ...rest, routeTiming };
@@ -2313,11 +2338,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
       if (unsavedTrackTimeline?.trackId === previewId) {
-        const routeTiming = adjustedTrackWeatherTimeline(
-          unsavedTrackTimeline.settings,
+        const { settings } = unsavedTrackTimeline;
+        const routeTiming = adjustedTrackRouteTiming(
+          settings,
           recordedRouteStart(summary.metrics),
         );
         if (routeTiming !== null) summary.routeTiming = routeTiming;
+        if (settings.lightOnMap) {
+          setLightOnMapTrackIds((current) => new Set(current).add(summary.id));
+        }
       }
       await database.ensureImportsFolder();
       await database.saveLocalTrack(summary, content);

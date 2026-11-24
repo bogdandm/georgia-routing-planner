@@ -101,12 +101,13 @@ projection, up to 50 validation warnings, and optional generated-name fields
 (`generatedName`, `middleAnchorKind` of `dominant-summit | farthest-point`, and
 start/landmark (`middlePoi`)/end POI candidates), and optional `routeTiming`: the
 track's **Route timing** start, pace, recorded-time override, time visibility,
-elapsed-time display, map light coloring, and hike date, absent while they equal the
-defaults. The retired `distance-midpoint` anchor and `fallbackPoi` field are still
-accepted from older records and dropped on read. Database version 13 moves the per-track
-entries that version 12 kept in `weather.track-preferences` into the summaries of the
-tracks still present and queues a metadata write for synchronized ones; data archives
-from earlier versions are restored the same way.
+elapsed-time display, and hike date, absent while they equal the defaults. The retired
+`distance-midpoint` anchor and `fallbackPoi` field are still accepted from older records
+and dropped on read. Database version 13 moves the per-track entries that version 12
+kept in `weather.track-preferences` into the summaries of the tracks still present and
+queues a metadata write for synchronized ones; data archives from earlier versions are
+restored the same way. Their light-coloring choice is dropped: it is session view state
+and is never stored.
 
 `LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
 segments of at least two points, each with coordinate and optional source elevation and

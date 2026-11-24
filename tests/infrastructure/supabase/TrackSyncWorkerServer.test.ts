@@ -381,7 +381,6 @@ describe('FetchRemoteGateway', () => {
       ignoreRecordedTime: false,
       timeMarkers: false,
       relativeTimeMarkers: true,
-      lightOnMap: true,
       hikeDate: '2026-07-15',
     };
 

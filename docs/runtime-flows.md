@@ -844,11 +844,12 @@ are then saved. A saved track's released start or pace slider and timing options
 its active summary at once and are written by `AppDatabase.setLocalTrackRouteTiming`
 into the summary's `routeTiming`, which queues a metadata synchronization like a rename.
 The summary holds `routeTiming` only for non-default start, pace, recorded-time
-override, relative display, map light coloring, or hike date, or any explicit
-time-marker visibility choice (a null choice follows Layers). A preview or shared track
-keeps its settings in memory and they enter the summary on save. Timing leaves the
-browser only inside the track's synchronized metadata, and a newer account revision
-replaces it with the rest of that metadata.
+override, relative display, or hike date, or any explicit time-marker visibility choice
+(a null choice follows Layers). A preview or shared track keeps its settings in memory
+and they enter the summary on save. Timing leaves the browser only inside the track's
+synchronized metadata, and a newer account revision replaces it with the rest of that
+metadata. **Color the map track by light** is not part of `routeTiming`: the provider
+keeps the IDs of light-colored tracks in React state only, so a reload clears them.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan

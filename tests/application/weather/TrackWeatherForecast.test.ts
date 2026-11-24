@@ -7,10 +7,11 @@ import type {
 } from '@/application/ports/WeatherForecastGateway';
 import { GetPointWeatherForecast } from '@/application/weather/GetPointWeatherForecast';
 import {
-  adjustedTrackWeatherTimeline,
+  adjustedTrackRouteTiming,
   createTrackTimingRoute,
   defaultTrackWeatherDate,
   defaultTrackWeatherTimelineSettings,
+  defaultTrackRouteTiming,
   planTrackClockTimes,
   planTrackMarkerTimes,
   planTrackWeatherTimeline,
@@ -743,34 +744,38 @@ describe('planTrackMarkerTimes', () => {
 });
 
 describe('per-track timeline settings', () => {
-  const ridge = { ...defaultTrackWeatherTimelineSettings, startHour: 7 };
+  const ridge = { ...defaultTrackRouteTiming, startHour: 7 };
 
-  it('stores adjusted settings only and reads them back over the defaults', () => {
-    expect(adjustedTrackWeatherTimeline(ridge)).toEqual(ridge);
-    expect(trackWeatherTimeline(ridge)).toEqual(ridge);
-    expect(
-      adjustedTrackWeatherTimeline(defaultTrackWeatherTimelineSettings),
-    ).toBeNull();
+  it('stores adjusted route timing only and reads it back with light coloring off', () => {
+    const litRidge = { ...ridge, lightOnMap: true };
+    expect(adjustedTrackRouteTiming(litRidge)).toEqual(ridge);
+    expect(trackWeatherTimeline(ridge)).toEqual({ ...ridge, lightOnMap: false });
+    expect(adjustedTrackRouteTiming(defaultTrackRouteTiming)).toBeNull();
     expect(trackWeatherTimeline(undefined)).toEqual(
       defaultTrackWeatherTimelineSettings,
     );
   });
 
-  it('keeps an explicit time-marker choice even when it matches the default', () => {
-    const hidden = { ...defaultTrackWeatherTimelineSettings, timeMarkers: false };
-    const shown = { ...defaultTrackWeatherTimelineSettings, timeMarkers: true };
+  it('never stores light coloring on its own', () => {
+    const lit = { ...defaultTrackWeatherTimelineSettings, lightOnMap: true };
+    expect(adjustedTrackRouteTiming(lit)).toBeNull();
+  });
 
-    expect(adjustedTrackWeatherTimeline(hidden)).toEqual(hidden);
-    expect(adjustedTrackWeatherTimeline(shown)).toEqual(shown);
+  it('keeps an explicit time-marker choice even when it matches the default', () => {
+    const hidden = { ...defaultTrackRouteTiming, timeMarkers: false };
+    const shown = { ...defaultTrackRouteTiming, timeMarkers: true };
+
+    expect(adjustedTrackRouteTiming(hidden)).toEqual(hidden);
+    expect(adjustedTrackRouteTiming(shown)).toEqual(shown);
   });
 
   it('stores tracks that only ignore recorded time, count relative times, or pick a date', () => {
     for (const settings of [
-      { ...defaultTrackWeatherTimelineSettings, ignoreRecordedTime: true },
-      { ...defaultTrackWeatherTimelineSettings, relativeTimeMarkers: true },
-      { ...defaultTrackWeatherTimelineSettings, hikeDate: '2026-07-15' },
+      { ...defaultTrackRouteTiming, ignoreRecordedTime: true },
+      { ...defaultTrackRouteTiming, relativeTimeMarkers: true },
+      { ...defaultTrackRouteTiming, hikeDate: '2026-07-15' },
     ]) {
-      expect(adjustedTrackWeatherTimeline(settings)).toEqual(settings);
+      expect(adjustedTrackRouteTiming(settings)).toEqual(settings);
     }
   });
 });
@@ -812,14 +817,11 @@ describe('recorded route-start defaults', () => {
 
   it('retains a manual 09:00 override instead of treating it as the recorded default', () => {
     const recordedStart = tbilisiStart(7, 16);
-    const manual = adjustedTrackWeatherTimeline(
-      defaultTrackWeatherTimelineSettings,
-      recordedStart,
-    );
+    const manual = adjustedTrackRouteTiming(defaultTrackRouteTiming, recordedStart);
     expect(manual).not.toBeNull();
     expect(trackWeatherTimeline(manual ?? undefined, recordedStart).startHour).toBe(9);
     expect(
-      adjustedTrackWeatherTimeline(
+      adjustedTrackRouteTiming(
         trackWeatherTimeline(undefined, recordedStart),
         recordedStart,
       ),

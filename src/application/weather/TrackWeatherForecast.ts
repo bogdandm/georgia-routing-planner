@@ -12,10 +12,7 @@ import type {
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
-import type {
-  TrackMarker,
-  TrackWeatherTimelineSettings,
-} from '@/domain/tracks/localTrack';
+import type { TrackMarker, TrackRouteTiming } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
 import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
 import {
@@ -301,14 +298,27 @@ export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
 export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
 
-export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
+/**
+ * Route timing plus the map's light coloring of the track, which is session view state:
+ * it is never stored and resets on reload.
+ */
+export interface TrackWeatherTimelineSettings extends TrackRouteTiming {
+  /** The map colors the track by its light along the hike instead of its grade. */
+  readonly lightOnMap: boolean;
+}
+
+export const defaultTrackRouteTiming: TrackRouteTiming = {
   startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
   paceFactor: 1,
   ignoreRecordedTime: false,
   timeMarkers: null,
   relativeTimeMarkers: false,
-  lightOnMap: false,
   hikeDate: null,
+};
+
+export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
+  ...defaultTrackRouteTiming,
+  lightOnMap: false,
 };
 
 /** A recorded start instant and the IANA zone at the route start, whose clock it shows. */
@@ -319,13 +329,13 @@ export interface RecordedRouteStart {
 
 /**
  * Stored adjustments win; otherwise use the recorded start's local clock time at the
- * route, rounded to the nearest half-hour.
+ * route, rounded to the nearest half-hour. Light coloring starts off.
  */
 export function trackWeatherTimeline(
-  stored: TrackWeatherTimelineSettings | undefined,
+  stored: TrackRouteTiming | undefined,
   recordedStart?: RecordedRouteStart,
 ): TrackWeatherTimelineSettings {
-  if (stored !== undefined) return stored;
+  if (stored !== undefined) return { ...stored, lightOnMap: false };
   if (recordedStart === undefined) return defaultTrackWeatherTimelineSettings;
   const start = new Date(recordedStart.at);
   if (!Number.isFinite(start.getTime())) return defaultTrackWeatherTimelineSettings;
@@ -336,24 +346,39 @@ export function trackWeatherTimeline(
   return { ...defaultTrackWeatherTimelineSettings, startHour };
 }
 
+export function sameTrackRouteTiming(
+  left: TrackRouteTiming,
+  right: TrackRouteTiming,
+): boolean {
+  return (
+    left.startHour === right.startHour &&
+    left.paceFactor === right.paceFactor &&
+    left.ignoreRecordedTime === right.ignoreRecordedTime &&
+    left.timeMarkers === right.timeMarkers &&
+    left.relativeTimeMarkers === right.relativeTimeMarkers &&
+    left.hikeDate === right.hikeDate
+  );
+}
+
 /**
- * The settings a track stores: null when they equal its defaults, so only adjusted
- * tracks carry an entry.
+ * The route timing a track stores, without the session-only light coloring: null when
+ * it equals the track's defaults, so only adjusted tracks carry it.
  */
-export function adjustedTrackWeatherTimeline(
-  settings: TrackWeatherTimelineSettings,
+export function adjustedTrackRouteTiming(
+  settings: TrackRouteTiming,
   recordedStart?: RecordedRouteStart,
-): TrackWeatherTimelineSettings | null {
-  const defaults = trackWeatherTimeline(undefined, recordedStart);
-  const adjusted =
-    settings.startHour !== defaults.startHour ||
-    settings.paceFactor !== defaults.paceFactor ||
-    settings.ignoreRecordedTime !== defaults.ignoreRecordedTime ||
-    settings.timeMarkers !== defaults.timeMarkers ||
-    settings.relativeTimeMarkers !== defaults.relativeTimeMarkers ||
-    settings.lightOnMap !== defaults.lightOnMap ||
-    settings.hikeDate !== defaults.hikeDate;
-  return adjusted ? settings : null;
+): TrackRouteTiming | null {
+  if (sameTrackRouteTiming(settings, trackWeatherTimeline(undefined, recordedStart))) {
+    return null;
+  }
+  return {
+    startHour: settings.startHour,
+    paceFactor: settings.paceFactor,
+    ignoreRecordedTime: settings.ignoreRecordedTime,
+    timeMarkers: settings.timeMarkers,
+    relativeTimeMarkers: settings.relativeTimeMarkers,
+    hikeDate: settings.hikeDate,
+  };
 }
 
 /** Track metrics the route timeline reads. */

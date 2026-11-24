@@ -1014,7 +1014,6 @@ describe('TrackSyncWorkerServer', () => {
       ignoreRecordedTime: false,
       timeMarkers: false,
       relativeTimeMarkers: true,
-      lightOnMap: false,
       hikeDate: '2026-07-15',
     };
     const compressed = gzipSync(encodeTrackSyncGeometry(content(track.id)));
@@ -1638,7 +1637,6 @@ describe('TrackSyncWorkerServer', () => {
       ignoreRecordedTime: false,
       timeMarkers: null,
       relativeTimeMarkers: false,
-      lightOnMap: false,
       hikeDate: null,
     };
     await database.restoreUserDataBackup({
@@ -1649,7 +1647,7 @@ describe('TrackSyncWorkerServer', () => {
         'weather.track-preferences': {
           expanded: false,
           weekday: 6,
-          timelines: { [track.id]: routeTiming },
+          timelines: { [track.id]: { ...routeTiming, lightOnMap: true } },
         },
       },
     });

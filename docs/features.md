@@ -391,11 +391,12 @@ out the time, distance, and light there, and a click goes to that point.
 
 **Color the map track by light**, among the map options of **Route timing**, paints the
 active track on the map in the strip's colors instead of its grade colors: each step
-between route points takes the light at its midpoint. It is stored with each track like
-its route start and pace, and is disabled when terrain light is off or could not be
-calculated. Grade colors remain while the light is calculated and in multi-track view.
-The colors replace the **Elevation gradient** overlay, so that layer's visibility still
-applies, and hovering a Climbs & Descents row still shows its grades.
+between route points takes the light at its midpoint. It applies to one track for the
+current session only: it is neither stored nor synchronized, and a reload turns it off.
+It is disabled when terrain light is off or could not be calculated. Grade colors remain
+while the light is calculated and in multi-track view. The colors replace the
+**Elevation gradient** overlay, so that layer's visibility still applies, and hovering a
+Climbs & Descents row still shows its grades.
 
 **Route timing** opens with a Garmin-style sun graph of the start day: the Sun's
 elevation on a true scale against the horizon, down to the end of astronomical twilight,

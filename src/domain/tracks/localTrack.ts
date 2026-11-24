@@ -11,7 +11,7 @@ import type {
 } from '@/domain/tracks/trackNaming';
 
 export const LOCAL_TRACK_SCHEMA_VERSION = 6;
-export const MAXIMUM_TRACK_MARKERS = 32;
+export const MAXIMUM_TRACK_MARKERS = 100;
 export const MAXIMUM_TRACK_NAME_LENGTH = 200;
 
 export const trackSorts = ['created', 'name', 'oldest', 'distance'] as const;

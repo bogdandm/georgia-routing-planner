@@ -197,9 +197,17 @@ HTTP 429. When source elevation is usable, Save keeps the source points as canon
 stores the calculated DEM projection separately; otherwise the DEM projection becomes
 the canonical elevation. The original file bytes are discarded after parsing.
 
-GPX import also reads bounded root `<wpt>` elements as track markers. Blank names become
-`Marker N`; invalid or excess waypoints are skipped with warnings and never count as
-track geometry. FIT, KML, shared tracks, and route plans do not create track markers.
+GPX import also reads bounded root `<wpt>` elements as track markers, up to 100 per
+track. Blank names become `Marker N`; invalid or excess waypoints are skipped with
+warnings and never count as track geometry. FIT, KML, shared tracks, and route plans do
+not create track markers.
+
+Files whose `creator` names Komoot are planned tours, not recordings: their point
+timestamps start at the export moment and follow Komoot's pace model. Import keeps them
+only when the elapsed time lies within 80–120 % of the DIN 33466 hiking estimate from
+the source distance and elevation; otherwise it drops every timestamp, so the track has
+no recorded start time or pace. Komoot planning-point waypoints named `Position N` or
+`N <truncated address>…` are skipped without warnings; other waypoints import normally.
 
 #### Route planning
 

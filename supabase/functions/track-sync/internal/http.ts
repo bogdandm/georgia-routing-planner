@@ -209,7 +209,7 @@ const trackMarkersSchema = z
       })
       .strict(),
   )
-  .max(32)
+  .max(100)
   .superRefine((markers, context) => {
     const ids = new Set<string>();
     for (const [index, marker] of markers.entries()) {
@@ -462,7 +462,7 @@ function requireMetadata(value: unknown): Record<string, unknown> {
   }
   const encoded = new TextEncoder().encode(JSON.stringify(value));
   if (encoded.byteLength > MAX_METADATA_BYTES) {
-    throw new TrackSyncFailure(413, 'metadata_too_large', 'metadata exceeds 64 KiB.');
+    throw new TrackSyncFailure(413, 'metadata_too_large', 'metadata exceeds 128 KiB.');
   }
   return value;
 }

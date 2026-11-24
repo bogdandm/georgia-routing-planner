@@ -104,7 +104,7 @@ and `fallbackPoi` field are still accepted from older records and dropped on rea
 
 `LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
 segments of at least two points, each with coordinate and optional source elevation and
-timestamp), optional DEM-derived `calculatedTrackPoints`, and up to 32 track-owned
+timestamp), optional DEM-derived `calculatedTrackPoints`, and up to 100 track-owned
 `markers` (`id`, `name`, `coordinate`) taken from GPX waypoints. Rows from older schema
 versions are migrated on read.
 
@@ -224,9 +224,9 @@ next per-user revision.
 Uploaded metadata is the local summary without POI coordinates and without elevation
 metrics, plus `lineageHash`, `geometryVersion`, track-owned `markers`, nullable
 `folderId`, distance/elapsed-time metrics, and the optional `replacesContentHashes`
-replacement hint (at most 256 lowercase SHA-256 hashes). The function caps it at 64 KiB,
-rejects a malformed replacement hint, and rejects a `lineageHash` or `geometryVersion`
-that does not match the uploaded geometry.
+replacement hint (at most 256 lowercase SHA-256 hashes). The function caps it at 128
+KiB, rejects a malformed replacement hint, and rejects a `lineageHash` or
+`geometryVersion` that does not match the uploaded geometry.
 
 The RPCs reserve, finalize, and release uploads, apply metadata, and hard-delete one
 track. Every mutation locks the user's usage row, and
@@ -298,7 +298,7 @@ objects are GZIP-compressed canonical bytes.
 ## Import parsing boundary
 
 GPX, FIT, and KML files parse to one `ParsedGpx` shape (`src/domain/tracks/gpx.ts`,
-`fit.ts`, `kml.ts`, `trackImport.ts`): geometry kind, segments, up to 32 named
+`fit.ts`, `kml.ts`, `trackImport.ts`): geometry kind, segments, up to 100 named
 waypoints, point count, bounded metadata projection, and up to 50 warnings. Failures use
 a stable `GpxParseError` code. GPX limits cover a 10 MiB file, XML depth, 128
 tracks/routes, 512 segments, 100,000 points, and text length; parsing is cancellable.

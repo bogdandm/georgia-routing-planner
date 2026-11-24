@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { GpxParseError, parseGpx } from '@/domain/tracks/gpx';
+import { MAXIMUM_TRACK_MARKERS } from '@/domain/tracks/localTrack';
 
 const fixtures = join(process.cwd(), 'tests', 'fixtures', 'tracks');
 
@@ -71,23 +72,90 @@ describe('parseGpx', () => {
     );
   });
 
-  it('caps waypoint names and retains only the first 32 valid coordinates', () => {
+  it('caps waypoint names and retains only the first 100 valid coordinates', () => {
     const longName = 'a'.repeat(201);
-    const waypoints = Array.from({ length: 33 }, (_, index) => {
+    const waypoints = Array.from({ length: 101 }, (_, index) => {
       const name = index === 0 ? `<name>${longName}</name>` : '';
-      return `<wpt lat="${String(index)}" lon="${String(index)}">${name}</wpt>`;
+      const degrees = String(index / 10);
+      return `<wpt lat="${degrees}" lon="${degrees}">${name}</wpt>`;
     }).join('');
     const result = parseGpx(
       `<gpx version="1.1">${waypoints}<trk><trkseg><trkpt lat="0" lon="0"/><trkpt lat="1" lon="1"/></trkseg></trk></gpx>`,
     );
 
-    expect(result.waypoints).toHaveLength(32);
+    expect(result.waypoints).toHaveLength(100);
     expect(result.waypoints[0]?.name).toBe('a'.repeat(200));
     expect(result.waypoints[1]?.name).toBe('Marker 1');
-    expect(result.waypoints[31]?.name).toBe('Marker 31');
+    expect(result.waypoints[99]?.name).toBe('Marker 99');
     expect(result.warnings).toContainEqual(
       expect.objectContaining({ code: 'waypoint-limit-reached' }),
     );
+  });
+
+  it('drops implausible Komoot timestamps and planning-point waypoints', () => {
+    const planningPoints = Array.from(
+      { length: MAXIMUM_TRACK_MARKERS + 1 },
+      (_, index) =>
+        `<wpt lat="41.1" lon="44.1"><name>Position ${String(index)}</name></wpt>`,
+    ).join('');
+    const result = parseGpx(
+      `<gpx version="1.1" creator="https://www.komoot.de">${planningPoints}` +
+        '<wpt lat="41.2" lon="44.2"><name>62 2500 თიანეთის მუნიციპალიტე…</name></wpt>' +
+        `<wpt lat="41.3" lon="44.3"><name>242 couldn't find, 2500 თიანე…</name></wpt>` +
+        '<wpt lat="41.4" lon="44.4"><name>Hut at 2500 m</name></wpt>' +
+        '<trk><trkseg>' +
+        '<trkpt lat="41.0" lon="44.0"><time>2026-11-23T22:48:32Z</time></trkpt>' +
+        '<trkpt lat="41.5" lon="44.5"><time>2026-11-24T02:44:46Z</time></trkpt>' +
+        '</trkseg></trk></gpx>',
+    );
+
+    expect(result.waypoints).toEqual([
+      { name: 'Hut at 2500 m', coordinate: [44.4, 41.4] },
+    ]);
+    expect(result.warnings).toEqual([]);
+    expect(
+      result.segments[0]?.points.every((point) => point.recordedAt === undefined),
+    ).toBe(true);
+  });
+
+  it.each([
+    { minutes: 46, kept: false },
+    { minutes: 50, kept: true },
+    { minutes: 70, kept: true },
+    { minutes: 74, kept: false },
+  ])(
+    'keeps Komoot timestamps only within 80-120% of the hiking estimate ($minutes min)',
+    ({ minutes, kept }) => {
+      // 0.036° of latitude is about 4 km: a flat hour at the DIN 33466 pace.
+      const end = new Date(Date.UTC(2026, 6, 13, 6, minutes)).toISOString();
+      const result = parseGpx(
+        '<gpx version="1.1" creator="https://www.komoot.com">' +
+          '<trk><trkseg>' +
+          '<trkpt lat="41.0" lon="44.0"><time>2026-07-13T06:00:00Z</time></trkpt>' +
+          `<trkpt lat="41.036" lon="44.0"><time>${end}</time></trkpt>` +
+          '</trkseg></trk></gpx>',
+      );
+
+      expect(result.segments[0]?.points.at(-1)?.recordedAt).toBe(
+        kept ? end : undefined,
+      );
+    },
+  );
+
+  it('keeps timestamps and position-named waypoints from other creators', () => {
+    const result = parseGpx(
+      '<gpx version="1.1" creator="OsmAnd">' +
+        '<wpt lat="41.1" lon="44.1"><name>Position 3</name></wpt>' +
+        '<trk><trkseg>' +
+        '<trkpt lat="41.0" lon="44.0"><time>2026-07-13T06:00:00Z</time></trkpt>' +
+        '<trkpt lat="41.5" lon="44.5"><time>2026-07-13T07:00:00Z</time></trkpt>' +
+        '</trkseg></trk></gpx>',
+    );
+
+    expect(result.waypoints).toEqual([
+      { name: 'Position 3', coordinate: [44.1, 41.1] },
+    ]);
+    expect(result.segments[0]?.points[0]?.recordedAt).toBe('2026-07-13T06:00:00.000Z');
   });
 
   it('falls back to route geometry for GPX 1.0', () => {

@@ -271,7 +271,7 @@ describe('suggestTrackName', () => {
       [],
       [
         [[44, 42], [place('Koruldi Lakes', 'natural:water', 'water', [44.003, 42])]],
-        [[44.05, 42], [place('Lamaria', 'historic:ruins', 'other', [44.051, 42])]],
+        [[44.05, 42], [place('Ananuri', 'historic:castle', 'other', [44.051, 42])]],
       ],
     );
     places.nearbySupplement.mockRejectedValue(
@@ -287,7 +287,7 @@ describe('suggestTrackName', () => {
       signal: new AbortController().signal,
     });
 
-    expect(suggestion.generatedName).toBe('Koruldi Lakes → Lamaria');
+    expect(suggestion.generatedName).toBe('Koruldi Lakes → Ananuri');
     expect(suggestion.lookupFailures).toBeUndefined();
     expect(places.nearby).toHaveBeenCalledTimes(2);
     expect(places.nearbySupplement).toHaveBeenCalledOnce();
@@ -296,6 +296,35 @@ describe('suggestTrackName', () => {
       name: 'local-track.nearby-supplement.failed',
       data: { reason: 'provider' },
     });
+  });
+
+  it('never names a track after excluded landmark types, however close', async () => {
+    const places = fakePlaces(
+      [],
+      [
+        [
+          [44, 42],
+          [
+            place('Lashari', 'amenity:place_of_worship', 'other', [44.0002, 42]),
+            place('Hut', 'tourism:alpine_hut', 'other', [44.0003, 42]),
+            place('Lamaria', 'historic:ruins', 'other', [44.0004, 42]),
+            place('Spring', 'tourism:attraction', 'other', [44.0005, 42]),
+          ],
+        ],
+        [[44.05, 42], [place('Zhabeshi', 'place:village', 'settlement', [44.051, 42])]],
+      ],
+    );
+
+    const suggestion = await suggestTrackName({
+      segments: [{ points: line([44, 42], [44.05, 42], 20) }],
+      places,
+      logger: createLogger(),
+      lookedUpAt,
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestion.startPoi).toBeUndefined();
+    expect(suggestion.endPoi?.label).toBe('Zhabeshi');
   });
 
   it('names from landmarks when the settlement lookup fails and reports the failure', async () => {

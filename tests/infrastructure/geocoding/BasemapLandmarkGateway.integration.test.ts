@@ -144,6 +144,12 @@ describe('BasemapLandmarkGateway', () => {
         layer: 'poi',
         longitude: 44.63,
         latitude: 42.67,
+        properties: { class: 'castle', subclass: 'castle', name: 'Arsha Fortress' },
+      },
+      {
+        layer: 'poi',
+        longitude: 44.632,
+        latitude: 42.668,
         properties: { class: 'lodging', subclass: 'alpine_hut', name: 'Bethlemi Hut' },
       },
       {
@@ -185,17 +191,13 @@ describe('BasemapLandmarkGateway', () => {
     ).toEqual(
       expect.arrayContaining([
         { label: 'Kazbek', category: 'natural:peak', kind: 'mountain' },
-        {
-          label: 'Gergeti Trinity Church',
-          category: 'amenity:place_of_worship',
-          kind: 'other',
-        },
-        { label: 'Bethlemi Hut', category: 'tourism:alpine_hut', kind: 'other' },
+        { label: 'Arsha Fortress', category: 'historic:castle', kind: 'other' },
         { label: 'Gergeti', category: 'place:village', kind: 'settlement' },
         { label: 'Tsivi Lake', category: 'natural:water', kind: 'water' },
       ]),
     );
-    expect(results).toHaveLength(5);
+    // The church, hut, café, quarter, ridge, and distant peak are not naming landmarks.
+    expect(results).toHaveLength(4);
     const peak = results.find((result) => result.label === 'Kazbek');
     expect(peak?.coordinate.longitude).toBeCloseTo(44.645, 4);
     expect(peak?.coordinate.latitude).toBeCloseTo(42.661, 4);

@@ -185,21 +185,20 @@ landmarks come primarily from the hiking basemap's z14 vector tiles
   administrative-only match names nothing.
 - Landmark lookups read the configured `vector` TileJSON once, then the z14 tiles
   covering two kilometres around the anchor (9–16 tiles in Georgia), with the map's
-  request timeout and the browser HTTP cache shared with MapLibre. Named features of
-  `mountain_peak` (peak, volcano, saddle), `poi` (alpine hut, viewpoint, camp site,
-  attraction, shelter, place of worship, castle, ruins, monument), `place` (city to
-  isolated dwelling), and `water_name` (lakes) are mapped to their OSM tags. A failed
-  tile lookup is skipped and explained in the preview; it never blocks import.
+  request timeout and the browser HTTP cache shared with MapLibre. Only the kinds that
+  may name a track are read: named `mountain_peak` peaks, volcanoes, and saddles; `poi`
+  castles (fortresses included) and monuments; `place` cities, towns, villages, and
+  hamlets; and `water_name` lakes, each mapped to its OSM tag. A failed tile lookup is
+  skipped and explained in the preview; it never blocks import.
 - In parallel, one Overpass query per anchor supplements what OpenMapTiles drops:
-  `mountain_pass=yes` on saddles, waterfalls, glaciers, cave entrances, wilderness huts,
-  localities, and other historic values. It is a single `around:2000` scan of named
-  objects into a set with in-memory tag filters, at most 50 centres, and a declared 32
-  MiB `maxsize`; a key-regex filter took up to 20 s and per-tag `around` unions timed
-  out. The public endpoint often answers HTTP 502 "at capacity" for minutes, so the
-  supplement makes one attempt, treats a `runtime error` remark as a failure, and after
-  its first failure is skipped for the rest of that track. Its failures are logged
-  (`local-track.nearby-supplement.failed`) but never shown. A basemap saddle within 50 m
-  of a supplement pass is treated as that pass.
+  `mountain_pass=yes` on saddles, waterfalls, and glaciers. It is a single `around:2000`
+  scan of named objects into a set with in-memory tag filters, at most 50 centres, and a
+  declared 32 MiB `maxsize`; a key-regex filter took up to 20 s and per-tag `around`
+  unions timed out. The public endpoint often answers HTTP 502 "at capacity" for
+  minutes, so the supplement makes one attempt, treats a `runtime error` remark as a
+  failure, and after its first failure is skipped for the rest of that track. Its
+  failures are logged (`local-track.nearby-supplement.failed`) but never shown. A
+  basemap saddle within 50 m of a supplement pass is treated as that pass.
 
 Queries, coordinates, and returned names are not written to diagnostics. UI attribution
 links to the OpenStreetMap copyright page.

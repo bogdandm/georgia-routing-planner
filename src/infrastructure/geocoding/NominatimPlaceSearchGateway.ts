@@ -114,20 +114,12 @@ const settlementAddressKeys = [
 /**
  * Named landmark tags requested from Overpass, in category-precedence order. Track
  * naming reads most landmarks from the basemap tiles; these are the ranked categories
- * the OpenMapTiles schema drops (`mountain_pass` on saddles, waterfalls, glaciers, cave
- * entrances, wilderness huts, localities, and historic values other than castles,
- * ruins, and monuments), so basemap duplicates cannot consume the 50-result quota.
+ * the OpenMapTiles schema drops: `mountain_pass` on saddles, waterfalls, and glaciers.
  */
-const nearbyLandmarkTags: readonly (readonly [
-  string,
-  readonly string[] | { readonly except: readonly string[] },
-])[] = [
+const nearbyLandmarkTags: readonly (readonly [string, readonly string[]])[] = [
   ['mountain_pass', ['yes']],
-  ['natural', ['glacier', 'cave_entrance']],
+  ['natural', ['glacier']],
   ['waterway', ['waterfall']],
-  ['tourism', ['wilderness_hut']],
-  ['historic', { except: ['castle', 'ruins', 'monument'] }],
-  ['place', ['locality']],
 ];
 const nearbyRadiusMeters = 2_000;
 
@@ -137,11 +129,7 @@ const nearbyRadiusMeters = 2_000;
 // declared `maxsize` lets the busy dispatcher admit the query sooner.
 function nearbyQuery(latitude: number, longitude: number): string {
   const filters = nearbyLandmarkTags
-    .map(([key, values]) =>
-      'except' in values
-        ? `nwr.named["${key}"]["${key}"!~"^(${values.except.join('|')})$"];`
-        : `nwr.named["${key}"~"^(${values.join('|')})$"];`,
-    )
+    .map(([key, values]) => `nwr.named["${key}"~"^(${values.join('|')})$"];`)
     .join('');
   return `[out:json][timeout:10][maxsize:33554432];nwr(around:${String(nearbyRadiusMeters)},${latitude.toFixed(6)},${longitude.toFixed(6)})["name"]->.named;(${filters});out center qt 50;`;
 }
@@ -159,11 +147,7 @@ function nearbyCategory(
 ): { readonly category: string; readonly type: string } | null {
   for (const [category, values] of nearbyLandmarkTags) {
     const type = tags[category]?.trim();
-    if (
-      type !== undefined &&
-      type.length > 0 &&
-      ('except' in values ? !values.except.includes(type) : values.includes(type))
-    ) {
+    if (type !== undefined && type.length > 0 && values.includes(type)) {
       return { category, type };
     }
   }

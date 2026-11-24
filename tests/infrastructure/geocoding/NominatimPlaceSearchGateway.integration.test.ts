@@ -229,9 +229,8 @@ describe('NominatimPlaceSearchGateway', () => {
     expect(query).toContain('nwr(around:2000,42.711630,43.163426)["name"]->.named;');
     expect(query).toContain('nwr.named["mountain_pass"~"^(yes)$"];');
     expect(query).toContain('nwr.named["waterway"~"^(waterfall)$"];');
-    expect(query).toContain(
-      'nwr.named["historic"]["historic"!~"^(castle|ruins|monument)$"];',
-    );
+    expect(query).toContain('nwr.named["natural"~"^(glacier)$"];');
+    expect(query).not.toContain('historic');
     expect(query).toContain('[maxsize:33554432]');
   });
 

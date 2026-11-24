@@ -50,25 +50,7 @@ interface LandmarkClass {
   readonly kind: PlaceSearchKind;
 }
 
-const settlementClasses = new Set([
-  'city',
-  'town',
-  'village',
-  'hamlet',
-  'isolated_dwelling',
-]);
-
-/** `poi.subclass` carries the OSM value; its key is implied by the schema mapping. */
-const poiCategories: Readonly<Record<string, string>> = {
-  alpine_hut: 'tourism:alpine_hut',
-  viewpoint: 'tourism:viewpoint',
-  camp_site: 'tourism:camp_site',
-  attraction: 'tourism:attraction',
-  shelter: 'amenity:shelter',
-  castle: 'historic:castle',
-  ruins: 'historic:ruins',
-  monument: 'historic:monument',
-};
+const settlementClasses = new Set(['city', 'town', 'village', 'hamlet']);
 
 function stringProperty(properties: FeatureProperties, key: string): string | null {
   const value = properties[key];
@@ -99,13 +81,11 @@ function landmarkClass(
         ? { category: 'natural:water', kind: 'water' }
         : null;
     case 'pois': {
-      // A place of worship's subclass is its religion.
-      if (featureClass === 'place_of_worship') {
-        return { category: 'amenity:place_of_worship', kind: 'other' };
-      }
+      // `subclass` carries the OSM value; castles and monuments are `historic` tags.
       const subclass = stringProperty(properties, 'subclass');
-      const category = subclass === null ? undefined : poiCategories[subclass];
-      return category === undefined ? null : { category, kind: 'other' };
+      return subclass === 'castle' || subclass === 'monument'
+        ? { category: `historic:${subclass}`, kind: 'other' }
+        : null;
     }
   }
 }

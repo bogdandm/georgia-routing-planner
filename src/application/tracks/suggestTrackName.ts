@@ -80,6 +80,11 @@ const summitRank: LandmarkRank = { weight: 1, radiusMeters: 1_000 };
 const waterRank: LandmarkRank = { weight: 1.5, radiusMeters: 2_000 };
 const featureRank: LandmarkRank = { weight: 2, radiusMeters: 2_000 };
 
+/**
+ * The only landmark categories that may name a track. Huts, shelters, camp sites,
+ * viewpoints, attractions, caves, places of worship, ruins, other historic objects,
+ * isolated dwellings, and localities are deliberately excluded.
+ */
 const landmarkRanks: Readonly<Record<string, LandmarkRank>> = {
   'mountain_pass:yes': summitRank,
   'natural:peak': summitRank,
@@ -88,25 +93,13 @@ const landmarkRanks: Readonly<Record<string, LandmarkRank>> = {
   'natural:water': waterRank,
   'natural:glacier': waterRank,
   'waterway:waterfall': waterRank,
-  'natural:cave_entrance': featureRank,
-  'tourism:alpine_hut': featureRank,
-  'tourism:wilderness_hut': featureRank,
-  'tourism:viewpoint': featureRank,
-  'tourism:camp_site': featureRank,
-  'tourism:attraction': featureRank,
-  'amenity:shelter': featureRank,
-  'amenity:place_of_worship': featureRank,
+  'historic:castle': featureRank,
+  'historic:monument': featureRank,
   'place:city': featureRank,
   'place:town': featureRank,
   'place:village': featureRank,
   'place:hamlet': featureRank,
-  'place:isolated_dwelling': featureRank,
-  'place:locality': featureRank,
 };
-
-function landmarkRank(category: string): LandmarkRank | undefined {
-  return category.startsWith('historic:') ? featureRank : landmarkRanks[category];
-}
 
 function locate(
   result: PlaceSearchResult,
@@ -239,7 +232,7 @@ export async function suggestTrackName(input: {
     let best: LocatedCandidate | null = null;
     let bestScore = Number.POSITIVE_INFINITY;
     for (const result of results) {
-      const rank = landmarkRank(result.category);
+      const rank = landmarkRanks[result.category];
       const candidate = rank === undefined ? null : locate(result, anchor, lookedUpAt);
       if (rank === undefined || candidate === null) continue;
       const score = candidate.distanceMeters * rank.weight;

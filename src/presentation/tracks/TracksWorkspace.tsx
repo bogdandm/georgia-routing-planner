@@ -356,6 +356,18 @@ function canReplaceKomootElevation(
   );
 }
 
+/** The question shows the gain difference, so it also needs a DEM gain to compare. */
+function canAskKomootElevation(
+  parsed: ParsedGpx,
+  prepared: PreparedImportedTrack,
+): boolean {
+  return (
+    canReplaceKomootElevation(parsed, prepared) &&
+    prepared.sourceMetrics.ascentMeters !== undefined &&
+    (prepared.calculatedMetrics?.ascentMeters ?? 0) > 0
+  );
+}
+
 /** The remove action needs a complete DEM projection and source elevation or times. */
 function canRemoveSourceElevationAndTime(preview: PreparedPreviewTrack): boolean {
   return (
@@ -1919,12 +1931,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             preparationStatus: 'ready',
             ...prepared,
             namingStatus: 'loading',
-            // The question shows the gain difference, so it needs a DEM gain to compare.
             komootElevationChoicePending:
-              replaceableKomootElevation &&
-              komootPreference === 'ask' &&
-              prepared.sourceMetrics.ascentMeters !== undefined &&
-              (prepared.calculatedMetrics?.ascentMeters ?? 0) > 0,
+              komootPreference === 'ask' && canAskKomootElevation(parsed, prepared),
           };
           const preview =
             replaceableKomootElevation && komootPreference === 'terrain'
@@ -2535,9 +2543,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               current.preparationStatus === 'ready'
                 ? current.namingStatus
                 : 'unavailable',
+            // A recalculated projection may no longer be able to replace the source.
             komootElevationChoicePending:
               current.preparationStatus === 'ready' &&
-              current.komootElevationChoicePending,
+              current.komootElevationChoicePending &&
+              canAskKomootElevation(current.parsed, prepared),
           };
           return updated;
         });

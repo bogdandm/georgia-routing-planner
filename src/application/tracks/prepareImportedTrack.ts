@@ -614,9 +614,11 @@ function routableSourceSegments(
 }
 
 /**
- * Whether the DEM projection can replace the source elevation: it has every
- * non-zero-length source segment (preparation skips segments without any DEM sample),
- * and its stations merged with every source vertex stay within the persisted point limit.
+ * Whether the DEM projection can replace the source elevation without changing the
+ * geometry: every source segment has length (a stationary one has no DEM stations to keep
+ * it), the projection has every segment (preparation skips segments without any DEM
+ * sample), and its stations plus every source vertex stay within the persisted point
+ * limit. That count is an upper bound: vertices replace stations at the same position.
  */
 export function canReplaceSourceElevation(prepared: PreparedImportedTrack): boolean {
   const calculatedSegments = prepared.calculatedSegments;
@@ -627,6 +629,7 @@ export function canReplaceSourceElevation(prepared: PreparedImportedTrack): bool
     mergedPointCount += segment.points.length;
   }
   return (
+    routable.length === prepared.sourceSegments.length &&
     calculatedSegments.length === routable.length &&
     mergedPointCount <= maximumPersistedPoints
   );

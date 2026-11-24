@@ -894,6 +894,7 @@ describe('WorkspaceShell', () => {
         trackSort: 'created',
         onboardingCompleted: true,
         trackSectionExpanded: {},
+        komootElevation: 'ask',
       });
     });
   });

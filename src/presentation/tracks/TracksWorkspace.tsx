@@ -111,7 +111,6 @@ import {
   setHoveredTrackPoint,
   trackPointHoverStore,
 } from '@/presentation/tracks/trackPointHoverStore';
-import { routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
@@ -212,7 +211,7 @@ import {
   sameTrackRouteTiming,
   trackWeatherTimeline,
   type TrackClockTimes,
-  type RecordedRouteStart,
+  recordedRouteStart,
   type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
@@ -712,15 +711,6 @@ function trackNameFailureMessage(
   return error.problem === 'required'
     ? msg`Track name is required.`
     : msg`Track name must be 200 characters or fewer.`;
-}
-
-/** The recorded start on the clock of the route start, which timing defaults use. */
-function recordedRouteStart(
-  metrics: Pick<TrackMetrics, 'recordedStartAt' | 'startCoordinate'>,
-): RecordedRouteStart | undefined {
-  return metrics.recordedStartAt === undefined
-    ? undefined
-    : { at: metrics.recordedStartAt, timeZone: routeTimeZone(metrics.startCoordinate) };
 }
 
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {

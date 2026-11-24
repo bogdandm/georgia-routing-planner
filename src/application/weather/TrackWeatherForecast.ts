@@ -14,7 +14,7 @@ import type {
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
 import type { TrackMarker, TrackRouteTiming } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
-import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
+import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   estimateHikingSeconds,
   geodesicDistanceMeters,
@@ -325,6 +325,15 @@ export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings =
 export interface RecordedRouteStart {
   readonly at: string;
   readonly timeZone: string;
+}
+
+/** The recorded start on the clock of the route start, which timing defaults use. */
+export function recordedRouteStart(
+  metrics: Pick<TrackMetrics, 'recordedStartAt' | 'startCoordinate'>,
+): RecordedRouteStart | undefined {
+  return metrics.recordedStartAt === undefined
+    ? undefined
+    : { at: metrics.recordedStartAt, timeZone: routeTimeZone(metrics.startCoordinate) };
 }
 
 /**

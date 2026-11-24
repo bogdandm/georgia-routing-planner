@@ -1188,7 +1188,12 @@ describe('AppDatabase', () => {
     });
     const synced = localTrackSummary();
     const unsent: LocalTrackSummary = { ...synced, id: 'local:unsent' };
-    const untouched: LocalTrackSummary = { ...synced, id: 'local:untouched' };
+    // Recorded at 07:30 on the route clock (Tbilisi, UTC+4).
+    const untouched: LocalTrackSummary = {
+      ...synced,
+      id: 'local:untouched',
+      metrics: { ...synced.metrics, recordedStartAt: '2026-08-08T03:30:00.000Z' },
+    };
     await legacy.table('localTracks').bulkPut([synced, unsent, untouched]);
     const syncState = {
       contentHash: 'a'.repeat(64),
@@ -1213,8 +1218,13 @@ describe('AppDatabase', () => {
             relativeTimeMarkers: true,
             lightOnMap: true,
           },
-          // Light coloring alone is session view state now and is not migrated.
-          [untouched.id]: { ...defaultTrackWeatherTimelineSettings, lightOnMap: true },
+          // Light coloring alone is session view state now and is not migrated, even
+          // when the entry holds the start its recording defaults to.
+          [untouched.id]: {
+            ...defaultTrackWeatherTimelineSettings,
+            startHour: 7.5,
+            lightOnMap: true,
+          },
           'local:deleted': { ...defaultTrackWeatherTimelineSettings, startHour: 6 },
         },
       },

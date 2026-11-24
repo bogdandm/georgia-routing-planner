@@ -16,9 +16,9 @@ import {
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
   TRACK_WEATHER_PACE_FACTOR_STEP,
   TRACK_WEATHER_START_HOUR_STEP,
-  defaultTrackRouteTiming,
+  adjustedTrackRouteTiming,
   defaultTrackWeatherPreferences,
-  sameTrackRouteTiming,
+  recordedRouteStart,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
 import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
@@ -619,15 +619,19 @@ const legacyTrackWeatherPreferencesSchema = z
   })
   .strict();
 
-/** Legacy entries that adjust more than light coloring, by saved track ID. */
-function legacyRouteTimings(
-  timelines: Readonly<Record<string, TrackRouteTiming>> | undefined,
-): ReadonlyMap<string, TrackRouteTiming> {
-  return new Map(
-    Object.entries(timelines ?? {}).filter(
-      ([, routeTiming]) => !sameTrackRouteTiming(routeTiming, defaultTrackRouteTiming),
-    ),
-  );
+/**
+ * The route timing a legacy entry gives the track, or null when, without its light
+ * coloring, the entry only restates the track's defaults.
+ */
+function legacyRouteTiming(
+  summary: LocalTrackSummary,
+  timelines: Readonly<Record<string, TrackRouteTiming>>,
+): TrackRouteTiming | null {
+  if (!Object.hasOwn(timelines, summary.id)) return null;
+  const entry = timelines[summary.id];
+  return entry === undefined
+    ? null
+    : adjustedTrackRouteTiming(entry, recordedRouteStart(summary.metrics));
 }
 
 const mapSharePreferencesKey = 'map.share-preferences';
@@ -1800,13 +1804,15 @@ export class AppDatabase
         const record = await settingsTable.get(trackWeatherPreferencesKey);
         const parsed = legacyTrackWeatherPreferencesSchema.safeParse(record?.value);
         if (record === undefined || !parsed.success) return;
-        const { timelines, ...preferences } = parsed.data;
+        const { timelines = {}, ...preferences } = parsed.data;
         await settingsTable.put({ ...record, value: preferences });
         const summaryTable = transaction.table('localTracks');
         const stateTable = transaction.table('trackSyncStates');
-        for (const [trackId, routeTiming] of legacyRouteTimings(timelines)) {
+        for (const trackId of Object.keys(timelines)) {
           const summary = parseLocalTrackSummary(await summaryTable.get(trackId));
           if (summary === null) continue;
+          const routeTiming = legacyRouteTiming(summary, timelines);
+          if (routeTiming === null) continue;
           await summaryTable.put({ ...summary, routeTiming });
           const state = parseTrackSyncState(await stateTable.get(trackId));
           if (state !== null) {
@@ -4061,14 +4067,14 @@ export class AppDatabase
     }
     // Archives written before route timing moved into the track summaries keep it in
     // the forecast preferences; it applies to archived tracks that carry none.
-    let archivedRouteTimings: ReadonlyMap<string, TrackRouteTiming> = new Map();
+    let archivedTimelines: Readonly<Record<string, TrackRouteTiming>> = {};
     const trackPreferences = legacyTrackWeatherPreferencesSchema.safeParse(
       settings.get(trackWeatherPreferencesKey),
     );
     if (trackPreferences.success) {
-      const { timelines, ...preferences } = trackPreferences.data;
+      const { timelines = {}, ...preferences } = trackPreferences.data;
       settings.set(trackWeatherPreferencesKey, preferences);
-      archivedRouteTimings = legacyRouteTimings(timelines);
+      archivedTimelines = timelines;
     }
 
     await this.transaction(
@@ -4140,9 +4146,9 @@ export class AppDatabase
           if (summary.folderId !== null && !folderIds.has(summary.folderId)) {
             summary.folderId = null;
           }
-          const legacyRouteTiming = archivedRouteTimings.get(trackId);
-          if (summary.routeTiming === undefined && legacyRouteTiming !== undefined) {
-            summary.routeTiming = legacyRouteTiming;
+          if (summary.routeTiming === undefined) {
+            const routeTiming = legacyRouteTiming(pair.summary, archivedTimelines);
+            if (routeTiming !== null) summary.routeTiming = routeTiming;
           }
           const existingSummary = parseLocalTrackSummary(
             await this.localTracks.get(trackId),

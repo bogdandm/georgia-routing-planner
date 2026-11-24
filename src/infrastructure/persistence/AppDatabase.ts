@@ -140,7 +140,7 @@ export interface TrackSyncState {
  * Bound on each predecessor list in a track sync state and in uploaded metadata. A
  * browser offline through more geometry edits than this would see the record vanish,
  * so the bound is far above realistic edit counts; 256 hashes take about 17 KiB of the
- * 64 KiB metadata limit.
+ * 128 KiB metadata limit.
  */
 export const MAXIMUM_REPLACED_CONTENT_HASHES = 256;
 

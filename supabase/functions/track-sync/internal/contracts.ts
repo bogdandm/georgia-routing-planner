@@ -1,6 +1,6 @@
 export const TRACK_GEOMETRY_BUCKET = 'track-geometries';
 export const TRACK_QUOTA_BYTES = 8_388_608;
-export const MAX_METADATA_BYTES = 65_536;
+export const MAX_METADATA_BYTES = 131_072;
 export const MAX_JSON_BYTES = MAX_METADATA_BYTES + 4_096;
 export const MAX_MULTIPART_BYTES = TRACK_QUOTA_BYTES + MAX_METADATA_BYTES + 131_072;
 export const MAX_CANONICAL_BYTES = 67_108_864;

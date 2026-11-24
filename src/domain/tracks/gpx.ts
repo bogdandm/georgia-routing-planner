@@ -1,3 +1,9 @@
+import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
+import {
+  calculateTrackMetrics,
+  estimateHikingSeconds,
+} from '@/domain/tracks/trackCalculations';
+
 export const GPX_PARSER_VERSION = 2;
 
 export type TrackCoordinate = readonly [longitude: number, latitude: number];
@@ -103,9 +109,57 @@ const defaultLimits = {
   maximumWarnings: 50,
   maximumTextLength: 2_000,
   maximumLinks: 10,
-  maximumWaypoints: 32,
+  maximumWaypoints: 100,
   maximumWaypointNameLength: 200,
 } as const;
+
+/**
+ * Komoot exports planned tours with timestamps synthesized from the export moment and,
+ * often, an unrealistic pace, plus one `<wpt>` per planning point named `Position N` or
+ * `N <address…>`.
+ */
+const komootCreatorPattern = /komoot/i;
+const komootPlanningWaypointNamePattern = /^(?:Position \d+|\d+ .*…)$/u;
+const komootPlausiblePaceRatio = { minimum: 0.8, maximum: 1.2 } as const;
+/** Local start window in minutes after midnight at the route's start, inclusive. */
+const komootPlausibleStartMinutes = { minimum: 7 * 60, maximum: 12 * 60 } as const;
+
+/**
+ * Whether timestamps look like a real hike: the local start lies within 07:00–12:00 and
+ * the elapsed time within 80–120 % of the DIN 33466 hiking estimate.
+ */
+function hasPlausibleTiming(segments: readonly TrackSegment[]): boolean {
+  const metrics = calculateTrackMetrics(segments);
+  if (metrics.elapsedSeconds === undefined || metrics.recordedStartAt === undefined) {
+    return false;
+  }
+  const start = instantToZonedWallTime(
+    new Date(metrics.recordedStartAt),
+    routeTimeZone(metrics.startCoordinate),
+  );
+  const startMinutes = start.hour * 60 + start.minute;
+  const ratio =
+    metrics.elapsedSeconds /
+    estimateHikingSeconds(
+      metrics.distanceMeters,
+      metrics.ascentMeters ?? 0,
+      metrics.descentMeters ?? 0,
+    );
+  return (
+    startMinutes >= komootPlausibleStartMinutes.minimum &&
+    startMinutes <= komootPlausibleStartMinutes.maximum &&
+    ratio >= komootPlausiblePaceRatio.minimum &&
+    ratio <= komootPlausiblePaceRatio.maximum
+  );
+}
+
+function withoutTimestamps(segments: readonly TrackSegment[]): readonly TrackSegment[] {
+  return segments.map((segment) => ({
+    points: segment.points.map(({ coordinate, elevationMeters }) =>
+      elevationMeters === undefined ? { coordinate } : { coordinate, elevationMeters },
+    ),
+  }));
+}
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) {
@@ -249,11 +303,22 @@ function parsePoint(
 function parseWaypoints(
   root: Element,
   warnings: GpxValidationWarning[],
+  skipKomootPlanningPoints: boolean,
 ): readonly ParsedGpxWaypoint[] {
   const waypoints: ParsedGpxWaypoint[] = [];
   let unnamedCount = 0;
 
   for (const [pointIndex, element] of directChildren(root, 'wpt').entries()) {
+    const explicitName = firstChild(element, 'name')
+      ?.textContent.trim()
+      .slice(0, defaultLimits.maximumWaypointNameLength);
+    if (
+      skipKomootPlanningPoints &&
+      explicitName !== undefined &&
+      komootPlanningWaypointNamePattern.test(explicitName)
+    ) {
+      continue;
+    }
     const longitude = optionalFiniteNumber(element.getAttribute('lon'));
     const latitude = optionalFiniteNumber(element.getAttribute('lat'));
     if (
@@ -280,10 +345,6 @@ function parseWaypoints(
       }
       continue;
     }
-
-    const explicitName = firstChild(element, 'name')
-      ?.textContent.trim()
-      .slice(0, defaultLimits.maximumWaypointNameLength);
     let name = explicitName;
     if (name === undefined || name.length === 0) {
       unnamedCount += 1;
@@ -447,7 +508,8 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
   }
 
   const warnings: GpxValidationWarning[] = [];
-  const waypoints = parseWaypoints(root, warnings);
+  const isKomootExport = komootCreatorPattern.test(root.getAttribute('creator') ?? '');
+  const waypoints = parseWaypoints(root, warnings, isKomootExport);
   const trackSegments = parseSegments(
     trackSegmentElements,
     'trkpt',
@@ -479,11 +541,18 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
       'The GPX file has no renderable track or route.',
     );
   }
+  const importedSegments =
+    isKomootExport && !hasPlausibleTiming(segments)
+      ? withoutTimestamps(segments)
+      : segments;
   return {
     parserVersion: GPX_PARSER_VERSION,
     geometryKind,
-    segments,
-    pointCount: segments.reduce((sum, segment) => sum + segment.points.length, 0),
+    segments: importedSegments,
+    pointCount: importedSegments.reduce(
+      (sum, segment) => sum + segment.points.length,
+      0,
+    ),
     waypoints,
     metadata: readMetadata(root, selected, version),
     warnings,

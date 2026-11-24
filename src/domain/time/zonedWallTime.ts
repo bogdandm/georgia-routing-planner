@@ -1,3 +1,5 @@
+import lookupTimeZone from '@photostructure/tz-lookup';
+
 /** Civil wall-clock time in an IANA time zone, to the minute; `month` is 1–12. */
 export interface ZonedWallTime {
   readonly year: number;
@@ -5,6 +7,20 @@ export interface ZonedWallTime {
   readonly day: number;
   readonly hour: number;
   readonly minute: number;
+}
+
+/**
+ * IANA zone at a route's start, whose clock every route time uses. Rounded like the map's
+ * sun panel, so nearby points share one zone.
+ */
+export function routeTimeZone([longitude, latitude]: readonly [
+  longitude: number,
+  latitude: number,
+]): string {
+  return lookupTimeZone(
+    Math.round(latitude * 100) / 100,
+    Math.round(longitude * 100) / 100,
+  );
 }
 
 const millisecondsPerMinute = 60_000;

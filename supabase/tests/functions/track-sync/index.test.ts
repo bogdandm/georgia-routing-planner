@@ -559,6 +559,46 @@ Deno.test('metadata mutations cannot change a stored lineage identity', async ()
 });
 
 Deno.test(
+  'metadata accepts 100 maximum-length multibyte markers and rejects 101',
+  async () => {
+    const markers = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+        name: 'თ'.repeat(200),
+        coordinate: [44, 42],
+      }));
+    const send = async (count: number) => {
+      const state = makeState();
+      const response = await handleTrackSync(
+        jsonRequest({
+          action: 'metadata',
+          contentHash: CONTENT_HASH,
+          baseRevision: 7,
+          metadata: syncMetadata({ markers: markers(count) }),
+        }),
+        makeContext(state),
+      );
+      return { response, state };
+    };
+
+    const accepted = await send(100);
+    assertEquals(accepted.response.status, 200);
+    assert(
+      accepted.state.calls.some(
+        (call) => call.kind === 'rpc' && call.name === 'apply_track_metadata',
+      ),
+    );
+
+    const rejected = await send(101);
+    assertEquals(rejected.response.status, 400);
+    assertEquals(
+      ((await responseJson(rejected.response)).error as Record<string, unknown>).code,
+      'invalid_metadata',
+    );
+  },
+);
+
+Deno.test(
   'invalid verified claims and invalid request bodies are rejected before backend access',
   async () => {
     const state = makeState();

@@ -38,6 +38,7 @@
     "src/application/ports/TrailRouter.ts",
     "src/domain/terrain/solarPosition.ts",
     "src/domain/terrain/terrainShadow.ts",
+    "src/domain/time/zonedWallTime.ts",
     "src/domain/tracks/gpx.ts",
     "src/domain/tracks/trackCalculations.ts",
     "src/infrastructure/elevation/BrowserDemImageDecoder.ts",

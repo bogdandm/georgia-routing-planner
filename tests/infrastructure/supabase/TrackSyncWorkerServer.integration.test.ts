@@ -1577,6 +1577,94 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
+  it('keeps a route timing restored during a metadata mutation pending', async () => {
+    const track = summary('local:restored');
+    await database.saveLocalTrack(track, content(track.id));
+    await database.saveTrackSyncState({
+      trackId: track.id,
+      contentHash,
+      lineageHash: legacyContentHash,
+      geometryVersion: 2,
+      remoteRevision: 1,
+      pendingKind: 'metadata',
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const [stored] = await database.listLocalTracks();
+    if (stored === undefined) throw new Error('Missing stored track.');
+    const storedContent = await database.loadLocalTrackContent(track.id);
+    const mutation = deferred<{ outcome: 'applied'; revision: number }>();
+    const mutationStarted = deferred<undefined>();
+    const mutate = vi.fn().mockImplementationOnce(() => {
+      mutationStarted.resolve(undefined);
+      return mutation.promise;
+    });
+    const remote = (revision: number) => ({
+      content_hash: contentHash,
+      revision,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: { lineageHash: legacyContentHash, geometryVersion: 2 },
+    });
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce([remote(1)])
+        .mockResolvedValueOnce([remote(2)]),
+      mutate,
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+    const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    await mutationStarted.promise;
+    // An archive from before synchronized timing changes only the route timing; the
+    // summary keeps its timestamp and the state stays a pending metadata write.
+    const routeTiming = {
+      startHour: 6.5,
+      paceFactor: 1,
+      ignoreRecordedTime: false,
+      timeMarkers: null,
+      relativeTimeMarkers: false,
+      lightOnMap: false,
+      hikeDate: null,
+    };
+    await database.restoreUserDataBackup({
+      tracks: [{ summary: stored, content: storedContent }],
+      folders: [],
+      markers: [],
+      settings: {
+        'weather.track-preferences': {
+          expanded: false,
+          weekday: 6,
+          timelines: { [track.id]: routeTiming },
+        },
+      },
+    });
+    mutation.resolve({ outcome: 'applied', revision: 2 });
+    await synchronization;
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: track.id, routeTiming }),
+    ]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
+      pendingKind: 'metadata',
+    });
+    client.dispose();
+  });
+
   it('replaces a v1 lineage across devices without changing the local track ID', async () => {
     vi.stubGlobal('Blob', NodeBlob);
     const sourceContent: LocalTrackContent = {

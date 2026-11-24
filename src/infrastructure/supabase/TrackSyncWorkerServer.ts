@@ -1245,7 +1245,10 @@ export class TrackSyncWorkerServer {
         initial?.pair?.summary.updatedAt === entry.pair?.summary.updatedAt &&
         initial?.pair?.summary.name === entry.pair?.summary.name &&
         initial?.pair?.summary.favorite === entry.pair?.summary.favorite &&
-        initial?.pair?.summary.folderId === entry.pair?.summary.folderId;
+        initial?.pair?.summary.folderId === entry.pair?.summary.folderId &&
+        // Both come from the same schema transform, so key order is stable.
+        JSON.stringify(initial?.pair?.summary.routeTiming) ===
+          JSON.stringify(entry.pair?.summary.routeTiming);
       let effective: TrackSyncState | null = entry.state;
       let adoptRemote = false;
       if (

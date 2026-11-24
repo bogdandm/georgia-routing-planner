@@ -1171,7 +1171,13 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         const { routeTiming: _previous, ...rest } = summary;
         return routeTiming === null ? rest : { ...rest, routeTiming };
       };
-      // The controls follow the choice at once; the write and its sync run behind it.
+      // The controls follow the choice at once, and so do the copies that reopening the
+      // track or multi-track view read; the write and its sync run behind it.
+      setSummaries((current) =>
+        current.map((summary) =>
+          summary.id === trackId ? withRouteTiming(summary) : summary,
+        ),
+      );
       setActive((current) =>
         current?.kind === 'saved' && current.summary.id === trackId
           ? { ...current, summary: withRouteTiming(current.summary) }

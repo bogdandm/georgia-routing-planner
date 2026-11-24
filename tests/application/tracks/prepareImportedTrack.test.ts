@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
-import { prepareImportedTrack } from '@/application/tracks/prepareImportedTrack';
+import {
+  demProjectionCoversSource,
+  prepareImportedTrack,
+} from '@/application/tracks/prepareImportedTrack';
 import type { TrackCoordinate, TrackSegment } from '@/domain/tracks/gpx';
 
 const signal = new AbortController().signal;
@@ -508,6 +511,36 @@ describe('prepareImportedTrack', () => {
     expect(prepared.calculatedSegments?.[0]?.points[1]?.recordedAt).toBe(
       '2026-07-30T10:00:30.000Z',
     );
+  });
+
+  it('reports a DEM projection that misses a segment as unable to replace the source', async () => {
+    const source: readonly TrackSegment[] = [
+      ...sourceSegments,
+      {
+        points: [
+          { coordinate: equatorCoordinate(1_000), elevationMeters: 1_200 },
+          { coordinate: equatorCoordinate(1_100), elevationMeters: 1_300 },
+        ],
+      },
+    ];
+    const firstSegmentOnlyDem: ElevationProvider = {
+      sample: () => Promise.resolve({ status: 'unavailable' }),
+      sampleMany: (coordinates) =>
+        Promise.resolve(
+          coordinates.map((coordinate) =>
+            coordinate.longitude < equatorCoordinate(500)[0]
+              ? ({ status: 'available', meters: 400 } as const)
+              : ({ status: 'unavailable' } as const),
+          ),
+        ),
+    };
+
+    const partial = await prepareImportedTrack(source, firstSegmentOnlyDem, signal);
+    const complete = await prepareImportedTrack(source, flatDem(400), signal);
+
+    expect(partial.calculatedSegments).toHaveLength(1);
+    expect(demProjectionCoversSource(partial)).toBe(false);
+    expect(demProjectionCoversSource(complete)).toBe(true);
   });
 
   it('resamples past a repeated interior coordinate without duplicating stations', async () => {

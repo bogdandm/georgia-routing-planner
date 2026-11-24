@@ -816,6 +816,11 @@ msgstr "Независимые сегменты не соединяются; и�
 msgid "Item dropped."
 msgstr "Элемент перемещён."
 
+#. js-lingui-id: DPtUHI
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Keep Komoot elevations? Their elevation gain differs from the terrain model by {difference} ({percent})."
+msgstr "Оставить высоты Komoot? Их набор высоты отличается от модели рельефа на {difference} ({percent})."
+
 #. js-lingui-id: w2YeAc
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Light along the route: {description}"
@@ -986,6 +991,11 @@ msgstr "Сначала новые"
 msgid "Next segment"
 msgstr "Следующий участок"
 
+#. js-lingui-id: 1UzENP
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "No"
+msgstr "Нет"
+
 #. js-lingui-id: ANszNw
 #: src/presentation/tracks/RoutePlanControls.tsx
 msgid "No connected route was found. Add a closer point or use Line for this segment."
@@ -1040,6 +1050,11 @@ msgstr "Нет сохранённых треков с таким названи�
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
 msgid "No significant climbs or descents."
 msgstr "Нет значимых подъёмов и спусков."
+
+#. js-lingui-id: OefRJ8
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "No, don't ask again"
+msgstr "Нет, больше не спрашивать"
 
 #. js-lingui-id: zsJUbn
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1146,10 +1161,20 @@ msgstr "Дата записи"
 msgid "Release the file inside this zone"
 msgstr "Отпустите файл в этой области"
 
+#. js-lingui-id: BCivzv
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Remove elevation and time"
+msgstr "Убрать высоты и время"
+
 #. js-lingui-id: T_pF0Z
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Remove from favorites"
 msgstr "Удалить из избранного"
+
+#. js-lingui-id: lEr-hF
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Removes the file's elevations and point times before saving. Elevation then comes from the terrain model, and the track has no recorded time or pace."
+msgstr "Удаляет из файла высоты и время точек перед сохранением. Высоты берутся из модели рельефа, а у трека не будет записанного времени и темпа."
 
 #. js-lingui-id: 2wxgft
 #: src/presentation/tracks/TrackMarkersSection.tsx
@@ -1704,3 +1729,13 @@ msgstr "Треки без папки"
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Weather forecast"
 msgstr "Прогноз погоды"
+
+#. js-lingui-id: l75CjT
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Yes"
+msgstr "Да"
+
+#. js-lingui-id: eA0Z6b
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Yes, don't ask again"
+msgstr "Да, больше не спрашивать"

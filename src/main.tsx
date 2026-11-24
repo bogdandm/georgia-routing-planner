@@ -13,7 +13,7 @@ import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { resolveAppLocale } from '@/domain/localization/appLocale';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
-import type { TrackSort } from '@/domain/tracks/localTrack';
+import type { KomootElevationPreference, TrackSort } from '@/domain/tracks/localTrack';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import '@/presentation/styles/global.css';
 import { createAppTheme } from '@/presentation/theme/createAppTheme';
@@ -29,6 +29,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
   let markerSort: MarkerSort = 'created';
   let trackSort: TrackSort = 'created';
   let trackSectionExpanded: Readonly<Record<string, boolean>> = {};
+  let komootElevation: KomootElevationPreference = 'ask';
   // Unreadable settings must not reopen the tour on every visit.
   let onboardingCompleted = true;
   let locale = resolveAppLocale(null, navigator.languages);
@@ -41,6 +42,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     markerSort = preferences.markerSort;
     trackSort = preferences.trackSort;
     trackSectionExpanded = preferences.trackSectionExpanded;
+    komootElevation = preferences.komootElevation;
     onboardingCompleted = preferences.onboardingCompleted;
     locale = resolveAppLocale(preferences.locale, navigator.languages);
   } catch {
@@ -56,6 +58,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     markerSort,
     trackSort,
     trackSectionExpanded,
+    komootElevation,
     onboardingCompleted,
   });
   const root = createRoot(rootElement);

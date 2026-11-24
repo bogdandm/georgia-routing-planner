@@ -597,3 +597,71 @@ export async function prepareImportedTrack(
     calculatedMetrics: calculateTrackMetrics(calculatedSegments, 'dem-assisted'),
   };
 }
+
+function withoutPointData(
+  segments: readonly TrackSegment[],
+  keep: { readonly elevation: boolean; readonly time: boolean },
+): readonly TrackSegment[] {
+  return segments.map((segment) => ({
+    points: segment.points.map(({ coordinate, elevationMeters, recordedAt }) => {
+      const point: {
+        coordinate: TrackCoordinate;
+        elevationMeters?: number;
+        recordedAt?: string;
+      } = { coordinate };
+      if (keep.elevation && elevationMeters !== undefined) {
+        point.elevationMeters = elevationMeters;
+      }
+      if (keep.time && recordedAt !== undefined) point.recordedAt = recordedAt;
+      return point;
+    }),
+  }));
+}
+
+/**
+ * Whether the DEM projection has every non-zero-length source segment. Preparation skips
+ * segments without any DEM sample, so only a complete projection can replace the source
+ * elevation without losing geometry when saved.
+ */
+export function demProjectionCoversSource(prepared: PreparedImportedTrack): boolean {
+  return (
+    prepared.calculatedSegments !== null &&
+    prepared.calculatedSegments.length ===
+      prepared.sourceSegments.filter((segment) => segmentDistanceMeters(segment) > 0)
+        .length
+  );
+}
+
+/**
+ * Drops source elevation, and optionally every point time. Call it only when
+ * `demProjectionCoversSource` holds: without a source profile, callers display and save
+ * the DEM projection as the canonical elevation; dropped times also leave the projection.
+ */
+export function withoutSourceElevation(
+  prepared: PreparedImportedTrack,
+  options: { readonly dropTimes: boolean },
+): PreparedImportedTrack {
+  const sourceSegments = withoutPointData(prepared.sourceSegments, {
+    elevation: false,
+    time: !options.dropTimes,
+  });
+  const result: PreparedImportedTrack = {
+    ...prepared,
+    sourceSegments,
+    sourceProfile: null,
+    sourceMetrics: calculateTrackMetrics(sourceSegments),
+  };
+  if (!options.dropTimes || prepared.calculatedSegments === null) return result;
+  const calculatedSegments = withoutPointData(prepared.calculatedSegments, {
+    elevation: true,
+    time: false,
+  });
+  return {
+    ...result,
+    calculatedSegments,
+    calculatedProfile: calculateElevationProfile(
+      calculatedProfileInputs(calculatedSegments),
+    ),
+    calculatedMetrics: calculateTrackMetrics(calculatedSegments, 'dem-assisted'),
+  };
+}

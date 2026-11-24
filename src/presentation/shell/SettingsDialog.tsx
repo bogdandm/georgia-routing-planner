@@ -20,6 +20,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import type { AppLocale } from '@/domain/localization/appLocale';
+import type { KomootElevationPreference } from '@/domain/tracks/localTrack';
 import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
 
 type SettingsTab = 'general' | 'storage';
@@ -28,19 +29,23 @@ const settingsPanelTitleId = 'settings-panel-title';
 
 interface SettingsDialogProps {
   readonly developerMode: boolean;
+  readonly komootElevation: KomootElevationPreference;
   readonly locale: AppLocale;
   readonly onClose: () => void;
   readonly onLocaleChange: (locale: AppLocale) => void;
   readonly onDeveloperModeChange: (value: boolean) => void;
+  readonly onKomootElevationChange: (value: KomootElevationPreference) => void;
   readonly open: boolean;
   readonly storageUsage: StorageUsageReader;
 }
 
 export function SettingsDialog({
   developerMode,
+  komootElevation,
   locale,
   onClose,
   onDeveloperModeChange,
+  onKomootElevationChange,
   onLocaleChange,
   open,
   storageUsage,
@@ -166,6 +171,29 @@ export function SettingsDialog({
                 </MenuItem>
                 <MenuItem value="ru">
                   <Trans>Русский</Trans>
+                </MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ mt: 2, maxWidth: 320 }}>
+              <InputLabel id="settings-komoot-elevation-label">
+                <Trans>Komoot elevation on import</Trans>
+              </InputLabel>
+              <Select<KomootElevationPreference>
+                labelId="settings-komoot-elevation-label"
+                value={komootElevation}
+                label={t`Komoot elevation on import`}
+                onChange={(event) => {
+                  onKomootElevationChange(event.target.value);
+                }}
+              >
+                <MenuItem value="ask">
+                  <Trans>Ask whether to keep it</Trans>
+                </MenuItem>
+                <MenuItem value="keep">
+                  <Trans>Always keep it</Trans>
+                </MenuItem>
+                <MenuItem value="terrain">
+                  <Trans>Replace with the terrain model</Trans>
                 </MenuItem>
               </Select>
             </FormControl>

@@ -75,9 +75,11 @@ import {
 import {
   LOCAL_TRACK_SCHEMA_VERSION,
   MAXIMUM_TRACK_MARKERS,
+  komootElevationPreferences,
   localTrackSegments,
   normalizeLocalTrackName,
   trackSorts,
+  type KomootElevationPreference,
   type LocalTrackContent,
   type LocalTrackSummary,
   type TrackMarker,
@@ -493,6 +495,7 @@ const uiPreferencesSchema = z
     trackSort: z.enum(trackSorts).default('created'),
     onboardingCompleted: z.boolean().default(false),
     trackSectionExpanded: z.record(z.string(), z.boolean()).default({}),
+    komootElevation: z.enum(komootElevationPreferences).default('ask'),
   })
   .strict();
 
@@ -512,6 +515,7 @@ interface UiPreferences {
   readonly trackSort: TrackSort;
   readonly onboardingCompleted: boolean;
   readonly trackSectionExpanded: Readonly<Record<string, boolean>>;
+  readonly komootElevation: KomootElevationPreference;
 }
 
 const defaultUiPreferences: UiPreferences = {
@@ -523,6 +527,7 @@ const defaultUiPreferences: UiPreferences = {
   trackSort: 'created',
   onboardingCompleted: false,
   trackSectionExpanded: {},
+  komootElevation: 'ask',
 };
 const markerWeatherWeekdaySchema: z.ZodType<MarkerWeatherWeekday> = z.union([
   z.literal(0),

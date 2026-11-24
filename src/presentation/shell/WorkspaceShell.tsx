@@ -147,6 +147,8 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const elevationGradeLegendDismissed = useUiStore(
     (state) => state.elevationGradeLegendDismissed,
   );
+  const komootElevation = useUiStore((state) => state.komootElevation);
+  const setKomootElevation = useUiStore((state) => state.setKomootElevation);
   const markerSort = useUiStore((state) => state.markerSort);
   const trackSort = useUiStore((state) => state.trackSort);
   const navigationCollapsed = useUiStore((state) => state.navigationCollapsed);
@@ -312,12 +314,16 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     };
   }, [setActiveTab]);
 
+  // Track disclosures and the Komoot elevation choice are written from the store by
+  // their own features, so every save reads them there.
   const persistUiPreferences = useCallback(
     async (nextPreferences: UiPreferenceValues): Promise<boolean> => {
+      const { trackSectionExpanded, komootElevation } = useUiStore.getState();
       try {
         await database.saveUiPreferences({
           ...nextPreferences,
-          trackSectionExpanded: useUiStore.getState().trackSectionExpanded,
+          trackSectionExpanded,
+          komootElevation,
         });
         return true;
       } catch {
@@ -331,7 +337,12 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   useEffect(
     () =>
       useUiStore.subscribe((state, previous) => {
-        if (state.trackSectionExpanded === previous.trackSectionExpanded) return;
+        if (
+          state.trackSectionExpanded === previous.trackSectionExpanded &&
+          state.komootElevation === previous.komootElevation
+        ) {
+          return;
+        }
         void persistUiPreferences({
           developerMode: state.developerMode,
           navigationCollapsed: state.navigationCollapsed,
@@ -1235,12 +1246,14 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       />
       <SettingsDialog
         developerMode={developerMode}
+        komootElevation={komootElevation}
         locale={locale}
         open={settingsOpen}
         onClose={() => {
           setSettingsOpen(false);
         }}
         onDeveloperModeChange={handleDeveloperModeChange}
+        onKomootElevationChange={setKomootElevation}
         onLocaleChange={handleLocaleChange}
         storageUsage={storageUsage}
       />

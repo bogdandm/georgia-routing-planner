@@ -124,6 +124,11 @@ const komootPlausiblePaceRatio = { minimum: 0.8, maximum: 1.2 } as const;
 /** Local start window in minutes after midnight at the route's start, inclusive. */
 const komootPlausibleStartMinutes = { minimum: 7 * 60, maximum: 12 * 60 } as const;
 
+/** Komoot's elevations come from its own coarse terrain model, not a recording. */
+export function isKomootCreator(creator: string | undefined): boolean {
+  return creator !== undefined && komootCreatorPattern.test(creator);
+}
+
 /**
  * Whether timestamps look like a real hike: the local start lies within 07:00–12:00 and
  * the elapsed time within 80–120 % of the DIN 33466 hiking estimate.
@@ -508,7 +513,7 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
   }
 
   const warnings: GpxValidationWarning[] = [];
-  const isKomootExport = komootCreatorPattern.test(root.getAttribute('creator') ?? '');
+  const isKomootExport = isKomootCreator(root.getAttribute('creator') ?? undefined);
   const waypoints = parseWaypoints(root, warnings, isKomootExport);
   const trackSegments = parseSegments(
     trackSegmentElements,

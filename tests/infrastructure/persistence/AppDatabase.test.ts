@@ -142,6 +142,7 @@ describe('AppDatabase', () => {
       trackSort: 'created',
       onboardingCompleted: false,
       trackSectionExpanded: {},
+      komootElevation: 'ask',
     });
 
     await database.saveUiPreferences({
@@ -153,6 +154,7 @@ describe('AppDatabase', () => {
       trackSort: 'distance',
       onboardingCompleted: true,
       trackSectionExpanded: { timing: false, markers: true },
+      komootElevation: 'terrain',
     });
 
     await expect(database.loadUiPreferences()).resolves.toEqual({
@@ -164,6 +166,7 @@ describe('AppDatabase', () => {
       trackSort: 'distance',
       onboardingCompleted: true,
       trackSectionExpanded: { timing: false, markers: true },
+      komootElevation: 'terrain',
     });
 
     await database.saveElevationGradeLegendDismissed(false);
@@ -176,6 +179,7 @@ describe('AppDatabase', () => {
       trackSort: 'distance',
       onboardingCompleted: true,
       trackSectionExpanded: { timing: false, markers: true },
+      komootElevation: 'terrain',
     });
   });
 
@@ -363,6 +367,7 @@ describe('AppDatabase', () => {
       trackSort: 'created',
       onboardingCompleted: false,
       trackSectionExpanded: {},
+      komootElevation: 'ask',
     });
   });
 

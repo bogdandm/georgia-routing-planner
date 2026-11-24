@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
-import type { TrackSort } from '@/domain/tracks/localTrack';
+import type { KomootElevationPreference, TrackSort } from '@/domain/tracks/localTrack';
 
 import type { MapDebugOptions } from '@/presentation/map/mapTypes';
 
@@ -16,6 +16,7 @@ interface UiState {
   readonly developerDrawerOpen: boolean;
   readonly developerMode: boolean;
   readonly elevationGradeLegendDismissed: boolean;
+  readonly komootElevation: KomootElevationPreference;
   readonly mapDebugOptions: MapDebugOptions;
   readonly markerSort: MarkerSort;
   readonly trackSort: TrackSort;
@@ -29,6 +30,7 @@ interface UiState {
   readonly setDeveloperDrawerOpen: (value: boolean) => void;
   readonly setDeveloperMode: (value: boolean) => void;
   readonly setElevationGradeLegendDismissed: (value: boolean) => void;
+  readonly setKomootElevation: (value: KomootElevationPreference) => void;
   readonly setMapDebugOptions: (value: MapDebugOptions) => void;
   readonly setMarkerSort: (value: MarkerSort) => void;
   readonly setTrackSort: (value: TrackSort) => void;
@@ -44,6 +46,7 @@ export const useUiStore = create<UiState>()((set) => ({
   developerDrawerOpen: false,
   developerMode: false,
   elevationGradeLegendDismissed: false,
+  komootElevation: 'ask',
   mapDebugOptions: {
     showCollisionBoxes: false,
     showTileBoundaries: false,
@@ -67,6 +70,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setElevationGradeLegendDismissed: (elevationGradeLegendDismissed) => {
     set({ elevationGradeLegendDismissed });
+  },
+  setKomootElevation: (komootElevation) => {
+    set({ komootElevation });
   },
   setMapDebugOptions: (mapDebugOptions) => {
     set({ mapDebugOptions });

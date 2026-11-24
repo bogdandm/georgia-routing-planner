@@ -134,6 +134,11 @@ msgstr "All map layers, grouped by data source. Your choices are saved in this b
 msgid "Allocated heap"
 msgstr "Allocated heap"
 
+#. js-lingui-id: x-b-KT
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Always keep it"
+msgstr "Always keep it"
+
 #. js-lingui-id: 77CFp1
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "An account is optional. Turn on sync to keep tracks, folders, and markers on all your devices."
@@ -153,6 +158,11 @@ msgstr "Approximate JavaScript memory"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Areas"
 msgstr "Areas"
+
+#. js-lingui-id: Aerhmy
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Ask whether to keep it"
+msgstr "Ask whether to keep it"
 
 #. js-lingui-id: iH8pgl
 #: src/presentation/shell/OnboardingTour.tsx
@@ -561,6 +571,11 @@ msgstr "Isolated dwelling"
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Keyboard and mouse"
 msgstr "Keyboard and mouse"
+
+#. js-lingui-id: rKSnkA
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Komoot elevation on import"
+msgstr "Komoot elevation on import"
 
 #. js-lingui-id: g9-BQD
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -1052,6 +1067,11 @@ msgstr "Rendering the selected Sentinel scene…"
 #: src/presentation/shell/OperationalStatus.tsx
 msgid "Rendering weather map"
 msgstr "Rendering weather map"
+
+#. js-lingui-id: M9sotw
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Replace with the terrain model"
+msgstr "Replace with the terrain model"
 
 #. js-lingui-id: J8y4b1
 #: src/presentation/shell/OperationalStatus.tsx

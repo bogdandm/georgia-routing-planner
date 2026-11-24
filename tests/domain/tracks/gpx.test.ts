@@ -119,19 +119,24 @@ describe('parseGpx', () => {
   });
 
   it.each([
-    { minutes: 46, kept: false },
-    { minutes: 50, kept: true },
-    { minutes: 70, kept: true },
-    { minutes: 74, kept: false },
+    { startUtc: '06:00', minutes: 46, kept: false },
+    { startUtc: '06:00', minutes: 50, kept: true },
+    { startUtc: '06:00', minutes: 70, kept: true },
+    { startUtc: '06:00', minutes: 74, kept: false },
+    { startUtc: '02:59', minutes: 60, kept: false },
+    { startUtc: '03:00', minutes: 60, kept: true },
+    { startUtc: '08:00', minutes: 60, kept: true },
+    { startUtc: '08:01', minutes: 60, kept: false },
   ])(
-    'keeps Komoot timestamps only within 80-120% of the hiking estimate ($minutes min)',
-    ({ minutes, kept }) => {
-      // 0.036° of latitude is about 4 km: a flat hour at the DIN 33466 pace.
-      const end = new Date(Date.UTC(2026, 6, 13, 6, minutes)).toISOString();
+    'keeps Komoot timestamps only for a 07:00-12:00 local start and 80-120% of the estimate (start $startUtc UTC, $minutes min)',
+    ({ startUtc, minutes, kept }) => {
+      // Asia/Tbilisi is UTC+4. 0.036° of latitude is about 4 km: a flat DIN 33466 hour.
+      const start = new Date(`2026-07-13T${startUtc}:00.000Z`);
+      const end = new Date(start.getTime() + minutes * 60_000).toISOString();
       const result = parseGpx(
         '<gpx version="1.1" creator="https://www.komoot.com">' +
           '<trk><trkseg>' +
-          '<trkpt lat="41.0" lon="44.0"><time>2026-07-13T06:00:00Z</time></trkpt>' +
+          `<trkpt lat="41.0" lon="44.0"><time>${start.toISOString()}</time></trkpt>` +
           `<trkpt lat="41.036" lon="44.0"><time>${end}</time></trkpt>` +
           '</trkseg></trk></gpx>',
       );

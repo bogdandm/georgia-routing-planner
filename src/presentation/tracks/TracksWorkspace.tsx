@@ -111,6 +111,7 @@ import {
   setHoveredTrackPoint,
   trackPointHoverStore,
 } from '@/presentation/tracks/trackPointHoverStore';
+import { routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
@@ -196,7 +197,6 @@ import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSecti
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
-  routeTimeZone,
   useTrackLighting,
   type TrackLightingView,
 } from '@/presentation/tracks/useTrackLighting';

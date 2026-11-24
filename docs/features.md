@@ -204,9 +204,10 @@ not create track markers.
 
 Files whose `creator` names Komoot are planned tours, not recordings: their point
 timestamps start at the export moment and follow Komoot's pace model. Import keeps them
-only when the elapsed time lies within 80–120 % of the DIN 33466 hiking estimate from
-the source distance and elevation; otherwise it drops every timestamp, so the track has
-no recorded start time or pace. Komoot planning-point waypoints named `Position N` or
+only when the start lies within 07:00–12:00 in the time zone of the track start and the
+elapsed time lies within 80–120 % of the DIN 33466 hiking estimate from the source
+distance and elevation; otherwise it drops every timestamp, so the track has no recorded
+start time or pace. Komoot planning-point waypoints named `Position N` or
 `N <truncated address>…` are skipped without warnings; other waypoints import normally.
 
 #### Route planning

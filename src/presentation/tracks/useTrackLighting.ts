@@ -1,4 +1,3 @@
-import lookupTimeZone from '@photostructure/tz-lookup';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -17,6 +16,7 @@ import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { solarDayEvents } from '@/domain/terrain/solarPosition';
 import {
   instantToZonedWallTime,
+  routeTimeZone,
   zonedWallTimeToInstant,
   type ZonedWallTime,
 } from '@/domain/time/zonedWallTime';
@@ -78,17 +78,6 @@ interface TrackLightingInput {
 }
 
 const millisecondsPerMinute = 60_000;
-
-/**
- * IANA zone at a route's start, whose clock every route time uses. Rounded like the map's
- * sun panel, so nearby points share one zone.
- */
-export function routeTimeZone([longitude, latitude]: TrackCoordinate): string {
-  return lookupTimeZone(
-    Math.round(latitude * 100) / 100,
-    Math.round(longitude * 100) / 100,
-  );
-}
 
 /** `{ year, month, day }` of a `YYYY-MM-DD` date, or null when it is not one. */
 export function parseIsoDate(

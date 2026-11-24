@@ -1,3 +1,4 @@
+import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   calculateTrackMetrics,
   estimateHikingSeconds,
@@ -120,11 +121,23 @@ const defaultLimits = {
 const komootCreatorPattern = /komoot/i;
 const komootPlanningWaypointNamePattern = /^(?:Position \d+|\d+ .*…)$/u;
 const komootPlausiblePaceRatio = { minimum: 0.8, maximum: 1.2 } as const;
+/** Local start window in minutes after midnight at the route's start, inclusive. */
+const komootPlausibleStartMinutes = { minimum: 7 * 60, maximum: 12 * 60 } as const;
 
-/** Whether the elapsed time lies within 80–120 % of the DIN 33466 hiking estimate. */
-function hasPlausiblePace(segments: readonly TrackSegment[]): boolean {
+/**
+ * Whether timestamps look like a real hike: the local start lies within 07:00–12:00 and
+ * the elapsed time within 80–120 % of the DIN 33466 hiking estimate.
+ */
+function hasPlausibleTiming(segments: readonly TrackSegment[]): boolean {
   const metrics = calculateTrackMetrics(segments);
-  if (metrics.elapsedSeconds === undefined) return false;
+  if (metrics.elapsedSeconds === undefined || metrics.recordedStartAt === undefined) {
+    return false;
+  }
+  const start = instantToZonedWallTime(
+    new Date(metrics.recordedStartAt),
+    routeTimeZone(metrics.startCoordinate),
+  );
+  const startMinutes = start.hour * 60 + start.minute;
   const ratio =
     metrics.elapsedSeconds /
     estimateHikingSeconds(
@@ -133,6 +146,8 @@ function hasPlausiblePace(segments: readonly TrackSegment[]): boolean {
       metrics.descentMeters ?? 0,
     );
   return (
+    startMinutes >= komootPlausibleStartMinutes.minimum &&
+    startMinutes <= komootPlausibleStartMinutes.maximum &&
     ratio >= komootPlausiblePaceRatio.minimum &&
     ratio <= komootPlausiblePaceRatio.maximum
   );
@@ -527,7 +542,7 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
     );
   }
   const importedSegments =
-    isKomootExport && !hasPlausiblePace(segments)
+    isKomootExport && !hasPlausibleTiming(segments)
       ? withoutTimestamps(segments)
       : segments;
   return {

@@ -116,7 +116,7 @@ const defaultLimits = {
 } as const;
 
 /**
- * Komoot exports planned tours with timestamps synthesized from the export moment and,
+ * Komoot exports planned tours with timestamps starting when the tour was created and,
  * often, an unrealistic pace, plus one `<wpt>` per planning point named `Position N` or
  * `N <address…>`.
  */

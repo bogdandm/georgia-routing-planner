@@ -6911,7 +6911,7 @@ export function TrackDetailsPane({
                 <Alert severity="warning">
                   <Trans>
                     Komoot point times were removed as unrealistic: Komoot starts them
-                    at the export moment and follows its own pace model.
+                    when the tour was created in Komoot and follows its own pace model.
                   </Trans>
                 </Alert>
               ) : null}

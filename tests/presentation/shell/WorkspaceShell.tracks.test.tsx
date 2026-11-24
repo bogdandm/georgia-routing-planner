@@ -71,7 +71,7 @@ async function createTrackFolder(
 }
 
 function komootGpxFile(): File {
-  // Komoot stamps a planned tour from the export moment: here 02:48 at the start.
+  // Komoot stamps a planned tour from its creation moment: here 02:48 at the start.
   const xml = `<?xml version="1.0"?><gpx version="1.1" creator="https://www.komoot.de"><trk><name>Komoot tour</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele><time>2026-11-23T22:48:32Z</time></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele><time>2026-11-23T23:20:00Z</time></trkpt></trkseg></trk></gpx>`;
   const file = new File([xml], 'Komoot tour.gpx', { type: 'application/gpx+xml' });
   Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
@@ -1790,7 +1790,7 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
     expect(
       within(details).getByText(
-        'Komoot point times were removed as unrealistic: Komoot starts them at the export moment and follows its own pace model.',
+        'Komoot point times were removed as unrealistic: Komoot starts them when the tour was created in Komoot and follows its own pace model.',
       ),
     ).toBeVisible();
     await user.click(within(details).getByRole('button', { name: 'Yes' }));

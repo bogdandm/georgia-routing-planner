@@ -186,16 +186,19 @@ name** field and needs an explicit apply. Multiple segments are named as one jou
 
 Endpoints prefer a city, town, village, or hamlet within 1 km, then a ranked landmark,
 then a settlement within 3 km; districts and municipalities never name a track.
-Landmarks rank passes, saddles, and peaks within 1 km, then lakes, glaciers, and
+Landmarks come from the basemap tiles the map labels, supplemented by passes,
+waterfalls, glaciers, and other kinds the tiles omit when the public Overpass service
+answers. They rank passes, saddles, and peaks within 1 km, then lakes, glaciers, and
 waterfalls, then huts, viewpoints, historic sites, shelters, places of worship, and
 settlements within 2 km, weighting each class by distance. Labels without an English or
 Latin name are romanized: Georgian as on road signs, without apostrophes and with `ყ` as
 `k` (`ყელიდა` → `Kelida`); Cyrillic by BGN/PCGN without diacritics or soft/hard-sign
 marks. Passes gain a `Pass` suffix and peaks an `Mt.` prefix when missing. A failed
-lookup is skipped, and a warning names the failed lookup and its reason, including
-HTTP 429. When source elevation is usable, Save keeps the source points as canonical and
-stores the calculated DEM projection separately; otherwise the DEM projection becomes
-the canonical elevation. The original file bytes are discarded after parsing.
+settlement or basemap landmark lookup is skipped, and a warning names it and its reason,
+including HTTP 429; an unavailable supplement is skipped silently. When source elevation
+is usable, Save keeps the source points as canonical and stores the calculated DEM
+projection separately; otherwise the DEM projection becomes the canonical elevation. The
+original file bytes are discarded after parsing.
 
 GPX import also reads bounded root `<wpt>` elements as track markers, up to 100 per
 track. Blank names become `Marker N`; invalid or excess waypoints are skipped with

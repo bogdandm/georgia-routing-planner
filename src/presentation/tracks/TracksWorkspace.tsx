@@ -727,7 +727,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     userData,
     mapLayers,
     mapViewport,
-    searchPlaces,
+    trackNamingPlaces,
   } = useRuntimeServices();
   const trackSort = useUiStore((state) => state.trackSort);
   // Smartphone map reveal: provider actions whose result is on the map close the
@@ -1722,7 +1722,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
 
   const generateName = useCallback(
     async (preview: PreparedPreviewTrack, controller: AbortController) => {
-      if (searchPlaces === null) {
+      if (trackNamingPlaces === null) {
         setActive((current) =>
           current?.kind === 'preview' &&
           current.preparationStatus === 'ready' &&
@@ -1739,7 +1739,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       try {
         const suggestion = await suggestTrackName({
           segments,
-          places: searchPlaces,
+          places: trackNamingPlaces,
           logger,
           lookedUpAt: clock.now().toISOString(),
           signal: controller.signal,
@@ -1763,7 +1763,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         );
       }
     },
-    [clock, logger, searchPlaces],
+    [clock, logger, trackNamingPlaces],
   );
 
   const importFiles = useCallback(

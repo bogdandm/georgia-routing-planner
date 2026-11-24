@@ -16,6 +16,7 @@ import type { TrailRouter } from '@/application/ports/TrailRouter';
 import { SearchSatelliteMosaic } from '@/application/satellite/SearchSatelliteMosaic';
 import { SearchSatelliteScenes } from '@/application/satellite/SearchSatelliteScenes';
 import type { TrackShareService } from '@/application/tracks/TrackShareService';
+import type { TrackNamingPlaces } from '@/application/tracks/suggestTrackName';
 import { buildInfo, type BuildInfo } from '@/bootstrap/buildInfo';
 import {
   createUnconfiguredUserDataService,
@@ -42,6 +43,7 @@ import { MapDiagnosticsSnapshotStore } from '@/diagnostics/snapshots/MapDiagnost
 import { SentinelQueryDiagnosticsStore } from '@/diagnostics/snapshots/SentinelQueryDiagnosticsStore';
 import { createHttpClient } from '@/infrastructure/http/createHttpClient';
 import { RasterDemElevationProvider } from '@/infrastructure/elevation/RasterDemElevationProvider';
+import { BasemapLandmarkGateway } from '@/infrastructure/geocoding/BasemapLandmarkGateway';
 import { NominatimPlaceSearchGateway } from '@/infrastructure/geocoding/NominatimPlaceSearchGateway';
 import { BrowserTrailRouter } from '@/infrastructure/routing/BrowserTrailRouter';
 import { AppDatabase } from '@/infrastructure/persistence/AppDatabase';
@@ -90,6 +92,8 @@ export interface RuntimeServices {
   readonly supabaseConfiguration: SupabaseConfigurationResult;
   readonly trackShares: TrackShareService | null;
   readonly userData: UserDataService;
+  /** Place lookups for imported-track names; null without valid map and geocoding configuration. */
+  readonly trackNamingPlaces: TrackNamingPlaces | null;
 }
 
 /**
@@ -259,22 +263,42 @@ export function createRuntimeServices(): RuntimeServices {
   const geocodingConfiguration = loadGeocodingProviderConfiguration(
     import.meta.env.VITE_GEOCODING_PROVIDER_CONFIGURATION,
   );
-  const searchPlaces =
+  // One gateway instance keeps search, reverse, and Overpass on a shared request pace.
+  const placeGateway =
     geocodingConfiguration.status === 'valid'
-      ? new SearchPlaces(
-          new NominatimPlaceSearchGateway(
-            httpClient,
-            geocodingConfiguration.value,
-            idGenerator,
-          ),
-          logger,
+      ? new NominatimPlaceSearchGateway(
+          httpClient,
+          geocodingConfiguration.value,
           idGenerator,
-          clock,
         )
       : null;
+  const searchPlaces =
+    placeGateway === null
+      ? null
+      : new SearchPlaces(placeGateway, logger, idGenerator, clock);
   if (searchPlaces === null) {
     logger.log({ level: 'warn', name: 'place-search.configuration.invalid' });
   }
+  const basemapLandmarks =
+    mapProviderConfiguration.status === 'valid'
+      ? new BasemapLandmarkGateway(
+          httpClient,
+          mapProviderConfiguration.value.vector.tileJsonUrl,
+          mapProviderConfiguration.value.vector.sourceLayers,
+          mapProviderConfiguration.value.policy.requestTimeoutMs,
+          idGenerator,
+        )
+      : null;
+  const trackNamingPlaces: TrackNamingPlaces | null =
+    placeGateway === null || basemapLandmarks === null
+      ? null
+      : {
+          reverseSettlement: (coordinate, signal) =>
+            placeGateway.reverseSettlement(coordinate, signal),
+          nearby: (coordinate, signal) => basemapLandmarks.nearby(coordinate, signal),
+          nearbySupplement: (coordinate, signal) =>
+            placeGateway.nearbySupplement(coordinate, signal),
+        };
   const satelliteCatalogGateway =
     mapProviderConfiguration.status === 'valid'
       ? new EarthSearchSatelliteCatalogGateway(
@@ -356,6 +380,7 @@ export function createRuntimeServices(): RuntimeServices {
     storageUsage,
     supabaseConfiguration,
     trackShares,
+    trackNamingPlaces,
     userData,
   };
 }

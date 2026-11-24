@@ -87,9 +87,10 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
 import {
-  demProjectionCoversSource,
+  canReplaceSourceElevation,
   prepareImportedTrack,
   TrackElevationPreparationError,
+  withoutPointTimes,
   withoutSourceElevation,
   type PreparedImportedTrack,
   type TrackElevationPreparationErrorCode,
@@ -351,14 +352,14 @@ function canReplaceKomootElevation(
   return (
     isKomootCreator(parsed.metadata.creator) &&
     prepared.sourceProfile !== null &&
-    demProjectionCoversSource(prepared)
+    canReplaceSourceElevation(prepared)
   );
 }
 
 /** The remove action needs a complete DEM projection and source elevation or times. */
 function canRemoveSourceElevationAndTime(preview: PreparedPreviewTrack): boolean {
   return (
-    demProjectionCoversSource(preview) &&
+    canReplaceSourceElevation(preview) &&
     preview.sourceSegments.some((segment) =>
       segment.points.some(
         (point) =>
@@ -370,13 +371,16 @@ function canRemoveSourceElevationAndTime(preview: PreparedPreviewTrack): boolean
 
 /**
  * Replaces the preview's source elevation, and optionally its point times, with the DEM
- * projection. The parsed segments change too, so recalculation cannot restore them.
+ * projection, keeping every source vertex. A preview without a source profile already
+ * has that projection. The parsed segments change too, so recalculation keeps the result.
  */
 function previewWithoutSourceElevation(
   preview: PreparedPreviewTrack,
   dropTimes: boolean,
 ): PreparedPreviewTrack {
-  const prepared = withoutSourceElevation(preview, { dropTimes });
+  const withoutElevation =
+    preview.sourceProfile === null ? preview : withoutSourceElevation(preview);
+  const prepared = dropTimes ? withoutPointTimes(withoutElevation) : withoutElevation;
   return {
     ...preview,
     ...prepared,
@@ -2483,11 +2487,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         active.kind === 'preview' || active.kind === 'shared'
           ? active.parsed.segments
           : active.content.trackPoints.map((points) => ({ points }));
+      // Stored DEM-canonical points are earlier 10 m stations. Resampling them again would
+      // cut each bend once more, so every recalculation would shorten the track and drift
+      // its totals; they keep their geometry and only take new DEM elevations.
+      const demCanonical =
+        active.kind === 'saved' &&
+        active.summary.metrics.elevationSource === 'dem-assisted' &&
+        active.summary.calculatedMetrics === undefined &&
+        active.content.calculatedTrackPoints === undefined;
       const prepared = await prepareImportedTrack(
         sourceSegments,
         elevationProvider,
         controller.signal,
         {
+          preserveGeometry: demCanonical,
           onProgress: (progress) => {
             if (
               controller.signal.aborted ||
@@ -2535,11 +2548,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           }
           return { ...current, preparationStatus: 'ready', ...prepared };
         });
-      } else if (
-        active.summary.metrics.elevationSource === 'dem-assisted' &&
-        active.summary.calculatedMetrics === undefined &&
-        active.content.calculatedTrackPoints === undefined
-      ) {
+      } else if (demCanonical) {
         const calculated = requireCalculatedElevation(prepared);
         const content: LocalTrackContent = {
           schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
@@ -2631,7 +2640,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setActive((current) =>
         current?.kind === 'preview' &&
         current.preparationStatus === 'ready' &&
-        demProjectionCoversSource(current)
+        canReplaceSourceElevation(current)
           ? previewWithoutSourceElevation(current, dropTimes)
           : current,
       );

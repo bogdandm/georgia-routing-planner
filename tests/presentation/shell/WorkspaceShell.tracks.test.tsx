@@ -1896,6 +1896,55 @@ describe('WorkspaceShell', () => {
     ).toBe(true);
   });
 
+  it('keeps the geometry of a DEM-canonical track through repeated recalculation', async () => {
+    mockRisingDem();
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+    const zigzag = [
+      [42, 44],
+      [42.0003, 44.0004],
+      [42, 44.0008],
+      [42.0003, 44.0012],
+      [42, 44.0016],
+    ]
+      .map(([lat, lon]) => `<trkpt lat="${String(lat)}" lon="${String(lon)}"/>`)
+      .join('');
+    const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Zigzag</name><trkseg>${zigzag}</trkseg></trk></gpx>`;
+    const file = new File([xml], 'Zigzag.gpx', { type: 'application/gpx+xml' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+
+    await user.upload(input, file);
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(await within(details).findByLabelText(/^Elevation gain: /u)).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const saved = saveLocalTrack.mock.calls[0]?.[1];
+    if (saved === undefined) throw new Error('The track was not saved.');
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
+    for (const pass of [2, 3]) {
+      const recalculate = screen.getByRole('button', { name: 'Recalculate elevation' });
+      await waitFor(() => {
+        expect(recalculate).toBeEnabled();
+      });
+      await user.click(recalculate);
+      await waitFor(() => {
+        expect(saveLocalTrack).toHaveBeenCalledTimes(pass);
+      });
+    }
+    const recalculated = await services.database.loadLocalTrackContent(saved.trackId);
+    expect(recalculated.trackPoints.flat().map((point) => point.coordinate)).toEqual(
+      saved.trackPoints.flat().map((point) => point.coordinate),
+    );
+  });
+
   it('keeps the newest import when an older preparation completes late', async () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();

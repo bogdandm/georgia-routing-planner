@@ -1079,7 +1079,11 @@ authoritative; calculated DEM elevation is the profile fallback only when no usa
 source run exists. The calculation resamples at 10 m, samples the provider's
 maximum-zoom DEM with bilinear interpolation between pixel centres (fetching each tile
 once and renormalizing over valid corners), and aggregates gain/loss with 5 m
-hysteresis. Preparation progress reports the share of resolved samples.
+hysteresis. Preparation progress reports the share of resolved samples. When the DEM
+projection becomes a track's canonical elevation, every source vertex rejoins the
+stations with elevation interpolated between its neighbouring stations, so the geometry
+is unchanged and the gain is not. Recalculating such a saved track keeps its stored
+points and only gives them new DEM elevations, so repeated recalculation is stable.
 
 `beforeunload` is registered only while an import preview is unsaved.
 

@@ -201,11 +201,12 @@ missing. A failed settlement or basemap landmark lookup is skipped, and a warnin
 it and its reason, including HTTP 429; an unavailable supplement is skipped silently.
 When source elevation is usable, Save keeps the source points as canonical and stores
 the calculated DEM projection separately; otherwise the DEM projection becomes the
-canonical elevation. The original file bytes are discarded after parsing. **Remove
-elevation and time**, left of Discard on a prepared import whose DEM projection covers
-every segment and that has source elevation or point times, drops both before saving:
-the DEM projection becomes the canonical elevation and the track has no recorded time or
-pace.
+canonical elevation, keeping every source vertex between its 10 m DEM stations so the
+track geometry is unchanged. The original file bytes are discarded after parsing.
+**Remove elevation and time**, left of Discard on a prepared import whose DEM projection
+covers every segment and that has source elevation or point times, drops both before
+saving: the DEM projection becomes the canonical elevation and the track has no recorded
+time or pace.
 
 GPX import also reads bounded root `<wpt>` elements as track markers, up to 100 per
 track. Blank names become `Marker N`; invalid or excess waypoints are skipped with

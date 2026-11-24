@@ -49,9 +49,11 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   ClickAwayListener,
   Divider,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   List,
@@ -85,8 +87,11 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand';
 
 import {
+  canReplaceSourceElevation,
   prepareImportedTrack,
   TrackElevationPreparationError,
+  withoutPointTimes,
+  withoutSourceElevation,
   type PreparedImportedTrack,
   type TrackElevationPreparationErrorCode,
   type TrackElevationPreparationProgress,
@@ -114,6 +119,7 @@ import {
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
+  isKomootCreator,
   type GpxParseFailureCode,
   type GpxValidationWarning,
   type GpxWarningCode,
@@ -221,9 +227,11 @@ import type { ImportedTrackHighlightSegment } from '@/presentation/map/MapLibreL
 import type { ImportedTrackTimeLabel } from '@/presentation/map/mapStyleFactory';
 import { trackLightMapSegments } from '@/presentation/tracks/trackLightColor';
 import {
+  formatElevationChange,
   formatTrackDistance,
   formatTrackDuration,
   formatTrackElevation,
+  formatTrackGrade,
 } from '@/presentation/tracks/trackFormatters';
 import {
   cancelTrackPathMove,
@@ -323,13 +331,75 @@ interface PreparedPreviewTrack extends PreviewTrackBase {
   readonly middlePoi?: PoiCandidate;
   readonly endPoi?: PoiCandidate;
   readonly lookupFailures?: readonly TrackNameLookupFailure[];
+  /** A Komoot import waits for the user to keep its elevation or use the DEM instead. */
+  readonly komootElevationChoicePending: boolean;
 }
 
-interface SharedTrackSelection extends Omit<PreparedPreviewTrack, 'kind'> {
+interface SharedTrackSelection extends Omit<
+  PreparedPreviewTrack,
+  'kind' | 'komootElevationChoicePending'
+> {
   readonly kind: 'shared';
 }
 
 type PreviewTrack = PreparingPreviewTrack | FailedPreviewTrack | PreparedPreviewTrack;
+
+/** A Komoot import whose source elevation a complete DEM projection can replace. */
+function canReplaceKomootElevation(
+  parsed: ParsedGpx,
+  prepared: PreparedImportedTrack,
+): boolean {
+  return (
+    isKomootCreator(parsed.metadata.creator) &&
+    prepared.sourceProfile !== null &&
+    canReplaceSourceElevation(prepared)
+  );
+}
+
+/** The question shows the gain difference, so it also needs a DEM gain to compare. */
+function canAskKomootElevation(
+  parsed: ParsedGpx,
+  prepared: PreparedImportedTrack,
+): boolean {
+  return (
+    canReplaceKomootElevation(parsed, prepared) &&
+    prepared.sourceMetrics.ascentMeters !== undefined &&
+    (prepared.calculatedMetrics?.ascentMeters ?? 0) > 0
+  );
+}
+
+/** The remove action needs a complete DEM projection and source elevation or times. */
+function canRemoveSourceElevationAndTime(preview: PreparedPreviewTrack): boolean {
+  return (
+    canReplaceSourceElevation(preview) &&
+    preview.sourceSegments.some((segment) =>
+      segment.points.some(
+        (point) =>
+          point.elevationMeters !== undefined || point.recordedAt !== undefined,
+      ),
+    )
+  );
+}
+
+/**
+ * Replaces the preview's source elevation, and optionally its point times, with the DEM
+ * projection, keeping every source vertex. A preview without a source profile already
+ * has that projection. The parsed segments change too, so recalculation keeps the result.
+ */
+function previewWithoutSourceElevation(
+  preview: PreparedPreviewTrack,
+  dropTimes: boolean,
+): PreparedPreviewTrack {
+  const withoutElevation =
+    preview.sourceProfile === null ? preview : withoutSourceElevation(preview);
+  const prepared = dropTimes ? withoutPointTimes(withoutElevation) : withoutElevation;
+  return {
+    ...preview,
+    ...prepared,
+    parsed: { ...preview.parsed, segments: prepared.sourceSegments },
+    komootElevationChoicePending: false,
+  };
+}
 
 interface SavedTrackSelection {
   readonly kind: 'saved';
@@ -532,6 +602,10 @@ interface TracksWorkspaceValue {
   readonly closeActive: () => Promise<boolean>;
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
+  /** Keeps or replaces a Komoot preview's elevation; `remember` stores the choice. */
+  readonly answerKomootElevation: (keep: boolean, remember: boolean) => void;
+  /** Replaces the preview's elevation with the DEM and drops its point times. */
+  readonly removePreviewElevationAndTime: () => void;
   readonly discardRoutePlan: () => void;
   readonly startTrackMarkerPlacement: () => void;
   readonly renameTrackMarker: (markerId: string, name: string) => Promise<void>;
@@ -1847,12 +1921,23 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
             },
           );
           if (importIsStale()) return;
-          const preview: PreparedPreviewTrack = {
+          const replaceableKomootElevation = canReplaceKomootElevation(
+            parsed,
+            prepared,
+          );
+          const komootPreference = useUiStore.getState().komootElevation;
+          const readyPreview: PreparedPreviewTrack = {
             ...previewBase,
             preparationStatus: 'ready',
             ...prepared,
             namingStatus: 'loading',
+            komootElevationChoicePending:
+              komootPreference === 'ask' && canAskKomootElevation(parsed, prepared),
           };
+          const preview =
+            replaceableKomootElevation && komootPreference === 'terrain'
+              ? previewWithoutSourceElevation(readyPreview, false)
+              : readyPreview;
           setActive((current) =>
             current?.kind === 'preview' && current.id === preview.id
               ? { ...preview, name: current.name }
@@ -2392,6 +2477,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
+    // An import's own elevations are canonical, so recalculating them means replacing
+    // them with the terrain model; point times stay.
+    const overwriteSourceElevation =
+      active.kind === 'preview' &&
+      active.preparationStatus === 'ready' &&
+      active.sourceProfile !== null;
+    if (
+      overwriteSourceElevation &&
+      !window.confirm(
+        t`Overwrite the track's elevations with the terrain model? Point times stay unchanged.`,
+      )
+    ) {
+      return;
+    }
     initiallyRestoredTrackId.current = null;
     recalculationAbort.current?.abort();
     const controller = new AbortController();
@@ -2410,11 +2509,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         active.kind === 'preview' || active.kind === 'shared'
           ? active.parsed.segments
           : active.content.trackPoints.map((points) => ({ points }));
+      // Stored DEM-canonical points are earlier 10 m stations. Resampling them again would
+      // cut each bend once more, so every recalculation would shorten the track and drift
+      // its totals; they keep their geometry and only take new DEM elevations.
+      const demCanonical =
+        active.kind === 'saved' &&
+        active.summary.metrics.elevationSource === 'dem-assisted' &&
+        active.summary.calculatedMetrics === undefined &&
+        active.content.calculatedTrackPoints === undefined;
       const prepared = await prepareImportedTrack(
         sourceSegments,
         elevationProvider,
         controller.signal,
         {
+          preserveGeometry: demCanonical,
           onProgress: (progress) => {
             if (
               controller.signal.aborted ||
@@ -2437,6 +2545,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setElevationProgress(null);
       renderedTrackId.current = null;
       if (active.kind === 'preview') {
+        const replaceable = canReplaceSourceElevation(prepared);
+        if (overwriteSourceElevation && !replaceable) {
+          setError(
+            msg`The terrain model does not cover the whole track, so its elevations were kept.`,
+          );
+        }
         setActive((current) => {
           if (current?.kind !== 'preview' || current.id !== activeId) {
             return current;
@@ -2449,8 +2563,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               current.preparationStatus === 'ready'
                 ? current.namingStatus
                 : 'unavailable',
+            // A recalculated projection may no longer be able to replace the source.
+            komootElevationChoicePending:
+              current.preparationStatus === 'ready' &&
+              current.komootElevationChoicePending &&
+              canAskKomootElevation(current.parsed, prepared),
           };
-          return updated;
+          return overwriteSourceElevation && replaceable
+            ? previewWithoutSourceElevation(updated, false)
+            : updated;
         });
       } else if (active.kind === 'shared') {
         setActive((current) => {
@@ -2459,11 +2580,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           }
           return { ...current, preparationStatus: 'ready', ...prepared };
         });
-      } else if (
-        active.summary.metrics.elevationSource === 'dem-assisted' &&
-        active.summary.calculatedMetrics === undefined &&
-        active.content.calculatedTrackPoints === undefined
-      ) {
+      } else if (demCanonical) {
         const calculated = requireCalculatedElevation(prepared);
         const content: LocalTrackContent = {
           schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
@@ -2528,6 +2645,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     elevationProvider,
     recalculationState,
     reloadSummaries,
+    t,
     trackContentHasher,
     userData,
   ]);
@@ -2546,6 +2664,44 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setActive(null);
     setError(null);
   }, []);
+
+  const replacePreviewSourceElevation = useCallback(
+    (dropTimes: boolean) => {
+      if (recalculationState === 'recalculating' || previewSaveInProgress.current) {
+        return;
+      }
+      setActive((current) =>
+        current?.kind === 'preview' &&
+        current.preparationStatus === 'ready' &&
+        canReplaceSourceElevation(current)
+          ? previewWithoutSourceElevation(current, dropTimes)
+          : current,
+      );
+    },
+    [recalculationState],
+  );
+
+  const answerKomootElevation = useCallback(
+    (keep: boolean, remember: boolean) => {
+      if (remember) {
+        useUiStore.getState().setKomootElevation(keep ? 'keep' : 'terrain');
+      }
+      if (!keep) {
+        replacePreviewSourceElevation(false);
+        return;
+      }
+      setActive((current) =>
+        current?.kind === 'preview' && current.preparationStatus === 'ready'
+          ? { ...current, komootElevationChoicePending: false }
+          : current,
+      );
+    },
+    [replacePreviewSourceElevation],
+  );
+
+  const removePreviewElevationAndTime = useCallback(() => {
+    replacePreviewSourceElevation(true);
+  }, [replacePreviewSourceElevation]);
 
   const closeActive = useCallback(async () => {
     if (routePlanSaveInProgress.current) return false;
@@ -3789,6 +3945,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       createReversedTrack,
       deleteSaved,
       discardPreview,
+      answerKomootElevation,
+      removePreviewElevationAndTime,
       downloadActiveTrackGpx,
       discardRoutePlan,
       startTrackMarkerPlacement,
@@ -3837,6 +3995,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       deleteSaved,
       deleteFolder,
       discardPreview,
+      answerKomootElevation,
+      removePreviewElevationAndTime,
       discardRoutePlan,
       startTrackMarkerPlacement,
       renameTrackMarker,
@@ -5981,6 +6141,76 @@ function trackWarningDetail(warning: GpxValidationWarning, i18n: I18n): string {
   return message;
 }
 
+/** Asks whether a Komoot import keeps its elevation, showing its gain against the DEM. */
+function KomootElevationQuestion({
+  disabled,
+  modelGainMeters,
+  onAnswer,
+  sourceGainMeters,
+}: {
+  readonly disabled: boolean;
+  readonly modelGainMeters: number;
+  readonly onAnswer: (keep: boolean, remember: boolean) => void;
+  readonly sourceGainMeters: number;
+}) {
+  const { i18n, t } = useLingui();
+  const [remember, setRemember] = useState(false);
+  const differenceMeters = sourceGainMeters - modelGainMeters;
+  const difference = formatElevationChange(differenceMeters, i18n);
+  const percent = formatTrackGrade((differenceMeters / modelGainMeters) * 100, i18n);
+  return (
+    <Alert severity="info">
+      <Trans>
+        Keep Komoot elevations? Their elevation gain differs from the terrain model by{' '}
+        {difference} ({percent}).
+      </Trans>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}
+      >
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={disabled}
+          onClick={() => {
+            onAnswer(true, remember);
+          }}
+        >
+          <Trans>Yes</Trans>
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={disabled}
+          onClick={() => {
+            onAnswer(false, remember);
+          }}
+        >
+          <Trans>No</Trans>
+        </Button>
+        <FormControlLabel
+          sx={{ m: 0 }}
+          slotProps={{ typography: { variant: 'body2' } }}
+          control={
+            <Checkbox
+              size="small"
+              sx={{ p: 0, mr: 1 }}
+              checked={remember}
+              disabled={disabled}
+              onChange={(event) => {
+                setRemember(event.target.checked);
+              }}
+            />
+          }
+          label={t`Don't ask again`}
+        />
+      </Stack>
+    </Alert>
+  );
+}
+
 export function TrackDetailsPane({
   mode,
   onCollapse,
@@ -6000,6 +6230,8 @@ export function TrackDetailsPane({
     createReversedTrack,
     deleteSaved,
     discardPreview,
+    answerKomootElevation,
+    removePreviewElevationAndTime,
     discardRoutePlan,
     startTrackMarkerPlacement,
     renameTrackMarker,
@@ -6032,6 +6264,13 @@ export function TrackDetailsPane({
     updateTrackWeatherPreferences,
   } = useTracksWorkspace();
   const { t, i18n } = useLingui();
+  const removableSourceData = useMemo(
+    () =>
+      active?.kind === 'preview' &&
+      active.preparationStatus === 'ready' &&
+      canRemoveSourceElevationAndTime(active),
+    [active],
+  );
   const summaryExpanded = useUiStore(
     (state) => state.trackSectionExpanded.summary ?? true,
   );
@@ -6692,6 +6931,23 @@ export function TrackDetailsPane({
                   )}
                 </Stack>
               )}
+              {active.preparationStatus === 'ready' &&
+              active.komootElevationChoicePending ? (
+                <KomootElevationQuestion
+                  disabled={recalculationState === 'recalculating'}
+                  modelGainMeters={active.calculatedMetrics?.ascentMeters ?? 0}
+                  onAnswer={answerKomootElevation}
+                  sourceGainMeters={active.sourceMetrics.ascentMeters ?? 0}
+                />
+              ) : null}
+              {active.parsed.implausibleTimesDropped === true ? (
+                <Alert severity="warning">
+                  <Trans>
+                    Komoot point times were removed as unrealistic: Komoot starts them
+                    when the tour was created in Komoot and follows its own pace model.
+                  </Trans>
+                </Alert>
+              ) : null}
             </Stack>
           ) : null}
           {active.kind === 'preview' || active.kind === 'shared' ? (
@@ -6714,6 +6970,23 @@ export function TrackDetailsPane({
                   >
                     <Trans>Shared track</Trans>
                   </Typography>
+                ) : null}
+                {removableSourceData ? (
+                  <Tooltip
+                    describeChild
+                    title={t`Removes the file's elevations and point times before saving. Elevation then comes from the terrain model, and the track has no recorded time or pace.`}
+                  >
+                    <Box component="span" sx={{ mr: 'auto' }}>
+                      <Button
+                        size="small"
+                        color="inherit"
+                        disabled={recalculationState === 'recalculating'}
+                        onClick={removePreviewElevationAndTime}
+                      >
+                        {t`Remove elevation and time`}
+                      </Button>
+                    </Box>
+                  </Tooltip>
                 ) : null}
                 <Button size="small" color="inherit" onClick={discardPreview}>
                   <Trans>Discard</Trans>

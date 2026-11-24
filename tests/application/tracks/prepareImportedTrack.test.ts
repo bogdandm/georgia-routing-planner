@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import type { ElevationProvider } from '@/application/ports/ElevationProvider';
-import { prepareImportedTrack } from '@/application/tracks/prepareImportedTrack';
+import {
+  canReplaceSourceElevation,
+  prepareImportedTrack,
+  withoutSourceElevation,
+} from '@/application/tracks/prepareImportedTrack';
 import type { TrackCoordinate, TrackSegment } from '@/domain/tracks/gpx';
 
 const signal = new AbortController().signal;
@@ -510,13 +514,92 @@ describe('prepareImportedTrack', () => {
     );
   });
 
-  it('resamples past a repeated interior coordinate without duplicating stations', async () => {
+  it('reports a DEM projection that misses a segment as unable to replace the source', async () => {
     const source: readonly TrackSegment[] = [
+      ...sourceSegments,
       {
         points: [
-          { coordinate: equatorCoordinate(0) },
-          { coordinate: equatorCoordinate(0) },
-          { coordinate: equatorCoordinate(20) },
+          { coordinate: equatorCoordinate(1_000), elevationMeters: 1_200 },
+          { coordinate: equatorCoordinate(1_100), elevationMeters: 1_300 },
+        ],
+      },
+    ];
+    const firstSegmentOnlyDem: ElevationProvider = {
+      sample: () => Promise.resolve({ status: 'unavailable' }),
+      sampleMany: (coordinates) =>
+        Promise.resolve(
+          coordinates.map((coordinate) =>
+            coordinate.longitude < equatorCoordinate(500)[0]
+              ? ({ status: 'available', meters: 400 } as const)
+              : ({ status: 'unavailable' } as const),
+          ),
+        ),
+    };
+
+    const partial = await prepareImportedTrack(source, firstSegmentOnlyDem, signal);
+    const complete = await prepareImportedTrack(source, flatDem(400), signal);
+
+    expect(partial.calculatedSegments).toHaveLength(1);
+    expect(canReplaceSourceElevation(partial)).toBe(false);
+    expect(canReplaceSourceElevation(complete)).toBe(true);
+  });
+
+  it('keeps every source vertex when the DEM projection replaces the source', async () => {
+    // A bend at 45 m: 10 m stations alone would cut its corner.
+    const corner: TrackCoordinate = [
+      equatorCoordinate(45)[0],
+      (5 / earthRadiusMeters) * (180 / Math.PI),
+    ];
+    const bent = (withElevation: boolean): readonly TrackSegment[] => [
+      {
+        points: [equatorCoordinate(0), corner, equatorCoordinate(90)].map(
+          (coordinate, index) =>
+            withElevation
+              ? { coordinate, elevationMeters: 1_000 + index }
+              : { coordinate },
+        ),
+      },
+    ];
+    const sourceCoordinates = bent(false)[0]?.points.map((point) => point.coordinate);
+
+    const replaced = withoutSourceElevation(
+      await prepareImportedTrack(bent(true), longitudeDem(), signal),
+    );
+    const elevationFree = await prepareImportedTrack(
+      bent(false),
+      longitudeDem(),
+      signal,
+    );
+
+    for (const prepared of [replaced, elevationFree]) {
+      const points = prepared.calculatedSegments?.[0]?.points ?? [];
+      expect(
+        points.filter((point) =>
+          sourceCoordinates?.some(
+            (coordinate) =>
+              coordinate[0] === point.coordinate[0] &&
+              coordinate[1] === point.coordinate[1],
+          ),
+        ),
+      ).toHaveLength(3);
+      expect(points.every((point) => point.elevationMeters !== undefined)).toBe(true);
+      expect(prepared.sourceProfile).toBeNull();
+    }
+    expect(replaced.calculatedMetrics?.ascentMeters).toBeCloseTo(
+      elevationFree.calculatedMetrics?.ascentMeters ?? Number.NaN,
+      6,
+    );
+  });
+
+  it('resamples past a repeated interior coordinate without duplicating stations', async () => {
+    const source: readonly TrackSegment[] = [
+      // Source elevation keeps the projection at plain stations; without it, preparation
+      // would merge the source vertices back in.
+      {
+        points: [
+          { coordinate: equatorCoordinate(0), elevationMeters: 100 },
+          { coordinate: equatorCoordinate(0), elevationMeters: 100 },
+          { coordinate: equatorCoordinate(20), elevationMeters: 110 },
         ],
       },
     ];

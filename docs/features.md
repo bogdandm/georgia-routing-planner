@@ -67,9 +67,10 @@ panel.
 - Owner: `src/presentation/shell`; visual tokens in
   `src/presentation/theme/appColors.ts` and the Material UI theme.
 - Settings is non-modal with `General` and `Storage` tabs. General offers
-  English/Русский language selection and developer diagnostics. Without an explicit
-  choice, the first English or Russian browser language is used, falling back to
-  English. UI strings use Lingui catalogs in `src/locales`.
+  English/Русский language selection, developer diagnostics, and **Komoot elevation on
+  import** (ask, always keep, or always replace with the terrain model). Without an
+  explicit choice, the first English or Russian browser language is used, falling back
+  to English. UI strings use Lingui catalogs in `src/locales`.
 - Storage shows only browser-supplied measurements: origin usage and quota, IndexedDB,
   Cache Storage, localStorage, residual origin data, and Chromium's optional JavaScript
   heap estimate. Browser HTTP and MapLibre tile caches are not measurable, so no size or
@@ -200,7 +201,15 @@ missing. A failed settlement or basemap landmark lookup is skipped, and a warnin
 it and its reason, including HTTP 429; an unavailable supplement is skipped silently.
 When source elevation is usable, Save keeps the source points as canonical and stores
 the calculated DEM projection separately; otherwise the DEM projection becomes the
-canonical elevation. The original file bytes are discarded after parsing.
+canonical elevation, keeping every source vertex between its 10 m DEM stations so the
+track geometry is unchanged. The original file bytes are discarded after parsing.
+**Remove elevation and time**, left of Discard on a prepared import whose DEM projection
+covers every segment and that has source elevation or point times, drops both before
+saving: the DEM projection becomes the canonical elevation and the track has no recorded
+time or pace. **Recalculate elevation** on a prepared import with its own elevation asks
+to overwrite it first; on confirmation the DEM projection replaces it the same way while
+point times stay. When the DEM does not cover the whole track, the elevation is kept and
+a warning says so.
 
 GPX import also reads bounded root `<wpt>` elements as track markers, up to 100 per
 track. Blank names become `Marker N`; invalid or excess waypoints are skipped with
@@ -208,12 +217,21 @@ warnings and never count as track geometry. FIT, KML, shared tracks, and route p
 not create track markers.
 
 Files whose `creator` names Komoot are planned tours, not recordings: their point
-timestamps start at the export moment and follow Komoot's pace model. Import keeps them
-only when the start lies within 07:00–12:00 in the time zone of the track start and the
-elapsed time lies within 80–120 % of the DIN 33466 hiking estimate from the source
-distance and elevation; otherwise it drops every timestamp, so the track has no recorded
-start time or pace. Komoot planning-point waypoints named `Position N` or
-`N <truncated address>…` are skipped without warnings; other waypoints import normally.
+timestamps start when the tour was created in Komoot and follow Komoot's pace model.
+Import keeps them only when the start lies within 07:00–12:00 in the time zone of the
+track start and the elapsed time lies within 80–120 % of the DIN 33466 hiking estimate
+from the source distance and elevation; otherwise it drops every timestamp, so the track
+has no recorded start time or pace, and the import preview shows a warning that the
+unrealistic Komoot times were removed. Komoot planning-point waypoints named
+`Position N` or `N <truncated address>…` are skipped without warnings; other waypoints
+import normally. Komoot elevation comes from Komoot's own terrain model, which can
+understate ridges and smooth out small climbs. A Komoot import with a source profile and
+a DEM projection covering every segment can replace its elevation. When the DEM gain is
+not zero, the preview asks whether to keep Komoot's elevations and shows the signed gain
+difference against the DEM in metres and percent. **No** replaces them with the DEM
+projection as for an elevation-free file. With **Don't ask again** checked, the answer
+is stored in Settings and later Komoot imports apply it silently. Saving without
+answering keeps Komoot's elevations.
 
 #### Route planning
 

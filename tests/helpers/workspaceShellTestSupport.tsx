@@ -215,6 +215,7 @@ export function setupWorkspaceShellTest(): void {
       markerSort: 'created',
       trackSort: 'created',
       trackSectionExpanded: {},
+      komootElevation: 'ask',
     });
   });
 

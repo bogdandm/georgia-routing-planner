@@ -18,6 +18,11 @@ export const trackSorts = ['created', 'name', 'oldest', 'distance'] as const;
 
 export type TrackSort = (typeof trackSorts)[number];
 
+/** Whether a Komoot import asks to keep its elevations, or always keeps or replaces them. */
+export const komootElevationPreferences = ['ask', 'keep', 'terrain'] as const;
+
+export type KomootElevationPreference = (typeof komootElevationPreferences)[number];
+
 export interface LocalTrackSummary {
   readonly schemaVersion: typeof LOCAL_TRACK_SCHEMA_VERSION;
   readonly id: string;

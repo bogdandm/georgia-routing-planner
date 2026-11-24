@@ -33,6 +33,7 @@ import {
   elevationFreeGpxFile,
   gpxFileWithGradeBands,
   flatGpxFile,
+  gpxFileWithCompanionRoute,
   deferred,
   readBlob,
   requiredBlob,
@@ -67,6 +68,29 @@ async function createTrackFolder(
     createdAt: timestamp,
     updatedAt: timestamp,
   });
+}
+
+function komootGpxFile(): File {
+  // Komoot stamps a planned tour from its creation moment: here 02:48 at the start.
+  const xml = `<?xml version="1.0"?><gpx version="1.1" creator="https://www.komoot.de"><trk><name>Komoot tour</name><trkseg><trkpt lat="42" lon="44"><ele>1000</ele><time>2026-11-23T22:48:32Z</time></trkpt><trkpt lat="42.01" lon="44.01"><ele>1120</ele><time>2026-11-23T23:20:00Z</time></trkpt></trkseg></trk></gpx>`;
+  const file = new File([xml], 'Komoot tour.gpx', { type: 'application/gpx+xml' });
+  Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+  return file;
+}
+
+/** DEM rising evenly from 1,000 to 1,100 m, so the calculated gain is exactly 100 m. */
+function mockRisingDem(): void {
+  const provider = services.elevationProvider;
+  if (provider === null)
+    throw new Error('The test services need an elevation provider.');
+  vi.spyOn(provider, 'sampleMany').mockImplementation((coordinates) =>
+    Promise.resolve(
+      coordinates.map((_, index) => ({
+        status: 'available' as const,
+        meters: 1_000 + (100 * index) / Math.max(1, coordinates.length - 1),
+      })),
+    ),
+  );
 }
 
 describe('WorkspaceShell', () => {
@@ -1747,6 +1771,231 @@ describe('WorkspaceShell', () => {
     expect(recalculatedSummary?.contentHash).not.toBe(promotedContentHash);
   });
 
+  it('asks whether to keep Komoot elevation and stops asking once told', async () => {
+    mockRisingDem();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+
+    await user.upload(input, komootGpxFile());
+    let details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      await within(details).findByText(
+        'Keep Komoot elevations? Their elevation gain differs from the terrain model by +20 m (+20%).',
+      ),
+    ).toBeVisible();
+    expect(
+      within(details).getByText(
+        'Komoot point times were removed as unrealistic: Komoot starts them when the tour was created in Komoot and follows its own pace model.',
+      ),
+    ).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Yes' }));
+    expect(
+      within(details).queryByRole('button', { name: 'Yes' }),
+    ).not.toBeInTheDocument();
+    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+
+    await user.upload(input, komootGpxFile());
+    details = await screen.findByRole('complementary', { name: 'Track details' });
+    await user.click(
+      await within(details).findByRole('checkbox', { name: "Don't ask again" }),
+    );
+    await user.click(within(details).getByRole('button', { name: 'No' }));
+    expect(within(details).getByLabelText('Elevation gain: 100 m')).toBeVisible();
+    expect(
+      within(details).queryByLabelText(/^Elevation gain \(calculated\):/u),
+    ).not.toBeInTheDocument();
+    await waitFor(async () => {
+      expect((await services.database.loadUiPreferences()).komootElevation).toBe(
+        'terrain',
+      );
+    });
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    expect(saveLocalTrack.mock.calls[0]?.[0].metrics.elevationSource).toBe(
+      'dem-assisted',
+    );
+    expect(saveLocalTrack.mock.calls[0]?.[1].calculatedTrackPoints).toBeUndefined();
+
+    await user.upload(input, komootGpxFile());
+    details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      await within(details).findByLabelText('Elevation gain: 100 m'),
+    ).toBeVisible();
+    expect(
+      within(details).queryByRole('button', { name: 'Yes' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps Komoot elevation without asking once told to always keep it', async () => {
+    mockRisingDem();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+
+    await user.upload(input, komootGpxFile());
+    let details = await screen.findByRole('complementary', { name: 'Track details' });
+    await user.click(
+      await within(details).findByRole('checkbox', { name: "Don't ask again" }),
+    );
+    await user.click(within(details).getByRole('button', { name: 'Yes' }));
+    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+    await waitFor(async () => {
+      expect((await services.database.loadUiPreferences()).komootElevation).toBe(
+        'keep',
+      );
+    });
+
+    await user.upload(input, komootGpxFile());
+    details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      await within(details).findByLabelText('Elevation gain: 120 m'),
+    ).toBeVisible();
+    expect(
+      within(details).queryByRole('button', { name: 'Yes' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('removes source elevation and point times from a preview before saving', async () => {
+    mockRisingDem();
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+
+    await user.upload(input, gpxFileWithCompanionRoute());
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      await within(details).findByLabelText('Elevation gain: 120 m'),
+    ).toBeVisible();
+    await user.click(
+      within(details).getByRole('button', { name: 'Remove elevation and time' }),
+    );
+    expect(within(details).getByLabelText('Elevation gain: 100 m')).toBeVisible();
+    expect(
+      within(details).queryByRole('button', { name: 'Remove elevation and time' }),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const [summary, content] = saveLocalTrack.mock.calls[0] ?? [];
+    expect(summary?.metrics.elevationSource).toBe('dem-assisted');
+    expect(summary?.metrics.recordedStartAt).toBeUndefined();
+    expect(
+      content?.trackPoints.flat().some((point) => point.recordedAt !== undefined),
+    ).toBe(false);
+    expect(
+      content?.trackPoints.flat().every((point) => point.elevationMeters !== undefined),
+    ).toBe(true);
+  });
+
+  it('overwrites preview elevations on recalculation only after confirmation', async () => {
+    mockRisingDem();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+
+    await user.upload(input, gpxFileWithCompanionRoute());
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      await within(details).findByLabelText('Elevation gain: 120 m'),
+    ).toBeVisible();
+    const recalculate = within(details).getByRole('button', {
+      name: 'Recalculate elevation',
+    });
+    await user.click(recalculate);
+    expect(confirm).toHaveBeenCalledWith(
+      "Overwrite the track's elevations with the terrain model? Point times stay unchanged.",
+    );
+    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+
+    confirm.mockReturnValueOnce(true);
+    await user.click(recalculate);
+    expect(
+      await within(details).findByLabelText('Elevation gain: 100 m'),
+    ).toBeVisible();
+    expect(
+      within(details).queryByLabelText(/^Elevation gain \(calculated\):/u),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const [summary, content] = saveLocalTrack.mock.calls[0] ?? [];
+    expect(summary?.metrics.elevationSource).toBe('dem-assisted');
+    expect(summary?.metrics.recordedStartAt).toBe('2026-07-13T08:00:00.000Z');
+    expect(content?.trackPoints[0]?.at(-1)?.recordedAt).toBe(
+      '2026-07-13T08:02:00.000Z',
+    );
+  });
+
+  it('keeps the geometry of a DEM-canonical track through repeated recalculation', async () => {
+    mockRisingDem();
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+    const zigzag = [
+      [42, 44],
+      [42.0003, 44.0004],
+      [42, 44.0008],
+      [42.0003, 44.0012],
+      [42, 44.0016],
+    ]
+      .map(([lat, lon]) => `<trkpt lat="${String(lat)}" lon="${String(lon)}"/>`)
+      .join('');
+    const xml = `<?xml version="1.0"?><gpx version="1.1"><trk><name>Zigzag</name><trkseg>${zigzag}</trkseg></trk></gpx>`;
+    const file = new File([xml], 'Zigzag.gpx', { type: 'application/gpx+xml' });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(xml) });
+
+    await user.upload(input, file);
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(await within(details).findByLabelText(/^Elevation gain: /u)).toBeVisible();
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const saved = saveLocalTrack.mock.calls[0]?.[1];
+    if (saved === undefined) throw new Error('The track was not saved.');
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
+    for (const pass of [2, 3]) {
+      const recalculate = screen.getByRole('button', { name: 'Recalculate elevation' });
+      await waitFor(() => {
+        expect(recalculate).toBeEnabled();
+      });
+      await user.click(recalculate);
+      await waitFor(() => {
+        expect(saveLocalTrack).toHaveBeenCalledTimes(pass);
+      });
+    }
+    const recalculated = await services.database.loadLocalTrackContent(saved.trackId);
+    expect(recalculated.trackPoints.flat().map((point) => point.coordinate)).toEqual(
+      saved.trackPoints.flat().map((point) => point.coordinate),
+    );
+  });
+
   it('keeps the newest import when an older preparation completes late', async () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
@@ -1830,6 +2079,7 @@ describe('WorkspaceShell', () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
     if (provider === null) return;
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const pendingRecalculations: {
       readonly count: number;
       readonly resolve: (samples: readonly ElevationSample[]) => void;
@@ -1907,6 +2157,11 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(previewRecalculate).toBeEnabled();
     });
+    expect(
+      screen.getByText(
+        'The terrain model does not cover the whole track, so its elevations were kept.',
+      ),
+    ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => {

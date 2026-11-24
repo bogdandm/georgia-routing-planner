@@ -74,6 +74,8 @@ export interface ParsedGpx {
   readonly pointCount: number;
   readonly metadata: GpxMetadataProjection;
   readonly warnings: readonly GpxValidationWarning[];
+  /** Set when a Komoot export's synthesized point times were dropped as implausible. */
+  readonly implausibleTimesDropped?: true;
 }
 
 export type GpxParseFailureCode =
@@ -114,7 +116,7 @@ const defaultLimits = {
 } as const;
 
 /**
- * Komoot exports planned tours with timestamps synthesized from the export moment and,
+ * Komoot exports planned tours with timestamps starting when the tour was created and,
  * often, an unrealistic pace, plus one `<wpt>` per planning point named `Position N` or
  * `N <address…>`.
  */
@@ -123,6 +125,11 @@ const komootPlanningWaypointNamePattern = /^(?:Position \d+|\d+ .*…)$/u;
 const komootPlausiblePaceRatio = { minimum: 0.8, maximum: 1.2 } as const;
 /** Local start window in minutes after midnight at the route's start, inclusive. */
 const komootPlausibleStartMinutes = { minimum: 7 * 60, maximum: 12 * 60 } as const;
+
+/** Komoot's elevations come from its own coarse terrain model, not a recording. */
+export function isKomootCreator(creator: string | undefined): boolean {
+  return creator !== undefined && komootCreatorPattern.test(creator);
+}
 
 /**
  * Whether timestamps look like a real hike: the local start lies within 07:00–12:00 and
@@ -508,7 +515,7 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
   }
 
   const warnings: GpxValidationWarning[] = [];
-  const isKomootExport = komootCreatorPattern.test(root.getAttribute('creator') ?? '');
+  const isKomootExport = isKomootCreator(root.getAttribute('creator') ?? undefined);
   const waypoints = parseWaypoints(root, warnings, isKomootExport);
   const trackSegments = parseSegments(
     trackSegmentElements,
@@ -541,11 +548,14 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
       'The GPX file has no renderable track or route.',
     );
   }
-  const importedSegments =
-    isKomootExport && !hasPlausibleTiming(segments)
-      ? withoutTimestamps(segments)
-      : segments;
-  return {
+  const timesDropped =
+    isKomootExport &&
+    segments.some((segment) =>
+      segment.points.some((point) => point.recordedAt !== undefined),
+    ) &&
+    !hasPlausibleTiming(segments);
+  const importedSegments = timesDropped ? withoutTimestamps(segments) : segments;
+  const parsed: ParsedGpx = {
     parserVersion: GPX_PARSER_VERSION,
     geometryKind,
     segments: importedSegments,
@@ -557,4 +567,5 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
     metadata: readMetadata(root, selected, version),
     warnings,
   };
+  return timesDropped ? { ...parsed, implausibleTimesDropped: true } : parsed;
 }

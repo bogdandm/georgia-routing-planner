@@ -134,6 +134,11 @@ msgstr "Все слои карты по источникам данных. На�
 msgid "Allocated heap"
 msgstr "Выделенная куча"
 
+#. js-lingui-id: x-b-KT
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Always keep it"
+msgstr "Всегда оставлять"
+
 #. js-lingui-id: 77CFp1
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "An account is optional. Turn on sync to keep tracks, folders, and markers on all your devices."
@@ -153,6 +158,11 @@ msgstr "Примерное использование памяти JavaScript"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Areas"
 msgstr "Площади"
+
+#. js-lingui-id: Aerhmy
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Ask whether to keep it"
+msgstr "Спрашивать"
 
 #. js-lingui-id: iH8pgl
 #: src/presentation/shell/OnboardingTour.tsx
@@ -561,6 +571,11 @@ msgstr "Отдельный дом"
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Keyboard and mouse"
 msgstr "Клавиатура и мышь"
+
+#. js-lingui-id: rKSnkA
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Komoot elevation on import"
+msgstr "Высоты Komoot при импорте"
 
 #. js-lingui-id: g9-BQD
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -1052,6 +1067,11 @@ msgstr "Отрисовка выбранной сцены Sentinel…"
 #: src/presentation/shell/OperationalStatus.tsx
 msgid "Rendering weather map"
 msgstr "Отрисовка карты погоды"
+
+#. js-lingui-id: M9sotw
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Replace with the terrain model"
+msgstr "Заменять моделью рельефа"
 
 #. js-lingui-id: J8y4b1
 #: src/presentation/shell/OperationalStatus.tsx

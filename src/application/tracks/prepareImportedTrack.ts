@@ -10,7 +10,7 @@ import {
   type ElevationProfileInputPoint,
   type ElevationSampleInput,
 } from '@/domain/tracks/elevationProfile';
-import type { TrackCoordinate, TrackSegment } from '@/domain/tracks/gpx';
+import type { TrackCoordinate, TrackPoint, TrackSegment } from '@/domain/tracks/gpx';
 import {
   calculateTrackMetrics,
   geodesicDistanceMeters,
@@ -590,10 +590,185 @@ export async function prepareImportedTrack(
       calculatedMetrics: null,
     };
   }
-  return {
+  const prepared: PreparedImportedTrack = {
     ...sourceResult,
     calculatedSegments,
     calculatedProfile,
+    calculatedMetrics: calculateTrackMetrics(calculatedSegments, 'dem-assisted'),
+  };
+  // Without usable source elevation the DEM projection is saved as the track itself, so
+  // it keeps every source vertex.
+  return sourceProfile !== null ||
+    options.preserveGeometry === true ||
+    !canReplaceSourceElevation(prepared)
+    ? prepared
+    : withCanonicalDemProjection(prepared, resampled);
+}
+
+function routableSourceSegments(
+  prepared: PreparedImportedTrack,
+): readonly TrackSegment[] {
+  return prepared.sourceSegments.filter(
+    (segment) => segmentDistanceMeters(segment) > 0,
+  );
+}
+
+/**
+ * Whether the DEM projection can replace the source elevation without changing the
+ * geometry: every source segment has length (a stationary one has no DEM stations to keep
+ * it), the projection has every segment (preparation skips segments without any DEM
+ * sample), and its stations plus every source vertex stay within the persisted point
+ * limit. That count is an upper bound: vertices replace stations at the same position.
+ */
+export function canReplaceSourceElevation(prepared: PreparedImportedTrack): boolean {
+  const calculatedSegments = prepared.calculatedSegments;
+  if (calculatedSegments === null) return false;
+  const routable = routableSourceSegments(prepared);
+  let mergedPointCount = 0;
+  for (const segment of [...calculatedSegments, ...routable]) {
+    mergedPointCount += segment.points.length;
+  }
+  return (
+    routable.length === prepared.sourceSegments.length &&
+    calculatedSegments.length === routable.length &&
+    mergedPointCount <= maximumPersistedPoints
+  );
+}
+
+/**
+ * Puts every source vertex back among the DEM stations sampled along it, so a canonical
+ * DEM projection keeps the drawn geometry instead of cutting bends between stations. A
+ * vertex takes the elevation interpolated between its neighbouring stations, which adds
+ * no climb, and replaces a station at the same position. Times come from both inputs.
+ */
+function mergeSourceVertices(
+  source: TrackSegment,
+  stations: readonly ResampledStation[],
+  calculated: TrackSegment,
+): TrackSegment {
+  if (stations.length !== calculated.points.length) {
+    throw new Error('The DEM projection does not match its stations.');
+  }
+  const stationMeters = calculated.points.map((point) => {
+    if (point.elevationMeters === undefined) {
+      throw new TrackElevationPreparationError('elevation-unavailable');
+    }
+    return point.elevationMeters;
+  });
+  const stationDistance = (index: number): number =>
+    requiredValue(stations, index).sourceDistanceMeters;
+  const vertexDistances = pointDistances(source.points);
+  const points: TrackPoint[] = [];
+  let stationIndex = 0;
+  source.points.forEach((vertex, vertexIndex) => {
+    const vertexDistance = requiredValue(vertexDistances, vertexIndex);
+    while (
+      stationDistance(stationIndex) <
+      vertexDistance - stationDistanceToleranceMeters
+    ) {
+      points.push(requiredValue(calculated.points, stationIndex));
+      stationIndex += 1;
+    }
+    // The last station sits on the last vertex, so `stationIndex` stays in range.
+    const previousIndex = Math.max(0, stationIndex - 1);
+    const span = stationDistance(stationIndex) - stationDistance(previousIndex);
+    const fraction =
+      span <= stationDistanceToleranceMeters
+        ? 1
+        : (vertexDistance - stationDistance(previousIndex)) / span;
+    const previousMeters = requiredValue(stationMeters, previousIndex);
+    const point: { -readonly [Key in keyof TrackPoint]: TrackPoint[Key] } = {
+      coordinate: vertex.coordinate,
+      elevationMeters:
+        previousMeters +
+        (requiredValue(stationMeters, stationIndex) - previousMeters) *
+          Math.min(1, Math.max(0, fraction)),
+    };
+    if (vertex.recordedAt !== undefined) point.recordedAt = vertex.recordedAt;
+    points.push(point);
+    while (
+      stationIndex < stations.length - 1 &&
+      stationDistance(stationIndex) <= vertexDistance + stationDistanceToleranceMeters
+    ) {
+      stationIndex += 1;
+    }
+  });
+  return { points };
+}
+
+/** Makes the DEM projection canonical: source elevation goes, source vertices stay. */
+function withCanonicalDemProjection(
+  prepared: PreparedImportedTrack,
+  stationsBySegment: readonly (readonly ResampledStation[])[],
+): PreparedImportedTrack {
+  const calculatedSegments = routableSourceSegments(prepared).map((segment, index) =>
+    mergeSourceVertices(
+      segment,
+      requiredValue(stationsBySegment, index),
+      requiredValue(prepared.calculatedSegments ?? [], index),
+    ),
+  );
+  const sourceSegments = prepared.sourceSegments.map((segment) => ({
+    points: segment.points.map(({ coordinate, recordedAt }) =>
+      recordedAt === undefined ? { coordinate } : { coordinate, recordedAt },
+    ),
+  }));
+  return {
+    ...prepared,
+    sourceSegments,
+    sourceProfile: null,
+    sourceMetrics: calculateTrackMetrics(sourceSegments),
+    calculatedSegments,
+    calculatedProfile: calculateElevationProfile(
+      calculatedProfileInputs(calculatedSegments),
+    ),
+    calculatedMetrics: calculateTrackMetrics(calculatedSegments, 'dem-assisted'),
+  };
+}
+
+/**
+ * Replaces usable source elevation with the DEM projection prepared at the default
+ * interval, keeping every source vertex. Call it only when `canReplaceSourceElevation`
+ * holds and the source still has a profile; preparation already does this otherwise.
+ */
+export function withoutSourceElevation(
+  prepared: PreparedImportedTrack,
+): PreparedImportedTrack {
+  const signal = new AbortController().signal;
+  return withCanonicalDemProjection(
+    prepared,
+    routableSourceSegments(prepared).map((segment, index) =>
+      resampleSegment(segment, index, signal, defaultSampleIntervalMeters),
+    ),
+  );
+}
+
+/** Drops every point time from both projections and recomputes what depends on them. */
+export function withoutPointTimes(
+  prepared: PreparedImportedTrack,
+): PreparedImportedTrack {
+  const withoutTimes = (segments: readonly TrackSegment[]): readonly TrackSegment[] =>
+    segments.map((segment) => ({
+      points: segment.points.map(({ coordinate, elevationMeters }) =>
+        elevationMeters === undefined
+          ? { coordinate }
+          : { coordinate, elevationMeters },
+      ),
+    }));
+  const sourceSegments = withoutTimes(prepared.sourceSegments);
+  const result: PreparedImportedTrack = {
+    ...prepared,
+    sourceSegments,
+    sourceMetrics: calculateTrackMetrics(sourceSegments),
+  };
+  if (prepared.calculatedSegments === null) return result;
+  const calculatedSegments = withoutTimes(prepared.calculatedSegments);
+  return {
+    ...result,
+    calculatedSegments,
+    calculatedProfile: calculateElevationProfile(
+      calculatedProfileInputs(calculatedSegments),
+    ),
     calculatedMetrics: calculateTrackMetrics(calculatedSegments, 'dem-assisted'),
   };
 }

@@ -1796,8 +1796,9 @@ describe('WorkspaceShell', () => {
     await user.upload(input, komootGpxFile());
     details = await screen.findByRole('complementary', { name: 'Track details' });
     await user.click(
-      await within(details).findByRole('button', { name: "No, don't ask again" }),
+      await within(details).findByRole('checkbox', { name: "Don't ask again" }),
     );
+    await user.click(within(details).getByRole('button', { name: 'No' }));
     expect(within(details).getByLabelText('Elevation gain: 100 m')).toBeVisible();
     expect(
       within(details).queryByLabelText(/^Elevation gain \(calculated\):/u),
@@ -1838,8 +1839,9 @@ describe('WorkspaceShell', () => {
     await user.upload(input, komootGpxFile());
     let details = await screen.findByRole('complementary', { name: 'Track details' });
     await user.click(
-      await within(details).findByRole('button', { name: "Yes, don't ask again" }),
+      await within(details).findByRole('checkbox', { name: "Don't ask again" }),
     );
+    await user.click(within(details).getByRole('button', { name: 'Yes' }));
     expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
     await waitFor(async () => {
       expect((await services.database.loadUiPreferences()).komootElevation).toBe(

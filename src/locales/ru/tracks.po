@@ -553,6 +553,11 @@ msgstr "Расстояние"
 msgid "Distance from map center"
 msgstr "По расстоянию от центра карты"
 
+#. js-lingui-id: 327wuB
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Don't ask again"
+msgstr "Больше не спрашивать"
+
 #. js-lingui-id: DPfwMq
 #: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Done"
@@ -1050,11 +1055,6 @@ msgstr "Нет сохранённых треков с таким названи�
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
 msgid "No significant climbs or descents."
 msgstr "Нет значимых подъёмов и спусков."
-
-#. js-lingui-id: OefRJ8
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "No, don't ask again"
-msgstr "Нет, больше не спрашивать"
 
 #. js-lingui-id: zsJUbn
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1734,8 +1734,3 @@ msgstr "Прогноз погоды"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Yes"
 msgstr "Да"
-
-#. js-lingui-id: eA0Z6b
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Yes, don't ask again"
-msgstr "Да, больше не спрашивать"

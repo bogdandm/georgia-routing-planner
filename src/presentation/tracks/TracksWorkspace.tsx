@@ -49,9 +49,11 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   CircularProgress,
   ClickAwayListener,
   Divider,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   List,
@@ -341,8 +343,6 @@ interface SharedTrackSelection extends Omit<
 
 type PreviewTrack = PreparingPreviewTrack | FailedPreviewTrack | PreparedPreviewTrack;
 
-type KomootElevationAnswer = 'keep' | 'always-keep' | 'terrain' | 'always-terrain';
-
 /** A Komoot import whose source elevation a complete DEM projection can replace. */
 function canReplaceKomootElevation(
   parsed: ParsedGpx,
@@ -586,7 +586,8 @@ interface TracksWorkspaceValue {
   readonly closeActive: () => Promise<boolean>;
   readonly deleteSaved: (summary: LocalTrackSummary) => Promise<void>;
   readonly discardPreview: () => void;
-  readonly answerKomootElevation: (answer: KomootElevationAnswer) => void;
+  /** Keeps or replaces a Komoot preview's elevation; `remember` stores the choice. */
+  readonly answerKomootElevation: (keep: boolean, remember: boolean) => void;
   /** Replaces the preview's elevation with the DEM and drops its point times. */
   readonly removePreviewElevationAndTime: () => void;
   readonly discardRoutePlan: () => void;
@@ -2639,9 +2640,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   );
 
   const answerKomootElevation = useCallback(
-    (answer: KomootElevationAnswer) => {
-      const keep = answer === 'keep' || answer === 'always-keep';
-      if (answer === 'always-keep' || answer === 'always-terrain') {
+    (keep: boolean, remember: boolean) => {
+      if (remember) {
         useUiStore.getState().setKomootElevation(keep ? 'keep' : 'terrain');
       }
       if (!keep) {
@@ -6108,10 +6108,11 @@ function KomootElevationQuestion({
 }: {
   readonly disabled: boolean;
   readonly modelGainMeters: number;
-  readonly onAnswer: (answer: KomootElevationAnswer) => void;
+  readonly onAnswer: (keep: boolean, remember: boolean) => void;
   readonly sourceGainMeters: number;
 }) {
   const { i18n, t } = useLingui();
+  const [remember, setRemember] = useState(false);
   const differenceMeters = sourceGainMeters - modelGainMeters;
   const difference = formatElevationChange(differenceMeters, i18n);
   const percent = formatTrackGrade((differenceMeters / modelGainMeters) * 100, i18n);
@@ -6121,13 +6122,18 @@ function KomootElevationQuestion({
         Keep Komoot elevations? Their elevation gain differs from the terrain model by{' '}
         {difference} ({percent}).
       </Trans>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1, flexWrap: 'wrap' }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        useFlexGap
+        sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}
+      >
         <Button
           size="small"
           variant="outlined"
           disabled={disabled}
           onClick={() => {
-            onAnswer('keep');
+            onAnswer(true, remember);
           }}
         >
           <Trans>Yes</Trans>
@@ -6137,29 +6143,27 @@ function KomootElevationQuestion({
           variant="outlined"
           disabled={disabled}
           onClick={() => {
-            onAnswer('terrain');
+            onAnswer(false, remember);
           }}
         >
           <Trans>No</Trans>
         </Button>
-        <Button
-          size="small"
-          disabled={disabled}
-          onClick={() => {
-            onAnswer('always-keep');
-          }}
-        >
-          {t`Yes, don't ask again`}
-        </Button>
-        <Button
-          size="small"
-          disabled={disabled}
-          onClick={() => {
-            onAnswer('always-terrain');
-          }}
-        >
-          {t`No, don't ask again`}
-        </Button>
+        <FormControlLabel
+          sx={{ m: 0 }}
+          slotProps={{ typography: { variant: 'body2' } }}
+          control={
+            <Checkbox
+              size="small"
+              sx={{ p: 0, mr: 1 }}
+              checked={remember}
+              disabled={disabled}
+              onChange={(event) => {
+                setRemember(event.target.checked);
+              }}
+            />
+          }
+          label={t`Don't ask again`}
+        />
       </Stack>
     </Alert>
   );

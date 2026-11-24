@@ -224,9 +224,9 @@ smooth out small climbs. A Komoot import with a source profile and a DEM project
 covering every segment can replace its elevation. When the DEM gain is not zero, the
 preview asks whether to keep Komoot's elevations and shows the signed gain difference
 against the DEM in metres and percent. **No** replaces them with the DEM projection as
-for an elevation-free file; the `don't ask again` answers store the choice in Settings,
-and later Komoot imports apply it silently. Saving without answering keeps Komoot's
-elevations.
+for an elevation-free file. With **Don't ask again** checked, the answer is stored in
+Settings and later Komoot imports apply it silently. Saving without answering keeps
+Komoot's elevations.
 
 #### Route planning
 

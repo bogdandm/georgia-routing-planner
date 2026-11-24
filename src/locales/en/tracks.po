@@ -553,6 +553,11 @@ msgstr "Distance"
 msgid "Distance from map center"
 msgstr "Distance from map center"
 
+#. js-lingui-id: 327wuB
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Don't ask again"
+msgstr "Don't ask again"
+
 #. js-lingui-id: DPfwMq
 #: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Done"
@@ -1050,11 +1055,6 @@ msgstr "No saved track matches this name."
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
 msgid "No significant climbs or descents."
 msgstr "No significant climbs or descents."
-
-#. js-lingui-id: OefRJ8
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "No, don't ask again"
-msgstr "No, don't ask again"
 
 #. js-lingui-id: zsJUbn
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1734,8 +1734,3 @@ msgstr "Weather forecast"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Yes"
 msgstr "Yes"
-
-#. js-lingui-id: eA0Z6b
-#: src/presentation/tracks/TracksWorkspace.tsx
-msgid "Yes, don't ask again"
-msgstr "Yes, don't ask again"

@@ -13,13 +13,13 @@ import {
   trackWeatherDates,
   trackWeatherWeekday,
   type TrackWeatherPreferences,
-  type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   ElevationProfile,
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
+import type { TrackWeatherTimelineSettings } from '@/domain/tracks/localTrack';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
 import {
   mapInteractionStore,
@@ -67,7 +67,6 @@ const dayHike: TrackStatsMetrics = {
 const expandedPreferences: TrackWeatherPreferences = {
   expanded: true,
   weekday: 6,
-  timelines: {},
 };
 
 let services: ReturnType<typeof createTestServices>;

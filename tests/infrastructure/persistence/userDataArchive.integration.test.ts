@@ -394,4 +394,39 @@ describe('user data archive', () => {
 
     await expect(database.listLocalTracks()).resolves.toEqual([]);
   });
+
+  it('moves route timing from an older archive onto the archived track', async () => {
+    const content = trackContent('local:kazbegi');
+    const summary = await trackSummary(content, 'Kazbegi', null);
+    const routeTiming = {
+      startHour: 6.5,
+      paceFactor: 1.25,
+      ignoreRecordedTime: true,
+      timeMarkers: null,
+      relativeTimeMarkers: false,
+      lightOnMap: false,
+      hikeDate: null,
+    };
+
+    await database.restoreUserDataBackup({
+      tracks: [{ summary, content }],
+      folders: [],
+      markers: [],
+      settings: {
+        'weather.track-preferences': {
+          expanded: true,
+          weekday: 2,
+          timelines: { [summary.id]: routeTiming },
+        },
+      },
+    });
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: summary.id, routeTiming }),
+    ]);
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: true,
+      weekday: 2,
+    });
+  });
 });

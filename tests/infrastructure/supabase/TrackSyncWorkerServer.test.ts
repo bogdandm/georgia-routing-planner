@@ -362,6 +362,51 @@ describe('FetchRemoteGateway', () => {
     expect(body.metadata).not.toHaveProperty('unconfirmedContentHashes');
   });
 
+  it("sends the track's route timing with its metadata", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        outcome: 'applied',
+        record: { contentHash, revision: 5, state: 'ready' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const gateway = new FetchRemoteGateway(
+      'https://example.test',
+      'publishable-key',
+      'access-token',
+    );
+    const routeTiming = {
+      startHour: 6.5,
+      paceFactor: 1.25,
+      ignoreRecordedTime: false,
+      timeMarkers: false,
+      relativeTimeMarkers: true,
+      lightOnMap: true,
+      hikeDate: '2026-07-15',
+    };
+
+    await gateway.mutate(
+      {
+        trackId: pair.summary.id,
+        contentHash,
+        lineageHash: 'b'.repeat(64),
+        geometryVersion: 2,
+        remoteRevision: 4,
+        pendingKind: 'metadata',
+      },
+      { ...pair, summary: { ...pair.summary, routeTiming } },
+      signal,
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    if (typeof request.body !== 'string')
+      throw new Error('Expected a JSON request body.');
+    const body = JSON.parse(request.body) as {
+      readonly metadata: Record<string, unknown>;
+    };
+    expect(body.metadata.routeTiming).toEqual(routeTiming);
+  });
+
   it('returns the authoritative revision for a remote-only delete conflict', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({

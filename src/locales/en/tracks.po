@@ -1549,6 +1549,11 @@ msgstr "The reversed track could not be created."
 msgid "The route could not be saved."
 msgstr "The route could not be saved."
 
+#. js-lingui-id: QacsWI
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "The route timing could not be saved."
+msgstr "The route timing could not be saved."
+
 #. js-lingui-id: _Kz0qB
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The track could not be added to multi-track view."

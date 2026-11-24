@@ -2,6 +2,7 @@ import type {
   LocalTrackContent,
   LocalTrackSummary,
   TrackMarker,
+  TrackWeatherTimelineSettings,
 } from '@/domain/tracks/localTrack';
 import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
 import type { TrackLightingRecord } from '@/domain/tracks/trackLighting';
@@ -46,6 +47,11 @@ export interface LocalTrackRepository {
   }>;
   renameLocalTrack(trackId: string, name: string): Promise<LocalTrackSummary>;
   setLocalTrackFavorite(trackId: string, favorite: boolean): Promise<LocalTrackSummary>;
+  /** Stores the track's Route timing; null restores the defaults. Queues a metadata sync. */
+  setLocalTrackRouteTiming(
+    trackId: string,
+    routeTiming: TrackWeatherTimelineSettings | null,
+  ): Promise<LocalTrackSummary>;
   loadLatestOpenedTrackId(): Promise<string | null>;
   saveLatestOpenedTrackId(trackId: string | null): Promise<void>;
   deleteLocalTrack(trackId: string): Promise<void>;

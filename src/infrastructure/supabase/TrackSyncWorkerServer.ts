@@ -1012,6 +1012,7 @@ function localFromRemote(
     if (base.middleAnchorKind !== undefined) {
       summary.middleAnchorKind = base.middleAnchorKind;
     }
+    if (base.routeTiming !== undefined) summary.routeTiming = base.routeTiming;
     return validateLocalTrackSyncPair({
       summary,
       content: {

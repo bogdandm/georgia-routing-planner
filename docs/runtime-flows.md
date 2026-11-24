@@ -839,15 +839,16 @@ time** selects the estimate. Changing the date or start time only reselects hour
 loaded forecasts; collapsing weather or unmounting aborts pending requests. Results stay
 in component state, keyed by the section's track, and failed locations retry on the next
 expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and saves
-every disclosure or weekday change and every released start or pace slider and timing
-option of a saved track; changes made before the record loads are merged over it,
-keeping its per-track entries, and then saved. The record's `timelines` map holds tracks
-with non-default start, pace, recorded-time override, relative display, or hike date, or
-any explicit time-marker visibility choice (a null choice follows Layers), keyed by
-saved track ID. The provider owns the active track's settings: a preview or shared track
-keeps them in memory and they move to the new saved ID on save. Deleting a track from
-the Tracks workspace removes its entry; tracks removed by synchronization leave an
-unused entry that reattaches if the same ID returns.
+every disclosure or weekday change; changes made before the record loads win over it and
+are then saved. A saved track's released start or pace slider and timing options update
+its active summary at once and are written by `AppDatabase.setLocalTrackRouteTiming`
+into the summary's `routeTiming`, which queues a metadata synchronization like a rename.
+The summary holds `routeTiming` only for non-default start, pace, recorded-time
+override, relative display, or hike date, or any explicit time-marker visibility choice
+(a null choice follows Layers). A preview or shared track keeps its settings in memory
+and they enter the summary on save. Timing leaves the browser only inside the track's
+synchronized metadata, and a newer account revision replaces it with the rest of that
+metadata.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan

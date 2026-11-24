@@ -2477,6 +2477,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     ) {
       return;
     }
+    // An import's own elevations are canonical, so recalculating them means replacing
+    // them with the terrain model; point times stay.
+    const overwriteSourceElevation =
+      active.kind === 'preview' &&
+      active.preparationStatus === 'ready' &&
+      active.sourceProfile !== null;
+    if (
+      overwriteSourceElevation &&
+      !window.confirm(
+        t`Overwrite the track's elevations with the terrain model? Point times stay unchanged.`,
+      )
+    ) {
+      return;
+    }
     initiallyRestoredTrackId.current = null;
     recalculationAbort.current?.abort();
     const controller = new AbortController();
@@ -2531,6 +2545,12 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       setElevationProgress(null);
       renderedTrackId.current = null;
       if (active.kind === 'preview') {
+        const replaceable = canReplaceSourceElevation(prepared);
+        if (overwriteSourceElevation && !replaceable) {
+          setError(
+            msg`The terrain model does not cover the whole track, so its elevations were kept.`,
+          );
+        }
         setActive((current) => {
           if (current?.kind !== 'preview' || current.id !== activeId) {
             return current;
@@ -2549,7 +2569,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
               current.komootElevationChoicePending &&
               canAskKomootElevation(current.parsed, prepared),
           };
-          return updated;
+          return overwriteSourceElevation && replaceable
+            ? previewWithoutSourceElevation(updated, false)
+            : updated;
         });
       } else if (active.kind === 'shared') {
         setActive((current) => {
@@ -2623,6 +2645,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     elevationProvider,
     recalculationState,
     reloadSummaries,
+    t,
     trackContentHasher,
     userData,
   ]);

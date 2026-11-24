@@ -1081,6 +1081,11 @@ msgstr "Open the forecast for {label} in Weather"
 msgid "Over {name}."
 msgstr "Over {name}."
 
+#. js-lingui-id: MRBkq-
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Overwrite the track's elevations with the terrain model? Point times stay unchanged."
+msgstr "Overwrite the track's elevations with the terrain model? Point times stay unchanged."
+
 #. js-lingui-id: NVQqOC
 #. placeholder {0}: (data.folder as TrackFolder).name
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1583,6 +1588,11 @@ msgstr "The route could not be saved."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The route timing could not be saved."
 msgstr "The route timing could not be saved."
+
+#. js-lingui-id: j_3MOo
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "The terrain model does not cover the whole track, so its elevations were kept."
+msgstr "The terrain model does not cover the whole track, so its elevations were kept."
 
 #. js-lingui-id: _Kz0qB
 #: src/presentation/tracks/TracksWorkspace.tsx

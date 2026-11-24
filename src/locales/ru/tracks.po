@@ -1081,6 +1081,11 @@ msgstr "Открыть прогноз в разделе «Погода»: {label
 msgid "Over {name}."
 msgstr "Над {name}."
 
+#. js-lingui-id: MRBkq-
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Overwrite the track's elevations with the terrain model? Point times stay unchanged."
+msgstr "Затереть высоты трека моделью рельефа? Время точек не изменится."
+
 #. js-lingui-id: NVQqOC
 #. placeholder {0}: (data.folder as TrackFolder).name
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1583,6 +1588,11 @@ msgstr "Не удалось сохранить маршрут."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The route timing could not be saved."
 msgstr "Не удалось сохранить время прохождения."
+
+#. js-lingui-id: j_3MOo
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "The terrain model does not cover the whole track, so its elevations were kept."
+msgstr "Модель рельефа покрывает не весь трек, поэтому его высоты сохранены."
 
 #. js-lingui-id: _Kz0qB
 #: src/presentation/tracks/TracksWorkspace.tsx

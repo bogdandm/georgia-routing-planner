@@ -206,7 +206,10 @@ track geometry is unchanged. The original file bytes are discarded after parsing
 **Remove elevation and time**, left of Discard on a prepared import whose DEM projection
 covers every segment and that has source elevation or point times, drops both before
 saving: the DEM projection becomes the canonical elevation and the track has no recorded
-time or pace.
+time or pace. **Recalculate elevation** on a prepared import with its own elevation asks
+to overwrite it first; on confirmation the DEM projection replaces it the same way while
+point times stay. When the DEM does not cover the whole track, the elevation is kept and
+a warning says so.
 
 GPX import also reads bounded root `<wpt>` elements as track markers, up to 100 per
 track. Blank names become `Marker N`; invalid or excess waypoints are skipped with

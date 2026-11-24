@@ -1902,6 +1902,51 @@ describe('WorkspaceShell', () => {
     ).toBe(true);
   });
 
+  it('overwrites preview elevations on recalculation only after confirmation', async () => {
+    mockRisingDem();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false);
+    const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
+    const user = userEvent.setup();
+    const { container } = renderWorkspaceShell();
+    await user.click(screen.getByRole('tab', { name: 'Tracks' }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (input === null) throw new Error('The track file input is missing.');
+
+    await user.upload(input, gpxFileWithCompanionRoute());
+    const details = await screen.findByRole('complementary', { name: 'Track details' });
+    expect(
+      await within(details).findByLabelText('Elevation gain: 120 m'),
+    ).toBeVisible();
+    const recalculate = within(details).getByRole('button', {
+      name: 'Recalculate elevation',
+    });
+    await user.click(recalculate);
+    expect(confirm).toHaveBeenCalledWith(
+      "Overwrite the track's elevations with the terrain model? Point times stay unchanged.",
+    );
+    expect(within(details).getByLabelText('Elevation gain: 120 m')).toBeVisible();
+
+    confirm.mockReturnValueOnce(true);
+    await user.click(recalculate);
+    expect(
+      await within(details).findByLabelText('Elevation gain: 100 m'),
+    ).toBeVisible();
+    expect(
+      within(details).queryByLabelText(/^Elevation gain \(calculated\):/u),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(details).getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(saveLocalTrack).toHaveBeenCalledOnce();
+    });
+    const [summary, content] = saveLocalTrack.mock.calls[0] ?? [];
+    expect(summary?.metrics.elevationSource).toBe('dem-assisted');
+    expect(summary?.metrics.recordedStartAt).toBe('2026-07-13T08:00:00.000Z');
+    expect(content?.trackPoints[0]?.at(-1)?.recordedAt).toBe(
+      '2026-07-13T08:02:00.000Z',
+    );
+  });
+
   it('keeps the geometry of a DEM-canonical track through repeated recalculation', async () => {
     mockRisingDem();
     const saveLocalTrack = vi.spyOn(services.database, 'saveLocalTrack');
@@ -2034,6 +2079,7 @@ describe('WorkspaceShell', () => {
     const provider = services.elevationProvider;
     expect(provider).not.toBeNull();
     if (provider === null) return;
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const pendingRecalculations: {
       readonly count: number;
       readonly resolve: (samples: readonly ElevationSample[]) => void;
@@ -2111,6 +2157,11 @@ describe('WorkspaceShell', () => {
     await waitFor(() => {
       expect(previewRecalculate).toBeEnabled();
     });
+    expect(
+      screen.getByText(
+        'The terrain model does not cover the whole track, so its elevations were kept.',
+      ),
+    ).toBeVisible();
 
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => {

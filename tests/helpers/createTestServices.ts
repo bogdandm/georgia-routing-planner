@@ -294,6 +294,11 @@ export function createTestServices(
     }),
     supabaseConfiguration: { status: 'unconfigured' },
     trackShares: options.trackShares ?? null,
+    trackNamingPlaces: {
+      reverseSettlement: () => Promise.resolve(null),
+      nearby: () => Promise.resolve([]),
+      nearbySupplement: () => Promise.resolve([]),
+    },
     userData,
   };
 }

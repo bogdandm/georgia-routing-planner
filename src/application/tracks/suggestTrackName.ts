@@ -18,11 +18,21 @@ import {
 } from '@/domain/tracks/trackNaming';
 
 export interface TrackNamingPlaces {
+  /** Settlement (city, town, village, or hamlet) containing or nearest the point. */
   reverseSettlement(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<PlaceSearchResult | null>;
+  /** Named landmarks within 2 km from the basemap tiles. */
   nearby(
+    coordinate: { readonly longitude: number; readonly latitude: number },
+    signal: AbortSignal,
+  ): Promise<readonly PlaceSearchResult[]>;
+  /**
+   * Landmark kinds the basemap omits, such as passes and waterfalls, from an often
+   * overloaded provider; failures are logged but never shown.
+   */
+  nearbySupplement(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<readonly PlaceSearchResult[]>;
@@ -30,7 +40,7 @@ export interface TrackNamingPlaces {
 
 /** A place lookup that failed; the suggestion was built without it. */
 export interface TrackNameLookupFailure {
-  /** `landmark` is the nearby-feature (Overpass) lookup; `settlement` the reverse geocoder. */
+  /** `landmark` is the basemap-tile lookup; `settlement` the reverse geocoder. */
   readonly lookup: 'settlement' | 'landmark';
   readonly reason: PlaceSearchFailureCode | 'unknown';
 }
@@ -57,6 +67,8 @@ type LocatedCandidate = PoiCandidate & { readonly distanceMeters: number };
 const SETTLEMENT_PREFERRED_METERS = 1_000;
 /** Beyond this distance a settlement no longer describes the anchor. */
 const SETTLEMENT_MAXIMUM_METERS = 3_000;
+/** Tile quantization and centre placement keep one OSM object within this distance. */
+const SAME_FEATURE_METERS = 50;
 
 interface LandmarkRank {
   /** Distance multiplier: lower-weight classes win over nearer weaker landmarks. */
@@ -68,6 +80,11 @@ const summitRank: LandmarkRank = { weight: 1, radiusMeters: 1_000 };
 const waterRank: LandmarkRank = { weight: 1.5, radiusMeters: 2_000 };
 const featureRank: LandmarkRank = { weight: 2, radiusMeters: 2_000 };
 
+/**
+ * The only landmark categories that may name a track. Huts, shelters, camp sites,
+ * viewpoints, attractions, caves, places of worship, ruins, other historic objects,
+ * isolated dwellings, and localities are deliberately excluded.
+ */
 const landmarkRanks: Readonly<Record<string, LandmarkRank>> = {
   'mountain_pass:yes': summitRank,
   'natural:peak': summitRank,
@@ -76,25 +93,13 @@ const landmarkRanks: Readonly<Record<string, LandmarkRank>> = {
   'natural:water': waterRank,
   'natural:glacier': waterRank,
   'waterway:waterfall': waterRank,
-  'natural:cave_entrance': featureRank,
-  'tourism:alpine_hut': featureRank,
-  'tourism:wilderness_hut': featureRank,
-  'tourism:viewpoint': featureRank,
-  'tourism:camp_site': featureRank,
-  'tourism:attraction': featureRank,
-  'amenity:shelter': featureRank,
-  'amenity:place_of_worship': featureRank,
+  'historic:castle': featureRank,
+  'historic:monument': featureRank,
   'place:city': featureRank,
   'place:town': featureRank,
   'place:village': featureRank,
   'place:hamlet': featureRank,
-  'place:isolated_dwelling': featureRank,
-  'place:locality': featureRank,
 };
-
-function landmarkRank(category: string): LandmarkRank | undefined {
-  return category.startsWith('historic:') ? featureRank : landmarkRanks[category];
-}
 
 function locate(
   result: PlaceSearchResult,
@@ -131,7 +136,9 @@ function locate(
  * landmark: the dominant summit, or the turnaround of a closed track. Multiple
  * segments are joined into one journey. Failed lookups are logged, reported in
  * `lookupFailures`, and treated as missing parts: a failed settlement falls back to a
- * landmark and vice versa. Cancellation propagates.
+ * landmark and vice versa. The landmark supplement is optional: its first failure is
+ * only logged and stops further supplement requests for this track, so one timeout
+ * delays naming at most once. Cancellation propagates.
  */
 export async function suggestTrackName(input: {
   readonly segments: readonly TrackSegment[];
@@ -175,21 +182,57 @@ export async function suggestTrackName(input: {
     }
     return result === null ? null : locate(result, anchor, lookedUpAt);
   };
-  const landmarkNear = async (anchor: TrackCoordinate) => {
-    let results: readonly PlaceSearchResult[];
+  let supplementAvailable = true;
+  const supplementNear = async (coordinate: {
+    readonly longitude: number;
+    readonly latitude: number;
+  }): Promise<readonly PlaceSearchResult[]> => {
+    if (!supplementAvailable) return [];
     try {
-      results = await places.nearby(
-        { longitude: anchor[0], latitude: anchor[1] },
-        signal,
-      );
+      return await places.nearbySupplement(coordinate, signal);
     } catch (error) {
-      recordFailure('landmark', error);
-      return null;
+      signal.throwIfAborted();
+      supplementAvailable = false;
+      logger.log({
+        level: 'warn',
+        name: 'local-track.nearby-supplement.failed',
+        data: { reason: error instanceof PlaceSearchFailure ? error.code : 'unknown' },
+      });
+      return [];
     }
+  };
+  const landmarkNear = async (anchor: TrackCoordinate) => {
+    const coordinate = { longitude: anchor[0], latitude: anchor[1] };
+    const [basemap, supplement] = await Promise.all([
+      places.nearby(coordinate, signal).catch((error: unknown) => {
+        recordFailure('landmark', error);
+        return [];
+      }),
+      supplementNear(coordinate),
+    ]);
+    // Basemap tiles drop `mountain_pass`, so a saddle at a supplement pass's position
+    // is the same object; the pass keeps its `Pass` suffix.
+    const passes = supplement.filter(
+      (result) => result.category === 'mountain_pass:yes',
+    );
+    const results = [
+      ...supplement,
+      ...basemap.filter(
+        (result) =>
+          result.category !== 'natural:saddle' ||
+          !passes.some(
+            (pass) =>
+              geodesicDistanceMeters(
+                [pass.coordinate.longitude, pass.coordinate.latitude],
+                [result.coordinate.longitude, result.coordinate.latitude],
+              ) <= SAME_FEATURE_METERS,
+          ),
+      ),
+    ];
     let best: LocatedCandidate | null = null;
     let bestScore = Number.POSITIVE_INFINITY;
     for (const result of results) {
-      const rank = landmarkRank(result.category);
+      const rank = landmarkRanks[result.category];
       const candidate = rank === undefined ? null : locate(result, anchor, lookedUpAt);
       if (rank === undefined || candidate === null) continue;
       const score = candidate.distanceMeters * rank.weight;

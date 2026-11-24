@@ -112,22 +112,16 @@ const settlementAddressKeys = [
   'isolated_dwelling',
 ] as const;
 /**
- * Named landmark tags requested from Overpass, in category-precedence order; `null`
- * accepts every value. They are exactly the categories track naming ranks, so cafés,
- * shops, and streams cannot consume the 50-result quota.
+ * Named landmark tags requested from Overpass, in category-precedence order. Track
+ * naming reads most landmarks from the basemap tiles; these are the ranked categories
+ * the OpenMapTiles schema drops: `mountain_pass` on saddles, waterfalls, and glaciers.
  */
-const nearbyLandmarkTags: readonly (readonly [string, readonly string[] | null])[] = [
+const nearbyLandmarkTags: readonly (readonly [string, readonly string[]])[] = [
   ['mountain_pass', ['yes']],
-  ['natural', ['peak', 'volcano', 'saddle', 'water', 'glacier', 'cave_entrance']],
+  ['natural', ['glacier']],
   ['waterway', ['waterfall']],
-  ['tourism', ['alpine_hut', 'wilderness_hut', 'viewpoint', 'camp_site', 'attraction']],
-  ['historic', null],
-  ['amenity', ['shelter', 'place_of_worship']],
-  ['place', ['city', 'town', 'village', 'hamlet', 'isolated_dwelling', 'locality']],
 ];
 const nearbyRadiusMeters = 2_000;
-/** Waits before retrying an overloaded Overpass response (HTTP 504 or runtime error). */
-const nearbyRetryDelaysMs = [2_000, 5_000] as const;
 
 // One spatial scan collects named objects; the tag filters then run on that in-memory
 // set. Measured against the public endpoint, this finished in 1–7 s where a key-regex
@@ -135,11 +129,7 @@ const nearbyRetryDelaysMs = [2_000, 5_000] as const;
 // declared `maxsize` lets the busy dispatcher admit the query sooner.
 function nearbyQuery(latitude: number, longitude: number): string {
   const filters = nearbyLandmarkTags
-    .map(([key, values]) =>
-      values === null
-        ? `nwr.named["${key}"];`
-        : `nwr.named["${key}"~"^(${values.join('|')})$"];`,
-    )
+    .map(([key, values]) => `nwr.named["${key}"~"^(${values.join('|')})$"];`)
     .join('');
   return `[out:json][timeout:10][maxsize:33554432];nwr(around:${String(nearbyRadiusMeters)},${latitude.toFixed(6)},${longitude.toFixed(6)})["name"]->.named;(${filters});out center qt 50;`;
 }
@@ -157,11 +147,7 @@ function nearbyCategory(
 ): { readonly category: string; readonly type: string } | null {
   for (const [category, values] of nearbyLandmarkTags) {
     const type = tags[category]?.trim();
-    if (
-      type !== undefined &&
-      type.length > 0 &&
-      (values === null || values.includes(type))
-    ) {
+    if (type !== undefined && type.length > 0 && values.includes(type)) {
       return { category, type };
     }
   }
@@ -262,7 +248,7 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
       this.remember(cacheKey, results);
       return result;
     } catch (error) {
-      return this.translateFailure(error, signal);
+      return translatePlaceSearchFailure(error, signal);
     }
   }
 
@@ -306,11 +292,15 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
       this.remember(cacheKey, results);
       return results;
     } catch (error) {
-      return this.translateFailure(error, signal);
+      return translatePlaceSearchFailure(error, signal);
     }
   }
 
-  public async nearby(
+  /**
+   * Named landmarks of the kinds basemap tiles omit; see `nearbyLandmarkTags`. Overpass
+   * is often at capacity, so one attempt is made and the caller treats it as optional.
+   */
+  public async nearbySupplement(
     coordinate: { readonly longitude: number; readonly latitude: number },
     signal: AbortSignal,
   ): Promise<readonly PlaceSearchResult[]> {
@@ -320,57 +310,44 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
     const cached = this.#cache.get(cacheKey);
     if (cached !== undefined && cached.expiresAt > this.now()) return cached.results;
 
-    for (let attempt = 0; ; attempt += 1) {
-      await this.waitForRequestSlot(signal);
-      try {
-        const raw = await this.httpClient
-          .post(nearbyUrl, {
-            context: { operationId: this.idGenerator.generate() },
-            body: new URLSearchParams({
-              data: nearbyQuery(coordinate.latitude, coordinate.longitude),
-            }),
-            signal,
-            timeout: this.configuration.requestTimeoutMs,
-          })
-          .json<unknown>();
-        const parsed = nearbyResultSchema.parse(raw);
-        if (parsed.remark?.startsWith('runtime error') === true) {
-          throw new PlaceSearchFailure(
-            'provider',
-            'The nearby-place provider could not finish the query. Try again.',
-          );
-        }
-        const results = parsed.elements
-          .flatMap<PlaceSearchResult>((element) => {
-            const result = this.toNearbyPlaceSearchResult(element);
-            return result === null ? [] : [result];
-          })
-          .filter(
-            (result) =>
-              geodesicDistanceKm(
-                coordinate.latitude,
-                coordinate.longitude,
-                result.coordinate.latitude,
-                result.coordinate.longitude,
-              ) <=
-              nearbyRadiusMeters / 1_000,
-          );
-        this.remember(cacheKey, results);
-        return results;
-      } catch (error) {
-        // An overloaded Overpass instance answers 504 or a runtime-error remark; both
-        // usually clear within seconds. A 429 means this client used its slots and is
-        // reported instead of retried.
-        const overloaded =
-          (error instanceof HTTPError && error.response.status === 504) ||
-          (error instanceof PlaceSearchFailure && error.code === 'provider');
-        const delay = nearbyRetryDelaysMs[attempt];
-        if (overloaded && delay !== undefined && !signal.aborted) {
-          await waitFor(delay, signal);
-          continue;
-        }
-        return this.translateFailure(error, signal);
+    await this.waitForRequestSlot(signal);
+    try {
+      const raw = await this.httpClient
+        .post(nearbyUrl, {
+          context: { operationId: this.idGenerator.generate() },
+          body: new URLSearchParams({
+            data: nearbyQuery(coordinate.latitude, coordinate.longitude),
+          }),
+          signal,
+          timeout: this.configuration.requestTimeoutMs,
+        })
+        .json<unknown>();
+      const parsed = nearbyResultSchema.parse(raw);
+      if (parsed.remark?.startsWith('runtime error') === true) {
+        throw new PlaceSearchFailure(
+          'provider',
+          'The nearby-place provider could not finish the query. Try again.',
+        );
       }
+      const results = parsed.elements
+        .flatMap<PlaceSearchResult>((element) => {
+          const result = this.toNearbyPlaceSearchResult(element);
+          return result === null ? [] : [result];
+        })
+        .filter(
+          (result) =>
+            geodesicDistanceKm(
+              coordinate.latitude,
+              coordinate.longitude,
+              result.coordinate.latitude,
+              result.coordinate.longitude,
+            ) <=
+            nearbyRadiusMeters / 1_000,
+        );
+      this.remember(cacheKey, results);
+      return results;
+    } catch (error) {
+      return translatePlaceSearchFailure(error, signal);
     }
   }
 
@@ -470,31 +447,35 @@ export class NominatimPlaceSearchGateway implements PlaceSearchGateway {
       bounds: null,
     };
   }
+}
 
-  private translateFailure(error: unknown, signal: AbortSignal): never {
-    if (signal.aborted) throw error;
-    if (error instanceof TimeoutError) {
-      throw new PlaceSearchFailure('timeout', 'Place search timed out. Try again.');
-    }
-    if (error instanceof HTTPError && error.response.status === 429) {
-      throw new PlaceSearchFailure(
-        'rate-limited',
-        'Place search is temporarily rate limited. Wait and try again.',
-      );
-    }
-    if (error instanceof HTTPError && error.response.status >= 500) {
-      throw new PlaceSearchFailure(
-        'provider',
-        'The place provider is temporarily unavailable. Try again.',
-      );
-    }
-    if (error instanceof PlaceSearchFailure) throw error;
-    if (error instanceof z.ZodError) {
-      throw new PlaceSearchFailure(
-        'invalid-response',
-        'The place provider returned an unsupported response.',
-      );
-    }
-    throw new PlaceSearchFailure('network', 'Place search is unavailable. Try again.');
+/** Maps a ky, Zod, or provider error to the typed failure; cancellation is rethrown. */
+export function translatePlaceSearchFailure(
+  error: unknown,
+  signal: AbortSignal,
+): never {
+  if (signal.aborted) throw error;
+  if (error instanceof TimeoutError) {
+    throw new PlaceSearchFailure('timeout', 'Place search timed out. Try again.');
   }
+  if (error instanceof HTTPError && error.response.status === 429) {
+    throw new PlaceSearchFailure(
+      'rate-limited',
+      'Place search is temporarily rate limited. Wait and try again.',
+    );
+  }
+  if (error instanceof HTTPError && error.response.status >= 500) {
+    throw new PlaceSearchFailure(
+      'provider',
+      'The place provider is temporarily unavailable. Try again.',
+    );
+  }
+  if (error instanceof PlaceSearchFailure) throw error;
+  if (error instanceof z.ZodError) {
+    throw new PlaceSearchFailure(
+      'invalid-response',
+      'The place provider returned an unsupported response.',
+    );
+  }
+  throw new PlaceSearchFailure('network', 'Place search is unavailable. Try again.');
 }

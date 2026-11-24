@@ -841,11 +841,10 @@ describe('WorkspaceShell', () => {
   });
 
   it('explains a missing generated name caused by a rate-limited landmark lookup', async () => {
-    const searchPlaces = services.searchPlaces;
-    expect(searchPlaces).not.toBeNull();
-    if (searchPlaces === null) return;
-    vi.spyOn(searchPlaces, 'reverseSettlement').mockResolvedValue(null);
-    vi.spyOn(searchPlaces, 'nearby').mockRejectedValue(
+    const places = services.trackNamingPlaces;
+    expect(places).not.toBeNull();
+    if (places === null) return;
+    vi.spyOn(places, 'nearby').mockRejectedValue(
       new PlaceSearchFailure('rate-limited', 'Rate limited.'),
     );
     const user = userEvent.setup();

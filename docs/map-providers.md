@@ -160,19 +160,22 @@ the visible detail map. Limits:
 MapLibre to detect provider drift (`tools/diagnostics/inspectRoutingTiles.ts`).
 Shortbread can still omit, misclassify, or grade-separate a physical connection.
 
-## Place search and names: Nominatim and Overpass
+## Place search and names: Nominatim, basemap tiles, and Overpass
 
 The defaults are the public OpenStreetMap Nominatim search and reverse endpoints under
 `https://nominatim.openstreetmap.org/` plus the Overpass interpreter at
 `https://overpass-api.de/api/interpreter`
-(`src/infrastructure/geocoding/NominatimPlaceSearchGateway.ts`). Operating limits:
+(`src/infrastructure/geocoding/NominatimPlaceSearchGateway.ts`). Imported-track
+landmarks come primarily from the hiking basemap's z14 vector tiles
+(`src/infrastructure/geocoding/BasemapLandmarkGateway.ts`). Operating limits:
 
 - Search is submit-only because the Nominatim usage policy forbids client autocomplete.
 - Each search sends a bounded `viewbox`, starting at the visible viewport and doubling
   up to a 500 km radius, and selects the `address`, `natural`, and `manmade` layers.
-- All three endpoints share a minimum one-second request interval, a five-minute cache,
-  the configured timeout and result cap (default 12 s and 10), Zod validation, and typed
-  timeout, rate-limit, invalid-response, provider, and network failures.
+- All three geocoding endpoints share a minimum one-second request interval, a
+  five-minute cache, the configured timeout and result cap (default 12 s and 10), Zod
+  validation, and typed timeout, rate-limit, invalid-response, provider, and network
+  failures.
 - JSONv2 `category`/`type` is an open-ended OSM tag, so the adapter allowlists reviewed
   settlement, administrative, mountain, and water tags and classifies everything else as
   `other`.
@@ -180,14 +183,22 @@ The defaults are the public OpenStreetMap Nominatim search and reverse endpoints
   `Accept-Language: en`) that return only the largest enclosing city, town, village,
   hamlet, or isolated dwelling, so a town quarter resolves to its town and an
   administrative-only match names nothing.
-- Landmark lookups send one Overpass query per anchor: a single `around:2000` scan of
-  named objects into a set, in-memory filters for the categories naming ranks, at most
-  50 centres, and a declared 32 MiB `maxsize`. On the public endpoint this finished in
-  1–7 s, while a key-regex filter took up to 20 s and per-tag `around` unions timed out.
-- Overpass reports query timeouts as HTTP 200 with a `runtime error` remark; that and
-  HTTP 504 are retried twice (after 2 s and 5 s). HTTP 429 means this client's slots are
-  used and is reported without a retry. Failed lookups are skipped and explained in the
-  preview; they never block import.
+- Landmark lookups read the configured `vector` TileJSON once, then the z14 tiles
+  covering two kilometres around the anchor (9–16 tiles in Georgia), with the map's
+  request timeout and the browser HTTP cache shared with MapLibre. Only the kinds that
+  may name a track are read: named `mountain_peak` peaks, volcanoes, and saddles; `poi`
+  castles (fortresses included) and monuments; `place` cities, towns, villages, and
+  hamlets; and `water_name` lakes, each mapped to its OSM tag. A failed tile lookup is
+  skipped and explained in the preview; it never blocks import.
+- In parallel, one Overpass query per anchor supplements what OpenMapTiles drops:
+  `mountain_pass=yes` on saddles, waterfalls, and glaciers. It is a single `around:2000`
+  scan of named objects into a set with in-memory tag filters, at most 50 centres, and a
+  declared 32 MiB `maxsize`; a key-regex filter took up to 20 s and per-tag `around`
+  unions timed out. The public endpoint often answers HTTP 502 "at capacity" for
+  minutes, so the supplement makes one attempt, treats a `runtime error` remark as a
+  failure, and after its first failure is skipped for the rest of that track. Its
+  failures are logged (`local-track.nearby-supplement.failed`) but never shown. A
+  basemap saddle within 50 m of a supplement pass is treated as that pass.
 
 Queries, coordinates, and returned names are not written to diagnostics. UI attribution
 links to the OpenStreetMap copyright page.

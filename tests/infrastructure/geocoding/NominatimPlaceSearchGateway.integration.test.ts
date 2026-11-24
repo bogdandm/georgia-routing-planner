@@ -156,7 +156,7 @@ describe('NominatimPlaceSearchGateway', () => {
     ).resolves.toBeNull();
   });
 
-  it('loads and validates nearby named OSM features across POI categories', async () => {
+  it('loads and validates the named landmark kinds basemap tiles omit', async () => {
     const services = createTestServices();
     const submittedQuery = vi.fn<(query: string | null) => void>();
     const nearbyUrl = defaultGeocodingProviderConfiguration.nearbyUrl;
@@ -182,7 +182,7 @@ describe('NominatimPlaceSearchGateway', () => {
               type: 'way',
               id: 6_217_647_19,
               center: { lat: 42.711078, lon: 43.1533538 },
-              tags: { name: 'Chutkharo Lakes', natural: 'water' },
+              tags: { name: 'Chutkharo Waterfall', waterway: 'waterfall' },
             },
             {
               type: 'relation',
@@ -202,7 +202,7 @@ describe('NominatimPlaceSearchGateway', () => {
     );
 
     await expect(
-      gateway.nearby(
+      gateway.nearbySupplement(
         { longitude: 43.163426, latitude: 42.71163 },
         new AbortController().signal,
       ),
@@ -217,9 +217,9 @@ describe('NominatimPlaceSearchGateway', () => {
       },
       {
         id: 'osm:way/621764719',
-        label: 'Chutkharo Lakes',
+        label: 'Chutkharo Waterfall',
         coordinate: { latitude: 42.711078, longitude: 43.1533538 },
-        category: 'natural:water',
+        category: 'waterway:waterfall',
         kind: 'water',
         bounds: null,
       },
@@ -227,70 +227,24 @@ describe('NominatimPlaceSearchGateway', () => {
 
     const query = submittedQuery.mock.calls[0]?.[0];
     expect(query).toContain('nwr(around:2000,42.711630,43.163426)["name"]->.named;');
-    expect(query).toContain('nwr.named["amenity"~"^(shelter|place_of_worship)$"];');
+    expect(query).toContain('nwr.named["mountain_pass"~"^(yes)$"];');
+    expect(query).toContain('nwr.named["waterway"~"^(waterfall)$"];');
+    expect(query).toContain('nwr.named["natural"~"^(glacier)$"];');
+    expect(query).not.toContain('historic');
     expect(query).toContain('[maxsize:33554432]');
   });
 
-  it('retries an overloaded nearby lookup and then succeeds', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    try {
-      const services = createTestServices();
-      const responses = [
-        () => new HttpResponse(null, { status: 504 }),
-        () =>
-          HttpResponse.json({
-            elements: [],
-            remark:
-              'runtime error: Query timed out in "query" at line 1 after 11 seconds.',
-          }),
-        () =>
-          HttpResponse.json({
-            elements: [
-              {
-                type: 'node',
-                id: 1,
-                lat: 42.7112,
-                lon: 43.1638,
-                tags: { name: 'Kelida', mountain_pass: 'yes' },
-              },
-            ],
-          }),
-      ];
-      let attempts = 0;
-      mswServer.use(
-        http.post(defaultGeocodingProviderConfiguration.nearbyUrl, () => {
-          const respond = responses[attempts] ?? responses[0];
-          attempts += 1;
-          return respond?.();
-        }),
-      );
-      const gateway = new NominatimPlaceSearchGateway(
-        services.httpClient,
-        defaultGeocodingProviderConfiguration,
-        services.idGenerator,
-        () => 2_000,
-      );
-
-      const lookup = gateway.nearby(
-        { longitude: 43.163426, latitude: 42.71163 },
-        new AbortController().signal,
-      );
-      await vi.advanceTimersByTimeAsync(20_000);
-
-      await expect(lookup).resolves.toMatchObject([{ label: 'Kelida' }]);
-      expect(attempts).toBe(3);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('reports a rate-limited nearby lookup without retrying it', async () => {
+  it('reports an Overpass runtime-error remark after a single attempt', async () => {
     const services = createTestServices();
     let attempts = 0;
     mswServer.use(
       http.post(defaultGeocodingProviderConfiguration.nearbyUrl, () => {
         attempts += 1;
-        return new HttpResponse(null, { status: 429 });
+        return HttpResponse.json({
+          elements: [],
+          remark:
+            'runtime error: Query timed out in "query" at line 1 after 11 seconds.',
+        });
       }),
     );
     const gateway = new NominatimPlaceSearchGateway(
@@ -300,11 +254,11 @@ describe('NominatimPlaceSearchGateway', () => {
     );
 
     await expect(
-      gateway.nearby(
+      gateway.nearbySupplement(
         { longitude: 43.16, latitude: 42.71 },
         new AbortController().signal,
       ),
-    ).rejects.toMatchObject({ code: 'rate-limited' });
+    ).rejects.toMatchObject({ code: 'provider' });
     expect(attempts).toBe(1);
   });
 

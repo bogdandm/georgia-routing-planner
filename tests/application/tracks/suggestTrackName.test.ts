@@ -64,9 +64,11 @@ type Lookup<T> = readonly (readonly [TrackCoordinate, T])[];
 function fakePlaces(
   settlements: Lookup<PlaceSearchResult>,
   landmarks: Lookup<readonly PlaceSearchResult[]>,
+  supplements: Lookup<readonly PlaceSearchResult[]> = [],
 ): TrackNamingPlaces & {
   readonly reverseSettlement: Mock<TrackNamingPlaces['reverseSettlement']>;
   readonly nearby: Mock<TrackNamingPlaces['nearby']>;
+  readonly nearbySupplement: Mock<TrackNamingPlaces['nearbySupplement']>;
 } {
   const find = <T>(
     lookup: Lookup<T>,
@@ -83,6 +85,9 @@ function fakePlaces(
     ),
     nearby: vi.fn<TrackNamingPlaces['nearby']>((coordinate) =>
       Promise.resolve(find(landmarks, coordinate) ?? []),
+    ),
+    nearbySupplement: vi.fn<TrackNamingPlaces['nearbySupplement']>((coordinate) =>
+      Promise.resolve(find(supplements, coordinate) ?? []),
     ),
   };
 }
@@ -116,10 +121,12 @@ describe('suggestTrackName', () => {
             place('Café', 'amenity:cafe', 'other', [44.7501, 42.6]),
             place('Chaukhi', 'natural:peak', 'mountain', [44.75, 42.6063]),
             place('Abudelauri Lakes', 'natural:water', 'water', [44.7537, 42.6]),
-            place('ჭაუხი', 'mountain_pass:yes', 'mountain', [44.75, 42.6018]),
+            // The basemap's copy of the pass below, nearer by tile quantization.
+            place('Chaukhi', 'natural:saddle', 'mountain', [44.75, 42.6017]),
           ],
         ],
       ],
+      [[summit, [place('ჭაუხი', 'mountain_pass:yes', 'mountain', [44.75, 42.6018])]]],
     );
 
     const suggestion = await suggestTrackName({
@@ -257,6 +264,67 @@ describe('suggestTrackName', () => {
       name: 'local-track.nearby-poi.failed',
       data: { reason: 'rate-limited' },
     });
+  });
+
+  it('names from basemap landmarks when the supplement fails, asking it only once and not reporting it', async () => {
+    const places = fakePlaces(
+      [],
+      [
+        [[44, 42], [place('Koruldi Lakes', 'natural:water', 'water', [44.003, 42])]],
+        [[44.05, 42], [place('Ananuri', 'historic:castle', 'other', [44.051, 42])]],
+      ],
+    );
+    places.nearbySupplement.mockRejectedValue(
+      new PlaceSearchFailure('provider', 'Overpass at capacity.'),
+    );
+    const logger = createLogger();
+
+    const suggestion = await suggestTrackName({
+      segments: [{ points: line([44, 42], [44.05, 42], 20) }],
+      places,
+      logger,
+      lookedUpAt,
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestion.generatedName).toBe('Koruldi Lakes → Ananuri');
+    expect(suggestion.lookupFailures).toBeUndefined();
+    expect(places.nearby).toHaveBeenCalledTimes(2);
+    expect(places.nearbySupplement).toHaveBeenCalledOnce();
+    expect(logger.log).toHaveBeenCalledWith({
+      level: 'warn',
+      name: 'local-track.nearby-supplement.failed',
+      data: { reason: 'provider' },
+    });
+  });
+
+  it('never names a track after excluded landmark types, however close', async () => {
+    const places = fakePlaces(
+      [],
+      [
+        [
+          [44, 42],
+          [
+            place('Lashari', 'amenity:place_of_worship', 'other', [44.0002, 42]),
+            place('Hut', 'tourism:alpine_hut', 'other', [44.0003, 42]),
+            place('Lamaria', 'historic:ruins', 'other', [44.0004, 42]),
+            place('Spring', 'tourism:attraction', 'other', [44.0005, 42]),
+          ],
+        ],
+        [[44.05, 42], [place('Zhabeshi', 'place:village', 'settlement', [44.051, 42])]],
+      ],
+    );
+
+    const suggestion = await suggestTrackName({
+      segments: [{ points: line([44, 42], [44.05, 42], 20) }],
+      places,
+      logger: createLogger(),
+      lookedUpAt,
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestion.startPoi).toBeUndefined();
+    expect(suggestion.endPoi?.label).toBe('Zhabeshi');
   });
 
   it('names from landmarks when the settlement lookup fails and reports the failure', async () => {

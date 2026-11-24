@@ -53,22 +53,6 @@ export class SearchPlaces {
     private readonly clock: Clock,
   ) {}
 
-  public async reverseSettlement(
-    coordinate: { readonly longitude: number; readonly latitude: number },
-    signal: AbortSignal,
-  ): Promise<PlaceSearchResult | null> {
-    if (this.gateway.reverseSettlement === undefined) return null;
-    return this.gateway.reverseSettlement(coordinate, signal);
-  }
-
-  public async nearby(
-    coordinate: { readonly longitude: number; readonly latitude: number },
-    signal: AbortSignal,
-  ): Promise<readonly PlaceSearchResult[]> {
-    if (this.gateway.nearby === undefined) return [];
-    return this.gateway.nearby(coordinate, signal);
-  }
-
   public async execute(
     rawQuery: string,
     bounds: PlaceSearchBounds,

@@ -826,6 +826,11 @@ msgstr "Item dropped."
 msgid "Keep Komoot elevations? Their elevation gain differs from the terrain model by {difference} ({percent})."
 msgstr "Keep Komoot elevations? Their elevation gain differs from the terrain model by {difference} ({percent})."
 
+#. js-lingui-id: Q3iZ7D
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Komoot point times were removed as unrealistic: Komoot starts them at the export moment and follows its own pace model."
+msgstr "Komoot point times were removed as unrealistic: Komoot starts them at the export moment and follows its own pace model."
+
 #. js-lingui-id: w2YeAc
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Light along the route: {description}"

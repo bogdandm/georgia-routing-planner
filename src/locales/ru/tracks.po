@@ -826,6 +826,11 @@ msgstr "Элемент перемещён."
 msgid "Keep Komoot elevations? Their elevation gain differs from the terrain model by {difference} ({percent})."
 msgstr "Оставить высоты Komoot? Их набор высоты отличается от модели рельефа на {difference} ({percent})."
 
+#. js-lingui-id: Q3iZ7D
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "Komoot point times were removed as unrealistic: Komoot starts them at the export moment and follows its own pace model."
+msgstr "Время точек Komoot удалено как нереалистичное: Komoot отсчитывает его от момента экспорта и следует своей модели темпа."
+
 #. js-lingui-id: w2YeAc
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Light along the route: {description}"

@@ -74,6 +74,8 @@ export interface ParsedGpx {
   readonly pointCount: number;
   readonly metadata: GpxMetadataProjection;
   readonly warnings: readonly GpxValidationWarning[];
+  /** Set when a Komoot export's synthesized point times were dropped as implausible. */
+  readonly implausibleTimesDropped?: true;
 }
 
 export type GpxParseFailureCode =
@@ -546,11 +548,14 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
       'The GPX file has no renderable track or route.',
     );
   }
-  const importedSegments =
-    isKomootExport && !hasPlausibleTiming(segments)
-      ? withoutTimestamps(segments)
-      : segments;
-  return {
+  const timesDropped =
+    isKomootExport &&
+    segments.some((segment) =>
+      segment.points.some((point) => point.recordedAt !== undefined),
+    ) &&
+    !hasPlausibleTiming(segments);
+  const importedSegments = timesDropped ? withoutTimestamps(segments) : segments;
+  const parsed: ParsedGpx = {
     parserVersion: GPX_PARSER_VERSION,
     geometryKind,
     segments: importedSegments,
@@ -562,4 +567,5 @@ export function parseGpx(xml: string, options: ParseGpxOptions = {}): ParsedGpx 
     metadata: readMetadata(root, selected, version),
     warnings,
   };
+  return timesDropped ? { ...parsed, implausibleTimesDropped: true } : parsed;
 }

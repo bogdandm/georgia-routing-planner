@@ -6907,6 +6907,14 @@ export function TrackDetailsPane({
                   sourceGainMeters={active.sourceMetrics.ascentMeters ?? 0}
                 />
               ) : null}
+              {active.parsed.implausibleTimesDropped === true ? (
+                <Alert severity="warning">
+                  <Trans>
+                    Komoot point times were removed as unrealistic: Komoot starts them
+                    at the export moment and follows its own pace model.
+                  </Trans>
+                </Alert>
+              ) : null}
             </Stack>
           ) : null}
           {active.kind === 'preview' || active.kind === 'shared' ? (

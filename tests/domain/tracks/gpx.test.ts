@@ -116,6 +116,7 @@ describe('parseGpx', () => {
     expect(
       result.segments[0]?.points.every((point) => point.recordedAt === undefined),
     ).toBe(true);
+    expect(result.implausibleTimesDropped).toBe(true);
   });
 
   it.each([
@@ -144,6 +145,7 @@ describe('parseGpx', () => {
       expect(result.segments[0]?.points.at(-1)?.recordedAt).toBe(
         kept ? end : undefined,
       );
+      expect(result.implausibleTimesDropped).toBe(kept ? undefined : true);
     },
   );
 

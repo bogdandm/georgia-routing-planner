@@ -218,7 +218,8 @@ timestamps start at the export moment and follow Komoot's pace model. Import kee
 only when the start lies within 07:00–12:00 in the time zone of the track start and the
 elapsed time lies within 80–120 % of the DIN 33466 hiking estimate from the source
 distance and elevation; otherwise it drops every timestamp, so the track has no recorded
-start time or pace. Komoot planning-point waypoints named `Position N` or
+start time or pace, and the import preview shows a warning that the unrealistic Komoot
+times were removed. Komoot planning-point waypoints named `Position N` or
 `N <truncated address>…` are skipped without warnings; other waypoints import normally.
 Komoot elevation comes from Komoot's own terrain model, which can understate ridges and
 smooth out small climbs. A Komoot import with a source profile and a DEM projection

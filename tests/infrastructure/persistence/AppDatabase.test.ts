@@ -1,7 +1,10 @@
 import Dexie from 'dexie';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { defaultTrackWeatherTimelineSettings } from '@/application/weather/TrackWeatherForecast';
+import {
+  defaultTrackRouteTiming,
+  defaultTrackWeatherTimelineSettings,
+} from '@/application/weather/TrackWeatherForecast';
 import {
   SAVED_MARKER_SCHEMA_VERSION,
   markerIconKeys,
@@ -217,91 +220,15 @@ describe('AppDatabase', () => {
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
       expanded: false,
       weekday: 6,
-      timelines: {},
     });
 
-    const saved = {
-      expanded: true,
-      weekday: 3,
-      timelines: {
-        'local:kazbegi': {
-          ...defaultTrackWeatherTimelineSettings,
-          startHour: 6.5,
-          paceFactor: 1.25,
-          ignoreRecordedTime: true,
-          relativeTimeMarkers: true,
-          hikeDate: '2026-07-15',
-        },
-        'local:gudauri': {
-          ...defaultTrackWeatherTimelineSettings,
-          timeMarkers: false,
-        },
-      },
-    } as const;
+    const saved = { expanded: true, weekday: 3 } as const;
     await database.saveTrackWeatherPreferences(saved);
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual(saved);
 
-    // Records stored before per-track timelines existed keep their choices.
-    await database.settings.put({
-      key: 'weather.track-preferences',
-      value: { expanded: true, weekday: 2 },
-      updatedAt: '2026-08-08T10:00:00.000Z',
-    });
-    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
-      expanded: true,
-      weekday: 2,
-      timelines: {},
-    });
-
-    // Older track entries load the default timing and map display options.
-    await database.settings.put({
-      key: 'weather.track-preferences',
-      value: {
-        expanded: true,
-        weekday: 2,
-        timelines: { 'local:kazbegi': { startHour: 7, paceFactor: 1 } },
-      },
-      updatedAt: '2026-08-08T10:00:00.000Z',
-    });
-    await expect(database.loadTrackWeatherPreferences()).resolves.toHaveProperty(
-      'timelines',
-      {
-        'local:kazbegi': {
-          ...defaultTrackWeatherTimelineSettings,
-          startHour: 7,
-        },
-      },
-    );
-
     for (const value of [
       { expanded: true, weekday: 7 },
-      {
-        expanded: true,
-        weekday: 3,
-        timelines: { 'local:kazbegi': { startHour: 6.25, paceFactor: 1 } },
-      },
-      {
-        expanded: true,
-        weekday: 3,
-        timelines: { 'local:kazbegi': { startHour: 24, paceFactor: 1 } },
-      },
-      {
-        expanded: true,
-        weekday: 3,
-        timelines: { 'local:kazbegi': { startHour: 9, paceFactor: 2.5 } },
-      },
-      {
-        expanded: true,
-        weekday: 3,
-        timelines: { 'local:kazbegi': { startHour: 9, paceFactor: 1.23 } },
-      },
-      {
-        expanded: true,
-        weekday: 3,
-        timelines: {
-          'local:kazbegi': { startHour: 9, paceFactor: 1, hikeDate: '2026-02-30' },
-        },
-      },
+      { expanded: true, weekday: 3, timelines: {} },
     ]) {
       await database.settings.put({
         key: 'weather.track-preferences',
@@ -311,12 +238,58 @@ describe('AppDatabase', () => {
       await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
         expanded: false,
         weekday: 6,
-        timelines: {},
       });
       await expect(
         database.settings.get('weather.track-preferences'),
       ).resolves.toBeUndefined();
     }
+  });
+
+  it('stores validated route timing on the track and queues a metadata sync', async () => {
+    const track = localTrackSummary();
+    await database.saveLocalTrack(track, localTrackContent());
+    await database.trackSyncStates.put({
+      trackId: track.id,
+      contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
+      remoteRevision: 4,
+      pendingKind: null,
+    });
+    const routeTiming = {
+      ...defaultTrackRouteTiming,
+      startHour: 6.5,
+      paceFactor: 1.25,
+      ignoreRecordedTime: true,
+      relativeTimeMarkers: true,
+      hikeDate: '2026-07-15',
+    };
+
+    const updated = await database.setLocalTrackRouteTiming(track.id, routeTiming);
+
+    expect(updated.routeTiming).toEqual(routeTiming);
+    expect(updated.updatedAt).not.toBe(track.updatedAt);
+    await expect(database.listLocalTracks()).resolves.toEqual([updated]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
+      remoteRevision: 4,
+      pendingKind: 'metadata',
+    });
+
+    for (const invalid of [
+      { ...routeTiming, startHour: 6.25 },
+      { ...routeTiming, startHour: 24 },
+      { ...routeTiming, paceFactor: 2.5 },
+      { ...routeTiming, paceFactor: 1.23 },
+      { ...routeTiming, hikeDate: '2026-02-30' },
+    ]) {
+      await expect(
+        database.setLocalTrackRouteTiming(track.id, invalid),
+      ).rejects.toMatchObject({ code: 'record-invalid' });
+    }
+
+    const reset = await database.setLocalTrackRouteTiming(track.id, null);
+    expect(reset).not.toHaveProperty('routeTiming');
+    await expect(database.listLocalTracks()).resolves.toEqual([reset]);
   });
 
   it('shares the complete map view until saved otherwise and repairs invalid share preferences', async () => {
@@ -1193,6 +1166,96 @@ describe('AppDatabase', () => {
     const timedRow = await database.localTracks.get('local:timed');
     expect(timedRow?.metrics.estimatedSeconds).toBeUndefined();
     expect(timedRow?.calculatedMetrics?.estimatedSeconds).toBe(3.5 * 3_600);
+  });
+
+  it('moves version 12 per-track timelines into the summaries and queues their sync', async () => {
+    database.close();
+    await database.delete();
+
+    const legacy = new Dexie('GeorgiaRoutingPlanner');
+    legacy.version(12).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      trackFolders: 'id,normalizedName,position',
+      folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      localTrackThumbnails: 'trackId',
+      localTrackLighting: 'trackId',
+    });
+    const synced = localTrackSummary();
+    const unsent: LocalTrackSummary = { ...synced, id: 'local:unsent' };
+    // Recorded at 07:30 on the route clock (Tbilisi, UTC+4).
+    const untouched: LocalTrackSummary = {
+      ...synced,
+      id: 'local:untouched',
+      metrics: { ...synced.metrics, recordedStartAt: '2026-08-08T03:30:00.000Z' },
+    };
+    await legacy.table('localTracks').bulkPut([synced, unsent, untouched]);
+    const syncState = {
+      contentHash: 'a'.repeat(64),
+      lineageHash: 'a'.repeat(64),
+      geometryVersion: 2,
+    };
+    await legacy.table('trackSyncStates').bulkPut([
+      { ...syncState, trackId: synced.id, remoteRevision: 4, pendingKind: null },
+      { ...syncState, trackId: unsent.id, remoteRevision: null, pendingKind: 'upsert' },
+      { ...syncState, trackId: untouched.id, remoteRevision: 5, pendingKind: null },
+    ]);
+    await legacy.table('settings').put({
+      key: 'weather.track-preferences',
+      value: {
+        expanded: true,
+        weekday: 2,
+        timelines: {
+          // Entries saved before the map options existed load their defaults.
+          [synced.id]: { startHour: 7, paceFactor: 1 },
+          [unsent.id]: {
+            ...defaultTrackWeatherTimelineSettings,
+            relativeTimeMarkers: true,
+            lightOnMap: true,
+          },
+          // Light coloring alone is session view state now and is not migrated, even
+          // when the entry holds the start its recording defaults to.
+          [untouched.id]: {
+            ...defaultTrackWeatherTimelineSettings,
+            startHour: 7.5,
+            lightOnMap: true,
+          },
+          'local:deleted': { ...defaultTrackWeatherTimelineSettings, startHour: 6 },
+        },
+      },
+      updatedAt: '2026-08-08T10:00:00.000Z',
+    });
+    legacy.close();
+
+    database = new AppDatabase(services.logger);
+
+    const tracks = await database.listLocalTracks();
+    expect(new Map(tracks.map((track) => [track.id, track.routeTiming]))).toEqual(
+      new Map([
+        [synced.id, { ...defaultTrackRouteTiming, startHour: 7 }],
+        [unsent.id, { ...defaultTrackRouteTiming, relativeTimeMarkers: true }],
+        [untouched.id, undefined],
+      ]),
+    );
+    await expect(database.loadTrackSyncState(synced.id)).resolves.toMatchObject({
+      remoteRevision: 4,
+      pendingKind: 'metadata',
+    });
+    await expect(database.loadTrackSyncState(unsent.id)).resolves.toMatchObject({
+      pendingKind: 'upsert',
+    });
+    await expect(database.loadTrackSyncState(untouched.id)).resolves.toMatchObject({
+      pendingKind: null,
+    });
+    await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
+      expanded: true,
+      weekday: 2,
+    });
   });
 
   it('keeps collapsed folders locally and discards an unreadable list', async () => {

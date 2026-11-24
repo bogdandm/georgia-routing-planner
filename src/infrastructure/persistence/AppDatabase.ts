@@ -16,7 +16,9 @@ import {
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
   TRACK_WEATHER_PACE_FACTOR_STEP,
   TRACK_WEATHER_START_HOUR_STEP,
+  adjustedTrackRouteTiming,
   defaultTrackWeatherPreferences,
+  recordedRouteStart,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
 import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
@@ -79,6 +81,7 @@ import {
   type LocalTrackContent,
   type LocalTrackSummary,
   type TrackMarker,
+  type TrackRouteTiming,
   type TrackSort,
 } from '@/domain/tracks/localTrack';
 import {
@@ -562,38 +565,74 @@ const markerWeatherPreferencesSchema: z.ZodType<WeatherIntervalPreferences> = z
   })
   .strict();
 
+const trackRouteTimingShape = {
+  startHour: z
+    .number()
+    .min(0)
+    .max(TRACK_WEATHER_LATEST_START_HOUR)
+    .multipleOf(TRACK_WEATHER_START_HOUR_STEP),
+  paceFactor: z
+    .number()
+    .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
+    .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
+    .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
+  // Entries saved before these options load with their defaults.
+  ignoreRecordedTime: z.boolean().default(false),
+  timeMarkers: z.boolean().nullable().default(null),
+  relativeTimeMarkers: z.boolean().default(false),
+  hikeDate: z.iso.date().nullable().default(null),
+};
+
+const trackRouteTimingSchema: z.ZodType<TrackRouteTiming> = z
+  .object(trackRouteTimingShape)
+  .strict();
+
+const trackWeatherPreferencesKey = 'weather.track-preferences';
 const trackWeatherPreferencesSchema: z.ZodType<TrackWeatherPreferences> = z
   .object({
     expanded: z.boolean(),
     weekday: markerWeatherWeekdaySchema,
-    // Records saved before per-track timelines existed have no entries.
+  })
+  .strict();
+
+/**
+ * Records and archives written before route timing moved into the track summaries also
+ * keep it per saved track ID, absent before per-track timelines existed. Their light
+ * coloring is session view state now and is dropped.
+ */
+const legacyTrackWeatherPreferencesSchema = z
+  .object({
+    expanded: z.boolean(),
+    weekday: markerWeatherWeekdaySchema,
     timelines: z
       .record(
         z.string().min(1).max(200),
         z
-          .object({
-            startHour: z
-              .number()
-              .min(0)
-              .max(TRACK_WEATHER_LATEST_START_HOUR)
-              .multipleOf(TRACK_WEATHER_START_HOUR_STEP),
-            paceFactor: z
-              .number()
-              .min(TRACK_WEATHER_MINIMUM_PACE_FACTOR)
-              .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
-              .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
-            // Entries saved before these options load with their defaults.
-            ignoreRecordedTime: z.boolean().default(false),
-            timeMarkers: z.boolean().nullable().default(null),
-            relativeTimeMarkers: z.boolean().default(false),
-            lightOnMap: z.boolean().default(false),
-            hikeDate: z.iso.date().nullable().default(null),
-          })
-          .strict(),
+          .object({ ...trackRouteTimingShape, lightOnMap: z.boolean().default(false) })
+          .strict()
+          .transform(
+            ({ lightOnMap: _lightOnMap, ...routeTiming }): TrackRouteTiming =>
+              routeTiming,
+          ),
       )
-      .default({}),
+      .optional(),
   })
   .strict();
+
+/**
+ * The route timing a legacy entry gives the track, or null when, without its light
+ * coloring, the entry only restates the track's defaults.
+ */
+function legacyRouteTiming(
+  summary: LocalTrackSummary,
+  timelines: Readonly<Record<string, TrackRouteTiming>>,
+): TrackRouteTiming | null {
+  if (!Object.hasOwn(timelines, summary.id)) return null;
+  const entry = timelines[summary.id];
+  return entry === undefined
+    ? null
+    : adjustedTrackRouteTiming(entry, recordedRouteStart(summary.metrics));
+}
 
 const mapSharePreferencesKey = 'map.share-preferences';
 const mapSharePreferencesSchema: z.ZodType<MapSharePreferences> = z
@@ -792,8 +831,8 @@ const archivedSettingValidators = new Map<string, (value: unknown) => boolean>([
     (value) => markerWeatherPreferencesSchema.safeParse(value).success,
   ],
   [
-    'weather.track-preferences',
-    (value) => trackWeatherPreferencesSchema.safeParse(value).success,
+    trackWeatherPreferencesKey,
+    (value) => legacyTrackWeatherPreferencesSchema.safeParse(value).success,
   ],
   [
     'markers.recent-icons',
@@ -1168,6 +1207,7 @@ const currentLocalTrackSummarySchema = z
     middlePoi: poiCandidateSchema.optional(),
     endPoi: poiCandidateSchema.optional(),
     fallbackPoi: poiCandidateSchema.optional(),
+    routeTiming: trackRouteTimingSchema.optional(),
   })
   .strict()
   .transform((value): LocalTrackSummary => {
@@ -1202,6 +1242,7 @@ const currentLocalTrackSummarySchema = z
     if (value.startPoi !== undefined) result.startPoi = value.startPoi;
     if (value.middlePoi !== undefined) result.middlePoi = value.middlePoi;
     if (value.endPoi !== undefined) result.endPoi = value.endPoi;
+    if (value.routeTiming !== undefined) result.routeTiming = value.routeTiming;
     if (value.contentHash !== undefined) result.contentHash = value.contentHash;
     return result;
   });
@@ -1742,6 +1783,46 @@ export class AppDatabase
       localTrackThumbnails: 'trackId',
       localTrackLighting: 'trackId',
     });
+    this.version(13)
+      .stores({
+        settings: 'key,updatedAt',
+        diagnostics: '++id,timestamp,name,level',
+        localTracks: 'id,normalizedName,savedAt',
+        localTrackContents: 'trackId',
+        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+        savedMarkers: 'id,normalizedName,colorKey,createdAt',
+        markerSyncStates: 'markerId,remoteRevision,pendingKind',
+        trackFolders: 'id,normalizedName,position',
+        folderSyncStates: 'folderId,remoteRevision,pendingKind',
+        localTrackThumbnails: 'trackId',
+        localTrackLighting: 'trackId',
+      })
+      // Route timing moves from the browser-local preference into each track summary,
+      // and synchronized tracks queue a metadata write so other devices receive it.
+      .upgrade(async (transaction) => {
+        const settingsTable = transaction.table<SettingRecord, string>('settings');
+        const record = await settingsTable.get(trackWeatherPreferencesKey);
+        const parsed = legacyTrackWeatherPreferencesSchema.safeParse(record?.value);
+        if (record === undefined || !parsed.success) return;
+        const { timelines = {}, ...preferences } = parsed.data;
+        await settingsTable.put({ ...record, value: preferences });
+        const summaryTable = transaction.table('localTracks');
+        const stateTable = transaction.table('trackSyncStates');
+        for (const trackId of Object.keys(timelines)) {
+          const summary = parseLocalTrackSummary(await summaryTable.get(trackId));
+          if (summary === null) continue;
+          const routeTiming = legacyRouteTiming(summary, timelines);
+          if (routeTiming === null) continue;
+          await summaryTable.put({ ...summary, routeTiming });
+          const state = parseTrackSyncState(await stateTable.get(trackId));
+          if (state !== null) {
+            await stateTable.put({
+              ...state,
+              pendingKind: state.pendingKind === 'upsert' ? 'upsert' : 'metadata',
+            });
+          }
+        }
+      });
     this.on('populate', async (transaction) => {
       const folder = createDefaultImportsFolder(new Date().toISOString());
       await transaction.table('trackFolders').put(folder);
@@ -2689,20 +2770,47 @@ export class AppDatabase
     name: string,
   ): Promise<LocalTrackSummary> {
     const normalized = normalizeLocalTrackName(name);
-    return this.updateLocalTrackMetadata(trackId, normalized, undefined);
+    return this.updateLocalTrackMetadata(trackId, (summary) => ({
+      ...summary,
+      ...normalized,
+    }));
   }
 
   public async setLocalTrackFavorite(
     trackId: string,
     favorite: boolean,
   ): Promise<LocalTrackSummary> {
-    return this.updateLocalTrackMetadata(trackId, undefined, favorite);
+    return this.updateLocalTrackMetadata(trackId, (summary) => ({
+      ...summary,
+      favorite,
+    }));
+  }
+
+  public async setLocalTrackRouteTiming(
+    trackId: string,
+    routeTiming: TrackRouteTiming | null,
+  ): Promise<LocalTrackSummary> {
+    let validTiming: TrackRouteTiming | null = null;
+    if (routeTiming !== null) {
+      const parsed = trackRouteTimingSchema.safeParse(routeTiming);
+      if (!parsed.success) {
+        throw new LocalTrackStorageError(
+          'record-invalid',
+          'The track route timing is invalid.',
+        );
+      }
+      validTiming = parsed.data;
+    }
+    return this.updateLocalTrackMetadata(
+      trackId,
+      ({ routeTiming: _previous, ...summary }) =>
+        validTiming === null ? summary : { ...summary, routeTiming: validTiming },
+    );
   }
 
   private async updateLocalTrackMetadata(
     trackId: string,
-    name: ReturnType<typeof normalizeLocalTrackName> | undefined,
-    favorite: boolean | undefined,
+    update: (summary: LocalTrackSummary) => LocalTrackSummary,
   ): Promise<LocalTrackSummary> {
     return this.transaction('rw', this.localTracks, this.trackSyncStates, async () => {
       const existing = await this.localTracks.get(trackId);
@@ -2711,9 +2819,7 @@ export class AppDatabase
         throw new LocalTrackStorageError('not-found', 'The saved track was not found.');
       }
       const updated: LocalTrackSummary = {
-        ...summary,
-        ...name,
-        ...(favorite === undefined ? {} : { favorite }),
+        ...update(summary),
         updatedAt: new Date().toISOString(),
       };
       await this.localTracks.put(updated);
@@ -3959,6 +4065,17 @@ export class AppDatabase
       }
       settings.set(key, value);
     }
+    // Archives written before route timing moved into the track summaries keep it in
+    // the forecast preferences; it applies to archived tracks that carry none.
+    let archivedTimelines: Readonly<Record<string, TrackRouteTiming>> = {};
+    const trackPreferences = legacyTrackWeatherPreferencesSchema.safeParse(
+      settings.get(trackWeatherPreferencesKey),
+    );
+    if (trackPreferences.success) {
+      const { timelines = {}, ...preferences } = trackPreferences.data;
+      settings.set(trackWeatherPreferencesKey, preferences);
+      archivedTimelines = timelines;
+    }
 
     await this.transaction(
       'rw',
@@ -4028,6 +4145,10 @@ export class AppDatabase
           const content: LocalTrackContentBuilder = { ...pair.content };
           if (summary.folderId !== null && !folderIds.has(summary.folderId)) {
             summary.folderId = null;
+          }
+          if (summary.routeTiming === undefined) {
+            const routeTiming = legacyRouteTiming(pair.summary, archivedTimelines);
+            if (routeTiming !== null) summary.routeTiming = routeTiming;
           }
           const existingSummary = parseLocalTrackSummary(
             await this.localTracks.get(trackId),
@@ -4249,13 +4370,13 @@ export class AppDatabase
   }
 
   public async loadTrackWeatherPreferences(): Promise<TrackWeatherPreferences> {
-    const record = await this.settings.get('weather.track-preferences');
+    const record = await this.settings.get(trackWeatherPreferencesKey);
     if (record === undefined) return defaultTrackWeatherPreferences;
 
     const parsed = trackWeatherPreferencesSchema.safeParse(record.value);
     if (parsed.success) return parsed.data;
 
-    await this.settings.delete('weather.track-preferences');
+    await this.settings.delete(trackWeatherPreferencesKey);
     this.logger.log({
       level: 'warn',
       name: 'storage.settings.repaired',
@@ -4268,7 +4389,7 @@ export class AppDatabase
     value: TrackWeatherPreferences,
   ): Promise<void> {
     await this.settings.put({
-      key: 'weather.track-preferences',
+      key: trackWeatherPreferencesKey,
       value: trackWeatherPreferencesSchema.parse(value),
       updatedAt: new Date().toISOString(),
     });

@@ -111,7 +111,6 @@ import {
   setHoveredTrackPoint,
   trackPointHoverStore,
 } from '@/presentation/tracks/trackPointHoverStore';
-import { routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   GPX_PARSER_VERSION,
   GpxParseError,
@@ -201,6 +200,7 @@ import {
   type TrackLightingView,
 } from '@/presentation/tracks/useTrackLighting';
 import {
+  adjustedTrackRouteTiming,
   createTrackTimingRoute,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
@@ -208,10 +208,10 @@ import {
   trackWeatherDates,
   planTrackClockTimes,
   planTrackMarkerTimes,
+  sameTrackRouteTiming,
   trackWeatherTimeline,
-  withTrackWeatherTimeline,
   type TrackClockTimes,
-  type RecordedRouteStart,
+  recordedRouteStart,
   type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
@@ -713,15 +713,6 @@ function trackNameFailureMessage(
     : msg`Track name must be 200 characters or fewer.`;
 }
 
-/** The recorded start on the clock of the route start, which timing defaults use. */
-function recordedRouteStart(
-  metrics: Pick<TrackMetrics, 'recordedStartAt' | 'startCoordinate'>,
-): RecordedRouteStart | undefined {
-  return metrics.recordedStartAt === undefined
-    ? undefined
-    : { at: metrics.recordedStartAt, timeZone: routeTimeZone(metrics.startCoordinate) };
-}
-
 export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const { t, i18n } = useLingui();
   const {
@@ -778,15 +769,20 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const [trackWeatherPreferences, setTrackWeatherPreferences] =
     useState<TrackWeatherPreferences | null>(null);
   // Mirrors the state for async callbacks. Choices made before the stored record loads
-  // are only kept in memory; the load merges them over it and saves the result.
+  // are only kept in memory; the load keeps them over the record and saves them.
   const latestTrackWeatherPreferences = useRef<TrackWeatherPreferences | null>(null);
   const trackWeatherPreferencesLoaded = useRef(false);
-  // Route start and pace of the open preview or shared track, moved into the
-  // preferences under the saved ID when that track is saved.
+  // Route timing of the open preview or shared track, stored in the summary when that
+  // track is saved.
   const [unsavedTrackTimeline, setUnsavedTrackTimeline] = useState<{
     readonly trackId: string;
     readonly settings: TrackWeatherTimelineSettings;
   } | null>(null);
+  // Saved tracks the map colors by light. Session view state only: never stored or
+  // synchronized, so a reload turns it off.
+  const [lightOnMapTrackIds, setLightOnMapTrackIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [query, setQuery] = useState('');
   const [active, setActive] = useState<ActiveTrack | null>(null);
   const [multiTrackMode, setMultiTrackMode] = useState(false);
@@ -869,13 +865,9 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       .then((loaded) => {
         if (!current) return;
         trackWeatherPreferencesLoaded.current = true;
-        // A choice made before the stored record arrived wins over it, but the
-        // record's per-track timelines survive an early disclosure click.
+        // A choice made before the stored record arrived wins over it.
         const early = latestTrackWeatherPreferences.current;
-        const merged =
-          early === null
-            ? loaded
-            : { ...early, timelines: { ...loaded.timelines, ...early.timelines } };
+        const merged = early ?? loaded;
         latestTrackWeatherPreferences.current = merged;
         setTrackWeatherPreferences(merged);
         if (early === null) return;
@@ -1129,6 +1121,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     setUnsavedTrackTimeline(null);
   }
   const savedTimingTrackId = active?.kind === 'saved' ? active.summary.id : null;
+  const savedRouteTiming =
+    active?.kind === 'saved' ? active.summary.routeTiming : undefined;
   const timingMetrics =
     active?.kind === 'saved'
       ? active.summary.metrics
@@ -1144,39 +1138,82 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const activeTrackWeatherTimeline = useMemo(
     () =>
       savedTimingTrackId !== null
-        ? trackWeatherTimeline(
-            trackWeatherPreferences,
-            savedTimingTrackId,
-            activeRecordedStart,
-          )
+        ? {
+            ...trackWeatherTimeline(savedRouteTiming, activeRecordedStart),
+            lightOnMap: lightOnMapTrackIds.has(savedTimingTrackId),
+          }
         : unsavedTrackTimeline !== null &&
             unsavedTrackTimeline.trackId === activeUnsavedTrackId
           ? unsavedTrackTimeline.settings
-          : trackWeatherTimeline(null, null, activeRecordedStart),
+          : trackWeatherTimeline(undefined, activeRecordedStart),
     [
       savedTimingTrackId,
+      savedRouteTiming,
+      lightOnMapTrackIds,
       activeRecordedStart,
-      trackWeatherPreferences,
       unsavedTrackTimeline,
       activeUnsavedTrackId,
     ],
   );
   const updateActiveTrackWeatherTimeline = useCallback(
     (settings: TrackWeatherTimelineSettings) => {
-      if (active?.kind === 'saved') {
-        updateTrackWeatherPreferences(
-          withTrackWeatherTimeline(
-            latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
-            active.summary.id,
-            settings,
-            recordedRouteStart(active.summary.metrics),
-          ),
-        );
-      } else if (active?.kind === 'preview' || active?.kind === 'shared') {
+      if (active?.kind === 'preview' || active?.kind === 'shared') {
         setUnsavedTrackTimeline({ trackId: active.id, settings });
+        return;
       }
+      if (active?.kind !== 'saved') return;
+      const trackId = active.summary.id;
+      setLightOnMapTrackIds((current) => {
+        if (current.has(trackId) === settings.lightOnMap) return current;
+        const next = new Set(current);
+        if (settings.lightOnMap) next.add(trackId);
+        else next.delete(trackId);
+        return next;
+      });
+      const routeTiming = adjustedTrackRouteTiming(
+        settings,
+        recordedRouteStart(active.summary.metrics),
+      );
+      const stored = active.summary.routeTiming ?? null;
+      if (
+        routeTiming === null
+          ? stored === null
+          : stored !== null && sameTrackRouteTiming(routeTiming, stored)
+      ) {
+        return;
+      }
+      const withRouteTiming = (summary: LocalTrackSummary): LocalTrackSummary => {
+        const { routeTiming: _previous, ...rest } = summary;
+        return routeTiming === null ? rest : { ...rest, routeTiming };
+      };
+      // The controls follow the choice at once, and so do the copies that reopening the
+      // track or multi-track view read; the write and its sync run behind it.
+      setSummaries((current) =>
+        current.map((summary) =>
+          summary.id === trackId ? withRouteTiming(summary) : summary,
+        ),
+      );
+      setActive((current) =>
+        current?.kind === 'saved' && current.summary.id === trackId
+          ? { ...current, summary: withRouteTiming(current.summary) }
+          : current,
+      );
+      setMultiTrackSelections((current) =>
+        current.map((selection) =>
+          selection.summary.id === trackId
+            ? { ...selection, summary: withRouteTiming(selection.summary) }
+            : selection,
+        ),
+      );
+      void (async () => {
+        await database.setLocalTrackRouteTiming(trackId, routeTiming);
+        await reloadSummaries();
+        void userData.trackMetadataChanged(trackId);
+      })().catch(() => {
+        setError(msg`The route timing could not be saved.`);
+      });
     },
-    [active, updateTrackWeatherPreferences],
+    [active, database, reloadSummaries, userData],
   );
 
   // The folder editor dialog reports these failures, so they are rethrown
@@ -2290,6 +2327,17 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       if (active.startPoi !== undefined) summary.startPoi = active.startPoi;
       if (active.middlePoi !== undefined) summary.middlePoi = active.middlePoi;
       if (active.endPoi !== undefined) summary.endPoi = active.endPoi;
+      if (unsavedTrackTimeline?.trackId === previewId) {
+        const { settings } = unsavedTrackTimeline;
+        const routeTiming = adjustedTrackRouteTiming(
+          settings,
+          recordedRouteStart(summary.metrics),
+        );
+        if (routeTiming !== null) summary.routeTiming = routeTiming;
+        if (settings.lightOnMap) {
+          setLightOnMapTrackIds((current) => new Set(current).add(summary.id));
+        }
+      }
       await database.ensureImportsFolder();
       await database.saveLocalTrack(summary, content);
       void userData.trackSaved(summary.id);
@@ -2305,16 +2353,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           ? { kind: 'saved', summary, content, draftName: summary.name, edit: null }
           : current,
       );
-      if (unsavedTrackTimeline?.trackId === previewId) {
-        updateTrackWeatherPreferences(
-          withTrackWeatherTimeline(
-            latestTrackWeatherPreferences.current ?? defaultTrackWeatherPreferences,
-            summary.id,
-            unsavedTrackTimeline.settings,
-            recordedRouteStart(summary.metrics),
-          ),
-        );
-      }
       /* eslint-disable lingui/no-unlocalized-strings -- Track ID prefix and URL hash. */
       if (previewId.startsWith('shared:')) {
         window.history.replaceState(null, '', '#tracks');
@@ -2341,7 +2379,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     saveLatestOpenedTrackId,
     trackContentHasher,
     unsavedTrackTimeline,
-    updateTrackWeatherPreferences,
     userData,
   ]);
 
@@ -3074,12 +3111,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           );
         }
         await reloadSummaries();
-        const preferences = latestTrackWeatherPreferences.current;
-        if (preferences !== null && Object.hasOwn(preferences.timelines, summary.id)) {
-          updateTrackWeatherPreferences(
-            withTrackWeatherTimeline(preferences, summary.id, null),
-          );
-        }
         void userData.trackDeleted(summary.id);
         setError(null);
       };
@@ -3087,14 +3118,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         setError(msg`The track could not be deleted.`);
       });
     },
-    [
-      active,
-      database,
-      reloadSummaries,
-      saveLatestOpenedTrackId,
-      updateTrackWeatherPreferences,
-      userData,
-    ],
+    [active, database, reloadSummaries, saveLatestOpenedTrackId, userData],
   );
 
   const applyGeneratedName = useCallback(() => {
@@ -3665,8 +3689,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     if (multiTrackMode) {
       return readyMultiTrackSelections.flatMap((selection) => {
         const settings = trackWeatherTimeline(
-          trackWeatherPreferences,
-          selection.summary.id,
+          selection.summary.routeTiming,
           recordedRouteStart(selection.summary.metrics),
         );
         const timingRoute = multiTrackTimingRoutes.get(selection.summary.id);
@@ -3701,7 +3724,6 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     multiTrackMode,
     multiTrackTimingRoutes,
     readyMultiTrackSelections,
-    trackWeatherPreferences,
   ]);
   useEffect(() => {
     mapLayers?.setImportedTrackTimeLabels(timeLabels);

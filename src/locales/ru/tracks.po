@@ -1549,6 +1549,11 @@ msgstr "Не удалось создать трек в обратную стор
 msgid "The route could not be saved."
 msgstr "Не удалось сохранить маршрут."
 
+#. js-lingui-id: QacsWI
+#: src/presentation/tracks/TracksWorkspace.tsx
+msgid "The route timing could not be saved."
+msgstr "Не удалось сохранить время прохождения."
+
 #. js-lingui-id: _Kz0qB
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "The track could not be added to multi-track view."

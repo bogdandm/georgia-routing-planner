@@ -340,10 +340,10 @@ totalling the DIN 33466 time of the track's distance and stored ascent and desce
 **Route start** sets the start from 00:00 to 23:30 in half-hour steps. It defaults to
 the recorded start's local time at the route start, rounded to the nearest half-hour, or
 to 09:00 without one. **Adjust pace** scales hiking time from ×0.5 (faster) to ×2
-(slower) on release. These settings are remembered in this browser for each saved track
-and reset to the defaults for a reversed copy; an unsaved track keeps them while it is
-open and carries them over when saved. They are not synchronized to the account and do
-not change the track's recorded or estimated time.
+(slower) on release. These settings belong to each saved track and synchronize with its
+metadata, so a signed-in account sees them on every device; they reset to the defaults
+for a reversed copy. An unsaved track keeps them while it is open and carries them over
+when saved. They do not change the track's recorded or estimated time.
 
 Timing includes the full route even if elevation is available only in its middle.
 Complete profiles reuse filtered elevation; incomplete profiles retain the original
@@ -391,11 +391,12 @@ out the time, distance, and light there, and a click goes to that point.
 
 **Color the map track by light**, among the map options of **Route timing**, paints the
 active track on the map in the strip's colors instead of its grade colors: each step
-between route points takes the light at its midpoint. It is remembered in this browser
-for each track like its route start and pace, and is disabled when terrain light is off
-or could not be calculated. Grade colors remain while the light is calculated and in
-multi-track view. The colors replace the **Elevation gradient** overlay, so that layer's
-visibility still applies, and hovering a Climbs & Descents row still shows its grades.
+between route points takes the light at its midpoint. It applies to one track for the
+current session only: it is neither stored nor synchronized, and a reload turns it off.
+It is disabled when terrain light is off or could not be calculated. Grade colors remain
+while the light is calculated and in multi-track view. The colors replace the
+**Elevation gradient** overlay, so that layer's visibility still applies, and hovering a
+Climbs & Descents row still shows its grades.
 
 **Route timing** opens with a Garmin-style sun graph of the start day: the Sun's
 elevation on a true scale against the horizon, down to the end of astronomical twilight,
@@ -449,10 +450,10 @@ drawn in satellite comparison panes. They draw above map labels, which give way 
 Endpoint times always show; hourly times give way to the endpoints and each other.
 
 **Show times on the map**, the first control in **Route timing**, turns the labels on or
-off for one track and is remembered in this browser like its route start and pace.
-**Count map times from 00:00 at the start** shows elapsed rather than clock times on the
-map, without changing the forecast's arrival times. It is disabled when map times are
-off. Tracks without their own visibility choice follow **Time markers** in Layers, on by
+off for one track and is stored with the track like its route start and pace. **Count
+map times from 00:00 at the start** shows elapsed rather than clock times on the map,
+without changing the forecast's arrival times. It is disabled when map times are off.
+Tracks without their own visibility choice follow **Time markers** in Layers, on by
 default. Multi-track view labels every selected track with its own stored settings.
 
 #### Track points

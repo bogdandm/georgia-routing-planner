@@ -48,7 +48,7 @@ import {
 } from '@test/helpers/workspaceShellTestSupport';
 import { PlaceSearchFailure } from '@/application/ports/PlaceSearchGateway';
 import {
-  defaultTrackWeatherTimelineSettings,
+  defaultTrackRouteTiming,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
 
@@ -2089,64 +2089,14 @@ describe('WorkspaceShell', () => {
     ).toBeVisible();
   });
 
-  it('forgets the forecast start and pace of a deleted track', async () => {
-    const source = savedTrackSummary('local:ridge', 'Ridge trail');
+  it("keeps an early forecast disclosure and shows the track's own route timing", async () => {
+    const source: LocalTrackSummary = {
+      ...savedTrackSummary('local:ridge', 'Ridge trail'),
+      routeTiming: { ...defaultTrackRouteTiming, startHour: 7 },
+    };
     await services.database.saveLocalTrack(source, savedTrackContent(source.id));
     await services.database.saveLatestOpenedTrackId(source.id);
-    const other = {
-      ...defaultTrackWeatherTimelineSettings,
-      startHour: 6,
-      paceFactor: 1.5,
-      timeMarkers: null,
-    };
-    await services.database.saveTrackWeatherPreferences({
-      expanded: false,
-      weekday: 6,
-      timelines: {
-        [source.id]: {
-          ...defaultTrackWeatherTimelineSettings,
-          startHour: 7,
-          paceFactor: 1,
-          timeMarkers: null,
-        },
-        'local:other': other,
-      },
-    });
-    useUiStore.setState({ activeTab: 'tracks' });
-    const user = userEvent.setup();
-    renderWorkspaceShell();
-    const details = await screen.findByRole('complementary', { name: 'Track details' });
-    await within(details).findByRole('heading', { name: 'Ridge trail' });
-
-    await user.click(within(details).getByRole('button', { name: 'Track actions' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Delete track' }));
-    await user.click(screen.getByRole('button', { name: 'Confirm delete' }));
-
-    await waitFor(async () => {
-      expect(await services.database.loadTrackWeatherPreferences()).toEqual({
-        expanded: false,
-        weekday: 6,
-        timelines: { 'local:other': other },
-      });
-    });
-  });
-
-  it('keeps saved track timelines when the forecast opens before preferences load', async () => {
-    const source = savedTrackSummary('local:ridge', 'Ridge trail');
-    await services.database.saveLocalTrack(source, savedTrackContent(source.id));
-    await services.database.saveLatestOpenedTrackId(source.id);
-    const stored: TrackWeatherPreferences = {
-      expanded: false,
-      weekday: 6,
-      timelines: {
-        [source.id]: {
-          ...defaultTrackWeatherTimelineSettings,
-          startHour: 7,
-          paceFactor: 1,
-          timeMarkers: null,
-        },
-      },
-    };
+    const stored: TrackWeatherPreferences = { expanded: false, weekday: 6 };
     const load = deferred<TrackWeatherPreferences>();
     vi.spyOn(services.database, 'loadTrackWeatherPreferences').mockReturnValueOnce(
       load.promise,
@@ -2196,19 +2146,12 @@ describe('WorkspaceShell', () => {
       'aria-valuetext',
       '08:00',
     );
-    const [saved] = await services.database.listLocalTracks();
-    expect(saved).toBeDefined();
     await waitFor(async () => {
-      expect((await services.database.loadTrackWeatherPreferences()).timelines).toEqual(
-        {
-          [saved?.id ?? '']: {
-            ...defaultTrackWeatherTimelineSettings,
-            startHour: 8,
-            paceFactor: 1,
-            timeMarkers: null,
-          },
-        },
-      );
+      const [saved] = await services.database.listLocalTracks();
+      expect(saved?.routeTiming).toEqual({
+        ...defaultTrackRouteTiming,
+        startHour: 8,
+      });
     });
   });
 
@@ -2252,12 +2195,9 @@ describe('WorkspaceShell', () => {
 
     expect(setImportedTrackTimeLabels).toHaveBeenLastCalledWith([]);
     await waitFor(async () => {
-      expect(
-        (await services.database.loadTrackWeatherPreferences()).timelines[source.id],
-      ).toEqual({
-        ...defaultTrackWeatherTimelineSettings,
-        startHour: 9,
-        paceFactor: 1,
+      const [saved] = await services.database.listLocalTracks();
+      expect(saved?.routeTiming).toEqual({
+        ...defaultTrackRouteTiming,
         timeMarkers: false,
       });
     });

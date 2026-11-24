@@ -67,7 +67,6 @@ const dayHike: TrackStatsMetrics = {
 const expandedPreferences: TrackWeatherPreferences = {
   expanded: true,
   weekday: 6,
-  timelines: {},
 };
 
 let services: ReturnType<typeof createTestServices>;

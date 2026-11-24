@@ -48,7 +48,7 @@ the SQL in `supabase/migrations`, and the Edge Function validators in
 
 ## IndexedDB schema
 
-`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 12. Earlier
+`AppDatabase` opens the Dexie database `GeorgiaRoutingPlanner` at version 13. Earlier
 versions exist only as upgrade steps.
 
 | Store                  | Key        | Record                                                             |
@@ -79,7 +79,7 @@ upsert.
 | `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                                                   |
 | `satellite.comparison-layout`   | Comparison grid layout last picked in the sidebar: 2 (2×1) or 4 (2×2); absent until the first pick                                                                             |
 | `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                                                           |
-| `weather.track-preferences`     | Forecast expansion and weekday; per-track route start, pace, recorded-time override, time visibility, elapsed-time display, and hike date; never uploaded                      |
+| `weather.track-preferences`     | Forecast expansion and weekday shared by every track; never uploaded                                                                                                           |
 | `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                                                 |
 | `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                                              |
 | `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                                                       |
@@ -99,8 +99,15 @@ optional `contentHash`, source filename and format (`gpx | fit | kml`), favorite
 `metrics`, optional DEM-derived `calculatedMetrics`, the bounded GPX metadata
 projection, up to 50 validation warnings, and optional generated-name fields
 (`generatedName`, `middleAnchorKind` of `dominant-summit | farthest-point`, and
-start/landmark (`middlePoi`)/end POI candidates). The retired `distance-midpoint` anchor
-and `fallbackPoi` field are still accepted from older records and dropped on read.
+start/landmark (`middlePoi`)/end POI candidates), and optional `routeTiming`: the
+track's **Route timing** start, pace, recorded-time override, time visibility,
+elapsed-time display, and hike date, absent while they equal the defaults. The retired
+`distance-midpoint` anchor and `fallbackPoi` field are still accepted from older records
+and dropped on read. Database version 13 moves the per-track entries that version 12
+kept in `weather.track-preferences` into the summaries of the tracks still present and
+queues a metadata write for synchronized ones; data archives from earlier versions are
+restored the same way. Their light-coloring choice is dropped: it is session view state
+and is never stored.
 
 `LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
 segments of at least two points, each with coordinate and optional source elevation and
@@ -223,10 +230,10 @@ next per-user revision.
 
 Uploaded metadata is the local summary without POI coordinates and without elevation
 metrics, plus `lineageHash`, `geometryVersion`, track-owned `markers`, nullable
-`folderId`, distance/elapsed-time metrics, and the optional `replacesContentHashes`
-replacement hint (at most 256 lowercase SHA-256 hashes). The function caps it at 128
-KiB, rejects a malformed replacement hint, and rejects a `lineageHash` or
-`geometryVersion` that does not match the uploaded geometry.
+`folderId`, distance/elapsed-time metrics, optional `routeTiming`, and the optional
+`replacesContentHashes` replacement hint (at most 256 lowercase SHA-256 hashes). The
+function caps it at 128 KiB, rejects a malformed replacement hint, and rejects a
+`lineageHash` or `geometryVersion` that does not match the uploaded geometry.
 
 The RPCs reserve, finalize, and release uploads, apply metadata, and hard-delete one
 track. Every mutation locks the user's usage row, and

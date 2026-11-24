@@ -991,6 +991,85 @@ describe('TrackSyncWorkerServer', () => {
     client.dispose();
   });
 
+  it("applies the account's newer route timing to a synchronized track", async () => {
+    vi.stubGlobal('Blob', NodeBlob);
+    const track = summary('local:timed');
+    await database.saveLocalTrack(track, content(track.id));
+    await database.saveTrackSyncState({
+      trackId: track.id,
+      contentHash,
+      lineageHash: legacyContentHash,
+      geometryVersion: 2,
+      remoteRevision: 1,
+      pendingKind: null,
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const routeTiming = {
+      startHour: 6.5,
+      paceFactor: 1.25,
+      ignoreRecordedTime: false,
+      timeMarkers: false,
+      relativeTimeMarkers: true,
+      hikeDate: '2026-07-15',
+    };
+    const compressed = gzipSync(encodeTrackSyncGeometry(content(track.id)));
+    const remote = {
+      content_hash: contentHash,
+      revision: 2,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: compressed.byteLength,
+      metadata: {
+        name: track.name,
+        savedAt: track.savedAt,
+        updatedAt: '2026-10-05T19:48:00.000Z',
+        sourceFilename: track.sourceFilename,
+        sourceFormat: 'gpx',
+        favorite: false,
+        geometryKind: 'track',
+        folderId: null,
+        metadata: { version: '1.1', links: [] },
+        warnings: [],
+        lineageHash: legacyContentHash,
+        geometryVersion: 2,
+        routeTiming,
+      },
+    };
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({
+          usedBytes: compressed.byteLength,
+          reservedBytes: 0,
+          limitBytes: 8_388_608,
+        }),
+      snapshot: vi.fn().mockResolvedValue([remote]),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn().mockResolvedValue(compressed),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+
+    await client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: track.id, routeTiming }),
+    ]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
+      remoteRevision: 2,
+      pendingKind: null,
+    });
+    client.dispose();
+  });
+
   it('returns a candidate when a pending metadata mutation is missing remotely', async () => {
     const track = summary('local:missing');
     await database.saveLocalTrack(track, content(track.id));
@@ -1494,6 +1573,93 @@ describe('TrackSyncWorkerServer', () => {
       AbortSignal,
     ];
     expect(secondMutation[1].summary.name).toBe('Renamed');
+    client.dispose();
+  });
+
+  it('keeps a route timing restored during a metadata mutation pending', async () => {
+    const track = summary('local:restored');
+    await database.saveLocalTrack(track, content(track.id));
+    await database.saveTrackSyncState({
+      trackId: track.id,
+      contentHash,
+      lineageHash: legacyContentHash,
+      geometryVersion: 2,
+      remoteRevision: 1,
+      pendingKind: 'metadata',
+    });
+    await database.settings.put({
+      key: 'sync.user-id',
+      value: 'user-id',
+      updatedAt: '2026-07-22T12:00:00.000Z',
+    });
+    const [stored] = await database.listLocalTracks();
+    if (stored === undefined) throw new Error('Missing stored track.');
+    const storedContent = await database.loadLocalTrackContent(track.id);
+    const mutation = deferred<{ outcome: 'applied'; revision: number }>();
+    const mutationStarted = deferred<undefined>();
+    const mutate = vi.fn().mockImplementationOnce(() => {
+      mutationStarted.resolve(undefined);
+      return mutation.promise;
+    });
+    const remote = (revision: number) => ({
+      content_hash: contentHash,
+      revision,
+      state: 'ready' as const,
+      object_path: `user/${contentHash}/upload.grpt.gz`,
+      compressed_bytes: 128,
+      metadata: { lineageHash: legacyContentHash, geometryVersion: 2 },
+    });
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => ({
+      status: () =>
+        Promise.resolve({ usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 }),
+      snapshot: vi
+        .fn()
+        .mockResolvedValueOnce([remote(1)])
+        .mockResolvedValueOnce([remote(2)]),
+      mutate,
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    }));
+    const client = new WorkerRpcClient(clientEndpoint);
+    const synchronization = client.request(trackSyncWorkerMethods.synchronize, {
+      accessToken: 'access-token',
+      userId: 'user-id',
+      sessionRevision: 0,
+    });
+
+    await mutationStarted.promise;
+    // An archive from before synchronized timing changes only the route timing; the
+    // summary keeps its timestamp and the state stays a pending metadata write.
+    const routeTiming = {
+      startHour: 6.5,
+      paceFactor: 1,
+      ignoreRecordedTime: false,
+      timeMarkers: null,
+      relativeTimeMarkers: false,
+      hikeDate: null,
+    };
+    await database.restoreUserDataBackup({
+      tracks: [{ summary: stored, content: storedContent }],
+      folders: [],
+      markers: [],
+      settings: {
+        'weather.track-preferences': {
+          expanded: false,
+          weekday: 6,
+          timelines: { [track.id]: { ...routeTiming, lightOnMap: true } },
+        },
+      },
+    });
+    mutation.resolve({ outcome: 'applied', revision: 2 });
+    await synchronization;
+
+    await expect(database.listLocalTracks()).resolves.toEqual([
+      expect.objectContaining({ id: track.id, routeTiming }),
+    ]);
+    await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
+      pendingKind: 'metadata',
+    });
     client.dispose();
   });
 

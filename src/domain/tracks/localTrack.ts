@@ -44,7 +44,35 @@ export interface LocalTrackSummary {
   /** Named landmark at the dominant summit or closed-track turnaround. */
   readonly middlePoi?: PoiCandidate;
   readonly endPoi?: PoiCandidate;
+  /**
+   * The track's Route timing adjustments; absent while they equal the defaults. They
+   * synchronize with the track's metadata.
+   */
+  readonly routeTiming?: TrackRouteTiming;
 }
+
+/**
+ * Route timeline adjustments for one track; they never change its recorded time. They
+ * also decide whether and how the map labels the track with these times.
+ */
+export interface TrackRouteTiming {
+  /** Fractional local hour of the day at which the hike starts. */
+  readonly startHour: number;
+  /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
+  readonly paceFactor: number;
+  /** Times the route by the DIN 33466 estimate even when it has recorded time. */
+  readonly ignoreRecordedTime: boolean;
+  /** Clock times on the map line; null follows the Layers default. */
+  readonly timeMarkers: boolean | null;
+  /** Map times count from 00:00 at the start instead of the route start's clock time. */
+  readonly relativeTimeMarkers: boolean;
+  /**
+   * Local `YYYY-MM-DD` of the hike for lighting; null uses the recording date, or today
+   * for a planned route.
+   */
+  readonly hikeDate: string | null;
+}
+
 export interface TrackMarker {
   readonly id: string;
   readonly name: string;

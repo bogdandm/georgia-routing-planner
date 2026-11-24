@@ -12,53 +12,25 @@ import type {
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
-import type { TrackMarker } from '@/domain/tracks/localTrack';
+import type { TrackMarker, TrackRouteTiming } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
-import { instantToZonedWallTime } from '@/domain/time/zonedWallTime';
+import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   estimateHikingSeconds,
   geodesicDistanceMeters,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 
-/**
- * Route timeline adjustments for one track; they never change its recorded time. They
- * also decide whether and how the map labels the track with these times.
- */
-export interface TrackWeatherTimelineSettings {
-  /** Fractional local hour of the day at which the hike starts. */
-  readonly startHour: number;
-  /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
-  readonly paceFactor: number;
-  /** Times the route by the DIN 33466 estimate even when it has recorded time. */
-  readonly ignoreRecordedTime: boolean;
-  /** Clock times on the map line; null follows the Layers default. */
-  readonly timeMarkers: boolean | null;
-  /** Map times count from 00:00 at the start instead of the route start's clock time. */
-  readonly relativeTimeMarkers: boolean;
-  /** The map colors the track by its light along the hike instead of its grade. */
-  readonly lightOnMap: boolean;
-  /**
-   * Local `YYYY-MM-DD` of the hike for lighting; null uses the recording date, or today
-   * for a planned route.
-   */
-  readonly hikeDate: string | null;
-}
-
-/** Browser-local track forecast view state. */
+/** Browser-local track forecast view state, shared by every track. */
 export interface TrackWeatherPreferences {
-  /** Shared by every track. */
   readonly expanded: boolean;
   /** Local weekday whose next occurrence the forecast date selector opens on. */
   readonly weekday: MarkerWeatherWeekday;
-  /** Adjusted saved tracks by ID; a track without an entry uses the defaults. */
-  readonly timelines: Readonly<Record<string, TrackWeatherTimelineSettings>>;
 }
 
 export const defaultTrackWeatherPreferences: TrackWeatherPreferences = {
   expanded: false,
   weekday: 6,
-  timelines: {},
 };
 
 /** Selectable forecast dates: the local day plus six days, all covered by the forecast. */
@@ -326,14 +298,27 @@ export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
 export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
 
-export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
+/**
+ * Route timing plus the map's light coloring of the track, which is session view state:
+ * it is never stored and resets on reload.
+ */
+export interface TrackWeatherTimelineSettings extends TrackRouteTiming {
+  /** The map colors the track by its light along the hike instead of its grade. */
+  readonly lightOnMap: boolean;
+}
+
+export const defaultTrackRouteTiming: TrackRouteTiming = {
   startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
   paceFactor: 1,
   ignoreRecordedTime: false,
   timeMarkers: null,
   relativeTimeMarkers: false,
-  lightOnMap: false,
   hikeDate: null,
+};
+
+export const defaultTrackWeatherTimelineSettings: TrackWeatherTimelineSettings = {
+  ...defaultTrackRouteTiming,
+  lightOnMap: false,
 };
 
 /** A recorded start instant and the IANA zone at the route start, whose clock it shows. */
@@ -342,23 +327,24 @@ export interface RecordedRouteStart {
   readonly timeZone: string;
 }
 
+/** The recorded start on the clock of the route start, which timing defaults use. */
+export function recordedRouteStart(
+  metrics: Pick<TrackMetrics, 'recordedStartAt' | 'startCoordinate'>,
+): RecordedRouteStart | undefined {
+  return metrics.recordedStartAt === undefined
+    ? undefined
+    : { at: metrics.recordedStartAt, timeZone: routeTimeZone(metrics.startCoordinate) };
+}
+
 /**
- * Saved overrides win; otherwise use the recorded start's local clock time at the route,
- * rounded to the nearest half-hour. Only own entries count for untrusted track IDs.
+ * Stored adjustments win; otherwise use the recorded start's local clock time at the
+ * route, rounded to the nearest half-hour. Light coloring starts off.
  */
 export function trackWeatherTimeline(
-  preferences: TrackWeatherPreferences | null,
-  trackId: string | null,
+  stored: TrackRouteTiming | undefined,
   recordedStart?: RecordedRouteStart,
 ): TrackWeatherTimelineSettings {
-  if (
-    preferences !== null &&
-    trackId !== null &&
-    Object.hasOwn(preferences.timelines, trackId)
-  ) {
-    const stored = preferences.timelines[trackId];
-    if (stored !== undefined) return stored;
-  }
+  if (stored !== undefined) return { ...stored, lightOnMap: false };
   if (recordedStart === undefined) return defaultTrackWeatherTimelineSettings;
   const start = new Date(recordedStart.at);
   if (!Number.isFinite(start.getTime())) return defaultTrackWeatherTimelineSettings;
@@ -369,33 +355,38 @@ export function trackWeatherTimeline(
   return { ...defaultTrackWeatherTimelineSettings, startHour };
 }
 
+export function sameTrackRouteTiming(
+  left: TrackRouteTiming,
+  right: TrackRouteTiming,
+): boolean {
+  return (
+    left.startHour === right.startHour &&
+    left.paceFactor === right.paceFactor &&
+    left.ignoreRecordedTime === right.ignoreRecordedTime &&
+    left.timeMarkers === right.timeMarkers &&
+    left.relativeTimeMarkers === right.relativeTimeMarkers &&
+    left.hikeDate === right.hikeDate
+  );
+}
+
 /**
- * Stores a saved track's timeline settings. Default settings and null remove its entry,
- * so the record only holds adjusted tracks.
+ * The route timing a track stores, without the session-only light coloring: null when
+ * it equals the track's defaults, so only adjusted tracks carry it.
  */
-export function withTrackWeatherTimeline(
-  preferences: TrackWeatherPreferences,
-  trackId: string,
-  settings: TrackWeatherTimelineSettings | null,
+export function adjustedTrackRouteTiming(
+  settings: TrackRouteTiming,
   recordedStart?: RecordedRouteStart,
-): TrackWeatherPreferences {
-  const others = Object.entries(preferences.timelines).filter(([id]) => id !== trackId);
-  const defaults = trackWeatherTimeline(null, null, recordedStart);
-  const adjusted =
-    settings !== null &&
-    (settings.startHour !== defaults.startHour ||
-      settings.paceFactor !== defaults.paceFactor ||
-      settings.ignoreRecordedTime !== defaults.ignoreRecordedTime ||
-      settings.timeMarkers !== defaults.timeMarkers ||
-      settings.relativeTimeMarkers !== defaults.relativeTimeMarkers ||
-      settings.lightOnMap !== defaults.lightOnMap ||
-      settings.hikeDate !== defaults.hikeDate);
-  // `fromEntries` defines own properties, so even a `__proto__` ID becomes an entry.
+): TrackRouteTiming | null {
+  if (sameTrackRouteTiming(settings, trackWeatherTimeline(undefined, recordedStart))) {
+    return null;
+  }
   return {
-    ...preferences,
-    timelines: Object.fromEntries(
-      adjusted ? [...others, [trackId, settings] as const] : others,
-    ),
+    startHour: settings.startHour,
+    paceFactor: settings.paceFactor,
+    ignoreRecordedTime: settings.ignoreRecordedTime,
+    timeMarkers: settings.timeMarkers,
+    relativeTimeMarkers: settings.relativeTimeMarkers,
+    hikeDate: settings.hikeDate,
   };
 }
 

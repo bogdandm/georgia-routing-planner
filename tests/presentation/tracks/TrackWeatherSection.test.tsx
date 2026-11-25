@@ -12,6 +12,7 @@ import {
   localCalendarDate,
   trackWeatherDates,
   trackWeatherWeekday,
+  type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
@@ -146,14 +147,17 @@ function forecastDates(): readonly string[] {
   return trackWeatherDates(localCalendarDate(services.clock.now()));
 }
 
-function expandedSection(metrics: TrackStatsMetrics) {
+function expandedSection(
+  metrics: TrackStatsMetrics,
+  timingRoute: TrackTimingRoute = ridge,
+) {
   return (
     <RuntimeServicesProvider services={services}>
       <ThemeProvider theme={createAppTheme()}>
         <TrackWeatherSection
           profile={ridge}
           metrics={metrics}
-          timingRoute={ridge}
+          timingRoute={timingRoute}
           preferences={expandedPreferences}
           onPreferencesChange={vi.fn()}
           timelineSettings={defaultTrackWeatherTimelineSettings}
@@ -260,15 +264,18 @@ describe('TrackWeatherSection', () => {
         .getAllByRole('group')
         .map((card) => card.getAttribute('aria-label')),
     ).toEqual([
-      '09:00, Start, 2,000 m',
-      '12:00, At 4.8 km, 2,720 m',
-      '14:30, Finish, 2,400 m',
+      // Each card names the highest point of its hours: 4.8 km at 12:00, the summit
+      // before 13:00, and the descent at 14:00.
+      '09:00, Start, 2,720 m',
+      '12:00, At 4.8 km, 2,900 m',
+      '14:30, Finish, 2,543 m',
     ]);
     expect(
       await within(route).findAllByRole('article', { name: /forecast$/ }),
     ).toHaveLength(3);
-    // Three elevation points plus three checkpoints; the start is also the lowest point.
-    expect(execute).toHaveBeenCalledTimes(5);
+    // Three elevation points plus the hiker at each hour from 09:00 to 14:00; at 09:00
+    // the hiker is at the start, which is also the lowest point.
+    expect(execute).toHaveBeenCalledTimes(8);
   });
 
   it('adjusts route timing with weather closed and uses it when forecasts open', async () => {
@@ -298,7 +305,7 @@ describe('TrackWeatherSection', () => {
       within(route)
         .getAllByRole('group')
         .map((card) => card.getAttribute('aria-label')),
-    ).toEqual(['10:00, Start, 2,000 m', '12:45, Finish, 2,400 m']);
+    ).toEqual(['10:00, Start, 2,900 m', '12:45, Finish, 2,829 m']);
     expect(
       await within(route).findAllByRole('article', { name: /forecast$/ }),
     ).toHaveLength(2);
@@ -317,23 +324,79 @@ describe('TrackWeatherSection', () => {
     );
   });
 
-  it('opens the full forecast at a clicked location in Weather', async () => {
+  it('opens the full forecast at a card highest point in Weather', async () => {
     resetMapInteractionStore();
     const user = userEvent.setup();
     renderSection(expandedPreferences);
 
     await user.click(
       await screen.findByRole('button', {
-        name: 'Open the forecast for 12:00, At 4.8 km, 2,720 m in Weather',
+        name: 'Open the forecast for 12:00, At 4.8 km, 2,900 m in Weather',
       }),
     );
 
     const request = mapInteractionStore.getState().weatherForecastRequest;
     expect(request?.placeLabel).toBe('12:00, At 4.8 km');
-    expect(request?.elevationMeters).toBeCloseTo(2_720, 6);
-    expect(request?.coordinate.longitude).toBeCloseTo(44.048, 6);
+    // The summit, 6 km along, which the hiker passes during the 12:00 hour.
+    expect(request?.elevationMeters).toBe(2_900);
+    expect(request?.coordinate.longitude).toBeCloseTo(44.06, 6);
     expect(useUiStore.getState().activeTab).toBe('weather');
     expect(window.location.hash).toBe('#weather');
+  });
+
+  it('names a route card by its highest hour once every hour forecast supplies elevation', async () => {
+    resetMapInteractionStore();
+    const forecast = services.pointWeatherForecast;
+    const execute = forecast.execute.bind(forecast);
+    // The test library target predates Promise.withResolvers.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Forecast elevation rises 100 m per kilometre east; the 1,800 m hour waits.
+    vi.spyOn(forecast, 'execute').mockImplementation(async (input, signal) => {
+      const elevationMeters =
+        1_000 + Math.round((input.coordinate.longitude - 44) * 10_000);
+      if (elevationMeters === 1_800) await held;
+      return execute({ ...input, elevationMeters }, signal);
+    });
+    const user = userEvent.setup();
+    // Without elevation the 12 km route takes 3 h: the start card covers 09:00 at
+    // 0 km, 10:00 at 4 km, and 11:00 at 8 km.
+    renderWithI18n(
+      expandedSection(
+        { distanceMeters: 12_000 },
+        {
+          points: ridge.points.map(
+            ({ coordinate, distanceMeters, sourceSegmentIndex }) => ({
+              coordinate,
+              distanceMeters,
+              sourceSegmentIndex,
+            }),
+          ),
+        },
+      ),
+    );
+    const route = screen.getByRole('list', { name: 'Forecast along the route' });
+
+    expect(
+      await within(route).findByRole('group', {
+        name: '12:00, Finish, 2,200 m',
+      }),
+    ).toBeVisible();
+    expect(
+      within(route).getByRole('group', { name: '09:00, Start, Loading elevation…' }),
+    ).toBeVisible();
+
+    act(release);
+    await user.click(
+      await within(route).findByRole('button', {
+        name: 'Open the forecast for 09:00, Start, 1,800 m in Weather',
+      }),
+    );
+    const request = mapInteractionStore.getState().weatherForecastRequest;
+    expect(request?.elevationMeters).toBe(1_800);
+    expect(request?.coordinate.longitude).toBeCloseTo(44.08, 6);
   });
 
   it('remembers the weekday of a chosen forecast date', async () => {
@@ -388,8 +451,8 @@ describe('TrackWeatherSection', () => {
 
     expect(start).toHaveAttribute('aria-valuetext', '10:30');
     expect(labels()).toEqual([
-      '10:30, Start, 2,000 m',
-      '13:30, At 4.8 km, 2,720 m',
+      '10:30, Start, 2,840 m',
+      '13:30, At 4.8 km, 2,900 m',
       '16:00, Finish, 2,400 m',
     ]);
     expect(

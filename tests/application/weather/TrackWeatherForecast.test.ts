@@ -165,17 +165,18 @@ async function pointForecast() {
   );
 }
 
-function checkpoint(
-  elapsedSeconds: number,
-  untilElapsedSeconds: number,
-): TrackWeatherCheckpoint {
-  return {
-    kind: 'interval',
-    coordinate: [44.8, 41.7],
+/** A checkpoint whose window covers the given clock hours of the forecast date. */
+function checkpoint(hours: readonly number[]): TrackWeatherCheckpoint {
+  const location = {
+    coordinate: [44.8, 41.7] as const,
     elevationMeters: 2_000,
     distanceMeters: 0,
-    elapsedSeconds,
-    untilElapsedSeconds,
+  };
+  return {
+    ...location,
+    kind: 'interval',
+    elapsedSeconds: 0,
+    hours: hours.map((hour) => ({ hour, location })),
   };
 }
 
@@ -212,6 +213,7 @@ describe('planTrackWeatherTimeline', () => {
       ridgeProfile(),
       { distanceMeters: 12_000, ...ridgeTotals },
       dinTiming,
+      9,
     );
 
     expect(timeline.status).toBe('available');
@@ -219,22 +221,18 @@ describe('planTrackWeatherTimeline', () => {
     expect(timeline.durationSource).toBe('estimated');
     expect(timeline.durationSeconds).toBeCloseTo(5.5 * hour, 6);
     expect(
-      timeline.checkpoints.map(({ kind, elapsedSeconds, untilElapsedSeconds }) => ({
+      timeline.checkpoints.map(({ kind, elapsedSeconds, hours }) => ({
         kind,
         elapsedSeconds,
-        untilElapsedSeconds,
+        hours: hours.map((value) => value.hour),
       })),
     ).toEqual([
-      { kind: 'start', elapsedSeconds: 0, untilElapsedSeconds: 3 * hour },
-      {
-        kind: 'interval',
-        elapsedSeconds: 3 * hour,
-        untilElapsedSeconds: expect.closeTo(5.5 * hour, 6) as number,
-      },
+      { kind: 'start', elapsedSeconds: 0, hours: [9, 10, 11] },
+      { kind: 'interval', elapsedSeconds: 3 * hour, hours: [12, 13, 14] },
       {
         kind: 'finish',
         elapsedSeconds: expect.closeTo(5.5 * hour, 6) as number,
-        untilElapsedSeconds: expect.closeTo(5.5 * hour, 6) as number,
+        hours: [14],
       },
     ]);
     // On the climb 1 km takes 0.5 h of ascent plus half of 0.25 h walking: 3 h is 4.8 km.
@@ -244,6 +242,45 @@ describe('planTrackWeatherTimeline', () => {
     expect(timeline.checkpoints[2]?.distanceMeters).toBe(12_000);
   });
 
+  it('locates each forecast hour at the highest point the hiker passes in it', () => {
+    const timeline = planTrackWeatherTimeline(
+      ridgeProfile(),
+      { distanceMeters: 12_000, ...ridgeTotals },
+      dinTiming,
+      9.5,
+    );
+
+    expect(timeline.status).toBe('available');
+    if (timeline.status !== 'available') return;
+    const hours = timeline.checkpoints.map((value) =>
+      value.hours.map(({ hour: clockHour, location }) => ({
+        clockHour,
+        distanceMeters: location.distanceMeters,
+      })),
+    );
+    // 1 km of climbing takes 0.625 h, so each climbing hour peaks at its end: the
+    // 09:00 hour waits at the start until 09:30, then reaches 0.8 km by 10:00.
+    const climb = [
+      { clockHour: 9, distanceMeters: expect.closeTo(800, 6) as number },
+      { clockHour: 10, distanceMeters: expect.closeTo(2_400, 6) as number },
+      { clockHour: 11, distanceMeters: expect.closeTo(4_000, 6) as number },
+      { clockHour: 12, distanceMeters: expect.closeTo(5_600, 6) as number },
+    ];
+    expect(hours[0]).toEqual(climb);
+    // The 12:00 hour ends the start's window and begins the 12:30 checkpoint's.
+    expect(hours[1]?.[0]).toEqual(climb[3]);
+    // The summit at 13:15 lies between two full hours; the 13:00 hour still reaches it.
+    expect(hours[1]?.[1]).toEqual({ clockHour: 13, distanceMeters: 6_000 });
+    expect(timeline.checkpoints[1]?.hours[1]?.location.elevationMeters).toBe(2_900);
+    // Descending, the 14:00 hour peaks at its start, below the summit.
+    expect(hours[1]?.[2]?.clockHour).toBe(14);
+    expect(timeline.checkpoints[1]?.hours[2]?.location.elevationMeters).toBeLessThan(
+      2_900,
+    );
+    // The hiker finishes at 15:00 and waits there for the rest of the hour.
+    expect(hours[2]).toEqual([{ clockHour: 15, distanceMeters: 12_000 }]);
+  });
+
   it('anchors the profile pace to the stored ascent and descent totals', () => {
     // The profile climbs 900 m, but the stored 600 m up and 400 m down make a 4.4 h DIN
     // total: 2.8 h vertical plus half of 3 h walking.
@@ -251,6 +288,7 @@ describe('planTrackWeatherTimeline', () => {
       ridgeProfile(),
       { distanceMeters: 12_000, ascentMeters: 600, descentMeters: 400 },
       dinTiming,
+      9,
     );
 
     expect(timeline).toMatchObject({ status: 'available' });
@@ -283,6 +321,7 @@ describe('planTrackWeatherTimeline', () => {
       recorded,
       { distanceMeters: 8_000, elapsedSeconds: 4.5 * hour },
       dinTiming,
+      9,
     );
 
     expect(timeline).toMatchObject({
@@ -316,7 +355,7 @@ describe('planTrackWeatherTimeline', () => {
     };
     const ignoring = { ...dinSettings, ignoreRecordedTime: true };
 
-    expect(planTrackWeatherTimeline(recorded, metrics, ignoring)).toMatchObject({
+    expect(planTrackWeatherTimeline(recorded, metrics, ignoring, 9)).toMatchObject({
       status: 'available',
       durationSource: 'estimated',
       durationSeconds: expect.closeTo(2.5 * hour, 6) as number,
@@ -336,6 +375,7 @@ describe('planTrackWeatherTimeline', () => {
         partial,
         { distanceMeters: 4_000, elapsedSeconds: 3_600 },
         dinTiming,
+        9,
       ),
     ).toMatchObject({ status: 'available', durationSource: 'estimated' });
   });
@@ -346,6 +386,7 @@ describe('planTrackWeatherTimeline', () => {
         ridgeProfile(),
         { distanceMeters: 30_000, ...ridgeTotals },
         dinTiming,
+        9,
       ),
     ).toMatchObject({ status: 'too-long', distanceMeters: 30_000 });
     // A steady 3150 m climb over 12 km: 10.5 h of ascent plus half of 3 h walking.
@@ -357,6 +398,7 @@ describe('planTrackWeatherTimeline', () => {
         ]),
         { distanceMeters: 12_000, ascentMeters, descentMeters: 0 },
         dinTiming,
+        9,
       );
     expect(climb(3_150)).toMatchObject({
       status: 'too-long',
@@ -385,17 +427,22 @@ describe('planTrackWeatherTimeline', () => {
       descentMeters: 0,
     };
 
-    expect(planTrackWeatherTimeline(recorded, metrics, dinTiming)).toMatchObject({
+    expect(planTrackWeatherTimeline(recorded, metrics, dinTiming, 9)).toMatchObject({
       status: 'too-long',
       durationSource: 'recorded',
       durationSeconds: 26 * hour,
     });
     expect(
-      planTrackWeatherTimeline(recorded, metrics, {
-        ...dinTiming,
-        paceFactor: 2,
-        ignoreRecordedTime: true,
-      }),
+      planTrackWeatherTimeline(
+        recorded,
+        metrics,
+        {
+          ...dinTiming,
+          paceFactor: 2,
+          ignoreRecordedTime: true,
+        },
+        9,
+      ),
     ).toMatchObject({
       status: 'too-long',
       durationSource: 'estimated',
@@ -406,20 +453,30 @@ describe('planTrackWeatherTimeline', () => {
   it('stretches or compresses the timeline by the pace factor', () => {
     const metrics = { distanceMeters: 12_000, ...ridgeTotals };
 
-    const faster = planTrackWeatherTimeline(ridgeProfile(), metrics, {
-      ...dinTiming,
-      paceFactor: 0.5,
-    });
+    const faster = planTrackWeatherTimeline(
+      ridgeProfile(),
+      metrics,
+      {
+        ...dinTiming,
+        paceFactor: 0.5,
+      },
+      9,
+    );
     expect(faster).toMatchObject({ status: 'available' });
     if (faster.status !== 'available') return;
     expect(faster.durationSeconds).toBeCloseTo(2.75 * hour, 6);
     expect(faster.checkpoints.map((value) => value.kind)).toEqual(['start', 'finish']);
     // Slowed beyond the day-hike limit: 5.5 h × 2.2 = 12.1 h.
     expect(
-      planTrackWeatherTimeline(ridgeProfile(), metrics, {
-        ...dinTiming,
-        paceFactor: 2.2,
-      }),
+      planTrackWeatherTimeline(
+        ridgeProfile(),
+        metrics,
+        {
+          ...dinTiming,
+          paceFactor: 2.2,
+        },
+        9,
+      ),
     ).toMatchObject({
       status: 'too-long',
     });
@@ -438,11 +495,16 @@ describe('planTrackWeatherTimeline', () => {
 
     for (const stopFactor of [0, 1, 3]) {
       expect(
-        planTrackWeatherTimeline(recorded, metrics, {
-          ...dinTiming,
-          paceFactor: 1.5,
-          stopFactor,
-        }),
+        planTrackWeatherTimeline(
+          recorded,
+          metrics,
+          {
+            ...dinTiming,
+            paceFactor: 1.5,
+            stopFactor,
+          },
+          9,
+        ),
       ).toMatchObject({
         status: 'available',
         durationSource: 'recorded',
@@ -513,7 +575,7 @@ describe('planTrackWeatherTimeline', () => {
       ),
     );
     expect(
-      planTrackWeatherTimeline(flat, { distanceMeters: 13_000 }, timing),
+      planTrackWeatherTimeline(flat, { distanceMeters: 13_000 }, timing, 9),
     ).toMatchObject({
       durationSource: 'estimated',
       durationSeconds: expect.closeTo(estimate?.totalSeconds ?? 0, 6) as number,
@@ -612,7 +674,7 @@ describe('full-route label timing', () => {
       ]).get('first-leg-end'),
     ).toBe('10:00');
     expect(
-      planTrackWeatherTimeline(route, { distanceMeters: 8000 }, settings),
+      planTrackWeatherTimeline(route, { distanceMeters: 8000 }, settings, 9),
     ).toMatchObject({ durationSeconds: 2 * hour });
   });
 });
@@ -995,68 +1057,66 @@ describe('track weather dates', () => {
 });
 
 describe('summarizeTrackWeatherCheckpoint', () => {
-  it('summarizes the hours until the next checkpoint at the checkpoint location', async () => {
+  it('reads each window hour from the forecast at its own location', async () => {
     const forecast = await pointForecast();
+    // Higher up the route, every hour is 10 °C colder.
+    const higher = {
+      ...forecast,
+      hourly: forecast.hourly.map((value) => ({
+        ...value,
+        temperatureCelsius: value.temperatureCelsius - 10,
+      })),
+    };
 
     expect(
-      summarizeTrackWeatherCheckpoint(
+      summarizeTrackWeatherCheckpoint('2026-07-18', checkpoint([9, 10, 11]), [
         forecast,
-        '2026-07-18',
-        9,
-        checkpoint(0, 3 * hour),
-      ),
+        forecast,
+        forecast,
+      ]),
     ).toMatchObject({
       isDay: true,
       period: { temperatureMinCelsius: 9, temperatureMaxCelsius: 11 },
     });
-    // An arrival at 13:47 still covers the 13:00 hour.
-    const arrival = 4 * hour + 47 * 60;
     expect(
-      summarizeTrackWeatherCheckpoint(
+      summarizeTrackWeatherCheckpoint('2026-07-18', checkpoint([15, 16, 17, 18]), [
+        higher,
+        higher,
         forecast,
-        '2026-07-18',
-        9,
-        checkpoint(arrival, arrival),
-      ),
+        forecast,
+      ]),
     ).toMatchObject({
-      period: { temperatureMinCelsius: 13, temperatureMaxCelsius: 13 },
+      period: { temperatureMinCelsius: 5, temperatureMaxCelsius: 18 },
     });
     expect(
-      summarizeTrackWeatherCheckpoint(
-        forecast,
-        '2026-07-18',
-        9,
-        checkpoint(12 * hour, 13 * hour),
-      ),
+      summarizeTrackWeatherCheckpoint('2026-07-18', checkpoint([21]), [forecast]),
     ).toMatchObject({ isDay: false, period: { temperatureMinCelsius: 21 } });
-    // A 22:30 start covers 22:00–01:00, reading the next date's hours after midnight.
+  });
+
+  it('reads hours after midnight from the next date and needs every hour', async () => {
+    const forecast = await pointForecast();
+    const lateStart = checkpoint([22, 23, 24]);
+
     expect(
-      summarizeTrackWeatherCheckpoint(
+      summarizeTrackWeatherCheckpoint('2026-07-18', lateStart, [
         forecast,
-        '2026-07-18',
-        22.5,
-        checkpoint(0, 3 * hour),
-      ),
+        forecast,
+        forecast,
+      ]),
     ).toMatchObject({
       isDay: false,
       period: { temperatureMinCelsius: 0, temperatureMaxCelsius: 23 },
     });
-    // On the forecast's last date the same start runs past its final hour.
+    // On the forecast's last date the same hours run past its final hour.
     expect(
-      summarizeTrackWeatherCheckpoint(
+      summarizeTrackWeatherCheckpoint('2026-07-25', lateStart, [
         forecast,
-        '2026-07-25',
-        22.5,
-        checkpoint(0, 3 * hour),
-      ),
+        forecast,
+        forecast,
+      ]),
     ).toBeNull();
     expect(
-      summarizeTrackWeatherCheckpoint(
-        forecast,
-        '2026-07-30',
-        9,
-        checkpoint(0, 3 * hour),
-      ),
+      summarizeTrackWeatherCheckpoint('2026-07-30', checkpoint([9]), [forecast]),
     ).toBeNull();
   });
 });

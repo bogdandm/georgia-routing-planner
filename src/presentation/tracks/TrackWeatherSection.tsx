@@ -189,12 +189,16 @@ export function TrackWeatherSection({
     () => selectTrackElevationLocations(profile),
     [profile],
   );
-  const { paceFactor, stopFactor, ignoreRecordedTime } = timelineSettings;
+  const {
+    startHour: forecastStartHour,
+    paceFactor,
+    stopFactor,
+    ignoreRecordedTime,
+  } = timelineSettings;
   const presetSettings = useUiStore((state) => state.hikingTimePresets);
   const defaultTimeMarkers = useStore(mapLayerStore, (state) => state.trackTimeMarkers);
-  // Drafts show slider positions while dragging; only released values are stored. The
-  // start draft already moves the checkpoint times, since it only reselects loaded
-  // hours, while pace and stops wait for release so they do not start forecast requests.
+  // Drafts show slider positions while dragging; only released values are stored and
+  // replan the route forecast, whose hourly locations each need a forecast request.
   const [startDraft, setStartDraft] = useState<number | null>(null);
   const [paceDraft, setPaceDraft] = useState<number | null>(null);
   const [stopDraft, setStopDraft] = useState<number | null>(null);
@@ -207,13 +211,21 @@ export function TrackWeatherSection({
   const startLabelId = `${detailsId}-start`;
   const timeline = useMemo(
     () =>
-      planTrackWeatherTimeline(timingRoute, metrics, {
-        paceFactor,
-        stopFactor,
-        ignoreRecordedTime,
-        hikingTime,
-      }),
-    [hikingTime, ignoreRecordedTime, metrics, paceFactor, stopFactor, timingRoute],
+      planTrackWeatherTimeline(
+        timingRoute,
+        metrics,
+        { paceFactor, stopFactor, ignoreRecordedTime, hikingTime },
+        forecastStartHour,
+      ),
+    [
+      forecastStartHour,
+      hikingTime,
+      ignoreRecordedTime,
+      metrics,
+      paceFactor,
+      stopFactor,
+      timingRoute,
+    ],
   );
   const recorded = timeline.durationSource === 'recorded';
   // Breaks and lunch scale linearly with the stop factor, so the slider's sum follows
@@ -256,7 +268,11 @@ export function TrackWeatherSection({
       elevationLocations.median,
       elevationLocations.lowest,
     ];
-    if (timeline.status === 'available') all.push(...timeline.checkpoints);
+    if (timeline.status === 'available') {
+      for (const checkpoint of timeline.checkpoints) {
+        all.push(...checkpoint.hours.map((hour) => hour.location));
+      }
+    }
     return all;
   }, [elevationLocations, timeline]);
   const [forecasts, setForecasts] = useState<ReadonlyMap<string, ForecastState>>(
@@ -408,19 +424,9 @@ export function TrackWeatherSection({
   const checkpointCard = (checkpoint: TrackWeatherCheckpoint) => {
     const time = trackWeatherLocalTime(
       selectedDate,
-      startHour,
+      forecastStartHour,
       checkpoint.elapsedSeconds,
     ).slice(11, 16);
-    const state = forecastFor(checkpoint);
-    const elevationMeters =
-      checkpoint.elevationMeters ??
-      (state?.status === 'ready' ? state.forecast.elevationMeters : undefined);
-    const elevation =
-      elevationMeters !== undefined
-        ? formatTrackElevation(elevationMeters, i18n)
-        : state === undefined
-          ? t`Loading elevation…`
-          : t`Elevation unavailable`;
     const distance = formatTrackDistance(checkpoint.distanceMeters, i18n);
     const place =
       checkpoint.kind === 'start'
@@ -428,14 +434,46 @@ export function TrackWeatherSection({
         : checkpoint.kind === 'finish'
           ? t`Finish`
           : t`At ${distance}`;
+    const hourStates = checkpoint.hours.map((hour) => forecastFor(hour.location));
+    const hourForecasts: PointWeatherForecast[] = [];
+    for (const hourState of hourStates) {
+      if (hourState?.status === 'ready') hourForecasts.push(hourState.forecast);
+    }
+    const status: ForecastState['status'] | 'loading' = hourStates.some(
+      (hourState) => hourState?.status === 'error',
+    )
+      ? 'error'
+      : hourForecasts.length < hourStates.length
+        ? 'loading'
+        : 'ready';
+    // The card names the highest of its hour locations; without profile elevation, an
+    // hour's forecast supplies it, so the maximum waits until every hour has one.
+    let highest: (TrackWeatherLocation & { readonly elevationMeters: number }) | null =
+      null;
+    for (const [index, hour] of checkpoint.hours.entries()) {
+      const hourState = hourStates[index];
+      const elevationMeters =
+        hour.location.elevationMeters ??
+        (hourState?.status === 'ready'
+          ? hourState.forecast.elevationMeters
+          : undefined);
+      if (elevationMeters === undefined) {
+        highest = null;
+        break;
+      }
+      if (highest === null || elevationMeters > highest.elevationMeters) {
+        highest = { ...hour.location, elevationMeters };
+      }
+    }
+    const elevation =
+      highest !== null
+        ? formatTrackElevation(highest.elevationMeters, i18n)
+        : status === 'loading'
+          ? t`Loading elevation…`
+          : t`Elevation unavailable`;
     const summary =
-      state?.status === 'ready'
-        ? summarizeTrackWeatherCheckpoint(
-            state.forecast,
-            selectedDate,
-            startHour,
-            checkpoint,
-          )
+      status === 'ready'
+        ? summarizeTrackWeatherCheckpoint(selectedDate, checkpoint, hourForecasts)
         : null;
     const label = [time, place, elevation].join(', ');
     return (
@@ -446,9 +484,9 @@ export function TrackWeatherSection({
           subtitle={elevation}
           headerWidth={checkpointHeaderWidth}
         >
-          {state === undefined ? (
+          {status === 'loading' ? (
             <ForecastPlaceholder />
-          ) : state.status === 'error' ? (
+          ) : status === 'error' ? (
             <ForecastPlaceholder>
               <Trans>The forecast could not be loaded.</Trans>
             </ForecastPlaceholder>
@@ -465,7 +503,7 @@ export function TrackWeatherSection({
               stacked
               openLabel={t`Open the forecast for ${label} in Weather`}
               onOpen={() => {
-                openInWeather(checkpoint, [time, place].join(', '));
+                openInWeather(highest ?? checkpoint, [time, place].join(', '));
               }}
             />
           )}

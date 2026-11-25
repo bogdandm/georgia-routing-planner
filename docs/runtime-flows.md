@@ -830,19 +830,22 @@ reports a marker change for synchronization.
 
 While its weather disclosure is expanded, `TrackWeatherSection` runs the same use case
 once per distinct location with the profile elevation: the highest, median-elevation,
-and lowest profile points from `selectTrackElevationLocations`, plus the timeline
-checkpoints from `planTrackWeatherTimeline`
-(`application/weather/TrackWeatherForecast.ts`). The timeline uses recorded sample
-timestamps unless **Ignore recorded time** selects the estimate, which
-`estimateHikingTime` (`domain/tracks/hikingTime.ts`) computes from the track's resolved
-hiking time preset: per-sample moving time (DIN 33466 anchored to the stored ascent and
-descent, or a pace-by-grade curve), altitude bands, breaks spread along moving time, and
-lunch pauses. `TracksWorkspaceProvider` resolves the preset from `routeTiming.presetId`
-and the `hikingTimePresets` that `main.tsx` hydrates into `uiStore` and `WorkspaceShell`
-saves to `tracks.hiking-time-presets` on every change, then requests synchronization.
-Changing the date or start time only reselects hours from loaded forecasts; collapsing
-weather or unmounting aborts pending requests. Results stay in component state, keyed by
-the section's track, and failed locations retry on the next expansion.
+and lowest profile points from `selectTrackElevationLocations`, plus the highest point
+the hiker passes in each clock hour of the checkpoint windows from
+`planTrackWeatherTimeline` (`application/weather/TrackWeatherForecast.ts`). The timeline
+uses recorded sample timestamps unless **Ignore recorded time** selects the estimate,
+which `estimateHikingTime` (`domain/tracks/hikingTime.ts`) computes from the track's
+resolved hiking time preset: per-sample moving time (DIN 33466 anchored to the stored
+ascent and descent, or a pace-by-grade curve), altitude bands, breaks spread along
+moving time, and lunch pauses. `TracksWorkspaceProvider` resolves the preset from
+`routeTiming.presetId` and the `hikingTimePresets` that `main.tsx` hydrates into
+`uiStore` and `WorkspaceShell` saves to `tracks.hiking-time-presets` on every change,
+then requests synchronization. `summarizeTrackWeatherCheckpoint` reads each window hour
+from its own location's forecast. Changing the date only reselects hours from loaded
+forecasts; a released start time moves the hourly locations, so a half-hour shift
+requests new ones while whole-hour shifts reuse loaded ones. Collapsing weather or
+unmounting aborts pending requests. Results stay in component state, keyed by the
+section's track, and failed locations retry on the next expansion.
 `TracksWorkspaceProvider` loads `weather.track-preferences` once and saves every
 disclosure or weekday change; changes made before the record loads win over it and are
 then saved. A saved track's released start or pace slider and timing options update its
@@ -1011,9 +1014,9 @@ or snapped coordinate is stored in track content; hiding times preserves the mar
 geometry and timestamps when the profile omitted elevation-less spans. The workspace
 memoizes those samples independently of timing settings and shares them with map times,
 marker passage times, and weather checkpoints. Unknown elevation contributes horizontal
-distance only; source-segment boundaries never contribute vertical travel. For a
-forecast checkpoint without elevation, the existing point forecast request resolves
-elevation and the card displays the returned value.
+distance only; source-segment boundaries never contribute vertical travel. Hourly
+locations without elevation are requested without it, and their cards take the highest
+elevation those forecasts return.
 
 `useTrackLighting` (`presentation/tracks/useTrackLighting.ts`), called once by the
 provider for the active single track, resolves the IANA zone at the route start, the

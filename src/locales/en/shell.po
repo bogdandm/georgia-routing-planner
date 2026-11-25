@@ -59,6 +59,11 @@ msgstr "{renderedSceneCount, number} of {totalSceneCount, number} Mosaic images 
 msgid "{sidebarTitle} tools"
 msgstr "{sidebarTitle} tools"
 
+#. js-lingui-id: KPM8Zk
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "{sourceName} copy"
+msgstr "{sourceName} copy"
+
 #. js-lingui-id: KpoP4l
 #: src/presentation/shell/AboutDialog.tsx
 msgid "{terrainCredits}. Georgia is covered by the Copernicus GLO-30 elevation model; Mapterhorn's attribution page lists every source."
@@ -114,6 +119,16 @@ msgstr "Account and sync between devices. The dot shows sync status."
 msgid "Actions for a point"
 msgstr "Actions for a point"
 
+#. js-lingui-id: 4exsDT
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Add altitude band"
+msgstr "Add altitude band"
+
+#. js-lingui-id: mL5gr3
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Add grade"
+msgstr "Add grade"
+
 #. js-lingui-id: OPLR35
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Add your own points to the track."
@@ -134,6 +149,11 @@ msgstr "All map layers, grouped by data source. Your choices are saved in this b
 msgid "Allocated heap"
 msgstr "Allocated heap"
 
+#. js-lingui-id: 66eRgW
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Altitude slowdown"
+msgstr "Altitude slowdown"
+
 #. js-lingui-id: x-b-KT
 #: src/presentation/shell/SettingsDialog.tsx
 msgid "Always keep it"
@@ -149,6 +169,11 @@ msgstr "An account is optional. Turn on sync to keep tracks, folders, and marker
 msgid "APIs"
 msgstr "APIs"
 
+#. js-lingui-id: DB8zMK
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Apply"
+msgstr "Apply"
+
 #. js-lingui-id: YcS65J
 #: src/presentation/shell/StorageUsagePanel.tsx
 msgid "Approximate JavaScript memory"
@@ -158,6 +183,11 @@ msgstr "Approximate JavaScript memory"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Areas"
 msgstr "Areas"
+
+#. js-lingui-id: Aq1PiC
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Ascent, m/h"
+msgstr "Ascent, m/h"
 
 #. js-lingui-id: Aerhmy
 #: src/presentation/shell/SettingsDialog.tsx
@@ -169,6 +199,16 @@ msgstr "Ask whether to keep it"
 msgid "Back"
 msgstr "Back"
 
+#. js-lingui-id: MUGkMY
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Band {row} elevation, m"
+msgstr "Band {row} elevation, m"
+
+#. js-lingui-id: YJ-QiW
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Band {row} speed factor"
+msgstr "Band {row} speed factor"
+
 #. js-lingui-id: BR9WHy
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Base map: vector, satellite, orthophoto, or Soviet topographic maps."
@@ -179,10 +219,25 @@ msgstr "Base map: vector, satellite, orthophoto, or Soviet topographic maps."
 msgid "Bay"
 msgstr "Bay"
 
+#. js-lingui-id: IFenxZ
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Breaks and lunch"
+msgstr "Breaks and lunch"
+
+#. js-lingui-id: Am-d9L
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Breaks, min per moving hour"
+msgstr "Breaks, min per moving hour"
+
 #. js-lingui-id: EzY-ZH
 #: src/presentation/shell/StorageUsagePanel.tsx
 msgid "Browser storage usage could not be measured."
 msgstr "Browser storage usage could not be measured."
+
+#. js-lingui-id: UHfNfA
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Built-in presets can be copied, not changed."
+msgstr "Built-in presets can be copied, not changed."
 
 #. js-lingui-id: QKoEdQ
 #: src/presentation/shell/MapLegend.tsx
@@ -203,6 +258,11 @@ msgstr "Camp site"
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Canal"
 msgstr "Canal"
+
+#. js-lingui-id: dEgA5A
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Cancel"
+msgstr "Cancel"
 
 #. js-lingui-id: i5FD0Y
 #: src/presentation/shell/WorkspaceSidebar.tsx
@@ -319,6 +379,11 @@ msgstr "Copy a link to this map view"
 msgid "Country border"
 msgstr "Country border"
 
+#. js-lingui-id: hYgDIe
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Create"
+msgstr "Create"
+
 #. js-lingui-id: kaKzkK
 #: src/presentation/shell/AboutDialog.tsx
 msgid "Created by <0>Bogdan Kalashnikov</0> (bogdandm)."
@@ -339,6 +404,21 @@ msgstr "Data licence"
 msgid "Data sources"
 msgstr "Data sources"
 
+#. js-lingui-id: 7dekXD
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Default preset"
+msgstr "Default preset"
+
+#. js-lingui-id: cnGeoo
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Delete"
+msgstr "Delete"
+
+#. js-lingui-id: fJt1_u
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Descent, m/h"
+msgstr "Descent, m/h"
+
 #. js-lingui-id: 0ezWrD
 #: src/presentation/shell/AboutDialog.tsx
 msgid "Deterministic 9 km model forecast; not a measured weather-station observation."
@@ -348,6 +428,11 @@ msgstr "Deterministic 9 km model forecast; not a measured weather-station observ
 #: src/presentation/shell/WorkspaceRail.tsx
 msgid "Developer diagnostics"
 msgstr "Developer diagnostics"
+
+#. js-lingui-id: zJClyE
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "DIN 33466 formula"
+msgstr "DIN 33466 formula"
 
 #. js-lingui-id: -1nBD_
 #: src/presentation/shell/MapLegend.tsx
@@ -384,6 +469,11 @@ msgstr "Drag with the middle button"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Drinking water"
 msgstr "Drinking water"
+
+#. js-lingui-id: Wj4zia
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Edit preset"
+msgstr "Edit preset"
 
 #. js-lingui-id: 2LsxCB
 #: src/presentation/shell/AboutDialog.tsx
@@ -470,6 +560,16 @@ msgstr "Ford"
 msgid "Forest"
 msgstr "Forest"
 
+#. js-lingui-id: Sa8jsG
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "From each elevation up, moving speed is multiplied by its factor."
+msgstr "From each elevation up, moving speed is multiplied by its factor."
+
+#. js-lingui-id: OOWGA1
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "From elevation, m"
+msgstr "From elevation, m"
+
 #. js-lingui-id: Weq9zb
 #: src/presentation/shell/SettingsDialog.tsx
 msgid "General"
@@ -494,6 +594,11 @@ msgstr "GitHub repository"
 #: src/presentation/shell/MapLegend.tsx
 msgid "Glacier"
 msgstr "Glacier"
+
+#. js-lingui-id: wssNkB
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Grade, %"
+msgstr "Grade, %"
 
 #. js-lingui-id: Nhbhp7
 #: src/presentation/shell/MapLegend.tsx
@@ -556,6 +661,21 @@ msgstr "Hide weather map"
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Highlighted days have images under the cloud limit. Click a day to show its image."
 msgstr "Highlighted days have images under the cloud limit. Click a day to show its image."
+
+#. js-lingui-id: j2e_2c
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Hiking time"
+msgstr "Hiking time"
+
+#. js-lingui-id: rd0s5E
+#: src/presentation/shell/SettingsDialog.tsx
+msgid "Hiking time settings"
+msgstr "Hiking time settings"
+
+#. js-lingui-id: NCLtpT
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Horizontal speed, km/h"
+msgstr "Horizontal speed, km/h"
 
 #. js-lingui-id: nWpAGx
 #: src/presentation/shell/OnboardingTour.tsx
@@ -654,10 +774,20 @@ msgstr "Local track search results"
 msgid "localStorage"
 msgstr "localStorage"
 
+#. js-lingui-id: 61HELQ
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Longer routes split into days of this moving time, each with its own lunch."
+msgstr "Longer routes split into days of this moving time, each with its own lunch."
+
 #. js-lingui-id: YdkFRS
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Look around in 3D"
 msgstr "Look around in 3D"
+
+#. js-lingui-id: VI1ojl
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Lunch, min"
+msgstr "Lunch, min"
 
 #. js-lingui-id: 4HBFYh
 #: src/presentation/shell/HelpScreen.tsx
@@ -792,6 +922,21 @@ msgstr "Mouse"
 msgid "Move the map"
 msgstr "Move the map"
 
+#. js-lingui-id: o3IDMA
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Movement"
+msgstr "Movement"
+
+#. js-lingui-id: rPTTjf
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Movement model"
+msgstr "Movement model"
+
+#. js-lingui-id: BghX7R
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Moving hours per day"
+msgstr "Moving hours per day"
+
 #. js-lingui-id: 19ClrL
 #: src/presentation/shell/AboutDialog.tsx
 msgid "Nearby-feature search"
@@ -821,6 +966,11 @@ msgstr "Next or previous base map"
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "No geographic matches found."
 msgstr "No geographic matches found."
+
+#. js-lingui-id: 0Ut1h9
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "No lunch below moving hours"
+msgstr "No lunch below moving hours"
 
 #. js-lingui-id: MyjSw9
 #: src/presentation/shell/MapSearchPlaceholder.tsx
@@ -906,6 +1056,11 @@ msgstr "Other origin storage"
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Other place"
 msgstr "Other place"
+
+#. js-lingui-id: JK6FBt
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Pace by grade"
+msgstr "Pace by grade"
 
 #. js-lingui-id: K2-Eko
 #: src/presentation/shell/MapLegend.tsx
@@ -1028,6 +1183,11 @@ msgstr "Preparing elevation…"
 msgid "Preparing the selected Sentinel scene…"
 msgstr "Preparing the selected Sentinel scene…"
 
+#. js-lingui-id: V3MCts
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Preset name"
+msgstr "Preset name"
+
 #. js-lingui-id: kCRgce
 #: src/presentation/shell/MapLegend.tsx
 msgid "Protected area"
@@ -1052,6 +1212,21 @@ msgstr "Refresh forecast"
 #: src/presentation/shell/WorkspaceSidebar.tsx
 msgid "Refresh marker weather"
 msgstr "Refresh marker weather"
+
+#. js-lingui-id: 3Bex_e
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Remove altitude band {row}"
+msgstr "Remove altitude band {row}"
+
+#. js-lingui-id: x1CS9x
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Remove grade row {row}"
+msgstr "Remove grade row {row}"
+
+#. js-lingui-id: 2wxgft
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Rename"
+msgstr "Rename"
 
 #. js-lingui-id: 4CSBKd
 #: src/presentation/shell/OperationalStatus.tsx
@@ -1082,6 +1257,11 @@ msgstr "Requesting Sentinel imagery tiles…"
 #: src/presentation/shell/formatPlaceSearchCategory.ts
 msgid "Reservoir"
 msgstr "Reservoir"
+
+#. js-lingui-id: OfhWJH
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Reset"
+msgstr "Reset"
 
 #. js-lingui-id: 6gRgw8
 #: src/presentation/shell/StorageUsagePanel.tsx
@@ -1138,6 +1318,16 @@ msgstr "Rotate and tilt in 3D"
 msgid "Route planning is unavailable because map routing data is not configured"
 msgstr "Route planning is unavailable because map routing data is not configured"
 
+#. js-lingui-id: E5rrzC
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Row {row} grade, %"
+msgstr "Row {row} grade, %"
+
+#. js-lingui-id: yn9qFC
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Row {row} speed, km/h"
+msgstr "Row {row} speed, km/h"
+
 #. js-lingui-id: 2mX_wb
 #: src/presentation/shell/MapLegend.tsx
 msgid "Ruins"
@@ -1189,9 +1379,15 @@ msgid "Satellite search is unavailable because its provider configuration is inv
 msgstr "Satellite search is unavailable because its provider configuration is invalid."
 
 #. js-lingui-id: tfDRzk
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
 #: src/presentation/shell/WorkspaceShell.tsx
 msgid "Save"
 msgstr "Save"
+
+#. js-lingui-id: pwRlHG
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Save as new preset"
+msgstr "Save as new preset"
 
 #. js-lingui-id: rZBFUL
 #: src/presentation/shell/HelpScreen.tsx
@@ -1384,6 +1580,11 @@ msgstr "Shrubs and heath"
 msgid "Skip tour"
 msgstr "Skip tour"
 
+#. js-lingui-id: 9ztNGg
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Some values are missing or out of range. Grades and elevations must increase from row to row."
+msgstr "Some values are missing or out of range. Grades and elevations must increase from row to row."
+
 #. js-lingui-id: NWDpRk
 #: src/presentation/shell/OnboardingTour.tsx
 msgid "Sort markers, including by color, icon, or distance."
@@ -1398,6 +1599,16 @@ msgstr "Sort tracks, including by distance from the map center."
 #: src/presentation/shell/AboutDialog.tsx
 msgid "Soviet-era topographic map mosaic"
 msgstr "Soviet-era topographic map mosaic"
+
+#. js-lingui-id: XTPTAh
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Speed factor, ×"
+msgstr "Speed factor, ×"
+
+#. js-lingui-id: E3Iq_R
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Speed, km/h"
+msgstr "Speed, km/h"
 
 #. js-lingui-id: og87nv
 #: src/presentation/shell/formatPlaceSearchCategory.ts
@@ -1542,6 +1753,11 @@ msgstr "Track name"
 msgid "Tracks"
 msgstr "Tracks"
 
+#. js-lingui-id: Zw5qgT
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Tracks without their own preset use this one."
+msgstr "Tracks without their own preset use this one."
+
 #. js-lingui-id: w6-xSA
 #: src/presentation/shell/HelpScreen.tsx
 msgid "Turn sun shadows on or off"
@@ -1627,6 +1843,11 @@ msgstr "Volcano"
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "Wait for the map viewport to become ready, then search again."
 msgstr "Wait for the map viewport to become ready, then search again."
+
+#. js-lingui-id: 6j6tCJ
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "Walking speed on each grade; speeds between grades are interpolated."
+msgstr "Walking speed on each grade; speeds between grades are interpolated."
 
 #. js-lingui-id: L6z1-b
 #: src/presentation/shell/formatPlaceSearchCategory.ts

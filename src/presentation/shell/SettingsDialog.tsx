@@ -21,9 +21,10 @@ import { useState } from 'react';
 import type { StorageUsageReader } from '@/application/ports/StorageUsageReader';
 import type { AppLocale } from '@/domain/localization/appLocale';
 import type { KomootElevationPreference } from '@/domain/tracks/localTrack';
+import { HikingTimeSettingsPanel } from '@/presentation/shell/HikingTimeSettingsPanel';
 import { StorageUsagePanel } from '@/presentation/shell/StorageUsagePanel';
 
-type SettingsTab = 'general' | 'storage';
+type SettingsTab = 'general' | 'hiking-time' | 'storage';
 const defaultSettingsTab: SettingsTab = 'general';
 const settingsPanelTitleId = 'settings-panel-title';
 
@@ -123,6 +124,7 @@ export function SettingsDialog({
         }}
       >
         <Tab disableRipple value="general" label={t`General`} />
+        <Tab disableRipple value="hiking-time" label={t`Hiking time`} />
         <Tab disableRipple value="storage" label={t`Storage`} />
       </Tabs>
 
@@ -198,6 +200,12 @@ export function SettingsDialog({
               </Select>
             </FormControl>
           </Stack>
+        ) : null}
+
+        {activeTab === 'hiking-time' ? (
+          <Box role="tabpanel" aria-label={t`Hiking time settings`}>
+            <HikingTimeSettingsPanel />
+          </Box>
         ) : null}
 
         {activeTab === 'storage' ? (

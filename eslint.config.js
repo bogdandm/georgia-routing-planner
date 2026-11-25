@@ -31,6 +31,8 @@ export const noUnlocalizedStringsRule = [
       // ARIA ID references and live-region politeness tokens.
       'aria-labelledby',
       'aria-live',
+      // Table header cell scope token.
+      'scope',
       // Non-visible MUI presentation and layout enum values.
       'align',
       'alignContent',
@@ -137,6 +139,7 @@ export default tseslint.config(
       'src/presentation/shell/workspaceTabLocation.ts',
       'src/presentation/shell/formatPlaceSearchCategory.ts',
       'src/presentation/shell/SettingsDialog.tsx',
+      'src/presentation/shell/HikingTimeSettingsPanel.tsx',
       'src/presentation/shell/OnboardingTour.tsx',
       'src/presentation/shell/MapLegend.tsx',
       'src/presentation/shell/HelpScreen.tsx',
@@ -161,6 +164,9 @@ export default tseslint.config(
       'src/presentation/tracks/TrackFolderEditorDialog.tsx',
       'src/presentation/tracks/TrackLighting.tsx',
       'src/presentation/tracks/trackFormatters.ts',
+      'src/presentation/tracks/HikingTimeMatch.tsx',
+      'src/presentation/tracks/HikingTimePresetSelect.tsx',
+      'src/presentation/tracks/hikingTimePresetFormat.ts',
       'src/presentation/markers/MarkersWorkspace.tsx',
       'src/presentation/markers/MarkerEditorDialog.tsx',
       'src/presentation/markers/MarkerIconPicker.tsx',

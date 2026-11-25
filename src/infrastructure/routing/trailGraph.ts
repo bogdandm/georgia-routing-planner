@@ -3,9 +3,9 @@ import type {
   TrailRouteSearchTrace,
 } from '@/application/ports/TrailRouter';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import { dinHikingSeconds } from '@/domain/tracks/hikingTime';
 import {
   EARTH_RADIUS_METERS,
-  estimateHikingSeconds,
   geodesicDistanceMeters,
 } from '@/domain/tracks/trackCalculations';
 
@@ -1310,7 +1310,7 @@ export function routeTrailGraph(
     );
   };
   const walkSeconds = (arc: TrailGraphArc, reversed: boolean): number => {
-    if (terrain === null) return estimateHikingSeconds(arc.distanceMeters, 0, 0);
+    if (terrain === null) return dinHikingSeconds(arc.distanceMeters, 0, 0);
     const piece = prepared.splitPieces.get(arc.edgeKey);
     const edgeKey = piece?.parentEdgeKey ?? arc.edgeKey;
     const nearEnd = piece?.fromFraction ?? 0;
@@ -1322,7 +1322,7 @@ export function routeTrailGraph(
       leavesNearEnd ? nearEnd : farEnd,
       leavesNearEnd ? farEnd : nearEnd,
     );
-    return estimateHikingSeconds(arc.distanceMeters, ascentMeters, descentMeters);
+    return dinHikingSeconds(arc.distanceMeters, ascentMeters, descentMeters);
   };
   const startElevation = elevationForNode(startKey);
   const destinationElevation = elevationForNode(destinationKey);
@@ -1332,7 +1332,7 @@ export function routeTrailGraph(
     const climbMeters = side.reversed
       ? elevationForNode(nodeKey) - startElevation
       : destinationElevation - elevationForNode(nodeKey);
-    return estimateHikingSeconds(
+    return dinHikingSeconds(
       geodesicDistanceMeters(
         coordinate,
         side.reversed ? startSnapCoordinate : destinationSnapCoordinate,

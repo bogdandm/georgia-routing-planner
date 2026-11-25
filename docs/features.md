@@ -66,11 +66,26 @@ panel.
 
 - Owner: `src/presentation/shell`; visual tokens in
   `src/presentation/theme/appColors.ts` and the Material UI theme.
-- Settings is non-modal with `General` and `Storage` tabs. General offers
-  English/Русский language selection, developer diagnostics, and **Komoot elevation on
-  import** (ask, always keep, or always replace with the terrain model). Without an
-  explicit choice, the first English or Russian browser language is used, falling back
-  to English. UI strings use Lingui catalogs in `src/locales`.
+- Settings is non-modal with `General`, `Hiking time`, and `Storage` tabs. General
+  offers English/Русский language selection, developer diagnostics, and **Komoot
+  elevation on import** (ask, always keep, or always replace with the terrain model).
+  Without an explicit choice, the first English or Russian browser language is used,
+  falling back to English. UI strings use Lingui catalogs in `src/locales`.
+- Hiking time picks the **Default preset** that tracks without their own preset use and
+  edits every parameter of a preset: the movement model (the DIN 33466 formula with
+  horizontal, ascent, and descent rates, or a pace-by-grade table of knots between which
+  pace is interpolated), altitude slowdown bands, breaks per moving hour, lunch length,
+  the moving time below which a day has no lunch, and the moving hours of one hiking
+  day. Built-in presets are **DIN 33466 (standard)**, the former estimate without
+  breaks; **Day hike**, the default, calibrated on recorded hikes; and **Multi-day
+  trek**, which walks at the same calibrated pace but takes longer breaks and lunch and
+  splits long routes into 8-hour days with a lunch each. Built-in lunch lengths are
+  expected values: the typical lunch times the share of hikes that had one. The
+  calibration spans all seasons: summer estimates run about 3 % long and winter ones
+  about 6 % short, so **Adjust pace** near ×1.1 suits a winter hike. Built-ins can only
+  be saved as a new preset; user presets can be saved, renamed, and deleted (a deleted
+  default falls back to Day hike). Presets stay in this browser and travel in data
+  archives.
 - Storage shows only browser-supplied measurements: origin usage and quota, IndexedDB,
   Cache Storage, localStorage, residual origin data, and Chromium's optional JavaScript
   heap estimate. Browser HTTP and MapLibre tile caches are not measurable, so no size or
@@ -298,13 +313,12 @@ the bottom too. The stats grid shows duration, distance, average speed, **Start 
 and **Elevation gain**/**Elevation loss**; tracks with source elevation also list the
 calculated DEM gain and loss. The start time appears only with recorded time, as
 `DD.MM.YYYY HH:mm` in the browser time zone, and wraps between date and time in a narrow
-pane. Without recorded time, duration is an **Estimated time** (`≈`) from DIN 33466
-hiking rates: 4 km/h horizontally, 300 m/h ascent, and 500 m/h descent, with the larger
-of the horizontal and vertical times counted fully and the smaller by half. Breaks are
-not included. Missing measurements are omitted. Source file, point/segment counts, and
-the saved timestamp follow. Closing the track removes its geometry without moving the
-camera. From 900 through 1899 CSS pixels, **Back to tracks** restores the prior list
-state; at 1900 and above the pane stays adjacent and uses **Close track**.
+pane. Without recorded time, duration is an **Estimated time** (`≈`) from the track's
+hiking time preset, breaks and lunch included, at its pace and stop adjustments. Missing
+measurements are omitted. Source file, point/segment counts, and the saved timestamp
+follow. Closing the track removes its geometry without moving the camera. From 900
+through 1899 CSS pixels, **Back to tracks** restores the prior list state; at 1900 and
+above the pane stays adjacent and uses **Close track**.
 
 The header offers **Download GPX** and a **Track actions** menu with favorite,
 **Download KML**, **Share…** (opens the Share dialog), **Rename** (an inline name
@@ -315,10 +329,10 @@ name, canonical elevation, and aligned timestamps. GPX also writes track markers
 **Create reversed track** saves the track walked the other way as a new track named
 "_name_ (reversed)" in the same folder, then opens it. Segment and point order flip,
 track markers are copied, and start and end landmarks swap. Gain and loss swap exactly,
-and the estimated time is recalculated for the new direction. Recorded time carries over
-only when the track is completely flat (known source and DEM gain and loss are all
-zero): timestamps mirror around the recording window, keeping duration and pauses.
-Otherwise timestamps are dropped and the duration becomes an **Estimated time**.
+and the estimate follows the new direction. Recorded time carries over only when the
+track is completely flat (known source and DEM gain and loss are all zero): timestamps
+mirror around the recording window, keeping duration and pauses. Otherwise timestamps
+are dropped and the duration becomes an **Estimated time**.
 
 With usable elevation, the map colors every non-flat climb/descent grade subsegment of
 the active track, leaving flat spans blue; chart hover stays panel-only. Hovering or
@@ -349,24 +363,48 @@ With a profile, track marker names in the list and on the map include their pass
 from **Route timing**. Each marker uses the nearest discrete route sample, not a
 projected position on a segment; ties use the first point in route order. A time is
 shown only when that point is at most 500 m away. This association does not move or
-rewrite the marker's saved coordinates. Start, pace, recorded-time choice, elapsed-time
-display, and the time-marker visibility setting all apply; hiding times keeps the
-markers.
+rewrite the marker's saved coordinates. Start, pace, stops, preset, recorded-time
+choice, elapsed-time display, and the time-marker visibility setting all apply; hiding
+times keeps the markers.
 
 Tracks with an elevation profile show **Route timing** below Climbs & Descents,
-independently of the **Weather forecast** section beneath it. Its map-time options,
-**Route start** and **Adjust pace** controls remain available while the forecast is
-collapsed. The timeline follows recorded timestamps when the track has recorded time and
-otherwise the DIN 33466 estimate, so climbs advance more slowly than flat walking.
-**Ignore recorded time**, offered on timed tracks, selects the estimate instead,
-totalling the DIN 33466 time of the track's distance and stored ascent and descent.
-**Route start** sets the start from 00:00 to 23:30 in half-hour steps. It defaults to
-the recorded start's local time at the route start, rounded to the nearest half-hour, or
-to 09:00 without one. **Adjust pace** scales hiking time from ×0.5 (faster) to ×2
-(slower) on release. These settings belong to each saved track and synchronize with its
-metadata, so a signed-in account sees them on every device; they reset to the defaults
-for a reversed copy. An unsaved track keeps them while it is open and carries them over
-when saved. They do not change the track's recorded or estimated time.
+independently of the **Weather forecast** section beneath it. Its preset, map-time
+options, **Route start**, **Adjust pace**, and **Adjust breaks and lunch** controls
+remain available while the forecast is collapsed. **Hiking time preset** offers
+**Default (…)**, which follows the default preset, and every preset with this track's
+estimated total beside it; on a timed track each also shows its signed difference from
+the recorded time. Imports and drawn routes choose it before saving. The timeline
+follows recorded timestamps when the track has recorded time and otherwise the preset's
+estimate: moving time from the DIN 33466 formula on the route's distance and stored
+ascent and descent or from the pace-by-grade curve on the 120 m grade of the 200 m
+elevation trend, as in the elevation profile, slowed by altitude bands, with breaks
+spread along the moving time and each day's lunch as a pause in its middle, so climbs
+advance more slowly than flat walking. **Ignore recorded time**, offered on timed
+tracks, selects the estimate instead. **Route start** sets the start from 00:00 to 23:30
+in half-hour steps. It defaults to the recorded start's local time at the route start,
+rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace** scales moving
+time only, on a timed track the recorded walking while its detected stops keep their
+length, from ×0.5 (faster) to ×2 (slower) on release. **Adjust breaks and lunch** scales
+the estimate's breaks and lunch from ×0 to ×3 and shows their total beside it; recorded
+stops are kept, so it is disabled while recorded time is used. These settings belong to
+each saved track and synchronize with its metadata, so a signed-in account sees them on
+every device; they reset to the defaults for a reversed copy. An unsaved track keeps
+them while it is open and carries them over when saved. They do not change the track's
+recorded time.
+
+On a timed track, a badge under the preset compares the preset's unadjusted estimate
+with the recorded time, green within 10 %, amber within 20 %, and red beyond, and **Show
+report** opens **Hiking time report**. There any preset can be chosen, its option
+showing its estimate and difference, without changing the track's preset. The report
+compares moving time, breaks, lunch, and the total, with idle time before the first and
+after the last movement listed separately. Stops are detected where the hiker moved less
+than 0.25 m/s and climbed less than 126 m/h across a 60 s window; stops less than 60 s
+apart merge, those under 60 s count as moving, and lunch is the longest stop of at least
+20 minutes between 15 % and 85 % of moving time. For built-in presets, **Accuracy**
+gives the range that held the actual time for 8 in 10 calibration hikes and the chances
+of landing within 10 % and 20 %, for moving and total time; user presets have no
+calibration statistics. **Moving speed by grade** compares recorded and estimated speed
+per grade band.
 
 Timing includes the full route even if elevation is available only in its middle.
 Complete profiles reuse filtered elevation; incomplete profiles retain the original
@@ -460,17 +498,18 @@ visible again.
 #### Time markers
 
 A track with an elevation profile is labelled on the map with clock times from the same
-timeline as **Route timing**: its route start and pace, recorded timestamps unless
-**Ignore recorded time** is selected, and otherwise the DIN 33466 estimate. The start
-and finish show their exact `HH:mm` beside the Play and Stop markers, extending away
-from each other east or west; a loop shows the start time on the right and finish on the
-left. Each full hour between them shows `HH:00` where the hiker is at that time, and an
-hour in a break between recorded segments stays at the earlier segment's end. Unlike the
-forecast timeline, any track length qualifies. Clock times wrap at midnight; elapsed
-times keep counting past 24 hours. Labels are white text on white-bordered rounded
-rectangles in the track colour, follow the Local GPX opacity and visibility, and are not
-drawn in satellite comparison panes. They draw above map labels, which give way to them.
-Endpoint times always show; hourly times give way to the endpoints and each other.
+timeline as **Route timing**: its route start, pace, stops, and preset, recorded
+timestamps unless **Ignore recorded time** is selected, and otherwise the preset's
+estimate. The start and finish show their exact `HH:mm` beside the Play and Stop
+markers, extending away from each other east or west; a loop shows the start time on the
+right and finish on the left. Each full hour between them shows `HH:00` where the hiker
+is at that time, and an hour in a break between recorded segments stays at the earlier
+segment's end. Unlike the forecast timeline, any track length qualifies. Clock times
+wrap at midnight; elapsed times keep counting past 24 hours. Labels are white text on
+white-bordered rounded rectangles in the track colour, follow the Local GPX opacity and
+visibility, and are not drawn in satellite comparison panes. They draw above map labels,
+which give way to them. Endpoint times always show; hourly times give way to the
+endpoints and each other.
 
 **Show times on the map**, the first control in **Route timing**, turns the labels on or
 off for one track and is stored with the track like its route start and pace. **Count

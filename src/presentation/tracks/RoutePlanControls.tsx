@@ -14,7 +14,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { TrackElevationPreparationProgress } from '@/application/tracks/prepareImportedTrack';
 
 import { ShortcutTooltipTitle } from '@/presentation/KeyboardShortcutKeys';
@@ -35,6 +35,8 @@ interface RoutePlanControlsProps {
   readonly onNameChange: (name: string) => void;
   readonly onSave: () => void;
   readonly onUndo: () => void;
+  /** Hiking time preset choice, stored with the route when it is saved. */
+  readonly presetControl: ReactNode;
 }
 
 /**
@@ -274,6 +276,7 @@ export function RoutePlanControls({
   onNameChange,
   onSave,
   onUndo,
+  presetControl,
 }: RoutePlanControlsProps): ReactElement {
   const { t } = useLingui();
   const saving = draft.status === 'saving';
@@ -289,6 +292,7 @@ export function RoutePlanControls({
         }}
         slotProps={{ htmlInput: { maxLength: 200 } }}
       />
+      {presetControl}
       <RoutePlanStatus draft={draft} elevationProgress={elevationProgress} />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
         <Stack direction="row" spacing={1}>

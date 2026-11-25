@@ -27,24 +27,25 @@ the SQL in `supabase/migrations`, and the Edge Function validators in
 
 ## Storage inventory
 
-| Data                                    | Authority and location                              | Retention/network rule                                                      |
-| --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------- |
-| Imported GPX/FIT/KML before retention   | Browser memory                                      | Discarded unless the user saves it; original file bytes are never kept      |
-| Retained local track summary and points | IndexedDB `localTracks` and `localTrackContents`    | Saved and deleted atomically; summary owns nullable folder placement        |
-| Saved-track list thumbnails             | IndexedDB `localTrackThumbnails`                    | Derived and disposable; deleted with the track, recomputed when stale       |
-| Saved-track route lighting              | IndexedDB `localTrackLighting`                      | Derived and disposable; deleted with the track, recomputed when stale       |
-| Flat personal folders                   | IndexedDB `trackFolders`; Supabase                  | Ordered and revisioned; at most 1,000 remote folders per user               |
-| Saved markers                           | IndexedDB `savedMarkers`; Supabase `marker_records` | Owner-only; at most 10,000 remote markers per user                          |
-| Synchronized track metadata             | Supabase Postgres `track_records`                   | Owner-readable; writes pass through the authenticated `track-sync` function |
-| Synchronized compressed geometry        | Private Supabase Storage bucket `track-geometries`  | Owner-readable; server writes and hard-deletes immutable per-upload objects |
-| Synchronized geometry quota             | Supabase Postgres `user_track_usage`                | 8 MiB compressed bytes per user; mutations serialize on this row            |
-| Public track share capabilities         | Supabase Postgres `track_shares`                    | Service-role only; resolved by the public `track-share` function            |
-| Unsaved route plans                     | Browser memory                                      | Discarded on close or reload; Save converts the plan into a local track     |
-| Opened shared track                     | Browser memory                                      | Transient `shared:<content-hash>` selection until the viewer saves it       |
-| Map camera and durable preferences      | IndexedDB `settings`                                | Validated per key; corrupt values are removed and defaults used             |
-| Selection, filters, visible tracks      | Browser memory/Zustand/components                   | Lost on reload unless a preference below persists it                        |
-| Satellite results and applied imagery   | Component state and map facade memory               | Cancellable and disposable; never written to IndexedDB                      |
-| Diagnostics                             | Bounded in-memory ring buffer (200 events)          | Local-only; leaves the browser only through explicit export                 |
+| Data                                    | Authority and location                                      | Retention/network rule                                                      |
+| --------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Imported GPX/FIT/KML before retention   | Browser memory                                              | Discarded unless the user saves it; original file bytes are never kept      |
+| Retained local track summary and points | IndexedDB `localTracks` and `localTrackContents`            | Saved and deleted atomically; summary owns nullable folder placement        |
+| Saved-track list thumbnails             | IndexedDB `localTrackThumbnails`                            | Derived and disposable; deleted with the track, recomputed when stale       |
+| Saved-track route lighting              | IndexedDB `localTrackLighting`                              | Derived and disposable; deleted with the track, recomputed when stale       |
+| Flat personal folders                   | IndexedDB `trackFolders`; Supabase                          | Ordered and revisioned; at most 1,000 remote folders per user               |
+| Saved markers                           | IndexedDB `savedMarkers`; Supabase `marker_records`         | Owner-only; at most 10,000 remote markers per user                          |
+| Hiking time presets                     | IndexedDB `settings`; Supabase `hiking_time_preset_records` | One revisioned document per user                                            |
+| Synchronized track metadata             | Supabase Postgres `track_records`                           | Owner-readable; writes pass through the authenticated `track-sync` function |
+| Synchronized compressed geometry        | Private Supabase Storage bucket `track-geometries`          | Owner-readable; server writes and hard-deletes immutable per-upload objects |
+| Synchronized geometry quota             | Supabase Postgres `user_track_usage`                        | 8 MiB compressed bytes per user; mutations serialize on this row            |
+| Public track share capabilities         | Supabase Postgres `track_shares`                            | Service-role only; resolved by the public `track-share` function            |
+| Unsaved route plans                     | Browser memory                                              | Discarded on close or reload; Save converts the plan into a local track     |
+| Opened shared track                     | Browser memory                                              | Transient `shared:<content-hash>` selection until the viewer saves it       |
+| Map camera and durable preferences      | IndexedDB `settings`                                        | Validated per key; corrupt values are removed and defaults used             |
+| Selection, filters, visible tracks      | Browser memory/Zustand/components                           | Lost on reload unless a preference below persists it                        |
+| Satellite results and applied imagery   | Component state and map facade memory                       | Cancellable and disposable; never written to IndexedDB                      |
+| Diagnostics                             | Bounded in-memory ring buffer (200 events)                  | Local-only; leaves the browser only through explicit export                 |
 
 ## IndexedDB schema
 
@@ -70,23 +71,25 @@ upsert.
 
 ### Settings keys
 
-| Key                             | Value                                                                                                                                                                          |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort, completed onboarding tour, track section disclosures  |
-| `map.camera`                    | Schema version 4: terrain mode and last settled longitude, latitude, and zoom; bearing and pitch kept only in 3D; versions 1-3 load as 2D                                      |
-| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, default track time markers (on), Sentinel rendering mode and tuning, terrain overlay options, sun-shadow switch (default off) |
-| `map.share-preferences`         | Whether map share links include the visible satellite layer, the visible Sentinel-2 scene, and the 3D camera (default all)                                                     |
-| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                                                   |
-| `satellite.comparison-layout`   | Comparison grid layout last picked in the sidebar: 2 (2×1) or 4 (2×2); absent until the first pick                                                                             |
-| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                                                           |
-| `weather.track-preferences`     | Forecast expansion and weekday shared by every track; never uploaded                                                                                                           |
-| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                                                 |
-| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                                              |
-| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                                                       |
-| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                                                                                   |
-| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                                                                                    |
-| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                                                                                  |
-| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                                                                              |
+| Key                             | Value                                                                                                                                                                                                                |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui.preferences`                | Developer mode, locale (`null` follows the browser), navigation collapse, dismissed grade legend, marker and track sort, completed onboarding tour, track section disclosures                                        |
+| `map.camera`                    | Schema version 4: terrain mode and last settled longitude, latitude, and zoom; bearing and pitch kept only in 3D; versions 1-3 load as 2D                                                                            |
+| `map.layers`                    | Per-layer visibility, OSM/track/weather opacity, default track time markers (on), Sentinel rendering mode and tuning, terrain overlay options, sun-shadow switch (default off)                                       |
+| `map.share-preferences`         | Whether map share links include the visible satellite layer, the visible Sentinel-2 scene, and the 3D camera (default all)                                                                                           |
+| `satellite.maximum-cloud-cover` | Percentage 0-100, default 50                                                                                                                                                                                         |
+| `satellite.comparison-layout`   | Comparison grid layout last picked in the sidebar: 2 (2×1) or 4 (2×2); absent until the first pick                                                                                                                   |
+| `weather.interval-preferences`  | Up to two weekdays, a day, night, or custom-hour period, and whether marker weather shows on the map                                                                                                                 |
+| `weather.track-preferences`     | Forecast expansion and weekday shared by every track; never uploaded                                                                                                                                                 |
+| `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                                                                                       |
+| `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                                                                                    |
+| `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                                                                                             |
+| `tracks.hiking-time-presets`    | User hiking time presets (up to 50, IDs `custom:<uuid>`) and the default preset ID (`day-hike` unless changed); built-in presets live in code; synchronized as one account document                                  |
+| `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                                                                                                                         |
+| `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                                                                                                                          |
+| `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                                                                                                                        |
+| `sync.folder-order-version`     | Version of an unsynchronized local folder reorder; absent when the order is clean                                                                                                                                    |
+| `sync.hiking-time-presets`      | Preset synchronization: nullable `remoteRevision`, the last merged settings as nullable `base`, and nullable `pendingVersion` of an unsynchronized local change; absent or invalid reads as never merged and pending |
 
 ## Local tracks
 
@@ -100,14 +103,16 @@ optional `contentHash`, source filename and format (`gpx | fit | kml`), favorite
 projection, up to 50 validation warnings, and optional generated-name fields
 (`generatedName`, `middleAnchorKind` of `dominant-summit | farthest-point`, and
 start/landmark (`middlePoi`)/end POI candidates), and optional `routeTiming`: the
-track's **Route timing** start, pace, recorded-time override, time visibility,
-elapsed-time display, and hike date, absent while they equal the defaults. The retired
-`distance-midpoint` anchor and `fallbackPoi` field are still accepted from older records
-and dropped on read. Database version 13 moves the per-track entries that version 12
-kept in `weather.track-preferences` into the summaries of the tracks still present and
-queues a metadata write for synchronized ones; data archives from earlier versions are
-restored the same way. Their light-coloring choice is dropped: it is session view state
-and is never stored.
+track's **Route timing** start, pace, stop factor, hiking time preset (`presetId`, null
+follows the default preset), recorded-time override, time visibility, elapsed-time
+display, and hike date, absent while they equal the defaults. A preset ID unknown in
+this browser, such as a user preset from another device, times the track with the
+default preset. The retired `distance-midpoint` anchor and `fallbackPoi` field are still
+accepted from older records and dropped on read. Database version 13 moves the per-track
+entries that version 12 kept in `weather.track-preferences` into the summaries of the
+tracks still present and queues a metadata write for synchronized ones; data archives
+from earlier versions are restored the same way. Their light-coloring choice is dropped:
+it is session view state and is never stored.
 
 `LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
 segments of at least two points, each with coordinate and optional source elevation and
@@ -121,11 +126,12 @@ optional ascent/descent/min/max elevation with `elevationSource` (`gpx | dem-ass
 and a matching `elevationAlgorithmVersion`. `calculatedMetrics` must be DEM-assisted
 version 5 (Mapterhorn bilinear sampling) or a stored version 4 (repaired Terrarium, kept
 readable until the user recalculates). Recorded duration is absent unless every rendered
-point has an ordered valid timestamp. Without it, metrics with ascent and descent carry
-`estimatedSeconds`, the DIN 33466 walking time from `estimateHikingSeconds` in
-`src/domain/tracks/trackCalculations.ts`. Database version 11 fills the estimate into
-summaries saved earlier; like other calculated values it is browser-local and never
-synchronized.
+point has an ordered valid timestamp. Estimated time is not stored: it is derived from
+the route and the track's hiking time preset when shown
+(`src/domain/tracks/hikingTime.ts`). Summaries saved before that stored a DIN 33466
+`estimatedSeconds`, which is accepted and dropped on read; database version 11, which
+once filled it in, now only declares the stores. Calculated values are browser-local and
+never synchronized.
 
 `contentHash` is the lowercase SHA-256 of canonical GRPT v2 bytes of `trackPoints`
 (`src/infrastructure/runtime/WebCryptoTrackContentHasher.ts`). It is absent only on rows
@@ -190,6 +196,12 @@ local track, folder, and marker, collapses duplicate track content by the canoni
 rule, drops stale sync states and delete records, writes pending upserts with null
 revisions, stores the new owner, and resets `sync.usage` in one transaction.
 
+Presets have no store: `sync.hiking-time-presets` tracks the whole document. Saving
+presets bumps `pendingVersion` in the same transaction only when the stored value
+changes, so writing back synchronized presets queues nothing; a restored archive that
+changes them queues them too. A changed owner resets the key to never merged and
+pending.
+
 When a same-account remote deletion needs a decision, one transaction removes the
 selected summary, content, thumbnail, lighting, and state rows and clears
 `local-tracks.latest-opened` when it names a removed track. Unselected pairs receive
@@ -212,13 +224,14 @@ queues a metadata write for a synchronized track whose hint changed.
 ## Supabase backend
 
 Browser roles receive only owner-scoped `SELECT` (`auth.uid() = user_id`) on
-`track_records`, `user_track_usage`, `track_folder_records`, and `marker_records`, and
-owner-only reads in the `track-geometries` bucket. All writes run through
-security-definer RPCs that only `service_role` may execute, invoked by the authenticated
-`track-sync` Edge Function. Per-user revision and count counters for folders and markers
-live in `private.user_folder_sync_state` and `private.user_marker_sync_state`, which no
-API role can read. Mutation RPCs return one outcome: `applied`, `upload`, `existing`,
-`conflict` (with the current record), `missing`, `limit`, or `revision-exhausted`.
+`track_records`, `user_track_usage`, `track_folder_records`, `marker_records`, and
+`hiking_time_preset_records`, and owner-only reads in the `track-geometries` bucket. All
+writes run through security-definer RPCs that only `service_role` may execute, invoked
+by the authenticated `track-sync` Edge Function. Per-user revision and count counters
+for folders and markers live in `private.user_folder_sync_state` and
+`private.user_marker_sync_state`, which no API role can read. Mutation RPCs return one
+outcome: `applied`, `upload`, `existing`, `conflict` (with the current record),
+`missing`, `limit`, or `revision-exhausted`.
 
 ### Tracks
 
@@ -260,6 +273,15 @@ return `conflict` with the current record on mismatch. Folder content upserts ke
 existing position; only `reorder_track_folders` changes positions, applying one complete
 order atomically. A trigger on `auth.users` provisions every account's **Imports**
 folder.
+
+### Hiking time presets
+
+`hiking_time_preset_records` holds one row per user: the preset document
+`{schemaVersion: 1, defaultPresetId, custom}` (validated by the function at 128 KiB), a
+revision, and `updated_at`. `upsert_hiking_time_presets` takes a base revision: base 0
+inserts the first document, a matching base replaces it, and a mismatch returns
+`conflict` with the current record. The default may name a built-in preset newer than
+the reading browser.
 
 ### Public track shares
 

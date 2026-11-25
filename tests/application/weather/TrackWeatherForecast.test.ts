@@ -15,23 +15,54 @@ import {
   planTrackClockTimes,
   planTrackMarkerTimes,
   planTrackWeatherTimeline,
+  routeElapsedSeconds,
   selectTrackElevationLocations,
   summarizeTrackWeatherCheckpoint,
   trackWeatherDates,
   trackWeatherLocalTime,
   trackWeatherTimeline,
   trackWeatherWeekday,
+  type TimedTrackWeatherSettings,
   type TrackWeatherCheckpoint,
+  type TrackWeatherTiming,
 } from '@/application/weather/TrackWeatherForecast';
 import type {
   ElevationProfile,
   ElevationProfilePoint,
 } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
+import {
+  DAY_HIKE_TIME_PRESET_ID,
+  DIN_HIKING_TIME_PRESET_ID,
+  builtInHikingTimePresets,
+  dinHikingMovement,
+  type HikingTimeParameters,
+} from '@/domain/tracks/hikingTime';
 import type { TrackMarker } from '@/domain/tracks/localTrack';
 import * as trackCalculations from '@/domain/tracks/trackCalculations';
 
 const hour = 3_600;
+
+function presetParameters(id: string): HikingTimeParameters {
+  const preset = builtInHikingTimePresets.find((value) => value.id === id);
+  if (preset === undefined) throw new Error(`Missing built-in preset ${id}.`);
+  return preset.parameters;
+}
+
+/** DIN 33466 without breaks or lunch: the estimate before hiking time presets. */
+const dinHikingTime = presetParameters(DIN_HIKING_TIME_PRESET_ID);
+const dinTiming: TrackWeatherTiming = {
+  paceFactor: 1,
+  stopFactor: 1,
+  ignoreRecordedTime: false,
+  hikingTime: dinHikingTime,
+};
+const dinSettings: TimedTrackWeatherSettings = {
+  ...defaultTrackWeatherTimelineSettings,
+  hikingTime: dinHikingTime,
+};
+/** Stored ascent and descent of `ridgeProfile`. */
+const ridgeTotals = { ascentMeters: 900, descentMeters: 500 };
 
 function profile(
   samples: readonly {
@@ -177,10 +208,11 @@ describe('selectTrackElevationLocations', () => {
 
 describe('planTrackWeatherTimeline', () => {
   it('places the hiker every three hours by DIN 33466 pace, climbing slower than walking', () => {
-    const timeline = planTrackWeatherTimeline(ridgeProfile(), {
-      distanceMeters: 12_000,
-      estimatedSeconds: 5.5 * hour,
-    });
+    const timeline = planTrackWeatherTimeline(
+      ridgeProfile(),
+      { distanceMeters: 12_000, ...ridgeTotals },
+      dinTiming,
+    );
 
     expect(timeline.status).toBe('available');
     if (timeline.status !== 'available') return;
@@ -212,11 +244,14 @@ describe('planTrackWeatherTimeline', () => {
     expect(timeline.checkpoints[2]?.distanceMeters).toBe(12_000);
   });
 
-  it('scales the profile pace to the stored track estimate', () => {
-    const timeline = planTrackWeatherTimeline(ridgeProfile(), {
-      distanceMeters: 12_000,
-      estimatedSeconds: 4.4 * hour,
-    });
+  it('anchors the profile pace to the stored ascent and descent totals', () => {
+    // The profile climbs 900 m, but the stored 600 m up and 400 m down make a 4.4 h DIN
+    // total: 2.8 h vertical plus half of 3 h walking.
+    const timeline = planTrackWeatherTimeline(
+      ridgeProfile(),
+      { distanceMeters: 12_000, ascentMeters: 600, descentMeters: 400 },
+      dinTiming,
+    );
 
     expect(timeline).toMatchObject({ status: 'available' });
     if (timeline.status !== 'available') return;
@@ -244,10 +279,11 @@ describe('planTrackWeatherTimeline', () => {
       },
     ]);
 
-    const timeline = planTrackWeatherTimeline(recorded, {
-      distanceMeters: 8_000,
-      elapsedSeconds: 4.5 * hour,
-    });
+    const timeline = planTrackWeatherTimeline(
+      recorded,
+      { distanceMeters: 8_000, elapsedSeconds: 4.5 * hour },
+      dinTiming,
+    );
 
     expect(timeline).toMatchObject({
       status: 'available',
@@ -278,20 +314,14 @@ describe('planTrackWeatherTimeline', () => {
       ascentMeters: 600,
       descentMeters: 0,
     };
-    const ignoring = {
-      ...defaultTrackWeatherTimelineSettings,
-      ignoreRecordedTime: true,
-    };
+    const ignoring = { ...dinSettings, ignoreRecordedTime: true };
 
     expect(planTrackWeatherTimeline(recorded, metrics, ignoring)).toMatchObject({
       status: 'available',
       durationSource: 'estimated',
       durationSeconds: expect.closeTo(2.5 * hour, 6) as number,
     });
-    expect(
-      planTrackClockTimes(recorded, metrics, defaultTrackWeatherTimelineSettings)
-        .finish,
-    ).toBe('11:00');
+    expect(planTrackClockTimes(recorded, metrics, dinSettings).finish).toBe('11:00');
     expect(planTrackClockTimes(recorded, metrics, ignoring).finish).toBe('11:30');
   });
 
@@ -302,32 +332,40 @@ describe('planTrackWeatherTimeline', () => {
     ]);
 
     expect(
-      planTrackWeatherTimeline(partial, {
-        distanceMeters: 4_000,
-        elapsedSeconds: 3_600,
-      }),
+      planTrackWeatherTimeline(
+        partial,
+        { distanceMeters: 4_000, elapsedSeconds: 3_600 },
+        dinTiming,
+      ),
     ).toMatchObject({ status: 'available', durationSource: 'estimated' });
   });
 
   it('is unavailable for tracks of 30 km or 12 hours and longer', () => {
     expect(
-      planTrackWeatherTimeline(ridgeProfile(), {
-        distanceMeters: 30_000,
-        estimatedSeconds: 5.5 * hour,
-      }),
+      planTrackWeatherTimeline(
+        ridgeProfile(),
+        { distanceMeters: 30_000, ...ridgeTotals },
+        dinTiming,
+      ),
     ).toMatchObject({ status: 'too-long', distanceMeters: 30_000 });
-    expect(
-      planTrackWeatherTimeline(ridgeProfile(), {
-        distanceMeters: 12_000,
-        estimatedSeconds: 12 * hour,
-      }),
-    ).toMatchObject({ status: 'too-long', durationSeconds: 12 * hour });
-    expect(
-      planTrackWeatherTimeline(ridgeProfile(), {
-        distanceMeters: 12_000,
-        estimatedSeconds: 11.5 * hour,
-      }),
-    ).toMatchObject({ status: 'available' });
+    // A steady 3150 m climb over 12 km: 10.5 h of ascent plus half of 3 h walking.
+    const climb = (ascentMeters: number) =>
+      planTrackWeatherTimeline(
+        profile([
+          { distanceMeters: 0, elevationMeters: 1_000 },
+          { distanceMeters: 12_000, elevationMeters: 1_000 + ascentMeters },
+        ]),
+        { distanceMeters: 12_000, ascentMeters, descentMeters: 0 },
+        dinTiming,
+      );
+    expect(climb(3_150)).toMatchObject({
+      status: 'too-long',
+      durationSeconds: 12 * hour,
+    });
+    expect(climb(3_000)).toMatchObject({
+      status: 'available',
+      durationSeconds: 11.5 * hour,
+    });
   });
 
   it('retains the recorded or estimated duration source beyond the forecast limit', () => {
@@ -339,35 +377,38 @@ describe('planTrackWeatherTimeline', () => {
         recordedAt: '2026-06-02T07:00:00Z',
       },
     ]);
+    // 30 km of flat walking is a 7.5 h DIN estimate.
     const metrics = {
       distanceMeters: 30_000,
       elapsedSeconds: 26 * hour,
-      estimatedSeconds: 15 * hour,
+      ascentMeters: 0,
+      descentMeters: 0,
     };
 
-    expect(planTrackWeatherTimeline(recorded, metrics)).toMatchObject({
+    expect(planTrackWeatherTimeline(recorded, metrics, dinTiming)).toMatchObject({
       status: 'too-long',
       durationSource: 'recorded',
       durationSeconds: 26 * hour,
     });
     expect(
       planTrackWeatherTimeline(recorded, metrics, {
+        ...dinTiming,
         paceFactor: 2,
         ignoreRecordedTime: true,
       }),
     ).toMatchObject({
       status: 'too-long',
       durationSource: 'estimated',
-      durationSeconds: 30 * hour,
+      durationSeconds: 15 * hour,
     });
   });
 
   it('stretches or compresses the timeline by the pace factor', () => {
-    const metrics = { distanceMeters: 12_000, estimatedSeconds: 5.5 * hour };
+    const metrics = { distanceMeters: 12_000, ...ridgeTotals };
 
     const faster = planTrackWeatherTimeline(ridgeProfile(), metrics, {
+      ...dinTiming,
       paceFactor: 0.5,
-      ignoreRecordedTime: false,
     });
     expect(faster).toMatchObject({ status: 'available' });
     if (faster.status !== 'available') return;
@@ -376,11 +417,106 @@ describe('planTrackWeatherTimeline', () => {
     // Slowed beyond the day-hike limit: 5.5 h × 2.2 = 12.1 h.
     expect(
       planTrackWeatherTimeline(ridgeProfile(), metrics, {
+        ...dinTiming,
         paceFactor: 2.2,
-        ignoreRecordedTime: false,
       }),
     ).toMatchObject({
       status: 'too-long',
+    });
+  });
+
+  it('stretches recorded time by the pace factor and ignores the stop factor for it', () => {
+    const recorded = profile([
+      { distanceMeters: 0, elevationMeters: 1_000, recordedAt: '2026-06-01T05:00:00Z' },
+      {
+        distanceMeters: 4_000,
+        elevationMeters: 1_400,
+        recordedAt: '2026-06-01T07:00:00Z',
+      },
+    ]);
+    const metrics = { distanceMeters: 4_000, elapsedSeconds: 2 * hour };
+
+    for (const stopFactor of [0, 1, 3]) {
+      expect(
+        planTrackWeatherTimeline(recorded, metrics, {
+          ...dinTiming,
+          paceFactor: 1.5,
+          stopFactor,
+        }),
+      ).toMatchObject({
+        status: 'available',
+        durationSource: 'recorded',
+        durationSeconds: 3 * hour,
+      });
+    }
+  });
+
+  it('stretches only the recorded walking by the pace factor and keeps its stops', () => {
+    const recorded = profile([
+      { distanceMeters: 0, elevationMeters: 1_000, recordedAt: '2026-06-01T05:00:00Z' },
+      {
+        distanceMeters: 2_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T05:30:00Z',
+      },
+      {
+        distanceMeters: 2_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T05:40:00Z',
+      },
+      {
+        distanceMeters: 4_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T06:10:00Z',
+      },
+    ]);
+
+    const { elapsed } = routeElapsedSeconds(
+      recorded.points,
+      { elapsedSeconds: 70 * 60 },
+      { ...dinTiming, paceFactor: 2 },
+    );
+
+    expect(elapsed).toEqual([0, 60 * 60, 70 * 60, 130 * 60]);
+  });
+
+  it('pauses for lunch in place between two neighbouring points of a v2 estimate', () => {
+    const flat = profile(
+      Array.from({ length: 14 }, (_, kilometre) => ({
+        distanceMeters: kilometre * 1_000,
+        elevationMeters: 1_000,
+      })),
+    );
+    const hikingTime = presetParameters(DAY_HIKE_TIME_PRESET_ID);
+    const timing = { ...dinTiming, hikingTime };
+
+    const { elapsed, recorded, estimate } = routeElapsedSeconds(
+      flat.points,
+      {},
+      timing,
+    );
+
+    expect(recorded).toBe(false);
+    expect(estimate).toMatchObject({
+      lunchCount: 1,
+      lunchSeconds: hikingTime.lunchMinutes * 60,
+    });
+    const steps = elapsed
+      .slice(1)
+      .map((seconds, index) => seconds - (elapsed[index] ?? 0));
+    const walking = Math.min(...steps);
+    // Lunch falls at half the moving time, 6.5 km along: between the 6th and 7th point.
+    expect(steps.map((step) => step - walking)).toEqual(
+      steps.map(
+        (_, index) =>
+          expect.closeTo(index === 6 ? hikingTime.lunchMinutes * 60 : 0, 6) as number,
+      ),
+    );
+    expect(
+      planTrackWeatherTimeline(flat, { distanceMeters: 13_000 }, timing),
+    ).toMatchObject({
+      durationSource: 'estimated',
+      durationSeconds: expect.closeTo(estimate?.totalSeconds ?? 0, 6) as number,
     });
   });
 });
@@ -421,7 +557,7 @@ describe('full-route label timing', () => {
       },
     ]);
     const route = createTrackTimingRoute(partial, raw, metrics.distanceMeters);
-    const settings = { ...defaultTrackWeatherTimelineSettings, timeMarkers: true };
+    const settings = { ...dinSettings, timeMarkers: true };
     const markers: readonly TrackMarker[] = [
       { id: 'prefix', name: 'Prefix', coordinate: [44, 42] },
       { id: 'interior', name: 'Interior', coordinate: [44.02, 42] },
@@ -435,14 +571,20 @@ describe('full-route label timing', () => {
         ['suffix', '12:00'],
       ]),
     );
-    expect(
-      planTrackMarkerTimes(
-        route,
-        { ...metrics, estimatedSeconds: 6 * hour },
-        { ...settings, ignoreRecordedTime: true, paceFactor: 1.5 },
-        markers,
-      ),
-    ).toEqual(
+    // A pace that walks the route in 6 h takes 9 h at a 1.5 pace factor.
+    const sixHourPace: TimedTrackWeatherSettings = {
+      ...settings,
+      ignoreRecordedTime: true,
+      paceFactor: 1.5,
+      hikingTime: {
+        ...dinHikingTime,
+        movement: {
+          ...dinHikingMovement,
+          horizontalKmh: (route.points.at(-1)?.distanceMeters ?? 0) / 6_000,
+        },
+      },
+    };
+    expect(planTrackMarkerTimes(route, metrics, sixHourPace, markers)).toEqual(
       new Map([
         ['prefix', '09:00'],
         ['interior', '12:00'],
@@ -459,7 +601,7 @@ describe('full-route label timing', () => {
       { distanceMeters: 8000, elevationMeters: 2000, sourceSegmentIndex: 1 },
     ]);
     const settings = {
-      ...defaultTrackWeatherTimelineSettings,
+      ...dinSettings,
       ignoreRecordedTime: true,
       timeMarkers: true,
     };
@@ -476,14 +618,10 @@ describe('full-route label timing', () => {
 });
 
 describe('planTrackClockTimes', () => {
-  const settings = { ...defaultTrackWeatherTimelineSettings, startHour: 9.5 };
+  const settings = { ...dinSettings, startHour: 9.5 };
 
   it('labels the start, the finish, and every full hour strictly between them', () => {
-    const times = planTrackClockTimes(
-      ridgeProfile(),
-      { estimatedSeconds: 5.5 * hour },
-      settings,
-    );
+    const times = planTrackClockTimes(ridgeProfile(), ridgeTotals, settings);
 
     expect(times.start).toBe('09:30');
     // The scaled estimate ends a hair off 5.5 h; the finish still reads 15:00, unlabelled.
@@ -512,7 +650,7 @@ describe('planTrackClockTimes', () => {
     const times = planTrackClockTimes(
       recorded,
       { elapsedSeconds: 2 * hour },
-      { ...defaultTrackWeatherTimelineSettings, startHour: 23 },
+      { ...dinSettings, startHour: 23 },
     );
     expect(times).toMatchObject({ start: '23:00', finish: '01:00' });
     expect(times.hours).toEqual([
@@ -520,11 +658,11 @@ describe('planTrackClockTimes', () => {
     ]);
 
     // 5.5 h × 2.5 is past the 12-hour forecast limit; labels still cover it.
-    const slow = planTrackClockTimes(
-      ridgeProfile(),
-      { estimatedSeconds: 5.5 * hour },
-      { ...defaultTrackWeatherTimelineSettings, startHour: 6, paceFactor: 2.5 },
-    );
+    const slow = planTrackClockTimes(ridgeProfile(), ridgeTotals, {
+      ...dinSettings,
+      startHour: 6,
+      paceFactor: 2.5,
+    });
     expect(slow.finish).toBe('19:45');
     expect(slow.hours).toHaveLength(13);
   });
@@ -554,7 +692,7 @@ describe('planTrackClockTimes', () => {
     const times = planTrackClockTimes(
       overnight,
       { elapsedSeconds: 5 * hour },
-      { ...defaultTrackWeatherTimelineSettings, startHour: 8 },
+      { ...dinSettings, startHour: 8 },
     );
     expect(
       times.hours.map(({ coordinate, time }) => [time, coordinate[0].toFixed(2)]),
@@ -568,11 +706,7 @@ describe('planTrackClockTimes', () => {
 
   it('counts relative times from 00:00 at the start without wrapping past a day', () => {
     const relative = { ...settings, relativeTimeMarkers: true };
-    const times = planTrackClockTimes(
-      ridgeProfile(),
-      { estimatedSeconds: 5.5 * hour },
-      relative,
-    );
+    const times = planTrackClockTimes(ridgeProfile(), ridgeTotals, relative);
 
     expect(times.start).toBe('00:00');
     expect(times.finish).toBe('05:30');
@@ -584,18 +718,17 @@ describe('planTrackClockTimes', () => {
       '05:00',
     ]);
 
-    const long = planTrackClockTimes(
-      ridgeProfile(),
-      { estimatedSeconds: 5.5 * hour },
-      { ...relative, paceFactor: 5 },
-    );
+    const long = planTrackClockTimes(ridgeProfile(), ridgeTotals, {
+      ...relative,
+      paceFactor: 5,
+    });
     expect(long.finish).toBe('27:30');
     expect(long.hours.at(-1)?.time).toBe('27:00');
   });
 });
 
 describe('planTrackMarkerTimes', () => {
-  const settings = { ...defaultTrackWeatherTimelineSettings, timeMarkers: true };
+  const settings = { ...dinSettings, timeMarkers: true };
 
   function marker(id: string, coordinate: TrackCoordinate): TrackMarker {
     return { id, name: id, coordinate };
@@ -610,9 +743,10 @@ describe('planTrackMarkerTimes', () => {
     const originalRoute = structuredClone(route);
     const originalMarkers = structuredClone(markers);
 
-    expect(
-      planTrackMarkerTimes(route, { estimatedSeconds: hour }, settings, markers),
-    ).toEqual(new Map([['near-finish', '10:00']]));
+    // 800 m of flat walking at 4 km/h takes 12 minutes.
+    expect(planTrackMarkerTimes(route, {}, settings, markers)).toEqual(
+      new Map([['near-finish', '09:12']]),
+    );
     expect(route).toEqual(originalRoute);
     expect(markers).toEqual(originalMarkers);
   });
@@ -624,7 +758,7 @@ describe('planTrackMarkerTimes', () => {
     ]);
 
     expect(
-      planTrackMarkerTimes(route, { estimatedSeconds: hour }, settings, [
+      planTrackMarkerTimes(route, {}, settings, [
         marker('line-midpoint', [0.01, 0]),
         marker('near-start', [0.001, 0]),
       ]),
@@ -655,9 +789,9 @@ describe('planTrackMarkerTimes', () => {
     ]);
 
     expect(
-      planTrackMarkerTimes(route, { estimatedSeconds: hour }, settings, [
-        marker('revisited', [44, 42]),
-      ]).get('revisited'),
+      planTrackMarkerTimes(route, {}, settings, [marker('revisited', [44, 42])]).get(
+        'revisited',
+      ),
     ).toBe('09:00');
   });
 
@@ -712,20 +846,22 @@ describe('planTrackMarkerTimes', () => {
   it('keeps relative times beyond 24 hours and rounds point elapsed time to whole seconds', () => {
     const route = ridgeProfile();
     const markers = [marker('finish', [44.12, 42])];
+    // A micrometre less ascent ends 5 × 5.5 h a fraction of a second before 27.5 h.
+    const metrics = { ascentMeters: 900 - 0.000_001, descentMeters: 500 };
 
     expect(
       planTrackMarkerTimes(
         route,
-        { estimatedSeconds: 27.5 * hour - 0.000_001 },
-        { ...settings, relativeTimeMarkers: true, startHour: 18 },
+        metrics,
+        { ...settings, relativeTimeMarkers: true, startHour: 18, paceFactor: 5 },
         markers,
       ).get('finish'),
     ).toBe('27:30');
     expect(
       planTrackMarkerTimes(
         route,
-        { estimatedSeconds: 27.5 * hour - 0.000_001 },
-        { ...settings, startHour: 18 },
+        metrics,
+        { ...settings, startHour: 18, paceFactor: 5 },
         markers,
       ).get('finish'),
     ).toBe('21:30');

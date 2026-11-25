@@ -10,7 +10,7 @@ import {
   routeElapsedSeconds,
   type TrackTimingMetrics,
   type TrackTimingRoute,
-  type TrackWeatherTimelineSettings,
+  type TimedTrackWeatherSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import { solarDayEvents } from '@/domain/terrain/solarPosition';
@@ -71,7 +71,7 @@ interface TrackLightingInput {
   } | null;
   readonly route: TrackTimingRoute | null;
   readonly metrics: TrackTimingMetrics | null;
-  readonly settings: TrackWeatherTimelineSettings;
+  readonly settings: TimedTrackWeatherSettings;
   readonly recordedStartAt: string | undefined;
   /** The date selected in the track weather forecast; the hike date follows it by default. */
   readonly forecastDate: string;
@@ -186,7 +186,14 @@ export function useTrackLighting({
   forecastDate,
 }: TrackLightingInput): TrackLightingView | null {
   const { database, logger, terrainSampler } = useRuntimeServices();
-  const { paceFactor, ignoreRecordedTime, startHour, hikeDate } = settings;
+  const {
+    paceFactor,
+    stopFactor,
+    hikingTime,
+    ignoreRecordedTime,
+    startHour,
+    hikeDate,
+  } = settings;
   const startCoordinate = route?.points[0]?.coordinate;
   const finishCoordinate = route?.points.at(-1)?.coordinate;
   const timeZone = useMemo(
@@ -215,10 +222,12 @@ export function useTrackLighting({
     if (route === null || metrics === null) return { stations: [], recorded: false };
     const { elapsed, recorded } = routeElapsedSeconds(route.points, metrics, {
       paceFactor,
+      stopFactor,
+      hikingTime,
       ignoreRecordedTime,
     });
     return { stations: planTrackLightingStations(route, elapsed), recorded };
-  }, [ignoreRecordedTime, metrics, paceFactor, route]);
+  }, [hikingTime, ignoreRecordedTime, metrics, paceFactor, route, stopFactor]);
   const { stations } = timing;
   const finishSeconds = stations.at(-1)?.elapsedSeconds ?? 0;
   const sunEvents = useMemo(() => {

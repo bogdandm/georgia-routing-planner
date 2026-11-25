@@ -29,6 +29,10 @@ import { useStore } from 'zustand';
 import { useRuntimeServices } from '@/bootstrap/RuntimeServicesProvider';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
 import type { TrackSort } from '@/domain/tracks/localTrack';
+import {
+  sameHikingTimePresetSettings,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
 import { resolveAppLocale, type AppLocale } from '@/domain/localization/appLocale';
 import { AboutDialog } from '@/presentation/shell/AboutDialog';
 import { activateAppLocale } from '@/presentation/localization/appI18n';
@@ -140,6 +144,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     mapViewport,
     storageUsage,
     trailRouter,
+    userData,
   } = useRuntimeServices();
   const activeTab = useUiStore((state) => state.activeTab);
   const developerDrawerOpen = useUiStore((state) => state.developerDrawerOpen);
@@ -355,6 +360,45 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
       }),
     [locale, persistUiPreferences],
   );
+
+  // Presets this browser received from synchronization are already stored and
+  // synchronized, so writing them back would only start another run.
+  const remoteHikingTimePresets = useRef<HikingTimePresetSettings | null>(null);
+  useEffect(
+    () =>
+      useUiStore.subscribe((state, previous) => {
+        if (state.hikingTimePresets === previous.hikingTimePresets) return;
+        if (state.hikingTimePresets === remoteHikingTimePresets.current) return;
+        database
+          .saveHikingTimePresets(state.hikingTimePresets)
+          .then(() => userData.hikingTimePresetsChanged())
+          .catch(() => {
+            logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+          });
+      }),
+    [database, logger, userData],
+  );
+
+  // Startup synchronization can apply remote presets before this effect subscribes, and
+  // the change event is not replayed, so the stored presets are also read once here.
+  useEffect(() => {
+    const reload = () => {
+      database
+        .loadHikingTimePresets()
+        .then((hikingTimePresets) => {
+          const current = useUiStore.getState().hikingTimePresets;
+          if (sameHikingTimePresetSettings(current, hikingTimePresets)) return;
+          remoteHikingTimePresets.current = hikingTimePresets;
+          useUiStore.setState({ hikingTimePresets });
+        })
+        .catch(() => {
+          logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+        });
+    };
+    const unsubscribe = userData.subscribeHikingTimePresetsChanged(reload);
+    reload();
+    return unsubscribe;
+  }, [database, logger, userData]);
 
   const handleSectionChange = useCallback(
     (section: WorkspaceTab) => {

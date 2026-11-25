@@ -30,12 +30,16 @@ import {
   TRACK_WEATHER_DEFAULT_START_HOUR,
   TRACK_WEATHER_LATEST_START_HOUR,
   TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
+  TRACK_WEATHER_MAXIMUM_STOP_FACTOR,
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
+  TRACK_WEATHER_MINIMUM_STOP_FACTOR,
   TRACK_WEATHER_PACE_FACTOR_STEP,
+  TRACK_WEATHER_STOP_FACTOR_STEP,
   TRACK_WEATHER_START_HOUR_STEP,
   TRACK_WEATHER_TIMELINE_MAXIMUM_DISTANCE_METERS,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  estimateRouteHikingTime,
   localCalendarDate,
   planTrackWeatherTimeline,
   selectTrackElevationLocations,
@@ -55,12 +59,15 @@ import {
   nearestPointIndex,
   type ElevationProfile,
 } from '@/domain/tracks/elevationProfile';
+import type { HikingTimeParameters } from '@/domain/tracks/hikingTime';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import {
   requestMapNavigation,
   requestWeatherForecast,
 } from '@/presentation/map/mapInteractionStore';
 import { useUiStore } from '@/presentation/shell/uiStore';
+import { HikingTimeMatch } from '@/presentation/tracks/HikingTimeMatch';
+import { HikingTimePresetSelect } from '@/presentation/tracks/HikingTimePresetSelect';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 import {
   TrackLightingSummary,
@@ -129,11 +136,18 @@ interface TrackWeatherSectionProps {
   /** Null while the stored preferences load; the section then stays collapsed. */
   readonly preferences: TrackWeatherPreferences | null;
   readonly onPreferencesChange: (preferences: TrackWeatherPreferences) => void;
-  /** This track's route start and pace; the workspace decides where they are kept. */
+  /**
+   * This track's route start, pace, and hiking time preset; the workspace decides where
+   * they are kept.
+   */
   readonly timelineSettings: TrackWeatherTimelineSettings;
   readonly onTimelineSettingsChange: (settings: TrackWeatherTimelineSettings) => void;
+  /** Parameters of the track's resolved hiking time preset. */
+  readonly hikingTime: HikingTimeParameters;
   /** The hike's date, sun, and terrain light; null while the route cannot be timed. */
   readonly lighting: TrackLightingView | null;
+  /** The track's total estimate under each preset, by preset ID. */
+  readonly presetEstimates: ReadonlyMap<string, number>;
 }
 
 /**
@@ -148,7 +162,9 @@ export function TrackWeatherSection({
   onPreferencesChange,
   timelineSettings,
   onTimelineSettingsChange,
+  hikingTime,
   lighting,
+  presetEstimates,
 }: TrackWeatherSectionProps): ReactElement {
   const { i18n, t } = useLingui();
   const { clock, mapLayers, pointWeatherForecast } = useRuntimeServices();
@@ -173,26 +189,43 @@ export function TrackWeatherSection({
     () => selectTrackElevationLocations(profile),
     [profile],
   );
-  const { paceFactor } = timelineSettings;
+  const { paceFactor, stopFactor, ignoreRecordedTime } = timelineSettings;
+  const presetSettings = useUiStore((state) => state.hikingTimePresets);
   const defaultTimeMarkers = useStore(mapLayerStore, (state) => state.trackTimeMarkers);
   // Drafts show slider positions while dragging; only released values are stored. The
   // start draft already moves the checkpoint times, since it only reselects loaded
-  // hours, while the pace waits for release so it does not start forecast requests.
+  // hours, while pace and stops wait for release so they do not start forecast requests.
   const [startDraft, setStartDraft] = useState<number | null>(null);
   const [paceDraft, setPaceDraft] = useState<number | null>(null);
+  const [stopDraft, setStopDraft] = useState<number | null>(null);
   const startHour = startDraft ?? timelineSettings.startHour;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const paceLabelId = `${detailsId}-pace`;
+  // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
+  const stopLabelId = `${detailsId}-stops`;
   // eslint-disable-next-line lingui/no-unlocalized-strings -- DOM element ID.
   const startLabelId = `${detailsId}-start`;
   const timeline = useMemo(
     () =>
       planTrackWeatherTimeline(timingRoute, metrics, {
         paceFactor,
-        ignoreRecordedTime: timelineSettings.ignoreRecordedTime,
+        stopFactor,
+        ignoreRecordedTime,
+        hikingTime,
       }),
-    [metrics, paceFactor, timingRoute, timelineSettings.ignoreRecordedTime],
+    [hikingTime, ignoreRecordedTime, metrics, paceFactor, stopFactor, timingRoute],
   );
+  const recorded = timeline.durationSource === 'recorded';
+  // Breaks and lunch scale linearly with the stop factor, so the slider's sum follows
+  // the dragged position without estimating again.
+  const unadjustedStopSeconds = useMemo(() => {
+    const estimate = estimateRouteHikingTime(timingRoute.points, metrics, {
+      paceFactor: 1,
+      stopFactor: 1,
+      hikingTime,
+    });
+    return estimate.breakSeconds + estimate.lunchSeconds;
+  }, [hikingTime, metrics, timingRoute]);
   const timeMarkers = timelineSettings.timeMarkers ?? defaultTimeMarkers;
   const timelineCheckbox = (
     label: string,
@@ -448,9 +481,9 @@ export function TrackWeatherSection({
   );
   const duration = formatTrackDuration(timeline.durationSeconds, i18n);
   const pace: TrackLightingPace =
-    paceFactor !== 1
+    paceFactor !== 1 || (!recorded && stopFactor !== 1)
       ? 'adjusted'
-      : timeline.durationSource === 'recorded'
+      : recorded
         ? 'recorded'
         : 'estimated';
   // The daylight widget shows the start, pace, and duration; without it, this sentence.
@@ -462,6 +495,11 @@ export function TrackWeatherSection({
         : t`Starting at ${startTime} at the estimated pace, about ${duration} in total.`;
   const paceFormat = new Intl.NumberFormat(i18n.locale, { maximumFractionDigits: 2 });
   const formatPace = (value: number) => `×${paceFormat.format(value)}`;
+  const stopDuration = formatTrackDuration(
+    unadjustedStopSeconds * (stopDraft ?? stopFactor),
+    i18n,
+  );
+  const recordedSeconds = metrics.elapsedSeconds;
   /**
    * A hike date within the forecast week selects that forecast date, so both stay in
    * step; any other date is stored as the track's own.
@@ -558,6 +596,24 @@ export function TrackWeatherSection({
             )}
             <Divider sx={{ mt: 1.5, mb: 2.5 }} />
             <Stack spacing={1.5} useFlexGap>
+              <HikingTimePresetSelect
+                label={t`Hiking time preset`}
+                settings={presetSettings}
+                value={timelineSettings.presetId}
+                onChange={(presetId) => {
+                  onTimelineSettingsChange({ ...timelineSettings, presetId });
+                }}
+                allowDefault
+                estimates={presetEstimates}
+                {...(recordedSeconds === undefined ? {} : { recordedSeconds })}
+              />
+              {recordedSeconds === undefined ? null : (
+                <HikingTimeMatch
+                  route={timingRoute}
+                  metrics={{ ...metrics, elapsedSeconds: recordedSeconds }}
+                  presetId={timelineSettings.presetId}
+                />
+              )}
               {lighting === null ? null : (
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <TextField
@@ -683,6 +739,57 @@ export function TrackWeatherSection({
                   />
                   <Typography variant="caption" color="text.secondary">
                     <Trans>Slower</Trans>
+                  </Typography>
+                </Stack>
+              </Box>
+              <Box sx={{ mb: -1 }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ justifyContent: 'space-between', alignItems: 'baseline' }}
+                >
+                  <Typography id={stopLabelId} variant="caption" color="text.secondary">
+                    <Trans>Adjust breaks and lunch</Trans>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {recorded
+                      ? t`Recorded stops are kept`
+                      : t`Breaks and lunch: ≈${stopDuration}`}
+                  </Typography>
+                </Stack>
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ alignItems: 'center', px: 0.5, mt: -0.5 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    <Trans>Shorter</Trans>
+                  </Typography>
+                  <Slider
+                    size="small"
+                    aria-labelledby={stopLabelId}
+                    disabled={recorded}
+                    min={TRACK_WEATHER_MINIMUM_STOP_FACTOR}
+                    max={TRACK_WEATHER_MAXIMUM_STOP_FACTOR}
+                    step={TRACK_WEATHER_STOP_FACTOR_STEP}
+                    marks={[{ value: 1 }]}
+                    value={stopDraft ?? stopFactor}
+                    valueLabelDisplay="auto"
+                    valueLabelFormat={formatPace}
+                    getAriaValueText={formatPace}
+                    onChange={(_event, value) => {
+                      setStopDraft(value);
+                    }}
+                    onChangeCommitted={(_event, value) => {
+                      setStopDraft(null);
+                      onTimelineSettingsChange({
+                        ...timelineSettings,
+                        stopFactor: Math.round(value * 100) / 100,
+                      });
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    <Trans>Longer</Trans>
                   </Typography>
                 </Stack>
               </Box>

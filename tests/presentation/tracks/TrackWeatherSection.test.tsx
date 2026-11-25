@@ -15,6 +15,13 @@ import {
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
+import {
+  DAY_HIKE_TIME_PRESET_ID,
+  DIN_HIKING_TIME_PRESET_ID,
+  defaultHikingTimePresetSettings,
+  resolveHikingTimePreset,
+  type HikingTimeParameters,
+} from '@/domain/tracks/hikingTime';
 import { RuntimeServicesProvider } from '@/bootstrap/RuntimeServicesProvider';
 import type {
   ElevationProfile,
@@ -59,9 +66,16 @@ const ridge: ElevationProfile = {
   algorithmVersion: 3,
 };
 
+/** The DIN 33466 preset reproduces the v1 timeline these tests were written for. */
+const dinHikingTime = resolveHikingTimePreset(
+  defaultHikingTimePresetSettings,
+  DIN_HIKING_TIME_PRESET_ID,
+).parameters;
+
 const dayHike: TrackStatsMetrics = {
   distanceMeters: 12_000,
-  estimatedSeconds: 5.5 * 3_600,
+  ascentMeters: 900,
+  descentMeters: 500,
 };
 
 const expandedPreferences: TrackWeatherPreferences = {
@@ -76,6 +90,7 @@ function renderSection(
   metrics: TrackStatsMetrics = dayHike,
   initialTimeline: TrackWeatherTimelineSettings = defaultTrackWeatherTimelineSettings,
   lighting: TrackLightingView | null = null,
+  hikingTime: HikingTimeParameters = dinHikingTime,
 ) {
   const onPreferencesChange = vi.fn();
   const onTimelineSettingsChange = vi.fn();
@@ -97,6 +112,8 @@ function renderSection(
           onTimelineSettingsChange(next);
           setTimelineSettings(next);
         }}
+        hikingTime={hikingTime}
+        presetEstimates={new Map()}
         // The track panel shows the track's own date, else the forecast's selected date.
         lighting={
           lighting === null
@@ -142,6 +159,8 @@ function expandedSection(metrics: TrackStatsMetrics) {
           timelineSettings={defaultTrackWeatherTimelineSettings}
           onTimelineSettingsChange={vi.fn()}
           lighting={null}
+          hikingTime={dinHikingTime}
+          presetEstimates={new Map()}
         />
       </ThemeProvider>
     </RuntimeServicesProvider>
@@ -162,6 +181,43 @@ beforeEach(() => {
 });
 
 describe('TrackWeatherSection', () => {
+  it('shows a track without its own preset as following the default preset', () => {
+    renderSection(null);
+
+    expect(
+      screen.getByRole('combobox', { name: 'Hiking time preset' }),
+    ).toHaveTextContent('Default (Day hike)');
+  });
+
+  it('sums breaks and lunch beside their own slider, which the pace leaves unchanged', async () => {
+    const user = userEvent.setup();
+    const { onTimelineSettingsChange } = renderSection(
+      null,
+      dayHike,
+      defaultTrackWeatherTimelineSettings,
+      null,
+      resolveHikingTimePreset(defaultHikingTimePresetSettings, DAY_HIKE_TIME_PRESET_ID)
+        .parameters,
+    );
+    const stopSum = () => screen.getByText(/^Breaks and lunch: ≈/u).textContent;
+    const initialSum = stopSum();
+    expect(initialSum).not.toBe('Breaks and lunch: ≈0h 0m');
+
+    screen.getByRole('slider', { name: 'Adjust pace' }).focus();
+    await user.keyboard('{End}');
+    expect(stopSum()).toBe(initialSum);
+
+    screen.getByRole('slider', { name: 'Adjust breaks and lunch' }).focus();
+    await user.keyboard('{Home}');
+    expect(stopSum()).toBe('Breaks and lunch: ≈0h 0m');
+    expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
+      ...defaultTrackWeatherTimelineSettings,
+      paceFactor: 2,
+      stopFactor: 0,
+      timeMarkers: null,
+    });
+  });
+
   it('keeps the recorded-time override available but disabled without recorded timing', () => {
     renderSection(null);
     expect(
@@ -322,6 +378,7 @@ describe('TrackWeatherSection', () => {
     expect(sliders.map((slider) => slider.getAttribute('aria-labelledby'))).toEqual([
       screen.getByText('Route start').id,
       screen.getByText('Adjust pace').id,
+      screen.getByText('Adjust breaks and lunch').id,
     ]);
     const start = screen.getByRole('slider', { name: 'Route start' });
     expect(start).toHaveAttribute('aria-valuetext', '09:00');

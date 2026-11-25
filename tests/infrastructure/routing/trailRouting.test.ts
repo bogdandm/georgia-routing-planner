@@ -3,10 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TrailRouteProgress } from '@/application/ports/TrailRouter';
 
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
-import {
-  estimateHikingSeconds,
-  geodesicDistanceMeters,
-} from '@/domain/tracks/trackCalculations';
+import { dinHikingSeconds } from '@/domain/tracks/hikingTime';
+import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 import { executeTrailRoute } from '@/infrastructure/routing/RoutingWorkerServer';
 import {
   MAX_ROUTING_TILES,
@@ -1136,7 +1134,7 @@ describe('trail graph snapping and routing', () => {
       const terrain = { nodeElevationMeters: elevations, edgeProfiles };
       const arcSeconds = (from: string, to: string, distanceMeters: number): number => {
         const climb = (elevations.get(to) ?? 0) - (elevations.get(from) ?? 0);
-        return estimateHikingSeconds(
+        return dinHikingSeconds(
           distanceMeters,
           Math.max(0, climb),
           Math.max(0, -climb),

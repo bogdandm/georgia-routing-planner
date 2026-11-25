@@ -11,6 +11,7 @@ export const MAX_MARKER_BYTES = 4_096;
 export const MAX_MARKER_RECORDS = 10_000;
 export const MAX_FOLDER_BYTES = 4_096;
 export const MAX_FOLDER_RECORDS = 1_000;
+export const MAX_HIKING_TIME_PRESETS_BYTES = 131_072;
 export const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 export const CONTENT_HASH_PATTERN = /^[0-9a-f]{64}$/;
@@ -49,6 +50,43 @@ export interface FolderRecord {
   readonly folder_id: string;
   readonly revision: number;
   readonly payload: FolderPayload;
+}
+
+export type HikingTimeMovementPayload =
+  | {
+      readonly kind: 'din';
+      readonly horizontalKmh: number;
+      readonly ascentMetersPerHour: number;
+      readonly descentMetersPerHour: number;
+    }
+  | {
+      readonly kind: 'grade-curve';
+      readonly knots: readonly {
+        readonly gradePercent: number;
+        readonly speedKmh: number;
+      }[];
+    };
+
+export interface HikingTimeParametersPayload {
+  readonly movement: HikingTimeMovementPayload;
+  readonly altitudeBands: readonly {
+    readonly fromMeters: number;
+    readonly speedFactor: number;
+  }[];
+  readonly breakMinutesPerMovingHour: number;
+  readonly lunchMinutes: number;
+  readonly lunchMinimumMovingHours: number;
+  readonly movingHoursPerDay: number;
+}
+
+export interface HikingTimePresetsPayload {
+  readonly schemaVersion: 1;
+  readonly defaultPresetId: string;
+  readonly custom: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly parameters: HikingTimeParametersPayload;
+  }[];
 }
 
 export interface RpcResponse {
@@ -120,6 +158,12 @@ export interface ReorderFoldersCommand {
   readonly folderIds: readonly string[];
 }
 
+export interface UpsertHikingTimePresetsCommand {
+  readonly action: 'hiking-time-presets-upsert';
+  readonly baseRevision: number;
+  readonly settings: HikingTimePresetsPayload;
+}
+
 export type TrackSyncCommand =
   | UploadTrackCommand
   | MetadataTrackCommand
@@ -129,7 +173,8 @@ export type TrackSyncCommand =
   | DeleteMarkerCommand
   | UpsertFolderCommand
   | DeleteFolderCommand
-  | ReorderFoldersCommand;
+  | ReorderFoldersCommand
+  | UpsertHikingTimePresetsCommand;
 
 export interface StorageEntry {
   readonly id: string | null;

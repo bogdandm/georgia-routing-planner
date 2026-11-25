@@ -18,6 +18,7 @@ export const trackSyncWorkerEventNames = {
   tracksChanged: 'track-sync.tracks-changed',
   markersChanged: 'track-sync.markers-changed',
   foldersChanged: 'track-sync.folders-changed',
+  hikingTimePresetsChanged: 'track-sync.hiking-time-presets-changed',
 } as const;
 
 export interface UserDataSyncChangedEvent {
@@ -41,6 +42,7 @@ export interface TrackSyncWorkerResult {
     readonly tracks: boolean;
     readonly markers: boolean;
     readonly folders: boolean;
+    readonly hikingTimePresets: boolean;
   };
   readonly remoteTrackDeletions: readonly RemoteTrackDeletionCandidate[];
   readonly remoteMarkerDeletions: readonly RemoteMarkerDeletionCandidate[];
@@ -133,6 +135,17 @@ export class TrackSyncWorkerClient {
   ): () => void {
     return this.#rpc.subscribeEvent(
       trackSyncWorkerEventNames.foldersChanged,
+      (payload) => {
+        if (isSyncChangedEvent(payload)) listener(payload);
+      },
+    );
+  }
+
+  public subscribeHikingTimePresetsChanged(
+    listener: (event: UserDataSyncChangedEvent) => void,
+  ): () => void {
+    return this.#rpc.subscribeEvent(
+      trackSyncWorkerEventNames.hikingTimePresetsChanged,
       (payload) => {
         if (isSyncChangedEvent(payload)) listener(payload);
       },

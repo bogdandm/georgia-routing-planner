@@ -1,8 +1,6 @@
 import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
-import {
-  calculateTrackMetrics,
-  estimateHikingSeconds,
-} from '@/domain/tracks/trackCalculations';
+import { dinHikingSeconds } from '@/domain/tracks/hikingTime';
+import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 
 export const GPX_PARSER_VERSION = 2;
 
@@ -147,7 +145,7 @@ function hasPlausibleTiming(segments: readonly TrackSegment[]): boolean {
   const startMinutes = start.hour * 60 + start.minute;
   const ratio =
     metrics.elapsedSeconds /
-    estimateHikingSeconds(
+    dinHikingSeconds(
       metrics.distanceMeters,
       metrics.ascentMeters ?? 0,
       metrics.descentMeters ?? 0,

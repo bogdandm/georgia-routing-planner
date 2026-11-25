@@ -71,6 +71,8 @@ export interface UserDataService {
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  hikingTimePresetsChanged(): Promise<void>;
+  subscribeHikingTimePresetsChanged(listener: () => void): () => void;
   dispose(): void;
 }
 
@@ -104,6 +106,8 @@ export function createUnconfiguredUserDataService(): UserDataService {
     subscribeFoldersChanged: () => () => undefined,
     resolveRemoteDeletions: () => Promise.resolve(),
     synchronizeNow: () => Promise.resolve(),
+    hikingTimePresetsChanged: () => Promise.resolve(),
+    subscribeHikingTimePresetsChanged: () => () => undefined,
     trackDeleted: () => Promise.resolve(),
     trackMetadataChanged: () => Promise.resolve(),
     trackSaved: () => Promise.resolve(),

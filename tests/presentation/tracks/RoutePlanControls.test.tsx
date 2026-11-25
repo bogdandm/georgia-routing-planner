@@ -30,6 +30,7 @@ function callbacks() {
     onNameChange: vi.fn(),
     onSave: vi.fn(),
     onUndo: vi.fn(),
+    presetControl: null,
   };
 }
 

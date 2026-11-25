@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TrackPoint } from '@/domain/tracks/gpx';
 import { reverseTrack } from '@/domain/tracks/reverseTrack';
-import {
-  calculateTrackMetrics,
-  estimateHikingSeconds,
-} from '@/domain/tracks/trackCalculations';
+import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 
 function point(
   longitude: number,
@@ -43,7 +40,7 @@ function savedTrack(
 }
 
 describe('reverseTrack', () => {
-  it('re-estimates a climbing track walked downhill and drops its recorded time', () => {
+  it('swaps the gain and loss of a climbing track walked downhill and drops its recorded time', () => {
     const { summary, content } = savedTrack([
       [point(0, 100, '2026-01-01T08:00:00Z'), point(0.01, 400, '2026-01-01T09:00:00Z')],
       [
@@ -62,9 +59,6 @@ describe('reverseTrack', () => {
     expect(reversed.metrics.elapsedSeconds).toBeUndefined();
     expect(reversed.metrics.ascentMeters).toBe(summary.metrics.descentMeters);
     expect(reversed.metrics.descentMeters).toBe(summary.metrics.ascentMeters);
-    expect(reversed.metrics.estimatedSeconds).toBe(
-      estimateHikingSeconds(reversed.metrics.distanceMeters, 100, 300),
-    );
   });
 
   it('swaps the source gain and loss although station sampling depends on direction', () => {
@@ -81,13 +75,6 @@ describe('reverseTrack', () => {
 
     expect(reversed.metrics.ascentMeters).toBe(summary.metrics.descentMeters);
     expect(reversed.metrics.descentMeters).toBe(sourceGain);
-    expect(reversed.metrics.estimatedSeconds).toBe(
-      estimateHikingSeconds(
-        reversed.metrics.distanceMeters,
-        summary.metrics.descentMeters ?? 0,
-        sourceGain,
-      ),
-    );
   });
 
   it('keeps the recorded duration and pauses of a completely flat track', () => {
@@ -109,7 +96,6 @@ describe('reverseTrack', () => {
       ],
     ]);
     expect(reversed.metrics.elapsedSeconds).toBe(summary.metrics.elapsedSeconds);
-    expect(reversed.metrics.estimatedSeconds).toBeUndefined();
   });
 
   it('drops recorded time when terrain shows a climb the source elevation lacks', () => {

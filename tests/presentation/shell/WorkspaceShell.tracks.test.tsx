@@ -2512,13 +2512,13 @@ describe('WorkspaceShell', () => {
     };
     await services.database.saveLocalTrack(source, content);
     await services.database.saveLatestOpenedTrackId(source.id);
-    useUiStore.setState({
-      activeTab: 'tracks',
-      hikingTimePresets: {
-        ...defaultHikingTimePresetSettings,
-        defaultPresetId: DIN_HIKING_TIME_PRESET_ID,
-      },
-    });
+    // Stored as `main.tsx` would have hydrated it: the shell rereads presets on mount.
+    const hikingTimePresets = {
+      ...defaultHikingTimePresetSettings,
+      defaultPresetId: DIN_HIKING_TIME_PRESET_ID,
+    };
+    await services.database.saveHikingTimePresets(hikingTimePresets);
+    useUiStore.setState({ activeTab: 'tracks', hikingTimePresets });
     const user = userEvent.setup();
     renderWorkspaceShell();
     const details = await screen.findByRole('complementary', { name: 'Track details' });

@@ -16,6 +16,7 @@ import {
   TrackSyncFailure,
   type TrackUsage,
   type UpsertFolderCommand,
+  type UpsertHikingTimePresetsCommand,
   type UpsertMarkerCommand,
   type UploadTrackCommand,
   UUID_PATTERN,
@@ -181,6 +182,16 @@ export class SupabaseTrackSyncGateway {
     return await this.callRpc('reorder_track_folders', {
       p_user_id: this.userId,
       p_folder_ids: command.folderIds,
+    });
+  }
+
+  async upsertHikingTimePresets(
+    command: UpsertHikingTimePresetsCommand,
+  ): Promise<RpcResponse> {
+    return await this.callRpc('upsert_hiking_time_presets', {
+      p_user_id: this.userId,
+      p_payload: command.settings,
+      p_base_revision: command.baseRevision,
     });
   }
 

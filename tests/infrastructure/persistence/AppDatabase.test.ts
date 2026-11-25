@@ -1650,3 +1650,114 @@ describe('AppDatabase', () => {
     ]);
   });
 });
+
+describe('AppDatabase hiking time preset synchronization', () => {
+  const dayHike = builtInHikingTimePresets[0];
+  if (dayHike === undefined) throw new Error('Missing the built-in presets.');
+  const preset = {
+    id: 'custom:00000000-0000-4000-8000-000000000001',
+    name: 'Slow',
+    parameters: { ...dayHike.parameters, lunchMinutes: 60 },
+  };
+  const withPreset: HikingTimePresetSettings = {
+    defaultPresetId: preset.id,
+    custom: [preset],
+  };
+
+  it('queues only actual preset changes and resets them for a new account', async () => {
+    await database.prepareUserDataSync('user-a', []);
+    await expect(database.readHikingTimePresetSync()).resolves.toEqual({
+      settings: defaultHikingTimePresetSettings,
+      state: { remoteRevision: null, base: null, pendingVersion: 1 },
+    });
+
+    await database.saveHikingTimePresets(withPreset);
+    await database.saveHikingTimePresets(withPreset);
+    await expect(database.readHikingTimePresetSync()).resolves.toMatchObject({
+      settings: withPreset,
+      state: { pendingVersion: 2 },
+    });
+
+    await expect(
+      database.applyRemoteHikingTimePresets({
+        settings: withPreset,
+        remoteRevision: 4,
+        base: withPreset,
+        expectedPendingVersion: 2,
+        expectedUserId: 'user-a',
+      }),
+    ).resolves.toBe(false);
+    await database.saveHikingTimePresets(withPreset);
+    await expect(database.readHikingTimePresetSync()).resolves.toEqual({
+      settings: withPreset,
+      state: { remoteRevision: 4, base: withPreset, pendingVersion: null },
+    });
+
+    await database.prepareUserDataSync('user-b', []);
+    await expect(database.readHikingTimePresetSync()).resolves.toEqual({
+      settings: withPreset,
+      state: { remoteRevision: null, base: null, pendingVersion: 1 },
+    });
+  });
+
+  it('applies remote presets only while the account and local intent are unchanged', async () => {
+    await database.prepareUserDataSync('user-a', []);
+    const update = {
+      settings: withPreset,
+      remoteRevision: 2,
+      base: withPreset,
+      expectedPendingVersion: 1,
+    };
+
+    await expect(
+      database.applyRemoteHikingTimePresets({ ...update, expectedUserId: 'user-b' }),
+    ).resolves.toBe(false);
+    await database.saveHikingTimePresets({
+      ...defaultHikingTimePresetSettings,
+      defaultPresetId: DIN_HIKING_TIME_PRESET_ID,
+    });
+    await expect(
+      database.applyRemoteHikingTimePresets({ ...update, expectedUserId: 'user-a' }),
+    ).resolves.toBe(false);
+    await expect(database.readHikingTimePresetSync()).resolves.toEqual({
+      settings: {
+        ...defaultHikingTimePresetSettings,
+        defaultPresetId: DIN_HIKING_TIME_PRESET_ID,
+      },
+      state: { remoteRevision: null, base: null, pendingVersion: 2 },
+    });
+
+    await expect(
+      database.applyRemoteHikingTimePresets({
+        ...update,
+        expectedPendingVersion: 2,
+        expectedUserId: 'user-a',
+      }),
+    ).resolves.toBe(true);
+    await expect(database.loadHikingTimePresets()).resolves.toEqual(withPreset);
+  });
+
+  it('queues presets a restored archive changed and keeps sync state out of it', async () => {
+    await database.prepareUserDataSync('user-a', []);
+    await database.applyRemoteHikingTimePresets({
+      settings: defaultHikingTimePresetSettings,
+      remoteRevision: 1,
+      base: defaultHikingTimePresetSettings,
+      expectedPendingVersion: 1,
+      expectedUserId: 'user-a',
+    });
+
+    await database.restoreUserDataBackup({
+      tracks: [],
+      folders: [],
+      markers: [],
+      settings: { 'tracks.hiking-time-presets': withPreset },
+    });
+    await expect(database.readHikingTimePresetSync()).resolves.toMatchObject({
+      settings: withPreset,
+      state: { remoteRevision: 1, pendingVersion: 1 },
+    });
+    const archive = await database.readUserDataBackup();
+    expect(Object.keys(archive.settings)).not.toContain('sync.hiking-time-presets');
+  });
+});

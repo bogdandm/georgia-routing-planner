@@ -48,6 +48,7 @@ function createService(initial: UserDataSnapshot) {
     subscribeTracksChanged: () => () => undefined,
     subscribeMarkersChanged: () => () => undefined,
     subscribeFoldersChanged: () => () => undefined,
+    subscribeHikingTimePresetsChanged: () => () => undefined,
     resolveRemoteDeletions: vi.fn().mockResolvedValue(undefined),
     synchronizeNow,
     trackDeleted: vi.fn().mockResolvedValue(undefined),
@@ -56,6 +57,7 @@ function createService(initial: UserDataSnapshot) {
     markerChanged: vi.fn().mockResolvedValue(undefined),
     markerDeleted: vi.fn().mockResolvedValue(undefined),
     foldersChanged: vi.fn().mockResolvedValue(undefined),
+    hikingTimePresetsChanged: vi.fn().mockResolvedValue(undefined),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

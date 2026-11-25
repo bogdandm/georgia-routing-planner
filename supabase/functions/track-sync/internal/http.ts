@@ -4,8 +4,10 @@ import { z } from 'npm:zod@4.4.3';
 import {
   CONTENT_HASH_PATTERN,
   type FolderPayload,
+  type HikingTimePresetsPayload,
   MAX_FOLDER_BYTES,
   MAX_FOLDER_RECORDS,
+  MAX_HIKING_TIME_PRESETS_BYTES,
   MAX_JSON_BYTES,
   MAX_MARKER_BYTES,
   MAX_METADATA_BYTES,
@@ -307,6 +309,118 @@ const folderPayloadSchema: z.ZodType<FolderPayload> = z
       });
     }
   });
+
+/** Bounds shared with `validHikingTimeParameters` in the browser domain. */
+export const hikingTimePresetBounds = {
+  maximumCustomPresets: 50,
+  maximumNameLength: 60,
+  maximumPaceKnots: 20,
+  maximumAltitudeBands: 10,
+  horizontalKmh: [0.1, 15],
+  ascentMetersPerHour: [10, 3_000],
+  descentMetersPerHour: [10, 5_000],
+  gradePercent: [-100, 100],
+  speedKmh: [0.1, 15],
+  fromMeters: [-500, 9_000],
+  speedFactor: [0.1, 2],
+  breakMinutesPerMovingHour: [0, 60],
+  lunchMinutes: [0, 240],
+  lunchMinimumMovingHours: [0, 24],
+  movingHoursPerDay: [1, 24],
+} as const;
+
+function boundedNumber(bounds: readonly [number, number]) {
+  return z.number().finite().min(bounds[0]).max(bounds[1]);
+}
+
+function strictlyAscending(values: readonly number[]): boolean {
+  return values.every(
+    (value, index) => index === 0 || value > (values[index - 1] ?? value),
+  );
+}
+
+const hikingTimeParametersSchema = z
+  .object({
+    movement: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('din'),
+          horizontalKmh: boundedNumber(hikingTimePresetBounds.horizontalKmh),
+          ascentMetersPerHour: boundedNumber(
+            hikingTimePresetBounds.ascentMetersPerHour,
+          ),
+          descentMetersPerHour: boundedNumber(
+            hikingTimePresetBounds.descentMetersPerHour,
+          ),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('grade-curve'),
+          knots: z
+            .array(
+              z
+                .object({
+                  gradePercent: boundedNumber(hikingTimePresetBounds.gradePercent),
+                  speedKmh: boundedNumber(hikingTimePresetBounds.speedKmh),
+                })
+                .strict(),
+            )
+            .min(2)
+            .max(hikingTimePresetBounds.maximumPaceKnots)
+            .refine((knots) =>
+              strictlyAscending(knots.map((knot) => knot.gradePercent)),
+            ),
+        })
+        .strict(),
+    ]),
+    altitudeBands: z
+      .array(
+        z
+          .object({
+            fromMeters: boundedNumber(hikingTimePresetBounds.fromMeters),
+            speedFactor: boundedNumber(hikingTimePresetBounds.speedFactor),
+          })
+          .strict(),
+      )
+      .max(hikingTimePresetBounds.maximumAltitudeBands)
+      .refine((bands) => strictlyAscending(bands.map((band) => band.fromMeters))),
+    breakMinutesPerMovingHour: boundedNumber(
+      hikingTimePresetBounds.breakMinutesPerMovingHour,
+    ),
+    lunchMinutes: boundedNumber(hikingTimePresetBounds.lunchMinutes),
+    lunchMinimumMovingHours: boundedNumber(
+      hikingTimePresetBounds.lunchMinimumMovingHours,
+    ),
+    movingHoursPerDay: boundedNumber(hikingTimePresetBounds.movingHoursPerDay),
+  })
+  .strict();
+
+const hikingTimePresetsPayloadSchema: z.ZodType<HikingTimePresetsPayload> = z
+  .object({
+    schemaVersion: z.literal(1),
+    defaultPresetId: z.string().min(1).max(200),
+    custom: z
+      .array(
+        z
+          .object({
+            id: z.string().regex(/^custom:[0-9a-f-]{36}$/),
+            name: z
+              .string()
+              .min(1)
+              .max(hikingTimePresetBounds.maximumNameLength)
+              .refine((name) => name === name.trim()),
+            parameters: hikingTimeParametersSchema,
+          })
+          .strict(),
+      )
+      .max(hikingTimePresetBounds.maximumCustomPresets)
+      .refine(
+        (presets) =>
+          new Set(presets.map((preset) => preset.id)).size === presets.length,
+      ),
+  })
+  .strict();
 import { validateGeometryUpload } from './geometry.ts';
 
 export function requireUserId(context: SupabaseContext): string {
@@ -352,7 +466,8 @@ export function createTrackSyncResponse(result: TrackSyncResult): Response {
       outcome: result.outcome,
     };
     const record = (result as RpcResponse).record;
-    if (record !== undefined) response.record = serializeRecord(record);
+    if (record === null) response.record = null;
+    else if (record !== undefined) response.record = serializeRecord(record);
     return jsonResponse(response);
   }
   return jsonResponse(result as TrackUsage);
@@ -525,6 +640,28 @@ function requireFolderPayload(value: unknown, folderId: string): FolderPayload {
   return parsed.data;
 }
 
+function requireHikingTimePresets(value: unknown): HikingTimePresetsPayload {
+  const parsed = hikingTimePresetsPayloadSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new TrackSyncFailure(
+      400,
+      'invalid_hiking_time_presets',
+      'hiking time presets are invalid.',
+    );
+  }
+  if (
+    new TextEncoder().encode(JSON.stringify(parsed.data)).byteLength >
+    MAX_HIKING_TIME_PRESETS_BYTES
+  ) {
+    throw new TrackSyncFailure(
+      413,
+      'hiking_time_presets_too_large',
+      'hiking time presets exceed 128 KiB.',
+    );
+  }
+  return parsed.data;
+}
+
 function parseIntegerField(value: FormDataEntryValue | null, name: string): number {
   if (typeof value !== 'string' || !/^\d+$/.test(value)) {
     throw new TrackSyncFailure(
@@ -690,6 +827,14 @@ async function parseJsonRequest(request: Request): Promise<TrackSyncCommand> {
     }
     return { action: 'folder-reorder', folderIds: ids };
   }
+  if (value.action === 'hiking-time-presets-upsert') {
+    requireExactFields(value, ['action', 'baseRevision', 'settings']);
+    return {
+      action: 'hiking-time-presets-upsert',
+      baseRevision: requireBaseRevision(value.baseRevision),
+      settings: requireHikingTimePresets(value.settings),
+    };
+  }
   throw new TrackSyncFailure(
     400,
     'invalid_action',
@@ -805,6 +950,13 @@ async function parseUploadRequest(request: Request): Promise<TrackSyncCommand> {
 
 function serializeRecord(value: unknown): unknown {
   if (!isObject(value)) return undefined;
+  if (
+    Object.keys(value).length === 2 &&
+    Number.isSafeInteger(value.revision) &&
+    isObject(value.payload)
+  ) {
+    return { revision: value.revision, payload: value.payload };
+  }
   if (
     typeof value.folder_id === 'string' &&
     Number.isSafeInteger(value.revision) &&

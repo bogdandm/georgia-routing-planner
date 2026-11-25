@@ -2,6 +2,15 @@ import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1.0.14';
 import type { SupabaseContext } from 'npm:@supabase/server@1.4.1';
 
 import { markerIconKeys as browserMarkerIconKeys } from '../../../../src/domain/markers/savedMarker.ts';
+import {
+  dinHikingMovement,
+  type HikingTimeParameters,
+  MAXIMUM_CUSTOM_HIKING_TIME_PRESETS,
+  MAXIMUM_HIKING_ALTITUDE_BANDS,
+  MAXIMUM_HIKING_PACE_KNOTS,
+  MAXIMUM_HIKING_TIME_PRESET_NAME_LENGTH,
+  validHikingTimeParameters,
+} from '../../../../src/domain/tracks/hikingTime.ts';
 
 import fixtureV1 from '../../../../tests/fixtures/track-sync/geometry-v1.json' with { type: 'json' };
 import fixtureV2 from '../../../../tests/fixtures/track-sync/geometry-v2.json' with { type: 'json' };
@@ -13,7 +22,10 @@ import {
   validateCanonicalGeometry,
   validateGeometryUpload,
 } from '../../../functions/track-sync/internal/geometry.ts';
-import { markerIconKeys as edgeMarkerIconKeys } from '../../../functions/track-sync/internal/http.ts';
+import {
+  hikingTimePresetBounds,
+  markerIconKeys as edgeMarkerIconKeys,
+} from '../../../functions/track-sync/internal/http.ts';
 import { SupabaseTrackSyncGateway } from '../../../functions/track-sync/internal/supabase-track-sync-gateway.ts';
 import { handleTrackSync } from '../../../functions/track-sync/track-sync.ts';
 
@@ -1538,4 +1550,344 @@ Deno.test('invalid marker commands never call the RPC boundary', async () => {
       [],
     );
   }
+});
+
+function hikingTimeParameters(): HikingTimeParameters {
+  return {
+    movement: {
+      kind: 'grade-curve',
+      knots: [
+        { gradePercent: -20, speedKmh: 3 },
+        { gradePercent: 0, speedKmh: 4.5 },
+        { gradePercent: 20, speedKmh: 2.5 },
+      ],
+    },
+    altitudeBands: [{ fromMeters: 2_000, speedFactor: 0.9 }],
+    breakMinutesPerMovingHour: 8,
+    lunchMinutes: 30,
+    lunchMinimumMovingHours: 3,
+    movingHoursPerDay: 7,
+  };
+}
+
+function hikingTimeSettings(
+  parametersList: readonly HikingTimeParameters[] = [hikingTimeParameters()],
+): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    defaultPresetId: 'day-hike',
+    custom: parametersList.map((parameters, index) => ({
+      id: `custom:00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`,
+      name: `Preset ${index}`,
+      parameters,
+    })),
+  };
+}
+
+async function hikingTimePresetsStatus(settings: unknown): Promise<number> {
+  const state = makeState();
+  state.rpcResults.set('upsert_hiking_time_presets', [
+    {
+      data: { outcome: 'applied', record: { revision: 1, payload: settings } },
+      error: null,
+    },
+  ]);
+  const response = await handleTrackSync(
+    jsonRequest({ action: 'hiking-time-presets-upsert', baseRevision: 0, settings }),
+    makeContext(state),
+  );
+  await response.body?.cancel();
+  return response.status;
+}
+
+Deno.test('browser and Edge hiking time preset bounds stay aligned', async () => {
+  assertEquals(
+    hikingTimePresetBounds.maximumCustomPresets,
+    MAXIMUM_CUSTOM_HIKING_TIME_PRESETS,
+  );
+  assertEquals(
+    hikingTimePresetBounds.maximumNameLength,
+    MAXIMUM_HIKING_TIME_PRESET_NAME_LENGTH,
+  );
+  assertEquals(hikingTimePresetBounds.maximumPaceKnots, MAXIMUM_HIKING_PACE_KNOTS);
+  assertEquals(
+    hikingTimePresetBounds.maximumAltitudeBands,
+    MAXIMUM_HIKING_ALTITUDE_BANDS,
+  );
+  const base = hikingTimeParameters();
+  const variants: Readonly<Record<string, (value: number) => HikingTimeParameters>> = {
+    horizontalKmh: (value) => ({
+      ...base,
+      movement: { ...dinHikingMovement, horizontalKmh: value },
+    }),
+    ascentMetersPerHour: (value) => ({
+      ...base,
+      movement: { ...dinHikingMovement, ascentMetersPerHour: value },
+    }),
+    descentMetersPerHour: (value) => ({
+      ...base,
+      movement: { ...dinHikingMovement, descentMetersPerHour: value },
+    }),
+    gradePercent: (value) => ({
+      ...base,
+      movement: {
+        kind: 'grade-curve',
+        knots: [
+          { gradePercent: value, speedKmh: 4 },
+          { gradePercent: value >= 0 ? value - 1 : value + 1, speedKmh: 4 },
+        ].sort((left, right) => left.gradePercent - right.gradePercent),
+      },
+    }),
+    speedKmh: (value) => ({
+      ...base,
+      movement: {
+        kind: 'grade-curve',
+        knots: [
+          { gradePercent: 0, speedKmh: value },
+          { gradePercent: 10, speedKmh: 4 },
+        ],
+      },
+    }),
+    fromMeters: (value) => ({
+      ...base,
+      altitudeBands: [{ fromMeters: value, speedFactor: 1 }],
+    }),
+    speedFactor: (value) => ({
+      ...base,
+      altitudeBands: [{ fromMeters: 0, speedFactor: value }],
+    }),
+    breakMinutesPerMovingHour: (value) => ({
+      ...base,
+      breakMinutesPerMovingHour: value,
+    }),
+    lunchMinutes: (value) => ({ ...base, lunchMinutes: value }),
+    lunchMinimumMovingHours: (value) => ({ ...base, lunchMinimumMovingHours: value }),
+    movingHoursPerDay: (value) => ({ ...base, movingHoursPerDay: value }),
+  };
+  for (const [field, build] of Object.entries(variants)) {
+    const [minimum, maximum] = hikingTimePresetBounds[
+      field as keyof typeof hikingTimePresetBounds
+    ] as readonly [number, number];
+    const step = (maximum - minimum) / 1_000;
+    for (const value of [minimum, maximum, minimum - step, maximum + step]) {
+      const parameters = build(value);
+      const browserValid = validHikingTimeParameters(parameters);
+      assertEquals(
+        browserValid,
+        value >= minimum && value <= maximum,
+        `${field}=${value} browser bound`,
+      );
+      assertEquals(
+        await hikingTimePresetsStatus(hikingTimeSettings([parameters])),
+        browserValid ? 200 : 400,
+        `${field}=${value} Edge bound`,
+      );
+    }
+  }
+  const knots = Array.from({ length: MAXIMUM_HIKING_PACE_KNOTS + 1 }, (_, index) => ({
+    gradePercent: index - 10,
+    speedKmh: 4,
+  }));
+  const bands = Array.from(
+    { length: MAXIMUM_HIKING_ALTITUDE_BANDS + 1 },
+    (_, index) => ({
+      fromMeters: index * 100,
+      speedFactor: 1,
+    }),
+  );
+  for (const parameters of [
+    { ...base, movement: { kind: 'grade-curve' as const, knots: knots.slice(0, 1) } },
+    { ...base, movement: { kind: 'grade-curve' as const, knots: knots.slice(0, -1) } },
+    { ...base, movement: { kind: 'grade-curve' as const, knots } },
+    {
+      ...base,
+      movement: { kind: 'grade-curve' as const, knots: [...knots].reverse() },
+    },
+    { ...base, altitudeBands: bands.slice(0, -1) },
+    { ...base, altitudeBands: bands },
+    { ...base, altitudeBands: [...bands.slice(0, 2)].reverse() },
+  ]) {
+    assertEquals(
+      await hikingTimePresetsStatus(hikingTimeSettings([parameters])),
+      validHikingTimeParameters(parameters) ? 200 : 400,
+    );
+  }
+});
+
+Deno.test(
+  'hiking time preset upserts are validated and forwarded to the preset RPC',
+  async () => {
+    const settings = hikingTimeSettings();
+    const state = makeState();
+    state.rpcResults.set('upsert_hiking_time_presets', [
+      {
+        data: { outcome: 'applied', record: { revision: 1, payload: settings } },
+        error: null,
+      },
+      {
+        data: { outcome: 'conflict', record: { revision: 4, payload: settings } },
+        error: null,
+      },
+      { data: { outcome: 'missing', record: null }, error: null },
+    ]);
+    const request = (baseRevision: number) =>
+      jsonRequest({ action: 'hiking-time-presets-upsert', baseRevision, settings });
+
+    const applied = await handleTrackSync(request(0), makeContext(state));
+    assertEquals(applied.status, 200);
+    assertEquals(await responseJson(applied), {
+      outcome: 'applied',
+      record: { revision: 1, payload: settings },
+    });
+    assertEquals(
+      state.calls.find((call) => call.name === 'upsert_hiking_time_presets')?.value,
+      { p_user_id: USER_ID, p_payload: settings, p_base_revision: 0 },
+    );
+
+    const conflict = await handleTrackSync(request(1), makeContext(state));
+    assertEquals(conflict.status, 200);
+    assertEquals(await responseJson(conflict), {
+      outcome: 'conflict',
+      record: { revision: 4, payload: settings },
+    });
+
+    const missing = await handleTrackSync(request(2), makeContext(state));
+    assertEquals(missing.status, 200);
+    assertEquals(await responseJson(missing), { outcome: 'missing', record: null });
+  },
+);
+
+Deno.test(
+  'hiking time preset revision exhaustion is a bounded conflict response',
+  async () => {
+    const state = makeState();
+    state.rpcResults.set('upsert_hiking_time_presets', [
+      { data: { outcome: 'revision-exhausted', record: null }, error: null },
+    ]);
+    const response = await handleTrackSync(
+      jsonRequest({
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 9_007_199_254_740_991,
+        settings: hikingTimeSettings(),
+      }),
+      makeContext(state),
+    );
+    assertEquals(response.status, 409);
+    assertEquals((await responseJson(response)).error, {
+      code: 'hiking_time_presets_revision_exhausted',
+      message: 'Hiking time preset revisions are exhausted.',
+    });
+  },
+);
+
+Deno.test(
+  'invalid hiking time preset commands never call the RPC boundary',
+  async () => {
+    const valid = hikingTimeSettings();
+    const preset = (valid.custom as readonly Record<string, unknown>[])[0];
+    const withPreset = (values: Record<string, unknown>) => ({
+      ...valid,
+      custom: [{ ...preset, ...values }],
+    });
+    const tooMany = hikingTimeSettings(
+      Array.from(
+        { length: MAXIMUM_CUSTOM_HIKING_TIME_PRESETS + 1 },
+        hikingTimeParameters,
+      ),
+    );
+    const cases: readonly unknown[] = [
+      {
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: valid,
+        extra: 1,
+      },
+      { action: 'hiking-time-presets-upsert', settings: valid },
+      { action: 'hiking-time-presets-upsert', baseRevision: -1, settings: valid },
+      { action: 'hiking-time-presets-upsert', baseRevision: 0.5, settings: valid },
+      { action: 'hiking-time-presets-upsert', baseRevision: 0, settings: [] },
+      {
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: { ...valid, extra: 1 },
+      },
+      {
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: { ...valid, schemaVersion: 2 },
+      },
+      {
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: { ...valid, defaultPresetId: '' },
+      },
+      {
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: { ...valid, defaultPresetId: 'x'.repeat(201) },
+      },
+      {
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: { ...valid, custom: [preset, preset] },
+      },
+      { action: 'hiking-time-presets-upsert', baseRevision: 0, settings: tooMany },
+      ...[
+        { id: 'day-hike' },
+        { id: 'custom:00000000-0000-4000-8000-00000000000G' },
+        { name: '' },
+        { name: ' Padded' },
+        { name: 'x'.repeat(61) },
+        { extra: true },
+        { parameters: { ...hikingTimeParameters(), extra: 1 } },
+      ].map((values) => ({
+        action: 'hiking-time-presets-upsert',
+        baseRevision: 0,
+        settings: withPreset(values),
+      })),
+    ];
+    for (const value of cases) {
+      const state = makeState();
+      const response = await handleTrackSync(jsonRequest(value), makeContext(state));
+      assertEquals(response.status, 400, JSON.stringify(value).slice(0, 200));
+      assertEquals(state.calls, []);
+    }
+  },
+);
+
+Deno.test('oversized hiking time presets are rejected with 413', async () => {
+  const state = makeState();
+  const knots = Array.from({ length: MAXIMUM_HIKING_PACE_KNOTS }, (_, index) => ({
+    gradePercent: -99.12345678901234 + index * 9.87654321012345,
+    speedKmh: 0.1234567890123456 + index * 0.71,
+  }));
+  const bands = Array.from({ length: MAXIMUM_HIKING_ALTITUDE_BANDS }, (_, index) => ({
+    fromMeters: -499.12345678901234 + index * 800.0123456789,
+    speedFactor: 0.1234567890123456 + index * 0.1,
+  }));
+  const parameters: HikingTimeParameters = {
+    movement: { kind: 'grade-curve', knots },
+    altitudeBands: bands,
+    breakMinutesPerMovingHour: 8.123456789012345,
+    lunchMinutes: 30.12345678901234,
+    lunchMinimumMovingHours: 3.123456789012345,
+    movingHoursPerDay: 7.123456789012345,
+  };
+  const settings = hikingTimeSettings(
+    Array.from({ length: MAXIMUM_CUSTOM_HIKING_TIME_PRESETS }, () => parameters),
+  );
+  // Escaped control characters keep every field valid while exceeding 128 KiB.
+  for (const preset of settings.custom as { name: string }[]) {
+    preset.name = '\u0001'.repeat(MAXIMUM_HIKING_TIME_PRESET_NAME_LENGTH);
+  }
+  const response = await handleTrackSync(
+    jsonRequest({ action: 'hiking-time-presets-upsert', baseRevision: 0, settings }),
+    makeContext(state),
+  );
+  assertEquals(response.status, 413);
+  assertEquals((await responseJson(response)).error, {
+    code: 'hiking_time_presets_too_large',
+    message: 'hiking time presets exceed 128 KiB.',
+  });
+  assertEquals(state.calls, []);
 });

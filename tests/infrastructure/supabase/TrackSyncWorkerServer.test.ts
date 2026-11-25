@@ -518,3 +518,105 @@ describe('FetchRemoteGateway', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('FetchRemoteGateway hiking time presets', () => {
+  const settings = {
+    defaultPresetId: 'future-built-in',
+    custom: [
+      {
+        id: 'custom:00000000-0000-4000-8000-000000000001',
+        name: 'Slow',
+        parameters: {
+          movement: {
+            kind: 'din' as const,
+            horizontalKmh: 4,
+            ascentMetersPerHour: 300,
+            descentMetersPerHour: 500,
+          },
+          altitudeBands: [],
+          breakMinutesPerMovingHour: 10,
+          lunchMinutes: 30,
+          lunchMinimumMovingHours: 3,
+          movingHoursPerDay: 8,
+        },
+      },
+    ],
+  };
+  const gateway = () =>
+    new FetchRemoteGateway('https://example.test', 'publishable-key', 'access-token');
+
+  it('reads the account document, accepting a default this version does not know', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json([{ revision: 3, payload: { schemaVersion: 1, ...settings } }]),
+      )
+      .mockResolvedValueOnce(Response.json([]))
+      .mockResolvedValueOnce(
+        Response.json([{ revision: 3, payload: { schemaVersion: 2, ...settings } }]),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(gateway().hikingTimePresetsSnapshot(signal)).resolves.toEqual({
+      revision: 3,
+      settings,
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      'https://example.test/rest/v1/hiking_time_preset_records?select=revision,payload',
+    );
+    await expect(gateway().hikingTimePresetsSnapshot(signal)).resolves.toBeNull();
+    await expect(gateway().hikingTimePresetsSnapshot(signal)).rejects.toMatchObject({
+      code: 'invalid-remote',
+    });
+  });
+
+  it('uploads the document at a base revision and reads the outcome', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          outcome: 'conflict',
+          record: { revision: 4, payload: { schemaVersion: 1, ...settings } },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ outcome: 'missing', record: null }))
+      .mockResolvedValueOnce(
+        Response.json(
+          {
+            error: {
+              code: 'hiking_time_presets_revision_exhausted',
+              message: 'exhausted',
+            },
+          },
+          { status: 409 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { code: 'hiking_time_presets_too_large', message: 'too large' } },
+          { status: 413 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      gateway().mutateHikingTimePresets(3, settings, signal),
+    ).resolves.toEqual({ outcome: 'conflict', record: { revision: 4, settings } });
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(String(url)).toBe('https://example.test/functions/v1/track-sync');
+    expect(JSON.parse(init.body as string)).toEqual({
+      action: 'hiking-time-presets-upsert',
+      baseRevision: 3,
+      settings: { schemaVersion: 1, ...settings },
+    });
+    await expect(
+      gateway().mutateHikingTimePresets(3, settings, signal),
+    ).resolves.toEqual({ outcome: 'missing' });
+    await expect(
+      gateway().mutateHikingTimePresets(3, settings, signal),
+    ).rejects.toMatchObject({ code: 'revision-exhausted' });
+    await expect(
+      gateway().mutateHikingTimePresets(3, settings, signal),
+    ).rejects.toMatchObject({ code: 'limit' });
+  });
+});

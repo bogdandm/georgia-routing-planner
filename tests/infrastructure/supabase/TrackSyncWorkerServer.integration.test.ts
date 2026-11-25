@@ -8,6 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { calculateTrackMetrics } from '@/domain/tracks/trackCalculations';
 import {
+  DAY_HIKE_TIME_PRESET_ID,
+  DIN_HIKING_TIME_PRESET_ID,
+  builtInHikingTimePresets,
+  type HikingTimePreset,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
+import {
   SAVED_MARKER_SCHEMA_VERSION,
   type SavedMarker,
 } from '@/domain/markers/savedMarker';
@@ -209,7 +216,12 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 3,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false, folders: true },
+      changed: {
+        tracks: false,
+        markers: false,
+        folders: true,
+        hikingTimePresets: false,
+      },
     });
 
     expect(calls.indexOf('folder-snapshot')).toBeLessThan(
@@ -583,7 +595,12 @@ describe('TrackSyncWorkerServer', () => {
       }),
     ).resolves.toEqual({
       usage: { usedBytes: 128, reservedBytes: 0, limitBytes: 8_388_608 },
-      changed: { tracks: true, markers: false, folders: false },
+      changed: {
+        tracks: true,
+        markers: false,
+        folders: false,
+        hikingTimePresets: false,
+      },
       remoteTrackDeletions: [],
       remoteMarkerDeletions: [],
     });
@@ -731,7 +748,12 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false, folders: false },
+      changed: {
+        tracks: false,
+        markers: false,
+        folders: false,
+        hikingTimePresets: false,
+      },
       remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -1108,7 +1130,12 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false, folders: false },
+      changed: {
+        tracks: false,
+        markers: false,
+        folders: false,
+        hikingTimePresets: false,
+      },
       remoteTrackDeletions: [{ trackId: track.id, name: track.name }],
     });
     await expect(database.listLocalTracks()).resolves.toEqual([
@@ -2073,7 +2100,12 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 0,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false, folders: false },
+      changed: {
+        tracks: false,
+        markers: false,
+        folders: false,
+        hikingTimePresets: false,
+      },
       remoteTrackDeletions: [],
     });
 
@@ -2129,7 +2161,12 @@ describe('TrackSyncWorkerServer', () => {
         sessionRevision: 7,
       }),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false, folders: false },
+      changed: {
+        tracks: false,
+        markers: false,
+        folders: false,
+        hikingTimePresets: false,
+      },
       remoteMarkerDeletions: [],
     });
     expect(mutateMarker).toHaveBeenCalledWith(
@@ -2694,5 +2731,181 @@ describe('in-place track geometry replacement', () => {
     expect(cloud.events).toEqual([`upload ${originalHash}`, `delete ${originalHash}`]);
     expect(cloud.records.size).toBe(0);
     await expect(localTracks(database)).resolves.toEqual([]);
+  });
+});
+
+describe('TrackSyncWorkerServer hiking time presets', () => {
+  const dayHike = builtInHikingTimePresets[0];
+  if (dayHike === undefined) throw new Error('Missing the built-in presets.');
+  const { parameters } = dayHike;
+  function preset(suffix: string, lunchMinutes = 30): HikingTimePreset {
+    return {
+      id: `custom:00000000-0000-4000-8000-00000000000${suffix}`,
+      name: `Preset ${suffix}`,
+      parameters: { ...parameters, lunchMinutes },
+    };
+  }
+  interface PresetRecord {
+    revision: number;
+    settings: HikingTimePresetSettings;
+  }
+  type Remote = PresetRecord | null;
+  type Mutation =
+    { outcome: 'applied' | 'conflict'; record: PresetRecord } | { outcome: 'missing' };
+
+  function presetGateway(
+    snapshots: readonly Remote[],
+    mutate: (
+      baseRevision: number,
+      settings: HikingTimePresetSettings,
+    ) => Promise<Mutation>,
+  ) {
+    let snapshotIndex = 0;
+    return {
+      hikingTimePresetsSnapshot: vi.fn(() => {
+        const snapshot = snapshots[Math.min(snapshotIndex, snapshots.length - 1)];
+        snapshotIndex += 1;
+        return Promise.resolve(snapshot ?? null);
+      }),
+      mutateHikingTimePresets: vi.fn(mutate),
+      status: vi.fn(() =>
+        Promise.resolve({ usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 }),
+      ),
+      snapshot: vi.fn(() => Promise.resolve([])),
+      mutate: vi.fn(),
+      deleteRemoteRecord: vi.fn(),
+      download: vi.fn(),
+    };
+  }
+
+  function synchronize(gateway: ReturnType<typeof presetGateway>) {
+    const [clientEndpoint, serverEndpoint] = createMemoryWorkerRpcEndpointPair();
+    new TrackSyncWorkerServer(serverEndpoint, database, () => gateway);
+    const client = new WorkerRpcClient(clientEndpoint);
+    const presetsChanged = vi.fn();
+    client.subscribeEvent(
+      trackSyncWorkerEventNames.hikingTimePresetsChanged,
+      presetsChanged,
+    );
+    return {
+      presetsChanged,
+      result: client.request(trackSyncWorkerMethods.synchronize, {
+        accessToken: 'access-token',
+        userId: 'user-id',
+        sessionRevision: 3,
+      }),
+    };
+  }
+
+  it('adopts the account presets on first binding without erasing them', async () => {
+    const account = { defaultPresetId: preset('1').id, custom: [preset('1')] };
+    const gateway = presetGateway([{ revision: 5, settings: account }], () =>
+      Promise.reject(new Error('Nothing to upload.')),
+    );
+
+    const { presetsChanged, result } = synchronize(gateway);
+
+    await expect(result).resolves.toMatchObject({
+      changed: { hikingTimePresets: true },
+    });
+    expect(gateway.mutateHikingTimePresets).not.toHaveBeenCalled();
+    await expect(database.loadHikingTimePresets()).resolves.toEqual(account);
+    await vi.waitFor(() => {
+      expect(presetsChanged).toHaveBeenCalledOnce();
+    });
+    await expect(database.readHikingTimePresetSync()).resolves.toMatchObject({
+      state: { remoteRevision: 5, pendingVersion: null },
+    });
+  });
+
+  it('merges local presets into the account and retries on a conflict', async () => {
+    await database.saveHikingTimePresets({
+      defaultPresetId: DAY_HIKE_TIME_PRESET_ID,
+      custom: [preset('2')],
+    });
+    const concurrent = {
+      defaultPresetId: preset('3').id,
+      custom: [preset('1'), preset('3')],
+    };
+    const uploads: { baseRevision: number; settings: HikingTimePresetSettings }[] = [];
+    const gateway = presetGateway(
+      [
+        {
+          revision: 1,
+          settings: { defaultPresetId: preset('1').id, custom: [preset('1')] },
+        },
+      ],
+      (baseRevision, settings) => {
+        uploads.push({ baseRevision, settings });
+        return Promise.resolve(
+          uploads.length === 1
+            ? { outcome: 'conflict', record: { revision: 2, settings: concurrent } }
+            : { outcome: 'applied', record: { revision: 3, settings } },
+        );
+      },
+    );
+
+    await expect(synchronize(gateway).result).resolves.toMatchObject({
+      changed: { hikingTimePresets: true },
+    });
+
+    const merged = {
+      defaultPresetId: preset('3').id,
+      custom: [preset('1'), preset('3'), preset('2')],
+    };
+    expect(uploads).toEqual([
+      {
+        baseRevision: 1,
+        settings: {
+          defaultPresetId: preset('1').id,
+          custom: [preset('1'), preset('2')],
+        },
+      },
+      { baseRevision: 2, settings: merged },
+    ]);
+    await expect(database.readHikingTimePresetSync()).resolves.toEqual({
+      settings: merged,
+      state: { remoteRevision: 3, base: merged, pendingVersion: null },
+    });
+  });
+
+  it('adopts a remote-only change and announces it', async () => {
+    const first = { defaultPresetId: preset('1').id, custom: [preset('1')] };
+    const edited = { defaultPresetId: preset('1').id, custom: [preset('1', 90)] };
+    await expect(
+      synchronize(presetGateway([{ revision: 1, settings: first }], vi.fn())).result,
+    ).resolves.toBeDefined();
+
+    const gateway = presetGateway([{ revision: 2, settings: edited }], () =>
+      Promise.reject(new Error('Nothing to upload.')),
+    );
+    const { presetsChanged, result } = synchronize(gateway);
+
+    await expect(result).resolves.toMatchObject({
+      changed: { hikingTimePresets: true },
+    });
+    expect(gateway.mutateHikingTimePresets).not.toHaveBeenCalled();
+    await expect(database.loadHikingTimePresets()).resolves.toEqual(edited);
+    await vi.waitFor(() => {
+      expect(presetsChanged).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('leaves presets changed during the run pending', async () => {
+    const account = { defaultPresetId: preset('1').id, custom: [preset('1')] };
+    const local = { defaultPresetId: DIN_HIKING_TIME_PRESET_ID, custom: [] };
+    const gateway = presetGateway([{ revision: 1, settings: account }], vi.fn());
+    gateway.hikingTimePresetsSnapshot.mockImplementationOnce(async () => {
+      await database.saveHikingTimePresets(local);
+      return { revision: 1, settings: account };
+    });
+
+    await expect(synchronize(gateway).result).resolves.toMatchObject({
+      changed: { hikingTimePresets: false },
+    });
+    await expect(database.readHikingTimePresetSync()).resolves.toMatchObject({
+      settings: local,
+      state: { pendingVersion: 2 },
+    });
   });
 });

@@ -14,6 +14,11 @@ import {
   isImportsPlaceholder,
   type TrackFolder,
 } from '@/domain/tracks/trackFolder';
+import {
+  mergeHikingTimePresetSettings,
+  sameHikingTimePresetSettings,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
 import type {
   RemoteMarkerDeletionCandidate,
   RemoteTrackDeletionCandidate,
@@ -23,6 +28,7 @@ import {
   equalTrackSyncStates,
   validateLocalTrackSyncPair,
   validateSavedMarkerRecord,
+  validateHikingTimePresetDocument,
   validateTrackFolderRecord,
   withReplacedContentHashes,
   type AppDatabase,
@@ -197,6 +203,42 @@ function parseRemoteFolderRecord(value: unknown): RemoteFolderRecord {
   return { ...parsed.data, payload };
 }
 
+/** The account's hiking time preset document at one revision. */
+interface RemoteHikingTimePresets {
+  readonly revision: number;
+  readonly settings: HikingTimePresetSettings;
+}
+
+type RemoteHikingTimePresetMutation =
+  | {
+      readonly outcome: 'applied' | 'conflict';
+      readonly record: RemoteHikingTimePresets;
+    }
+  | { readonly outcome: 'missing' };
+
+const hikingTimePresetDocumentVersion = 1;
+const remoteHikingTimePresetsSchema = z
+  .object({
+    revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    payload: z.looseObject({
+      schemaVersion: z.literal(hikingTimePresetDocumentVersion),
+    }),
+  })
+  .strict();
+
+function parseRemoteHikingTimePresets(value: unknown): RemoteHikingTimePresets {
+  try {
+    const { revision, payload } = remoteHikingTimePresetsSchema.parse(value);
+    const { schemaVersion: _schemaVersion, ...settings } = payload;
+    return { revision, settings: validateHikingTimePresetDocument(settings) };
+  } catch {
+    throw new TrackSyncWorkerError(
+      'The server returned invalid hiking time presets.',
+      'invalid-remote',
+    );
+  }
+}
+
 interface RemoteIdentity {
   readonly lineageHash: string;
   readonly geometryVersion: 1 | 2;
@@ -329,6 +371,14 @@ interface RemoteGateway {
     signal: AbortSignal,
   ): Promise<RemoteMutation>;
   reorderFolders?(folderIds: readonly string[], signal: AbortSignal): Promise<void>;
+  hikingTimePresetsSnapshot?(
+    signal: AbortSignal,
+  ): Promise<RemoteHikingTimePresets | null>;
+  mutateHikingTimePresets?(
+    baseRevision: number,
+    settings: HikingTimePresetSettings,
+    signal: AbortSignal,
+  ): Promise<RemoteHikingTimePresetMutation>;
   download(path: string, signal: AbortSignal): Promise<Uint8Array>;
   deleteRemoteRecord(
     contentHash: string,
@@ -425,6 +475,15 @@ async function errorForResponse(response: Response): Promise<TrackSyncWorkerErro
     return new TrackSyncWorkerError('Your account session expired.', 'auth-expired');
   }
   if (response.status === 413) {
+    const parsed = errorResponseSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    if (parsed.success && parsed.data.error.code === 'hiking_time_presets_too_large') {
+      return new TrackSyncWorkerError(
+        'The hiking time presets are too large to synchronize. Delete a user preset and try again.',
+        'limit',
+      );
+    }
     return new TrackSyncWorkerError('Track geometry quota exceeded.', 'quota');
   }
   let detail = String(response.status);
@@ -453,6 +512,12 @@ async function errorForResponse(response: Response): Promise<TrackSyncWorkerErro
       if (code === 'folder_revision_exhausted') {
         return new TrackSyncWorkerError(
           'Synchronization could not finish. Your local tracks and folders remain available.',
+          'revision-exhausted',
+        );
+      }
+      if (code === 'hiking_time_presets_revision_exhausted') {
+        return new TrackSyncWorkerError(
+          'Synchronization could not finish. Your local hiking time presets remain available.',
           'revision-exhausted',
         );
       }
@@ -899,6 +964,64 @@ export class FetchRemoteGateway implements RemoteGateway {
     return new Uint8Array(await response.arrayBuffer());
   }
 
+  public async hikingTimePresetsSnapshot(
+    signal: AbortSignal,
+  ): Promise<RemoteHikingTimePresets | null> {
+    const response = await this.request(
+      '/rest/v1/hiking_time_preset_records?select=revision,payload',
+      { signal },
+    );
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    if (!Array.isArray(value) || value.length > 1) {
+      throw new TrackSyncWorkerError(
+        'The server returned invalid hiking time presets.',
+        'invalid-remote',
+      );
+    }
+    return value.length === 0 ? null : parseRemoteHikingTimePresets(value[0]);
+  }
+
+  public async mutateHikingTimePresets(
+    baseRevision: number,
+    settings: HikingTimePresetSettings,
+    signal: AbortSignal,
+  ): Promise<RemoteHikingTimePresetMutation> {
+    const response = await this.request('/functions/v1/track-sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'hiking-time-presets-upsert',
+        baseRevision,
+        settings: { schemaVersion: hikingTimePresetDocumentVersion, ...settings },
+      }),
+      signal,
+    });
+    if (!response.ok) throw await errorForResponse(response);
+    const value: unknown = await response.json();
+    const parsed = z
+      .object({
+        outcome: z.enum(['applied', 'conflict', 'missing']),
+        record: z.unknown(),
+      })
+      .strict()
+      .safeParse(value);
+    if (
+      !parsed.success ||
+      (parsed.data.outcome === 'missing') !== (parsed.data.record === null)
+    ) {
+      throw new TrackSyncWorkerError(
+        'The server returned an invalid hiking time preset mutation.',
+        'invalid-remote',
+      );
+    }
+    return parsed.data.outcome === 'missing'
+      ? { outcome: 'missing' }
+      : {
+          outcome: parsed.data.outcome,
+          record: parseRemoteHikingTimePresets(parsed.data.record),
+        };
+  }
+
   private async request(path: string, init: RequestInit): Promise<Response> {
     if (this.serverErrorBudget.failures >= maximumServerErrorAttempts) {
       throw new TrackSyncWorkerError(exhaustedServerErrorMessage, 'network');
@@ -1085,6 +1208,12 @@ export class TrackSyncWorkerServer {
         }
         if (result.changed.folders) {
           this.#rpc.publishEvent(trackSyncWorkerEventNames.foldersChanged, {
+            userId: request.userId,
+            sessionRevision: request.sessionRevision,
+          });
+        }
+        if (result.changed.hikingTimePresets) {
+          this.#rpc.publishEvent(trackSyncWorkerEventNames.hikingTimePresetsChanged, {
             userId: request.userId,
             sessionRevision: request.sessionRevision,
           });
@@ -1457,16 +1586,89 @@ export class TrackSyncWorkerServer {
         publishProgress();
       },
     );
+    const hikingTimePresetsChanged = await this.synchronizeHikingTimePresets(
+      userId,
+      gateway,
+      signal,
+    );
     return {
       usage,
       changed: {
         tracks: tracksChanged,
         markers: markerOutcome.changed,
         folders: folderOutcome.changed,
+        hikingTimePresets: hikingTimePresetsChanged,
       },
       remoteTrackDeletions: [...remoteDeletionCandidates.values()],
       remoteMarkerDeletions: markerOutcome.remoteDeletions,
     };
+  }
+
+  /**
+   * Three-way merges the local presets with the account document, uploads the merge
+   * when it carries local changes, and stores it unless local presets changed during
+   * the run; those stay pending for the next run. Returns whether local presets changed.
+   */
+  private async synchronizeHikingTimePresets(
+    userId: string,
+    gateway: RemoteGateway,
+    signal: AbortSignal,
+  ): Promise<boolean> {
+    if (
+      gateway.hikingTimePresetsSnapshot === undefined ||
+      gateway.mutateHikingTimePresets === undefined
+    ) {
+      return false;
+    }
+    const { settings: local, state } = await this.database.readHikingTimePresetSync();
+    let remote = await gateway.hikingTimePresetsSnapshot(signal);
+    for (let attempt = 0; attempt <= 3; attempt += 1) {
+      const remoteSettings = remote?.settings ?? state.base ?? local;
+      const merged = mergeHikingTimePresetSettings(state.base, local, remoteSettings);
+      // A default this version does not know falls back locally but stays in the
+      // account document unless this browser chose another default.
+      const keepsRemoteDefault =
+        remote !== null &&
+        merged.defaultPresetId !== remote.settings.defaultPresetId &&
+        (state.base === null || local.defaultPresetId === state.base.defaultPresetId);
+      const upload = keepsRemoteDefault
+        ? { ...merged, defaultPresetId: remoteSettings.defaultPresetId }
+        : merged;
+      let revision: number;
+      if (
+        remote !== null &&
+        (state.pendingVersion === null ||
+          sameHikingTimePresetSettings(upload, remote.settings))
+      ) {
+        revision = remote.revision;
+      } else {
+        const mutation = await gateway.mutateHikingTimePresets(
+          remote?.revision ?? 0,
+          upload,
+          signal,
+        );
+        if (mutation.outcome === 'missing') {
+          remote = null;
+          continue;
+        }
+        if (mutation.outcome === 'conflict') {
+          remote = mutation.record;
+          continue;
+        }
+        revision = mutation.record.revision;
+      }
+      return await this.database.applyRemoteHikingTimePresets({
+        settings: merged,
+        remoteRevision: revision,
+        base: merged,
+        expectedPendingVersion: state.pendingVersion,
+        expectedUserId: userId,
+      });
+    }
+    throw new TrackSyncWorkerError(
+      'Synchronization could not finish. Your local hiking time presets remain available.',
+      'concurrent-change',
+    );
   }
 
   private async synchronizeFolders(

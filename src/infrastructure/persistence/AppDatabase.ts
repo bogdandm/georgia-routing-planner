@@ -32,6 +32,7 @@ import {
   defaultHikingTimePresetSettings,
   hikingTimePresets,
   isBuiltInHikingTimePreset,
+  sameHikingTimePresetSettings,
   validHikingTimeParameters,
   type HikingTimeParameters,
   type HikingTimePresetSettings,
@@ -692,7 +693,9 @@ const hikingTimeParametersSchema: z.ZodType<HikingTimeParameters> = z
   .strict()
   .refine(validHikingTimeParameters, { message: 'Invalid hiking time parameters.' });
 
-const hikingTimePresetSettingsSchema: z.ZodType<HikingTimePresetSettings> = z
+// The shape a synchronized document carries: its default may name a preset this
+// version does not know yet, and resolution falls back until the merge repairs it.
+const hikingTimePresetDocumentSchema = z
   .object({
     defaultPresetId: z.string().min(1).max(200),
     custom: z
@@ -711,16 +714,67 @@ const hikingTimePresetSettingsSchema: z.ZodType<HikingTimePresetSettings> = z
   .refine(
     (settings) => {
       const ids = settings.custom.map((preset) => preset.id);
-      return (
-        new Set(ids).size === ids.length &&
-        !ids.some(isBuiltInHikingTimePreset) &&
-        hikingTimePresets(settings).some(
-          (preset) => preset.id === settings.defaultPresetId,
-        )
-      );
+      return new Set(ids).size === ids.length && !ids.some(isBuiltInHikingTimePreset);
     },
-    { message: 'Hiking time presets must have unique IDs and an existing default.' },
+    { message: 'Hiking time presets must have unique custom IDs.' },
   );
+
+const hikingTimePresetSettingsSchema: z.ZodType<HikingTimePresetSettings> =
+  hikingTimePresetDocumentSchema.refine(
+    (settings) =>
+      hikingTimePresets(settings).some(
+        (preset) => preset.id === settings.defaultPresetId,
+      ),
+    { message: 'Hiking time presets must have an existing default.' },
+  );
+
+/**
+ * Validates a synchronized preset document's settings; its default may be a preset
+ * this version does not know.
+ */
+export function validateHikingTimePresetDocument(
+  value: unknown,
+): HikingTimePresetSettings {
+  return hikingTimePresetDocumentSchema.parse(value);
+}
+
+/** Synchronization progress of the hiking time presets, one document per account. */
+export interface HikingTimePresetSyncState {
+  /** Revision of the account document this browser last merged, or null. */
+  readonly remoteRevision: number | null;
+  /** Settings of that merge, the common ancestor of the next three-way merge. */
+  readonly base: HikingTimePresetSettings | null;
+  /** Version of the latest local change not yet synchronized, or null when clean. */
+  readonly pendingVersion: number | null;
+}
+
+export interface HikingTimePresetSyncSnapshot {
+  readonly settings: HikingTimePresetSettings;
+  readonly state: HikingTimePresetSyncState;
+}
+
+export interface RemoteHikingTimePresetsUpdate {
+  readonly settings: HikingTimePresetSettings;
+  readonly remoteRevision: number;
+  readonly base: HikingTimePresetSettings;
+  /** Pending version the run read; a different current version keeps local intent. */
+  readonly expectedPendingVersion: number | null;
+  readonly expectedUserId: string;
+}
+
+const hikingTimePresetSyncKey = 'sync.hiking-time-presets';
+const hikingTimePresetSyncStateSchema: z.ZodType<HikingTimePresetSyncState> = z
+  .object({
+    remoteRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
+    base: hikingTimePresetDocumentSchema.nullable(),
+    pendingVersion: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
+  })
+  .strict();
+const initialHikingTimePresetSyncState: HikingTimePresetSyncState = {
+  remoteRevision: null,
+  base: null,
+  pendingVersion: 1,
+};
 
 const mapSharePreferencesKey = 'map.share-preferences';
 const mapSharePreferencesSchema: z.ZodType<MapSharePreferences> = z
@@ -3465,6 +3519,11 @@ export class AppDatabase
             value: defaultTrackSyncUsage,
             updatedAt,
           });
+          await this.settings.put({
+            key: hikingTimePresetSyncKey,
+            value: initialHikingTimePresetSyncState,
+            updatedAt,
+          });
         }
       },
     );
@@ -4285,12 +4344,17 @@ export class AppDatabase
         }
 
         const updatedAt = new Date().toISOString();
+        const presetsBefore = await this.readStoredHikingTimePresets();
         for (const key of archivedSettingValidators.keys()) {
           if (settings.has(key)) {
             await this.settings.put({ key, value: settings.get(key), updatedAt });
           } else {
             await this.settings.delete(key);
           }
+        }
+        const presetsAfter = await this.readStoredHikingTimePresets();
+        if (!sameHikingTimePresetSettings(presetsBefore, presetsAfter)) {
+          await this.markHikingTimePresetsPending();
         }
       },
     );
@@ -4473,10 +4537,94 @@ export class AppDatabase
     return defaultHikingTimePresetSettings;
   }
 
+  /**
+   * Stores the presets; an actual change waits for synchronization, so writing back a
+   * value that synchronization just applied queues nothing.
+   */
   public async saveHikingTimePresets(value: HikingTimePresetSettings): Promise<void> {
+    const settings = hikingTimePresetSettingsSchema.parse(value);
+    await this.transaction('rw', this.settings, async () => {
+      const current = await this.readStoredHikingTimePresets();
+      if (sameHikingTimePresetSettings(current, settings)) return;
+      await this.settings.put({
+        key: hikingTimePresetsKey,
+        value: settings,
+        updatedAt: new Date().toISOString(),
+      });
+      await this.markHikingTimePresetsPending();
+    });
+  }
+
+  /** The presets and their synchronization state, read together. */
+  public async readHikingTimePresetSync(): Promise<HikingTimePresetSyncSnapshot> {
+    return this.transaction('r', this.settings, async () => ({
+      settings: await this.readStoredHikingTimePresets(),
+      state: await this.readHikingTimePresetSyncState(),
+    }));
+  }
+
+  /**
+   * Atomically stores merged account presets and their synchronization state unless
+   * the account binding or the local pending change differs from what the run read.
+   * Returns whether the stored presets changed.
+   */
+  public async applyRemoteHikingTimePresets(
+    update: RemoteHikingTimePresetsUpdate,
+  ): Promise<boolean> {
+    if (update.expectedUserId.length === 0 || update.expectedUserId.length > 200) {
+      throw new LocalTrackStorageError(
+        'record-invalid',
+        'The synchronization account identifier is invalid.',
+      );
+    }
+    const settings = hikingTimePresetSettingsSchema.parse(update.settings);
+    const state = hikingTimePresetSyncStateSchema.parse({
+      remoteRevision: update.remoteRevision,
+      base: update.base,
+      pendingVersion: null,
+    });
+    return this.transaction('rw', this.settings, async () => {
+      const owner = await this.settings.get('sync.user-id');
+      if (owner?.value !== update.expectedUserId) return false;
+      const current = await this.readHikingTimePresetSyncState();
+      if (current.pendingVersion !== update.expectedPendingVersion) return false;
+      const updatedAt = new Date().toISOString();
+      await this.settings.put({
+        key: hikingTimePresetSyncKey,
+        value: state,
+        updatedAt,
+      });
+      const stored = await this.readStoredHikingTimePresets();
+      if (sameHikingTimePresetSettings(stored, settings)) return false;
+      await this.settings.put({
+        key: hikingTimePresetsKey,
+        value: settings,
+        updatedAt,
+      });
+      return true;
+    });
+  }
+
+  private async readStoredHikingTimePresets(): Promise<HikingTimePresetSettings> {
+    const parsed = hikingTimePresetSettingsSchema.safeParse(
+      (await this.settings.get(hikingTimePresetsKey))?.value,
+    );
+    return parsed.success ? parsed.data : defaultHikingTimePresetSettings;
+  }
+
+  /** An absent or invalid state synchronizes the presets as never merged. */
+  private async readHikingTimePresetSyncState(): Promise<HikingTimePresetSyncState> {
+    const parsed = hikingTimePresetSyncStateSchema.safeParse(
+      (await this.settings.get(hikingTimePresetSyncKey))?.value,
+    );
+    return parsed.success ? parsed.data : initialHikingTimePresetSyncState;
+  }
+
+  private async markHikingTimePresetsPending(): Promise<void> {
+    const state = await this.readHikingTimePresetSyncState();
     await this.settings.put({
-      key: hikingTimePresetsKey,
-      value: hikingTimePresetSettingsSchema.parse(value),
+      key: hikingTimePresetSyncKey,
+      value: { ...state, pendingVersion: (state.pendingVersion ?? 0) + 1 },
       updatedAt: new Date().toISOString(),
     });
   }

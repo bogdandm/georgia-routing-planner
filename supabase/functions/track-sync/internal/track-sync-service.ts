@@ -10,6 +10,7 @@ import type {
   TrackSyncCommand,
   TrackSyncResult,
   UpsertFolderCommand,
+  UpsertHikingTimePresetsCommand,
   UpsertMarkerCommand,
   UploadTrackCommand,
 } from './contracts.ts';
@@ -39,6 +40,8 @@ export class TrackSyncService {
         return await this.deleteFolder(command);
       case 'folder-reorder':
         return await this.reorderFolders(command);
+      case 'hiking-time-presets-upsert':
+        return await this.upsertHikingTimePresets(command);
       case 'status':
         return await this.status();
     }
@@ -62,6 +65,20 @@ export class TrackSyncService {
 
   private async reorderFolders(command: ReorderFoldersCommand): Promise<RpcResponse> {
     return this.folderMutation(await this.gateway.reorderFolders(command));
+  }
+
+  private async upsertHikingTimePresets(
+    command: UpsertHikingTimePresetsCommand,
+  ): Promise<RpcResponse> {
+    const result = await this.gateway.upsertHikingTimePresets(command);
+    if (result.outcome === 'revision-exhausted') {
+      throw new TrackSyncFailure(
+        409,
+        'hiking_time_presets_revision_exhausted',
+        'Hiking time preset revisions are exhausted.',
+      );
+    }
+    return result;
   }
 
   private folderMutation(result: RpcResponse): RpcResponse {

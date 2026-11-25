@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  MAXIMUM_CUSTOM_HIKING_TIME_PRESETS,
   DAY_HIKE_TIME_PRESET_ID,
   DIN_HIKING_TIME_PRESET_ID,
   MULTI_DAY_HIKE_TIME_PRESET_ID,
@@ -11,6 +12,7 @@ import {
   hikingPaceSecondsPerMeter,
   hikingTimePresets,
   isBuiltInHikingTimePreset,
+  mergeHikingTimePresetSettings,
   resolveHikingTimePreset,
   validHikingTimeParameters,
   type HikingPaceKnot,
@@ -467,5 +469,135 @@ describe('validHikingTimeParameters', () => {
     ['a day over 24 hours', { ...plain, movingHoursPerDay: 25 }],
   ])('rejects %s', (_, parameters) => {
     expect(validHikingTimeParameters(parameters)).toBe(false);
+  });
+});
+
+describe('mergeHikingTimePresetSettings', () => {
+  const dayHike = builtIn(DAY_HIKE_TIME_PRESET_ID);
+  function custom(id: string, lunchMinutes = 30): HikingTimePreset {
+    return {
+      id: `custom:${id}`,
+      name: `Preset ${id}`,
+      parameters: { ...dayHike.parameters, lunchMinutes },
+    };
+  }
+  const settings = (
+    custom: readonly HikingTimePreset[],
+    defaultPresetId = DAY_HIKE_TIME_PRESET_ID,
+  ) => ({ defaultPresetId, custom });
+
+  it('keeps presets added concurrently on two devices', () => {
+    const base = settings([custom('a')]);
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a'), custom('local')]),
+        settings([custom('a'), custom('remote')]),
+      ),
+    ).toEqual(settings([custom('a'), custom('remote'), custom('local')]));
+  });
+
+  it('propagates deletions of unchanged presets from either side', () => {
+    const base = settings([custom('a'), custom('b')]);
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('b')]),
+        settings([custom('a'), custom('b')]),
+      ),
+    ).toEqual(settings([custom('b')]));
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a'), custom('b')]),
+        settings([custom('a')]),
+      ),
+    ).toEqual(settings([custom('a')]));
+  });
+
+  it('keeps an edit over a concurrent delete on either side', () => {
+    const base = settings([custom('a')]);
+    expect(
+      mergeHikingTimePresetSettings(base, settings([]), settings([custom('a', 60)])),
+    ).toEqual(settings([custom('a', 60)]));
+    expect(
+      mergeHikingTimePresetSettings(base, settings([custom('a', 60)]), settings([])),
+    ).toEqual(settings([custom('a', 60)]));
+  });
+
+  it('keeps a one-sided edit and lets the account win edits made on both sides', () => {
+    const base = settings([custom('a'), custom('b'), custom('c')]);
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a', 45), custom('b'), custom('c', 75)]),
+        settings([custom('a', 60), custom('b', 90), custom('c')]),
+      ),
+    ).toEqual(settings([custom('a', 60), custom('b', 90), custom('c', 75)]));
+  });
+
+  it('unites both sides without a base, the account winning same-ID clashes', () => {
+    expect(
+      mergeHikingTimePresetSettings(
+        null,
+        settings([custom('local'), custom('a', 45)], 'custom:local'),
+        settings([custom('a', 60)], 'custom:a'),
+      ),
+    ).toEqual(settings([custom('a', 60), custom('local')], 'custom:a'));
+  });
+
+  it('caps the merge at the custom preset limit, keeping account presets first', () => {
+    const remote = Array.from(
+      { length: MAXIMUM_CUSTOM_HIKING_TIME_PRESETS },
+      (_, index) => custom(`remote-${String(index)}`),
+    );
+    const merged = mergeHikingTimePresetSettings(
+      null,
+      settings([custom('local')]),
+      settings(remote),
+    );
+    expect(merged.custom).toEqual(remote);
+  });
+
+  it('resolves the default from the side that changed it to an existing preset', () => {
+    const base = settings([custom('a'), custom('b')], 'custom:a');
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a'), custom('b')], 'custom:b'),
+        base,
+      ).defaultPresetId,
+    ).toBe('custom:b');
+    // Both devices changed it: the account's choice wins.
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a'), custom('b')], 'custom:b'),
+        settings([custom('a'), custom('b')], DIN_HIKING_TIME_PRESET_ID),
+      ).defaultPresetId,
+    ).toBe(DIN_HIKING_TIME_PRESET_ID);
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a'), custom('b')], 'custom:a'),
+        settings([custom('a'), custom('b')], MULTI_DAY_HIKE_TIME_PRESET_ID),
+      ).defaultPresetId,
+    ).toBe(MULTI_DAY_HIKE_TIME_PRESET_ID);
+    // The local default was deleted remotely: the remote default applies.
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        settings([custom('a'), custom('b')], 'custom:b'),
+        settings([custom('a')], DIN_HIKING_TIME_PRESET_ID),
+      ).defaultPresetId,
+    ).toBe(DIN_HIKING_TIME_PRESET_ID);
+    // A default this version does not know falls back to the day hike.
+    expect(
+      mergeHikingTimePresetSettings(
+        base,
+        base,
+        settings([custom('a')], 'future-preset'),
+      ).defaultPresetId,
+    ).toBe(DAY_HIKE_TIME_PRESET_ID);
   });
 });

@@ -247,6 +247,96 @@ export function isBuiltInHikingTimePreset(presetId: string): boolean {
   return builtInHikingTimePresets.some((preset) => preset.id === presetId);
 }
 
+/** Structural equality of JSON-like values, independent of object key order. */
+function sameValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left)) {
+    return (
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => sameValue(value, right[index]))
+    );
+  }
+  if (
+    typeof left !== 'object' ||
+    typeof right !== 'object' ||
+    left === null ||
+    right === null ||
+    Array.isArray(right)
+  ) {
+    return false;
+  }
+  const leftEntries = Object.entries(left);
+  const rightRecord = right as Record<string, unknown>;
+  return (
+    leftEntries.length === Object.keys(rightRecord).length &&
+    leftEntries.every(
+      ([key, value]) =>
+        Object.hasOwn(rightRecord, key) && sameValue(value, rightRecord[key]),
+    )
+  );
+}
+
+/** Whether two preset settings hold the same default and presets in the same order. */
+export function sameHikingTimePresetSettings(
+  left: HikingTimePresetSettings,
+  right: HikingTimePresetSettings,
+): boolean {
+  return sameValue(left, right);
+}
+
+/**
+ * Three-way merge of preset settings by preset ID against the last synchronized
+ * document `base`; null treats every preset as new on both sides. A side's change
+ * since base wins, remote wins true conflicts, and an edit outlives a delete. Remote
+ * order comes first, followed by local-only additions.
+ */
+export function mergeHikingTimePresetSettings(
+  base: HikingTimePresetSettings | null,
+  local: HikingTimePresetSettings,
+  remote: HikingTimePresetSettings,
+): HikingTimePresetSettings {
+  const baseById = new Map((base?.custom ?? []).map((preset) => [preset.id, preset]));
+  const localById = new Map(local.custom.map((preset) => [preset.id, preset]));
+  const remoteIds = new Set(remote.custom.map((preset) => preset.id));
+  const changed = (preset: HikingTimePreset) => {
+    const original = baseById.get(preset.id);
+    return original === undefined || !sameValue(original, preset);
+  };
+  const merged: HikingTimePreset[] = [];
+  for (const preset of remote.custom) {
+    const mine = localById.get(preset.id);
+    if (mine !== undefined) {
+      // Only this device changed it since base: keep the local edit; otherwise the
+      // account copy, which also wins when both devices edited it.
+      merged.push(
+        baseById.has(preset.id) && changed(mine) && !changed(preset) ? mine : preset,
+      );
+    } else if (changed(preset)) {
+      merged.push(preset);
+    }
+  }
+  for (const preset of local.custom) {
+    if (!remoteIds.has(preset.id) && changed(preset)) merged.push(preset);
+  }
+  const custom = merged.slice(0, MAXIMUM_CUSTOM_HIKING_TIME_PRESETS);
+  const known = (presetId: string) =>
+    isBuiltInHikingTimePreset(presetId) ||
+    custom.some((preset) => preset.id === presetId);
+  const preferred =
+    base !== null &&
+    local.defaultPresetId !== base.defaultPresetId &&
+    remote.defaultPresetId === base.defaultPresetId
+      ? local.defaultPresetId
+      : remote.defaultPresetId;
+  const defaultPresetId = known(preferred)
+    ? preferred
+    : known(remote.defaultPresetId)
+      ? remote.defaultPresetId
+      : DAY_HIKE_TIME_PRESET_ID;
+  return { defaultPresetId, custom };
+}
+
 /**
  * The track's preset; null follows the default. A preset deleted since, or not synced
  * to this browser, falls back to the default and then to the day-hike preset.

@@ -45,7 +45,12 @@ describe('TrackSyncWorkerClient', () => {
         });
         return {
           usage: { usedBytes: 0, reservedBytes: 0, limitBytes: 8_388_608 },
-          changed: { tracks: false, markers: false, folders: false },
+          changed: {
+            tracks: false,
+            markers: false,
+            folders: false,
+            hikingTimePresets: false,
+          },
           remoteTrackDeletions: [],
           remoteMarkerDeletions: [],
         };
@@ -56,7 +61,12 @@ describe('TrackSyncWorkerClient', () => {
     await expect(
       client.synchronize('user-id', 'access-token', 3, new AbortController().signal),
     ).resolves.toMatchObject({
-      changed: { tracks: false, markers: false, folders: false },
+      changed: {
+        tracks: false,
+        markers: false,
+        folders: false,
+        hikingTimePresets: false,
+      },
     });
 
     client.dispose();

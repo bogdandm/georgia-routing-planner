@@ -35,6 +35,7 @@ export class SupabaseUserDataService implements UserDataService {
   readonly #trackListeners = new Set<() => void>();
   readonly #markerListeners = new Set<() => void>();
   readonly #folderListeners = new Set<() => void>();
+  readonly #hikingTimePresetListeners = new Set<() => void>();
   #worker: TrackSyncWorkerClient | null;
   #snapshot = initialSnapshot;
   #unsubscribe: (() => void) | null = null;
@@ -89,6 +90,11 @@ export class SupabaseUserDataService implements UserDataService {
   public subscribeFoldersChanged(listener: () => void): () => void {
     this.#folderListeners.add(listener);
     return () => this.#folderListeners.delete(listener);
+  }
+
+  public subscribeHikingTimePresetsChanged(listener: () => void): () => void {
+    this.#hikingTimePresetListeners.add(listener);
+    return () => this.#hikingTimePresetListeners.delete(listener);
   }
 
   public async setSyncEnabled(enabled: boolean): Promise<void> {
@@ -247,6 +253,10 @@ export class SupabaseUserDataService implements UserDataService {
   }
 
   public async foldersChanged(): Promise<void> {
+    await this.synchronizeNow();
+  }
+
+  public async hikingTimePresetsChanged(): Promise<void> {
     await this.synchronizeNow();
   }
 
@@ -588,6 +598,10 @@ export class SupabaseUserDataService implements UserDataService {
     worker.subscribeFoldersChanged(({ userId, sessionRevision }) => {
       if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
       for (const listener of this.#folderListeners) listener();
+    });
+    worker.subscribeHikingTimePresetsChanged(({ userId, sessionRevision }) => {
+      if (!this.#isDecisionCurrent(userId, sessionRevision)) return;
+      for (const listener of this.#hikingTimePresetListeners) listener();
     });
     worker.subscribeProgress((progress: UserDataSyncProgress) => {
       if (this.#snapshot.syncStatus !== 'syncing') return;

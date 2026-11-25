@@ -839,22 +839,22 @@ hiking time preset: per-sample moving time (DIN 33466 anchored to the stored asc
 descent, or a pace-by-grade curve), altitude bands, breaks spread along moving time, and
 lunch pauses. `TracksWorkspaceProvider` resolves the preset from `routeTiming.presetId`
 and the `hikingTimePresets` that `main.tsx` hydrates into `uiStore` and `WorkspaceShell`
-saves to `tracks.hiking-time-presets` on every change. Changing the date or start time
-only reselects hours from loaded forecasts; collapsing weather or unmounting aborts
-pending requests. Results stay in component state, keyed by the section's track, and
-failed locations retry on the next expansion. `TracksWorkspaceProvider` loads
-`weather.track-preferences` once and saves every disclosure or weekday change; changes
-made before the record loads win over it and are then saved. A saved track's released
-start or pace slider and timing options update its active summary at once and are
-written by `AppDatabase.setLocalTrackRouteTiming` into the summary's `routeTiming`,
-which queues a metadata synchronization like a rename. The summary holds `routeTiming`
-only for non-default start, pace, recorded-time override, relative display, or hike
-date, or any explicit time-marker visibility choice (a null choice follows Layers). A
-preview or shared track keeps its settings in memory and they enter the summary on save.
-Timing leaves the browser only inside the track's synchronized metadata, and a newer
-account revision replaces it with the rest of that metadata. **Color the map track by
-light** is not part of `routeTiming`: the provider keeps the IDs of light-colored tracks
-in React state only, so a reload clears them.
+saves to `tracks.hiking-time-presets` on every change, then requests synchronization.
+Changing the date or start time only reselects hours from loaded forecasts; collapsing
+weather or unmounting aborts pending requests. Results stay in component state, keyed by
+the section's track, and failed locations retry on the next expansion.
+`TracksWorkspaceProvider` loads `weather.track-preferences` once and saves every
+disclosure or weekday change; changes made before the record loads win over it and are
+then saved. A saved track's released start or pace slider and timing options update its
+active summary at once and are written by `AppDatabase.setLocalTrackRouteTiming` into
+the summary's `routeTiming`, which queues a metadata synchronization like a rename. The
+summary holds `routeTiming` only for non-default start, pace, recorded-time override,
+relative display, or hike date, or any explicit time-marker visibility choice (a null
+choice follows Layers). A preview or shared track keeps its settings in memory and they
+enter the summary on save. Timing leaves the browser only inside the track's
+synchronized metadata, and a newer account revision replaces it with the rest of that
+metadata. **Color the map track by light** is not part of `routeTiming`: the provider
+keeps the IDs of light-colored tracks in React state only, so a reload clears them.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan
@@ -1096,10 +1096,10 @@ points and only gives them new DEM elevations, so repeated recalculation is stab
 
 Startup restores the local `sync.enabled` preference and the account session
 independently. One worker run starts when both resolve with an authenticated user and
-sync enabled. Later runs follow only an explicit local track, folder, or marker
-mutation, enabling sync, sign-in, or **Sync now**; token refresh and focus update
-account state without syncing. Disabling sync or signing out aborts an active run. The
-user ID only namespaces local preparation; the access token is the sole remote
+sync enabled. Later runs follow only an explicit local track, folder, marker, or hiking
+time preset mutation, enabling sync, sign-in, or **Sync now**; token refresh and focus
+update account state without syncing. Disabling sync or signing out aborts an active
+run. The user ID only namespaces local preparation; the access token is the sole remote
 credential.
 
 Before any remote call, the worker records `sync.user-id` in the transaction that
@@ -1116,6 +1116,19 @@ on the newer revision (last writer wins). An untouched local **Imports** placeho
 always adopts the account's existing record. Order is uploaded separately through one
 atomic `folder-reorder` call; readers order by position, then ID. A remote folder
 deletion only clears local placement, and unknown folder IDs read as unfiled.
+
+Hiking time presets reconcile last as one account document. The worker three-way merges
+the local presets with the account document against the last merged `base` by preset ID:
+each side's change since base wins, the account wins true conflicts, an edit outlives a
+concurrent delete, and presets added on two devices both survive. Without a base (first
+binding or a new account) both sides unite, the account winning same-ID clashes and
+choosing the default. A default that names no known preset falls back to the account's
+default and then to `day-hike`; a built-in preset this version does not know stays the
+account's default. A pending local change uploads the merge at the observed revision,
+re-merging and retrying on `conflict` up to three times. The merge is stored only while
+the local `pendingVersion` is unchanged; `WorkspaceShell` reloads the presets into
+`uiStore` on the `hiking-time-presets-changed` worker event and once when it mounts,
+since startup synchronization may finish before it subscribes.
 
 Each snapshot is grouped by lineage. A ready GRPT v2 member is the lineage head even
 over a higher-revision v1 predecessor. A browser holding source elevation for a v1
@@ -1149,11 +1162,11 @@ local data and pending work.
 
 ### Edge Function trust boundary
 
-`supabase/functions/track-sync` handles tracks, folders, and markers. Supabase verifies
-the JWT, `@supabase/server` in `auth: "user"` mode supplies claims, and the function
-derives `user_id` only from `userClaims.id`. It rejects client-supplied identity, object
-paths, quota counters, unknown fields, oversized bodies, and malformed values. No
-privileged key reaches the browser.
+`supabase/functions/track-sync` handles tracks, folders, markers, and hiking time
+presets. Supabase verifies the JWT, `@supabase/server` in `auth: "user"` mode supplies
+claims, and the function derives `user_id` only from `userClaims.id`. It rejects
+client-supplied identity, object paths, quota counters, unknown fields, oversized
+bodies, and malformed values. No privileged key reaches the browser.
 
 An upload is one bounded multipart request with `action=upload`, `baseRevision`,
 `contentHash`, `compressedBytes`, JSON metadata, and one `application/gzip` geometry.

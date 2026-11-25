@@ -139,6 +139,7 @@ export default tseslint.config(
       'src/presentation/shell/workspaceTabLocation.ts',
       'src/presentation/shell/formatPlaceSearchCategory.ts',
       'src/presentation/shell/SettingsDialog.tsx',
+      'src/presentation/shell/HikingTimeSettingsPanel.tsx',
       'src/presentation/shell/OnboardingTour.tsx',
       'src/presentation/shell/MapLegend.tsx',
       'src/presentation/shell/HelpScreen.tsx',

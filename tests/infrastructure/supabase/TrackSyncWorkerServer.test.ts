@@ -378,6 +378,8 @@ describe('FetchRemoteGateway', () => {
     const routeTiming = {
       startHour: 6.5,
       paceFactor: 1.25,
+      stopFactor: 0.75,
+      presetId: 'multi-day',
       ignoreRecordedTime: false,
       timeMarkers: false,
       relativeTimeMarkers: true,

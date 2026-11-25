@@ -13,14 +13,29 @@ import {
 import {
   TRACK_WEATHER_LATEST_START_HOUR,
   TRACK_WEATHER_MAXIMUM_PACE_FACTOR,
+  TRACK_WEATHER_MAXIMUM_STOP_FACTOR,
   TRACK_WEATHER_MINIMUM_PACE_FACTOR,
+  TRACK_WEATHER_MINIMUM_STOP_FACTOR,
   TRACK_WEATHER_PACE_FACTOR_STEP,
   TRACK_WEATHER_START_HOUR_STEP,
+  TRACK_WEATHER_STOP_FACTOR_STEP,
   adjustedTrackRouteTiming,
   defaultTrackWeatherPreferences,
   recordedRouteStart,
   type TrackWeatherPreferences,
 } from '@/application/weather/TrackWeatherForecast';
+import {
+  MAXIMUM_CUSTOM_HIKING_TIME_PRESETS,
+  MAXIMUM_HIKING_ALTITUDE_BANDS,
+  MAXIMUM_HIKING_PACE_KNOTS,
+  MAXIMUM_HIKING_TIME_PRESET_NAME_LENGTH,
+  defaultHikingTimePresetSettings,
+  hikingTimePresets,
+  isBuiltInHikingTimePreset,
+  validHikingTimeParameters,
+  type HikingTimeParameters,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
 import { APP_LOCALES, type AppLocale } from '@/domain/localization/appLocale';
 
 import type { DiagnosticLogger } from '@/application/ports/DiagnosticLogger';
@@ -94,10 +109,7 @@ import {
   trackFolderUpdatedAt,
   type TrackFolder,
 } from '@/domain/tracks/trackFolder';
-import {
-  estimatedTrackSeconds,
-  type TrackMetrics,
-} from '@/domain/tracks/trackCalculations';
+import type { TrackMetrics } from '@/domain/tracks/trackCalculations';
 import type { PoiCandidate } from '@/domain/tracks/trackNaming';
 import {
   TRACK_LIGHTING_ALGORITHM_VERSION,
@@ -582,6 +594,13 @@ const trackRouteTimingShape = {
     .max(TRACK_WEATHER_MAXIMUM_PACE_FACTOR)
     .multipleOf(TRACK_WEATHER_PACE_FACTOR_STEP),
   // Entries saved before these options load with their defaults.
+  stopFactor: z
+    .number()
+    .min(TRACK_WEATHER_MINIMUM_STOP_FACTOR)
+    .max(TRACK_WEATHER_MAXIMUM_STOP_FACTOR)
+    .multipleOf(TRACK_WEATHER_STOP_FACTOR_STEP)
+    .default(1),
+  presetId: z.string().min(1).max(200).nullable().default(null),
   ignoreRecordedTime: z.boolean().default(false),
   timeMarkers: z.boolean().nullable().default(null),
   relativeTimeMarkers: z.boolean().default(false),
@@ -638,6 +657,70 @@ function legacyRouteTiming(
     ? null
     : adjustedTrackRouteTiming(entry, recordedRouteStart(summary.metrics));
 }
+
+const hikingTimePresetsKey = 'tracks.hiking-time-presets';
+const hikingTimeParametersSchema: z.ZodType<HikingTimeParameters> = z
+  .object({
+    movement: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('din'),
+          horizontalKmh: z.number(),
+          ascentMetersPerHour: z.number(),
+          descentMetersPerHour: z.number(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('grade-curve'),
+          knots: z
+            .array(
+              z.object({ gradePercent: z.number(), speedKmh: z.number() }).strict(),
+            )
+            .max(MAXIMUM_HIKING_PACE_KNOTS),
+        })
+        .strict(),
+    ]),
+    altitudeBands: z
+      .array(z.object({ fromMeters: z.number(), speedFactor: z.number() }).strict())
+      .max(MAXIMUM_HIKING_ALTITUDE_BANDS),
+    breakMinutesPerMovingHour: z.number(),
+    lunchMinutes: z.number(),
+    lunchMinimumMovingHours: z.number(),
+    movingHoursPerDay: z.number(),
+  })
+  .strict()
+  .refine(validHikingTimeParameters, { message: 'Invalid hiking time parameters.' });
+
+const hikingTimePresetSettingsSchema: z.ZodType<HikingTimePresetSettings> = z
+  .object({
+    defaultPresetId: z.string().min(1).max(200),
+    custom: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(200),
+            name: z.string().trim().min(1).max(MAXIMUM_HIKING_TIME_PRESET_NAME_LENGTH),
+            parameters: hikingTimeParametersSchema,
+          })
+          .strict(),
+      )
+      .max(MAXIMUM_CUSTOM_HIKING_TIME_PRESETS),
+  })
+  .strict()
+  .refine(
+    (settings) => {
+      const ids = settings.custom.map((preset) => preset.id);
+      return (
+        new Set(ids).size === ids.length &&
+        !ids.some(isBuiltInHikingTimePreset) &&
+        hikingTimePresets(settings).some(
+          (preset) => preset.id === settings.defaultPresetId,
+        )
+      );
+    },
+    { message: 'Hiking time presets must have unique IDs and an existing default.' },
+  );
 
 const mapSharePreferencesKey = 'map.share-preferences';
 const mapSharePreferencesSchema: z.ZodType<MapSharePreferences> = z
@@ -855,6 +938,10 @@ const archivedSettingValidators = new Map<string, (value: unknown) => boolean>([
     collapsedTrackFoldersKey,
     (value) => collapsedTrackFolderIdsSchema.safeParse(value).success,
   ],
+  [
+    hikingTimePresetsKey,
+    (value) => hikingTimePresetSettingsSchema.safeParse(value).success,
+  ],
 ]);
 
 /** Both records come from the same schema parse, so their key order matches. */
@@ -922,6 +1009,8 @@ const trackMetricsSchema = z
     recordedStartAt: z.iso.datetime().optional(),
     recordedEndAt: z.iso.datetime().optional(),
     elapsedSeconds: z.number().nonnegative().optional(),
+    // Summaries saved before estimates followed the track's hiking time preset stored
+    // the DIN 33466 estimate; it is dropped on read.
     estimatedSeconds: z.number().nonnegative().optional(),
     ascentMeters: z.number().nonnegative().optional(),
     descentMeters: z.number().nonnegative().optional(),
@@ -967,9 +1056,6 @@ const trackMetricsSchema = z
     if (value.recordedEndAt !== undefined) result.recordedEndAt = value.recordedEndAt;
     if (value.elapsedSeconds !== undefined)
       result.elapsedSeconds = value.elapsedSeconds;
-    if (value.estimatedSeconds !== undefined) {
-      result.estimatedSeconds = value.estimatedSeconds;
-    }
     if (value.ascentMeters !== undefined) result.ascentMeters = value.ascentMeters;
     if (value.descentMeters !== undefined) result.descentMeters = value.descentMeters;
     if (value.minimumElevationMeters !== undefined) {
@@ -1159,24 +1245,6 @@ function withoutCalculatedElevation(value: unknown): unknown {
   delete sourceRecord.calculatedMetrics;
   delete sourceRecord.calculatedTrackPoints;
   return sourceRecord;
-}
-
-function withEstimatedDuration(metrics: TrackMetrics): TrackMetrics {
-  if (metrics.estimatedSeconds !== undefined) return metrics;
-  const estimatedSeconds = estimatedTrackSeconds(metrics);
-  return estimatedSeconds === undefined ? metrics : { ...metrics, estimatedSeconds };
-}
-
-/** Fills the walking-time estimate that summaries saved before it existed lack. */
-function withEstimatedDurations(summary: LocalTrackSummary): LocalTrackSummary {
-  const result: LocalTrackSummaryBuilder = {
-    ...summary,
-    metrics: withEstimatedDuration(summary.metrics),
-  };
-  if (summary.calculatedMetrics !== undefined) {
-    result.calculatedMetrics = withEstimatedDuration(summary.calculatedMetrics);
-  }
-  return result;
 }
 
 const currentLocalTrackSummarySchema = z
@@ -1752,29 +1820,18 @@ export class AppDatabase
       folderSyncStates: 'folderId,remoteRevision,pendingKind',
       localTrackThumbnails: 'trackId',
     });
-    this.version(11)
-      .stores({
-        settings: 'key,updatedAt',
-        diagnostics: '++id,timestamp,name,level',
-        localTracks: 'id,normalizedName,savedAt',
-        localTrackContents: 'trackId',
-        trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
-        savedMarkers: 'id,normalizedName,colorKey,createdAt',
-        markerSyncStates: 'markerId,remoteRevision,pendingKind',
-        trackFolders: 'id,normalizedName,position',
-        folderSyncStates: 'folderId,remoteRevision,pendingKind',
-        localTrackThumbnails: 'trackId',
-      })
-      // The estimate is browser-local derived metadata: it never enters the content
-      // hash or synchronized metadata, so sync state stays unchanged.
-      .upgrade(async (transaction) => {
-        const summaryTable = transaction.table('localTracks');
-        const summaries: unknown[] = await summaryTable.toArray();
-        for (const value of summaries) {
-          const summary = parseLocalTrackSummary(value);
-          if (summary !== null) await summaryTable.put(withEstimatedDurations(summary));
-        }
-      });
+    this.version(11).stores({
+      settings: 'key,updatedAt',
+      diagnostics: '++id,timestamp,name,level',
+      localTracks: 'id,normalizedName,savedAt',
+      localTrackContents: 'trackId',
+      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
+      savedMarkers: 'id,normalizedName,colorKey,createdAt',
+      markerSyncStates: 'markerId,remoteRevision,pendingKind',
+      trackFolders: 'id,normalizedName,position',
+      folderSyncStates: 'folderId,remoteRevision,pendingKind',
+      localTrackThumbnails: 'trackId',
+    });
     this.version(12).stores({
       settings: 'key,updatedAt',
       diagnostics: '++id,timestamp,name,level',
@@ -4396,6 +4453,30 @@ export class AppDatabase
     await this.settings.put({
       key: trackWeatherPreferencesKey,
       value: trackWeatherPreferencesSchema.parse(value),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  public async loadHikingTimePresets(): Promise<HikingTimePresetSettings> {
+    const record = await this.settings.get(hikingTimePresetsKey);
+    if (record === undefined) return defaultHikingTimePresetSettings;
+
+    const parsed = hikingTimePresetSettingsSchema.safeParse(record.value);
+    if (parsed.success) return parsed.data;
+
+    await this.settings.delete(hikingTimePresetsKey);
+    this.logger.log({
+      level: 'warn',
+      name: 'storage.settings.repaired',
+      data: { reason: 'schema-invalid' },
+    });
+    return defaultHikingTimePresetSettings;
+  }
+
+  public async saveHikingTimePresets(value: HikingTimePresetSettings): Promise<void> {
+    await this.settings.put({
+      key: hikingTimePresetsKey,
+      value: hikingTimePresetSettingsSchema.parse(value),
       updatedAt: new Date().toISOString(),
     });
   }

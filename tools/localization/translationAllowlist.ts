@@ -42,6 +42,17 @@ export const translationAllowlist: readonly TranslationAllowlistEntry[] = [
     reason: 'The approximation sign before an already localized duration is invariant.',
   },
   {
+    catalog: 'tracks',
+    messageId: 'vaxoYu',
+    reason:
+      'The approximation sign and parentheses around already localized values are invariant.',
+  },
+  {
+    catalog: 'tracks',
+    messageId: '2vMX4s',
+    reason: 'Only the localized durations vary; the en dash range format is invariant.',
+  },
+  {
     catalog: 'weather',
     messageId: 'WOxIJW',
     reason: 'Only the localized number varies; the °C unit symbol is invariant.',

@@ -200,6 +200,7 @@ import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 import { MarkerEditorDialog } from '@/presentation/markers/MarkerEditorDialog';
 import { ClimbsDescentsSection } from '@/presentation/tracks/ClimbsDescentsSection';
 import { TrackMarkersSection } from '@/presentation/tracks/TrackMarkersSection';
+import { HikingTimePresetSelect } from '@/presentation/tracks/HikingTimePresetSelect';
 import { TrackWeatherSection } from '@/presentation/tracks/TrackWeatherSection';
 import {
   useTrackLighting,
@@ -210,6 +211,7 @@ import {
   createTrackTimingRoute,
   defaultTrackWeatherDate,
   defaultTrackWeatherPreferences,
+  estimateRouteHikingTime,
   localCalendarDate,
   trackWeatherDates,
   planTrackClockTimes,
@@ -218,10 +220,12 @@ import {
   trackWeatherTimeline,
   type TrackClockTimes,
   recordedRouteStart,
+  type TimedTrackWeatherSettings,
   type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
+import { hikingTimePresets, resolveHikingTimePreset } from '@/domain/tracks/hikingTime';
 import { mapLayerStore } from '@/presentation/map/mapLayerStore';
 import type { ImportedTrackHighlightSegment } from '@/presentation/map/MapLibreLayerController';
 import type { ImportedTrackTimeLabel } from '@/presentation/map/mapStyleFactory';
@@ -563,12 +567,18 @@ interface TracksWorkspaceValue {
     preferences: TrackWeatherPreferences,
   ) => void;
   /**
-   * Route start and pace of the active track: stored per saved track, kept in memory
-   * for a preview or shared track until it is saved.
+   * Route start, pace, and hiking time preset of the active track: stored per saved
+   * track, kept in memory for a preview or shared track until it is saved. It carries
+   * the resolved preset's parameters.
    */
-  readonly activeTrackWeatherTimeline: TrackWeatherTimelineSettings;
+  readonly activeTrackWeatherTimeline: TimedTrackWeatherSettings;
   readonly activeTrackMarkerTimes: ReadonlyMap<string, string>;
   readonly activeTimingRoute: TrackTimingRoute | null;
+  /**
+   * Total estimate of the active track under every preset at its pace and stop
+   * adjustments, by preset ID; empty while the route cannot be timed.
+   */
+  readonly activePresetEstimates: ReadonlyMap<string, number>;
   /** Sun and terrain light of the active track's hike; null without a timed route. */
   readonly activeTrackLighting: TrackLightingView | null;
   readonly updateActiveTrackWeatherTimeline: (
@@ -591,6 +601,8 @@ interface TracksWorkspaceValue {
   readonly multiTrackMode: boolean;
   readonly multiTrackSelections: readonly MultiTrackSelection[];
   readonly multiTrackStatsMetrics: TrackStatsMetrics | null;
+  /** Stats of each ready selected track, untimed ones with their preset's estimate. */
+  readonly multiTrackSelectionStats: ReadonlyMap<string, TrackStatsMetrics>;
   readonly toggleMultiTrackMode: () => Promise<void>;
   readonly toggleMultiTrackSelection: (summary: LocalTrackSummary) => Promise<void>;
   readonly clearRoutePlan: () => void;
@@ -846,8 +858,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   // are only kept in memory; the load keeps them over the record and saves them.
   const latestTrackWeatherPreferences = useRef<TrackWeatherPreferences | null>(null);
   const trackWeatherPreferencesLoaded = useRef(false);
-  // Route timing of the open preview or shared track, stored in the summary when that
-  // track is saved.
+  // Route timing of the open preview, shared track, or drawn route, stored in the
+  // summary when that track is saved.
   const [unsavedTrackTimeline, setUnsavedTrackTimeline] = useState<{
     readonly trackId: string;
     readonly settings: TrackWeatherTimelineSettings;
@@ -1184,7 +1196,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     [database, logger],
   );
   const activeUnsavedTrackId =
-    active?.kind === 'preview' || active?.kind === 'shared' ? active.id : null;
+    active?.kind === 'preview' ||
+    active?.kind === 'shared' ||
+    active?.kind === 'route-plan'
+      ? active.id
+      : null;
   // Adjusting state during render, not in an effect: once its preview or shared track
   // is closed, replaced, or saved, the in-memory settings are gone, so reopening the
   // same shared link starts from the defaults.
@@ -1209,8 +1225,8 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     () => (timingMetrics === undefined ? undefined : recordedRouteStart(timingMetrics)),
     [timingMetrics],
   );
-  const activeTrackWeatherTimeline = useMemo(
-    () =>
+  const activeTimelineSettings = useMemo(
+    (): TrackWeatherTimelineSettings =>
       savedTimingTrackId !== null
         ? {
             ...trackWeatherTimeline(savedRouteTiming, activeRecordedStart),
@@ -1229,9 +1245,24 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeUnsavedTrackId,
     ],
   );
+  const presetSettings = useUiStore((state) => state.hikingTimePresets);
+  const activeTrackWeatherTimeline = useMemo(
+    (): TimedTrackWeatherSettings => ({
+      ...activeTimelineSettings,
+      hikingTime: resolveHikingTimePreset(
+        presetSettings,
+        activeTimelineSettings.presetId,
+      ).parameters,
+    }),
+    [activeTimelineSettings, presetSettings],
+  );
   const updateActiveTrackWeatherTimeline = useCallback(
     (settings: TrackWeatherTimelineSettings) => {
-      if (active?.kind === 'preview' || active?.kind === 'shared') {
+      if (
+        active?.kind === 'preview' ||
+        active?.kind === 'shared' ||
+        active?.kind === 'route-plan'
+      ) {
         setUnsavedTrackTimeline({ trackId: active.id, settings });
         return;
       }
@@ -2273,6 +2304,11 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         trackPoints: stored.trackPoints,
         markers: [],
       };
+      // A drawn route has no recorded start, so only the user's changes are stored.
+      const routeTiming =
+        unsavedTrackTimeline?.trackId === planId
+          ? adjustedTrackRouteTiming(unsavedTrackTimeline.settings)
+          : null;
       const summary: LocalTrackSummary = {
         schemaVersion: LOCAL_TRACK_SCHEMA_VERSION,
         id: planId,
@@ -2291,6 +2327,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
         ),
         segmentCount: stored.trackPoints.length,
         metrics: stored.metrics,
+        ...(routeTiming === null ? {} : { routeTiming }),
         metadata: {
           version: '1.1',
           name: normalizedName.name,
@@ -2331,6 +2368,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   }, [
     active,
     clock,
+    unsavedTrackTimeline,
     database,
     reloadSummaries,
     saveLatestOpenedTrackId,
@@ -3322,7 +3360,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
           : active.preparationStatus === 'ready'
             ? (active.sourceProfile ?? active.calculatedProfile)
             : null;
-  const activeStatsMetrics = useMemo<TrackStatsMetrics | null>(() => {
+  const activeTrackMetrics = useMemo<TrackStatsMetrics | null>(() => {
     if (activePath !== null) return trackPathMetrics(activePath);
     if (active === null || active.kind === 'route-plan') return null;
     if (active.kind === 'saved') return active.summary.metrics;
@@ -3699,7 +3737,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     active.preparationStatus === 'ready'
       ? active.sourceSegments
       : undefined;
-  const timingDistance = activeStatsMetrics?.distanceMeters;
+  const timingDistance = activeTrackMetrics?.distanceMeters;
   const activeTimingRoute = useMemo(() => {
     const segments =
       savedTimingPoints ?? previewTimingSegments?.map((segment) => segment.points);
@@ -3719,6 +3757,39 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     savedTimingPoints,
     previewTimingSegments,
   ]);
+  // Untimed tracks show their preset's estimate in the stats; a drawn route or an edit
+  // has no full timing route yet, so its profile times it.
+  const estimateRoute =
+    activeTimingRoute ?? (activePath === null ? null : activeProfile);
+  const activePresetEstimates = useMemo(() => {
+    const estimates = new Map<string, number>();
+    if (estimateRoute === null || activeTrackMetrics === null) return estimates;
+    for (const preset of hikingTimePresets(presetSettings)) {
+      estimates.set(
+        preset.id,
+        estimateRouteHikingTime(estimateRoute.points, activeTrackMetrics, {
+          ...activeTrackWeatherTimeline,
+          hikingTime: preset.parameters,
+        }).totalSeconds,
+      );
+    }
+    return estimates;
+  }, [activeTrackMetrics, activeTrackWeatherTimeline, estimateRoute, presetSettings]);
+  const activeStatsMetrics = useMemo((): TrackStatsMetrics | null => {
+    if (activeTrackMetrics === null) return null;
+    const estimatedSeconds = activePresetEstimates.get(
+      resolveHikingTimePreset(presetSettings, activeTrackWeatherTimeline.presetId).id,
+    );
+    return estimatedSeconds === undefined ||
+      activeTrackMetrics.elapsedSeconds !== undefined
+      ? activeTrackMetrics
+      : { ...activeTrackMetrics, estimatedSeconds };
+  }, [
+    activePresetEstimates,
+    activeTrackMetrics,
+    activeTrackWeatherTimeline.presetId,
+    presetSettings,
+  ]);
   const multiTrackTimingRoutes = useMemo(() => {
     const routes = new Map<string, TrackTimingRoute>();
     for (const selection of readyMultiTrackSelections) {
@@ -3734,6 +3805,25 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     }
     return routes;
   }, [readyMultiTrackSelections]);
+  const multiTrackSelectionStats = useMemo(() => {
+    const stats = new Map<string, TrackStatsMetrics>();
+    for (const selection of readyMultiTrackSelections) {
+      const { metrics, routeTiming } = selection.summary;
+      const route = multiTrackTimingRoutes.get(selection.summary.id);
+      if (route === undefined || metrics.elapsedSeconds !== undefined) continue;
+      const timing = trackWeatherTimeline(routeTiming, recordedRouteStart(metrics));
+      const estimate = estimateRouteHikingTime(route.points, metrics, {
+        paceFactor: timing.paceFactor,
+        stopFactor: timing.stopFactor,
+        hikingTime: resolveHikingTimePreset(presetSettings, timing.presetId).parameters,
+      });
+      stats.set(selection.summary.id, {
+        ...metrics,
+        estimatedSeconds: estimate.totalSeconds,
+      });
+    }
+    return stats;
+  }, [presetSettings, multiTrackTimingRoutes, readyMultiTrackSelections]);
   const activeTrackLighting = useTrackLighting({
     savedTrack:
       active?.kind === 'saved'
@@ -3844,10 +3934,15 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
   const timeLabels = useMemo((): readonly ImportedTrackTimeLabel[] => {
     if (multiTrackMode) {
       return readyMultiTrackSelections.flatMap((selection) => {
-        const settings = trackWeatherTimeline(
+        const timeline = trackWeatherTimeline(
           selection.summary.routeTiming,
           recordedRouteStart(selection.summary.metrics),
         );
+        const settings: TimedTrackWeatherSettings = {
+          ...timeline,
+          hikingTime: resolveHikingTimePreset(presetSettings, timeline.presetId)
+            .parameters,
+        };
         const timingRoute = multiTrackTimingRoutes.get(selection.summary.id);
         if (
           timingRoute === undefined ||
@@ -3877,6 +3972,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
     activeClockTimes,
     activeTrackWeatherTimeline,
     defaultTimeMarkers,
+    presetSettings,
     multiTrackMode,
     multiTrackTimingRoutes,
     readyMultiTrackSelections,
@@ -3925,6 +4021,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeTrackWeatherTimeline,
       activeTrackMarkerTimes,
       activeTimingRoute,
+      activePresetEstimates,
       activeTrackLighting,
       updateActiveTrackWeatherTimeline,
       createFolder,
@@ -3938,6 +4035,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       multiTrackMode,
       multiTrackSelections,
       multiTrackStatsMetrics,
+      multiTrackSelectionStats,
       query,
       summaries,
       applyGeneratedName,
@@ -4011,6 +4109,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       activeTrackWeatherTimeline,
       activeTrackMarkerTimes,
       activeTimingRoute,
+      activePresetEstimates,
       activeTrackLighting,
       updateActiveTrackWeatherTimeline,
       importErrorMessage,
@@ -4020,6 +4119,7 @@ export function TracksWorkspaceProvider({ children }: PropsWithChildren) {
       multiTrackSelections,
       downloadActiveTrackGpx,
       multiTrackStatsMetrics,
+      multiTrackSelectionStats,
       moveTrackToFolder,
       query,
       renameActive,
@@ -6223,6 +6323,7 @@ export function TrackDetailsPane({
     activeTrackWeatherTimeline,
     activeTrackMarkerTimes,
     activeTimingRoute,
+    activePresetEstimates,
     activeTrackLighting,
     applyGeneratedName,
     closeActive,
@@ -6239,6 +6340,7 @@ export function TrackDetailsPane({
     multiTrackMode,
     multiTrackSelections,
     multiTrackStatsMetrics,
+    multiTrackSelectionStats,
     renameActive,
     savePreview,
     saveRoutePlan,
@@ -6264,6 +6366,7 @@ export function TrackDetailsPane({
     updateTrackWeatherPreferences,
   } = useTracksWorkspace();
   const { t, i18n } = useLingui();
+  const presetSettings = useUiStore((state) => state.hikingTimePresets);
   const removableSourceData = useMemo(
     () =>
       active?.kind === 'preview' &&
@@ -6430,7 +6533,12 @@ export function TrackDetailsPane({
                     </Stack>
                   ) : (
                     <>
-                      <TrackStats metrics={selection.summary.metrics} />
+                      <TrackStats
+                        metrics={
+                          multiTrackSelectionStats.get(selection.summary.id) ??
+                          selection.summary.metrics
+                        }
+                      />
                       {selection.profile === null ? (
                         <Box
                           sx={{
@@ -6857,6 +6965,21 @@ export function TrackDetailsPane({
               onNameChange={setActiveName}
               onSave={() => void saveRoutePlan()}
               onUndo={undoPathEdit}
+              presetControl={
+                <HikingTimePresetSelect
+                  label={t`Hiking time preset`}
+                  settings={presetSettings}
+                  value={activeTrackWeatherTimeline.presetId}
+                  onChange={(presetId) => {
+                    updateActiveTrackWeatherTimeline({
+                      ...activeTrackWeatherTimeline,
+                      presetId,
+                    });
+                  }}
+                  allowDefault
+                  estimates={activePresetEstimates}
+                />
+              }
             />
           ) : null}
           {active.kind === 'saved' && active.edit !== null ? (
@@ -7089,6 +7212,8 @@ export function TrackDetailsPane({
                 timelineSettings={activeTrackWeatherTimeline}
                 onTimelineSettingsChange={updateActiveTrackWeatherTimeline}
                 lighting={activeTrackLighting}
+                hikingTime={activeTrackWeatherTimeline.hikingTime}
+                presetEstimates={activePresetEstimates}
               />
             )}
             {trackMarkers === null || activePath !== null ? null : (

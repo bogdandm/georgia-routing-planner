@@ -12,6 +12,11 @@ import {
   type LocalTrackSummary,
 } from '@/domain/tracks/localTrack';
 import {
+  DIN_HIKING_TIME_PRESET_ID,
+  builtInHikingTimePresets,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
+import {
   TRACK_FOLDER_SCHEMA_VERSION,
   normalizeTrackFolderName,
 } from '@/domain/tracks/trackFolder';
@@ -169,6 +174,21 @@ describe('user data archive', () => {
     });
     await database.saveMaximumCloudCoverPercent(20);
     await database.saveTrackSyncEnabled(true);
+    const din = builtInHikingTimePresets.find(
+      (preset) => preset.id === DIN_HIKING_TIME_PRESET_ID,
+    );
+    if (din === undefined) throw new Error('Missing the DIN preset.');
+    const hikingTimePresets: HikingTimePresetSettings = {
+      defaultPresetId: 'custom:rests',
+      custom: [
+        {
+          id: 'custom:rests',
+          name: 'DIN with rests',
+          parameters: { ...din.parameters, breakMinutesPerMovingHour: 10 },
+        },
+      ],
+    };
+    await database.saveHikingTimePresets(hikingTimePresets);
     const folders = await database.listTrackFolders();
     const [stored] = await database.listLocalTracks();
     if (stored === undefined) throw new Error('Missing stored track.');
@@ -193,6 +213,7 @@ describe('user data archive', () => {
     });
     await expect(restored.loadMaximumCloudCoverPercent()).resolves.toBe(20);
     await expect(restored.loadTrackSyncEnabled()).resolves.toBe(false);
+    await expect(restored.loadHikingTimePresets()).resolves.toEqual(hikingTimePresets);
     await expect(restored.loadTrackSyncState(summary.id)).resolves.toMatchObject({
       remoteRevision: null,
       pendingKind: 'upsert',
@@ -421,7 +442,10 @@ describe('user data archive', () => {
     });
 
     await expect(database.listLocalTracks()).resolves.toEqual([
-      expect.objectContaining({ id: summary.id, routeTiming }),
+      expect.objectContaining({
+        id: summary.id,
+        routeTiming: { ...routeTiming, stopFactor: 1, presetId: null },
+      }),
     ]);
     await expect(database.loadTrackWeatherPreferences()).resolves.toEqual({
       expanded: true,

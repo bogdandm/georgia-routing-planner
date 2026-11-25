@@ -13,6 +13,10 @@ import { WorkspaceShell } from '@/presentation/shell/WorkspaceShell';
 import { activateAppLocale, appI18n } from '@/presentation/localization/appI18n';
 import { resolveAppLocale } from '@/domain/localization/appLocale';
 import type { MarkerSort } from '@/domain/markers/savedMarker';
+import {
+  defaultHikingTimePresetSettings,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
 import type { KomootElevationPreference, TrackSort } from '@/domain/tracks/localTrack';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import '@/presentation/styles/global.css';
@@ -30,6 +34,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
   let trackSort: TrackSort = 'created';
   let trackSectionExpanded: Readonly<Record<string, boolean>> = {};
   let komootElevation: KomootElevationPreference = 'ask';
+  let hikingTimePresets: HikingTimePresetSettings = defaultHikingTimePresetSettings;
   // Unreadable settings must not reopen the tour on every visit.
   let onboardingCompleted = true;
   let locale = resolveAppLocale(null, navigator.languages);
@@ -48,6 +53,11 @@ void runApplicationBootstrap(async (rootElement, services) => {
   } catch {
     services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
   }
+  try {
+    hikingTimePresets = await services.database.loadHikingTimePresets();
+  } catch {
+    services.logger.log({ level: 'warn', name: 'storage.settings.load-failed' });
+  }
 
   activateAppLocale(locale);
 
@@ -59,6 +69,7 @@ void runApplicationBootstrap(async (rootElement, services) => {
     trackSort,
     trackSectionExpanded,
     komootElevation,
+    hikingTimePresets,
     onboardingCompleted,
   });
   const root = createRoot(rootElement);

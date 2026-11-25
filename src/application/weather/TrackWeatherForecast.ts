@@ -16,7 +16,11 @@ import type { TrackMarker, TrackRouteTiming } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
 import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
-  estimateHikingSeconds,
+  estimateHikingTime,
+  type HikingTimeEstimate,
+  type HikingTimeParameters,
+} from '@/domain/tracks/hikingTime';
+import {
   geodesicDistanceMeters,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
@@ -215,39 +219,6 @@ export function selectTrackElevationLocations(
   };
 }
 
-/**
- * DIN 33466 elapsed seconds per profile point from cumulative distance, ascent, and
- * descent, scaled so the finish matches the track's stored estimate when one exists.
- */
-function estimatedElapsedSeconds(
-  points: readonly TrackTimingPoint[],
-  totalSeconds: number | undefined,
-): readonly number[] {
-  const elapsed: number[] = [];
-  let ascentMeters = 0;
-  let descentMeters = 0;
-  let previous: TrackTimingPoint | undefined;
-  for (const point of points) {
-    if (
-      previous?.sourceSegmentIndex === point.sourceSegmentIndex &&
-      previous.elevationMeters !== undefined &&
-      point.elevationMeters !== undefined
-    ) {
-      const change = point.elevationMeters - previous.elevationMeters;
-      if (change > 0) ascentMeters += change;
-      else descentMeters -= change;
-    }
-    elapsed.push(
-      estimateHikingSeconds(point.distanceMeters, ascentMeters, descentMeters),
-    );
-    previous = point;
-  }
-  const profileSeconds = elapsed.at(-1) ?? 0;
-  if (totalSeconds === undefined || profileSeconds <= 0) return elapsed;
-  const scale = totalSeconds / profileSeconds;
-  return elapsed.map((seconds) => seconds * scale);
-}
-
 function interpolate(start: number, end: number, fraction: number): number {
   return start + (end - start) * fraction;
 }
@@ -293,10 +264,14 @@ function locationAtElapsed(
   };
 }
 
-/** Bounds and step of the forecast-only pace adjustment, a multiplier of hiking time. */
+/** Bounds and step of the pace adjustment, a multiplier of moving time. */
 export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
 export const TRACK_WEATHER_PACE_FACTOR_STEP = 0.05;
+/** Bounds and step of the stop adjustment, a multiplier of breaks and lunch. */
+export const TRACK_WEATHER_MINIMUM_STOP_FACTOR = 0;
+export const TRACK_WEATHER_MAXIMUM_STOP_FACTOR = 3;
+export const TRACK_WEATHER_STOP_FACTOR_STEP = 0.05;
 
 /**
  * Route timing plus the map's light coloring of the track, which is session view state:
@@ -310,6 +285,8 @@ export interface TrackWeatherTimelineSettings extends TrackRouteTiming {
 export const defaultTrackRouteTiming: TrackRouteTiming = {
   startHour: TRACK_WEATHER_DEFAULT_START_HOUR,
   paceFactor: 1,
+  stopFactor: 1,
+  presetId: null,
   ignoreRecordedTime: false,
   timeMarkers: null,
   relativeTimeMarkers: false,
@@ -362,6 +339,8 @@ export function sameTrackRouteTiming(
   return (
     left.startHour === right.startHour &&
     left.paceFactor === right.paceFactor &&
+    left.stopFactor === right.stopFactor &&
+    left.presetId === right.presetId &&
     left.ignoreRecordedTime === right.ignoreRecordedTime &&
     left.timeMarkers === right.timeMarkers &&
     left.relativeTimeMarkers === right.relativeTimeMarkers &&
@@ -383,6 +362,8 @@ export function adjustedTrackRouteTiming(
   return {
     startHour: settings.startHour,
     paceFactor: settings.paceFactor,
+    stopFactor: settings.stopFactor,
+    presetId: settings.presetId,
     ignoreRecordedTime: settings.ignoreRecordedTime,
     timeMarkers: settings.timeMarkers,
     relativeTimeMarkers: settings.relativeTimeMarkers,
@@ -393,46 +374,68 @@ export function adjustedTrackRouteTiming(
 /** Track metrics the route timeline reads. */
 export type TrackTimingMetrics = Pick<
   TrackMetrics,
-  'elapsedSeconds' | 'estimatedSeconds' | 'ascentMeters' | 'descentMeters'
+  'elapsedSeconds' | 'ascentMeters' | 'descentMeters'
 >;
+
+/** The settings that change how long the route takes, and the preset's parameters. */
+export type TrackWeatherTiming = Pick<
+  TrackWeatherTimelineSettings,
+  'paceFactor' | 'stopFactor' | 'ignoreRecordedTime'
+> & { readonly hikingTime: HikingTimeParameters };
+
+export interface RouteElapsedSeconds {
+  readonly elapsed: readonly number[];
+  readonly recorded: boolean;
+  /** The preset estimate; null while recorded timestamps time the route. */
+  readonly estimate: HikingTimeEstimate | null;
+}
+
+/**
+ * The preset's estimate of the route, without the recorded-time choice. A DIN movement
+ * is anchored to the route's stored ascent and descent rather than the noisier
+ * per-sample sum.
+ */
+export function estimateRouteHikingTime(
+  points: readonly TrackTimingPoint[],
+  metrics: TrackTimingMetrics,
+  timing: Omit<TrackWeatherTiming, 'ignoreRecordedTime'>,
+): HikingTimeEstimate {
+  const totals: { ascentMeters?: number; descentMeters?: number } = {};
+  if (metrics.ascentMeters !== undefined) totals.ascentMeters = metrics.ascentMeters;
+  if (metrics.descentMeters !== undefined) totals.descentMeters = metrics.descentMeters;
+  return estimateHikingTime(points, timing.hikingTime, timing, totals);
+}
 
 /**
  * Elapsed seconds at each profile point. Recorded timestamps drive the pace when the
- * track has a recorded duration and `ignoreRecordedTime` is off; otherwise the DIN 33466
- * estimate adds climbing and descending time to horizontal walking time, scaled to the
- * track's stored estimate. Recorded tracks store none, so the DIN total of the route's
- * distance and the stored ascent and descent anchors it instead of the noisier
- * per-sample sum. `paceFactor` stretches (above 1) or compresses that time.
+ * track has a recorded duration and `ignoreRecordedTime` is off, stretched by
+ * `paceFactor`; otherwise the hiking time preset estimates moving time, breaks, and
+ * lunch, and the pace and stop factors scale them separately.
  */
 export function routeElapsedSeconds(
   points: readonly TrackTimingPoint[],
   metrics: TrackTimingMetrics,
   timing: TrackWeatherTiming,
-): { readonly elapsed: readonly number[]; readonly recorded: boolean } {
+): RouteElapsedSeconds {
   const recorded =
     metrics.elapsedSeconds === undefined || timing.ignoreRecordedTime
       ? null
       : recordedElapsedSeconds(points);
-  const estimateTotal =
-    metrics.estimatedSeconds ??
-    (metrics.ascentMeters === undefined || metrics.descentMeters === undefined
-      ? undefined
-      : estimateHikingSeconds(
-          points.at(-1)?.distanceMeters ?? 0,
-          metrics.ascentMeters,
-          metrics.descentMeters,
-        ));
-  const elapsed = (recorded ?? estimatedElapsedSeconds(points, estimateTotal)).map(
-    (seconds) => seconds * timing.paceFactor,
-  );
-  return { elapsed, recorded: recorded !== null };
+  if (recorded !== null) {
+    return {
+      elapsed: recorded.map((seconds) => seconds * timing.paceFactor),
+      recorded: true,
+      estimate: null,
+    };
+  }
+  const estimate = estimateRouteHikingTime(points, metrics, timing);
+  return { elapsed: estimate.elapsedSeconds, recorded: false, estimate };
 }
 
-/** The settings that change how long the route takes. */
-export type TrackWeatherTiming = Pick<
-  TrackWeatherTimelineSettings,
-  'paceFactor' | 'ignoreRecordedTime'
->;
+/** Route timing settings with the parameters of the track's resolved preset. */
+export type TimedTrackWeatherSettings = TrackWeatherTimelineSettings & {
+  readonly hikingTime: HikingTimeParameters;
+};
 
 /**
  * Places the hiker on the route every three hours from the start and at the finish,
@@ -442,7 +445,7 @@ export type TrackWeatherTiming = Pick<
 export function planTrackWeatherTimeline(
   profile: TrackTimingRoute,
   metrics: TrackTimingMetrics & Pick<TrackMetrics, 'distanceMeters'>,
-  timing: TrackWeatherTiming = defaultTrackWeatherTimelineSettings,
+  timing: TrackWeatherTiming,
 ): TrackWeatherTimeline {
   const { points } = profile;
   const { elapsed, recorded } = routeElapsedSeconds(points, metrics, timing);
@@ -522,7 +525,7 @@ function hoursAndMinutes(seconds: number, wrapAtMidnight: boolean): string {
 export function planTrackClockTimes(
   profile: TrackTimingRoute,
   metrics: TrackTimingMetrics,
-  settings: TrackWeatherTimelineSettings,
+  settings: TimedTrackWeatherSettings,
 ): TrackClockTimes {
   const { points } = profile;
   const { elapsed } = routeElapsedSeconds(points, metrics, settings);
@@ -558,7 +561,7 @@ export function planTrackClockTimes(
 export function planTrackMarkerTimes(
   profile: TrackTimingRoute,
   metrics: TrackTimingMetrics,
-  settings: TrackWeatherTimelineSettings,
+  settings: TimedTrackWeatherSettings,
   markers: readonly TrackMarker[],
 ): ReadonlyMap<string, string> {
   const times = new Map<string, string>();

@@ -356,6 +356,17 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
     [locale, persistUiPreferences],
   );
 
+  useEffect(
+    () =>
+      useUiStore.subscribe((state, previous) => {
+        if (state.hikingTimePresets === previous.hikingTimePresets) return;
+        database.saveHikingTimePresets(state.hikingTimePresets).catch(() => {
+          logger.log({ level: 'warn', name: 'storage.settings.save-failed' });
+        });
+      }),
+    [database, logger],
+  );
+
   const handleSectionChange = useCallback(
     (section: WorkspaceTab) => {
       setActiveTab(section);

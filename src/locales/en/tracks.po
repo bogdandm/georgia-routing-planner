@@ -41,6 +41,11 @@ msgstr "{distance} m"
 msgid "{elevation} m"
 msgstr "{elevation} m"
 
+#. js-lingui-id: hM9PJd
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "{from} to {to}"
+msgstr "{from} to {to}"
+
 #. js-lingui-id: JFP0Bz
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
 msgid "{heading}, {grade}, {distance}, {primary}"
@@ -116,6 +121,11 @@ msgstr "{minutes}m"
 msgid "{name} (reversed)"
 msgstr "{name} (reversed)"
 
+#. js-lingui-id: z6Ccxk
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "{name} estimate: {duration} ({difference} vs recorded)"
+msgstr "{name} estimate: {duration} ({difference} vs recorded)"
+
 #. js-lingui-id: CrwWJw
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "{pointCount, plural, one {# point} other {# points}} · {segmentCount, plural, one {# segment} other {# segments}}"
@@ -126,6 +136,11 @@ msgstr "{pointCount, plural, one {# point} other {# points}} · {segmentCount, p
 msgid "{selectedCount, plural, one {# point selected} other {# points selected}}"
 msgstr "{selectedCount, plural, one {# point selected} other {# points selected}}"
 
+#. js-lingui-id: 2vMX4s
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "{shortest} – {longest}"
+msgstr "{shortest} – {longest}"
+
 #. js-lingui-id: l1OB5S
 #: src/presentation/tracks/trackFormatters.ts
 msgid "{speed} km/h"
@@ -135,6 +150,11 @@ msgstr "{speed} km/h"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "{trackCount, plural, one {Search # saved track} other {Search # saved tracks}}"
 msgstr "{trackCount, plural, one {Search # saved track} other {Search # saved tracks}}"
+
+#. js-lingui-id: D6Vo1y
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "{value} and steeper"
+msgstr "{value} and steeper"
 
 #. js-lingui-id: pXTSNf
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -147,9 +167,15 @@ msgid "↑ Apply place name ↑"
 msgstr "↑ Apply place name ↑"
 
 #. js-lingui-id: C6vDEv
+#: src/presentation/tracks/HikingTimePresetSelect.tsx
 #: src/presentation/tracks/TrackSummary.tsx
 msgid "≈{duration}"
 msgstr "≈{duration}"
+
+#. js-lingui-id: vaxoYu
+#: src/presentation/tracks/HikingTimePresetSelect.tsx
+msgid "≈{duration} ({divergence})"
+msgstr "≈{duration} ({divergence})"
 
 #. js-lingui-id: dvb1sX
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -170,6 +196,11 @@ msgstr "A segment with fewer than two valid points was skipped."
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "A waypoint with invalid coordinates was skipped."
 msgstr "A waypoint with invalid coordinates was skipped."
+
+#. js-lingui-id: XmVUbU
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Accuracy"
+msgstr "Accuracy"
 
 #. js-lingui-id: m16xKo
 #: src/presentation/tracks/TrackPointsSection.tsx
@@ -228,6 +259,11 @@ msgstr "Additional GPX validation warnings were omitted."
 msgid "Additional valid waypoints were omitted."
 msgstr "Additional valid waypoints were omitted."
 
+#. js-lingui-id: YHOjpP
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Adjust breaks and lunch"
+msgstr "Adjust breaks and lunch"
+
 #. js-lingui-id: rKEsFD
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Adjust pace"
@@ -282,6 +318,16 @@ msgstr "Back to tracks"
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Blue hour"
 msgstr "Blue hour"
+
+#. js-lingui-id: 9n2Yyv
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Breaks"
+msgstr "Breaks"
+
+#. js-lingui-id: OW5M8J
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Breaks and lunch: ≈{stopDuration}"
+msgstr "Breaks and lunch: ≈{stopDuration}"
 
 #. js-lingui-id: QIgTCB
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -372,6 +418,11 @@ msgstr "Climb {typeNumber}"
 msgid "Climbs & Descents"
 msgstr "Climbs & Descents"
 
+#. js-lingui-id: yz7wBu
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Close"
+msgstr "Close"
+
 #. js-lingui-id: 2IOueG
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Close multi-track view"
@@ -457,10 +508,20 @@ msgstr "Create reversed track"
 msgid "Day"
 msgstr "Day"
 
+#. js-lingui-id: LSdPiK
+#: src/presentation/tracks/hikingTimePresetFormat.ts
+msgid "Day hike"
+msgstr "Day hike"
+
 #. js-lingui-id: qxkSyg
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Daylight"
 msgstr "Daylight"
+
+#. js-lingui-id: kAVvMj
+#: src/presentation/tracks/HikingTimePresetSelect.tsx
+msgid "Default ({defaultName})"
+msgstr "Default ({defaultName})"
 
 #. js-lingui-id: cnGeoo
 #: src/presentation/tracks/TrackPointsSection.tsx
@@ -509,6 +570,16 @@ msgstr "Descent {typeNumber}"
 msgid "Detailed track geometry was used instead of companion route geometry."
 msgstr "Detailed track geometry was used instead of companion route geometry."
 
+#. js-lingui-id: T3TgrC
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Difference"
+msgstr "Difference"
+
+#. js-lingui-id: rjRPBG
+#: src/presentation/tracks/hikingTimePresetFormat.ts
+msgid "DIN 33466 (standard)"
+msgstr "DIN 33466 (standard)"
+
 #. js-lingui-id: bzSI52
 #: src/presentation/tracks/RoutePlanControls.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -543,6 +614,7 @@ msgstr "Discard your point edits?"
 #. js-lingui-id: GPeIuw
 #: src/presentation/tracks/ClimbsDescentsSection.tsx
 #: src/presentation/tracks/ElevationProfileChart.tsx
+#: src/presentation/tracks/HikingTimeMatch.tsx
 #: src/presentation/tracks/TrackSummary.tsx
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Distance"
@@ -700,6 +772,11 @@ msgstr "Enter a folder name."
 msgid "Enter a marker name."
 msgstr "Enter a marker name."
 
+#. js-lingui-id: eenpyX
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Estimated"
+msgstr "Estimated"
+
 #. js-lingui-id: R9wpsN
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Estimated pace"
@@ -756,6 +833,11 @@ msgstr "Folder name"
 msgid "Folder names must be 200 characters or fewer."
 msgstr "Folder names must be 200 characters or fewer."
 
+#. js-lingui-id: opMuQY
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "For a planned hike with this estimate, the actual time falls in this range for 8 in 10 hikes. A wider range means a less certain forecast. {calibrationHikes, plural, one {Based on # recorded hike.} other {Based on # recorded hikes.}}"
+msgstr "For a planned hike with this estimate, the actual time falls in this range for 8 in 10 hikes. A wider range means a less certain forecast. {calibrationHikes, plural, one {Based on # recorded hike.} other {Based on # recorded hikes.}}"
+
 #. js-lingui-id: 2JKkIm
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Forecast along the route"
@@ -771,6 +853,11 @@ msgstr "Forecast by elevation"
 msgid "Forecast date"
 msgstr "Forecast date"
 
+#. js-lingui-id: ZtKYrn
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Grade"
+msgstr "Grade"
+
 #. js-lingui-id: _WH_9-
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Highest"
@@ -785,6 +872,22 @@ msgstr "Hike"
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Hike date"
 msgstr "Hike date"
+
+#. js-lingui-id: 6gbO5e
+#: src/presentation/tracks/TracksWorkspace.tsx
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Hiking time preset"
+msgstr "Hiking time preset"
+
+#. js-lingui-id: neBgVG
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Hiking time report"
+msgstr "Hiking time report"
+
+#. js-lingui-id: i8QeNT
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Idle before start and after finish"
+msgstr "Idle before start and after finish"
 
 #. js-lingui-id: nyzDhI
 #: src/presentation/tracks/TrackWeatherSection.tsx
@@ -836,6 +939,11 @@ msgstr "Komoot point times were removed as unrealistic: Komoot starts them when 
 msgid "Light along the route: {description}"
 msgstr "Light along the route: {description}"
 
+#. js-lingui-id: Y8JA_3
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Likely actual time"
+msgstr "Likely actual time"
+
 #. js-lingui-id: rjuFFw
 #: src/presentation/tracks/RoutePlanControls.tsx
 #: src/presentation/tracks/TrackPointsSection.tsx
@@ -879,6 +987,11 @@ msgstr "Loading sharing status"
 msgid "Loading track…"
 msgstr "Loading track…"
 
+#. js-lingui-id: Dlkb5t
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Longer"
+msgstr "Longer"
+
 #. js-lingui-id: NJHTJk
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Looking up representative places"
@@ -893,6 +1006,11 @@ msgstr "Looking up representative places…"
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Lowest"
 msgstr "Lowest"
+
+#. js-lingui-id: XlFJcL
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Lunch"
+msgstr "Lunch"
 
 #. js-lingui-id: lTIIr2
 #: src/presentation/tracks/TrackMarkersSection.tsx
@@ -934,6 +1052,21 @@ msgstr "Move cancelled."
 #: src/presentation/tracks/TrackPointsSection.tsx
 msgid "Move point {number}"
 msgstr "Move point {number}"
+
+#. js-lingui-id: gkOxmF
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Moving"
+msgstr "Moving"
+
+#. js-lingui-id: IzlVdj
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Moving speed by grade"
+msgstr "Moving speed by grade"
+
+#. js-lingui-id: 4I5xSG
+#: src/presentation/tracks/hikingTimePresetFormat.ts
+msgid "Multi-day trek"
+msgstr "Multi-day trek"
 
 #. js-lingui-id: RSjgBr
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1005,6 +1138,11 @@ msgstr "Next segment"
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "No"
 msgstr "No"
+
+#. js-lingui-id: lCMrPp
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "No calibration statistics exist for this custom preset."
+msgstr "No calibration statistics exist for this custom preset."
 
 #. js-lingui-id: ANszNw
 #: src/presentation/tracks/RoutePlanControls.tsx
@@ -1086,6 +1224,11 @@ msgstr "Over {name}."
 msgid "Overwrite the track's elevations with the terrain model? Point times stay unchanged."
 msgstr "Overwrite the track's elevations with the terrain model? Point times stay unchanged."
 
+#. js-lingui-id: vgP-9p
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Part"
+msgstr "Part"
+
 #. js-lingui-id: NVQqOC
 #. placeholder {0}: (data.folder as TrackFolder).name
 #: src/presentation/tracks/TracksWorkspace.tsx
@@ -1130,6 +1273,11 @@ msgstr "Preparing elevation"
 msgid "Preparing elevation…"
 msgstr "Preparing elevation…"
 
+#. js-lingui-id: 6o2Onc
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Preset"
+msgstr "Preset"
+
 #. js-lingui-id: KQYkQd
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Press space to pick up an item. Use arrow keys to move it. Press space to drop or Escape to cancel."
@@ -1150,10 +1298,25 @@ msgstr "Profile value"
 msgid "Recalculate elevation"
 msgstr "Recalculate elevation"
 
+#. js-lingui-id: YBh_VC
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Recorded"
+msgstr "Recorded"
+
+#. js-lingui-id: qu9XM8
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Recorded and estimated time"
+msgstr "Recorded and estimated time"
+
 #. js-lingui-id: S-JfFg
 #: src/presentation/tracks/TrackLighting.tsx
 msgid "Recorded pace"
 msgstr "Recorded pace"
+
+#. js-lingui-id: IJ-xEz
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Recorded stops are kept"
+msgstr "Recorded stops are kept"
 
 #. js-lingui-id: SVCift
 #: src/presentation/tracks/TrackSummary.tsx
@@ -1391,6 +1554,16 @@ msgstr "Sharing could not be updated. Try again."
 #: src/presentation/tracks/TrackShareTable.tsx
 msgid "Sharing status could not be loaded."
 msgstr "Sharing status could not be loaded."
+
+#. js-lingui-id: 6R711t
+#: src/presentation/tracks/TrackWeatherSection.tsx
+msgid "Shorter"
+msgstr "Shorter"
+
+#. js-lingui-id: bCZaP2
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Show report"
+msgstr "Show report"
 
 #. js-lingui-id: oG5653
 #: src/presentation/tracks/TrackWeatherSection.tsx
@@ -1679,6 +1852,11 @@ msgstr "Time"
 msgid "Today"
 msgstr "Today"
 
+#. js-lingui-id: 72c5Qo
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Total"
+msgstr "Total"
+
 #. js-lingui-id: SLFyVr
 #: src/presentation/tracks/TracksWorkspace.tsx
 msgid "Track actions"
@@ -1744,6 +1922,16 @@ msgstr "Unfiled tracks"
 #: src/presentation/tracks/TrackWeatherSection.tsx
 msgid "Weather forecast"
 msgstr "Weather forecast"
+
+#. js-lingui-id: ciPlJs
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Within ±10%"
+msgstr "Within ±10%"
+
+#. js-lingui-id: 7MZ35V
+#: src/presentation/tracks/HikingTimeMatch.tsx
+msgid "Within ±20%"
+msgstr "Within ±20%"
 
 #. js-lingui-id: l75CjT
 #: src/presentation/tracks/TracksWorkspace.tsx

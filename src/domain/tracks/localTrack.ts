@@ -63,9 +63,13 @@ export interface LocalTrackSummary {
 export interface TrackRouteTiming {
   /** Fractional local hour of the day at which the hike starts. */
   readonly startHour: number;
-  /** Multiplier of hiking time: above 1 is slower, below 1 faster. */
+  /** Multiplier of moving time: above 1 is slower, below 1 faster. */
   readonly paceFactor: number;
-  /** Times the route by the DIN 33466 estimate even when it has recorded time. */
+  /** Multiplier of the estimate's breaks and lunch; recorded time keeps its stops. */
+  readonly stopFactor: number;
+  /** Hiking time preset of the estimate; null follows the default preset. */
+  readonly presetId: string | null;
+  /** Times the route by its estimate even when it has recorded time. */
   readonly ignoreRecordedTime: boolean;
   /** Clock times on the map line; null follows the Layers default. */
   readonly timeMarkers: boolean | null;

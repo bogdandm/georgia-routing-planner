@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 
 import type { MarkerSort } from '@/domain/markers/savedMarker';
+import {
+  defaultHikingTimePresetSettings,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
 import type { KomootElevationPreference, TrackSort } from '@/domain/tracks/localTrack';
 
 import type { MapDebugOptions } from '@/presentation/map/mapTypes';
@@ -16,6 +20,8 @@ interface UiState {
   readonly developerDrawerOpen: boolean;
   readonly developerMode: boolean;
   readonly elevationGradeLegendDismissed: boolean;
+  /** Hydrated by `main.tsx`; the shell saves every change. */
+  readonly hikingTimePresets: HikingTimePresetSettings;
   readonly komootElevation: KomootElevationPreference;
   readonly mapDebugOptions: MapDebugOptions;
   readonly markerSort: MarkerSort;
@@ -30,6 +36,7 @@ interface UiState {
   readonly setDeveloperDrawerOpen: (value: boolean) => void;
   readonly setDeveloperMode: (value: boolean) => void;
   readonly setElevationGradeLegendDismissed: (value: boolean) => void;
+  readonly setHikingTimePresets: (value: HikingTimePresetSettings) => void;
   readonly setKomootElevation: (value: KomootElevationPreference) => void;
   readonly setMapDebugOptions: (value: MapDebugOptions) => void;
   readonly setMarkerSort: (value: MarkerSort) => void;
@@ -46,6 +53,7 @@ export const useUiStore = create<UiState>()((set) => ({
   developerDrawerOpen: false,
   developerMode: false,
   elevationGradeLegendDismissed: false,
+  hikingTimePresets: defaultHikingTimePresetSettings,
   komootElevation: 'ask',
   mapDebugOptions: {
     showCollisionBoxes: false,
@@ -70,6 +78,9 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setElevationGradeLegendDismissed: (elevationGradeLegendDismissed) => {
     set({ elevationGradeLegendDismissed });
+  },
+  setHikingTimePresets: (hikingTimePresets) => {
+    set({ hikingTimePresets });
   },
   setKomootElevation: (komootElevation) => {
     set({ komootElevation });

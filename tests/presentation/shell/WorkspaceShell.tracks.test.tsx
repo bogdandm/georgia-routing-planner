@@ -2325,7 +2325,6 @@ describe('WorkspaceShell', () => {
     expect(summary?.folderId).toBe(source.folderId);
     expect(summary?.metrics.ascentMeters).toBe(0);
     expect(summary?.metrics.descentMeters).toBe(120);
-    expect(summary?.metrics.estimatedSeconds).toBeGreaterThan(0);
     expect(content?.trackPoints).toEqual([sourceContent.trackPoints[0]?.toReversed()]);
     expect(content?.markers).toHaveLength(1);
     expect(content?.markers[0]?.id).not.toBe(markerId);

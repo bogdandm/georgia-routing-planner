@@ -6,6 +6,12 @@ import {
   defaultTrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
 import {
+  DIN_HIKING_TIME_PRESET_ID,
+  builtInHikingTimePresets,
+  defaultHikingTimePresetSettings,
+  type HikingTimePresetSettings,
+} from '@/domain/tracks/hikingTime';
+import {
   SAVED_MARKER_SCHEMA_VERSION,
   markerIconKeys,
   type SavedMarker,
@@ -249,6 +255,71 @@ describe('AppDatabase', () => {
     }
   });
 
+  it('loads the default hiking time presets until saved and repairs invalid ones', async () => {
+    await expect(database.loadHikingTimePresets()).resolves.toEqual(
+      defaultHikingTimePresetSettings,
+    );
+
+    const din = builtInHikingTimePresets.find(
+      (preset) => preset.id === DIN_HIKING_TIME_PRESET_ID,
+    );
+    if (din === undefined) throw new Error('Missing the DIN preset.');
+    const custom = {
+      id: 'custom:slow',
+      name: 'Slow with long lunch',
+      parameters: {
+        ...din.parameters,
+        breakMinutesPerMovingHour: 15,
+        lunchMinutes: 60,
+      },
+    };
+    const saved: HikingTimePresetSettings = {
+      defaultPresetId: custom.id,
+      custom: [custom],
+    };
+    await database.saveHikingTimePresets(saved);
+    await expect(database.loadHikingTimePresets()).resolves.toEqual(saved);
+
+    for (const value of [
+      // Knots must ascend.
+      {
+        defaultPresetId: custom.id,
+        custom: [
+          {
+            ...custom,
+            parameters: {
+              ...custom.parameters,
+              movement: {
+                kind: 'grade-curve',
+                knots: [
+                  { gradePercent: 10, speedKmh: 2 },
+                  { gradePercent: 0, speedKmh: 4 },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      // A user preset may not replace a built-in one.
+      { defaultPresetId: custom.id, custom: [{ ...custom, id: din.id }] },
+      // The default must exist.
+      { defaultPresetId: 'custom:deleted', custom: [custom] },
+      { defaultPresetId: custom.id, custom: [custom, custom] },
+    ]) {
+      await database.settings.put({
+        key: 'tracks.hiking-time-presets',
+        value,
+        updatedAt: '2026-08-08T10:00:00.000Z',
+      });
+      await expect(database.loadHikingTimePresets()).resolves.toEqual(
+        defaultHikingTimePresetSettings,
+      );
+      await expect(
+        database.settings.get('tracks.hiking-time-presets'),
+      ).resolves.toBeUndefined();
+    }
+  });
+
   it('stores validated route timing on the track and queues a metadata sync', async () => {
     const track = localTrackSummary();
     await database.saveLocalTrack(track, localTrackContent());
@@ -264,6 +335,8 @@ describe('AppDatabase', () => {
       ...defaultTrackRouteTiming,
       startHour: 6.5,
       paceFactor: 1.25,
+      stopFactor: 0.75,
+      presetId: 'multi-day',
       ignoreRecordedTime: true,
       relativeTimeMarkers: true,
       hikeDate: '2026-07-15',
@@ -284,6 +357,9 @@ describe('AppDatabase', () => {
       { ...routeTiming, startHour: 24 },
       { ...routeTiming, paceFactor: 2.5 },
       { ...routeTiming, paceFactor: 1.23 },
+      { ...routeTiming, stopFactor: 3.5 },
+      { ...routeTiming, stopFactor: 0.33 },
+      { ...routeTiming, presetId: '' },
       { ...routeTiming, hikeDate: '2026-02-30' },
     ]) {
       await expect(
@@ -1124,53 +1200,44 @@ describe('AppDatabase', () => {
     );
   });
 
-  it('stores walking-time estimates for version 10 tracks without recorded time', async () => {
-    database.close();
-    await database.delete();
-
-    const legacy = new Dexie('GeorgiaRoutingPlanner');
-    legacy.version(10).stores({
-      settings: 'key,updatedAt',
-      diagnostics: '++id,timestamp,name,level',
-      localTracks: 'id,normalizedName,savedAt',
-      localTrackContents: 'trackId',
-      trackSyncStates: 'trackId,contentHash,remoteRevision,pendingKind',
-      savedMarkers: 'id,normalizedName,colorKey,createdAt',
-      markerSyncStates: 'markerId,remoteRevision,pendingKind',
-      trackFolders: 'id,normalizedName,position',
-      folderSyncStates: 'folderId,remoteRevision,pendingKind',
-      localTrackThumbnails: 'trackId',
-    });
-    const untimed = localTrackSummary();
-    const climbing: LocalTrackSummary = {
-      ...untimed,
-      metrics: { ...untimed.metrics, ascentMeters: 900, descentMeters: 500 },
+  it('drops stored walking-time estimates and loads route timing saved before presets', async () => {
+    const track = localTrackSummary();
+    await database.saveLocalTrack(track, localTrackContent());
+    // Rows written before hiking time presets: a stored DIN 33466 estimate, and route
+    // timing without the stop factor and preset.
+    await database.table('localTracks').put({
+      ...track,
+      metrics: { ...track.metrics, ascentMeters: 100, estimatedSeconds: 900 },
       calculatedMetrics: {
-        ...untimed.metrics,
-        distanceMeters: 12_000,
-        ascentMeters: 300,
-        descentMeters: 0,
+        ...track.metrics,
+        ascentMeters: 120,
         elevationAlgorithmVersion: 4,
+        estimatedSeconds: 960,
       },
-    };
-    const timed: LocalTrackSummary = {
-      ...climbing,
-      id: 'local:timed',
-      metrics: { ...climbing.metrics, elapsedSeconds: 3_600 },
-    };
-    await legacy.table('localTracks').bulkPut([climbing, timed]);
-    legacy.close();
-
-    database = new AppDatabase(services.logger);
-
-    // 1 km = 0.25 h; 900 m up + 500 m down = 4 h; 4 h + 0.25 h / 2.
-    await expect(database.localTracks.get(climbing.id)).resolves.toMatchObject({
-      metrics: { estimatedSeconds: 4.125 * 3_600 },
-      calculatedMetrics: { estimatedSeconds: 3.5 * 3_600 },
+      routeTiming: {
+        startHour: 7,
+        paceFactor: 1.25,
+        ignoreRecordedTime: true,
+        timeMarkers: null,
+        relativeTimeMarkers: false,
+        hikeDate: null,
+      },
     });
-    const timedRow = await database.localTracks.get('local:timed');
-    expect(timedRow?.metrics.estimatedSeconds).toBeUndefined();
-    expect(timedRow?.calculatedMetrics?.estimatedSeconds).toBe(3.5 * 3_600);
+
+    const [loaded] = await database.listLocalTracks();
+
+    expect(loaded?.metrics).toEqual({ ...track.metrics, ascentMeters: 100 });
+    expect(loaded?.calculatedMetrics).toEqual({
+      ...track.metrics,
+      ascentMeters: 120,
+      elevationAlgorithmVersion: 4,
+    });
+    expect(loaded?.routeTiming).toEqual({
+      ...defaultTrackRouteTiming,
+      startHour: 7,
+      paceFactor: 1.25,
+      ignoreRecordedTime: true,
+    });
   });
 
   it('moves version 12 per-track timelines into the summaries and queues their sync', async () => {

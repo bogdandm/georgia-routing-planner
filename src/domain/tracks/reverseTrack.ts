@@ -2,7 +2,6 @@ import type { TrackPoint } from '@/domain/tracks/gpx';
 import type { LocalTrackContent, LocalTrackSummary } from '@/domain/tracks/localTrack';
 import {
   calculateTrackMetrics,
-  estimatedTrackSeconds,
   type TrackMetrics,
 } from '@/domain/tracks/trackCalculations';
 
@@ -18,7 +17,7 @@ export interface ReversedTrack {
 /**
  * Gain and loss sampling is anchored at each segment start, so recalculating reversed
  * points can shift the totals slightly. The source totals swap instead, keeping both
- * directions consistent, and the walking-time estimate is derived from them.
+ * directions consistent.
  */
 function reversedMetrics(
   trackPoints: TrackPoints,
@@ -43,8 +42,6 @@ function reversedMetrics(
   if (source.elevationAlgorithmVersion !== undefined) {
     metrics.elevationAlgorithmVersion = source.elevationAlgorithmVersion;
   }
-  const estimatedSeconds = estimatedTrackSeconds(metrics);
-  if (estimatedSeconds !== undefined) metrics.estimatedSeconds = estimatedSeconds;
   return metrics;
 }
 

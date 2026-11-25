@@ -24,11 +24,13 @@ export type TrackStatsMetrics = Pick<
   TrackMetrics,
   | 'distanceMeters'
   | 'elapsedSeconds'
-  | 'estimatedSeconds'
   | 'ascentMeters'
   | 'descentMeters'
   | 'recordedStartAt'
->;
+> & {
+  /** The track's hiking time preset estimate, breaks included; shown without recorded time. */
+  readonly estimatedSeconds?: number;
+};
 
 function averageSpeedKilometersPerHour(metrics: TrackStatsMetrics): number | undefined {
   const elapsedSeconds = metrics.elapsedSeconds;

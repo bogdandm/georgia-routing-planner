@@ -78,12 +78,14 @@ panel.
   the moving time below which a day has no lunch, and the moving hours of one hiking
   day. Built-in presets are **DIN 33466 (standard)**, the former estimate without
   breaks; **Day hike**, the default, calibrated on recorded hikes; and **Multi-day
-  trek**, which slows climbs and steep descents for a full pack, takes longer breaks and
-  lunch, and splits long routes into 6-hour days with a lunch each. Built-in lunch
-  lengths are expected values: the typical lunch times the share of hikes that had one.
-  Built-ins can only be saved as a new preset; user presets can be saved, renamed, and
-  deleted (a deleted default falls back to Day hike). Presets stay in this browser and
-  travel in data archives.
+  trek**, which walks at the same calibrated pace but takes longer breaks and lunch and
+  splits long routes into 8-hour days with a lunch each. Built-in lunch lengths are
+  expected values: the typical lunch times the share of hikes that had one. The
+  calibration spans all seasons: summer estimates run about 3 % long and winter ones
+  about 6 % short, so **Adjust pace** near ×1.1 suits a winter hike. Built-ins can only
+  be saved as a new preset; user presets can be saved, renamed, and deleted (a deleted
+  default falls back to Day hike). Presets stay in this browser and travel in data
+  archives.
 - Storage shows only browser-supplied measurements: origin usage and quota, IndexedDB,
   Cache Storage, localStorage, residual origin data, and Chromium's optional JavaScript
   heap estimate. Browser HTTP and MapLibre tile caches are not measurable, so no size or

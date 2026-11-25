@@ -482,7 +482,7 @@ describe('planTrackWeatherTimeline', () => {
 
   it('pauses for lunch in place between two neighbouring points of a v2 estimate', () => {
     const flat = profile(
-      Array.from({ length: 13 }, (_, kilometre) => ({
+      Array.from({ length: 14 }, (_, kilometre) => ({
         distanceMeters: kilometre * 1_000,
         elevationMeters: 1_000,
       })),
@@ -505,7 +505,7 @@ describe('planTrackWeatherTimeline', () => {
       .slice(1)
       .map((seconds, index) => seconds - (elapsed[index] ?? 0));
     const walking = Math.min(...steps);
-    // Lunch falls at half the moving time, between the 6th and 7th kilometre.
+    // Lunch falls at half the moving time, 6.5 km along: between the 6th and 7th point.
     expect(steps.map((step) => step - walking)).toEqual(
       steps.map(
         (_, index) =>
@@ -513,7 +513,7 @@ describe('planTrackWeatherTimeline', () => {
       ),
     );
     expect(
-      planTrackWeatherTimeline(flat, { distanceMeters: 12_000 }, timing),
+      planTrackWeatherTimeline(flat, { distanceMeters: 13_000 }, timing),
     ).toMatchObject({
       durationSource: 'estimated',
       durationSeconds: expect.closeTo(estimate?.totalSeconds ?? 0, 6) as number,

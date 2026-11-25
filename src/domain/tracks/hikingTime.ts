@@ -1,8 +1,8 @@
 /**
  * Hiking time presets: moving time from a pace model, slowed at altitude, plus regular
  * breaks and lunch. The v1 preset is the DIN 33466 estimate without breaks; the v2
- * presets come from a calibration on recorded hikes (grade pace curve, altitude bands,
- * a grade-dependent pack penalty on multi-day trips, measured breaks and lunch).
+ * presets come from a calibration on recorded hikes (grade pace curve scaled end to
+ * end through this estimate, altitude bands, measured breaks and lunch).
  */
 
 /** Walking speed at one grade; speeds between knots interpolate linearly in pace. */
@@ -86,10 +86,11 @@ const calibratedAltitudeBands: readonly HikingAltitudeBand[] = [
 /**
  * How `estimateHikingTime` with a built-in preset scattered around the recorded time
  * on the calibration hikes (day hikes for Day hike, multi-day days for Multi-day trek,
- * all for DIN 33466): P10 and P90 of the estimate/recorded ratio, and the share of
- * hikes within 10 % and 20 %. Total time is measured from the first to the last
- * movement. Breaks vary more between hikes than walking does, so total time is less
- * certain than moving time. User presets have no such statistics.
+ * all for DIN 33466), cross-validated by trip for the fitted presets: P10 and P90 of
+ * the estimate/recorded ratio, and the share of hikes within 10 % and 20 %. Total time
+ * is measured from the first to the last movement. Breaks vary more between hikes than
+ * walking does, so total time is less certain than moving time. User presets have no
+ * such statistics.
  */
 export interface HikingTimeAccuracy {
   readonly hikes: number;
@@ -125,31 +126,31 @@ export const builtInHikingTimeAccuracy: Readonly<
   [DAY_HIKE_TIME_PRESET_ID]: {
     hikes: 51,
     moving: {
-      ratioP10: 0.842,
-      ratioP90: 1.151,
-      withinTenPercent: 0.51,
-      withinTwentyPercent: 0.84,
+      ratioP10: 0.873,
+      ratioP90: 1.234,
+      withinTenPercent: 0.47,
+      withinTwentyPercent: 0.8,
     },
     total: {
-      ratioP10: 0.787,
-      ratioP90: 1.247,
-      withinTenPercent: 0.45,
-      withinTwentyPercent: 0.71,
+      ratioP10: 0.828,
+      ratioP90: 1.331,
+      withinTenPercent: 0.49,
+      withinTwentyPercent: 0.78,
     },
   },
   [MULTI_DAY_HIKE_TIME_PRESET_ID]: {
     hikes: 64,
     moving: {
-      ratioP10: 0.938,
-      ratioP90: 1.248,
-      withinTenPercent: 0.55,
-      withinTwentyPercent: 0.86,
+      ratioP10: 0.867,
+      ratioP90: 1.146,
+      withinTenPercent: 0.64,
+      withinTwentyPercent: 0.92,
     },
     total: {
-      ratioP10: 0.733,
-      ratioP90: 1.296,
-      withinTenPercent: 0.27,
-      withinTwentyPercent: 0.53,
+      ratioP10: 0.665,
+      ratioP90: 1.209,
+      withinTenPercent: 0.39,
+      withinTwentyPercent: 0.66,
     },
   },
 };
@@ -168,22 +169,24 @@ export const builtInHikingTimePresets: readonly HikingTimePreset[] = [
     },
   },
   {
-    // Fitted knots scaled by the day-hike base factor (×1.045) and the season model's
-    // whole-hike calibration (÷1.010). Breaks are stationary time per moving hour on day
-    // hikes; lunch is its expected length: 38.5 min in the 71 % of hikes that had one.
+    // The calibration's grade curve (median speed per grade band), scaled end to end
+    // through this estimate so the median day hike's moving time matches the recording
+    // (×0.954). Calibrated across seasons: summer runs about 3 % long, winter about 6 %
+    // short. Breaks are stationary time per moving hour on day hikes; lunch is its
+    // expected length: 38.5 min in the 71 % of hikes that had one.
     id: DAY_HIKE_TIME_PRESET_ID,
     name: 'Day hike',
     parameters: {
       movement: {
         kind: 'grade-curve',
         knots: [
-          { gradePercent: -45, speedKmh: 0.95 },
-          { gradePercent: -24, speedKmh: 3.04 },
-          { gradePercent: -10, speedKmh: 4.32 },
-          { gradePercent: 0, speedKmh: 3.92 },
-          { gradePercent: 12, speedKmh: 3.31 },
-          { gradePercent: 15, speedKmh: 2.42 },
-          { gradePercent: 45, speedKmh: 0.9 },
+          { gradePercent: -45, speedKmh: 0.91 },
+          { gradePercent: -24, speedKmh: 2.9 },
+          { gradePercent: -10, speedKmh: 4.12 },
+          { gradePercent: 0, speedKmh: 3.74 },
+          { gradePercent: 12, speedKmh: 3.16 },
+          { gradePercent: 15, speedKmh: 2.31 },
+          { gradePercent: 45, speedKmh: 0.86 },
         ],
       },
       altitudeBands: calibratedAltitudeBands,
@@ -194,29 +197,30 @@ export const builtInHikingTimePresets: readonly HikingTimePreset[] = [
     },
   },
   {
-    // A full pack costs 14–21 % on climbs and about 15 % on descents steeper than
-    // 20 %, but nothing on flat ground and gentle descents. Lunch is expected length:
-    // 51 min in the 63 % of multi-day days that had one.
+    // The day-hike curve shape with its own end-to-end scale (×0.956): a grade-dependent
+    // pack penalty did not hold on whole days. Longer breaks and lunch, the expected
+    // 51 min in the 63 % of multi-day days that had one, and 8-hour days (the longest
+    // recorded multi-day day moved 7.9 h).
     id: MULTI_DAY_HIKE_TIME_PRESET_ID,
     name: 'Multi-day trek',
     parameters: {
       movement: {
         kind: 'grade-curve',
         knots: [
-          { gradePercent: -45, speedKmh: 0.81 },
-          { gradePercent: -24, speedKmh: 2.58 },
-          { gradePercent: -10, speedKmh: 4.32 },
-          { gradePercent: 0, speedKmh: 3.92 },
-          { gradePercent: 12, speedKmh: 2.71 },
-          { gradePercent: 15, speedKmh: 1.91 },
-          { gradePercent: 45, speedKmh: 0.77 },
+          { gradePercent: -45, speedKmh: 0.91 },
+          { gradePercent: -24, speedKmh: 2.91 },
+          { gradePercent: -10, speedKmh: 4.13 },
+          { gradePercent: 0, speedKmh: 3.75 },
+          { gradePercent: 12, speedKmh: 3.16 },
+          { gradePercent: 15, speedKmh: 2.31 },
+          { gradePercent: 45, speedKmh: 0.86 },
         ],
       },
       altitudeBands: calibratedAltitudeBands,
       breakMinutesPerMovingHour: 21.7,
       lunchMinutes: 32,
       lunchMinimumMovingHours: 2,
-      movingHoursPerDay: 6,
+      movingHoursPerDay: 8,
     },
   },
 ];

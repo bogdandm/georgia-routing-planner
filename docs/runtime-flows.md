@@ -832,24 +832,29 @@ While its weather disclosure is expanded, `TrackWeatherSection` runs the same us
 once per distinct location with the profile elevation: the highest, median-elevation,
 and lowest profile points from `selectTrackElevationLocations`, plus the timeline
 checkpoints from `planTrackWeatherTimeline`
-(`application/weather/TrackWeatherForecast.ts`). The timeline accumulates DIN 33466 time
-over profile samples from cumulative distance, ascent, and descent and scales it to the
-stored `estimatedSeconds`, or uses recorded sample timestamps unless **Ignore recorded
-time** selects the estimate. Changing the date or start time only reselects hours from
-loaded forecasts; collapsing weather or unmounting aborts pending requests. Results stay
-in component state, keyed by the section's track, and failed locations retry on the next
-expansion. `TracksWorkspaceProvider` loads `weather.track-preferences` once and saves
-every disclosure or weekday change; changes made before the record loads win over it and
-are then saved. A saved track's released start or pace slider and timing options update
-its active summary at once and are written by `AppDatabase.setLocalTrackRouteTiming`
-into the summary's `routeTiming`, which queues a metadata synchronization like a rename.
-The summary holds `routeTiming` only for non-default start, pace, recorded-time
-override, relative display, or hike date, or any explicit time-marker visibility choice
-(a null choice follows Layers). A preview or shared track keeps its settings in memory
-and they enter the summary on save. Timing leaves the browser only inside the track's
-synchronized metadata, and a newer account revision replaces it with the rest of that
-metadata. **Color the map track by light** is not part of `routeTiming`: the provider
-keeps the IDs of light-colored tracks in React state only, so a reload clears them.
+(`application/weather/TrackWeatherForecast.ts`). The timeline uses recorded sample
+timestamps unless **Ignore recorded time** selects the estimate, which
+`estimateHikingTime` (`domain/tracks/hikingTime.ts`) computes from the track's resolved
+hiking time preset: per-sample moving time (DIN 33466 anchored to the stored ascent and
+descent, or a pace-by-grade curve), altitude bands, breaks spread along moving time, and
+lunch pauses. `TracksWorkspaceProvider` resolves the preset from `routeTiming.presetId`
+and the `hikingTimePresets` that `main.tsx` hydrates into `uiStore` and `WorkspaceShell`
+saves to `tracks.hiking-time-presets` on every change. Changing the date or start time
+only reselects hours from loaded forecasts; collapsing weather or unmounting aborts
+pending requests. Results stay in component state, keyed by the section's track, and
+failed locations retry on the next expansion. `TracksWorkspaceProvider` loads
+`weather.track-preferences` once and saves every disclosure or weekday change; changes
+made before the record loads win over it and are then saved. A saved track's released
+start or pace slider and timing options update its active summary at once and are
+written by `AppDatabase.setLocalTrackRouteTiming` into the summary's `routeTiming`,
+which queues a metadata synchronization like a rename. The summary holds `routeTiming`
+only for non-default start, pace, recorded-time override, relative display, or hike
+date, or any explicit time-marker visibility choice (a null choice follows Layers). A
+preview or shared track keeps its settings in memory and they enter the summary on save.
+Timing leaves the browser only inside the track's synchronized metadata, and a newer
+account revision replaces it with the rest of that metadata. **Color the map track by
+light** is not part of `routeTiming`: the provider keeps the IDs of light-colored tracks
+in React state only, so a reload clears them.
 
 One-shot weather selection and an enabled weather map take primary map clicks from point
 inspection. Marker placement keeps precedence; an enabled weather map pauses route-plan

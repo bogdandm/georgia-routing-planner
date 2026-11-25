@@ -83,6 +83,7 @@ upsert.
 | `markers.recent-icons`          | Up to 21 unique recently used marker icon keys                                                                                                                                 |
 | `local-tracks.latest-opened`    | ID of the last opened saved track                                                                                                                                              |
 | `track-folders.collapsed`       | IDs of folders collapsed in this browser; never uploaded                                                                                                                       |
+| `tracks.hiking-time-presets`    | User hiking time presets (up to 50, IDs `custom:<uuid>`) and the default preset ID (`day-hike` unless changed); built-in presets live in code; never uploaded                  |
 | `sync.enabled`                  | Boolean, default `false`; alone permits startup or lifecycle synchronization                                                                                                   |
 | `sync.user-id`                  | Opaque account ID that owns local sync preparation; coordination metadata, not a credential                                                                                    |
 | `sync.usage`                    | Last validated remote used/reserved bytes and the 8 MiB limit                                                                                                                  |
@@ -100,14 +101,16 @@ optional `contentHash`, source filename and format (`gpx | fit | kml`), favorite
 projection, up to 50 validation warnings, and optional generated-name fields
 (`generatedName`, `middleAnchorKind` of `dominant-summit | farthest-point`, and
 start/landmark (`middlePoi`)/end POI candidates), and optional `routeTiming`: the
-track's **Route timing** start, pace, recorded-time override, time visibility,
-elapsed-time display, and hike date, absent while they equal the defaults. The retired
-`distance-midpoint` anchor and `fallbackPoi` field are still accepted from older records
-and dropped on read. Database version 13 moves the per-track entries that version 12
-kept in `weather.track-preferences` into the summaries of the tracks still present and
-queues a metadata write for synchronized ones; data archives from earlier versions are
-restored the same way. Their light-coloring choice is dropped: it is session view state
-and is never stored.
+track's **Route timing** start, pace, stop factor, hiking time preset (`presetId`, null
+follows the default preset), recorded-time override, time visibility, elapsed-time
+display, and hike date, absent while they equal the defaults. A preset ID unknown in
+this browser, such as a user preset from another device, times the track with the
+default preset. The retired `distance-midpoint` anchor and `fallbackPoi` field are still
+accepted from older records and dropped on read. Database version 13 moves the per-track
+entries that version 12 kept in `weather.track-preferences` into the summaries of the
+tracks still present and queues a metadata write for synchronized ones; data archives
+from earlier versions are restored the same way. Their light-coloring choice is dropped:
+it is session view state and is never stored.
 
 `LocalTrackContent` shares the track ID and holds normalized `trackPoints` (1-512
 segments of at least two points, each with coordinate and optional source elevation and
@@ -121,11 +124,12 @@ optional ascent/descent/min/max elevation with `elevationSource` (`gpx | dem-ass
 and a matching `elevationAlgorithmVersion`. `calculatedMetrics` must be DEM-assisted
 version 5 (Mapterhorn bilinear sampling) or a stored version 4 (repaired Terrarium, kept
 readable until the user recalculates). Recorded duration is absent unless every rendered
-point has an ordered valid timestamp. Without it, metrics with ascent and descent carry
-`estimatedSeconds`, the DIN 33466 walking time from `estimateHikingSeconds` in
-`src/domain/tracks/trackCalculations.ts`. Database version 11 fills the estimate into
-summaries saved earlier; like other calculated values it is browser-local and never
-synchronized.
+point has an ordered valid timestamp. Estimated time is not stored: it is derived from
+the route and the track's hiking time preset when shown
+(`src/domain/tracks/hikingTime.ts`). Summaries saved before that stored a DIN 33466
+`estimatedSeconds`, which is accepted and dropped on read; database version 11, which
+once filled it in, now only declares the stores. Calculated values are browser-local and
+never synchronized.
 
 `contentHash` is the lowercase SHA-256 of canonical GRPT v2 bytes of `trackPoints`
 (`src/infrastructure/runtime/WebCryptoTrackContentHasher.ts`). It is absent only on rows

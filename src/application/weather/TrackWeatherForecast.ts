@@ -1,3 +1,4 @@
+import type { HourlyWeatherForecast } from '@/application/ports/WeatherForecastGateway';
 import {
   summarizeWeatherPeriod,
   type PointWeatherForecast,
@@ -67,12 +68,22 @@ export interface TrackElevationLocations {
   readonly lowest: TrackElevationLocation;
 }
 
+/** Where the hiker is at one forecast hour. */
+export interface TrackWeatherHour {
+  /** Whole hours from the forecast date's local midnight; past 23 on the next date. */
+  readonly hour: number;
+  readonly location: TrackWeatherLocation;
+}
+
 export interface TrackWeatherCheckpoint extends TrackWeatherLocation {
   readonly kind: 'start' | 'interval' | 'finish';
   /** Time after the start at which the hiker reaches this location. */
   readonly elapsedSeconds: number;
-  /** End of the forecast window: the next checkpoint, or this one for the finish. */
-  readonly untilElapsedSeconds: number;
+  /**
+   * The forecast window: every hour from the arrival hour until the next checkpoint, or
+   * the arrival hour alone for the finish, each where the hiker is at that hour.
+   */
+  readonly hours: readonly TrackWeatherHour[];
 }
 
 export type TrackWeatherTimeline =
@@ -447,12 +458,16 @@ export type TimedTrackWeatherSettings = TrackWeatherTimelineSettings & {
 /**
  * Places the hiker on the route every three hours from the start and at the finish,
  * timed by `routeElapsedSeconds`; the timing adjusts the time for the forecast only.
- * Only day hikes qualify: shorter than 30 km and, after the adjustment, 12 hours.
+ * Each checkpoint's forecast hours locate the hiker at that clock hour on a hike that
+ * starts at the fractional local `startHour`, before the start at the start and after
+ * the finish at the finish. Only day hikes qualify: shorter than 30 km and, after the
+ * adjustment, 12 hours.
  */
 export function planTrackWeatherTimeline(
   profile: TrackTimingRoute,
   metrics: TrackTimingMetrics & Pick<TrackMetrics, 'distanceMeters'>,
   timing: TrackWeatherTiming,
+  startHour: number,
 ): TrackWeatherTimeline {
   const { points } = profile;
   const { elapsed, recorded } = routeElapsedSeconds(points, metrics, timing);
@@ -481,11 +496,24 @@ export function planTrackWeatherTimeline(
   times.push(durationSeconds);
   const checkpoints = times.map((seconds, index): TrackWeatherCheckpoint => {
     const last = index === times.length - 1;
+    const untilSeconds = times[index + 1] ?? seconds;
+    const firstHour = Math.floor(startHour + seconds / 3_600);
+    const endHour = Math.max(
+      firstHour + 1,
+      Math.ceil(startHour + untilSeconds / 3_600),
+    );
+    const hours: TrackWeatherHour[] = [];
+    for (let hour = firstHour; hour < endHour; hour += 1) {
+      hours.push({
+        hour,
+        location: locationAtElapsed(points, elapsed, (hour - startHour) * 3_600),
+      });
+    }
     return {
       ...locationAtElapsed(points, elapsed, seconds),
       kind: index === 0 ? 'start' : last ? 'finish' : 'interval',
       elapsedSeconds: seconds,
-      untilElapsedSeconds: times[index + 1] ?? seconds,
+      hours,
     };
   });
   return {
@@ -658,27 +686,24 @@ export function trackWeatherLocalTime(
 }
 
 /**
- * Summarizes the checkpoint location's forecast hours from its arrival hour until the
- * next checkpoint; the finish covers its arrival hour. Arrivals after midnight read the
- * next date's hours. Null unless the forecast reaches the window's last hour, so a late
- * start on the last date never summarizes a truncated window.
+ * Summarizes a checkpoint's forecast hours, each read from the forecast at the hiker's
+ * location in that hour: `forecasts[index]` belongs to `checkpoint.hours[index]`. Hours
+ * after midnight read the next date. Null unless every hour is forecast, so a late start
+ * on the last date never summarizes a truncated window.
  */
 export function summarizeTrackWeatherCheckpoint(
-  forecast: PointWeatherForecast,
   date: string,
-  startHour: number,
   checkpoint: TrackWeatherCheckpoint,
+  forecasts: readonly PointWeatherForecast[],
 ): TrackWeatherCheckpointPeriod | null {
-  const startHours = startHour + checkpoint.elapsedSeconds / 3_600;
-  const untilHours = startHour + checkpoint.untilElapsedSeconds / 3_600;
-  const firstHour = Math.floor(startHours);
-  const endHour = Math.max(firstHour + 1, Math.ceil(untilHours));
   const dayStart = parseLocalDate(date);
-  const start = localDateTime(dayStart + firstHour * 3_600_000);
-  const lastHour = localDateTime(dayStart + (endHour - 1) * 3_600_000);
-  const end = localDateTime(dayStart + endHour * 3_600_000);
-  if ((forecast.hourly.at(-1)?.time ?? '') < lastHour) return null;
-  const hours = forecast.hourly.filter((hour) => hour.time >= start && hour.time < end);
+  const hours: HourlyWeatherForecast[] = [];
+  for (const [index, { hour }] of checkpoint.hours.entries()) {
+    const time = localDateTime(dayStart + hour * 3_600_000);
+    const sample = forecasts[index]?.hourly.find((value) => value.time === time);
+    if (sample === undefined) return null;
+    hours.push(sample);
+  }
   if (hours.length === 0) return null;
   const isDay = hours.filter((hour) => hour.isDay).length * 2 >= hours.length;
   return { isDay, period: summarizeWeatherPeriod(hours, isDay ? 'day' : 'night') };

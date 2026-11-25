@@ -267,8 +267,9 @@ describe('TrackWeatherSection', () => {
     expect(
       await within(route).findAllByRole('article', { name: /forecast$/ }),
     ).toHaveLength(3);
-    // Three elevation points plus three checkpoints; the start is also the lowest point.
-    expect(execute).toHaveBeenCalledTimes(5);
+    // Three elevation points plus the hiker at each hour from 09:00 to 14:00; at 09:00
+    // the hiker is at the start, which is also the lowest point.
+    expect(execute).toHaveBeenCalledTimes(8);
   });
 
   it('adjusts route timing with weather closed and uses it when forecasts open', async () => {

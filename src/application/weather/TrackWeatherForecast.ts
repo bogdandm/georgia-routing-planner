@@ -288,7 +288,8 @@ function highestLocationBetween(
 ): TrackWeatherLocation {
   const passed = points.flatMap((point, index): TrackWeatherLocation[] => {
     const seconds = elapsed[index] ?? 0;
-    return seconds > fromSeconds && seconds < toSeconds
+    // Inclusive, so recorded samples that share a boundary time all count.
+    return seconds >= fromSeconds && seconds <= toSeconds
       ? [
           {
             coordinate: point.coordinate,

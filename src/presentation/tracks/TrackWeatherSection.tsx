@@ -447,11 +447,9 @@ export function TrackWeatherSection({
         ? 'loading'
         : 'ready';
     // The card names the highest of its hour locations; without profile elevation, an
-    // hour's forecast supplies it.
-    let highest: {
-      readonly location: TrackWeatherLocation;
-      readonly elevationMeters: number;
-    } | null = null;
+    // hour's forecast supplies it, so the maximum waits until every hour has one.
+    let highest: (TrackWeatherLocation & { readonly elevationMeters: number }) | null =
+      null;
     for (const [index, hour] of checkpoint.hours.entries()) {
       const hourState = hourStates[index];
       const elevationMeters =
@@ -459,11 +457,12 @@ export function TrackWeatherSection({
         (hourState?.status === 'ready'
           ? hourState.forecast.elevationMeters
           : undefined);
-      if (
-        elevationMeters !== undefined &&
-        (highest === null || elevationMeters > highest.elevationMeters)
-      ) {
-        highest = { location: hour.location, elevationMeters };
+      if (elevationMeters === undefined) {
+        highest = null;
+        break;
+      }
+      if (highest === null || elevationMeters > highest.elevationMeters) {
+        highest = { ...hour.location, elevationMeters };
       }
     }
     const elevation =
@@ -504,10 +503,7 @@ export function TrackWeatherSection({
               stacked
               openLabel={t`Open the forecast for ${label} in Weather`}
               onOpen={() => {
-                openInWeather(
-                  highest?.location ?? checkpoint,
-                  [time, place].join(', '),
-                );
+                openInWeather(highest ?? checkpoint, [time, place].join(', '));
               }}
             />
           )}

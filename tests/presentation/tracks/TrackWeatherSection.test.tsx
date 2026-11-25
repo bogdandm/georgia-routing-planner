@@ -12,6 +12,7 @@ import {
   localCalendarDate,
   trackWeatherDates,
   trackWeatherWeekday,
+  type TrackTimingRoute,
   type TrackWeatherPreferences,
   type TrackWeatherTimelineSettings,
 } from '@/application/weather/TrackWeatherForecast';
@@ -146,14 +147,17 @@ function forecastDates(): readonly string[] {
   return trackWeatherDates(localCalendarDate(services.clock.now()));
 }
 
-function expandedSection(metrics: TrackStatsMetrics) {
+function expandedSection(
+  metrics: TrackStatsMetrics,
+  timingRoute: TrackTimingRoute = ridge,
+) {
   return (
     <RuntimeServicesProvider services={services}>
       <ThemeProvider theme={createAppTheme()}>
         <TrackWeatherSection
           profile={ridge}
           metrics={metrics}
-          timingRoute={ridge}
+          timingRoute={timingRoute}
           preferences={expandedPreferences}
           onPreferencesChange={vi.fn()}
           timelineSettings={defaultTrackWeatherTimelineSettings}
@@ -338,6 +342,61 @@ describe('TrackWeatherSection', () => {
     expect(request?.coordinate.longitude).toBeCloseTo(44.06, 6);
     expect(useUiStore.getState().activeTab).toBe('weather');
     expect(window.location.hash).toBe('#weather');
+  });
+
+  it('names a route card by its highest hour once every hour forecast supplies elevation', async () => {
+    resetMapInteractionStore();
+    const forecast = services.pointWeatherForecast;
+    const execute = forecast.execute.bind(forecast);
+    // The test library target predates Promise.withResolvers.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Forecast elevation rises 100 m per kilometre east; the 1,800 m hour waits.
+    vi.spyOn(forecast, 'execute').mockImplementation(async (input, signal) => {
+      const elevationMeters =
+        1_000 + Math.round((input.coordinate.longitude - 44) * 10_000);
+      if (elevationMeters === 1_800) await held;
+      return execute({ ...input, elevationMeters }, signal);
+    });
+    const user = userEvent.setup();
+    // Without elevation the 12 km route takes 3 h: the start card covers 09:00 at
+    // 0 km, 10:00 at 4 km, and 11:00 at 8 km.
+    renderWithI18n(
+      expandedSection(
+        { distanceMeters: 12_000 },
+        {
+          points: ridge.points.map(
+            ({ coordinate, distanceMeters, sourceSegmentIndex }) => ({
+              coordinate,
+              distanceMeters,
+              sourceSegmentIndex,
+            }),
+          ),
+        },
+      ),
+    );
+    const route = screen.getByRole('list', { name: 'Forecast along the route' });
+
+    expect(
+      await within(route).findByRole('group', {
+        name: '12:00, Finish, 2,200 m',
+      }),
+    ).toBeVisible();
+    expect(
+      within(route).getByRole('group', { name: '09:00, Start, Loading elevation…' }),
+    ).toBeVisible();
+
+    act(release);
+    await user.click(
+      await within(route).findByRole('button', {
+        name: 'Open the forecast for 09:00, Start, 1,800 m in Weather',
+      }),
+    );
+    const request = mapInteractionStore.getState().weatherForecastRequest;
+    expect(request?.elevationMeters).toBe(1_800);
+    expect(request?.coordinate.longitude).toBeCloseTo(44.08, 6);
   });
 
   it('remembers the weekday of a chosen forecast date', async () => {

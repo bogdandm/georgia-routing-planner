@@ -242,7 +242,7 @@ describe('planTrackWeatherTimeline', () => {
     expect(timeline.checkpoints[2]?.distanceMeters).toBe(12_000);
   });
 
-  it('locates each forecast hour where the hiker is at that hour', () => {
+  it('locates each forecast hour at the highest point the hiker passes in it', () => {
     const timeline = planTrackWeatherTimeline(
       ridgeProfile(),
       { distanceMeters: 12_000, ...ridgeTotals },
@@ -258,19 +258,26 @@ describe('planTrackWeatherTimeline', () => {
         distanceMeters: location.distanceMeters,
       })),
     );
-    // 1 km of climbing takes 0.625 h. At 09:00 the hiker waits at the start, and the
-    // 12:00 hour ends the start's window and begins the 12:30 checkpoint's.
+    // 1 km of climbing takes 0.625 h, so each climbing hour peaks at its end: the
+    // 09:00 hour waits at the start until 09:30, then reaches 0.8 km by 10:00.
     const climb = [
-      { clockHour: 9, distanceMeters: 0 },
-      { clockHour: 10, distanceMeters: expect.closeTo(800, 6) as number },
-      { clockHour: 11, distanceMeters: expect.closeTo(2_400, 6) as number },
-      { clockHour: 12, distanceMeters: expect.closeTo(4_000, 6) as number },
+      { clockHour: 9, distanceMeters: expect.closeTo(800, 6) as number },
+      { clockHour: 10, distanceMeters: expect.closeTo(2_400, 6) as number },
+      { clockHour: 11, distanceMeters: expect.closeTo(4_000, 6) as number },
+      { clockHour: 12, distanceMeters: expect.closeTo(5_600, 6) as number },
     ];
     expect(hours[0]).toEqual(climb);
+    // The 12:00 hour ends the start's window and begins the 12:30 checkpoint's.
     expect(hours[1]?.[0]).toEqual(climb[3]);
-    expect(hours[1]?.map((value) => value.clockHour)).toEqual([12, 13, 14]);
-    expect(hours[1]?.[1]?.distanceMeters).toBeCloseTo(5_600, 6);
-    // The hiker finishes at 15:00, so the finish's only hour is at the finish.
+    // The summit at 13:15 lies between two full hours; the 13:00 hour still reaches it.
+    expect(hours[1]?.[1]).toEqual({ clockHour: 13, distanceMeters: 6_000 });
+    expect(timeline.checkpoints[1]?.hours[1]?.location.elevationMeters).toBe(2_900);
+    // Descending, the 14:00 hour peaks at its start, below the summit.
+    expect(hours[1]?.[2]?.clockHour).toBe(14);
+    expect(timeline.checkpoints[1]?.hours[2]?.location.elevationMeters).toBeLessThan(
+      2_900,
+    );
+    // The hiker finishes at 15:00 and waits there for the rest of the hour.
     expect(hours[2]).toEqual([{ clockHour: 15, distanceMeters: 12_000 }]);
   });
 

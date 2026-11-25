@@ -271,8 +271,6 @@ export function TrackWeatherSection({
     if (timeline.status === 'available') {
       for (const checkpoint of timeline.checkpoints) {
         all.push(...checkpoint.hours.map((hour) => hour.location));
-        // Only a route without elevation shows the arrival elevation the forecast finds.
-        if (checkpoint.elevationMeters === undefined) all.push(checkpoint);
       }
     }
     return all;
@@ -429,17 +427,6 @@ export function TrackWeatherSection({
       forecastStartHour,
       checkpoint.elapsedSeconds,
     ).slice(11, 16);
-    const arrival =
-      checkpoint.elevationMeters === undefined ? forecastFor(checkpoint) : undefined;
-    const elevationMeters =
-      checkpoint.elevationMeters ??
-      (arrival?.status === 'ready' ? arrival.forecast.elevationMeters : undefined);
-    const elevation =
-      elevationMeters !== undefined
-        ? formatTrackElevation(elevationMeters, i18n)
-        : arrival === undefined
-          ? t`Loading elevation…`
-          : t`Elevation unavailable`;
     const distance = formatTrackDistance(checkpoint.distanceMeters, i18n);
     const place =
       checkpoint.kind === 'start'
@@ -459,6 +446,32 @@ export function TrackWeatherSection({
       : hourForecasts.length < hourStates.length
         ? 'loading'
         : 'ready';
+    // The card names the highest of its hour locations; without profile elevation, an
+    // hour's forecast supplies it.
+    let highest: {
+      readonly location: TrackWeatherLocation;
+      readonly elevationMeters: number;
+    } | null = null;
+    for (const [index, hour] of checkpoint.hours.entries()) {
+      const hourState = hourStates[index];
+      const elevationMeters =
+        hour.location.elevationMeters ??
+        (hourState?.status === 'ready'
+          ? hourState.forecast.elevationMeters
+          : undefined);
+      if (
+        elevationMeters !== undefined &&
+        (highest === null || elevationMeters > highest.elevationMeters)
+      ) {
+        highest = { location: hour.location, elevationMeters };
+      }
+    }
+    const elevation =
+      highest !== null
+        ? formatTrackElevation(highest.elevationMeters, i18n)
+        : status === 'loading'
+          ? t`Loading elevation…`
+          : t`Elevation unavailable`;
     const summary =
       status === 'ready'
         ? summarizeTrackWeatherCheckpoint(selectedDate, checkpoint, hourForecasts)
@@ -491,7 +504,10 @@ export function TrackWeatherSection({
               stacked
               openLabel={t`Open the forecast for ${label} in Weather`}
               onOpen={() => {
-                openInWeather(checkpoint, [time, place].join(', '));
+                openInWeather(
+                  highest?.location ?? checkpoint,
+                  [time, place].join(', '),
+                );
               }}
             />
           )}

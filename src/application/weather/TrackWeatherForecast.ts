@@ -68,7 +68,7 @@ export interface TrackElevationLocations {
   readonly lowest: TrackElevationLocation;
 }
 
-/** Where the hiker is at one forecast hour. */
+/** One forecast hour at the highest point the hiker passes during that hour. */
 export interface TrackWeatherHour {
   /** Whole hours from the forecast date's local midnight; past 23 on the next date. */
   readonly hour: number;
@@ -81,7 +81,7 @@ export interface TrackWeatherCheckpoint extends TrackWeatherLocation {
   readonly elapsedSeconds: number;
   /**
    * The forecast window: every hour from the arrival hour until the next checkpoint, or
-   * the arrival hour alone for the finish, each where the hiker is at that hour.
+   * the arrival hour alone for the finish.
    */
   readonly hours: readonly TrackWeatherHour[];
 }
@@ -276,6 +276,39 @@ function locationAtElapsed(
   };
 }
 
+/**
+ * The highest point the hiker passes between two elapsed times, ends included; the
+ * point at `fromSeconds` when no elevation is known.
+ */
+function highestLocationBetween(
+  points: readonly TrackTimingPoint[],
+  elapsed: readonly number[],
+  fromSeconds: number,
+  toSeconds: number,
+): TrackWeatherLocation {
+  const passed = points.flatMap((point, index): TrackWeatherLocation[] => {
+    const seconds = elapsed[index] ?? 0;
+    return seconds > fromSeconds && seconds < toSeconds
+      ? [
+          {
+            coordinate: point.coordinate,
+            elevationMeters: point.elevationMeters,
+            distanceMeters: point.distanceMeters,
+          },
+        ]
+      : [];
+  });
+  let highest = locationAtElapsed(points, elapsed, fromSeconds);
+  for (const candidate of [...passed, locationAtElapsed(points, elapsed, toSeconds)]) {
+    if (
+      (candidate.elevationMeters ?? -Infinity) > (highest.elevationMeters ?? -Infinity)
+    ) {
+      highest = candidate;
+    }
+  }
+  return highest;
+}
+
 /** Bounds and step of the pace adjustment, a multiplier of moving time. */
 export const TRACK_WEATHER_MINIMUM_PACE_FACTOR = 0.5;
 export const TRACK_WEATHER_MAXIMUM_PACE_FACTOR = 2;
@@ -458,10 +491,11 @@ export type TimedTrackWeatherSettings = TrackWeatherTimelineSettings & {
 /**
  * Places the hiker on the route every three hours from the start and at the finish,
  * timed by `routeElapsedSeconds`; the timing adjusts the time for the forecast only.
- * Each checkpoint's forecast hours locate the hiker at that clock hour on a hike that
- * starts at the fractional local `startHour`, before the start at the start and after
- * the finish at the finish. Only day hikes qualify: shorter than 30 km and, after the
- * adjustment, 12 hours.
+ * Each checkpoint's forecast hour H is located at the highest point the hiker passes
+ * from H:00 to the next hour on a hike that starts at the fractional local
+ * `startHour`, waiting at the start before it and at the finish after it, so the hour
+ * never misses a summit between two full hours. Only day hikes qualify: shorter than
+ * 30 km and, after the adjustment, 12 hours.
  */
 export function planTrackWeatherTimeline(
   profile: TrackTimingRoute,
@@ -504,9 +538,15 @@ export function planTrackWeatherTimeline(
     );
     const hours: TrackWeatherHour[] = [];
     for (let hour = firstHour; hour < endHour; hour += 1) {
+      const fromSeconds = (hour - startHour) * 3_600;
       hours.push({
         hour,
-        location: locationAtElapsed(points, elapsed, (hour - startHour) * 3_600),
+        location: highestLocationBetween(
+          points,
+          elapsed,
+          fromSeconds,
+          fromSeconds + 3_600,
+        ),
       });
     }
     return {

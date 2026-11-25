@@ -486,14 +486,16 @@ next Saturday is selected until then. **By elevation** shows the daytime forecas
 highest, median-elevation, and lowest profile points. **Along the route** uses **Route
 timing** to show where the hiker is every three hours and at the finish. Each card
 summarizes the hours from its arrival hour until the next checkpoint; the finish covers
-its arrival hour. Every hour is forecast where the hiker is at that hour, so a window
-that climbs or descends shows the weather along the way rather than at one point. Hours
-after midnight use the next date's forecast. Forecast checkpoints are offered only for
-day hikes shorter than 30 km and 12 hours; slowing a track past 12 hours hides them
-until the pace is reduced. This restriction does not hide the timing controls or map
-labels. Cards reuse the 7-day forecast rows from Weather and request each location with
-its profile elevation. Clicking a loaded forecast row opens Weather with the full
-forecast at that location and elevation, labelled with the card's point or time. Failed
+its arrival hour. Every hour is forecast at the highest point the hiker passes during
+that hour, so a window that climbs or descends shows the weather along the way rather
+than at one point, and a summit between two full hours is not missed. Hours after
+midnight use the next date's forecast. Forecast checkpoints are offered only for day
+hikes shorter than 30 km and 12 hours; slowing a track past 12 hours hides them until
+the pace is reduced. This restriction does not hide the timing controls or map labels.
+Cards reuse the 7-day forecast rows from Weather and request each location with its
+profile elevation. A route card shows the highest elevation of its hours. Clicking a
+loaded forecast row opens Weather with the full forecast at that location and elevation
+(for a route card, its highest point), labelled with the card's point or time. Failed
 track forecasts retry automatically as in Weather when the app becomes visible again.
 
 #### Time markers

@@ -84,10 +84,12 @@ const calibratedAltitudeBands: readonly HikingAltitudeBand[] = [
 ];
 
 /**
- * How a preset's estimates scattered around the recorded time in the cross-validated
- * calibration hikes: P10 and P90 of the estimate/recorded ratio, and the share of
- * hikes within 10 % and 20 %. Breaks vary more between hikes than walking does, so
- * total time is less certain than moving time. User presets have no such statistics.
+ * How `estimateHikingTime` with a built-in preset scattered around the recorded time
+ * on the calibration hikes (day hikes for Day hike, multi-day days for Multi-day trek,
+ * all for DIN 33466): P10 and P90 of the estimate/recorded ratio, and the share of
+ * hikes within 10 % and 20 %. Total time is measured from the first to the last
+ * movement. Breaks vary more between hikes than walking does, so total time is less
+ * certain than moving time. User presets have no such statistics.
  */
 export interface HikingTimeAccuracy {
   readonly hikes: number;
@@ -102,51 +104,53 @@ export interface HikingTimeRatioSpread {
   readonly withinTwentyPercent: number;
 }
 
-/** Total time of the v2 presets: grade curve plus structured breaks and lunch. */
-const calibratedTotalSpread: HikingTimeRatioSpread = {
-  ratioP10: 0.695,
-  ratioP90: 1.278,
-  withinTenPercent: 0.4,
-  withinTwentyPercent: 0.65,
-};
-
 export const builtInHikingTimeAccuracy: Readonly<
   Record<string, HikingTimeAccuracy | undefined>
 > = {
   [DIN_HIKING_TIME_PRESET_ID]: {
     hikes: 115,
     moving: {
-      ratioP10: 1.069,
-      ratioP90: 1.526,
-      withinTenPercent: 0.1,
-      withinTwentyPercent: 0.28,
+      ratioP10: 1.119,
+      ratioP90: 1.681,
+      withinTenPercent: 0.08,
+      withinTwentyPercent: 0.19,
     },
     total: {
-      ratioP10: 0.617,
-      ratioP90: 1.118,
+      ratioP10: 0.65,
+      ratioP90: 1.169,
       withinTenPercent: 0.37,
-      withinTwentyPercent: 0.6,
+      withinTwentyPercent: 0.62,
     },
   },
   [DAY_HIKE_TIME_PRESET_ID]: {
     hikes: 51,
     moving: {
-      ratioP10: 0.835,
-      ratioP90: 1.185,
+      ratioP10: 0.842,
+      ratioP90: 1.151,
       withinTenPercent: 0.51,
       withinTwentyPercent: 0.84,
     },
-    total: calibratedTotalSpread,
+    total: {
+      ratioP10: 0.787,
+      ratioP90: 1.247,
+      withinTenPercent: 0.45,
+      withinTwentyPercent: 0.71,
+    },
   },
   [MULTI_DAY_HIKE_TIME_PRESET_ID]: {
     hikes: 64,
     moving: {
-      ratioP10: 0.87,
-      ratioP90: 1.156,
-      withinTenPercent: 0.63,
-      withinTwentyPercent: 0.92,
+      ratioP10: 0.938,
+      ratioP90: 1.248,
+      withinTenPercent: 0.55,
+      withinTwentyPercent: 0.86,
     },
-    total: calibratedTotalSpread,
+    total: {
+      ratioP10: 0.733,
+      ratioP90: 1.296,
+      withinTenPercent: 0.27,
+      withinTwentyPercent: 0.53,
+    },
   },
 };
 
@@ -164,8 +168,9 @@ export const builtInHikingTimePresets: readonly HikingTimePreset[] = [
     },
   },
   {
-    // Fitted knots scaled by the day-hike base factor (×1.045) and the whole-hike
-    // calibration (÷1.015); breaks and lunch are the day-hike medians.
+    // Fitted knots scaled by the day-hike base factor (×1.045) and the season model's
+    // whole-hike calibration (÷1.010). Breaks are stationary time per moving hour on day
+    // hikes; lunch is its expected length: 38.5 min in the 71 % of hikes that had one.
     id: DAY_HIKE_TIME_PRESET_ID,
     name: 'Day hike',
     parameters: {
@@ -173,24 +178,25 @@ export const builtInHikingTimePresets: readonly HikingTimePreset[] = [
         kind: 'grade-curve',
         knots: [
           { gradePercent: -45, speedKmh: 0.95 },
-          { gradePercent: -24, speedKmh: 3.02 },
-          { gradePercent: -10, speedKmh: 4.3 },
-          { gradePercent: 0, speedKmh: 3.9 },
-          { gradePercent: 12, speedKmh: 3.29 },
-          { gradePercent: 15, speedKmh: 2.41 },
+          { gradePercent: -24, speedKmh: 3.04 },
+          { gradePercent: -10, speedKmh: 4.32 },
+          { gradePercent: 0, speedKmh: 3.92 },
+          { gradePercent: 12, speedKmh: 3.31 },
+          { gradePercent: 15, speedKmh: 2.42 },
           { gradePercent: 45, speedKmh: 0.9 },
         ],
       },
       altitudeBands: calibratedAltitudeBands,
-      breakMinutesPerMovingHour: 20.6,
-      lunchMinutes: 41,
+      breakMinutesPerMovingHour: 18.8,
+      lunchMinutes: 27,
       lunchMinimumMovingHours: 2,
       movingHoursPerDay: 10,
     },
   },
   {
     // A full pack costs 14–21 % on climbs and about 15 % on descents steeper than
-    // 20 %, but nothing on flat ground and gentle descents.
+    // 20 %, but nothing on flat ground and gentle descents. Lunch is expected length:
+    // 51 min in the 63 % of multi-day days that had one.
     id: MULTI_DAY_HIKE_TIME_PRESET_ID,
     name: 'Multi-day trek',
     parameters: {
@@ -198,17 +204,17 @@ export const builtInHikingTimePresets: readonly HikingTimePreset[] = [
         kind: 'grade-curve',
         knots: [
           { gradePercent: -45, speedKmh: 0.81 },
-          { gradePercent: -24, speedKmh: 2.57 },
-          { gradePercent: -10, speedKmh: 4.26 },
-          { gradePercent: 0, speedKmh: 3.9 },
-          { gradePercent: 12, speedKmh: 2.7 },
-          { gradePercent: 15, speedKmh: 1.9 },
+          { gradePercent: -24, speedKmh: 2.58 },
+          { gradePercent: -10, speedKmh: 4.32 },
+          { gradePercent: 0, speedKmh: 3.92 },
+          { gradePercent: 12, speedKmh: 2.71 },
+          { gradePercent: 15, speedKmh: 1.91 },
           { gradePercent: 45, speedKmh: 0.77 },
         ],
       },
       altitudeBands: calibratedAltitudeBands,
-      breakMinutesPerMovingHour: 23.4,
-      lunchMinutes: 51,
+      breakMinutesPerMovingHour: 21.7,
+      lunchMinutes: 32,
       lunchMinimumMovingHours: 2,
       movingHoursPerDay: 6,
     },
@@ -371,26 +377,69 @@ export interface HikingTimeRouteTotals {
   readonly descentMeters?: number;
 }
 
-/** Grade is measured over this distance, matching the elevation profile's local grade. */
+/**
+ * Grade is the slope over this distance of the elevation trend, the mean elevation of
+ * points within the trend window: the elevation profile's local grade, which the pace
+ * curve was calibrated on. Raw sample noise would steepen grades, and since pace grows
+ * faster on steep ground than it falls on gentle ground, it would lengthen walking.
+ */
 const gradeWindowMeters = 120;
+const trendWindowMeters = 200;
 
 interface ElevationRun {
   readonly distances: readonly number[];
+  /** Trend elevation at each distance. */
   readonly elevations: readonly number[];
 }
 
-/** Points with elevation per source segment, for interpolating elevation by distance. */
+/** Mean elevation of the run's points within half the trend window either side. */
+function trendElevations(
+  distances: readonly number[],
+  elevations: readonly number[],
+): number[] {
+  const trends: number[] = [];
+  let windowStart = 0;
+  let windowEnd = 0;
+  let sum = 0;
+  for (const distance of distances) {
+    while (
+      windowEnd < distances.length &&
+      (distances[windowEnd] ?? 0) <= distance + trendWindowMeters / 2
+    ) {
+      sum += elevations[windowEnd] ?? 0;
+      windowEnd += 1;
+    }
+    while (
+      windowStart < windowEnd &&
+      (distances[windowStart] ?? 0) < distance - trendWindowMeters / 2
+    ) {
+      sum -= elevations[windowStart] ?? 0;
+      windowStart += 1;
+    }
+    trends.push(sum / (windowEnd - windowStart));
+  }
+  return trends;
+}
+
+/** Points with elevation per source segment, for interpolating the trend by distance. */
 function elevationRuns(points: readonly HikingTimePoint[]): Map<number, ElevationRun> {
-  const runs = new Map<number, { distances: number[]; elevations: number[] }>();
+  const samples = new Map<number, { distances: number[]; elevations: number[] }>();
   for (const point of points) {
     if (point.elevationMeters === undefined) continue;
-    let run = runs.get(point.sourceSegmentIndex);
+    let run = samples.get(point.sourceSegmentIndex);
     if (run === undefined) {
       run = { distances: [], elevations: [] };
-      runs.set(point.sourceSegmentIndex, run);
+      samples.set(point.sourceSegmentIndex, run);
     }
     run.distances.push(point.distanceMeters);
     run.elevations.push(point.elevationMeters);
+  }
+  const runs = new Map<number, ElevationRun>();
+  for (const [segment, run] of samples) {
+    runs.set(segment, {
+      distances: run.distances,
+      elevations: trendElevations(run.distances, run.elevations),
+    });
   }
   return runs;
 }
@@ -431,6 +480,53 @@ function altitudeSpeedFactor(
   return factor;
 }
 
+/** Grade and trend elevation of each step `index - 1 → index`, shared with reports. */
+export interface HikingTimeSteps {
+  /** Zero for the first point, across source segments, and without elevation. */
+  readonly gradePercent: readonly number[];
+  /** Trend elevation at the step's middle; undefined where the segment has none. */
+  readonly elevationMeters: readonly (number | undefined)[];
+}
+
+export function hikingTimeSteps(points: readonly HikingTimePoint[]): HikingTimeSteps {
+  const gradePercent = points.map(() => 0);
+  const elevationMeters: (number | undefined)[] = points.map(() => undefined);
+  const runs = elevationRuns(points);
+  const lowHint = { index: 0 };
+  const highHint = { index: 0 };
+  const midHint = { index: 0 };
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const point = points[index];
+    if (previous === undefined || point === undefined) continue;
+    if (previous.sourceSegmentIndex !== point.sourceSegmentIndex) {
+      lowHint.index = 0;
+      highHint.index = 0;
+      midHint.index = 0;
+      continue;
+    }
+    const run = runs.get(point.sourceSegmentIndex);
+    if (run === undefined) continue;
+    const middle = (previous.distanceMeters + point.distanceMeters) / 2;
+    elevationMeters[index] = elevationAt(run, middle, midHint);
+    // Missing elevation adds horizontal travel only, never an invented slope.
+    if (previous.elevationMeters === undefined || point.elevationMeters === undefined) {
+      continue;
+    }
+    const runStart = run.distances[0] ?? 0;
+    const runEnd = run.distances.at(-1) ?? runStart;
+    const low = Math.max(middle - gradeWindowMeters / 2, runStart);
+    const high = Math.min(middle + gradeWindowMeters / 2, runEnd);
+    if (high - low > 1) {
+      gradePercent[index] =
+        ((elevationAt(run, high, highHint) - elevationAt(run, low, lowHint)) /
+          (high - low)) *
+        100;
+    }
+  }
+  return { gradePercent, elevationMeters };
+}
+
 /** Unadjusted moving seconds of each step `index - 1 → index`; zero across segments. */
 function movingStepSeconds(
   points: readonly HikingTimePoint[],
@@ -438,12 +534,8 @@ function movingStepSeconds(
   totals: HikingTimeRouteTotals,
 ): number[] {
   const steps = points.map(() => 0);
-  const runs = elevationRuns(points);
+  const { gradePercent, elevationMeters } = hikingTimeSteps(points);
   const movement = parameters.movement;
-  const lowHint = { index: 0 };
-  const highHint = { index: 0 };
-  const midHint = { index: 0 };
-  let currentRun: number | undefined;
 
   // DIN works on cumulative totals: its elapsed time is a function of distance, ascent,
   // and descent so far, scaled so the finish matches the route totals.
@@ -460,19 +552,6 @@ function movingStepSeconds(
       }
       continue;
     }
-    const distance = point.distanceMeters - previous.distanceMeters;
-    const run = runs.get(point.sourceSegmentIndex);
-    if (currentRun !== point.sourceSegmentIndex) {
-      currentRun = point.sourceSegmentIndex;
-      lowHint.index = 0;
-      highHint.index = 0;
-      midHint.index = 0;
-    }
-    const middle = (previous.distanceMeters + point.distanceMeters) / 2;
-    const elevation =
-      run === undefined || run.distances.length === 0
-        ? undefined
-        : elevationAt(run, middle, midHint);
     let seconds: number;
     if (movement.kind === 'din') {
       if (
@@ -487,27 +566,12 @@ function movingStepSeconds(
       seconds = din - previousDin;
       previousDin = din;
     } else {
-      // Missing elevation adds horizontal travel only, never an invented slope.
-      let grade = 0;
-      if (
-        run !== undefined &&
-        previous.elevationMeters !== undefined &&
-        point.elevationMeters !== undefined
-      ) {
-        const runStart = run.distances[0] ?? 0;
-        const runEnd = run.distances.at(-1) ?? runStart;
-        const low = Math.max(middle - gradeWindowMeters / 2, runStart);
-        const high = Math.min(middle + gradeWindowMeters / 2, runEnd);
-        if (high - low > 1) {
-          grade =
-            ((elevationAt(run, high, highHint) - elevationAt(run, low, lowHint)) /
-              (high - low)) *
-            100;
-        }
-      }
-      seconds = distance * hikingPaceSecondsPerMeter(movement.knots, grade);
+      seconds =
+        (point.distanceMeters - previous.distanceMeters) *
+        hikingPaceSecondsPerMeter(movement.knots, gradePercent[index] ?? 0);
     }
-    steps[index] = seconds / altitudeSpeedFactor(parameters.altitudeBands, elevation);
+    steps[index] =
+      seconds / altitudeSpeedFactor(parameters.altitudeBands, elevationMeters[index]);
   }
 
   if (

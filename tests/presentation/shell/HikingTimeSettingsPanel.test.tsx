@@ -116,7 +116,7 @@ describe('HikingTimeSettingsPanel', () => {
         parameters: { ...dayHike.parameters, lunchMinutes: 25 },
       },
     ]);
-    expect(dayHike.parameters.lunchMinutes).toBe(41);
+    expect(dayHike.parameters.lunchMinutes).toBe(27);
     expect(builtInHikingTimePresets.find((preset) => preset.id === dayHike.id)).toBe(
       dayHike,
     );

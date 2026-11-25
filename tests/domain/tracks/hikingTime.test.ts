@@ -167,6 +167,20 @@ describe('estimateHikingTime with a grade curve', () => {
     expect(climbTime.movingSeconds).toBeGreaterThan(flatTime.movingSeconds);
   });
 
+  it('measures grade on the elevation trend, so sample noise does not slow walking', () => {
+    const parameters = builtIn(DAY_HIKE_TIME_PRESET_ID).parameters;
+    const flat = flatRoute(3_000, 10);
+    // ±3 m alternating sample noise is a 60 % grade between neighbouring samples.
+    const noisy = flat.map((value, index) =>
+      point(value.distanceMeters, 1_000 + (index % 2 === 0 ? 3 : -3)),
+    );
+
+    const flatTime = estimateHikingTime(flat, parameters, unadjusted);
+    const noisyTime = estimateHikingTime(noisy, parameters, unadjusted);
+
+    expect(noisyTime.movingSeconds / flatTime.movingSeconds).toBeLessThan(1.01);
+  });
+
   it('slows only the steps at or above an altitude band', () => {
     const route = [
       point(0, 1_900, 0),

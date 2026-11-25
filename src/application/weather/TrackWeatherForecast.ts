@@ -14,6 +14,7 @@ import type {
 import type { TrackCoordinate, TrackPoint } from '@/domain/tracks/gpx';
 import type { TrackMarker, TrackRouteTiming } from '@/domain/tracks/localTrack';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
+import { analyzeRecordedHike } from '@/domain/tracks/recordedHikeAnalysis';
 import { instantToZonedWallTime, routeTimeZone } from '@/domain/time/zonedWallTime';
 import {
   estimateHikingTime,
@@ -408,9 +409,10 @@ export function estimateRouteHikingTime(
 
 /**
  * Elapsed seconds at each profile point. Recorded timestamps drive the pace when the
- * track has a recorded duration and `ignoreRecordedTime` is off, stretched by
- * `paceFactor`; otherwise the hiking time preset estimates moving time, breaks, and
- * lunch, and the pace and stop factors scale them separately.
+ * track has a recorded duration and `ignoreRecordedTime` is off; `paceFactor` then
+ * stretches only the recorded walking, keeping its stops. Otherwise the hiking time
+ * preset estimates moving time, breaks, and lunch, and the pace and stop factors scale
+ * them separately.
  */
 export function routeElapsedSeconds(
   points: readonly TrackTimingPoint[],
@@ -422,11 +424,16 @@ export function routeElapsedSeconds(
       ? null
       : recordedElapsedSeconds(points);
   if (recorded !== null) {
-    return {
-      elapsed: recorded.map((seconds) => seconds * timing.paceFactor),
-      recorded: true,
-      estimate: null,
-    };
+    const movingSteps =
+      timing.paceFactor === 1 ? null : analyzeRecordedHike(points)?.movingStepSeconds;
+    let adjusted = 0;
+    const elapsed = recorded.map((seconds, index) => {
+      const step = index === 0 ? 0 : seconds - (recorded[index - 1] ?? seconds);
+      const moving = movingSteps?.[index] ?? step;
+      adjusted += step + moving * (timing.paceFactor - 1);
+      return adjusted;
+    });
+    return { elapsed, recorded: true, estimate: null };
   }
   const estimate = estimateRouteHikingTime(points, metrics, timing);
   return { elapsed: estimate.elapsedSeconds, recorded: false, estimate };

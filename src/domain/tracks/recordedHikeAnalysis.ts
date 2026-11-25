@@ -9,6 +9,7 @@ import {
   type GradeBand,
 } from '@/domain/tracks/elevationProfile';
 import type { TrackCoordinate } from '@/domain/tracks/gpx';
+import { hikingTimeSteps } from '@/domain/tracks/hikingTime';
 import { recordedElapsedSeconds } from '@/domain/tracks/profileTiming';
 import { geodesicDistanceMeters } from '@/domain/tracks/trackCalculations';
 
@@ -27,8 +28,6 @@ const LUNCH_MINIMUM_SECONDS = 20 * 60;
 const LUNCH_EARLIEST_MOVING_FRACTION = 0.15;
 const LUNCH_LATEST_MOVING_FRACTION = 0.85;
 
-/** Grade is measured over this distance, matching the hiking time estimate. */
-const GRADE_WINDOW_METERS = 120;
 /** Bands walked for less than this say little about speed. */
 const MINIMUM_BAND_DISTANCE_METERS = 200;
 
@@ -81,8 +80,10 @@ function positionAt(
   }
   const startSeconds = elapsed[hint.index] ?? 0;
   const endSeconds = elapsed[next] ?? startSeconds;
+  // Between source segments no track was recorded: the hiker waits at the previous
+  // segment's end, so a recording gap reads as a stop rather than a fast walk.
   const fraction =
-    endSeconds > startSeconds
+    endSeconds > startSeconds && start.sourceSegmentIndex === end.sourceSegmentIndex
       ? Math.min(Math.max((seconds - startSeconds) / (endSeconds - startSeconds), 0), 1)
       : 0;
   const coordinate: TrackCoordinate = [
@@ -228,93 +229,29 @@ export interface GradeBandComparison {
   readonly estimatedMovingSeconds: number;
 }
 
-interface ElevationRun {
-  readonly distances: number[];
-  readonly elevations: number[];
-}
-
-/** Linear elevation at distances queried in ascending order within one run. */
-function elevationAt(
-  run: ElevationRun,
-  distanceMeters: number,
-  hint: { index: number },
-): number {
-  const { distances, elevations } = run;
-  const last = distances.length - 1;
-  while (hint.index < last && (distances[hint.index + 1] ?? 0) <= distanceMeters) {
-    hint.index += 1;
-  }
-  const start = distances[hint.index] ?? 0;
-  const end = distances[hint.index + 1];
-  const startElevation = elevations[hint.index] ?? 0;
-  if (end === undefined || end <= start || distanceMeters <= start)
-    return startElevation;
-  const endElevation = elevations[hint.index + 1] ?? startElevation;
-  return (
-    startElevation +
-    ((endElevation - startElevation) * (distanceMeters - start)) / (end - start)
-  );
-}
-
 /**
- * Recorded and estimated moving time per grade band. A step's grade spans a 120 m
- * window centred on it within its source segment, as in the estimate; steps without
- * elevation count as flat. Bands walked for less than 200 m are left out.
+ * Recorded and estimated moving time per grade band, with the estimate's step grades
+ * (`hikingTimeSteps`), so both sides fall in the same bands. Bands walked for less than
+ * 200 m are left out.
  */
 export function compareGradeBands(
   points: readonly RecordedHikePoint[],
   recordedMovingStepSeconds: readonly number[],
   estimatedMovingElapsedSeconds: readonly number[],
 ): readonly GradeBandComparison[] {
-  const runs = new Map<number, ElevationRun>();
-  for (const point of points) {
-    if (point.elevationMeters === undefined) continue;
-    let run = runs.get(point.sourceSegmentIndex);
-    if (run === undefined) {
-      run = { distances: [], elevations: [] };
-      runs.set(point.sourceSegmentIndex, run);
-    }
-    run.distances.push(point.distanceMeters);
-    run.elevations.push(point.elevationMeters);
-  }
-
+  const { gradePercent } = hikingTimeSteps(points);
   const totals = new Map<
     GradeBand,
     { distance: number; recorded: number; estimated: number }
   >();
-  const lowHint = { index: 0 };
-  const highHint = { index: 0 };
   for (let index = 1; index < points.length; index += 1) {
     const previous = points[index - 1];
     const point = points[index];
     if (previous === undefined || point === undefined) continue;
-    if (previous.sourceSegmentIndex !== point.sourceSegmentIndex) {
-      lowHint.index = 0;
-      highHint.index = 0;
-      continue;
-    }
+    if (previous.sourceSegmentIndex !== point.sourceSegmentIndex) continue;
     const distance = point.distanceMeters - previous.distanceMeters;
     if (distance <= 0) continue;
-    const run = runs.get(point.sourceSegmentIndex);
-    let grade = 0;
-    if (
-      run !== undefined &&
-      previous.elevationMeters !== undefined &&
-      point.elevationMeters !== undefined
-    ) {
-      const middle = (previous.distanceMeters + point.distanceMeters) / 2;
-      const runStart = run.distances[0] ?? 0;
-      const runEnd = run.distances.at(-1) ?? runStart;
-      const low = Math.max(middle - GRADE_WINDOW_METERS / 2, runStart);
-      const high = Math.min(middle + GRADE_WINDOW_METERS / 2, runEnd);
-      if (high - low > 1) {
-        grade =
-          ((elevationAt(run, high, highHint) - elevationAt(run, low, lowHint)) /
-            (high - low)) *
-          100;
-      }
-    }
-    const band = gradeBandForGrade(grade);
+    const band = gradeBandForGrade(gradePercent[index] ?? 0);
     let total = totals.get(band);
     if (total === undefined) {
       total = { distance: 0, recorded: 0, estimated: 0 };

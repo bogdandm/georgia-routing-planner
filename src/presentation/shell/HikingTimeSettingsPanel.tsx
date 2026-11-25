@@ -670,7 +670,7 @@ function HikingTimePresetEditor({
             }}
           />
           <NumberField
-            label={t`Lunch after moving hours`}
+            label={t`No lunch below moving hours`}
             value={draft.lunchMinimumMovingHours}
             step={0.5}
             onChange={(lunchMinimumMovingHours) => {

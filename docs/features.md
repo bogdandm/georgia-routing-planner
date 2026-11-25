@@ -75,13 +75,15 @@ panel.
   edits every parameter of a preset: the movement model (the DIN 33466 formula with
   horizontal, ascent, and descent rates, or a pace-by-grade table of knots between which
   pace is interpolated), altitude slowdown bands, breaks per moving hour, lunch length,
-  the moving time a day needs before lunch, and the moving hours of one hiking day.
-  Built-in presets are **DIN 33466 (standard)**, the former estimate without breaks;
-  **Day hike**, the default, calibrated on recorded hikes; and **Multi-day trek**, which
-  slows climbs and steep descents for a full pack, takes longer breaks and lunch, and
-  splits long routes into 6-hour days with a lunch each. Built-ins can only be saved as
-  a new preset; user presets can be saved, renamed, and deleted (a deleted default falls
-  back to Day hike). Presets stay in this browser and travel in data archives.
+  the moving time below which a day has no lunch, and the moving hours of one hiking
+  day. Built-in presets are **DIN 33466 (standard)**, the former estimate without
+  breaks; **Day hike**, the default, calibrated on recorded hikes; and **Multi-day
+  trek**, which slows climbs and steep descents for a full pack, takes longer breaks and
+  lunch, and splits long routes into 6-hour days with a lunch each. Built-in lunch
+  lengths are expected values: the typical lunch times the share of hikes that had one.
+  Built-ins can only be saved as a new preset; user presets can be saved, renamed, and
+  deleted (a deleted default falls back to Day hike). Presets stay in this browser and
+  travel in data archives.
 - Storage shows only browser-supplied measurements: origin usage and quota, IndexedDB,
   Cache Storage, localStorage, residual origin data, and Chromium's optional JavaScript
   heap estimate. Browser HTTP and MapLibre tile caches are not measurable, so no size or
@@ -372,15 +374,16 @@ estimated total beside it; on a timed track each also shows its signed differenc
 the recorded time. Imports and drawn routes choose it before saving. The timeline
 follows recorded timestamps when the track has recorded time and otherwise the preset's
 estimate: moving time from the DIN 33466 formula on the route's distance and stored
-ascent and descent or from the pace-by-grade curve on a 120 m grade window, slowed by
-altitude bands, with breaks spread along the moving time and each day's lunch as a pause
-in its middle, so climbs advance more slowly than flat walking. **Ignore recorded
-time**, offered on timed tracks, selects the estimate instead. **Route start** sets the
-start from 00:00 to 23:30 in half-hour steps. It defaults to the recorded start's local
-time at the route start, rounded to the nearest half-hour, or to 09:00 without one.
-**Adjust pace** scales moving time only, or the whole recording on a timed track, from
-×0.5 (faster) to ×2 (slower) on release. **Adjust breaks and lunch** scales the
-estimate's breaks and lunch from ×0 to ×3 and shows their total beside it; recorded
+ascent and descent or from the pace-by-grade curve on the 120 m grade of the 200 m
+elevation trend, as in the elevation profile, slowed by altitude bands, with breaks
+spread along the moving time and each day's lunch as a pause in its middle, so climbs
+advance more slowly than flat walking. **Ignore recorded time**, offered on timed
+tracks, selects the estimate instead. **Route start** sets the start from 00:00 to 23:30
+in half-hour steps. It defaults to the recorded start's local time at the route start,
+rounded to the nearest half-hour, or to 09:00 without one. **Adjust pace** scales moving
+time only, on a timed track the recorded walking while its detected stops keep their
+length, from ×0.5 (faster) to ×2 (slower) on release. **Adjust breaks and lunch** scales
+the estimate's breaks and lunch from ×0 to ×3 and shows their total beside it; recorded
 stops are kept, so it is disabled while recorded time is used. These settings belong to
 each saved track and synchronize with its metadata, so a signed-in account sees them on
 every device; they reset to the defaults for a reversed copy. An unsaved track keeps

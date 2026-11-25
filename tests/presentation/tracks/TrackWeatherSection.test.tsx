@@ -181,6 +181,14 @@ beforeEach(() => {
 });
 
 describe('TrackWeatherSection', () => {
+  it('shows a track without its own preset as following the default preset', () => {
+    renderSection(null);
+
+    expect(
+      screen.getByRole('combobox', { name: 'Hiking time preset' }),
+    ).toHaveTextContent('Default (Day hike)');
+  });
+
   it('sums breaks and lunch beside their own slider, which the pace leaves unchanged', async () => {
     const user = userEvent.setup();
     const { onTimelineSettingsChange } = renderSection(

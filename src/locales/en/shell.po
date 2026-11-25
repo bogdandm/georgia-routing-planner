@@ -784,11 +784,6 @@ msgstr "Longer routes split into days of this moving time, each with its own lun
 msgid "Look around in 3D"
 msgstr "Look around in 3D"
 
-#. js-lingui-id: UvhFKH
-#: src/presentation/shell/HikingTimeSettingsPanel.tsx
-msgid "Lunch after moving hours"
-msgstr "Lunch after moving hours"
-
 #. js-lingui-id: VI1ojl
 #: src/presentation/shell/HikingTimeSettingsPanel.tsx
 msgid "Lunch, min"
@@ -971,6 +966,11 @@ msgstr "Next or previous base map"
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "No geographic matches found."
 msgstr "No geographic matches found."
+
+#. js-lingui-id: 0Ut1h9
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "No lunch below moving hours"
+msgstr "No lunch below moving hours"
 
 #. js-lingui-id: MyjSw9
 #: src/presentation/shell/MapSearchPlaceholder.tsx

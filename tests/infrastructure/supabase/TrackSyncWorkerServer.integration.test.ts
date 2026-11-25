@@ -1061,7 +1061,11 @@ describe('TrackSyncWorkerServer', () => {
     });
 
     await expect(database.listLocalTracks()).resolves.toEqual([
-      expect.objectContaining({ id: track.id, routeTiming }),
+      // Metadata from clients without hiking time presets loads with their defaults.
+      expect.objectContaining({
+        id: track.id,
+        routeTiming: { ...routeTiming, stopFactor: 1, presetId: null },
+      }),
     ]);
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
       remoteRevision: 2,
@@ -1655,7 +1659,10 @@ describe('TrackSyncWorkerServer', () => {
     await synchronization;
 
     await expect(database.listLocalTracks()).resolves.toEqual([
-      expect.objectContaining({ id: track.id, routeTiming }),
+      expect.objectContaining({
+        id: track.id,
+        routeTiming: { ...routeTiming, stopFactor: 1, presetId: null },
+      }),
     ]);
     await expect(database.loadTrackSyncState(track.id)).resolves.toMatchObject({
       pendingKind: 'metadata',

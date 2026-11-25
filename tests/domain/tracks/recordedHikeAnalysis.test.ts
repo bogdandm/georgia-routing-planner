@@ -108,6 +108,33 @@ describe('analyzeRecordedHike', () => {
     expect((analysis?.movingSeconds ?? 0) + (analysis?.idleSeconds ?? 0)).toBe(4_020);
   });
 
+  it('counts a recording gap between segments as a break, not as walking', () => {
+    const before = recordedHike([{ kind: 'walk', seconds: 1_800 }], 0);
+    const lastBefore = before.at(-1);
+    if (lastBefore === undefined) throw new Error('Expected points.');
+    const gapMilliseconds = 600_000;
+    // The next segment starts 10 minutes later and 500 m further along.
+    const after = recordedHike([{ kind: 'walk', seconds: 1_800 }], 1).map((point) => ({
+      ...point,
+      coordinate: [
+        point.coordinate[0],
+        point.coordinate[1] +
+          500 / METERS_PER_DEGREE_LATITUDE +
+          (lastBefore.coordinate[1] - 42),
+      ] as const,
+      recordedAt: new Date(
+        Date.parse(point.recordedAt ?? '') + 1_800_000 + gapMilliseconds,
+      ).toISOString(),
+      distanceMeters: point.distanceMeters + lastBefore.distanceMeters + 500,
+    }));
+
+    const analysis = analyzeRecordedHike([...before, ...after]);
+
+    expect(analysis?.breakSeconds).toBe(600);
+    expect(analysis?.movingSeconds).toBeGreaterThanOrEqual(3_600);
+    expect(analysis?.movingSeconds).toBeLessThan(3_660);
+  });
+
   it('needs advancing timestamps', () => {
     const points = recordedHike([{ kind: 'walk', seconds: 600 }]).map(
       ({ recordedAt: _recordedAt, ...point }) => point,
@@ -149,11 +176,14 @@ describe('compareGradeBands', () => {
     );
 
     expect(bands.map((band) => band.band)).toEqual(['flat', 'hard-climb']);
-    expect(bands.reduce((sum, band) => sum + band.distanceMeters, 0)).toBeCloseTo(
-      2_160,
-    );
-    expect(bands[0]?.recordedMovingSeconds).toBe(900);
-    expect(bands[1]?.recordedMovingSeconds).toBe(900);
+    // The 200 m elevation trend flattens the climb's ends: some join the flat band,
+    // the rest fall into a gentle band shorter than 200 m, left out with the descent.
+    const distance = bands.reduce((sum, band) => sum + band.distanceMeters, 0);
+    expect(distance).toBeGreaterThan(2_000);
+    expect(distance).toBeLessThanOrEqual(2_160);
+    expect(bands[0]?.recordedMovingSeconds).toBeGreaterThanOrEqual(900);
+    expect(bands[1]?.recordedMovingSeconds).toBeGreaterThan(700);
+    expect(bands[1]?.recordedMovingSeconds).toBeLessThan(900);
     const estimatedInBands = bands.reduce(
       (sum, band) => sum + band.estimatedMovingSeconds,
       0,

@@ -21,8 +21,13 @@ import {
 } from '@/presentation/tracks/hikingTimePresetFormat';
 import { formatTrackDuration } from '@/presentation/tracks/trackFormatters';
 
-/** Select value of the entry that follows the default preset; preset IDs are never empty. */
-const followDefaultValue = '';
+/**
+ * Select value of the entry that follows the default preset. MUI renders an empty value
+ * as no selection, so it is a token no preset uses: built-in IDs are fixed and user
+ * preset IDs start with `custom:`.
+ */
+// eslint-disable-next-line lingui/no-unlocalized-strings -- Select value token.
+const followDefaultValue = 'follow-default';
 
 interface HikingTimePresetSelectProps {
   readonly label: string;
@@ -95,11 +100,13 @@ export function HikingTimePresetSelect({
         labelId={labelId}
         label={label}
         value={
-          value === null
-            ? allowDefault
+          // A preset unknown here, such as another device's user preset, times the
+          // track with the default, so it shows as following the default.
+          value !== null && presets.some((preset) => preset.id === value)
+            ? value
+            : allowDefault
               ? followDefaultValue
               : defaultPreset.id
-            : resolveHikingTimePreset(settings, value).id
         }
         onChange={(event) => {
           const next = event.target.value;

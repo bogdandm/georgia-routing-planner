@@ -451,6 +451,35 @@ describe('planTrackWeatherTimeline', () => {
     }
   });
 
+  it('stretches only the recorded walking by the pace factor and keeps its stops', () => {
+    const recorded = profile([
+      { distanceMeters: 0, elevationMeters: 1_000, recordedAt: '2026-06-01T05:00:00Z' },
+      {
+        distanceMeters: 2_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T05:30:00Z',
+      },
+      {
+        distanceMeters: 2_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T05:40:00Z',
+      },
+      {
+        distanceMeters: 4_000,
+        elevationMeters: 1_000,
+        recordedAt: '2026-06-01T06:10:00Z',
+      },
+    ]);
+
+    const { elapsed } = routeElapsedSeconds(
+      recorded.points,
+      { elapsedSeconds: 70 * 60 },
+      { ...dinTiming, paceFactor: 2 },
+    );
+
+    expect(elapsed).toEqual([0, 60 * 60, 70 * 60, 130 * 60]);
+  });
+
   it('pauses for lunch in place between two neighbouring points of a v2 estimate', () => {
     const flat = profile(
       Array.from({ length: 13 }, (_, kilometre) => ({

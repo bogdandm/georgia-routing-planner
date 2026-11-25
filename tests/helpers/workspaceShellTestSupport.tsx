@@ -10,6 +10,7 @@ import type {
   SatelliteCatalogGateway,
   SatelliteCatalogResult,
 } from '@/application/ports/SatelliteCatalogGateway';
+import { defaultHikingTimePresetSettings } from '@/domain/tracks/hikingTime';
 import {
   type UserDataService,
   type UserDataSnapshot,
@@ -216,6 +217,7 @@ export function setupWorkspaceShellTest(): void {
       trackSort: 'created',
       trackSectionExpanded: {},
       komootElevation: 'ask',
+      hikingTimePresets: defaultHikingTimePresetSettings,
     });
   });
 

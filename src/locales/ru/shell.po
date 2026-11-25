@@ -784,11 +784,6 @@ msgstr "Длинные маршруты делятся на дни с таким
 msgid "Look around in 3D"
 msgstr "Осмотреться в 3D"
 
-#. js-lingui-id: UvhFKH
-#: src/presentation/shell/HikingTimeSettingsPanel.tsx
-msgid "Lunch after moving hours"
-msgstr "Обед после часов движения"
-
 #. js-lingui-id: VI1ojl
 #: src/presentation/shell/HikingTimeSettingsPanel.tsx
 msgid "Lunch, min"
@@ -971,6 +966,11 @@ msgstr "Следующий или предыдущий вид карты"
 #: src/presentation/shell/MapSearchPlaceholder.tsx
 msgid "No geographic matches found."
 msgstr "Подходящих мест не найдено."
+
+#. js-lingui-id: 0Ut1h9
+#: src/presentation/shell/HikingTimeSettingsPanel.tsx
+msgid "No lunch below moving hours"
+msgstr "Без обеда при движении меньше, ч"
 
 #. js-lingui-id: MyjSw9
 #: src/presentation/shell/MapSearchPlaceholder.tsx

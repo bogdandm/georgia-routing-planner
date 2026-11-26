@@ -770,12 +770,12 @@ export function ElevationProfileChart({
       }),
     [i18n.locale],
   );
+  const elevationFormatter = new Intl.NumberFormat(i18n.locale);
+  const minimumElevation = elevationFormatter.format(Math.round(profile.minimumMeters));
+  const maximumElevationMeters = Math.round(profile.maximumMeters);
+  const maximumElevation = elevationFormatter.format(maximumElevationMeters);
   let profileLabel: string;
   if (metric === 'elevation') {
-    const minimumElevation = new Intl.NumberFormat(i18n.locale).format(
-      Math.round(profile.minimumMeters),
-    );
-    const maximumElevationMeters = Math.round(profile.maximumMeters);
     profileLabel = t`${plural(maximumElevationMeters, {
       one: `Elevation profile from ${minimumElevation} to # metre`,
       other: `Elevation profile from ${minimumElevation} to # metres`,
@@ -849,7 +849,11 @@ export function ElevationProfileChart({
         ];
   const heading = (
     <TrackSectionHeading
-      title={metric === 'speed' ? t`Speed profile` : t`Elevation profile`}
+      title={
+        metric === 'speed'
+          ? t`Speed profile`
+          : t`Elevation profile (${minimumElevation} – ${maximumElevation} m)`
+      }
       label={t`Elevation profile`}
       detailsId={detailsId}
       expanded={expanded}

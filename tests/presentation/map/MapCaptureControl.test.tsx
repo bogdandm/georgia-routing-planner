@@ -195,4 +195,72 @@ describe('MapCapturePopover', () => {
 
     expect(onRecordTrackVideo.mock.calls.map((call) => call[2])).toEqual([true, false]);
   });
+
+  it('keeps the screen on while a video records and frees every lock after it', async () => {
+    const user = userEvent.setup();
+    const locks: {
+      readonly release: () => Promise<void>;
+      readonly grant: () => void;
+    }[] = [];
+    const request = vi.fn(
+      () =>
+        new Promise<WakeLockSentinel>((resolve) => {
+          const release = vi.fn(() => Promise.resolve());
+          const sentinel = { release } as unknown as WakeLockSentinel;
+          locks.push({
+            release,
+            grant: () => {
+              resolve(sentinel);
+            },
+          });
+        }),
+    );
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request },
+    });
+    let visibility: DocumentVisibilityState = 'visible';
+    const visibilityState = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockImplementation(() => visibility);
+    // The test tsconfig targets ES2023, which has no `Promise.withResolvers`.
+    let finishRecording: () => void = () => undefined;
+    const recordingDone = new Promise<void>((resolve) => {
+      finishRecording = resolve;
+    });
+    renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: () => recordingDone,
+      onRecordTrackVideo: null,
+    });
+
+    try {
+      await user.click(
+        screen.getByRole('button', { name: 'Record a video of the day' }),
+      );
+      expect(request).toHaveBeenCalledWith('screen');
+      // The browser drops the lock while the page is hidden; showing it again requests
+      // a new one, here before the first request settled.
+      visibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(request).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        for (const lock of locks) lock.grant();
+        await Promise.resolve();
+      });
+
+      act(() => {
+        finishRecording();
+      });
+      await screen.findByText('The video was downloaded.');
+      for (const lock of locks) expect(lock.release).toHaveBeenCalled();
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      visibilityState.mockRestore();
+      Reflect.deleteProperty(navigator, 'wakeLock');
+    }
+  });
 });

@@ -984,8 +984,9 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   the frame size says so with the size, and any other failure shows the browser's or
   encoder's own error text. Unless a time was chosen in the sun panel, the map returns
   to the minute shown before the recording, however it ended. Closing the panel keeps
-  the recording running. **Record a track video**, available while sun shadows are on
-  and a single track with route timing is open, downloads
+  the recording running, and the screen stays on until the recording ends where the
+  browser allows it. **Record a track video**, available while sun shadows are on and a
+  single track with route timing is open, downloads
   `<track name>-<hike date>-<start time>.mp4` (for example
   `Sakhizare-2026-07-11-08-00.mp4`, the start in the route's time zone, characters a
   file name cannot hold replaced as in a GPX download) in the same format: a 25-second

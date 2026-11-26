@@ -46,8 +46,14 @@ function keepScreenOn(): () => void {
     // eslint-disable-next-line lingui/no-unlocalized-strings -- Wake Lock type token.
     navigator.wakeLock.request('screen').then(
       (sentinel) => {
-        if (released) void sentinel.release();
-        else lock = sentinel;
+        if (released) {
+          void sentinel.release();
+          return;
+        }
+        // A hide and show before an earlier request settled overlaps two requests;
+        // only the newest lock is kept, so the release frees every one.
+        void lock?.release();
+        lock = sentinel;
       },
       () => undefined,
     );

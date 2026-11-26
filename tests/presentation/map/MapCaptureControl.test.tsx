@@ -196,11 +196,24 @@ describe('MapCapturePopover', () => {
     expect(onRecordTrackVideo.mock.calls.map((call) => call[2])).toEqual([true, false]);
   });
 
-  it('keeps the screen on while a video records, again after the page returns', async () => {
+  it('keeps the screen on while a video records and frees every lock after it', async () => {
     const user = userEvent.setup();
-    const release = vi.fn(() => Promise.resolve());
-    const request = vi.fn(() =>
-      Promise.resolve({ release } as unknown as WakeLockSentinel),
+    const locks: {
+      readonly release: () => Promise<void>;
+      readonly grant: () => void;
+    }[] = [];
+    const request = vi.fn(
+      () =>
+        new Promise<WakeLockSentinel>((resolve) => {
+          const release = vi.fn(() => Promise.resolve());
+          const sentinel = { release } as unknown as WakeLockSentinel;
+          locks.push({
+            release,
+            grant: () => {
+              resolve(sentinel);
+            },
+          });
+        }),
     );
     Object.defineProperty(navigator, 'wakeLock', {
       configurable: true,
@@ -226,19 +239,23 @@ describe('MapCapturePopover', () => {
         screen.getByRole('button', { name: 'Record a video of the day' }),
       );
       expect(request).toHaveBeenCalledWith('screen');
-      // Hiding the page drops the lock; showing it again takes a new one.
+      // The browser drops the lock while the page is hidden; showing it again requests
+      // a new one, here before the first request settled.
       visibility = 'hidden';
       document.dispatchEvent(new Event('visibilitychange'));
       visibility = 'visible';
       document.dispatchEvent(new Event('visibilitychange'));
       expect(request).toHaveBeenCalledTimes(2);
-      expect(release).not.toHaveBeenCalled();
+      await act(async () => {
+        for (const lock of locks) lock.grant();
+        await Promise.resolve();
+      });
 
       act(() => {
         finishRecording();
       });
       await screen.findByText('The video was downloaded.');
-      expect(release).toHaveBeenCalled();
+      for (const lock of locks) expect(lock.release).toHaveBeenCalled();
       document.dispatchEvent(new Event('visibilitychange'));
       expect(request).toHaveBeenCalledTimes(2);
     } finally {

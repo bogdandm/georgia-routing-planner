@@ -31,6 +31,36 @@ const recordingBlink = keyframes`
 /** The remaining time is shown once this much of the recording lies behind it. */
 const minimumEstimateMs = 3_000;
 
+/**
+ * Keeps the screen on until the returned release is called: a phone that dims its screen
+ * hides the page, which stops map frames and stalls the recording. The browser drops the
+ * lock while the page is hidden, so it is taken again when the page shows. Best effort:
+ * without the API, or when the browser refuses (battery saver), the recording runs as is.
+ */
+function keepScreenOn(): () => void {
+  if (!('wakeLock' in navigator)) return () => undefined;
+  let lock: WakeLockSentinel | null = null;
+  let released = false;
+  const acquire = () => {
+    if (document.visibilityState !== 'visible') return;
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Wake Lock type token.
+    navigator.wakeLock.request('screen').then(
+      (sentinel) => {
+        if (released) void sentinel.release();
+        else lock = sentinel;
+      },
+      () => undefined,
+    );
+  };
+  document.addEventListener('visibilitychange', acquire);
+  acquire();
+  return () => {
+    released = true;
+    document.removeEventListener('visibilitychange', acquire);
+    void lock?.release();
+  };
+}
+
 export interface MapCaptureControlProps {
   /** Copies a PNG of the map, without controls, to the clipboard. */
   readonly onCopyScreenshot: () => Promise<void>;
@@ -159,6 +189,7 @@ export function MapCapturePopover({
     videoAbort.current = controller;
     const startedAtMs = performance.now();
     setVideo({ kind: 'recording', progress: 0, remainingMs: null });
+    const releaseScreen = keepScreenOn();
     record(controller.signal, (progress) => {
       const elapsedMs = performance.now() - startedAtMs;
       setVideo({
@@ -169,18 +200,20 @@ export function MapCapturePopover({
             ? (elapsedMs * (1 - progress)) / progress
             : null,
       });
-    }).then(
-      () => {
-        setVideo({ kind: 'saved' });
-      },
-      (error: unknown) => {
-        // Cancel is the user's own choice; any other stop is reported.
-        if (controller.signal.aborted) setVideo({ kind: 'idle' });
-        else if (error instanceof DOMException && error.name === 'AbortError') {
-          setVideo({ kind: 'stopped' });
-        } else setVideo({ kind: 'failed', reason: videoFailureReason(error) });
-      },
-    );
+    })
+      .finally(releaseScreen)
+      .then(
+        () => {
+          setVideo({ kind: 'saved' });
+        },
+        (error: unknown) => {
+          // Cancel is the user's own choice; any other stop is reported.
+          if (controller.signal.aborted) setVideo({ kind: 'idle' });
+          else if (error instanceof DOMException && error.name === 'AbortError') {
+            setVideo({ kind: 'stopped' });
+          } else setVideo({ kind: 'failed', reason: videoFailureReason(error) });
+        },
+      );
   };
   const recording = video.kind === 'recording';
   const percent = formatPercent(

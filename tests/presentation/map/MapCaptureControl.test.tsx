@@ -195,4 +195,55 @@ describe('MapCapturePopover', () => {
 
     expect(onRecordTrackVideo.mock.calls.map((call) => call[2])).toEqual([true, false]);
   });
+
+  it('keeps the screen on while a video records, again after the page returns', async () => {
+    const user = userEvent.setup();
+    const release = vi.fn(() => Promise.resolve());
+    const request = vi.fn(() =>
+      Promise.resolve({ release } as unknown as WakeLockSentinel),
+    );
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: { request },
+    });
+    let visibility: DocumentVisibilityState = 'visible';
+    const visibilityState = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockImplementation(() => visibility);
+    // The test tsconfig targets ES2023, which has no `Promise.withResolvers`.
+    let finishRecording: () => void = () => undefined;
+    const recordingDone = new Promise<void>((resolve) => {
+      finishRecording = resolve;
+    });
+    renderPopover({
+      onCopyScreenshot: vi.fn(),
+      onRecordDayVideo: () => recordingDone,
+      onRecordTrackVideo: null,
+    });
+
+    try {
+      await user.click(
+        screen.getByRole('button', { name: 'Record a video of the day' }),
+      );
+      expect(request).toHaveBeenCalledWith('screen');
+      // Hiding the page drops the lock; showing it again takes a new one.
+      visibility = 'hidden';
+      document.dispatchEvent(new Event('visibilitychange'));
+      visibility = 'visible';
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(release).not.toHaveBeenCalled();
+
+      act(() => {
+        finishRecording();
+      });
+      await screen.findByText('The video was downloaded.');
+      expect(release).toHaveBeenCalled();
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(request).toHaveBeenCalledTimes(2);
+    } finally {
+      visibilityState.mockRestore();
+      Reflect.deleteProperty(navigator, 'wakeLock');
+    }
+  });
 });

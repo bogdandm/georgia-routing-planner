@@ -556,7 +556,10 @@ stop also aborts it with an `AbortError`, checked again before each minute becau
 encoding is awaited outside the `idle` wait; an unfinished recording cancels its
 encoder. However a recording ends, it reapplies the minute shown before it unless
 `setSunShadow` (the sun panel or its keys) chose a minute meanwhile; a daylight clamp
-after a camera move does not count.
+after a camera move does not count. While either video records, the panel holds a Screen
+Wake Lock, since a dimmed phone screen hides the page and stops map frames; the browser
+drops the lock while the page is hidden, so the panel requests it again when the page
+shows, and a refused lock leaves the recording unchanged.
 
 A track video (`MapLibreFacade.recordTrackVideo`) takes the active route, its elapsed
 seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same timing as

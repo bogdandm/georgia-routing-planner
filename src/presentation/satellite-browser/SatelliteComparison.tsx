@@ -58,6 +58,7 @@ import {
   type ComparisonLayout,
   type ComparisonTileProgress,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
+import { formatPercent } from '@/presentation/formatPercent';
 
 interface ComparedSceneDatePickerProps {
   readonly slotIndex: number;
@@ -370,10 +371,8 @@ export function SatelliteComparisonPanel() {
           timeZone,
           timeZoneName: 'short',
         }).format(acquiredAt),
-      percent: new Intl.NumberFormat(i18n.locale, {
-        style: 'percent',
-        maximumFractionDigits: 0,
-      }),
+      percent: (fraction: number) =>
+        formatPercent(fraction, i18n.locale, { maximumFractionDigits: 0 }),
     }),
     [i18n.locale],
   );
@@ -480,9 +479,7 @@ export function SatelliteComparisonPanel() {
             const timeZone = sceneTimeZone(image);
             title = formats.day(acquiredAt, timeZone);
             const time = formats.time(acquiredAt, timeZone);
-            const cloud = formats.percent.format(
-              Math.round(image.cloudCoverPercent) / 100,
-            );
+            const cloud = formats.percent(Math.round(image.cloudCoverPercent) / 100);
             details = (
               <>
                 <Typography variant="caption" color="text.secondary">

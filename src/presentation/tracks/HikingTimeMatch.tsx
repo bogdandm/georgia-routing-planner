@@ -39,6 +39,7 @@ import {
   analyzeRecordedHike,
   compareGradeBands,
 } from '@/domain/tracks/recordedHikeAnalysis';
+import { formatPercent } from '@/presentation/formatPercent';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import {
   estimateDivergence,
@@ -58,6 +59,20 @@ import {
 const matchSeverity = { close: 'success', fair: 'warning', far: 'error' } as const;
 
 const missingValue = '—';
+
+/**
+ * Report tables align with their headings and keep values on one line: `км/ч` would
+ * otherwise break at its slash. Row labels still wrap where they are long.
+ */
+/* eslint-disable lingui/no-unlocalized-strings -- CSS selectors and values. */
+const reportTableSx = {
+  '& th, & td': { px: 1 },
+  // Every row starts with a header cell; body rows end with a data cell.
+  '& th:first-of-type': { pl: 0 },
+  '& thead th:last-of-type, & td:last-of-type': { pr: 0 },
+  '& td': { whiteSpace: 'nowrap' },
+} as const;
+/* eslint-enable lingui/no-unlocalized-strings */
 
 interface HikingTimeMatchProps {
   readonly route: TrackTimingRoute;
@@ -118,6 +133,7 @@ export function HikingTimeMatch({
           <Button
             color="inherit"
             size="small"
+            sx={{ whiteSpace: 'nowrap' }}
             onClick={() => {
               setReportOpen(true);
             }}
@@ -245,7 +261,11 @@ function HikingTimeReport({
             <Typography component="h3" variant="subtitle2">
               <Trans>Recorded and estimated time</Trans>
             </Typography>
-            <Table size="small" aria-label={t`Recorded and estimated time`}>
+            <Table
+              size="small"
+              sx={reportTableSx}
+              aria-label={t`Recorded and estimated time`}
+            >
               <TableHead>
                 <TableRow>
                   <TableCell>
@@ -300,7 +320,7 @@ function HikingTimeReport({
                     />
                   </Trans>
                 </Typography>
-                <Table size="small" aria-label={t`Accuracy`}>
+                <Table size="small" sx={reportTableSx} aria-label={t`Accuracy`}>
                   <TableHead>
                     <TableRow>
                       <TableCell>
@@ -309,12 +329,14 @@ function HikingTimeReport({
                       <TableCell align="right">
                         <Trans>Likely actual time</Trans>
                       </TableCell>
-                      <TableCell align="right">
-                        <Trans>Within ±10%</Trans>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Trans>Within ±20%</Trans>
-                      </TableCell>
+                      {[0.1, 0.2].map((limit) => {
+                        const share = formatShare(limit, i18n);
+                        return (
+                          <TableCell key={limit} align="right">
+                            {t`Within ±${share}`}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -338,7 +360,11 @@ function HikingTimeReport({
               <Typography component="h3" variant="subtitle2">
                 <Trans>Moving speed by grade</Trans>
               </Typography>
-              <Table size="small" aria-label={t`Moving speed by grade`}>
+              <Table
+                size="small"
+                sx={reportTableSx}
+                aria-label={t`Moving speed by grade`}
+              >
                 <TableHead>
                   <TableRow>
                     <TableCell>
@@ -413,25 +439,25 @@ function AccuracyRow({
   spread,
 }: AccuracyRowProps): ReactElement {
   const { i18n, t } = useLingui();
-  const percent = new Intl.NumberFormat(i18n.locale, {
-    // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
-    style: 'percent',
-    maximumFractionDigits: 0,
-  });
   const shortest = formatTrackDuration(estimatedSeconds / spread.ratioP90, i18n);
   const longest = formatTrackDuration(estimatedSeconds / spread.ratioP10, i18n);
   return (
     <TableRow>
-      <TableCell component="th" scope="row">
+      <TableCell component="th" scope="row" sx={{ whiteSpace: 'nowrap' }}>
         {label}
       </TableCell>
-      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-        {t`${shortest} – ${longest}`}
+      <TableCell align="right">{t`${shortest} – ${longest}`}</TableCell>
+      <TableCell align="right">{formatShare(spread.withinTenPercent, i18n)}</TableCell>
+      <TableCell align="right">
+        {formatShare(spread.withinTwentyPercent, i18n)}
       </TableCell>
-      <TableCell align="right">{percent.format(spread.withinTenPercent)}</TableCell>
-      <TableCell align="right">{percent.format(spread.withinTwentyPercent)}</TableCell>
     </TableRow>
   );
+}
+
+/** A whole percent share such as `47%`. */
+function formatShare(share: number, i18n: I18n): string {
+  return formatPercent(share, i18n.locale, { maximumFractionDigits: 0 });
 }
 
 function speed(distanceMeters: number, seconds: number, i18n: I18n): string {

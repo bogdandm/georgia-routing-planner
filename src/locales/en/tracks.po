@@ -1923,15 +1923,10 @@ msgstr "Unfiled tracks"
 msgid "Weather forecast"
 msgstr "Weather forecast"
 
-#. js-lingui-id: ciPlJs
+#. js-lingui-id: XVsexh
 #: src/presentation/tracks/HikingTimeMatch.tsx
-msgid "Within ±10%"
-msgstr "Within ±10%"
-
-#. js-lingui-id: 7MZ35V
-#: src/presentation/tracks/HikingTimeMatch.tsx
-msgid "Within ±20%"
-msgstr "Within ±20%"
+msgid "Within ±{share}"
+msgstr "Within ±{share}"
 
 #. js-lingui-id: l75CjT
 #: src/presentation/tracks/TracksWorkspace.tsx

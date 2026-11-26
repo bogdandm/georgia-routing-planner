@@ -521,7 +521,7 @@ msgstr "Световой день"
 #. js-lingui-id: kAVvMj
 #: src/presentation/tracks/HikingTimePresetSelect.tsx
 msgid "Default ({defaultName})"
-msgstr "По умолчанию ({defaultName})"
+msgstr "{defaultName} (по умолчанию)"
 
 #. js-lingui-id: cnGeoo
 #: src/presentation/tracks/TrackPointsSection.tsx
@@ -1563,7 +1563,7 @@ msgstr "Короче"
 #. js-lingui-id: bCZaP2
 #: src/presentation/tracks/HikingTimeMatch.tsx
 msgid "Show report"
-msgstr "Показать отчёт"
+msgstr "Отчёт"
 
 #. js-lingui-id: oG5653
 #: src/presentation/tracks/TrackWeatherSection.tsx
@@ -1923,15 +1923,10 @@ msgstr "Треки без папки"
 msgid "Weather forecast"
 msgstr "Прогноз погоды"
 
-#. js-lingui-id: ciPlJs
+#. js-lingui-id: XVsexh
 #: src/presentation/tracks/HikingTimeMatch.tsx
-msgid "Within ±10%"
-msgstr "В пределах ±10%"
-
-#. js-lingui-id: 7MZ35V
-#: src/presentation/tracks/HikingTimeMatch.tsx
-msgid "Within ±20%"
-msgstr "В пределах ±20%"
+msgid "Within ±{share}"
+msgstr "В пределах ±{share}"
 
 #. js-lingui-id: l75CjT
 #: src/presentation/tracks/TracksWorkspace.tsx

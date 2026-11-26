@@ -40,7 +40,7 @@ describe('WeatherTimeControl', () => {
     expect(screen.getByLabelText('Weather map legend')).toBeVisible();
     expect(
       screen.getByLabelText(
-        'Cloud cover · ≤30 transparent: 0 %, 30 %, 31 %, 50 %, 70 %, 90 %, 100 %',
+        'Cloud cover · ≤30 transparent: 0%, 30%, 31%, 50%, 70%, 90%, 100%',
       ),
     ).toBeVisible();
     expect(

@@ -2802,7 +2802,7 @@ describe('MapLibreFacade', () => {
       'route-plan',
       [44.64, 42.66],
       [44.65, 42.67],
-      '1.4 km',
+      '1.4\u00a0km',
     );
     expect(sampleMany).not.toHaveBeenCalled();
     facade.setPlanningPreview({ anchor: { longitude: 44.66, latitude: 42.68 } });
@@ -2835,7 +2835,7 @@ describe('MapLibreFacade', () => {
       'measurement',
       [44.66, 42.68],
       [44.65, 42.67],
-      '5.0 km',
+      '5.0\u00a0km',
     );
     expect(sampleMany).toHaveBeenCalledWith(
       [
@@ -2849,7 +2849,7 @@ describe('MapLibreFacade', () => {
         'measurement',
         [44.66, 42.68],
         [44.65, 42.67],
-        '5.0 km\nElevation +985 m',
+        '5.0\u00a0km\nElevation +985\u00a0m',
       );
     });
     nativeMap.fire('click', {
@@ -2913,14 +2913,14 @@ describe('MapLibreFacade', () => {
       'measurement',
       [44.66, 42.68],
       [44.66, 42.68],
-      '3.6 km',
+      '3.6\u00a0km',
     );
     await vi.waitFor(() => {
       expect(setPlannedLinePreview).toHaveBeenLastCalledWith(
         'measurement',
         [44.66, 42.68],
         [44.66, 42.68],
-        '3.6 km\nElevation +250 m',
+        '3.6\u00a0km\nElevation +250\u00a0m',
       );
     });
 

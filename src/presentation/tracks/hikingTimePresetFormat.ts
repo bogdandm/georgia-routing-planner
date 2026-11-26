@@ -8,6 +8,8 @@ import {
   type HikingTimePreset,
 } from '@/domain/tracks/hikingTime';
 
+import { formatPercent } from '@/presentation/formatPercent';
+
 /** Built-in presets are named in the active locale; user presets keep their own name. */
 export function hikingTimePresetName(preset: HikingTimePreset, i18n: I18n): string {
   switch (preset.id) {
@@ -38,13 +40,11 @@ export function estimateMatch(divergence: number): EstimateMatch {
   return magnitude <= 0.1 ? 'close' : magnitude <= 0.2 ? 'fair' : 'far';
 }
 
-/** Signed whole percent such as `+12%` or `−4%`; zero stays unsigned. */
+/** Signed whole percent such as `+12%` or `-4%`; zero stays unsigned. */
 export function formatEstimateDivergence(divergence: number, i18n: I18n): string {
-  return new Intl.NumberFormat(i18n.locale, {
-    // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option tokens.
-    style: 'percent',
-    // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option tokens.
+  return formatPercent(divergence, i18n.locale, {
+    // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
     signDisplay: 'exceptZero',
     maximumFractionDigits: 0,
-  }).format(divergence);
+  });
 }

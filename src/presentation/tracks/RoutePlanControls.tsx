@@ -26,6 +26,7 @@ import {
   type TrackPathDraft,
   type TrackPathFailure,
 } from '@/presentation/tracks/trackPathEditor';
+import { formatPercent } from '@/presentation/formatPercent';
 
 interface RoutePlanControlsProps {
   readonly draft: RoutePlanDraft;
@@ -180,10 +181,10 @@ export function RoutePlanStatus({
       const totalTiles = countFormatter.format(progress.totalTileCount);
       label = t`Loading route tiles… ${loadedTiles}/${totalTiles}`;
     } else if (progress?.phase === 'building-graph') {
-      const graphProgress = new Intl.NumberFormat(i18n.locale, {
-        // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
-        style: 'percent',
-      }).format(Math.round(progress.graphProgress * 100) / 100);
+      const graphProgress = formatPercent(
+        Math.round(progress.graphProgress * 100) / 100,
+        i18n.locale,
+      );
       label = t`Building route graph… ${graphProgress}`;
     } else if (progress?.phase === 'loading-terrain') {
       label = t`Loading route terrain…`;
@@ -225,10 +226,10 @@ export function RoutePlanStatus({
     if (completedFraction === null) {
       label = t`Preparing elevation…`;
     } else {
-      const percent = new Intl.NumberFormat(i18n.locale, {
-        // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
-        style: 'percent',
-      }).format(Math.floor(completedFraction * 100) / 100);
+      const percent = formatPercent(
+        Math.floor(completedFraction * 100) / 100,
+        i18n.locale,
+      );
       label = t`Loading elevation: ${percent}`;
     }
     const value = completedFraction === null ? undefined : completedFraction * 100;

@@ -99,6 +99,7 @@ import {
 import { setTrackPathInsertionMode } from '@/presentation/tracks/trackPathEditor';
 import { parseTrackShareLocation } from '@/presentation/tracks/trackShareUrl';
 import { CompactTrackSummary } from '@/presentation/tracks/TrackSummary';
+import { formatPercent } from '@/presentation/formatPercent';
 
 /* eslint-disable -- CSS queries, identifiers, events, and diagnostics are machine data. */
 const smartphoneViewportQuery = '(width < 900px)';
@@ -270,10 +271,7 @@ function WorkspaceShellContent({ mapSurface }: WorkspaceShellProps) {
   const preparationPercent =
     preparationFraction === null
       ? null
-      : new Intl.NumberFormat(i18n.locale, {
-          // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
-          style: 'percent',
-        }).format(Math.floor(preparationFraction * 100) / 100);
+      : formatPercent(Math.floor(preparationFraction * 100) / 100, i18n.locale);
   const preparationLabel =
     preparationPercent === null
       ? t`Preparing elevation…`

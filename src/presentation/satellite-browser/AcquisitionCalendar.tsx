@@ -25,6 +25,7 @@ import { useMemo, useState } from 'react';
 import type { SatelliteSearchResult } from '@/domain/satellite/SatelliteSearchResult';
 import { calculateWeightedCloudCover } from '@/domain/satellite/calculateWeightedCloudCover';
 import { predictSentinelAcquisitionDates } from '@/domain/satellite/predictSentinelAcquisitionDates';
+import { formatPercent } from '@/presentation/formatPercent';
 import { appColors } from '@/presentation/theme/appColors';
 
 const sentinelArchiveFirstMonth = '2015-06';
@@ -74,10 +75,8 @@ function createCalendarLabels(locale: string) {
       year: 'numeric',
       timeZone: 'UTC',
     }),
-    percent: new Intl.NumberFormat(locale, {
-      style: 'percent',
-      maximumFractionDigits: 0,
-    }),
+    percent: (fraction: number) =>
+      formatPercent(fraction, locale, { maximumFractionDigits: 0 }),
   };
 }
 /* eslint-enable lingui/no-unlocalized-strings */
@@ -508,9 +507,7 @@ export function AcquisitionCalendar({
               const matchesCloudFilter =
                 cloud !== undefined && cloud <= mode.maxCloudCoverPercent;
               const cloudLabel =
-                cloud === undefined
-                  ? ''
-                  : labels.percent.format(Math.round(cloud) / 100);
+                cloud === undefined ? '' : labels.percent(Math.round(cloud) / 100);
               return (
                 <ButtonBase
                   key={date}

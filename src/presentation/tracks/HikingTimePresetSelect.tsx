@@ -84,7 +84,13 @@ export function HikingTimePresetSelect({
             {name}
           </Typography>
           {text === null ? null : (
-            <Typography variant="body2" color="text.secondary" noWrap>
+            // The estimate is the option's point; the preset name truncates first.
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              noWrap
+              sx={{ flexShrink: 0 }}
+            >
               {text}
             </Typography>
           )}

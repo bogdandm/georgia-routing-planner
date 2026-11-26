@@ -147,7 +147,7 @@ msgstr "{sky, select, clear {Малооблачно, временами дожд
 #. js-lingui-id: XdCytn
 #: src/presentation/weather/HourlyForecastTable.tsx
 msgid "{time} cloud cover {cloudCover} percent"
-msgstr "{time}: облачность {cloudCover} %"
+msgstr "{time}: облачность {cloudCover}%"
 
 #. js-lingui-id: 7QXcMF
 #: src/presentation/weather/HourlyForecastTable.tsx

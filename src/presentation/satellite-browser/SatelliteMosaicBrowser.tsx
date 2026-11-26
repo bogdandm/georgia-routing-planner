@@ -13,6 +13,7 @@ import {
 } from '@/presentation/satellite-browser/SatelliteMosaicProvider';
 import { SatelliteRenderModeSelect } from '@/presentation/satellite-browser/SatelliteRenderingControls';
 import { satelliteImageryProblemMessage } from '@/presentation/satellite-browser/satelliteProblemMessages';
+import { formatPercent } from '@/presentation/formatPercent';
 
 interface SatelliteMosaicBrowserProps {
   /** Reveals the map on smartphones after the mosaic starts rendering. */
@@ -63,14 +64,12 @@ export function SatelliteMosaicBrowser({ onShowMap }: SatelliteMosaicBrowserProp
       year: 'numeric',
       timeZone: 'UTC',
     });
-    const coverageFormatter = new Intl.NumberFormat(i18n.locale, {
-      style: 'percent',
+    const oldestDate =
+      appliedMosaic.oldestAcquisitionDate ?? appliedMosaic.selectedDate;
+    coverage = formatPercent(appliedMosaic.coveragePercent / 100, i18n.locale, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
-    const oldestDate =
-      appliedMosaic.oldestAcquisitionDate ?? appliedMosaic.selectedDate;
-    coverage = coverageFormatter.format(appliedMosaic.coveragePercent / 100);
     firstDate = dayFormatter.format(new Date(`${oldestDate}T00:00:00.000Z`));
     lastDate = dayFormatter.format(
       new Date(`${appliedMosaic.selectedDate}T00:00:00.000Z`),

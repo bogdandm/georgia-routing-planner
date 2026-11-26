@@ -544,15 +544,19 @@ click's user activation. A day video (`MapLibreLayerController.recordSunShadowDa
 takes the same frames as playback, unrotated, applies each minute through the sun-shadow
 reconciliation, and captures it in the `idle` event, which MapLibre fires right after
 the frame that leaves every tile loaded and no fade running. Each frame is copied into a
-2D canvas that fits 1920×1080 in the map's orientation with even sides, and
-`mediabunny`, loaded as a separate chunk on the first recording, encodes it with
+2D canvas whose longer side, in either orientation, is at most 1920 px with even sides,
+and `mediabunny`, loaded as a separate chunk on the first recording, encodes it with
 WebCodecs H.264, repeating it at a constant 30 fps for the 150 ms playback delay, into
 an MP4 whose index precedes the media (`MapVideoRecorder`); `MapWorkspace` downloads the
-bytes. The recording registers as playback, so every playback stop also aborts it with
-an `AbortError`, checked again before each minute because encoding is awaited outside
-the `idle` wait; an unfinished recording cancels its encoder. However a recording ends,
-it reapplies the minute shown before it unless `setSunShadow` (the sun panel or its
-keys) chose a minute meanwhile; a daylight clamp after a camera move does not count.
+bytes. Before the first frame, `MapVideoRecorder.start` checks the encoder
+configurations with `canEncodeVideo` and rejects with `MapVideoEncoderUnsupportedError`
+naming the frame size; the panel shows that as a localized cause and any other failure
+as the error's name and message. The recording registers as playback, so every playback
+stop also aborts it with an `AbortError`, checked again before each minute because
+encoding is awaited outside the `idle` wait; an unfinished recording cancels its
+encoder. However a recording ends, it reapplies the minute shown before it unless
+`setSunShadow` (the sun panel or its keys) chose a minute meanwhile; a daylight clamp
+after a camera move does not count.
 
 A track video (`MapLibreFacade.recordTrackVideo`) takes the active route, its elapsed
 seconds from `routeElapsedSeconds`, and `TrackLightingView.startMs`, the same timing as

@@ -975,14 +975,17 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   `sun-shadows-<date>.mp4`: H.264 video without sound at a constant 30 frames per
   second, each minute shown for 150 ms as in playback, a format that social networks and
   messengers accept for upload. Frames have the same content as the screenshot and are
-  scaled to fit 1920×1080 in the map's orientation (smaller maps keep their size). The
-  panel shows a blinking red recording light with **Recording…**, a progress bar, the
-  percent done and the time left at the pace so far (once three seconds have passed),
-  and **Cancel**; a camera move, a time chosen in the sun panel, **Play the day**, or
-  turning shadows off stops the recording and says so. Unless a time was chosen in the
-  sun panel, the map returns to the minute shown before the recording, however it ended.
-  Closing the panel keeps the recording running. **Record a track video**, available
-  while sun shadows are on and a single track with route timing is open, downloads
+  scaled so their longer side, in either orientation, is at most 1920 px (smaller maps
+  keep their size). The panel shows a blinking red recording light with **Recording…**,
+  a progress bar, the percent done and the time left at the pace so far (once three
+  seconds have passed), and **Cancel**; a camera move, a time chosen in the sun panel,
+  **Play the day**, or turning shadows off stops the recording and says so. A failed
+  recording names its cause under the failure: a browser without an H.264 encoder for
+  the frame size says so with the size, and any other failure shows the browser's or
+  encoder's own error text. Unless a time was chosen in the sun panel, the map returns
+  to the minute shown before the recording, however it ended. Closing the panel keeps
+  the recording running. **Record a track video**, available while sun shadows are on
+  and a single track with route timing is open, downloads
   `<track name>-<hike date>-<start time>.mp4` (for example
   `Sakhizare-2026-07-11-08-00.mp4`, the start in the route's time zone, characters a
   file name cannot hold replaced as in a GPX download) in the same format: a 25-second

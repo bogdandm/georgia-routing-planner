@@ -71,6 +71,7 @@ import {
   swapComparisonSlots,
   type ComparisonSlot,
 } from '@/presentation/satellite-browser/satelliteCompareStore';
+import { formatPercent } from '@/presentation/formatPercent';
 
 function basemapAttribution(
   configuration: MapProviderConfiguration,
@@ -276,10 +277,9 @@ function sceneLabel(scene: SatelliteScene, locale: string): SceneLabel {
       timeZone,
       timeZoneName: 'short',
     }).format(acquiredAt),
-    cloud: new Intl.NumberFormat(locale, {
-      style: 'percent',
+    cloud: formatPercent(Math.round(scene.cloudCoverPercent) / 100, locale, {
       maximumFractionDigits: 0,
-    }).format(Math.round(scene.cloudCoverPercent) / 100),
+    }),
   };
 }
 /* eslint-enable lingui/no-unlocalized-strings */

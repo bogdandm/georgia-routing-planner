@@ -83,8 +83,8 @@ describe('ClimbsDescentsSection', () => {
 
     const rows = screen.getAllByRole('button', { pressed: false });
     expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
-      'Climb 1, +10%, 1.0 km, 100 m, 3 m descent',
-      'Descent 1, -8%, 1.0 km, 80 m, 5 m ascent',
+      'Climb 1, +10%, 1.0\u00a0km, 100\u00a0m, 3\u00a0m descent',
+      'Descent 1, -8%, 1.0\u00a0km, 80\u00a0m, 5\u00a0m ascent',
     ]);
   });
 
@@ -184,7 +184,7 @@ describe('ClimbsDescentsSection', () => {
     expect([
       formatTrackDistance(9_999, appI18n),
       formatTrackDistance(10_000, appI18n),
-    ]).toEqual(['10.0 km', '10 km']);
-    expect(formatTrackElevation(1_234.6, appI18n)).toBe('1,235 m');
+    ]).toEqual(['10.0\u00a0km', '10\u00a0km']);
+    expect(formatTrackElevation(1_234.6, appI18n)).toBe('1,235\u00a0m');
   });
 });

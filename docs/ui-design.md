@@ -64,6 +64,12 @@ marker's weather on the map. Do not mix both kinds in one group.
   compact metric rows.
 - Keep the same metric-to-icon mapping across panels. A compact row may wrap as complete
   icon-value pairs, but an icon must never become separated from its value.
+- A formatted quantity such as `8 ч 2 мин` or `3,9 km/h` never wraps inside itself: the
+  shared track formatters join its parts with non-breaking spaces, and value cells of
+  report tables stay on one line.
+- Percents are written without a space before the sign in every locale (`-27%`, not the
+  `-27 %` that `Intl` produces for Russian); format them through
+  `src/presentation/formatPercent.ts`.
 
 ## Use a 4 px spacing grid
 

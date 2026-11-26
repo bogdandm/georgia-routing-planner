@@ -69,6 +69,7 @@ import { useUiStore } from '@/presentation/shell/uiStore';
 import { TrackSectionHeading } from '@/presentation/tracks/TrackSectionHeading';
 import { SunEventChartMark } from '@/presentation/tracks/TrackLighting';
 import type { TrackLightingView } from '@/presentation/tracks/useTrackLighting';
+import { formatPercent } from '@/presentation/formatPercent';
 
 /** A press that travels this far along the chart is a range drag, never a click. */
 const RANGE_DRAG_THRESHOLD_PX = 4;
@@ -559,10 +560,7 @@ export function ElevationPreparationChart({
   const percent =
     completedFraction === null
       ? null
-      : new Intl.NumberFormat(i18n.locale, {
-          // eslint-disable-next-line lingui/no-unlocalized-strings -- Intl option token.
-          style: 'percent',
-        }).format(Math.floor(completedFraction * 100) / 100);
+      : formatPercent(Math.floor(completedFraction * 100) / 100, i18n.locale);
   const label =
     percent === null ? t`Preparing elevation…` : t`Loading elevation: ${percent}`;
   const accessibilityLabel =

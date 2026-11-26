@@ -205,7 +205,7 @@ describe('TrackWeatherSection', () => {
     );
     const stopSum = () => screen.getByText(/^Breaks and lunch: ≈/u).textContent;
     const initialSum = stopSum();
-    expect(initialSum).not.toBe('Breaks and lunch: ≈0h 0m');
+    expect(initialSum).not.toBe('Breaks and lunch: ≈0h\u00a00m');
 
     screen.getByRole('slider', { name: 'Adjust pace' }).focus();
     await user.keyboard('{End}');
@@ -213,7 +213,7 @@ describe('TrackWeatherSection', () => {
 
     screen.getByRole('slider', { name: 'Adjust breaks and lunch' }).focus();
     await user.keyboard('{Home}');
-    expect(stopSum()).toBe('Breaks and lunch: ≈0h 0m');
+    expect(stopSum()).toBe('Breaks and lunch: ≈0h\u00a00m');
     expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
       ...defaultTrackWeatherTimelineSettings,
       paceFactor: 2,
@@ -245,14 +245,14 @@ describe('TrackWeatherSection', () => {
       'aria-pressed',
       'true',
     );
-    const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
+    const highest = screen.getByRole('group', { name: 'Highest, 2,900\u00a0m' });
     expect(
       await within(highest).findByRole('article', { name: 'Day forecast' }),
     ).toBeVisible();
     expect(
       within(highest).queryByRole('article', { name: 'Night forecast' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Lowest, 2,000 m' })).toBeVisible();
+    expect(screen.getByRole('group', { name: 'Lowest, 2,000\u00a0m' })).toBeVisible();
     expect(
       screen.getByText(
         'Starting at 09:00 at the estimated pace, about 5h 30m in total.',
@@ -266,9 +266,9 @@ describe('TrackWeatherSection', () => {
     ).toEqual([
       // Each card names the highest point of its hours: 4.8 km at 12:00, the summit
       // before 13:00, and the descent at 14:00.
-      '09:00, Start, 2,720 m',
-      '12:00, At 4.8 km, 2,900 m',
-      '14:30, Finish, 2,543 m',
+      '09:00, Start, 2,720\u00a0m',
+      '12:00, At 4.8\u00a0km, 2,900\u00a0m',
+      '14:30, Finish, 2,543\u00a0m',
     ]);
     expect(
       await within(route).findAllByRole('article', { name: /forecast$/ }),
@@ -305,7 +305,7 @@ describe('TrackWeatherSection', () => {
       within(route)
         .getAllByRole('group')
         .map((card) => card.getAttribute('aria-label')),
-    ).toEqual(['10:00, Start, 2,900 m', '12:45, Finish, 2,829 m']);
+    ).toEqual(['10:00, Start, 2,900\u00a0m', '12:45, Finish, 2,829\u00a0m']);
     expect(
       await within(route).findAllByRole('article', { name: /forecast$/ }),
     ).toHaveLength(2);
@@ -331,12 +331,12 @@ describe('TrackWeatherSection', () => {
 
     await user.click(
       await screen.findByRole('button', {
-        name: 'Open the forecast for 12:00, At 4.8 km, 2,900 m in Weather',
+        name: 'Open the forecast for 12:00, At 4.8\u00a0km, 2,900\u00a0m in Weather',
       }),
     );
 
     const request = mapInteractionStore.getState().weatherForecastRequest;
-    expect(request?.placeLabel).toBe('12:00, At 4.8 km');
+    expect(request?.placeLabel).toBe('12:00, At 4.8\u00a0km');
     // The summit, 6 km along, which the hiker passes during the 12:00 hour.
     expect(request?.elevationMeters).toBe(2_900);
     expect(request?.coordinate.longitude).toBeCloseTo(44.06, 6);
@@ -381,7 +381,7 @@ describe('TrackWeatherSection', () => {
 
     expect(
       await within(route).findByRole('group', {
-        name: '12:00, Finish, 2,200 m',
+        name: '12:00, Finish, 2,200\u00a0m',
       }),
     ).toBeVisible();
     expect(
@@ -391,7 +391,7 @@ describe('TrackWeatherSection', () => {
     act(release);
     await user.click(
       await within(route).findByRole('button', {
-        name: 'Open the forecast for 09:00, Start, 1,800 m in Weather',
+        name: 'Open the forecast for 09:00, Start, 1,800\u00a0m in Weather',
       }),
     );
     const request = mapInteractionStore.getState().weatherForecastRequest;
@@ -451,9 +451,9 @@ describe('TrackWeatherSection', () => {
 
     expect(start).toHaveAttribute('aria-valuetext', '10:30');
     expect(labels()).toEqual([
-      '10:30, Start, 2,840 m',
-      '13:30, At 4.8 km, 2,900 m',
-      '16:00, Finish, 2,400 m',
+      '10:30, Start, 2,840\u00a0m',
+      '13:30, At 4.8\u00a0km, 2,900\u00a0m',
+      '16:00, Finish, 2,400\u00a0m',
     ]);
     expect(
       screen.getByText(
@@ -466,7 +466,7 @@ describe('TrackWeatherSection', () => {
     await user.keyboard('{End}');
     expect(start).toHaveAttribute('aria-valuetext', '23:30');
     // Arrivals after midnight fall on the next date; only the time of day is shown.
-    expect(labels()[2]).toBe('05:00, Finish, 2,400 m');
+    expect(labels()[2]).toBe('05:00, Finish, 2,400\u00a0m');
     expect(onTimelineSettingsChange).toHaveBeenLastCalledWith({
       ...defaultTrackWeatherTimelineSettings,
       startHour: 23.5,
@@ -541,7 +541,7 @@ describe('TrackWeatherSection', () => {
     // Same values in a new object: the effect reruns before the first requests settle.
     rerender(expandedSection({ ...dayHike }));
 
-    const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
+    const highest = screen.getByRole('group', { name: 'Highest, 2,900\u00a0m' });
     expect(
       await within(highest).findByRole('article', { name: 'Day forecast' }),
     ).toBeVisible();
@@ -553,7 +553,7 @@ describe('TrackWeatherSection', () => {
     );
     renderSection(expandedPreferences);
 
-    const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
+    const highest = screen.getByRole('group', { name: 'Highest, 2,900\u00a0m' });
     expect(
       await within(highest).findByText('The forecast could not be loaded.'),
     ).toBeVisible();
@@ -574,11 +574,11 @@ describe('TrackWeatherSection', () => {
         return realExecute(input, signal);
       });
     renderSection(expandedPreferences);
-    const highest = screen.getByRole('group', { name: 'Highest, 2,900 m' });
+    const highest = screen.getByRole('group', { name: 'Highest, 2,900\u00a0m' });
     expect(
       await within(highest).findByText('The forecast could not be loaded.'),
     ).toBeVisible();
-    const lowest = screen.getByRole('group', { name: 'Lowest, 2,000 m' });
+    const lowest = screen.getByRole('group', { name: 'Lowest, 2,000\u00a0m' });
     await within(lowest).findByRole('article', { name: 'Day forecast' });
     const initialCalls = execute.mock.calls.length;
 
@@ -933,7 +933,7 @@ describe('TrackWeatherSection', () => {
         screen.getAllByRole('listitem').map((kind) => kind.textContent.trim()),
       ).toEqual([
         'In the sun 2h 0m',
-        'In the shade 1h 0m (2h 0m before sunset)',
+        'In the shade 1h 0m (2h\u00a00m before sunset)',
         'Blue hour 0h 0m',
         'After dark 0h 0m',
       ]);

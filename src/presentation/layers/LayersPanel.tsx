@@ -35,6 +35,7 @@ import {
 import { satelliteImageryProblemMessage } from '@/presentation/satellite-browser/satelliteProblemMessages';
 import { useUiStore } from '@/presentation/shell/uiStore';
 import { workspaceHashForTab } from '@/presentation/shell/workspaceTabLocation';
+import { formatPercent } from '@/presentation/formatPercent';
 
 interface LayerControl {
   readonly id: LogicalMapLayerId;
@@ -432,14 +433,14 @@ export function LayersPanel() {
   const provider =
     mapProviderConfiguration.status === 'valid' ? mapProviderConfiguration.value : null;
   /* eslint-disable -- Intl option values are locale-independent formatting tokens. */
-  const percentFormatter = new Intl.NumberFormat(i18n.locale, { style: 'percent' });
   const meterFormatter = new Intl.NumberFormat(i18n.locale, {
     style: 'unit',
     unit: 'meter',
     unitDisplay: 'short',
   });
   /* eslint-enable */
-  const formatPercent = (value: number) => percentFormatter.format(value / 100);
+  // Opacity sliders hold whole percents.
+  const formatOpacity = (value: number) => formatPercent(value / 100, i18n.locale);
   const groups = [
     {
       id: 'imported-tracks',
@@ -592,7 +593,7 @@ export function LayersPanel() {
                 step={5}
                 value={Math.round(state.weatherMapOpacity * 100)}
                 valueLabelDisplay="auto"
-                valueLabelFormat={formatPercent}
+                valueLabelFormat={formatOpacity}
                 onChange={(_event, value) => {
                   changeWeatherOpacity(value, 'live');
                 }}
@@ -606,7 +607,7 @@ export function LayersPanel() {
                 color="text.secondary"
                 sx={{ minWidth: 34, textAlign: 'right' }}
               >
-                {formatPercent(Math.round(state.weatherMapOpacity * 100))}
+                {formatOpacity(Math.round(state.weatherMapOpacity * 100))}
               </Typography>
             </Stack>
             {state.weatherMapProblem === null ? null : (
@@ -681,7 +682,7 @@ export function LayersPanel() {
                     step={5}
                     value={Math.round(state.openStreetMapOpacity * 100)}
                     valueLabelDisplay="auto"
-                    valueLabelFormat={formatPercent}
+                    valueLabelFormat={formatOpacity}
                     onChange={(_event, value) => {
                       changeOpenStreetMapOpacity(value, 'live');
                     }}
@@ -695,7 +696,7 @@ export function LayersPanel() {
                     color="text.secondary"
                     sx={{ minWidth: 4, pl: 0.5, textAlign: 'right' }}
                   >
-                    {formatPercent(Math.round(state.openStreetMapOpacity * 100))}
+                    {formatOpacity(Math.round(state.openStreetMapOpacity * 100))}
                   </Typography>
                 </Stack>
               ) : null}
@@ -716,7 +717,7 @@ export function LayersPanel() {
                     step={5}
                     value={Math.round(state.importedTrackOpacity * 100)}
                     valueLabelDisplay="auto"
-                    valueLabelFormat={formatPercent}
+                    valueLabelFormat={formatOpacity}
                     onChange={(_event, value) => {
                       changeImportedTrackOpacity(value, 'live');
                     }}
@@ -730,7 +731,7 @@ export function LayersPanel() {
                     color="text.secondary"
                     sx={{ minWidth: 4, pl: 0.75, textAlign: 'right' }}
                   >
-                    {formatPercent(Math.round(state.importedTrackOpacity * 100))}
+                    {formatOpacity(Math.round(state.importedTrackOpacity * 100))}
                   </Typography>
                 </Stack>
               ) : null}

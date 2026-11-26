@@ -215,7 +215,7 @@ export function WeatherTimeControl() {
     [i18n.locale, timeZone],
   );
   const numberFormat = useMemo(() => new Intl.NumberFormat(i18n.locale), [i18n.locale]);
-  const formatCloudCover = (value: string) => `${value} %`;
+  const formatCloudCover = (value: string) => `${value}%`;
   const formatPrecipitation = (millimetres: string) => t`${millimetres} mm`;
   const days = useMemo<readonly ForecastDay[]>(() => {
     const groups = new Map<

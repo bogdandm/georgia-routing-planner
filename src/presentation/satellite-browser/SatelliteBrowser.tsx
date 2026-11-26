@@ -104,6 +104,7 @@ import {
   completeSatelliteRequest,
   failSatelliteRequest,
 } from '@/presentation/satellite-browser/satelliteRequestStatusStore';
+import { formatPercent } from '@/presentation/formatPercent';
 
 interface SatelliteBrowserProps {
   readonly active?: boolean;
@@ -160,7 +161,7 @@ interface MonthLoadError {
 interface DisplayFormats {
   readonly month: Intl.DateTimeFormat;
   readonly day: Intl.DateTimeFormat;
-  readonly percent: Intl.NumberFormat;
+  readonly percent: (fraction: number) => string;
   readonly kilometers: Intl.NumberFormat;
   /** Local acquisition time at the searched place, e.g. `14:12 GMT+4`. */
   readonly acquisitionTime: (acquiredAt: Date, timeZone: string) => string;
@@ -180,10 +181,8 @@ function createDisplayFormats(locale: string): DisplayFormats {
       year: 'numeric',
       timeZone: 'UTC',
     }),
-    percent: new Intl.NumberFormat(locale, {
-      style: 'percent',
-      maximumFractionDigits: 0,
-    }),
+    percent: (fraction) =>
+      formatPercent(fraction, locale, { maximumFractionDigits: 0 }),
     kilometers: new Intl.NumberFormat(locale, {
       style: 'unit',
       unit: 'kilometer',
@@ -424,10 +423,8 @@ function SceneCard({
   const acquiredAt = new Date(scene.acquiredAt);
   const title = formats.day.format(acquiredAt);
   const acquisitionTime = formats.acquisitionTime(acquiredAt, timeZone);
-  const cloudPercent = formats.percent.format(
-    Math.round(scene.cloudCoverPercent) / 100,
-  );
-  const coveragePercent = formats.percent.format(
+  const cloudPercent = formats.percent(Math.round(scene.cloudCoverPercent) / 100);
+  const coveragePercent = formats.percent(
     Math.round(coverage.viewportCoveragePercent) / 100,
   );
   const edgeDistance = formats.kilometers.format(coverage.distanceToSceneEdgeKm);
@@ -1509,7 +1506,7 @@ export function SatelliteBrowser({
                 <Trans>Maximum cloud</Trans>
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                ≤ {formats.percent.format(maxCloudCoverPercent / 100)}
+                ≤ {formats.percent(maxCloudCoverPercent / 100)}
               </Typography>
             </Stack>
             <Slider

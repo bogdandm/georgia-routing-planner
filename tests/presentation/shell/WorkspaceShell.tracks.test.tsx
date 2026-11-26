@@ -1670,13 +1670,16 @@ describe('WorkspaceShell', () => {
     elevationFreeDem = true;
     await user.upload(nextInput, elevationFreeGpxFile());
     details = await screen.findByRole('complementary', { name: 'Track details' });
+    // Labels join values and units with non-breaking spaces; queries normalize them.
     const primaryGain = within(details)
       .getByLabelText(/^Elevation gain: (?!0 m)/u)
-      .getAttribute('aria-label');
+      .getAttribute('aria-label')
+      ?.replaceAll('\u00a0', ' ');
     const primaryLoss = within(details)
       .getByLabelText(/^Elevation loss: (?!0 m)/u)
-      .getAttribute('aria-label');
-    if (primaryGain === null || primaryLoss === null) {
+      .getAttribute('aria-label')
+      ?.replaceAll('\u00a0', ' ');
+    if (primaryGain === undefined || primaryLoss === undefined) {
       throw new Error('Calculated elevation totals are missing.');
     }
     expect(

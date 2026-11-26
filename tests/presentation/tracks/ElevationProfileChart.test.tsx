@@ -847,7 +847,7 @@ describe('ElevationProfileChart', () => {
 
       expect(screen.getByRole('heading', { name: 'Speed profile' })).toBeVisible();
       expect(
-        screen.getByRole('img', { name: 'Speed profile up to 8.4 km/h' }),
+        screen.getByRole('img', { name: 'Speed profile up to 8.4\u00a0km/h' }),
       ).toBeVisible();
       expect(tickTexts().some((value) => value.endsWith('km/h'))).toBe(true);
       expect(tickTexts().some((value) => value.endsWith('km'))).toBe(true);

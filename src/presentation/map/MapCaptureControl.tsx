@@ -20,6 +20,7 @@ import {
 import { keyframes } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
 
+import { formatPercent } from '@/presentation/formatPercent';
 import { MapVideoEncoderUnsupportedError } from '@/presentation/map/mapCapture';
 
 /** The camcorder recording light: on for half a second, off for half a second. */
@@ -182,11 +183,11 @@ export function MapCapturePopover({
     );
   };
   const recording = video.kind === 'recording';
-  // Whole percents, spaced as the locale writes them ("1 %" in Russian).
-  const percent = new Intl.NumberFormat(i18n.locale, {
-    style: 'percent',
-    maximumFractionDigits: 0,
-  }).format(recording ? Math.floor(video.progress * 100) / 100 : 0);
+  const percent = formatPercent(
+    recording ? Math.floor(video.progress * 100) / 100 : 0,
+    i18n.locale,
+    { maximumFractionDigits: 0 },
+  );
   const remainingMs = recording ? video.remainingMs : null;
   const remaining =
     remainingMs === null

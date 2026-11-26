@@ -138,7 +138,7 @@ describe('WorkspaceShell', () => {
       within(details).queryByRole('heading', { name: 'Track details' }),
     ).not.toBeInTheDocument();
     expect(
-      within(details).queryByRole('heading', { name: 'Elevation profile' }),
+      within(details).queryByRole('heading', { name: /^Elevation profile/u }),
     ).not.toBeInTheDocument();
     for (const actionName of [
       'Track actions',

@@ -21,6 +21,7 @@ import { keyframes } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
 
 import { formatPercent } from '@/presentation/formatPercent';
+import { MapVideoEncoderUnsupportedError } from '@/presentation/map/mapCapture';
 
 /** The camcorder recording light: on for half a second, off for half a second. */
 const recordingBlink = keyframes`
@@ -102,7 +103,9 @@ interface MapCapturePopoverProps extends MapCaptureControlProps {
 
 type ScreenshotStatus = 'idle' | 'copying' | 'copied' | 'failed';
 type VideoStatus =
-  | { readonly kind: 'idle' | 'saved' | 'stopped' | 'failed' }
+  | { readonly kind: 'idle' | 'saved' | 'stopped' }
+  /** `reason` is shown under the failure: a localized cause or the error's own text. */
+  | { readonly kind: 'failed'; readonly reason: string }
   | {
       readonly kind: 'recording';
       readonly progress: number;
@@ -142,6 +145,15 @@ export function MapCapturePopover({
       },
     );
   };
+  const videoFailureReason = (error: unknown): string => {
+    if (error instanceof MapVideoEncoderUnsupportedError) {
+      const { width, height } = error;
+      return t`This browser cannot encode H.264 video at ${width} × ${height} pixels.`;
+    }
+    // Browser and encoder errors are English technical text, shown as they are so the
+    // cause can be reported; the name tells encoder failures apart (`EncodingError`).
+    return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  };
   const recordVideo = (record: RecordVideo) => {
     const controller = new AbortController();
     videoAbort.current = controller;
@@ -162,10 +174,11 @@ export function MapCapturePopover({
         setVideo({ kind: 'saved' });
       },
       (error: unknown) => {
-        const aborted = error instanceof DOMException && error.name === 'AbortError';
         // Cancel is the user's own choice; any other stop is reported.
         if (controller.signal.aborted) setVideo({ kind: 'idle' });
-        else setVideo({ kind: aborted ? 'stopped' : 'failed' });
+        else if (error instanceof DOMException && error.name === 'AbortError') {
+          setVideo({ kind: 'stopped' });
+        } else setVideo({ kind: 'failed', reason: videoFailureReason(error) });
       },
     );
   };
@@ -362,9 +375,19 @@ export function MapCapturePopover({
               </Typography>
             ) : null}
             {video.kind === 'failed' ? (
-              <Typography color="error" role="alert" variant="caption">
-                {t`The video could not be recorded.`}
-              </Typography>
+              <Box role="alert">
+                <Typography color="error" component="p" variant="caption">
+                  {t`The video could not be recorded.`}
+                </Typography>
+                <Typography
+                  color="text.secondary"
+                  component="p"
+                  sx={{ overflowWrap: 'anywhere' }}
+                  variant="caption"
+                >
+                  {video.reason}
+                </Typography>
+              </Box>
             ) : null}
           </Stack>
         </Paper>

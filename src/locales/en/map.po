@@ -680,6 +680,11 @@ msgstr "The video was downloaded."
 msgid "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
 msgstr "This browser cannot compute shadows: WebGL2 float rendering is unavailable."
 
+#. js-lingui-id: WIzz3H
+#: src/presentation/map/MapCaptureControl.tsx
+msgid "This browser cannot encode H.264 video at {width} × {height} pixels."
+msgstr "This browser cannot encode H.264 video at {width} × {height} pixels."
+
 #. js-lingui-id: HUfyUv
 #: src/presentation/map/SatelliteCompareMaps.tsx
 msgid "This scene has no supported true-color asset."

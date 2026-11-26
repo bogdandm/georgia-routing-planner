@@ -283,7 +283,9 @@ describe('ElevationProfileChart', () => {
       observedWidth = width;
       renderElevationProfileChart();
 
-      expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+      expect(
+        screen.getByRole('heading', { name: 'Elevation profile (1,000 – 1,120 m)' }),
+      ).toBeVisible();
       const image = screen.getByRole('img', {
         name: 'Elevation profile from 1,000 to 1,120 metres',
       });
@@ -863,7 +865,9 @@ describe('ElevationProfileChart', () => {
           />
         </ThemeProvider>,
       );
-      expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+      expect(
+        screen.getByRole('heading', { name: 'Elevation profile (1,000 – 1,120 m)' }),
+      ).toBeVisible();
       expect(screen.queryByRole('group', { name: 'Profile value' })).toBeNull();
     });
 

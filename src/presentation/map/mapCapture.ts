@@ -87,16 +87,28 @@ export function readWhenMapIdle<T>(
 }
 
 /**
- * Largest recorded video frame, 1080p in the map's own orientation: a larger canvas is
- * scaled down to fit it, and a smaller canvas keeps its own size.
+ * Longest side of a recorded video frame in either orientation: a canvas with a longer
+ * side is scaled down to it, and a smaller canvas keeps its own size.
  */
 const videoLongSidePixels = 1920;
-const videoShortSidePixels = 1080;
 /**
  * Social networks expect a constant rate of 24–60 frames per second, so each map frame is
  * repeated for its duration at this rate.
  */
 export const videoFrameRate = 30;
+
+/** The browser's WebCodecs offer no H.264 encoder for a video of this frame size. */
+export class MapVideoEncoderUnsupportedError extends Error {
+  public readonly width: number;
+  public readonly height: number;
+
+  public constructor(width: number, height: number) {
+    super(`H.264 encoding at ${String(width)}×${String(height)} is unsupported.`);
+    this.name = 'MapVideoEncoderUnsupportedError';
+    this.width = width;
+    this.height = height;
+  }
+}
 
 /**
  * MP4 video of map frames: H.264 through WebCodecs, without audio, with the index at the
@@ -120,34 +132,23 @@ export class MapVideoRecorder {
       CanvasSource,
       Mp4OutputFormat,
       Output,
-      Quality,
     }: Pick<
       typeof Mediabunny,
-      'BufferTarget' | 'CanvasSource' | 'Mp4OutputFormat' | 'Output' | 'Quality'
+      'BufferTarget' | 'CanvasSource' | 'Mp4OutputFormat' | 'Output'
     >,
-    sourceWidth: number,
-    sourceHeight: number,
+    width: number,
+    height: number,
+    quality: Mediabunny.Quality,
   ) {
-    const scale = Math.min(
-      1,
-      videoLongSidePixels / Math.max(sourceWidth, sourceHeight),
-      videoShortSidePixels / Math.min(sourceWidth, sourceHeight),
-    );
-    // H.264 stores color at half resolution, so both sides must be even.
-    this.#width = Math.max(2, 2 * Math.round((sourceWidth * scale) / 2));
-    this.#height = Math.max(2, 2 * Math.round((sourceHeight * scale) / 2));
+    this.#width = width;
+    this.#height = height;
     const canvas = document.createElement('canvas');
-    canvas.width = this.#width;
-    canvas.height = this.#height;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d');
     if (context === null) throw new Error('A 2D canvas is unavailable.');
     this.#context = context;
-    this.#source = new CanvasSource(canvas, {
-      codec: 'avc',
-      // The whole map moves every frame, and satellite imagery is detailed: below this
-      // level the encoder smears the imagery and the labels, even on held frames.
-      quality: new Quality('very-high'),
-    });
+    this.#source = new CanvasSource(canvas, { codec: 'avc', quality });
     this.#output = new Output({
       format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
       target: new BufferTarget(),
@@ -155,6 +156,10 @@ export class MapVideoRecorder {
     this.#output.addVideoTrack(this.#source, { frameRate: videoFrameRate });
   }
 
+  /**
+   * Rejects with `MapVideoEncoderUnsupportedError` when the browser cannot encode the
+   * frame size, before any frame is drawn.
+   */
   public static async start(
     sourceWidth: number,
     sourceHeight: number,
@@ -162,12 +167,41 @@ export class MapVideoRecorder {
     // Dynamic, not static: the encoder is about 200 kB that only a recording needs, so
     // Vite splits it out of the startup bundle and loads it with the first recording.
     // Destructuring at the import lets the bundler drop the unused rest of the library.
-    const { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality } =
-      await import('mediabunny');
+    const {
+      BufferTarget,
+      CanvasSource,
+      Mp4OutputFormat,
+      Output,
+      Quality,
+      canEncodeVideo,
+    } = await import('mediabunny');
+    const scale = Math.min(
+      1,
+      videoLongSidePixels / Math.max(sourceWidth, sourceHeight),
+    );
+    // H.264 stores color at half resolution, so both sides must be even.
+    const width = Math.max(2, 2 * Math.round((sourceWidth * scale) / 2));
+    const height = Math.max(2, 2 * Math.round((sourceHeight * scale) / 2));
+    // The whole map moves every frame, and satellite imagery is detailed: below this
+    // level the encoder smears the imagery and the labels, even on held frames.
+    const quality = new Quality('very-high');
+    // The same encoder configurations the source tries, checked up front so the failure
+    // can name the frame size instead of surfacing from the first frame.
+    if (
+      !(await canEncodeVideo('avc', {
+        width,
+        height,
+        quality,
+        frameRate: videoFrameRate,
+      }))
+    ) {
+      throw new MapVideoEncoderUnsupportedError(width, height);
+    }
     const recorder = new MapVideoRecorder(
-      { BufferTarget, CanvasSource, Mp4OutputFormat, Output, Quality },
-      sourceWidth,
-      sourceHeight,
+      { BufferTarget, CanvasSource, Mp4OutputFormat, Output },
+      width,
+      height,
+      quality,
     );
     await recorder.#output.start();
     return recorder;

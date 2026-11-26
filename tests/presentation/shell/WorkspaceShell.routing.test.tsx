@@ -315,7 +315,11 @@ describe('WorkspaceShell', () => {
     });
     expect(elevationProfile).toBeVisible();
     expect(elevationProfile).toHaveStyle({ height: '264px' });
-    expect(screen.getByRole('heading', { name: 'Elevation profile' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', {
+        name: /^Elevation profile \([\d,]+ – [\d,]+ m\)$/u,
+      }),
+    ).toBeVisible();
     expect(elevationProfile.querySelectorAll('.recharts-cartesian-axis')).toHaveLength(
       2,
     );

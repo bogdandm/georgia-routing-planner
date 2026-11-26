@@ -340,18 +340,20 @@ focusing a Climbs & Descents row dims the track outside that climb or descent on
 map. Selecting a row fits the map to the segment; in 3D the camera also turns to face
 from its start toward its finish at a 45° pitch, so the start sits at the bottom of the
 screen and the finish at the top. The interactive profile has axes, tooltip, and a map
-marker at the highlighted point. When every profile point has recorded time,
-**Elevation**/**Speed** and **Distance**/**Time** toggles directly below the chart,
-right-aligned to the plot edge, switch it: Time plots against elapsed recorded time,
-including pauses, and Speed plots a Gaussian-smoothed speed (σ of 90 seconds or 1/240 of
-the duration, whichever is longer) so per-fix GPS jitter does not dominate; a stop
-recorded without fixes, such as an auto-pause, drops to zero speed, and hovering it
-points at the fix where it began. The tooltip then also shows elapsed time and smoothed
-speed. Tracks without complete recorded time show elevation over distance only, and the
-view choice lasts while the chart stays open. Source elevation drives the profile,
-grades, and climbs unless it has no complete run, in which case the DEM profile is used.
-On desktop and tablet, a lower-right grade legend explains the colors; its dismissal
-persists and the profile chart offers **Show track grade legend** to restore it.
+marker at the highlighted point; its **Elevation profile** heading appends the whole
+profile's minimum and maximum elevation, such as `(1,000 – 1,120 m)`. When every profile
+point has recorded time, **Elevation**/**Speed** and **Distance**/**Time** toggles
+directly below the chart, right-aligned to the plot edge, switch it: Time plots against
+elapsed recorded time, including pauses, and Speed plots a Gaussian-smoothed speed (σ of
+90 seconds or 1/240 of the duration, whichever is longer) so per-fix GPS jitter does not
+dominate; a stop recorded without fixes, such as an auto-pause, drops to zero speed, and
+hovering it points at the fix where it began. The tooltip then also shows elapsed time
+and smoothed speed. Tracks without complete recorded time show elevation over distance
+only, and the view choice lasts while the chart stays open. Source elevation drives the
+profile, grades, and climbs unless it has no complete run, in which case the DEM profile
+is used. On desktop and tablet, a lower-right grade legend explains the colors; its
+dismissal persists and the profile chart offers **Show track grade legend** to restore
+it.
 
 Editable single tracks show a collapsed **Markers** section below **Weather forecast**,
 with an add action, map navigation, inline rename, and two-stage deletion. Only the
@@ -973,14 +975,17 @@ are session-only. ECMWF IFS values are model forecasts, not station observations
   `sun-shadows-<date>.mp4`: H.264 video without sound at a constant 30 frames per
   second, each minute shown for 150 ms as in playback, a format that social networks and
   messengers accept for upload. Frames have the same content as the screenshot and are
-  scaled to fit 1920×1080 in the map's orientation (smaller maps keep their size). The
-  panel shows a blinking red recording light with **Recording…**, a progress bar, the
-  percent done and the time left at the pace so far (once three seconds have passed),
-  and **Cancel**; a camera move, a time chosen in the sun panel, **Play the day**, or
-  turning shadows off stops the recording and says so. Unless a time was chosen in the
-  sun panel, the map returns to the minute shown before the recording, however it ended.
-  Closing the panel keeps the recording running. **Record a track video**, available
-  while sun shadows are on and a single track with route timing is open, downloads
+  scaled so their longer side, in either orientation, is at most 1920 px (smaller maps
+  keep their size). The panel shows a blinking red recording light with **Recording…**,
+  a progress bar, the percent done and the time left at the pace so far (once three
+  seconds have passed), and **Cancel**; a camera move, a time chosen in the sun panel,
+  **Play the day**, or turning shadows off stops the recording and says so. A failed
+  recording names its cause under the failure: a browser without an H.264 encoder for
+  the frame size says so with the size, and any other failure shows the browser's or
+  encoder's own error text. Unless a time was chosen in the sun panel, the map returns
+  to the minute shown before the recording, however it ended. Closing the panel keeps
+  the recording running. **Record a track video**, available while sun shadows are on
+  and a single track with route timing is open, downloads
   `<track name>-<hike date>-<start time>.mp4` (for example
   `Sakhizare-2026-07-11-08-00.mp4`, the start in the route's time zone, characters a
   file name cannot hold replaced as in a GPX download) in the same format: a 25-second

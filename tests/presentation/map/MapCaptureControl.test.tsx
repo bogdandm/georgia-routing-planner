@@ -7,6 +7,7 @@ import {
   MapCapturePopover,
   type MapCaptureControlProps,
 } from '@/presentation/map/MapCaptureControl';
+import { MapVideoEncoderUnsupportedError } from '@/presentation/map/mapCapture';
 import { renderWithI18n } from '@test/helpers/renderWithI18n';
 
 function renderPopover(props: MapCaptureControlProps) {
@@ -155,11 +156,21 @@ describe('MapCapturePopover', () => {
 
     await user.click(record);
     act(() => {
-      runs[3]?.reject(new Error('No 2D canvas.'));
+      runs[3]?.reject(new DOMException('Encoder crashed.', 'EncodingError'));
     });
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The video could not be recorded.',
-    );
+    const failure = await screen.findByRole('alert');
+    expect(failure).toHaveTextContent('The video could not be recorded.');
+    expect(failure).toHaveTextContent('EncodingError: Encoder crashed.');
+
+    await user.click(record);
+    act(() => {
+      runs[4]?.reject(new MapVideoEncoderUnsupportedError(1080, 1920));
+    });
+    expect(
+      await screen.findByText(
+        'This browser cannot encode H.264 video at 1080 × 1920 pixels.',
+      ),
+    ).toBeVisible();
   });
 
   it('records a track video with or without changing light, as the toggle says', async () => {

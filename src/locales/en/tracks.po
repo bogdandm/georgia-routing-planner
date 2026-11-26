@@ -741,6 +741,11 @@ msgstr "Elevation preparation failed."
 msgid "Elevation profile"
 msgstr "Elevation profile"
 
+#. js-lingui-id: pL9E32
+#: src/presentation/tracks/ElevationProfileChart.tsx
+msgid "Elevation profile ({minimumElevation} – {maximumElevation} m)"
+msgstr "Elevation profile ({minimumElevation} – {maximumElevation} m)"
+
 #. js-lingui-id: D4TjJE
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Elevation profile loading"

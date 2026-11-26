@@ -741,6 +741,11 @@ msgstr "Не удалось подготовить данные о высоте.
 msgid "Elevation profile"
 msgstr "Профиль высот"
 
+#. js-lingui-id: pL9E32
+#: src/presentation/tracks/ElevationProfileChart.tsx
+msgid "Elevation profile ({minimumElevation} – {maximumElevation} m)"
+msgstr "Профиль высот ({minimumElevation} – {maximumElevation} м)"
+
 #. js-lingui-id: D4TjJE
 #: src/presentation/tracks/ElevationProfileChart.tsx
 msgid "Elevation profile loading"
